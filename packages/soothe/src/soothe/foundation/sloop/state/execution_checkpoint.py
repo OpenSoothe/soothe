@@ -233,8 +233,7 @@ class GoalIndexEntry(BaseModel):
     Goal state recovered from CE GoalNode. Checkpoint only stores
     goal_id and status for loop-level tracking.
 
-    Per RFC-626 §4: GoalIndexEntry is a trimmed version of GoalExecutionRecord
-    that excludes goal content fields (goal_text, plan_revision_count, goal_completion).
+    Per RFC-626 §4: GoalIndexEntry stores loop-level goal index metadata only.
     CE GoalNode is the authoritative source for goal state.
 
     Attributes:

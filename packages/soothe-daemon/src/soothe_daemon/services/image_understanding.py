@@ -176,10 +176,9 @@ async def enrich_user_text_with_vision(
 def _build_vision_invoke_config(config: Any, *, session_id: str | None = None) -> dict[str, Any]:
     """Build Langfuse-traced RunnableConfig for vision preflight."""
     try:
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        return build_traced_config(
-            config,
+        return SootheLangfuse(config).traced_llm(
             purpose="vision_preflight",
             component="daemon.vision",
             phase="pre-stream",

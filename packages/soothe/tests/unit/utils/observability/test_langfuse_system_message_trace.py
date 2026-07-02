@@ -61,11 +61,11 @@ def test_merge_uses_soothe_langfuse_handler() -> None:
     pytest.importorskip("langfuse")
     from soothe.config import SootheConfig
     from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    from soothe.utils.observability import langfuse as langfuse_util
+    import soothe.utils.observability.langfuse._handlers as handlers_mod
     from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
-    langfuse_util._HANDLERS.clear()
+    handlers_mod._HANDLERS.clear()
 
     obs = ObservabilityConfig(langfuse=LangfuseIntegrationConfig(enabled=True))
     cfg = SootheConfig(observability=obs)
@@ -469,11 +469,11 @@ def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:
     pytest.importorskip("langfuse")
     from soothe.config import SootheConfig
     from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    from soothe.utils.observability import langfuse as langfuse_util
+    import soothe.utils.observability.langfuse._handlers as handlers_mod
     from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
-    langfuse_util._HANDLERS.clear()
+    handlers_mod._HANDLERS.clear()
     obs = ObservabilityConfig(langfuse=LangfuseIntegrationConfig(enabled=True))
     cfg = SootheConfig(observability=obs)
     runnable = merge_langfuse_runnable_config(

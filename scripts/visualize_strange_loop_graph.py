@@ -52,11 +52,8 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     mock_goal_context_manager = MagicMock()
     mock_plan_manager = MagicMock()
 
-    from soothe.foundation.sloop.state.checkpoint import (
-        GoalExecutionRecord,
-        StrangeLoopCheckpoint,
-        ThreadHealthMetrics,
-    )
+    from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
+    from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 
     checkpoint = StrangeLoopCheckpoint(
         loop_id="test_loop",
@@ -69,7 +66,7 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
-    goal_record = GoalExecutionRecord(
+    goal_record = GoalIndexEntry(
         goal_id="test_goal",
         thread_id="test_thread",
         started_at=datetime.now(UTC),

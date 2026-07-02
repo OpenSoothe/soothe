@@ -102,28 +102,24 @@ class TestIntakeClassifierLedger:
 
 
 class TestIntakeLangfuseInvokeConfig:
-    """Intent-classify nests under goal loop trace when bootstrap is provided (IG-540)."""
+    """Intent-classify nests under goal loop trace when goal_trace is provided (IG-540)."""
 
-    def test_build_invoke_config_uses_bootstrap_not_independent_trace(self) -> None:
+    def test_build_invoke_config_uses_goal_trace(self) -> None:
         from soothe.config import SootheConfig
 
         cfg = SootheConfig()
         cfg.observability.langfuse.enabled = True
         classifier = IntentClassifier(model=MagicMock(), soothe_config=cfg)
-        bootstrap = {"metadata": {"loop_id": "loop-1"}, "callbacks": [MagicMock()]}
+        goal_trace = MagicMock()
+        goal_trace.intake_invoke_config.return_value = {"metadata": {"purpose": "classify_intake"}}
 
-        with patch(
-            "soothe.utils.observability.langfuse.build_intake_langfuse_invoke_config",
-            return_value={"metadata": {"purpose": "classify_intake"}},
-        ) as mock_build:
-            out = classifier._build_invoke_config(
-                "classify_intake",
-                "intake.primary",
-                langfuse_bootstrap=bootstrap,
-            )
+        out = classifier._build_invoke_config(
+            "classify_intake",
+            "intake.primary",
+            goal_trace=goal_trace,
+        )
 
-        mock_build.assert_called_once()
-        assert mock_build.call_args.kwargs["langfuse_bootstrap"] is bootstrap
+        goal_trace.intake_invoke_config.assert_called_once()
         assert out["metadata"]["purpose"] == "classify_intake"
 
 

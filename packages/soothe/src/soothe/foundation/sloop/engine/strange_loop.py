@@ -143,7 +143,7 @@ class StrangeLoop:
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
         proposal_queue: ProposalQueue | None = None,  # RFC-204 Group C: Layer 2 proposals
-        langfuse_bootstrap: dict[str, Any] | None = None,  # IG-540: shared Langfuse trace root
+        goal_trace: Any | None = None,  # GoalLoopTrace when Langfuse enabled
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -166,7 +166,7 @@ class StrangeLoop:
                 requests are deferred via the legacy no-policy path.
             proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
                 tools to enqueue goal suggestions and findings during execution.
-            langfuse_bootstrap: Shared Langfuse config from the runner so off-graph
+            goal_trace: ``GoalLoopTrace`` from ``SootheLangfuse.begin_goal_loop`` so off-graph
                 intent-classify and ``strange-loop-graph`` nest under one trace.
 
         Yields:
@@ -278,7 +278,8 @@ class StrangeLoop:
                 current_goal_index = checkpoint.current_goal_index
                 if 0 <= current_goal_index < len(checkpoint.goal_history):
                     goal_record = checkpoint.goal_history[current_goal_index]
-                    iteration = goal_record.iteration
+                    exec_cp = checkpoint.execution_checkpoint or {}
+                    iteration = int(exec_cp.get("iteration") or 0)
                     recovery_valid_resume = True
                     logger.info(
                         "Recovering from checkpoint at iteration %d (goal: %s)",
@@ -578,7 +579,7 @@ class StrangeLoop:
                 proposal_queue=proposal_queue,  # RFC-204 Group C
                 ce=ce_instance,
                 ce_goal_id=ce_goal.id,
-                langfuse_bootstrap=langfuse_bootstrap,
+                goal_trace=goal_trace,
             )
 
             async def pump_graph() -> None:

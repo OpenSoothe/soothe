@@ -63,18 +63,21 @@ async def parse_plan_structured(
     from langchain_core.messages import HumanMessage
 
     from soothe.foundation.sloop.prompts.fragments import STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT
-    from soothe.utils.observability.langfuse import build_traced_config
+    from soothe.utils.observability.langfuse import SootheLangfuse
 
     prompt = STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT.format(
         goal=goal,
         planner_output=planner_output[:12000],
     )
-    invoke_config = build_traced_config(
-        soothe_config,
-        purpose="structured_plan_parse",
-        component="loop.cognition.structured_parser",
-        phase="plan-generate",
-        run_name="soothe:structured-plan-parse",
+    invoke_config = (
+        SootheLangfuse(soothe_config).traced_llm(
+            purpose="structured_plan_parse",
+            component="loop.cognition.structured_parser",
+            phase="plan-generate",
+            run_name="soothe:structured-plan-parse",
+        )
+        if soothe_config is not None
+        else {}
     )
 
     async def _invoke() -> PlanExtracted:

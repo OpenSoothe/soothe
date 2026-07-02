@@ -186,12 +186,11 @@ def _build_traced_invoke_config(
     if soothe_config is None:
         return None
     try:
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
         trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
         run_name = f"{trace_name}:veritas" if trace_name else "veritas"
-        return build_traced_config(
-            soothe_config,
+        return SootheLangfuse(soothe_config).traced_llm(
             purpose="clarification_answer",
             component="subagent.veritas",
             phase="pre-stream",

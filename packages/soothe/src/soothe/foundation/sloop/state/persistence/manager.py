@@ -401,26 +401,12 @@ class StrangeLoopCheckpointPersistenceManager:
         goal_id: str,
         loop_id: str,
         thread_id: str,
-        goal_text: str,
-        iteration: int = 0,
         status: str = "running",
         started_at: datetime | None = None,
     ) -> None:
-        """Save goal execution record (RFC-215).
-
-        Args:
-            goal_id: Goal identifier.
-            loop_id: StrangeLoop identifier.
-            thread_id: Thread where goal executes.
-            goal_text: Goal description.
-            iteration: Current iteration number.
-            status: Goal status ("running", "completed", "failed").
-            started_at: Goal start timestamp.
-        """
+        """Save goal index entry (RFC-626)."""
         started_at_iso = (started_at or datetime.now(UTC)).isoformat()
-        await self._backend.save_goal_record(
-            goal_id, loop_id, goal_text, thread_id, iteration, status, started_at_iso
-        )
+        await self._backend.save_goal_record(goal_id, loop_id, thread_id, status, started_at_iso)
         logger.debug(
             "Saved goal: id=%s loop=%s thread=%s status=%s",
             goal_id,
@@ -434,33 +420,16 @@ class StrangeLoopCheckpointPersistenceManager:
         goal_id: str,
         loop_id: str,
         status: str = "completed",
-        goal_completion: str = "",
-        evidence_summary: str = "",
-        iteration: int = 0,
         duration_ms: int = 0,
         tokens_used: int = 0,
         completed_at: datetime | None = None,
     ) -> None:
-        """Update goal record with execution results (RFC-215).
-
-        Args:
-            goal_id: Goal identifier.
-            loop_id: StrangeLoop identifier.
-            status: Final goal status.
-            goal_completion: Generated goal completion content.
-            evidence_summary: Condensed evidence summary.
-            iteration: Final iteration number.
-            duration_ms: Goal execution duration.
-            tokens_used: Tokens consumed.
-            completed_at: Goal completion timestamp.
-        """
+        """Update goal index entry with execution metrics (RFC-626)."""
         completed_at_iso = (completed_at or datetime.now(UTC)).isoformat()
         await self._backend.update_goal_record(
             goal_id,
             loop_id,
             status,
-            goal_completion,
-            evidence_summary,
             duration_ms,
             tokens_used,
             completed_at_iso,

@@ -542,8 +542,6 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     )
 
     goal_record = MagicMock()
-    goal_record.loop_messages = []
-    goal_record.iteration = 1
 
     # state_manager.save is awaited; capture the checkpoint argument.
     save_calls: list[Any] = []
@@ -623,10 +621,8 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     assert "Which package next?" in new_human.content
     assert "soothe-daemon" in new_ai.content
 
-    # RFC-624 Phase 4: goal_record.loop_messages is no longer populated;
-    # CE LedgerManager spans all goals and ce.save() persists the ledger.
-    # goal_record.iteration is still advanced inline.
-    assert goal_record.iteration == 3  # 2 → +1 in synth path
+    # RFC-626: iteration lives on LoopState / execution_checkpoint, not goal index.
+    assert loop_state.iteration == 3  # 2 → +1 in synth path
 
     # Checkpoint was persisted exactly once with our checkpoint object.
     assert save_calls == [checkpoint_obj]

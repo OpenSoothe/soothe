@@ -70,12 +70,12 @@ def publish_langfuse_system_prompt_hint(
     if not isinstance(runnable_config, dict):
         return tok
     try:
-        from soothe.utils.observability.langfuse import _langfuse_handler_from_runnable_config
+        from soothe.utils.observability.langfuse._merge import langfuse_handler_from_runnable_config
         from soothe.utils.observability.langfuse_callback_handler import (
             SootheLangfuseCallbackHandler,
         )
 
-        handler = _langfuse_handler_from_runnable_config(runnable_config)
+        handler = langfuse_handler_from_runnable_config(runnable_config)
         if isinstance(handler, SootheLangfuseCallbackHandler):
             handler.register_system_prompt_hint_for_config(runnable_config, str(text))
     except Exception:
@@ -100,12 +100,12 @@ def clear_langfuse_system_prompt_hint(
     if not isinstance(runnable_config, dict):
         return
     try:
-        from soothe.utils.observability.langfuse import _langfuse_handler_from_runnable_config
+        from soothe.utils.observability.langfuse._merge import langfuse_handler_from_runnable_config
         from soothe.utils.observability.langfuse_callback_handler import (
             SootheLangfuseCallbackHandler,
         )
 
-        handler = _langfuse_handler_from_runnable_config(runnable_config)
+        handler = langfuse_handler_from_runnable_config(runnable_config)
         if isinstance(handler, SootheLangfuseCallbackHandler):
             handler.clear_system_prompt_hint_for_config(runnable_config)
     except Exception:

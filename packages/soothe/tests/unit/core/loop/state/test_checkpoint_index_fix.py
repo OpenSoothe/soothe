@@ -357,7 +357,6 @@ class TestEdgeCases:
         checkpoint.status = "running"
 
         assert checkpoint.current_goal_index == 0
-        assert checkpoint.goal_history[0].iteration == 0
 
 
 # Run tests with: pytest packages/soothe/tests/unit/core/loop/state/test_checkpoint_index_fix.py -v

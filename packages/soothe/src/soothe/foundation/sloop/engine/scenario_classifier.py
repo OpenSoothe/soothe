@@ -375,10 +375,9 @@ async def classify_synthesis_scenario(
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        invoke_config = build_traced_config(
-            soothe_config,
+        invoke_config = SootheLangfuse(soothe_config).traced_llm(
             purpose="scenario_classify",
             component="synthesis.scenario_classifier",
             phase="post-loop",

@@ -21,11 +21,11 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.sloop.state.checkpoint import (
-    GoalExecutionRecord,
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
@@ -412,24 +412,19 @@ class StrangeLoopStateManager:
 
                 goal_history = []
                 for goal_row in goal_rows_data:
-                    # RFC-225: unpack enriched fields stored in extras_jsonb
-                    extras_raw = goal_row[13] if len(goal_row) > 13 else None
-                    extras = json.loads(extras_raw) if extras_raw else {}
-
-                    # RFC-624 Phase 4: GER slimmed to metadata-only; CE owns loop state
-                    goal_record = GoalExecutionRecord(
-                        goal_id=goal_row[0],
-                        thread_id=goal_row[3],
-                        iteration=goal_row[4],
-                        max_iterations=extras.get("max_iterations", 10),
-                        status=goal_row[5],
-                        plan_revision_count=extras.get("plan_revision_count", 0),
-                        duration_ms=goal_row[9],
-                        tokens_used=goal_row[10],
-                        started_at=datetime.fromisoformat(goal_row[11]),
-                        completed_at=datetime.fromisoformat(goal_row[12]) if goal_row[12] else None,
+                    goal_history.append(
+                        GoalIndexEntry(
+                            goal_id=goal_row[0],
+                            thread_id=goal_row[2],
+                            status=goal_row[3],
+                            duration_ms=goal_row[4] or 0,
+                            tokens_used=goal_row[5] or 0,
+                            started_at=datetime.fromisoformat(goal_row[6]),
+                            completed_at=datetime.fromisoformat(goal_row[7])
+                            if goal_row[7]
+                            else None,
+                        )
                     )
-                    goal_history.append(goal_record)
 
                 checkpoint = StrangeLoopCheckpoint(
                     loop_id=self.loop_id,
@@ -506,10 +501,8 @@ class StrangeLoopStateManager:
         """Sync load of goal records executed in thread pool."""
         cursor = conn.execute(
             """
-            SELECT goal_id, loop_id, goal_text, thread_id, iteration, status,
-                   loop_messages, goal_completion, evidence_summary,
-                   duration_ms, tokens_used, started_at, completed_at,
-                   extras_jsonb
+            SELECT goal_id, loop_id, thread_id, status,
+                   duration_ms, tokens_used, started_at, completed_at
             FROM goal_records WHERE loop_id = ?
             ORDER BY started_at
             """,
@@ -789,50 +782,32 @@ class StrangeLoopStateManager:
         # Save goal_history to goal_records table
         for goal_record in checkpoint.goal_history:
             logger.debug(
-                "save goal: id=%s status=%s iter=%d done=%s",
+                "save goal: id=%s status=%s done=%s",
                 goal_record.goal_id,
                 goal_record.status,
-                goal_record.iteration,
                 goal_record.completed_at.isoformat() if goal_record.completed_at else "None",
             )
 
-            # RFC-624 Phase 4 Stage 2: loop_messages field removed from GER.
-            # CE LedgerManager is the authoritative source. Save empty placeholder.
-            loop_messages_json = json.dumps([], ensure_ascii=False)
             completed_at_str = (
                 goal_record.completed_at.isoformat() if goal_record.completed_at else None
             )
-            # RFC-624 Phase 4 Stage 2: extras contains only metadata fields.
-            # CE-owned fields removed: current_plan, completed_step_ids, step_results, evidence_ledger.
-            extras_payload = {
-                "max_iterations": goal_record.max_iterations,
-                "plan_revision_count": goal_record.plan_revision_count,
-            }
-            extras_json = json.dumps(extras_payload, ensure_ascii=False)
 
             conn.execute(
                 """
                 INSERT OR REPLACE INTO goal_records
-                (goal_id, loop_id, goal_text, thread_id, iteration, status,
-                 loop_messages, goal_completion, evidence_summary,
-                 duration_ms, tokens_used, started_at, completed_at, extras_jsonb)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (goal_id, loop_id, thread_id, status,
+                 duration_ms, tokens_used, started_at, completed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     goal_record.goal_id,
                     checkpoint.loop_id,
-                    "",
                     goal_record.thread_id,
-                    goal_record.iteration,
                     goal_record.status,
-                    loop_messages_json,
-                    "",
-                    "",  # RFC-624 Phase 4 Stage 2: evidence_summary removed, use empty placeholder
                     goal_record.duration_ms,
                     goal_record.tokens_used,
                     goal_record.started_at.isoformat(),
                     completed_at_str,
-                    extras_json,
                 ),
             )
 
@@ -842,15 +817,15 @@ class StrangeLoopStateManager:
         self,
         goal: str,
         max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
-    ) -> GoalExecutionRecord:
-        """Create new goal record and clear working memory (RFC-216).
+    ) -> GoalIndexEntry:
+        """Create new goal index entry and clear working memory (RFC-216).
 
         Args:
-            goal: Goal description
-            max_iterations: Maximum iterations for this goal
+            goal: Goal description (stored in CE, not checkpoint index)
+            max_iterations: Maximum iterations for this goal (execution config)
 
         Returns:
-            New GoalExecutionRecord (thread_id = current_thread_id)
+            New GoalIndexEntry (thread_id = current_thread_id)
 
         Raises:
             ValueError: If checkpoint is None or loop status is 'running'
@@ -872,11 +847,10 @@ class StrangeLoopStateManager:
 
         now = datetime.now(UTC)
 
-        goal_record = GoalExecutionRecord(
+        _ = goal, max_iterations
+        goal_record = GoalIndexEntry(
             goal_id=goal_id,
             thread_id=checkpoint.current_thread_id,
-            iteration=0,
-            max_iterations=max_iterations,
             status="running",
             duration_ms=0,
             tokens_used=0,
@@ -891,7 +865,7 @@ class StrangeLoopStateManager:
 
     async def finalize_goal(
         self,
-        goal_record: GoalExecutionRecord,
+        goal_record: GoalIndexEntry,
         _goal_completion: str,
         loop_state: LoopState | None = None,
     ) -> None:
@@ -931,13 +905,13 @@ class StrangeLoopStateManager:
         target_goal.completed_at = datetime.now(UTC)
 
         # RFC-624 Phase 4 Stage 2: No mirroring of CE-owned data.
-        # GoalExecutionRecord is metadata-only. CE DAG is the real data store.
+        # GoalIndexEntry is loop-level index only; CE DAG is the real data store.
         # Removed: current_plan, completed_step_ids, step_results, evidence_ledger.
 
         logger.debug(
-            "finalize_goal: modified id=%s iter=%d",
+            "finalize_goal: modified id=%s status=%s",
             target_goal.goal_id,
-            target_goal.iteration,
+            target_goal.status,
         )
 
         # Update loop metrics
@@ -965,7 +939,7 @@ class StrangeLoopStateManager:
 
     async def record_iteration(
         self,
-        goal_record: GoalExecutionRecord,
+        goal_record: GoalIndexEntry,
         iteration: int,
         plan_result: PlanResult,
         decision: AgentDecision | None,  # Allow None for immediate completion
@@ -1014,20 +988,24 @@ class StrangeLoopStateManager:
 
         # RFC-624 Phase 4 Stage 2: No loop_messages deep-copy.
         # CE LedgerManager spans all goals, persisted via ce.save().
-        # GoalExecutionRecord.loop_messages field removed.
+        # CE ledger spans all goals; no checkpoint mirroring.
 
         # Record working memory state
         if working_memory is not None:
             checkpoint.working_memory_state = self._serialize_working_memory(working_memory)
 
-        # Update goal metrics
-        target_goal.iteration = iteration + 1
+        # Update goal metrics (iteration tracked in execution_checkpoint)
         target_goal.duration_ms += sum(r.duration_ms for r in step_results)
         target_goal.tokens_used = state.total_tokens_used
+        exec_cp = dict(checkpoint.execution_checkpoint or {})
+        exec_cp["iteration"] = iteration + 1
+        exec_cp.setdefault("loop_id", checkpoint.loop_id)
+        exec_cp.setdefault("thread_id", checkpoint.current_thread_id)
+        checkpoint.execution_checkpoint = exec_cp
 
         logger.debug(
             "record_iteration: updated iter=%d dur=%dms tok=%d",
-            target_goal.iteration,
+            iteration + 1,
             target_goal.duration_ms,
             target_goal.tokens_used,
         )
