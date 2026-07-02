@@ -282,11 +282,10 @@ class LoopConfig:
     sort_order: str
 
 
-# Default column visibility for /resume. Only Loop ID, message count,
-# updated timestamp, and topic are shown — topic distinguishes loops best.
+# Default column visibility for /resume: topic (left), updated + loop id (right).
 _DEFAULT_LOOP_COLUMNS = {
     "loop_id": True,
-    "messages": True,
+    "messages": False,
     "updated_at": True,
     "topic": True,
     "status": False,
