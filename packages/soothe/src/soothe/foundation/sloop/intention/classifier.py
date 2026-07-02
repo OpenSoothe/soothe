@@ -1,4 +1,4 @@
-"""Intent classifier implementation (RFC-225, RFC-630).
+"""Intent classifier implementation (RFC-225, RFC-630, IG-540).
 
 4-class LLM intake classification (``quiz`` | ``trivial`` | ``simple`` |
 ``complex``) via ``classify_intake``, driving ``route_by_intent`` branch
@@ -8,11 +8,11 @@ from the loaded checkpoint and is not a classifier concern.
 
 from __future__ import annotations
 
+import json
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
@@ -20,17 +20,13 @@ from soothe.utils.llm.invoke_policy import (
 )
 from soothe.utils.llm.structured import invoke_structured_chat
 
+from .intake_messages import build_intake_human_message, build_intake_system_message
 from .models import (
     IntakeClassificationLLMResult,
     IntakeLabel,
     IntentClassification,
     derive_task_complexity_from_intake,
 )
-from .prompts import (
-    INTAKE_CLASSIFICATION_PROMPT,
-    INTAKE_CLASSIFICATION_RETRY_PROMPT,
-)
-from .quiz_messages import build_quiz_system_message
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -74,7 +70,11 @@ class IntentClassifier:
         self,
         query: str,
         *,
+        loop_messages: list[BaseMessage] | None = None,
+        thread_id: str | None = None,
+        context_engine: Any | None = None,
         observability_metadata: dict[str, str] | None = None,
+        langfuse_bootstrap: dict[str, Any] | None = None,
     ) -> IntentClassification:
         """Classify the query into a 4-class intake label (RFC-630).
 
@@ -83,7 +83,12 @@ class IntentClassifier:
 
         Args:
             query: User input text.
+            loop_messages: Optional persisted ledger for prior-goal projection.
+            thread_id: Thread id for ledger metadata (optional).
+            context_engine: Optional CE instance for intent-classify ledger writes.
             observability_metadata: Optional metadata for observability.
+            langfuse_bootstrap: Shared Langfuse config from ``build_goal_loop_langfuse_bootstrap``
+                so intent-classify nests under the same trace as ``strange-loop-graph``.
 
         Returns:
             IntentClassification with ``intake_label`` ∈
@@ -95,13 +100,17 @@ class IntentClassifier:
 
         result: IntentClassification | None = None
         last_error: Exception | None = None
+        last_human_content: str | None = None
+        last_llm_dict: dict[str, Any] | None = None
 
         for retry_mode in (False, True):
             try:
-                result = await self._classify_intake_llm(
+                result, last_human_content, last_llm_dict = await self._classify_intake_llm(
                     query,
                     retry_mode=retry_mode,
+                    loop_messages=loop_messages,
                     observability_metadata=observability_metadata,
+                    langfuse_bootstrap=langfuse_bootstrap,
                 )
                 break
             except Exception as exc:
@@ -121,6 +130,14 @@ class IntentClassifier:
 
         result = self._patch_missing_fields(result, query)
 
+        if last_human_content is not None and last_llm_dict is not None:
+            await self._record_intake_ledger(
+                human_content=last_human_content,
+                llm_result=last_llm_dict,
+                thread_id=thread_id,
+                context_engine=context_engine,
+            )
+
         logger.debug(
             "Intake classified: intake_label=%s complexity=%s",
             result.intake_label,
@@ -136,38 +153,33 @@ class IntentClassifier:
         query: str,
         *,
         retry_mode: bool = False,
+        loop_messages: list[BaseMessage] | None = None,
         observability_metadata: dict[str, str] | None = None,
-    ) -> IntentClassification:
-        """4-class intake LLM call with structured output (RFC-630).
-
-        Uses `invoke_structured_chat` for thinking-model compatibility.
-        Models in thinking mode reject `tool_choice=required`, so we use the
-        structured_invoke fallback chain: function_calling → json_schema → json_mode.
-        The LLM picks one of ``quiz``/``trivial``/``simple``/``complex``; the
-        result is mapped onto ``intent_type`` so the quiz fast-path and event
-        emission keep working.
-        """
-        current_time = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
-
-        prompt_template = (
-            INTAKE_CLASSIFICATION_RETRY_PROMPT if retry_mode else INTAKE_CLASSIFICATION_PROMPT
+        langfuse_bootstrap: dict[str, Any] | None = None,
+    ) -> tuple[IntentClassification, str, dict[str, Any]]:
+        """4-class intake LLM call with structured output (RFC-630)."""
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            project_prior_goal_completion_for_intake,
         )
-        prompt = prompt_template.format(
-            query=query,
-            current_time=current_time,
-            assistant_name=self._assistant_name,
+
+        system_content = build_intake_system_message(self._assistant_name, retry=retry_mode)
+        human_content = build_intake_human_message(query=query, retry=retry_mode)
+
+        ledger_cfg = (
+            self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
         )
+        projected = project_prior_goal_completion_for_intake(loop_messages or [], ledger_cfg)
 
         config = self._build_invoke_config(
             "classify_intake",
             "intake.primary",
             observability_metadata=observability_metadata,
+            langfuse_bootstrap=langfuse_bootstrap,
         )
 
-        messages = [
-            SystemMessage(content=build_quiz_system_message(self._assistant_name)),
-            HumanMessage(content=prompt),
-        ]
+        messages: list[BaseMessage] = [SystemMessage(content=system_content)]
+        messages.extend(projected)
+        messages.append(HumanMessage(content=human_content))
 
         schema = IntakeClassificationLLMResult.model_json_schema()
         try:
@@ -202,7 +214,49 @@ class IntentClassifier:
             raise ValueError(f"Invalid intake_label from LLM: {result_dict.get('intake_label')!r}")
 
         llm_result = IntakeClassificationLLMResult(**result_dict)
-        return llm_result.to_intent_classification()
+        return llm_result.to_intent_classification(), human_content, result_dict
+
+    async def _record_intake_ledger(
+        self,
+        *,
+        human_content: str,
+        llm_result: dict[str, Any],
+        thread_id: str | None,
+        context_engine: Any | None,
+    ) -> None:
+        """Append intent-classify Human/AI pair to the CE ledger (RFC-214, IG-540)."""
+        if context_engine is None:
+            return
+        from soothe.foundation.sloop.utils.messages import (
+            LoopAIMessage,
+            LoopHumanMessage,
+            _record_ledger_message,
+        )
+
+        tid = (thread_id or "").strip()
+        human_msg = LoopHumanMessage(
+            content=human_content,
+            thread_id=tid or None,
+            iteration=0,
+            phase="intent_classify",
+        )
+        ai_msg = LoopAIMessage(
+            content=json.dumps(llm_result, ensure_ascii=False),
+            thread_id=tid or None,
+            iteration=0,
+            phase="intent_classify",
+        )
+        try:
+            _record_ledger_message(context_engine, human_msg, "intent_classify")
+            _record_ledger_message(context_engine, ai_msg, "intent_classify")
+            await context_engine.save()
+            logger.debug(
+                "Recorded intent-classify ledger pair: human=%d chars, ai=%d chars",
+                len(human_content),
+                len(ai_msg.content),
+            )
+        except Exception:
+            logger.warning("Failed to record intent-classify ledger pair", exc_info=True)
 
     # -- Helpers ------------------------------------------------------------
 
@@ -257,23 +311,51 @@ class IntentClassifier:
         component: str,
         *,
         observability_metadata: dict[str, str] | None = None,
+        langfuse_bootstrap: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build RunnableConfig with Langfuse tracing and call metadata."""
-        try:
-            from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.middleware._utils import create_llm_call_metadata
 
+        if (
+            langfuse_bootstrap is not None
+            and self._soothe_config is not None
+            and self._soothe_config.observability.langfuse.enabled
+        ):
+            try:
+                from soothe.utils.observability.langfuse import build_intake_langfuse_invoke_config
+
+                return build_intake_langfuse_invoke_config(
+                    self._soothe_config,
+                    langfuse_bootstrap=langfuse_bootstrap,
+                    purpose=purpose,
+                    component=f"classifier.{component}",
+                    phase="pre-stream",
+                    extra_metadata=observability_metadata,
+                )
+            except Exception:
+                logger.debug("Langfuse intake invoke config build failed", exc_info=True)
+
+        try:
+            from soothe.utils.observability.langfuse import (
+                build_traced_config,
+                intent_classify_langfuse_run_display_name,
+            )
+
+            trace_name = (
+                (self._soothe_config.observability.langfuse.trace_name or "").strip()
+                if self._soothe_config
+                else ""
+            )
             return build_traced_config(
                 self._soothe_config,
                 purpose=purpose,
                 component=f"classifier.{component}",
                 phase="pre-stream",
-                run_name="soothe:intent-classify",
+                run_name=intent_classify_langfuse_run_display_name(trace_name or None),
                 extra_metadata=observability_metadata,
-                independent_trace=True,  # Ensure standalone root trace, not nested under strange-loop-graph
+                independent_trace=False,
             )
         except Exception:
-            from soothe.middleware._utils import create_llm_call_metadata
-
             metadata = create_llm_call_metadata(
                 purpose=purpose,
                 component=f"classifier.{component}",

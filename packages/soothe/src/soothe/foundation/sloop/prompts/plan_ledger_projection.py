@@ -31,7 +31,9 @@ PlannerProjectionMode = Literal["new_goal", "mid_goal"]
 
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
-_NEW_GOAL_LEDGER_PHASES = frozenset({"plan_assess", "plan_generate", "goal_completion"})
+_NEW_GOAL_LEDGER_PHASES = frozenset(
+    {"intent_classify", "plan_assess", "plan_generate", "goal_completion"}
+)
 
 
 def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
@@ -216,6 +218,75 @@ def project_planner_ledger(
         len(projected),
     )
     return projected
+
+
+def _is_loop_human_message(msg: BaseMessage) -> bool:
+    name = type(msg).__name__
+    return name.endswith("HumanMessage")
+
+
+def _is_loop_ai_message(msg: BaseMessage) -> bool:
+    name = type(msg).__name__
+    return name.endswith("AIMessage")
+
+
+def _extract_last_phase_pair(
+    loop_messages: list[BaseMessage],
+    phase: str,
+) -> list[BaseMessage]:
+    """Return the last human+AI pair for ``phase``, or the trailing AI alone."""
+    last_ai_idx: int | None = None
+    for i in range(len(loop_messages) - 1, -1, -1):
+        msg = loop_messages[i]
+        if getattr(msg, "phase", None) == phase and _is_loop_ai_message(msg):
+            last_ai_idx = i
+            break
+    if last_ai_idx is None:
+        return []
+    last_human_idx: int | None = None
+    for j in range(last_ai_idx - 1, -1, -1):
+        msg = loop_messages[j]
+        if getattr(msg, "phase", None) == phase and _is_loop_human_message(msg):
+            last_human_idx = j
+            break
+    if last_human_idx is not None:
+        return list(loop_messages[last_human_idx : last_ai_idx + 1])
+    return [loop_messages[last_ai_idx]]
+
+
+def project_prior_goal_completion_for_intake(
+    loop_messages: list[BaseMessage],
+    ledger_cfg: PlanPromptLedgerConfig | None,
+) -> list[BaseMessage]:
+    """Project the last prior goal's completion for intake classification (IG-540).
+
+    Resolution order mirrors goal completion:
+    1. ``goal_completion`` human/AI pair when synthesis wrote a final report.
+    2. Last ``execute_step`` human/AI pair for ledger-direct completion.
+    3. Last ``quiz`` human/AI pair for a prior quiz turn.
+
+    Args:
+        loop_messages: Full RFC-214 ledger loaded from CE persistence.
+        ledger_cfg: Optional caps (same knobs as plan prompts).
+
+    Returns:
+        Bounded ledger slice injected before the classify human message.
+    """
+    if not loop_messages:
+        return []
+
+    for phase in ("goal_completion", "execute_step", "quiz"):
+        tail = _extract_last_phase_pair(loop_messages, phase)
+        if tail:
+            projected = project_loop_messages_for_plan(tail, ledger_cfg)
+            logger.debug(
+                "Intake prior-goal projection: phase=%s in=%d out=%d",
+                phase,
+                len(tail),
+                len(projected),
+            )
+            return projected
+    return []
 
 
 def project_loop_messages_for_core_agent(

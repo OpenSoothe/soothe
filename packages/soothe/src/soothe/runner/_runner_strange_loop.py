@@ -412,12 +412,33 @@ class StrangeLoopMixin:
         # to a normal turn if no clarification is really pending.
 
         intent_classification = None
+        strange_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
+        langfuse_bootstrap = None
         if self._intent_classifier and not clarification_answer:
             # RFC-630: 4-class intake LLM (quiz | trivial | simple | complex),
             # drives route_by_intent branch routing in the graph.
             yield _custom(StrangeLoopPlanPhaseStatusEvent(label="Classifying request").to_dict())
+            if self._config.observability.langfuse.enabled:
+                from soothe.utils.observability.langfuse import build_goal_loop_langfuse_bootstrap
+
+                langfuse_bootstrap = build_goal_loop_langfuse_bootstrap(
+                    self._config,
+                    session_id=tid,
+                    loop_id=strange_loop_id,
+                )
+            from soothe.foundation.sloop.intention.intake_context import load_intake_context
+
+            intake_ctx = await load_intake_context(
+                self._config,
+                strange_loop_id,
+                workspace=workspace,
+            )
             intent_classification = await self._intent_classifier.classify_intake(
                 user_input,
+                loop_messages=intake_ctx.loop_messages,
+                thread_id=tid,
+                context_engine=intake_ctx.context_engine,
+                langfuse_bootstrap=langfuse_bootstrap,
             )
 
             logger.info(
@@ -469,7 +490,6 @@ class StrangeLoopMixin:
             loop_planner=self._planner,
             config=self._config,
         )
-        strange_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
 
         # IG-406: Get shared PostgreSQL pool for high-concurrency support
         shared_pool = await self.get_sloop_shared_pool()
@@ -519,6 +539,7 @@ class StrangeLoopMixin:
                 clarification_policy=clarification_policy,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
+                langfuse_bootstrap=langfuse_bootstrap,
             ):
                 if event_type == "intent_classified":
                     logger.info(

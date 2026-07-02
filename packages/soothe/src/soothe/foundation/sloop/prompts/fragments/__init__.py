@@ -68,8 +68,15 @@ QUIZ_RESPONSE_GUIDE_FRAGMENT = _read("system/response_guides/quiz_response.xml")
 # Classifier prompts
 # ---------------------------------------------------------------------------
 
-INTAKE_CLASSIFICATION_PROMPT_FRAGMENT = _read("classifiers/intake_classification.xml")
-INTAKE_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = _read("classifiers/intake_classification_retry.xml")
+INTAKE_CLASSIFICATION_SYSTEM_PROMPT_FRAGMENT = _read("classifiers/intake_classification_system.xml")
+INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT_FRAGMENT = _read(
+    "classifiers/intake_classification_retry_system.xml"
+)
+# Human envelope is code-built (GOAL: plain text); keep stub for back-compat imports.
+INTAKE_CLASSIFICATION_HUMAN_PROMPT_FRAGMENT = "GOAL:\n{query}"
+INTAKE_CLASSIFICATION_RETRY_HUMAN_PROMPT_FRAGMENT = INTAKE_CLASSIFICATION_HUMAN_PROMPT_FRAGMENT
+INTAKE_CLASSIFICATION_PROMPT_FRAGMENT = INTAKE_CLASSIFICATION_SYSTEM_PROMPT_FRAGMENT
+INTAKE_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT_FRAGMENT
 SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
     "classifiers/scenario_classifier_system.xml", strip=True
 )
