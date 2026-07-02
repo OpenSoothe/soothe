@@ -132,7 +132,11 @@ def test_build_dependent_execution_hints_includes_no_rediscovery_instruction() -
         workspace=None,
         expected_output="All checks pass",
     )
-    assert "PRIOR STEPS and prior execute-step ledger turns are authoritative" in hints.instructions
+    assert (
+        "PRIOR STEPS and prior execute-step ledger turns are authoritative"
+        not in hints.instructions
+    )
+    assert "Prior execute-step ledger turns are authoritative" in hints.instructions
     assert "do not repeat completed discovery steps" in hints.instructions
 
 

@@ -39,6 +39,7 @@ class ProjectedExecuteStepInput:
 
     messages: list[BaseMessage] = field(default_factory=list)
     cross_goal_projected: bool = False
+    predecessor_projected: bool = False
     mode: ExecuteProjectionMode = "mid_goal"
 
 
@@ -490,29 +491,33 @@ def project_execute_step_graph_input(
                 out.extend(slice_a)
                 cross_goal_projected = True
 
+    predecessor_projected = False
     if step.dependencies:
         cap = exec_cfg.predecessor_max_messages
         if cap <= 0:
             cap = None
-        out.extend(
-            project_predecessor_execute_ledger_for_step(
-                loop_messages,
-                step,
-                decision,
-                max_messages=cap,
-            )
+        slice_b = project_predecessor_execute_ledger_for_step(
+            loop_messages,
+            step,
+            decision,
+            max_messages=cap,
         )
+        if slice_b:
+            out.extend(slice_b)
+            predecessor_projected = True
 
     logger.debug(
-        "Execute-step graph projection: mode=%s cross_goal=%s out_msgs=%d step=%s",
+        "Execute-step graph projection: mode=%s cross_goal=%s predecessor=%s out_msgs=%d step=%s",
         mode,
         cross_goal_projected,
+        predecessor_projected,
         len(out),
         step.id,
     )
     return ProjectedExecuteStepInput(
         messages=out,
         cross_goal_projected=cross_goal_projected,
+        predecessor_projected=predecessor_projected,
         mode=mode,
     )
 

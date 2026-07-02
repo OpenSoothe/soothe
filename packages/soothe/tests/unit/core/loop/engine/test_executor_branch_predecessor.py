@@ -107,10 +107,10 @@ async def test_multi_dep_step_uses_ledger_projection() -> None:
     messages = _astream_messages(mock_agent)
     assert len(messages) == 5
     envelope = str(messages[-1].content)
-    assert "PRIOR STEPS:" in envelope
+    assert "PRIOR STEPS:" not in envelope
     assert "PRIOR STEP EVIDENCE" not in envelope
-    assert "(completed)" in envelope
-    assert "first" in envelope or "second" in envelope
+    assert "first" not in envelope
+    assert "second" not in envelope
     assert "ledger-ai-A" in str(messages[1].content)
     assert "ledger-ai-B" in str(messages[3].content)
     assert "ledger-human-A" in str(messages[0].content)
@@ -175,9 +175,8 @@ async def test_singleton_dependent_step_uses_fresh_thread_and_ledger_projection(
     messages = _astream_messages(mock_agent)
     assert len(messages) == 3
     envelope = str(messages[-1].content)
-    assert "PRIOR STEPS:" in envelope
+    assert "PRIOR STEPS:" not in envelope
     assert "PRIOR STEP EVIDENCE" not in envelope
-    assert "(completed)" in envelope
     assert "ledger-ai-A with failure details" in str(messages[1].content)
     assert "do not repeat completed discovery steps" in envelope
     assert "ledger-human-A" in str(messages[0].content)

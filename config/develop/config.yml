@@ -65,6 +65,7 @@ active_router_profile: production
 # AGENT (team concurrency overrides only)
 # ============================================================
 agent:
+  agent_instructions_max_chars: 8000
   runtime:
     lazy_core_agent: true  # pair with daemon thread_pool.warmup_core_agent for fast TUI
     general_purpose_subagent: false

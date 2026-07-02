@@ -15,6 +15,8 @@ from soothe.utils.observability.langfuse._handlers import (
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
+    SootheConfigOrNone = SootheConfig | None
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,7 +66,7 @@ def pinned_trace_id_from_config(config: dict[str, Any] | None) -> str | None:
 
 def merge_langfuse_runnable_config(
     base: dict[str, Any],
-    soothe_config: SootheConfig,
+    soothe_config: SootheConfig | None,
     *,
     session_id: str | None = None,
     run_name: str | None = None,
@@ -80,7 +82,7 @@ def merge_langfuse_runnable_config(
 
     Args:
         base: RunnableConfig-compatible dict.
-        soothe_config: Active Soothe configuration.
+        soothe_config: Active Soothe configuration, or None to skip Langfuse integration.
         session_id: Optional thread id stored as ``langfuse_session_id`` metadata.
         run_name: Optional root run name.
         loop_id: Optional loop identifier for trace correlation.
@@ -90,7 +92,7 @@ def merge_langfuse_runnable_config(
             handler pinned to this id so intent-classify and strange-loop-graph land on
             one Langfuse trace without reusing stale handler state across invocations.
     """
-    if not soothe_config.observability.langfuse.enabled:
+    if soothe_config is None or not soothe_config.observability.langfuse.enabled:
         return base
 
     inherit_handler = (

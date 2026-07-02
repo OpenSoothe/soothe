@@ -152,14 +152,19 @@ class SynthesisGenerator:
 
         max_total = self._synthesis_max_chars()
         ledger_cfg = None
+        agent_instructions_max_chars = 8000
         if self._soothe_config is not None:
             ledger_cfg = self._soothe_config.agent.loop.plan_prompt_ledger
+            agent_instructions_max_chars = int(
+                self._soothe_config.agent.agent_instructions_max_chars
+            )
         messages = build_synthesis_messages(
             state,
             classification,
             user_query=goal,
             max_chars=max_total,
             ledger_cfg=ledger_cfg,
+            agent_instructions_max_chars=agent_instructions_max_chars,
         )
 
         approx_chars = sum(

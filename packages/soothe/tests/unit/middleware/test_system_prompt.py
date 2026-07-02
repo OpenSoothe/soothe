@@ -533,7 +533,7 @@ class TestWorkspaceInjection:
 
     def test_minimal_complexity_still_emits_workspace_blocks(self, tmp_path) -> None:
         """Minimal-complexity execute steps must include WORKSPACE_RULES, <WORKSPACE>,
-        and WORKSPACE_INSTRUCTIONS when a workspace is bound.
+        and AGENT_INSTRUCTIONS when a workspace is bound.
 
         Regression for the trace fe0d follow-up: previously the minimal branch
         in ``_get_prompt_for_complexity`` short-circuited before reaching the
@@ -545,7 +545,7 @@ class TestWorkspaceInjection:
         prompt = mw._get_prompt_for_complexity("minimal", {"workspace": str(tmp_path)})
         assert "<WORKSPACE_RULES>" in prompt
         assert "<WORKSPACE>" in prompt
-        assert "<WORKSPACE_INSTRUCTIONS>" in prompt
+        assert "<AGENT_INSTRUCTIONS>" in prompt
         assert "Be concise." in prompt
 
     def test_response_language_hint_lives_in_system_prompt(self, tmp_path) -> None:
@@ -575,7 +575,7 @@ class TestWorkspaceInjection:
 
     def test_workspace_prelude_block_order(self, tmp_path) -> None:
         """Execute-step system prompt order must be:
-        base_core, WORKSPACE_RULES, WORKSPACE_INSTRUCTIONS, ENVIRONMENT, WORKSPACE.
+        base_core, WORKSPACE_RULES, AGENT_INSTRUCTIONS, ENVIRONMENT, WORKSPACE.
 
         Workspace context grounds the model before host/env details and before
         the dynamic <WORKSPACE> metadata block.
@@ -585,7 +585,7 @@ class TestWorkspaceInjection:
         prompt = mw._get_prompt_for_complexity("medium", {"workspace": str(tmp_path)})
 
         idx_rules = prompt.find("<WORKSPACE_RULES>")
-        idx_instr = prompt.find("<WORKSPACE_INSTRUCTIONS>")
+        idx_instr = prompt.find("<AGENT_INSTRUCTIONS>")
         idx_env = prompt.find("<ENVIRONMENT")
         # `<WORKSPACE>\n<root>` matches the metadata block specifically;
         # bare `<WORKSPACE>` also occurs inside the WORKSPACE_RULES text
@@ -597,7 +597,7 @@ class TestWorkspaceInjection:
         assert idx_env >= 0
         assert idx_ws >= 0
         assert idx_rules < idx_instr < idx_env < idx_ws, (
-            "Expected order: WORKSPACE_RULES < WORKSPACE_INSTRUCTIONS < "
+            "Expected order: WORKSPACE_RULES < AGENT_INSTRUCTIONS < "
             f"ENVIRONMENT < <WORKSPACE>; got rules={idx_rules}, "
             f"instr={idx_instr}, env={idx_env}, ws={idx_ws}"
         )
@@ -617,7 +617,7 @@ class TestWorkspaceInjection:
             "_SystemPromptState must declare `workspace` so LangGraph "
             "preserves it across node boundaries; otherwise the execute-step "
             "system prompt loses WORKSPACE_RULES, <WORKSPACE>, and "
-            "WORKSPACE_INSTRUCTIONS."
+            "AGENT_INSTRUCTIONS."
         )
         # Annotations are stringified by ``from __future__ import annotations``
         # so we assert on the string form (NotRequired survives) rather than
@@ -659,10 +659,10 @@ def test_available_tools_block_when_progressive_enabled() -> None:
     assert "not yet bound" in content
 
 
-def test_simple_complexity_emits_workspace_instructions(tmp_path) -> None:
+def test_simple_complexity_emits_agent_instructions(tmp_path) -> None:
     """Simple-tier execute steps must inline AGENTS.md/CLAUDE.md (headline cap)."""
     (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
     mw = SystemPromptMiddleware(config=SootheConfig())
     prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
-    assert "<WORKSPACE_INSTRUCTIONS>" in prompt
+    assert "<AGENT_INSTRUCTIONS>" in prompt
     assert "Use ruff." in prompt

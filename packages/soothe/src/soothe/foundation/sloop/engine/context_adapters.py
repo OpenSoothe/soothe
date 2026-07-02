@@ -71,11 +71,11 @@ class ContextEngineGoalContextAdapter:
             for goal in completed:
                 step_summary = self._render_step_summary(goal)
                 context_block = (
-                    f"<previous_goal>\n"
+                    f"<PREVIOUS_GOAL>\n"
                     f"Goal: {goal.description}\n"
                     f"Status: {goal.status}\n"
                     f"Output:\n{step_summary}\n"
-                    f"</previous_goal>"
+                    f"</PREVIOUS_GOAL>"
                 )
                 context_blocks.append(context_block)
 

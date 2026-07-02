@@ -57,23 +57,23 @@ class BrowserUsePlugin:
         ),
         model="openai:gpt-4o-mini",
         system_context="""<BROWSER_CONTEXT>
-<navigation_rules>
+<NAVIGATION_RULES>
 Always verify URLs before navigation to prevent security issues.
 Check for HTTPS when handling sensitive data (logins, payments).
 Handle JavaScript-heavy pages with patience - wait for dynamic content.
 Detect and handle CAPTCHAs, authentication prompts, and interactive elements.
-</navigation_rules>
-<output_interpretation>
+</NAVIGATION_RULES>
+<OUTPUT_INTERPRETATION>
 Browser results include page states, DOM snapshots, and screenshots.
 URLs in results show navigation history and current page location.
 Status indicators show success/failure of navigation actions.
 Screenshots capture visual state for verification.
-</output_interpretation>
-<best_practices>
+</OUTPUT_INTERPRETATION>
+<BEST_PRACTICES>
 Use specific selectors (CSS, XPath) for reliable element interaction.
 Implement retry logic for transient failures.
 Capture screenshots at key navigation points for debugging.
-</best_practices>
+</BEST_PRACTICES>
 </BROWSER_CONTEXT>""",
         triggers=["WORKSPACE", "BROWSER_CONTEXT"],
     )

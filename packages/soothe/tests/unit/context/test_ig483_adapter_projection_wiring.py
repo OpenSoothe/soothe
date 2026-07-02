@@ -269,7 +269,7 @@ class TestPromptBuilderContextBundle:
         assert "<MEMORY_INSTRUCTIONS>" not in str(system_msg.content)
 
     def test_build_plan_messages_with_bundle_supplements_system(self) -> None:
-        """ContextBundle injects agent/memory instructions into system (not project rules)."""
+        """ContextBundle injects memory instructions into system (not agent/project rules)."""
         from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
         from soothe.protocols.planner import PlanContext
@@ -293,8 +293,8 @@ class TestPromptBuilderContextBundle:
         )
         system_content = str(messages[0].content)
         assert "Custom project instructions" not in system_content
-        assert "<AGENT_INSTRUCTIONS>" in system_content
-        assert "Agent-specific instructions" in system_content
+        assert "Agent-specific instructions" not in system_content
+        assert "<AGENT_INSTRUCTIONS>" not in system_content
         assert "<MEMORY_INSTRUCTIONS>" in system_content
         assert "Memory-based instructions" in system_content
 

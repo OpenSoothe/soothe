@@ -198,7 +198,7 @@ def _build_result_payload(result: object) -> str:
     parts = [
         header,
         "",
-        "<search_data>",
+        "<SEARCH_DATA>",
     ]
     if answer:
         parts.append(f"Direct answer: {answer}")
@@ -206,7 +206,7 @@ def _build_result_payload(result: object) -> str:
     parts.extend(
         [
             body,
-            "</search_data>",
+            "</SEARCH_DATA>",
             "",
             "Synthesize the search data into a clear answer. "
             "Do NOT reproduce raw results, source listings, or URLs.",

@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 from soothe.config import SootheConfig
 from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
 from soothe.foundation.sloop.engine.executor import Executor
-from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 
 
 def test_executor_langfuse_merge_run_name_with_trace_name(monkeypatch) -> None:

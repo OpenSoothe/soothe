@@ -1,4 +1,4 @@
-"""Tests for workspace CLAUDE.md / AGENTS.md WORKSPACE_INSTRUCTIONS loading."""
+"""Tests for AGENTS.md / CLAUDE.md AGENT_INSTRUCTIONS loading."""
 
 from __future__ import annotations
 
@@ -12,20 +12,20 @@ from soothe.foundation.sloop.state.schemas import LoopState
 
 def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
     from soothe.foundation.sloop.prompts.project_instructions import (
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     agents = tmp_path / "AGENTS.md"
     agents.write_text("A" * 20_000, encoding="utf-8")
-    block = load_workspace_project_instructions(tmp_path, headline_max_chars=8000)
+    block = load_agent_instructions(tmp_path, headline_max_chars=8000)
     assert block is not None
     assert len(block) < 20_000
-    assert "<note>" in block or 'inlined="partial"' in block
+    assert "<NOTE>" in block or 'inlined="partial"' in block
 
 
-def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Path) -> None:
+def test_load_agent_instructions_reads_first_500_lines(tmp_path: Path) -> None:
     from soothe.foundation.sloop.prompts.project_instructions import (
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     claude = tmp_path / "CLAUDE.md"
@@ -33,9 +33,9 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
     agents = tmp_path / "AGENTS.md"
     agents.write_text("agents rule one\nagents rule two\n", encoding="utf-8")
 
-    block = load_workspace_project_instructions(tmp_path, max_lines=500)
+    block = load_agent_instructions(tmp_path, max_lines=500)
     assert block is not None
-    assert "<WORKSPACE_INSTRUCTIONS>" in block
+    assert "<AGENT_INSTRUCTIONS>" in block
     # AGENTS.md is preferred, so CLAUDE.md content should NOT appear
     assert "claude line 0" not in block
     assert "agents rule one" in block
@@ -43,13 +43,13 @@ def test_load_workspace_project_instructions_reads_first_500_lines(tmp_path: Pat
     # Small AGENTS.md inlines fully; no read_file note.
     assert 'inlined="full"' in block
     assert 'truncated_lines="false"' in block
-    assert "<note>" not in block
+    assert "<NOTE>" not in block
 
 
-def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> None:
+def test_load_agent_instructions_claude_fallback(tmp_path: Path) -> None:
     """CLAUDE.md fallback: 600 lines fits under 25K headline cap but trips line cap."""
     from soothe.foundation.sloop.prompts.project_instructions import (
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     claude = tmp_path / "CLAUDE.md"
@@ -58,9 +58,9 @@ def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> 
     # marks ``truncated_lines=true``, which alone is enough to emit the note.
     claude.write_text("\n".join(f"claude line {i}" for i in range(600)), encoding="utf-8")
 
-    block = load_workspace_project_instructions(tmp_path, max_lines=500)
+    block = load_agent_instructions(tmp_path, max_lines=500)
     assert block is not None
-    assert "<WORKSPACE_INSTRUCTIONS>" in block
+    assert "<AGENT_INSTRUCTIONS>" in block
     assert "claude line 0" in block
     # First 500 lines inline verbatim; lines past the line cap stay out.
     assert "claude line 499" in block
@@ -68,21 +68,21 @@ def test_load_workspace_project_instructions_claude_fallback(tmp_path: Path) -> 
     assert 'inlined="full"' in block
     assert 'truncated_lines="true"' in block
     # Line-cap truncation still emits the read_file hint.
-    assert "<note>" in block
+    assert "<NOTE>" in block
     assert "read_file" in block
     assert str(claude) in block
 
 
-def test_load_workspace_project_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
+def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
     from soothe.foundation.sloop.prompts.project_instructions import (
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     soothe = tmp_path / ".soothe"
     soothe.mkdir()
     (soothe / "AGENTS.md").write_text("from dot soothe\n", encoding="utf-8")
 
-    block = load_workspace_project_instructions(tmp_path)
+    block = load_agent_instructions(tmp_path)
     assert block is not None
     assert "from dot soothe" in block
     assert ".soothe/AGENTS.md" in block
@@ -108,7 +108,7 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
 
 
 def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:
-    """plan-generate omits WORKSPACE_INSTRUCTIONS in system and human messages."""
+    """plan-generate omits AGENT_INSTRUCTIONS in system and human messages."""
     from soothe.protocols.planner import PlanContext
 
     (tmp_path / "CLAUDE.md").write_text("Plan must follow CLAUDE rules\n", encoding="utf-8")
@@ -121,9 +121,9 @@ def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> N
     assess_human = assess[-1].content
     generate_human = generate[-1].content
     generate_system = generate[0].content
-    assert "<WORKSPACE_INSTRUCTIONS>" not in assess_human
-    assert "<WORKSPACE_INSTRUCTIONS>" not in generate_human
-    assert "<WORKSPACE_INSTRUCTIONS>" not in generate_system
+    assert "<AGENT_INSTRUCTIONS>" not in assess_human
+    assert "<AGENT_INSTRUCTIONS>" not in generate_human
+    assert "<AGENT_INSTRUCTIONS>" not in generate_system
     assert "Plan must follow CLAUDE rules" not in generate_system
 
 
@@ -147,33 +147,33 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
     messages = await executor._build_batch_human_messages(steps, state)
     assert len(messages) == 2
     # No project_instructions in envelope - it's in system prompt
-    assert "<WORKSPACE_INSTRUCTIONS>" not in messages[0].content
-    assert "<WORKSPACE_INSTRUCTIONS>" not in messages[1].content
+    assert "<AGENT_INSTRUCTIONS>" not in messages[0].content
+    assert "<AGENT_INSTRUCTIONS>" not in messages[1].content
 
 
 def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
     """Files under the headline cap inline verbatim with no read_file hint."""
     from soothe.foundation.sloop.prompts.project_instructions import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     body = "# Project Rules\n\nBe terse.\n"
     assert len(body) <= PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS
     (tmp_path / "AGENTS.md").write_text(body, encoding="utf-8")
 
-    block = load_workspace_project_instructions(tmp_path)
+    block = load_agent_instructions(tmp_path)
     assert block is not None
     assert "Be terse." in block
     assert 'inlined="full"' in block
-    assert "<note>" not in block
+    assert "<NOTE>" not in block
 
 
 def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
     """Files above the headline cap emit a paragraph-clean prefix + read_file hint."""
     from soothe.foundation.sloop.prompts.project_instructions import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     # Build a body that exceeds the 25K headline cap with clear paragraph
@@ -186,10 +186,10 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
     agents = tmp_path / "AGENTS.md"
     agents.write_text(body, encoding="utf-8")
 
-    block = load_workspace_project_instructions(tmp_path)
+    block = load_agent_instructions(tmp_path)
     assert block is not None
     assert 'inlined="partial"' in block
-    assert "<note>" in block
+    assert "<NOTE>" in block
     assert f'read_file("{agents}")' in block
     # CDATA payload should be smaller than the body and end on a paragraph
     # boundary (the last visible char before `]]>` is not mid-sentence).
@@ -204,7 +204,7 @@ def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
     """Second load with unchanged mtime hits the cache; no second disk read."""
     from soothe.foundation.sloop.prompts import project_instructions
     from soothe.foundation.sloop.prompts.project_instructions import (
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
@@ -220,8 +220,8 @@ def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
 
     monkeypatch.setattr(project_instructions, "_read_file_head_lines", counting_read)
 
-    first = load_workspace_project_instructions(tmp_path)
-    second = load_workspace_project_instructions(tmp_path)
+    first = load_agent_instructions(tmp_path)
+    second = load_agent_instructions(tmp_path)
     assert first == second
     assert calls["n"] == 1
 
@@ -232,14 +232,14 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
 
     from soothe.foundation.sloop.prompts import project_instructions
     from soothe.foundation.sloop.prompts.project_instructions import (
-        load_workspace_project_instructions,
+        load_agent_instructions,
     )
 
     agents = tmp_path / "AGENTS.md"
     agents.write_text("original rule\n", encoding="utf-8")
     project_instructions._build_block_cached.cache_clear()
 
-    first = load_workspace_project_instructions(tmp_path)
+    first = load_agent_instructions(tmp_path)
     assert first is not None
     assert "original rule" in first
 
@@ -248,7 +248,7 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
     new_mtime_ns = agents.stat().st_mtime_ns + 1_000_000_000  # +1s
     os.utime(agents, ns=(new_mtime_ns, new_mtime_ns))
 
-    second = load_workspace_project_instructions(tmp_path)
+    second = load_agent_instructions(tmp_path)
     assert second is not None
     assert "updated rule" in second
     assert "original rule" not in second
