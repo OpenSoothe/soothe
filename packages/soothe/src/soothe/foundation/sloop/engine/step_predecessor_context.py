@@ -288,7 +288,7 @@ def build_dependent_execution_hints(
     if has_predecessor_evidence:
         instruction_lines.insert(
             0,
-            "- PRIOR STEPS and prior execute-step ledger turns are authoritative; "
+            "- Prior execute-step ledger turns are authoritative; "
             "do not repeat completed discovery steps",
         )
         instruction_lines.insert(

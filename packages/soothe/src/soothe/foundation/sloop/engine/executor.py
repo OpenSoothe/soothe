@@ -398,6 +398,7 @@ class Executor:
         wire_subagent: str | None,
         workspace: str | None,
         cross_goal_projected: bool = False,
+        predecessor_projected: bool = False,
     ) -> str:
         """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
         from soothe.foundation.sloop.prompts.builder import _prior_goals_from_checkpoint
@@ -420,12 +421,13 @@ class Executor:
             loop_state is not None
             and loop_state.current_decision is not None
             and has_predecessor_ledger
+            and not predecessor_projected
         ):
             prior_steps = build_prior_steps_summary_block(
                 step,
                 loop_state.current_decision,
                 loop_state,
-                evidence_in_ledger=True,
+                evidence_in_ledger=False,
             )
         if cross_goal_projected and self._checkpoint is not None:
             tail_k = 1
@@ -1629,6 +1631,9 @@ class Executor:
                 )
                 graph_input_messages.extend(projected.messages)
                 cross_goal_projected = projected.cross_goal_projected
+                predecessor_projected = projected.predecessor_projected
+            else:
+                predecessor_projected = False
 
             envelope = self._compose_execute_step_envelope(
                 step,
@@ -1636,6 +1641,7 @@ class Executor:
                 wire_subagent=wire_subagent,
                 workspace=workspace,
                 cross_goal_projected=cross_goal_projected,
+                predecessor_projected=predecessor_projected,
             )
             logger.debug("[Human Message] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(

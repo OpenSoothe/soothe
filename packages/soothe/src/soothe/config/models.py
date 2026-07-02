@@ -2133,11 +2133,11 @@ class AgentConfig(BaseModel):
         ),
     )
 
-    workspace_instructions_max_chars: int = Field(
+    agent_instructions_max_chars: int = Field(
         default=8000,
         ge=500,
         le=100_000,
-        description="Max chars inlined from AGENTS.md/CLAUDE.md in WORKSPACE_INSTRUCTIONS",
+        description="Max chars inlined from AGENTS.md/CLAUDE.md in AGENT_INSTRUCTIONS",
     )
 
     @model_validator(mode="after")

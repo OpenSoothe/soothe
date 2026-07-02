@@ -28,6 +28,21 @@ if TYPE_CHECKING:
 
 PlanPromptPhase = Literal["assess", "generate"]
 
+_PRIOR_CONVERSATION_TAGS: tuple[tuple[str, Literal["human", "ai"]], ...] = (
+    ("USER", "human"),
+    ("ASSISTANT", "ai"),
+)
+
+
+def _parse_prior_conversation_xml(msg_xml: str) -> tuple[Literal["human", "ai"], str] | None:
+    """Parse ``<USER>`` / ``<ASSISTANT>`` blocks from prior conversation projection."""
+    msg_xml = msg_xml.strip()
+    for tag, role in _PRIOR_CONVERSATION_TAGS:
+        open_tag, close_tag = f"<{tag}>", f"</{tag}>"
+        if msg_xml.startswith(open_tag) and msg_xml.endswith(close_tag):
+            return role, msg_xml[len(open_tag) : -len(close_tag)].strip()
+    return None
+
 
 def _prior_goals_from_checkpoint(
     checkpoint: Any | None,
@@ -161,9 +176,11 @@ class PromptBuilder:
 
         if context.recent_messages:
             for msg_xml in context.recent_messages:
-                msg_xml = msg_xml.strip()
-                if msg_xml.startswith("<user>") and msg_xml.endswith("</user>"):
-                    content = msg_xml[6:-7].strip()
+                parsed = _parse_prior_conversation_xml(msg_xml)
+                if parsed is None:
+                    continue
+                role, content = parsed
+                if role == "human":
                     out.append(
                         LoopHumanMessage(
                             content=content,
@@ -172,8 +189,7 @@ class PromptBuilder:
                             phase="execute_step",
                         )
                     )
-                elif msg_xml.startswith("<assistant>") and msg_xml.endswith("</assistant>"):
-                    content = msg_xml[11:-12].strip()
+                else:
                     out.append(
                         LoopAIMessage(
                             content=content,
@@ -255,7 +271,8 @@ class PromptBuilder:
         # WORKSPACE_RULES apply only to plan-generate: plan-assess is a meta-decision
         # (status/progress/next_action) that does not author steps touching the workspace.
         # Project rules (AGENTS.md / CLAUDE.md) are injected on execute via CoreAgent
-        # system prompt, not plan-generate — keeps the planner cache-stable and lean.
+        # system prompt as AGENT_INSTRUCTIONS, not plan-generate — keeps the planner
+        # cache-stable and lean.
         if context.workspace and kind == "generate":
             parts.append(
                 "<WORKSPACE_RULES>\n"
@@ -269,14 +286,9 @@ class PromptBuilder:
                 "</WORKSPACE_RULES>\n"
             )
 
-        # RFC-624: Supplementary instructions from ContextBundle
+        # RFC-624: Supplementary instructions from ContextBundle (plan cache-stable:
+        # agent/project rules stay on execute-type system prompts only).
         if context_bundle is not None:
-            if context_bundle.agent_instructions:
-                parts.append(
-                    "<AGENT_INSTRUCTIONS>\n"
-                    + context_bundle.agent_instructions
-                    + "\n</AGENT_INSTRUCTIONS>\n"
-                )
             if context_bundle.memory_instructions:
                 parts.append(
                     "<MEMORY_INSTRUCTIONS>\n"

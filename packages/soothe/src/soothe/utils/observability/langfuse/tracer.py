@@ -15,15 +15,17 @@ if TYPE_CHECKING:
 class SootheLangfuse:
     """Single entry point for Langfuse RunnableConfig and goal-loop trace sessions."""
 
-    def __init__(self, soothe_config: SootheConfig) -> None:
+    def __init__(self, soothe_config: SootheConfig | None) -> None:
         self._config = soothe_config
 
     @property
-    def config(self) -> SootheConfig:
+    def config(self) -> SootheConfig | None:
         return self._config
 
     @property
     def enabled(self) -> bool:
+        if self._config is None:
+            return False
         return self._config.observability.langfuse.enabled
 
     def begin_goal_loop(
@@ -33,7 +35,7 @@ class SootheLangfuse:
         loop_id: str | None,
     ) -> GoalLoopTrace | None:
         """Start a shared trace for intent-classify + strange-loop-graph."""
-        if not self.enabled:
+        if not self.enabled or self._config is None:
             return None
         return GoalLoopTrace.begin(
             self._config,
@@ -70,6 +72,8 @@ class SootheLangfuse:
             metadata.update(extra_metadata)
 
         base: dict[str, Any] = {"metadata": metadata}
+        if self._config is None:
+            return base
         return merge_langfuse_runnable_config(
             base,
             self._config,
@@ -91,6 +95,8 @@ class SootheLangfuse:
         goal_trace: GoalLoopTrace | None = None,
     ) -> dict[str, Any]:
         """Merge Langfuse callbacks into an existing RunnableConfig."""
+        if self._config is None:
+            return base
         return merge_langfuse_runnable_config(
             base,
             self._config,
@@ -112,6 +118,8 @@ class SootheLangfuse:
         session_id: str | None = None,
     ) -> None:
         """Set trace-level input/output after graph completion."""
+        if self._config is None:
+            return
         from soothe.utils.observability.langfuse._client import resolve_langfuse_config_str
 
         pub = resolve_langfuse_config_str(self._config.observability.langfuse.public_key)

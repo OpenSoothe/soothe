@@ -167,6 +167,25 @@ def test_build_synthesis_messages_system_and_task_only_when_no_ledger() -> None:
     assert str(msgs[1].content).startswith("TASK:")
 
 
+def test_synthesis_system_prompt_includes_agent_instructions(tmp_path) -> None:
+    """Goal synthesis inlines AGENTS.md/CLAUDE.md like execute-type prompts."""
+    (tmp_path / "AGENTS.md").write_text("# Rules\n\nBe concise in reports.\n", encoding="utf-8")
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by theme",
+    )
+    text = render_synthesis_system_prompt(
+        classification,
+        user_goal="Summarize work",
+        workspace=str(tmp_path),
+        agent_instructions_max_chars=8000,
+    )
+    assert "<AGENT_INSTRUCTIONS>" in text
+    assert "Be concise in reports." in text
+
+
 def test_system_prompt_includes_scenario_list() -> None:
     """IG-524: Available scenarios moved to system prompt for caching."""
     classification = ScenarioClassification(

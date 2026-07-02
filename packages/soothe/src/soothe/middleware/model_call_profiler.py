@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _BLOCK_TAGS: tuple[tuple[str, str], ...] = (
-    ("WORKSPACE_INSTRUCTIONS", "workspace_instructions"),
+    ("AGENT_INSTRUCTIONS", "agent_instructions"),
     ("AVAILABLE_SKILLS", "skills"),
     ("AVAILABLE_MCP_TOOLS", "mcp"),
     ("AVAILABLE_TOOLS", "available_tools"),
@@ -217,10 +217,10 @@ class ModelCallProfilerMiddleware(AgentMiddleware):
         if sys_chars > 0 and isinstance(request.system_message.content, str):
             blocks = _block_char_sizes(request.system_message.content)
             logger.info(
-                "[ModelProfiler] SYS_BLOCKS base=%d workspace_instructions=%d "
+                "[ModelProfiler] SYS_BLOCKS base=%d agent_instructions=%d "
                 "skills=%d mcp=%d available_tools=%d workspace_rules=%d orchestration=%d",
                 blocks.get("base", 0),
-                blocks.get("workspace_instructions", 0),
+                blocks.get("agent_instructions", 0),
                 blocks.get("skills", 0),
                 blocks.get("mcp", 0),
                 blocks.get("available_tools", 0),

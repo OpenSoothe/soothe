@@ -28,20 +28,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Summarization prompt template
-_SUMMARY_PROMPT = """<role>
+_SUMMARY_PROMPT = """<ROLE>
 Context Extraction Assistant
-</role>
+</ROLE>
 
-<primary_objective>
+<PRIMARY_OBJECTIVE>
 Your sole objective is to extract the highest quality/most relevant context from the conversation history below.
-</primary_objective>
+</PRIMARY_OBJECTIVE>
 
-<objective_information>
+<OBJECTIVE_INFORMATION>
 You're nearing the total number of input tokens you can accept, so you must extract the most important information.
 This context will replace the conversation history. Ensure you capture only critical information to continue working toward the overall goal.
-</objective_information>
+</OBJECTIVE_INFORMATION>
 
-<instructions>
+<INSTRUCTIONS>
 Structure your summary using these sections. Each section acts as a checklist - populate with relevant information or state "None" if nothing to report:
 
 ## SESSION INTENT
@@ -56,14 +56,14 @@ What artifacts, files, or resources were created, modified, or accessed? List fi
 ## NEXT STEPS
 What specific tasks remain to complete the session intent? What should be done next?
 
-</instructions>
+</INSTRUCTIONS>
 
 Extract the most important and relevant context to replace the history. Respond ONLY with the extracted context.
 
-<messages>
+<MESSAGES>
 Messages to summarize:
 {messages}
-</messages>"""
+</MESSAGES>"""
 
 # Keep recent messages after summarization (default: last 5)
 _DEFAULT_KEEP_MESSAGES = 5

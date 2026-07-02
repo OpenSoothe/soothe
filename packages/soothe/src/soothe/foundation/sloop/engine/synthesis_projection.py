@@ -53,14 +53,17 @@ def render_synthesis_system_prompt(
     classification: ScenarioClassification,
     *,
     user_goal: str,
+    workspace: str | None = None,
+    agent_instructions_max_chars: int = 8000,
 ) -> str:
     """Render system instructions from the synthesis template (no orchestration terms)."""
     from soothe.foundation.sloop.prompts.loader import load_prompt_fragment
+    from soothe.foundation.sloop.prompts.project_instructions import load_agent_instructions
     from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
 
     template = load_prompt_fragment("instructions/synthesis_report_system.xml")
     focus_items = "\n".join(f"- {item}" for item in classification.contextual_focus)
-    return (
+    parts = [
         template.render(
             scenario=classification.scenario,
             sections=classification.sections,
@@ -68,9 +71,16 @@ def render_synthesis_system_prompt(
             evidence_emphasis=classification.evidence_emphasis,
             user_goal=user_goal,
         )
-        + "\n\n"
-        + build_timestamp_xml_footer()
-    )
+    ]
+    if workspace:
+        block = load_agent_instructions(
+            workspace,
+            headline_max_chars=agent_instructions_max_chars,
+        )
+        if block:
+            parts.append(block)
+    parts.append(build_timestamp_xml_footer())
+    return "\n\n".join(parts)
 
 
 def build_synthesis_messages(
@@ -80,12 +90,18 @@ def build_synthesis_messages(
     user_query: str | None = None,
     max_chars: int,
     ledger_cfg: PlanPromptLedgerConfig | None = None,
+    agent_instructions_max_chars: int = 8000,
 ) -> list[BaseMessage]:
     """Assemble system + execute ledger + TASK human for goal-completion synthesis."""
     from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 
     user_goal = normalize_user_query(user_query if user_query is not None else state.goal)
-    system_text = render_synthesis_system_prompt(classification, user_goal=user_goal)
+    system_text = render_synthesis_system_prompt(
+        classification,
+        user_goal=user_goal,
+        workspace=state.workspace,
+        agent_instructions_max_chars=agent_instructions_max_chars,
+    )
     ledger_msgs = list(
         project_loop_messages_for_synthesis(state.loop_messages, ledger_cfg),
     )

@@ -48,25 +48,25 @@ class TacitusPlugin:
             "Do not use for local codebase exploration (use explore)."
         ),
         system_context="""<TACITUS_RULES>
-<source_verification>
+<SOURCE_VERIFICATION>
 Cross-reference claims across multiple independent public sources.
 Prefer primary sources (original papers, official docs) over secondary.
 Check publication dates and relevance to current context.
-</source_verification>
-<citation_format>
+</SOURCE_VERIFICATION>
+<CITATION_FORMAT>
 Use markdown links for sources: [Title](URL)
 Include timestamps when available: [Title](URL) (accessed YYYY-MM-DD)
 A formatted References section is appended to the final report automatically.
-</citation_format>
-<effort_levels>
+</CITATION_FORMAT>
+<EFFORT_LEVELS>
 Default depth is normal. Optional: effort: normal | high | xhigh in the task description.
 - normal: fewer sub-questions and loops (faster)
 - high: balanced depth (~3 reflection loops)
 - xhigh: maximum breadth and follow-up depth
-</effort_levels>
-<depth_guidelines>
+</EFFORT_LEVELS>
+<DEPTH_GUIDELINES>
 Start broad, then narrow. Investigate contradictions. Document sources consulted.
-</depth_guidelines>
+</DEPTH_GUIDELINES>
 </TACITUS_RULES>""",
         triggers=["TACITUS_RULES", "context"],
     )

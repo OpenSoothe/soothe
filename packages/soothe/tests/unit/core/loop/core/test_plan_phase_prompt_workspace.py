@@ -99,8 +99,8 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
     ctx = PlanContext(
         workspace=None,
         recent_messages=[
-            "<user>\nIran news please\n</user>",
-            "<assistant>\n**Infrastructure** … long body …\n</assistant>",
+            "<USER>\nIran news please\n</USER>",
+            "<ASSISTANT>\n**Infrastructure** … long body …\n</ASSISTANT>",
         ],
     )
     builder = PromptBuilder()

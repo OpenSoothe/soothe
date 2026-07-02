@@ -33,9 +33,8 @@ def test_merge_returns_base_when_handler_unavailable(monkeypatch) -> None:
 
 def test_callback_handler_returns_none_when_langfuse_placeholder_loaded(monkeypatch) -> None:
     pytest.importorskip("langfuse.langchain")
-    import soothe.utils.observability.langfuse_callback_handler as callback_module
-
     import soothe.utils.observability.langfuse._handlers as handlers_mod
+    import soothe.utils.observability.langfuse_callback_handler as callback_module
 
     obs = ObservabilityConfig(
         langfuse=LangfuseIntegrationConfig(enabled=True, public_key="pk-test"),
@@ -187,7 +186,6 @@ def test_merge_reuses_inherited_handler_not_cached(monkeypatch) -> None:
     """Goal-loop bootstrap handler must not be replaced by the process-wide cached handler."""
     pytest.importorskip("langfuse")
     from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    from soothe.utils.observability import langfuse as langfuse_util
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
     obs = ObservabilityConfig(

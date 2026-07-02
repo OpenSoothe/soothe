@@ -59,9 +59,9 @@ def test_ensure_system_replaces_empty_system() -> None:
 
 def test_merge_uses_soothe_langfuse_handler() -> None:
     pytest.importorskip("langfuse")
+    import soothe.utils.observability.langfuse._handlers as handlers_mod
     from soothe.config import SootheConfig
     from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    import soothe.utils.observability.langfuse._handlers as handlers_mod
     from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
@@ -467,9 +467,9 @@ def test_on_chain_end_patches_input_for_model_chain() -> None:
 
 def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:
     pytest.importorskip("langfuse")
+    import soothe.utils.observability.langfuse._handlers as handlers_mod
     from soothe.config import SootheConfig
     from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    import soothe.utils.observability.langfuse._handlers as handlers_mod
     from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
