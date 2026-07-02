@@ -221,6 +221,60 @@ def _create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
     return SootheLangfuseCallbackHandler()
 
 
+def _allocate_langfuse_trace_id(soothe_config: SootheConfig) -> str | None:
+    """Reserve a Langfuse trace id for one goal turn (intent-classify + strange-loop-graph)."""
+    try:
+        from langfuse import get_client
+
+        pub_resolved = _resolve_str(soothe_config.observability.langfuse.public_key)
+        _ensure_langfuse_client(soothe_config)
+        client = get_client(public_key=pub_resolved) if pub_resolved else get_client()
+        return str(client.create_trace_id())
+    except Exception:
+        logger.debug("Langfuse trace id allocation failed", exc_info=True)
+        return None
+
+
+def _new_soothe_langfuse_handler(
+    soothe_config: SootheConfig,
+    *,
+    trace_context: dict[str, str] | None = None,
+) -> Any | None:
+    """Create a non-cached ``SootheLangfuseCallbackHandler`` (optional pinned ``trace_context``)."""
+    handler = _create_fresh_langfuse_handler(soothe_config)
+    if handler is None or trace_context is None:
+        return handler
+    pub_resolved = _resolve_str(soothe_config.observability.langfuse.public_key)
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    kwargs: dict[str, Any] = {"trace_context": trace_context}
+    if pub_resolved:
+        kwargs["public_key"] = pub_resolved
+    try:
+        return SootheLangfuseCallbackHandler(**kwargs)
+    except TypeError:
+        try:
+            return SootheLangfuseCallbackHandler(trace_context=trace_context)
+        except TypeError:
+            logger.debug("Langfuse handler does not accept trace_context; using fresh handler")
+            return handler
+
+
+def _create_goal_loop_langfuse_handler(
+    soothe_config: SootheConfig,
+) -> tuple[Any | None, str | None]:
+    """Handler + trace id shared by off-graph intent-classify and ``strange-loop-graph``.
+
+    Langfuse creates a new root trace per LangChain invocation even when reusing the
+    global cached handler. Pinning ``trace_context.trace_id`` on a per-goal handler keeps
+    both stages on one trace (IG-540).
+    """
+    trace_id = _allocate_langfuse_trace_id(soothe_config)
+    trace_context = {"trace_id": trace_id} if trace_id else None
+    handler = _new_soothe_langfuse_handler(soothe_config, trace_context=trace_context)
+    return handler, trace_id
+
+
 def merge_langfuse_runnable_config(
     base: dict[str, Any],
     soothe_config: SootheConfig,
@@ -243,10 +297,9 @@ def merge_langfuse_runnable_config(
         run_name: Optional root run name (e.g. ``soothe-dev:plan-assess``, ``soothe-dev:execute-step``). When omitted,
             uses ``observability.langfuse.trace_name`` when set.
         loop_id: Optional loop identifier for trace correlation across sub-traces.
-        inherit_callbacks_from: When set and already carries the same ``SootheLangfuseCallbackHandler``
-            instance as would be attached, skip appending the handler again so a later
-            ``merge_configs(langgraph_parent, child)`` does not register duplicate Langfuse
-            callbacks (goal-completion synthesis nested under the StrangeLoop graph).
+        inherit_callbacks_from: When set, reuses the Langfuse handler already present on that
+            config (goal-loop bootstrap / nested synthesis) instead of the process-wide cached
+            handler. Skips appending when ``base`` already carries the same handler instance.
         fresh_handler: When True, creates a new handler instance (not cached) to ensure
             independent trace_id and avoid OpenTelemetry context nesting. Use for
             standalone LLM calls that should not nest under subsequent graph traces.
@@ -260,23 +313,27 @@ def merge_langfuse_runnable_config(
     """
     if not soothe_config.observability.langfuse.enabled:
         return base
-    # Use fresh handler for independent traces (e.g., intent classification before strange-loop-graph)
-    handler = (
-        _create_fresh_langfuse_handler(soothe_config)
-        if fresh_handler
-        else _langfuse_callback_handler(soothe_config)
+    inherit_handler = (
+        _langfuse_handler_from_runnable_config(inherit_callbacks_from)
+        if inherit_callbacks_from is not None
+        else None
     )
+    if fresh_handler:
+        handler = _create_fresh_langfuse_handler(soothe_config)
+    elif inherit_handler is not None:
+        handler = inherit_handler
+    else:
+        handler = _langfuse_callback_handler(soothe_config)
     if handler is None:
         return base
-    skip_handler_append = False
-    if inherit_callbacks_from is not None:
-        existing = _langfuse_handler_from_runnable_config(inherit_callbacks_from)
-        if existing is not None and existing is handler:
-            skip_handler_append = True
     out: dict[str, Any] = dict(base)
     if "configurable" in base:
         out["configurable"] = dict(base["configurable"])
-    if not skip_handler_append:
+    existing_handler = _langfuse_handler_from_runnable_config(out)
+    skip_handler_append = existing_handler is handler or (
+        inherit_handler is not None and handler is inherit_handler and existing_handler is None
+    )
+    if handler is not None and not skip_handler_append:
         prev = list(out.get("callbacks") or [])
         out["callbacks"] = prev + [handler]
     meta = dict(out.get("metadata") or {})
@@ -418,8 +475,8 @@ def build_goal_loop_langfuse_bootstrap(
 ) -> dict[str, Any]:
     """Shared Langfuse RunnableConfig root for one agentic goal turn (IG-540 Langfuse merge).
 
-    Intent-classify and ``strange-loop-graph`` share this config's callback handler so both
-    stages nest under a single Langfuse trace. Pass the return value to
+    Intent-classify and ``strange-loop-graph`` share one handler pinned to a single
+    ``trace_id`` so both stages land on one Langfuse trace. Pass the return value to
     ``classify_intake(langfuse_bootstrap=...)`` and ``run_with_progress(langfuse_bootstrap=...)``.
 
     Args:
@@ -430,28 +487,43 @@ def build_goal_loop_langfuse_bootstrap(
     Returns:
         RunnableConfig dict with Langfuse handler and loop-graph metadata/tags.
     """
-    base: dict[str, Any] = {"configurable": {"thread_id": loop_id or session_id or ""}}
+    configurable: dict[str, Any] = {"thread_id": loop_id or session_id or ""}
+    base: dict[str, Any] = {"configurable": configurable}
+    if not soothe_config.observability.langfuse.enabled:
+        return base
+
+    handler, trace_id = _create_goal_loop_langfuse_handler(soothe_config)
+    if handler is None:
+        return base
+
     run_name = loop_graph_langfuse_run_display_name(soothe_config.observability.langfuse.trace_name)
-    merged = merge_langfuse_runnable_config(
-        base,
-        soothe_config,
-        session_id=session_id,
-        run_name=run_name,
-        loop_id=loop_id,
-    )
-    out = dict(merged)
-    meta = dict(out.get("metadata") or {})
+    meta: dict[str, Any] = {}
+    if session_id:
+        meta["langfuse_session_id"] = session_id
+        meta["thread_id"] = session_id
     if loop_id:
-        meta.setdefault("loop_id", loop_id)
-    meta.setdefault("soothe_component", "strange_loop_graph")
-    meta.setdefault("soothe_component_version", "strange-loop-v2")
-    tags = list(meta.get("langfuse_tags") or [])
+        meta["loop_id"] = loop_id
+    if trace_id:
+        meta["langfuse_trace_id"] = trace_id
+    tags_cfg = _resolved_langfuse_tags(soothe_config)
+    tags = list(tags_cfg) if tags_cfg else []
     for label in ("goal_execution_loop", "strange-loop-graph"):
         if label not in tags:
             tags.append(label)
-    meta["langfuse_tags"] = tags
-    out["metadata"] = meta
-    return out
+    if tags:
+        meta["langfuse_tags"] = tags
+    uid = _resolve_str(soothe_config.observability.langfuse.user_id)
+    if uid:
+        meta["langfuse_user_id"] = uid
+    meta.setdefault("soothe_component", "strange_loop_graph")
+    meta.setdefault("soothe_component_version", "strange-loop-v2")
+    meta["langfuse_trace_name"] = run_name
+    return {
+        "configurable": dict(configurable),
+        "callbacks": [handler],
+        "metadata": meta,
+        "run_name": run_name,
+    }
 
 
 def build_intake_langfuse_invoke_config(
@@ -485,25 +557,19 @@ def build_intake_langfuse_invoke_config(
     if extra_metadata:
         metadata.update(extra_metadata)
 
-    base = dict(langfuse_bootstrap)
-    meta = dict(base.get("metadata") or {})
+    out = dict(langfuse_bootstrap)
+    if "configurable" in langfuse_bootstrap:
+        out["configurable"] = dict(langfuse_bootstrap["configurable"])
+
+    meta = dict(out.get("metadata") or {})
     meta.update(metadata)
-    base["metadata"] = meta
+    out["metadata"] = meta
 
     run_name = intent_classify_langfuse_run_display_name(
         soothe_config.observability.langfuse.trace_name
     )
-    session_id = meta.get("langfuse_session_id") or meta.get("thread_id")
-    loop_id = meta.get("loop_id")
-
-    return merge_langfuse_runnable_config(
-        base,
-        soothe_config,
-        session_id=str(session_id).strip() if session_id else None,
-        run_name=run_name,
-        loop_id=str(loop_id).strip() if loop_id else None,
-        inherit_callbacks_from=langfuse_bootstrap,
-    )
+    out["run_name"] = run_name
+    return out
 
 
 def _merge_trace_fields_via_ingestion(

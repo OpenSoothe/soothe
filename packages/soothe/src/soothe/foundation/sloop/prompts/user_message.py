@@ -32,9 +32,8 @@ _MCP_RESOURCE_REF_RE = re.compile(r"@(\w+):(\S+)")
 # Hard cap on the rendered PRIOR PROGRESS section (RFC-227).
 PRIOR_PROGRESS_MAX_CHARS = 600
 
-# Execute-step envelope labels (distinct from plan-phase GOAL / GOAL RECAP).
+# Execute-step envelope label (distinct from plan-phase GOAL / GOAL RECAP).
 EXECUTION_TASK_LABEL = "EXECUTION TASK"
-EXECUTION_TASK_RECAP_LABEL = "EXECUTION TASK RECAP"
 
 
 def _goal_text(goal: str | None) -> str:
@@ -168,6 +167,36 @@ def _render_prior_goals_section(prior_goals: list[PriorGoalSummary]) -> str:
         if completion:
             block_lines.append(completion)
         blocks.append("\n".join(block_lines))
+    return "\n\n".join(blocks)
+
+
+def render_prior_steps_tree(
+    prior_steps: list[Any],
+    *,
+    evidence_in_ledger: bool,
+    outcome_preview_chars: int = 160,
+) -> str:
+    """Render predecessor steps as nested list (mirrors plan-phase PRIOR GOALS layout)."""
+    if not prior_steps:
+        return ""
+    blocks: list[str] = []
+    for summary in prior_steps:
+        step_id = (getattr(summary, "step_id", None) or "").strip()
+        description = (getattr(summary, "description", None) or "").strip()
+        if not description:
+            continue
+        status = (getattr(summary, "status", None) or "unknown").strip()
+        id_prefix = f"[{step_id}] " if step_id else ""
+        lines = [f"- STEP {id_prefix}{description} ({status})"]
+        if evidence_in_ledger:
+            lines.append("  - outcome: see prior assistant message")
+        else:
+            preview = (getattr(summary, "outcome_preview", None) or "").strip()
+            if preview:
+                if outcome_preview_chars > 0 and len(preview) > outcome_preview_chars:
+                    preview = preview[: outcome_preview_chars - 1].rstrip() + "…"
+                lines.append(f"  - outcome: {preview}")
+        blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
 
@@ -442,7 +471,7 @@ class UserMessageBuilder:
         step_description: str,
         *,
         execution_hints: str | None = None,
-        predecessor_evidence: str | None = None,
+        prior_steps: str | None = None,
         prior_goal_completion: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
@@ -453,7 +482,7 @@ class UserMessageBuilder:
         Args:
             step_description: The step's description or full_description (what to execute).
             execution_hints: Hints text with merged task instructions (IG-508).
-            predecessor_evidence: Completed predecessor step output for dependent steps.
+            prior_steps: Transitive predecessor step descriptions and statuses.
             prior_goal_completion: Prior goal synthesis report for loop continuation.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
@@ -466,8 +495,8 @@ class UserMessageBuilder:
             (EXECUTION_TASK_LABEL, _goal_text(step_description)),
         ]
 
-        if (predecessor_evidence or "").strip():
-            sections.append(("PRIOR STEP EVIDENCE", predecessor_evidence.strip()))
+        if (prior_steps or "").strip():
+            sections.append(("PRIOR STEPS", prior_steps.strip()))
 
         if (prior_goal_completion or "").strip():
             sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
@@ -510,9 +539,8 @@ class UserMessageBuilder:
 def flatten_user_message_content(content: str) -> str:
     """Extract the primary directive from a scenario-formatted user message.
 
-    Execute-step envelopes use ``EXECUTION TASK:`` / ``EXECUTION TASK RECAP:``;
-    plan envelopes use ``GOAL:`` / ``GOAL RECAP:``. Legacy execute envelopes that
-    still use ``GOAL:`` are accepted for backward compat.
+    Execute-step envelopes use ``EXECUTION TASK:``; plan envelopes use ``GOAL:`` /
+    ``GOAL RECAP:``. Legacy ledger rows may still use ``EXECUTION TASK RECAP:`` or ``GOAL:``.
 
     Falls back to raw content for old XML-format ledger messages.
     """
@@ -543,7 +571,6 @@ def flatten_user_message_content(content: str) -> str:
 
 __all__ = [
     "EXECUTION_TASK_LABEL",
-    "EXECUTION_TASK_RECAP_LABEL",
     "PRIOR_PROGRESS_MAX_CHARS",
     "UserMessageBuilder",
     "_append_plan_context_sections",
@@ -551,4 +578,5 @@ __all__ = [
     "_render_prior_goals_tree",
     "_should_inject_goal_lineage",
     "flatten_user_message_content",
+    "render_prior_steps_tree",
 ]
