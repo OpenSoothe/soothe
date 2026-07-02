@@ -18,16 +18,22 @@ from soothe.foundation.events.internal_events import (
     INTERNAL_GOALS_READY,
 )
 
+from .fakes import IdleFakeFactory
+
 
 def _config() -> AutonomousConfig:
     return AutonomousConfig(max_loops=2, max_parallel_goals=2)
+
+
+def _factory() -> IdleFakeFactory:
+    return IdleFakeFactory()
 
 
 class TestSubscribeToBusFlag:
     def test_default_subscribes(self) -> None:
         bus = InternalEventBus()
         ce = ContextEngine()
-        svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus)
+        svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus, runner_factory=_factory())
         assert svc._subscribed is True
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
         assert bus.subscriber_count(INTERNAL_GOALS_READY) == 1
@@ -36,7 +42,13 @@ class TestSubscribeToBusFlag:
     def test_explicit_true_subscribes(self) -> None:
         bus = InternalEventBus()
         ce = ContextEngine()
-        svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus, subscribe_to_bus=True)
+        svc = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=True,
+            runner_factory=_factory(),
+        )
         assert svc._subscribed is True
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 1
         assert bus.subscriber_count(INTERNAL_GOAL_UNBLOCKED) == 1
@@ -44,7 +56,13 @@ class TestSubscribeToBusFlag:
     def test_false_does_not_subscribe(self) -> None:
         bus = InternalEventBus()
         ce = ContextEngine()
-        svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus, subscribe_to_bus=False)
+        svc = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=False,
+            runner_factory=_factory(),
+        )
         assert svc._subscribed is False
         assert bus.subscriber_count(INTERNAL_GOAL_STATE_CHANGED) == 0
         assert bus.subscriber_count(INTERNAL_GOALS_READY) == 0
@@ -56,10 +74,18 @@ class TestSubscribeToBusFlag:
         bus = InternalEventBus()
         ce = ContextEngine()
         svc_subscribed = AutopilotService(
-            ce=ce, config=_config(), internal_bus=bus, subscribe_to_bus=True
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=True,
+            runner_factory=_factory(),
         )
         svc_dormant = AutopilotService(
-            ce=ce, config=_config(), internal_bus=bus, subscribe_to_bus=False
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=False,
+            runner_factory=_factory(),
         )
         assert svc_subscribed._subscribed is True
         assert svc_dormant._subscribed is False
@@ -72,8 +98,12 @@ class TestSubscribeToBusFlag:
         """Dormant service must still be a usable object (just not subscribed)."""
         bus = InternalEventBus()
         ce = ContextEngine()
-        svc = AutopilotService(ce=ce, config=_config(), internal_bus=bus, subscribe_to_bus=False)
+        svc = AutopilotService(
+            ce=ce,
+            config=_config(),
+            internal_bus=bus,
+            subscribe_to_bus=False,
+            runner_factory=_factory(),
+        )
         status = svc.status()
         assert status["running"] is False
-        # has_real_dispatch is False without a runner_factory
-        assert svc.has_real_dispatch is False

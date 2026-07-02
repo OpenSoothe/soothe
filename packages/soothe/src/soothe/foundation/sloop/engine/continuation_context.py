@@ -91,25 +91,6 @@ def ledger_goal_completion_text(loop_messages: list[Any]) -> str:
     return content
 
 
-def checkpoint_completions_by_goal_text(
-    checkpoint: StrangeLoopCheckpoint | None,
-    *,
-    exclude_goal_id: str | None = None,
-) -> dict[str, str]:
-    """Map prior goal text → persisted ``goal_completion`` from checkpoint."""
-    out: dict[str, str] = {}
-    if checkpoint is None:
-        return out
-    for rec in checkpoint.goal_history:
-        if exclude_goal_id and rec.goal_id == exclude_goal_id:
-            continue
-        goal_text = (rec.goal_text or "").strip()
-        completion = (rec.goal_completion or "").strip()
-        if goal_text and completion:
-            out[goal_text] = completion
-    return out
-
-
 def resolve_prior_goal_completion(
     *,
     loop_messages: list[Any],
@@ -118,20 +99,7 @@ def resolve_prior_goal_completion(
     exclude_goal_id: str | None = None,
 ) -> str:
     """Resolve the best prior-goal completion body for continuation grounding."""
-    by_text = checkpoint_completions_by_goal_text(checkpoint, exclude_goal_id=exclude_goal_id)
-    if prior_goal_text:
-        matched = by_text.get(prior_goal_text.strip())
-        if matched:
-            return matched
-    if by_text:
-        # Most recent completed prior goal in checkpoint order.
-        for rec in reversed(checkpoint.goal_history if checkpoint else []):
-            if exclude_goal_id and rec.goal_id == exclude_goal_id:
-                continue
-            text = (rec.goal_text or "").strip()
-            completion = (rec.goal_completion or "").strip()
-            if text and completion:
-                return completion
+    _ = checkpoint, prior_goal_text, exclude_goal_id
     return ledger_goal_completion_text(loop_messages)
 
 
@@ -197,9 +165,8 @@ def build_prior_goal_summaries(
 ) -> list[dict[str, Any]]:
     """Compact summary of prior goals for continuation-assess and plan-generate.
 
-    Reads goal metadata from the CE GoalStepDAG and completion bodies from
-    checkpoint ``goal_completion`` fields (same resolution order as
-    ``resolve_prior_goal_completion``).
+    Reads goal metadata from the CE GoalStepDAG. Completion bodies come from
+    CE ``action_history`` or the orchestration ledger.
 
     Args:
         ce: ContextEngine (or compatible) exposing ``get_all_goals()``.
@@ -210,10 +177,7 @@ def build_prior_goal_summaries(
         List of dicts with keys ``goal_id``, ``goal_text``, ``completion``,
         ``step_count``.
     """
-    completions_by_text = checkpoint_completions_by_goal_text(
-        checkpoint,
-        exclude_goal_id=exclude_goal_id,
-    )
+    completions_by_text: dict[str, str] = {}
     if ce is None:
         return []
     out: list[dict[str, Any]] = []
@@ -283,7 +247,6 @@ __all__ = [
     "build_continuation_plan_prior_goal_completion",
     "build_prior_goal_completion_block",
     "build_prior_goal_summaries",
-    "checkpoint_completions_by_goal_text",
     "format_prior_goal_completion_section",
     "is_continuation_first_plan",
     "ledger_goal_completion_text",

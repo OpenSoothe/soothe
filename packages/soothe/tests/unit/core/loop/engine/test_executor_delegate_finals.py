@@ -86,7 +86,6 @@ async def test_record_execute_wave_prefers_delegate_final_over_empty_root_ai() -
         parallel_multi_step=False,
         delegate_final_text="Final from task tool.",
     )
-    assert state.last_execute_assistant_text == "Final from task tool."
     assert state.last_wave_answer_from_delegate_final is True
 
 
@@ -104,7 +103,6 @@ def test_record_execute_wave_parallel_multi_merges_delegate_finals() -> None:
         parallel_multi_step=True,
         delegate_final_text=merged,
     )
-    assert state.last_execute_assistant_text == merged
     assert state.last_wave_answer_from_delegate_final is True
 
 
@@ -829,5 +827,4 @@ def test_record_execute_wave_parallel_multi_clears_when_no_delegate() -> None:
         parallel_multi_step=True,
         delegate_final_text=None,
     )
-    assert state.last_execute_assistant_text is None
     assert state.last_wave_answer_from_delegate_final is False

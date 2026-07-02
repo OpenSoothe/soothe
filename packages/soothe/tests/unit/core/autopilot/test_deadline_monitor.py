@@ -44,16 +44,6 @@ def _service(*, deadline: float | None) -> AutopilotService:
 
 class TestDeadlineMonitorNoOps:
     @pytest.mark.asyncio
-    async def test_no_worker_pool_short_circuits(self) -> None:
-        bus = InternalEventBus()
-        ce = ContextEngine()
-        cfg = AutonomousConfig(max_loops=1, max_parallel_goals=1)
-        cfg.goal_deadline_seconds = 1.0
-        svc = AutopilotService(ce=ce, config=cfg, internal_bus=bus)
-        # Should not raise and should not require a pool.
-        await svc._monitor_loop_health()
-
-    @pytest.mark.asyncio
     async def test_no_deadline_configured_skips(self) -> None:
         svc = _service(deadline=None)
         # Manually claim a worker far in the past — no deadline so no action.

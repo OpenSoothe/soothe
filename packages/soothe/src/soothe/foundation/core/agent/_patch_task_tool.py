@@ -3,6 +3,10 @@
 This patch ensures parent runnable config is propagated to subagent invocations,
 enabling proper stream event forwarding in nested graph execution.
 
+When ``agent.runtime.general_purpose_subagent`` is false (default), the deepagents
+``general-purpose`` delegate is removed from the task tool listing and blocked at
+invoke time.
+
 Note: Do not enable PEP 563 (``from __future__ import annotations``) in this module
 when adding patches that use ``inspect.signature`` for runtime type checking.
 The ``runtime`` parameter must stay annotated as ``ToolRuntime`` (not ``Any``) so
@@ -11,18 +15,81 @@ LangGraph's tool node injects it; see ``_get_all_injected_args`` in tool_node.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import dataclasses
 import json
 import logging
+from collections.abc import Iterator
 from typing import Annotated, Any
 
 logger = logging.getLogger(__name__)
+
+GENERAL_PURPOSE_SUBAGENT_NAME = "general-purpose"
+_GP_TASK_DESC_SECTION_START = "7. When only the general-purpose agent"
+_GP_TASK_DESC_SECTION_END = "### Example usage with custom agents:"
 
 # Used in patched ``task`` / ``atask`` signatures so LangGraph detects injection.
 try:
     from langchain.tools import ToolRuntime
 except ImportError:  # pragma: no cover - optional at lint import time
     ToolRuntime = Any  # type: ignore[misc,assignment]
+
+_general_purpose_subagent_enabled: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "soothe_general_purpose_subagent_enabled",
+    default=False,
+)
+
+
+def general_purpose_subagent_enabled() -> bool:
+    """Return whether deepagents general-purpose subagent is active for this build."""
+    return _general_purpose_subagent_enabled.get()
+
+
+@contextlib.contextmanager
+def general_purpose_subagent_build_context(enabled: bool) -> Iterator[None]:
+    """Scope ``create_deep_agent`` so task-tool patches honor runtime config."""
+    token = _general_purpose_subagent_enabled.set(enabled)
+    try:
+        yield
+    finally:
+        _general_purpose_subagent_enabled.reset(token)
+
+
+def _filter_general_purpose_subagents(subagents: list[Any]) -> list[Any]:
+    return [spec for spec in subagents if spec.get("name") != GENERAL_PURPOSE_SUBAGENT_NAME]
+
+
+def _task_tool_description_template(base_template: str, *, include_general_purpose: bool) -> str:
+    if include_general_purpose:
+        return base_template
+    start = base_template.find(_GP_TASK_DESC_SECTION_START)
+    end = base_template.find(_GP_TASK_DESC_SECTION_END)
+    if start == -1 or end == -1 or end <= start:
+        return base_template
+    return base_template[:start].rstrip() + "\n\n" + base_template[end:]
+
+
+def _patch_subagent_middleware_filters_general_purpose() -> None:
+    try:
+        from deepagents.middleware import subagents as sm
+    except ImportError:
+        return
+
+    if getattr(sm.SubAgentMiddleware.__init__, "_soothe_gp_filter_patched", False):
+        return
+
+    original_init = sm.SubAgentMiddleware.__init__
+
+    def _patched_init(self, *args: Any, **kwargs: Any) -> None:
+        if not general_purpose_subagent_enabled():
+            subagents = kwargs.get("subagents")
+            if subagents is not None:
+                kwargs["subagents"] = _filter_general_purpose_subagents(list(subagents))
+        original_init(self, *args, **kwargs)
+
+    _patched_init._soothe_gp_filter_patched = True  # type: ignore[attr-defined]
+    sm.SubAgentMiddleware.__init__ = _patched_init  # type: ignore[method-assign]
 
 
 def _patch_task_tool_propagates_parent_runnable_config() -> None:
@@ -66,6 +133,10 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
         private_state_keys: frozenset[str] = frozenset(),
         state_schema: Any = None,
     ):
+        include_general_purpose = general_purpose_subagent_enabled()
+        if not include_general_purpose:
+            subagents = _filter_general_purpose_subagents(subagents)
+
         # Combine excluded_state_keys (deepagents default) with private_state_keys
         all_excluded_keys = excluded_state_keys | private_state_keys | parent_owned_state_keys
 
@@ -100,10 +171,12 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             f"- {s['name']}: {s['description']}" for s in compiled_subagents
         )
 
+        description_template = _task_tool_description_template(
+            task_tool_description_template,
+            include_general_purpose=include_general_purpose,
+        )
         if task_description is None:
-            description = task_tool_description_template.format(
-                available_agents=subagent_description_str
-            )
+            description = description_template.format(available_agents=subagent_description_str)
         elif "{available_agents}" in task_description:
             description = task_description.format(available_agents=subagent_description_str)
         else:
@@ -184,9 +257,6 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             if subagent_type not in subagent_graphs:
                 allowed_types = ", ".join([f"`{k}`" for k in subagent_graphs])
                 return f"We cannot invoke subagent {subagent_type} because it does not exist, the only allowed types are {allowed_types}"
-            if subagent_type == "general-purpose" and "explore" in subagent_graphs:
-                logger.debug("[Task Tool] remapped subagent_type general-purpose -> explore")
-                subagent_type = "explore"
             if not runtime.tool_call_id:
                 value_error_msg = "Tool call ID is required for subagent invocation"
                 raise ValueError(value_error_msg)
@@ -210,9 +280,6 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             if subagent_type not in subagent_graphs:
                 allowed_types = ", ".join([f"`{k}`" for k in subagent_graphs])
                 return f"We cannot invoke subagent {subagent_type} because it does not exist, the only allowed types are {allowed_types}"
-            if subagent_type == "general-purpose" and "explore" in subagent_graphs:
-                logger.debug("[Task Tool] remapped subagent_type general-purpose -> explore")
-                subagent_type = "explore"
             if not runtime.tool_call_id:
                 value_error_msg = "Tool call ID is required for subagent invocation"
                 raise ValueError(value_error_msg)
@@ -237,9 +304,13 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
 def apply_task_tool_patch() -> None:
     """Apply task tool config propagation patch."""
     _patch_task_tool_propagates_parent_runnable_config()
+    _patch_subagent_middleware_filters_general_purpose()
 
 
 __all__ = [
+    "GENERAL_PURPOSE_SUBAGENT_NAME",
     "apply_task_tool_patch",
+    "general_purpose_subagent_build_context",
+    "general_purpose_subagent_enabled",
     "_patch_task_tool_propagates_parent_runnable_config",
 ]

@@ -12,6 +12,8 @@ from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 
+from .fakes import IdleFakeFactory
+
 
 def _service(*, monitor: MagicMock | None = None) -> AutopilotService:
     bus = InternalEventBus()
@@ -21,6 +23,7 @@ def _service(*, monitor: MagicMock | None = None) -> AutopilotService:
         config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
         monitor=monitor,
+        runner_factory=IdleFakeFactory(),
     )
 
 

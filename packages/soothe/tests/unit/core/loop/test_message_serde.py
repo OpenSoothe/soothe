@@ -77,12 +77,10 @@ def test_goal_execution_record_serde_roundtrip():
 
     record = GoalExecutionRecord(
         goal_id="test_goal_1",
-        goal_text="Test goal",
         thread_id="test_thread",
         iteration=10,
         status="completed",
         plan_revision_count=2,
-        goal_completion="Finished",
         duration_ms=1200,
         tokens_used=99,
         started_at=datetime.now(),
@@ -98,7 +96,6 @@ def test_goal_execution_record_serde_roundtrip():
     assert isinstance(deserialized, GoalExecutionRecord)
     assert deserialized.goal_id == record.goal_id
     assert deserialized.plan_revision_count == 2
-    assert deserialized.goal_completion == "Finished"
     assert deserialized.duration_ms == 1200
     assert deserialized.tokens_used == 99
 
@@ -135,7 +132,6 @@ def test_minimal_goal_execution_record_serde():
 
     record = GoalExecutionRecord(
         goal_id="test_goal_empty",
-        goal_text="Empty ledger test",
         thread_id="test_thread",
         iteration=0,
         status="running",

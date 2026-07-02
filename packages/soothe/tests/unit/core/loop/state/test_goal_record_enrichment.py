@@ -48,7 +48,6 @@ async def test_goal_record_round_trip_through_sqlite(temp_state_manager) -> None
     goal.plan_revision_count = 3
     goal.status = "completed"
     goal.completed_at = datetime.now(UTC)
-    goal.goal_completion = "done"
     goal.duration_ms = 300
     goal.tokens_used = 42
     checkpoint.status = "idle"
@@ -80,4 +79,3 @@ async def test_goal_record_round_trip_through_sqlite(temp_state_manager) -> None
     assert g.plan_revision_count == 3
     assert g.duration_ms == 300
     assert g.tokens_used == 42
-    assert g.goal_completion == "done"

@@ -30,7 +30,6 @@ def mock_loop_state(**kwargs) -> LoopState:
         "step_results": [],
         "last_execute_wave_parallel_multi_step": False,
         "last_wave_hit_subagent_cap": False,
-        "last_execute_assistant_text": "",
         "current_decision": None,
         "loop_messages": [],
     }
