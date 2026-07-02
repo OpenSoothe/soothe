@@ -378,7 +378,13 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 checkpointer = AsyncPostgresSaver(
                     self._checkpointer_pool, serde=create_soothe_serde()
                 )
-                await checkpointer.setup()
+                if SharedCheckpointerPool.is_shared_pool(self._checkpointer_pool):
+                    await SharedCheckpointerPool.setup_checkpointer(
+                        self._checkpointer_pool,
+                        checkpointer.setup,
+                    )
+                else:
+                    await checkpointer.setup()
 
                 self._checkpointer = checkpointer
                 self._materialized_core_agent().graph.checkpointer = checkpointer
