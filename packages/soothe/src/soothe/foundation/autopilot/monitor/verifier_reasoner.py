@@ -359,10 +359,9 @@ class DagVerificationReasoner:
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        invoke_config = build_traced_config(
-            self._soothe_config,
+        invoke_config = SootheLangfuse(self._soothe_config).traced_llm(
             purpose="dag_verification",
             component="autopilot.monitor.verifier_reasoner",
             phase="background",

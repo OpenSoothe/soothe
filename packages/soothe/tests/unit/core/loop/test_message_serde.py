@@ -3,7 +3,7 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from soothe_sdk.utils.serde import create_soothe_serde
 
-from soothe.foundation.sloop.state.checkpoint import GoalExecutionRecord
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -69,33 +69,26 @@ def test_loop_ai_message_serde_roundtrip():
     assert deserialized.step_id == msg.step_id
 
 
-def test_goal_execution_record_serde_roundtrip():
-    """GoalExecutionRecord serde preserves metadata fields."""
+def test_goal_index_entry_serde_roundtrip():
+    """GoalIndexEntry serde preserves metadata fields."""
     from datetime import datetime
 
     serde = create_soothe_serde()
 
-    record = GoalExecutionRecord(
+    record = GoalIndexEntry(
         goal_id="test_goal_1",
         thread_id="test_thread",
-        iteration=10,
         status="completed",
-        plan_revision_count=2,
         duration_ms=1200,
         tokens_used=99,
         started_at=datetime.now(),
     )
 
-    # Serialize
     serialized = serde.dumps_typed(record)
-
-    # Deserialize
     deserialized = serde.loads_typed(serialized)
 
-    # Verify record structure
-    assert isinstance(deserialized, GoalExecutionRecord)
+    assert isinstance(deserialized, GoalIndexEntry)
     assert deserialized.goal_id == record.goal_id
-    assert deserialized.plan_revision_count == 2
     assert deserialized.duration_ms == 1200
     assert deserialized.tokens_used == 99
 
@@ -124,16 +117,15 @@ def test_mixed_message_types_in_ledger():
     assert isinstance(deserialized[3], AIMessage)
 
 
-def test_minimal_goal_execution_record_serde():
-    """GoalExecutionRecord serde works with minimal required fields."""
+def test_minimal_goal_index_entry_serde():
+    """GoalIndexEntry serde works with minimal required fields."""
     from datetime import datetime
 
     serde = create_soothe_serde()
 
-    record = GoalExecutionRecord(
+    record = GoalIndexEntry(
         goal_id="test_goal_empty",
         thread_id="test_thread",
-        iteration=0,
         status="running",
         started_at=datetime.now(),
     )

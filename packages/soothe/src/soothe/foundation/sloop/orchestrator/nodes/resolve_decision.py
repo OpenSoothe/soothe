@@ -74,9 +74,6 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         # Old step IDs remain in the set but don't interfere with new plan's
         # dependency resolution (dependency_completion_ids() unions with step_results).
         state.current_decision = decision
-        # RFC-225: count plan revisions in the active goal record
-        if ctx.goal_record is not None:
-            ctx.goal_record.plan_revision_count += 1
 
     ctx.scratch.decision = decision
     merged = plan_result.model_copy(update={"decision": decision})

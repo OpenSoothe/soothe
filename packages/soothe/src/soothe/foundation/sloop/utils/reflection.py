@@ -230,11 +230,10 @@ async def reflect_with_llm(
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
         prompt = _build_reflection_prompt(plan, step_results, goal_context)
-        invoke_config = build_traced_config(
-            soothe_config,
+        invoke_config = SootheLangfuse(soothe_config).traced_llm(
             purpose="reflection",
             component="planning._shared",
             phase="post-loop",

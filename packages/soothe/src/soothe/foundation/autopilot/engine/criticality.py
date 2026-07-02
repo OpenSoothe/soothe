@@ -90,7 +90,7 @@ async def _evaluate_with_llm(
         Tuple of (risk_level, reasons) where risk_level is "high", "medium", or "low".
     """
     from soothe.foundation.sloop.prompts.fragments import CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT
-    from soothe.utils.observability.langfuse import build_traced_config
+    from soothe.utils.observability.langfuse import SootheLangfuse
 
     prompt_text = CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT.format(
         description=description,
@@ -102,10 +102,8 @@ async def _evaluate_with_llm(
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import build_traced_config
 
-        invoke_config = build_traced_config(
-            soothe_config,
+        invoke_config = SootheLangfuse(soothe_config).traced_llm(
             purpose="criticality_assessment",
             component="cognition.criticality",
             phase="pre-goal",

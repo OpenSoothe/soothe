@@ -15,7 +15,6 @@ from soothe.foundation.sloop.engine.synthesis import (
 )
 from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.utils.observability import langfuse as langfuse_util
 
 
 def test_synthesis_checkpoint_thread_id_is_unique_and_prefixed() -> None:
@@ -120,7 +119,10 @@ async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypa
     )
     soothe_cfg = SootheConfig(observability=obs)
     handler = MagicMock()
-    monkeypatch.setattr(langfuse_util, "_langfuse_callback_handler", lambda _c: handler)
+    monkeypatch.setattr(
+        "soothe.utils.observability.langfuse._merge.cached_langfuse_callback_handler",
+        lambda _c: handler,
+    )
 
     state = LoopState(
         goal="g",

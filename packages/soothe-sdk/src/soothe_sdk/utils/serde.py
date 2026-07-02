@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 _SOOTHE_MSGPACK_MODULES: list[tuple[str, str]] = [
     ("soothe.foundation.sloop.utils.messages", "LoopHumanMessage"),
     ("soothe.foundation.sloop.utils.messages", "LoopAIMessage"),
-    ("soothe.foundation.sloop.state.checkpoint", "GoalExecutionRecord"),
+    ("soothe.foundation.sloop.state.execution_checkpoint", "GoalIndexEntry"),
 ]
 
 

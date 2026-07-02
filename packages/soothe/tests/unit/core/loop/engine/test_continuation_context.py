@@ -12,16 +12,16 @@ from soothe.foundation.sloop.engine.continuation_context import (
     resolve_prior_goal_completion,
 )
 from soothe.foundation.sloop.state.checkpoint import (
-    GoalExecutionRecord,
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage
 
 
-def _make_checkpoint(*records: GoalExecutionRecord) -> StrangeLoopCheckpoint:
+def _make_checkpoint(*records: GoalIndexEntry) -> StrangeLoopCheckpoint:
     now = datetime.now(UTC)
     return StrangeLoopCheckpoint(
         loop_id="loop-x",
@@ -46,7 +46,7 @@ def test_ledger_goal_completion_text_returns_latest_ai_body() -> None:
 
 
 def test_resolve_prior_goal_completion_uses_ledger() -> None:
-    prior = GoalExecutionRecord(
+    prior = GoalIndexEntry(
         goal_id="g0",
         thread_id="tid",
         status="completed",
@@ -113,7 +113,7 @@ def test_is_continuation_first_plan_requires_no_step_results() -> None:
 def test_build_prior_goal_summaries_uses_ce_action_history() -> None:
     from soothe.foundation.sloop.engine.continuation_context import build_prior_goal_summaries
 
-    prior = GoalExecutionRecord(
+    prior = GoalIndexEntry(
         goal_id="g0",
         thread_id="tid",
         status="completed",

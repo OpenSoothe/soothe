@@ -40,10 +40,9 @@ def _build_direct_invoke_config(
 ) -> dict[str, Any]:
     """Langfuse-traced RunnableConfig for direct daemon LLM calls."""
     try:
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        return build_traced_config(
-            config,
+        return SootheLangfuse(config).traced_llm(
             purpose=purpose,
             component=component,
             phase="direct-invoke",

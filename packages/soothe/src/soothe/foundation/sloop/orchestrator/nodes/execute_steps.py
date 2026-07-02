@@ -343,11 +343,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             # would loop (or never terminate via max_iterations) because no
             # iteration was recorded as complete during this graph invocation.
             state.iteration += 1
-            # RFC-624 Phase 4 Stage 2: No loop_messages mirroring onto goal_record.
-            # CE LedgerManager spans all goals; ce.save() persists the ledger.
-            # Update goal_record.iteration and persist checkpoint.
             if goal_record is not None:
-                goal_record.iteration = state.iteration
                 try:
                     await state_manager.save(checkpoint)
                 except Exception:

@@ -9,17 +9,11 @@ RFC-626 Phase 3: ExecutionCheckpoint pattern with execution-only fields.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-
-if TYPE_CHECKING:
-    # Forward references — actual imports happen during model_rebuild() at the
-    # end of soothe.core.loop.state.__init__ to break the circular import via
-    # protocols.loop_planner (RFC-225 / IG-445).
-    pass
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 
 _SLOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
 
@@ -129,40 +123,6 @@ class GoalThreadRelevanceAnalysis(BaseModel):
     should_switch_thread: bool
 
 
-class GoalExecutionRecord(BaseModel):
-    """Single goal execution record (RFC-216: on specific thread).
-
-    RFC-624 Phase 4 Stage 2: Slimmed to metadata-only. CE owns execution data:
-    - loop_messages → CE LedgerManager spans all goals
-    - step_results → CE StepDAG
-    - completed_step_ids → derived from CE StepDAG
-    - evidence_ledger → not populated after clear_goal_state()
-    - current_plan → clear_goal_state() sets None before finalize
-
-    The checkpoint goal_history is a lightweight execution index. CE DAG is the
-    real data store for goal/step/ledger state.
-    """
-
-    # Identity (RFC-216: goal_id independent of thread)
-    goal_id: str  # "{loop_id}_goal_{seq}"
-    thread_id: str  # RFC-216: which thread executed this goal
-
-    # Execution state
-    iteration: int = 0
-    max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-    status: Literal["running", "completed", "failed", "cancelled"] = "running"
-
-    plan_revision_count: int = 0
-
-    # Metrics
-    duration_ms: int = 0
-    tokens_used: int = 0
-
-    # Timestamps
-    started_at: datetime
-    completed_at: datetime | None = None
-
-
 class StrangeLoopCheckpoint(BaseModel):
     """Complete StrangeLoop state (RFC-216: multi-thread spanning).
 
@@ -182,7 +142,7 @@ class StrangeLoopCheckpoint(BaseModel):
     # Goal execution history (RFC-216: across all threads)
     # RFC-626 Phase 3: goal_history is now a lightweight index (GoalIndexEntry-like)
     # Goal content recovered from CE GoalNode on restart
-    goal_history: list[GoalExecutionRecord] = Field(default_factory=list)
+    goal_history: list[GoalIndexEntry] = Field(default_factory=list)
     current_goal_index: int = -1  # -1 if no active goal
 
     # Working memory (cleared per-goal)
@@ -217,6 +177,26 @@ class StrangeLoopCheckpoint(BaseModel):
         default=None,
         description="ExecutionCheckpoint fields for schema 5.0 (lazy migration)",
     )
+
+
+_GOAL_INDEX_FIELDS = frozenset(
+    {
+        "goal_id",
+        "thread_id",
+        "status",
+        "started_at",
+        "completed_at",
+        "duration_ms",
+        "tokens_used",
+    }
+)
+
+
+def _slim_goal_index_item(item: Any) -> Any:
+    """Normalize legacy goal_history rows to GoalIndexEntry fields."""
+    if not isinstance(item, dict):
+        return item
+    return {k: v for k, v in item.items() if k in _GOAL_INDEX_FIELDS}
 
 
 def normalize_checkpoint_data(
@@ -268,14 +248,7 @@ def normalize_checkpoint_data(
 
     # Strip legacy goal content fields from goal_history (schema 5.0+).
     if schema_version >= "5.0" and out.get("goal_history"):
-        slim_history: list[dict[str, Any]] = []
-        for item in out["goal_history"]:
-            if not isinstance(item, dict):
-                slim_history.append(item)
-                continue
-            slim = {k: v for k, v in item.items() if k not in ("goal_text", "goal_completion")}
-            slim_history.append(slim)
-        out["goal_history"] = slim_history
+        out["goal_history"] = [_slim_goal_index_item(item) for item in out["goal_history"]]
 
     # RFC-626 Phase 3: execution_checkpoint defaults for schema 5.0
     if schema_version == "5.0" and "execution_checkpoint" not in out:

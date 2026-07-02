@@ -5,7 +5,7 @@ import os
 from typing import Any
 
 from soothe.config import SootheConfig
-from soothe.utils.observability.langfuse import _resolve_str
+from soothe.utils.observability.langfuse import resolve_langfuse_config_str
 
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
@@ -39,14 +39,20 @@ def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
             },
         )
 
-    pub = _resolve_str(lf.public_key) or os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
-    sec = _resolve_str(lf.secret_key) or os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
+    pub = (
+        resolve_langfuse_config_str(lf.public_key)
+        or os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
+    )
+    sec = (
+        resolve_langfuse_config_str(lf.secret_key)
+        or os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
+    )
     details: dict[str, Any] = {
         "enabled": True,
         "public_key_present": bool(pub),
         "secret_key_present": bool(sec),
     }
-    host = _resolve_str(lf.host) or os.environ.get("LANGFUSE_HOST", "").strip()
+    host = resolve_langfuse_config_str(lf.host) or os.environ.get("LANGFUSE_HOST", "").strip()
     if host:
         details["host"] = host
 

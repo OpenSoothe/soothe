@@ -8,10 +8,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.sloop.engine.anchor_manager import CheckpointAnchorManager
-from soothe.foundation.sloop.state.checkpoint import (
-    GoalExecutionRecord,
-    StrangeLoopCheckpoint,
-)
+from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.state.sloop_manager import (
     StrangeLoopStateManager,
@@ -24,6 +22,7 @@ if TYPE_CHECKING:
     from soothe.foundation.core.agent import CoreAgent
     from soothe.foundation.sloop.clarification.protocol import ClarificationPolicy
     from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+    from soothe.utils.observability.langfuse import GoalLoopTrace
 
 EmitFn = Callable[[str, Any], Awaitable[None]]
 
@@ -40,7 +39,7 @@ class LoopRuntimeContext:
     goal_context_manager: Any  # GoalContextManager or ContextEngineGoalContextAdapter (duck-typed)
     plan_manager: Any  # StepPlanManagerAdapter (duck-typed, 5-method contract)
     checkpoint: StrangeLoopCheckpoint
-    goal_record: GoalExecutionRecord | None
+    goal_record: GoalIndexEntry | None
     continue_loop_mode: bool
     recovery_valid_resume: bool
     loop_state: LoopState
@@ -65,8 +64,8 @@ class LoopRuntimeContext:
     # RFC-624 Phase 4: ContextEngine is always active
     ce: Any | None = None  # ContextEngine instance
     ce_goal_id: str | None = None  # Active goal ID in CE
-    # Shared Langfuse RunnableConfig root for intent-classify + strange-loop-graph (IG-540).
-    langfuse_bootstrap: dict[str, Any] | None = None
+    # Shared Langfuse trace for intent-classify + strange-loop-graph (IG-540).
+    goal_trace: GoalLoopTrace | None = None
 
     @property
     def core_agent(self) -> CoreAgent:

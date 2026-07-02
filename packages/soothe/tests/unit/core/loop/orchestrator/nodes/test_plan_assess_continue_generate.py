@@ -17,11 +17,11 @@ from soothe.foundation.sloop.orchestrator.nodes.plan_assess import node_plan_ass
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.sloop.state.checkpoint import (
-    GoalExecutionRecord,
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.schemas import (
     ContinuationAssessment,
     LoopState,
@@ -29,9 +29,9 @@ from soothe.foundation.sloop.state.schemas import (
 )
 
 
-def _make_prior_goal() -> GoalExecutionRecord:
+def _make_prior_goal() -> GoalIndexEntry:
     now = datetime.now(UTC)
-    return GoalExecutionRecord(
+    return GoalIndexEntry(
         goal_id="g0",
         thread_id="tid",
         status="completed",
@@ -40,21 +40,20 @@ def _make_prior_goal() -> GoalExecutionRecord:
     )
 
 
-def _make_active_goal(goal: str = "fix to add trace metadata") -> GoalExecutionRecord:
+def _make_active_goal(goal: str = "fix to add trace metadata") -> GoalIndexEntry:
     now = datetime.now(UTC)
     _ = goal
-    return GoalExecutionRecord(
+    return GoalIndexEntry(
         goal_id="g1",
         thread_id="tid",
         status="running",
         started_at=now,
-        iteration=0,
     )
 
 
 def _make_checkpoint(
-    prior: GoalExecutionRecord,
-    active: GoalExecutionRecord,
+    prior: GoalIndexEntry,
+    active: GoalIndexEntry,
 ) -> StrangeLoopCheckpoint:
     now = datetime.now(UTC)
     return StrangeLoopCheckpoint(

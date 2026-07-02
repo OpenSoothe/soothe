@@ -225,20 +225,16 @@ class StrangeLoopPersistenceBackend(ABC):
         self,
         goal_id: str,
         loop_id: str,
-        goal_text: str,
         thread_id: str,
-        iteration: int,
         status: str,
         started_at: str,
     ) -> None:
-        """Save goal execution record.
+        """Save goal index entry.
 
         Args:
             goal_id: Goal identifier.
             loop_id: StrangeLoop identifier.
-            goal_text: Goal description.
             thread_id: Thread identifier.
-            iteration: Iteration number.
             status: Goal status.
             started_at: Start timestamp (ISO format).
         """
@@ -250,20 +246,16 @@ class StrangeLoopPersistenceBackend(ABC):
         goal_id: str,
         loop_id: str,
         status: str,
-        goal_completion: str,
-        evidence_summary: str,
         duration_ms: int,
         tokens_used: int,
         completed_at: str | None,
     ) -> None:
-        """Update goal execution record.
+        """Update goal index entry.
 
         Args:
             goal_id: Goal identifier.
             loop_id: StrangeLoop identifier.
             status: Goal status.
-            goal_completion: Goal completion summary.
-            evidence_summary: Evidence summary.
             duration_ms: Duration in milliseconds.
             tokens_used: Tokens consumed.
             completed_at: Completion timestamp (ISO format, None if not completed).

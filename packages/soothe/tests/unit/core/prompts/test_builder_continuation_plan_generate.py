@@ -10,17 +10,17 @@ from soothe.foundation.sloop.prompts.plan_ledger_projection import (
 )
 from soothe.foundation.sloop.prompts.planner_assembly import resolve_planner_projection_mode
 from soothe.foundation.sloop.state.checkpoint import (
-    GoalExecutionRecord,
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
+from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.protocols.planner import PlanContext
 
 
-def _make_checkpoint(*records: GoalExecutionRecord) -> StrangeLoopCheckpoint:
+def _make_checkpoint(*records: GoalIndexEntry) -> StrangeLoopCheckpoint:
     now = datetime.now(UTC)
     return StrangeLoopCheckpoint(
         loop_id="loop-x",
@@ -66,7 +66,7 @@ def test_new_goal_projection_excludes_execute_step() -> None:
 
 
 def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> None:
-    prior = GoalExecutionRecord(
+    prior = GoalIndexEntry(
         goal_id="g0",
         thread_id="tid",
         status="completed",
