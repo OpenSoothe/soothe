@@ -158,6 +158,34 @@ def test_merge_skips_handler_append_when_inherit_carries_same_handler(monkeypatc
     assert out["metadata"]["langfuse_session_id"] == "sess-1"
 
 
+def test_merge_reuses_inherited_handler_not_cached(monkeypatch) -> None:
+    """Goal-loop bootstrap handler must not be replaced by the process-wide cached handler."""
+    pytest.importorskip("langfuse")
+    from soothe.config.models import LangfuseIntegrationConfig, ObservabilityConfig
+    from soothe.utils.observability import langfuse as langfuse_util
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    obs = ObservabilityConfig(
+        langfuse=LangfuseIntegrationConfig(enabled=True, trace_name="soothe-test"),
+    )
+    cfg = SootheConfig(observability=obs)
+    cached = SootheLangfuseCallbackHandler()
+    inherited = SootheLangfuseCallbackHandler(trace_context={"trace_id": "shared-trace"})
+    monkeypatch.setattr(langfuse_util, "_langfuse_callback_handler", lambda _c: cached)
+
+    parent = {"callbacks": [inherited]}
+    base = {"configurable": {"thread_id": "loop-1"}, "callbacks": [inherited]}
+    out = langfuse_util.merge_langfuse_runnable_config(
+        base,
+        cfg,
+        session_id="sess-1",
+        run_name="soothe-test:strange-loop-graph",
+        inherit_callbacks_from=parent,
+    )
+    assert out["callbacks"] == [inherited]
+    assert out["callbacks"][0] is not cached
+
+
 def test_merge_appends_handler_when_inherit_lacks_soothe_handler(monkeypatch) -> None:
     pytest.importorskip("langfuse")
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler

@@ -43,12 +43,6 @@ _PLAN_ASSESS_LEDGER_FIELDS: frozenset[str] = frozenset(
     {"status", "goal_progress", "require_goal_completion"}
 )
 
-# Execute ledger: optional PRIOR STEP EVIDENCE block (multi-line until next section)
-_PRIOR_STEP_EVIDENCE_RE = re.compile(
-    r"PRIOR STEP EVIDENCE:\s*\n(.+?)(?:\n\n[A-Z][A-Z0-9 ]*:|$)",
-    re.DOTALL,
-)
-
 
 def compact_planning_human_content(content: str) -> str:
     """Return ledger-ready content for a recorded plan-phase HumanMessage.
@@ -99,11 +93,12 @@ def compact_plan_assess_ai_dump(response: Any) -> str:
 def compact_execute_human_content(step: Any, *, envelope: str = "") -> str:
     """Return ledger-ready content for a recorded execute-step HumanMessage.
 
-    Stores EXECUTION TASK RECAP + EXPECTED OUTPUT (+ optional PRIOR STEP EVIDENCE).
-    Volatile sections (WORKSPACE STATE, SKILL CONTEXT, EXECUTION HINTS) are omitted.
+    Stores EXECUTION TASK + EXPECTED OUTPUT only. Volatile sections (WORKSPACE STATE,
+    SKILL CONTEXT, EXECUTION HINTS) and predecessor context (projected separately
+    into CoreAgent input) are omitted.
     """
     from soothe.foundation.sloop.prompts.user_message import (
-        EXECUTION_TASK_RECAP_LABEL,
+        EXECUTION_TASK_LABEL,
         flatten_user_message_content,
     )
 
@@ -111,17 +106,10 @@ def compact_execute_human_content(step: Any, *, envelope: str = "") -> str:
     if not brief and envelope:
         brief = flatten_user_message_content(envelope)
 
-    sections: list[str] = [f"{EXECUTION_TASK_RECAP_LABEL}:\n{brief}"]
+    sections: list[str] = [f"{EXECUTION_TASK_LABEL}:\n{brief}"]
 
     expected = (getattr(step, "expected_output", None) or "").strip()
     if expected:
         sections.append(f"EXPECTED OUTPUT:\n{expected}")
-
-    if envelope:
-        prior_match = _PRIOR_STEP_EVIDENCE_RE.search(envelope)
-        if prior_match:
-            prior_body = prior_match.group(1).strip()
-            if prior_body:
-                sections.append(f"PRIOR STEP EVIDENCE:\n{prior_body}")
 
     return "\n\n".join(sections).strip()

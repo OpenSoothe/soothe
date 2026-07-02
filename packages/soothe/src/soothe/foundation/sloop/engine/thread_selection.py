@@ -54,13 +54,13 @@ def _select_thread_for_step(
     """Select an isolated thread_id for a step.
 
     IG-477: Thread isolation via ``__step_<id>`` namespace for parallel safety.
-    Predecessor context arrives via message injection, not checkpoint fork.
+    Predecessor context arrives via ledger projection, not checkpoint fork.
 
     Strategy:
     | Direct deps | Action                                              |
     |-------------|-----------------------------------------------------|
     | 0           | new __step_<id> thread                              |
-    | ≥1          | new __step_<id> thread + predecessor msg injection |
+    | ≥1          | new __step_<id> thread + predecessor ledger projection |
 
     Returns:
         Thread_id for the step's CoreAgent execution.

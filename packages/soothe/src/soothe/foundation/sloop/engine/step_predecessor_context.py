@@ -9,6 +9,7 @@ discovery actions (e.g. re-running a verify script on a fix step).
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
 
 PRIOR_STEP_EVIDENCE_MAX_CHARS = 4000
+PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS = 160
 
 _GENERIC_BRIEF_RE = re.compile(
     r"^(fix|apply|resolve|address|handle|complete|implement)\b",
@@ -52,6 +54,87 @@ def step_needs_brief_hydration(step: StepAction) -> bool:
         "do not repeat",
     )
     return any(marker in lowered for marker in generic_markers) and len(full) < 80
+
+
+@dataclass(frozen=True)
+class PriorStepSummary:
+    """Lightweight predecessor step row for execute-step human envelopes."""
+
+    step_id: str
+    description: str
+    status: str
+    outcome_preview: str = ""
+
+
+def _predecessor_step_status(loop_state: LoopState, step_id: str) -> str:
+    """Return completed/failed/unknown for a transitive predecessor step."""
+    for result in reversed(loop_state.step_results):
+        if result.step_id != step_id:
+            continue
+        return "completed" if result.success else "failed"
+    if _ledger_ai_content_for_step(loop_state.loop_messages, step_id):
+        return "completed"
+    return "unknown"
+
+
+def build_prior_steps_summaries(
+    step: StepAction,
+    decision: AgentDecision,
+    loop_state: LoopState,
+) -> list[PriorStepSummary]:
+    """Build desc/status rows for transitive predecessor steps."""
+    predecessor_ids = transitive_dependency_step_ids(step, decision)
+    if not predecessor_ids:
+        return []
+
+    summaries: list[PriorStepSummary] = []
+    for pred_id in sorted(predecessor_ids):
+        pred_step = _resolve_predecessor_step(pred_id, decision)
+        description = ""
+        if pred_step is not None:
+            description = (pred_step.full_description or pred_step.description or "").strip()
+        if not description:
+            description = pred_id
+        status = _predecessor_step_status(loop_state, pred_id)
+        preview = ""
+        if status == "completed":
+            preview = _ledger_ai_content_for_step(loop_state.loop_messages, pred_id)
+            if not preview:
+                preview = _step_result_evidence(loop_state, pred_id)
+            preview = preview.strip()
+            if (
+                PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS > 0
+                and len(preview) > PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS
+            ):
+                preview = preview[: PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS - 1].rstrip() + "…"
+        elif status == "failed":
+            for result in reversed(loop_state.step_results):
+                if result.step_id == pred_id and not result.success:
+                    preview = (result.error or "").strip()
+                    break
+        summaries.append(
+            PriorStepSummary(
+                step_id=pred_id,
+                description=description,
+                status=status,
+                outcome_preview=preview,
+            )
+        )
+    return summaries
+
+
+def build_prior_steps_summary_block(
+    step: StepAction,
+    decision: AgentDecision,
+    loop_state: LoopState,
+    *,
+    evidence_in_ledger: bool = True,
+) -> str:
+    """Render transitive predecessor steps for the execute-step human envelope."""
+    from soothe.foundation.sloop.prompts.user_message import render_prior_steps_tree
+
+    summaries = build_prior_steps_summaries(step, decision, loop_state)
+    return render_prior_steps_tree(summaries, evidence_in_ledger=evidence_in_ledger)
 
 
 def _message_step_id(msg: Any) -> str | None:
@@ -209,11 +292,12 @@ def build_dependent_execution_hints(
     if has_predecessor_evidence:
         instruction_lines.insert(
             0,
-            "- PRIOR STEP EVIDENCE is authoritative; do not repeat completed discovery steps",
+            "- PRIOR STEPS and prior execute-step ledger turns are authoritative; "
+            "do not repeat completed discovery steps",
         )
         instruction_lines.insert(
             1,
-            "- Apply fixes or follow-up actions using concrete details from PRIOR STEP EVIDENCE",
+            "- Apply fixes or follow-up actions using concrete details from prior step outcomes",
         )
     hints_lines.append("Instructions:\n" + "\n".join(instruction_lines))
     return "\n\n".join(hints_lines)
@@ -221,8 +305,12 @@ def build_dependent_execution_hints(
 
 __all__ = [
     "PRIOR_STEP_EVIDENCE_MAX_CHARS",
+    "PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS",
+    "PriorStepSummary",
     "build_dependent_execution_hints",
     "build_prior_step_evidence",
+    "build_prior_steps_summaries",
+    "build_prior_steps_summary_block",
     "predecessor_messages_for_step",
     "step_needs_brief_hydration",
     "template_hydrate_step_brief",

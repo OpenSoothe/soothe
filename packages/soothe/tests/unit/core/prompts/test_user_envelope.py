@@ -86,21 +86,46 @@ def test_execute_message_hints_contains_task_instructions() -> None:
     assert "- Execute the step" in msg
 
 
-def test_execute_message_prior_step_evidence_section() -> None:
-    """Dependent steps include PRIOR STEP EVIDENCE between EXECUTION TASK and EXECUTION HINTS."""
+def test_execute_message_prior_steps_section() -> None:
+    """Dependent steps include PRIOR STEPS between EXECUTION TASK and EXECUTION HINTS."""
+    from soothe.foundation.sloop.engine.step_predecessor_context import PriorStepSummary
+    from soothe.foundation.sloop.prompts.user_message import render_prior_steps_tree
+
     builder = UserMessageBuilder()
-    evidence = "Step 01 — verify (completed)\n---\n✗ F821 undefined name `Any`"
+    prior_steps = render_prior_steps_tree(
+        [
+            PriorStepSummary(
+                step_id="01",
+                description="Run verification script",
+                status="completed",
+            )
+        ],
+        evidence_in_ledger=True,
+    )
     msg = builder.build_execute_step_message(
         "Fix identified failures",
-        execution_hints="Instructions:\n- Apply fixes from evidence",
-        predecessor_evidence=evidence,
+        execution_hints="Instructions:\n- Apply fixes from prior outcomes",
+        prior_steps=prior_steps,
     )
-    assert "PRIOR STEP EVIDENCE:" in msg
-    assert "F821 undefined name `Any`" in msg
+    assert "PRIOR STEPS:" in msg
+    assert "Run verification script" in msg
+    assert "(completed)" in msg
+    assert "see prior assistant message" in msg
     task_idx = msg.index("EXECUTION TASK:")
-    evidence_idx = msg.index("PRIOR STEP EVIDENCE:")
+    prior_idx = msg.index("PRIOR STEPS:")
     hints_idx = msg.index("EXECUTION HINTS:")
-    assert task_idx < evidence_idx < hints_idx
+    assert task_idx < prior_idx < hints_idx
+
+
+def test_execute_message_no_prior_step_evidence_section() -> None:
+    """Predecessor context is projected from the ledger, not inlined in the envelope."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
+        "Fix identified failures",
+        execution_hints="Instructions:\n- Apply fixes from prior ledger evidence",
+    )
+    assert "PRIOR STEP EVIDENCE:" not in msg
+    assert "Fix identified failures" in msg
 
 
 def test_execute_message_omits_prior_step_evidence_when_absent() -> None:
