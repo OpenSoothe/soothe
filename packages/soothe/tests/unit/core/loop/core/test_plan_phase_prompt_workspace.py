@@ -12,19 +12,17 @@ from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessa
 from soothe.protocols.planner import PlanContext
 
 
-def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
-    """plan-generate with config includes ENVIRONMENT, WORKSPACE, and WORKSPACE_RULES."""
+def test_build_loop_plan_messages_with_config_omits_workspace_blocks() -> None:
+    """plan-generate omits workspace blocks; those live on execute-step system prompts."""
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
     config = MagicMock()
     config.resolve_model.return_value = "claude-opus-4-6"
     builder = PromptBuilder(config)
-    # WORKSPACE_RULES are emitted for plan-generate only (assess is a meta-decision).
     messages = builder.build_plan_messages(
         "analyze architecture", state, ctx, plan_phase="generate"
     )
 
-    # Assess: system + optional ledger + plan-context human with GOAL:
     assert len(messages) == 2
     assert isinstance(messages[0], SystemMessage)
     assert isinstance(messages[1], LoopHumanMessage)
@@ -32,20 +30,20 @@ def test_build_loop_plan_messages_with_config_includes_soothe_blocks() -> None:
     system_content = messages[0].content
     human_content = messages[1].content
 
-    # RFC-207: SystemMessage has static context
-    assert "<ENVIRONMENT" in system_content
-    assert "<WORKSPACE" in system_content
-    assert "/abs/path/to/repo" in system_content
-    assert "<WORKSPACE_RULES>" in system_content
-    assert "Do NOT ask the user" in system_content
+    assert "<ENVIRONMENT" not in system_content
+    assert "<WORKSPACE" not in system_content
+    assert "/abs/path/to/repo" not in system_content
+    assert "<WORKSPACE_RULES>" not in system_content
+    assert "<EXECUTION_POLICIES>" in system_content
+    assert "<PLAN_GENERATE>" in system_content
 
-    assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
+    assert "</USER_QUERY>" not in system_content
     assert "GOAL:" in human_content
     assert "analyze architecture" in human_content
 
 
-def test_build_loop_plan_messages_without_config_workspace_only() -> None:
-    """plan-generate without config still includes WORKSPACE + WORKSPACE_RULES."""
+def test_build_loop_plan_messages_without_config_omits_workspace_blocks() -> None:
+    """plan-generate without config still omits WORKSPACE / WORKSPACE_RULES."""
     state = LoopState(goal="analyze architecture", thread_id="t1", max_iterations=8)
     ctx = PlanContext(workspace="/abs/path/to/repo")
     builder = PromptBuilder()
@@ -58,11 +56,11 @@ def test_build_loop_plan_messages_without_config_workspace_only() -> None:
     human_content = messages[1].content
 
     assert "<ENVIRONMENT" not in system_content
-    assert "<WORKSPACE" in system_content
-    assert "/abs/path/to/repo" in system_content
-    assert "<WORKSPACE_RULES>" in system_content
+    assert "<WORKSPACE" not in system_content
+    assert "/abs/path/to/repo" not in system_content
+    assert "<WORKSPACE_RULES>" not in system_content
 
-    assert "</USER_QUERY>" not in system_content  # goal text lives in human message only
+    assert "</USER_QUERY>" not in system_content
     assert "GOAL:" in human_content
     assert "analyze architecture" in human_content
 

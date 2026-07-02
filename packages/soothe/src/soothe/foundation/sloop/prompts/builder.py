@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -221,22 +220,22 @@ class PromptBuilder:
         call_kind: PlannerCallKind | None = None,
         context_bundle: ContextBundle | None = None,
     ) -> str:
-        """Construct static context: policies, instructions, environment, workspace.
+        """Construct static context: policies and phase instructions.
 
         Maps RFC-206 SYSTEM_CONTEXT + INSTRUCTIONS layers to SystemMessage.
         Uses prefetched fragments for cache optimization (IG-183).
 
-        Reordered per IG-364: Static-always fragments first, conditional static sections,
-        then ENVIRONMENT (global), then WORKSPACE (dynamic project-specific).
+        Workspace path semantics, ENVIRONMENT, WORKSPACE metadata, and
+        AGENT_INSTRUCTIONS live on execute-step CoreAgent system prompts only —
+        plan-assess / plan-generate stay lean and workspace-agnostic for cache
+        stability.
 
-        Section ordering (optimized for prompt caching):
-        - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS only, then conditional blocks, ENVIRONMENT,
-          WORKSPACE.
-        - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS (schema-aligned PlanGeneration
-          only), then conditional blocks, ENVIRONMENT, WORKSPACE.
+        Section ordering:
+        - **assess** (IG-372): PLAN_ASSESS_INSTRUCTIONS, then conditional blocks.
+        - **generate**: EXECUTION_POLICIES, PLAN_GENERATE_INSTRUCTIONS, conditional blocks.
+        - **continuation**: PLAN_CONTINUATION_DISCRIMINATE, conditional blocks.
 
-        Goal is supplied in the plan-context user message
-        (``GOAL:``), not in the system prompt.
+        Goal is supplied in the plan-context user message (``GOAL:``), not in the system prompt.
 
         Args:
             context: Planning context with workspace, capabilities
@@ -267,25 +266,6 @@ class PromptBuilder:
         # Language directive: cache-stable, applies to all phases.
         parts.append(RESPONSE_LANGUAGE_HINT_FRAGMENT + "\n")
 
-        # Conditional static sections (present based on context).
-        # WORKSPACE_RULES apply only to plan-generate: plan-assess is a meta-decision
-        # (status/progress/next_action) that does not author steps touching the workspace.
-        # Project rules (AGENTS.md / CLAUDE.md) are injected on execute via CoreAgent
-        # system prompt as AGENT_INSTRUCTIONS, not plan-generate — keeps the planner
-        # cache-stable and lean.
-        if context.workspace and kind == "generate":
-            parts.append(
-                "<WORKSPACE_RULES>\n"
-                "Project root is under <WORKSPACE><root>. Filesystem tools: workspace-relative "
-                "or host-absolute paths under that root. Shell tools (run_command, run_python): "
-                "cwd = workspace root; leading '/' in shell = host root — use '.' or relative paths.\n"
-                "- For architecture/codebase/structure goals: inspect this directory immediately.\n"
-                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal "
-                "names a different project outside this directory.\n"
-                "- Do NOT tell the user you need them to share the project first — it is already here.\n"
-                "</WORKSPACE_RULES>\n"
-            )
-
         # RFC-624: Supplementary instructions from ContextBundle (plan cache-stable:
         # agent/project rules stay on execute-type system prompts only).
         if context_bundle is not None:
@@ -305,19 +285,6 @@ class PromptBuilder:
                 "do not claim completion without execution evidence.\n"
                 "</FOLLOW_UP_POLICY>\n"
             )
-
-        # Environment section (after REASONING_STANDARDS, before WORKSPACE)
-        if self.config is not None:
-            from soothe.foundation.sloop.prompts.context_xml import build_soothe_environment_section
-
-            model = self.config.resolve_model("default")
-            parts.append(build_soothe_environment_section(model=model) + "\n")
-
-        # Workspace section (dynamic, placed last)
-        if context.workspace:
-            from soothe.foundation.sloop.prompts.context_xml import build_soothe_workspace_section
-
-            parts.append(build_soothe_workspace_section(Path(context.workspace)) + "\n")
 
         return "\n".join(parts)
 

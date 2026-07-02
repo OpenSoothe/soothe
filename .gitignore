@@ -191,6 +191,15 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Soothe local runtime data
+.soothe/
+
+# Tool backup files (created by file editing tools)
+.backups/
+
+# Large tool result cache
+large_tool_results/
+
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
@@ -206,7 +215,6 @@ __marimo__/
 .python-version
 thirdparty/
 .cursor/
-large_tool_results/
 plot_*
 .claude/
 .DS_Store
@@ -216,5 +224,3 @@ manifest.json
 _bmad
 __MACOSX
 .qoder
-.soothe
-.backups/

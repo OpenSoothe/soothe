@@ -559,48 +559,44 @@ class TestWorkspaceInjection:
         assert "same natural language as the user's goal" in prompt
         # The lowercase legacy tag must not leak back in.
         assert "<response_language_hint>" not in prompt
-        # Hint sits in the workspace prelude (before <ENVIRONMENT> / <WORKSPACE>).
+        # Hint sits in the behavioral prelude (before workspace tail / ENVIRONMENT).
         assert prompt.find("<RESPONSE_LANGUAGE_HINT>") < prompt.find("<ENVIRONMENT")
 
-    def test_workspace_rules_warn_against_pasting_truncated_tool_output(self, tmp_path) -> None:
-        """Rules must forbid re-pasting truncated tool bodies (trace 0e412f)."""
+    def test_workspace_rules_use_execute_semantics(self, tmp_path) -> None:
+        """WORKSPACE_RULES must describe path semantics for filesystem and shell tools."""
         (tmp_path / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
         mw = self._middleware()
         prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
-        # Anti-paste rule must mention the truncation signal AND a concrete
-        # re-query alternative so the model has actionable guidance.
-        assert "truncated=true" in prompt
-        assert "do NOT paste" in prompt
-        assert "run_python" in prompt
+        assert "run_command, run_python" in prompt
+        assert "cwd = workspace root" in prompt
+        assert "inspect this directory immediately" in prompt
 
-    def test_workspace_prelude_block_order(self, tmp_path) -> None:
-        """Execute-step system prompt order must be:
-        base_core, WORKSPACE_RULES, AGENT_INSTRUCTIONS, ENVIRONMENT, WORKSPACE.
-
-        Workspace context grounds the model before host/env details and before
-        the dynamic <WORKSPACE> metadata block.
+    def test_workspace_tail_block_order(self, tmp_path) -> None:
+        """Execute-step workspace blocks live at the system-prompt tail:
+        ENVIRONMENT, WORKSPACE_RULES, WORKSPACE, AGENT_INSTRUCTIONS (before TIMESTAMP).
         """
         (tmp_path / "AGENTS.md").write_text("# Rules\n\nBe terse.\n", encoding="utf-8")
         mw = self._middleware()
         prompt = mw._get_prompt_for_complexity("medium", {"workspace": str(tmp_path)})
 
-        idx_rules = prompt.find("<WORKSPACE_RULES>")
-        idx_instr = prompt.find("<AGENT_INSTRUCTIONS>")
         idx_env = prompt.find("<ENVIRONMENT")
-        # `<WORKSPACE>\n<root>` matches the metadata block specifically;
-        # bare `<WORKSPACE>` also occurs inside the WORKSPACE_RULES text
-        # (`...is under <WORKSPACE><root> above`).
+        idx_rules = prompt.find("<WORKSPACE_RULES>")
         idx_ws = prompt.find("<WORKSPACE>\n<root>")
+        idx_instr = prompt.find("<AGENT_INSTRUCTIONS>")
+        idx_ts = prompt.find("<TIMESTAMP>")
 
-        assert idx_rules >= 0
-        assert idx_instr >= 0
         assert idx_env >= 0
+        assert idx_rules >= 0
         assert idx_ws >= 0
-        assert idx_rules < idx_instr < idx_env < idx_ws, (
-            "Expected order: WORKSPACE_RULES < AGENT_INSTRUCTIONS < "
-            f"ENVIRONMENT < <WORKSPACE>; got rules={idx_rules}, "
-            f"instr={idx_instr}, env={idx_env}, ws={idx_ws}"
+        assert idx_instr >= 0
+        assert idx_ts >= 0
+        assert idx_env < idx_rules < idx_ws < idx_instr < idx_ts, (
+            "Expected order: ENVIRONMENT < WORKSPACE_RULES < <WORKSPACE> < "
+            f"AGENT_INSTRUCTIONS < TIMESTAMP; got env={idx_env}, "
+            f"rules={idx_rules}, ws={idx_ws}, instr={idx_instr}, ts={idx_ts}"
         )
+        # Workspace tail follows behavioral prelude (language hint precedes ENVIRONMENT).
+        assert prompt.find("<RESPONSE_LANGUAGE_HINT>") < idx_env
 
     def test_state_schema_declares_workspace_channel(self) -> None:
         """LangGraph drops undeclared keys between nodes — `workspace`
@@ -666,3 +662,114 @@ def test_simple_complexity_emits_agent_instructions(tmp_path) -> None:
     prompt = mw._get_prompt_for_complexity("simple", {"workspace": str(tmp_path)})
     assert "<AGENT_INSTRUCTIONS>" in prompt
     assert "Use ruff." in prompt
+
+
+def test_modify_request_resolves_workspace_from_langgraph_config(tmp_path) -> None:
+    """Trace 416c: workspace on configurable must reach execute-step system prompt."""
+    (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
+    mw = SystemPromptMiddleware(config=SootheConfig())
+    request = MockModelRequest(
+        state={"routing_classification": {"task_complexity": "simple"}, "messages": []},
+        system_message=SystemMessage(content="original"),
+    )
+    with patch(
+        "langgraph.config.get_config",
+        return_value={"configurable": {"workspace": str(tmp_path)}},
+    ):
+        modified = mw.modify_request(request)
+    content = modified.system_message.content
+    assert "<AGENT_INSTRUCTIONS>" in content
+    assert "<WORKSPACE_RULES>" in content
+    assert "Use ruff." in content
+
+
+def test_modify_request_resolves_workspace_from_human_message(tmp_path) -> None:
+    """Workspace on LoopHumanMessage must reach execute-step system prompt."""
+    from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+
+    (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
+    mw = SystemPromptMiddleware(config=SootheConfig())
+    request = MockModelRequest(
+        state={
+            "routing_classification": {"task_complexity": "simple"},
+            "messages": [
+                LoopHumanMessage(content="EXECUTION TASK:\nDo work", workspace=str(tmp_path))
+            ],
+        },
+        system_message=SystemMessage(content="original"),
+    )
+    modified = mw.modify_request(request)
+    content = modified.system_message.content
+    assert "<AGENT_INSTRUCTIONS>" in content
+    assert "<WORKSPACE_RULES>" in content
+
+
+def test_modify_request_resolves_workspace_from_request_messages_first_hop(tmp_path) -> None:
+    """First execute-step hop: workspace on request.messages before state merge."""
+    from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+
+    (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
+    mw = SystemPromptMiddleware(config=SootheConfig())
+    human = LoopHumanMessage(
+        content="EXECUTION TASK:\nFind verify command",
+        workspace=str(tmp_path),
+        phase="execute_step",
+    )
+    request = MockModelRequest(
+        state={"routing_classification": {"task_complexity": "simple"}, "messages": []},
+        system_message=SystemMessage(content="original"),
+    )
+    object.__setattr__(request, "_messages", [human])
+    modified = mw.modify_request(request)
+    content = modified.system_message.content
+    assert "<WORKSPACE_RULES>" in content
+    assert "<AGENT_INSTRUCTIONS>" in content
+    assert "<ENVIRONMENT" in content
+    assert "<WORKSPACE>\n<root>" in content
+    assert str(tmp_path) in content
+
+
+def test_execute_step_has_workspace_tail_plan_generate_does_not(tmp_path) -> None:
+    """Workspace blocks are execute-step only; plan-generate stays lean."""
+    from soothe.foundation.sloop.prompts import PromptBuilder
+    from soothe.foundation.sloop.state.schemas import LoopState
+    from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+    from soothe.protocols.planner import PlanContext
+
+    (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
+    ws = str(tmp_path)
+
+    plan_system = (
+        PromptBuilder()
+        .build_plan_messages(
+            "run verify",
+            LoopState(goal="run verify", thread_id="t1", max_iterations=8),
+            PlanContext(workspace=ws),
+            plan_phase="generate",
+        )[0]
+        .content
+    )
+    assert "<WORKSPACE_RULES>" not in plan_system
+    assert "<ENVIRONMENT" not in plan_system
+    assert "<WORKSPACE>" not in plan_system
+
+    mw = SystemPromptMiddleware(config=SootheConfig())
+    request = MockModelRequest(
+        state={"routing_classification": {"task_complexity": "simple"}, "messages": []},
+        system_message=SystemMessage(content="original"),
+    )
+    object.__setattr__(
+        request,
+        "_messages",
+        [
+            LoopHumanMessage(
+                content="EXECUTION TASK:\nRun verify",
+                workspace=ws,
+                phase="execute_step",
+            )
+        ],
+    )
+    execute_system = mw.modify_request(request).system_message.content
+    for tag in ("<WORKSPACE_RULES>", "<AGENT_INSTRUCTIONS>", "<ENVIRONMENT", "<WORKSPACE>\n<root>"):
+        assert tag in execute_system
+    assert "Use ruff." in execute_system
