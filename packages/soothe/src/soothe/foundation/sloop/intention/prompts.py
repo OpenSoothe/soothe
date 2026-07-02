@@ -1,19 +1,7 @@
-"""LLM prompts for 4-class intake classification (RFC-630).
+"""LLM prompts for 4-class intake classification (RFC-630, IG-540).
 
-The LLM classifies the user's goal into one of ``quiz`` | ``trivial`` |
-``simple`` | ``complex``. When ``quiz``, the LLM also provides the direct
-answer (``quiz_response``) to avoid a second LLM call. Loop continuation is
-derived structurally inside ``StrangeLoop`` from the checkpoint, not classified.
-
-Prompt bodies live as ``.xml`` fragments under
-``soothe.foundation.sloop.prompts.fragments.classifiers``; this module loads
-them directly to avoid importing ``soothe.foundation.sloop.prompts`` (circular
-import with config).
-
-XML structure:
-- <intent_instructions>: Static content (classification rules, JSON schema)
-- <intent_inputs> (retry only): Dynamic runtime fields as flat XML elements
-  - <current_time>, <current_query>: Runtime context
+Static classification rules live in system fragments. The human message is
+built in Python (``GOAL:`` plain text, same shape as plan-assess).
 """
 
 from __future__ import annotations
@@ -29,13 +17,39 @@ def _read_classifier_fragment(name: str) -> str:
     return (_CLASSIFIER_FRAGMENTS_DIR / name).read_text(encoding="utf-8")
 
 
-# 4-class intake classification prompt (RFC-630)
-INTAKE_CLASSIFICATION_PROMPT = _read_classifier_fragment("intake_classification.xml")
+INTAKE_CLASSIFICATION_SYSTEM_PROMPT = _read_classifier_fragment("intake_classification_system.xml")
+INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT = _read_classifier_fragment(
+    "intake_classification_retry_system.xml"
+)
 
-# 4-class intake retry prompt (simplified)
-INTAKE_CLASSIFICATION_RETRY_PROMPT = _read_classifier_fragment("intake_classification_retry.xml")
+INTAKE_CLASSIFICATION_HUMAN_TASK = (
+    "Classify GOAL above. Reply with JSON only. "
+    "When intake_label is not quiz: set reasoning to one first-person sentence "
+    "(I'll or Let me, max 20 words) stating your next concrete action — paraphrase GOAL, "
+    "never mention intake labels, complexity, routing, or classification rationale."
+)
+
+INTAKE_CLASSIFICATION_HUMAN_TASK_RETRY = (
+    "Re-classify GOAL above. Reply with JSON only. "
+    "reasoning must start with I'll or Let me and describe your next action only — "
+    "never echo label jargon (forbidden: single focused step, trivial, simple, complex)."
+)
+
+# Back-compat aliases (system-only; human envelope is code-built).
+INTAKE_CLASSIFICATION_PROMPT = INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+INTAKE_CLASSIFICATION_RETRY_PROMPT = INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT
+INTAKE_CLASSIFICATION_HUMAN_PROMPT = "GOAL:\n{query}\n\nTASK:\n" + INTAKE_CLASSIFICATION_HUMAN_TASK
+INTAKE_CLASSIFICATION_RETRY_HUMAN_PROMPT = (
+    "GOAL:\n{query}\n\nTASK:\n" + INTAKE_CLASSIFICATION_HUMAN_TASK_RETRY
+)
 
 __all__ = [
+    "INTAKE_CLASSIFICATION_HUMAN_PROMPT",
+    "INTAKE_CLASSIFICATION_HUMAN_TASK",
+    "INTAKE_CLASSIFICATION_HUMAN_TASK_RETRY",
     "INTAKE_CLASSIFICATION_PROMPT",
+    "INTAKE_CLASSIFICATION_RETRY_HUMAN_PROMPT",
     "INTAKE_CLASSIFICATION_RETRY_PROMPT",
+    "INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT",
+    "INTAKE_CLASSIFICATION_SYSTEM_PROMPT",
 ]
