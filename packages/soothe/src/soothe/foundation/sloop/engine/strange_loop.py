@@ -143,6 +143,7 @@ class StrangeLoop:
         clarification_answer: bool = False,  # RFC-622: hint that goal is a resume answer
         clarification_answers: list[str] | None = None,  # RFC-622: per-question answer list
         proposal_queue: ProposalQueue | None = None,  # RFC-204 Group C: Layer 2 proposals
+        langfuse_bootstrap: dict[str, Any] | None = None,  # IG-540: shared Langfuse trace root
     ) -> AsyncGenerator[tuple[str, Any], None]:
         """Run loop with progress events (RFC-0020 compliant).
 
@@ -165,6 +166,8 @@ class StrangeLoop:
                 requests are deferred via the legacy no-policy path.
             proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
                 tools to enqueue goal suggestions and findings during execution.
+            langfuse_bootstrap: Shared Langfuse config from the runner so off-graph
+                intent-classify and ``strange-loop-graph`` nest under one trace.
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -575,6 +578,7 @@ class StrangeLoop:
                 proposal_queue=proposal_queue,  # RFC-204 Group C
                 ce=ce_instance,
                 ce_goal_id=ce_goal.id,
+                langfuse_bootstrap=langfuse_bootstrap,
             )
 
             async def pump_graph() -> None:

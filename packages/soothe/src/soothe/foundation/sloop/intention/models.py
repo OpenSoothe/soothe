@@ -162,7 +162,8 @@ class IntakeClassificationLLMResult(BaseModel):
     )
     reasoning: str | None = Field(
         default=None,
-        description="Brief first-person reasoning (one sentence, max 20 words). Empty for quiz.",
+        description="One first-person sentence (max 20 words) starting with I'll or Let me; "
+        "user-facing next action, never intake-label jargon.",
     )
     goal_description: str | None = Field(
         default=None,

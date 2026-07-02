@@ -56,13 +56,21 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
         RunnableConfig dict safe to pass to ``ainvoke``.
     """
     loop_id = ctx.state_manager.loop_id
-    base: dict[str, Any] = {"configurable": {"thread_id": loop_id}}
+    inherit = ctx.langfuse_bootstrap
+    if inherit is not None:
+        base = dict(inherit)
+        configurable = dict(base.get("configurable") or {})
+        configurable["thread_id"] = loop_id
+    else:
+        base = {"configurable": {"thread_id": loop_id}}
+        configurable = base["configurable"]
     # BM-001 fix: propagate workspace to configurable so tools use client workspace
     if ctx.loop_state.workspace:
-        base["configurable"]["workspace"] = ctx.loop_state.workspace
+        configurable["workspace"] = ctx.loop_state.workspace
     # RFC-204 Group C: propagate proposal_queue for Layer 2 tools
     if ctx.proposal_queue is not None:
-        base["configurable"]["proposal_queue"] = ctx.proposal_queue
+        configurable["proposal_queue"] = ctx.proposal_queue
+    base["configurable"] = configurable
     cfg = ctx.strange_loop.config
     run_name = loop_graph_langfuse_run_display_name(cfg.observability.langfuse.trace_name)
     merged = merge_langfuse_runnable_config(
@@ -71,6 +79,7 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
         session_id=ctx.loop_state.thread_id,
         run_name=run_name,
         loop_id=loop_id,
+        inherit_callbacks_from=inherit,
     )
     out = dict(merged)
     meta = dict(out.get("metadata") or {})

@@ -361,9 +361,9 @@ def build_traced_config(
         run_name: Trace display name (e.g. ``soothe:intent-classify``).
         extra_metadata: Additional metadata fields to merge.
         loop_id: Optional loop identifier for trace correlation across sub-traces.
-        independent_trace: When True, creates a fresh handler with new trace_id to avoid
-            nesting under a prior trace's OpenTelemetry context. Use for LLM calls that
-            should be standalone root traces (e.g., intent classification before strange-loop-graph).
+        independent_trace: When True, creates a fresh handler with new trace_id (standalone
+            root trace). Default False — prefer ``build_goal_loop_langfuse_bootstrap`` and
+            ``inherit_callbacks_from`` to nest intent-classify under ``strange-loop-graph``.
 
     Returns:
         RunnableConfig dict with callbacks and metadata ready for ``model.ainvoke(..., config=)``.
@@ -402,6 +402,108 @@ def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
     """Same root run label as ``build_loop_graph_invoke_config`` / LangGraph ``run_name``."""
     tn = (trace_name or "").strip()
     return f"{tn}:strange-loop-graph" if tn else "strange-loop-graph"
+
+
+def intent_classify_langfuse_run_display_name(trace_name: str | None) -> str:
+    """Child run label for the pre-graph intake LLM under the goal loop trace."""
+    tn = (trace_name or "").strip()
+    return f"{tn}:intent-classify" if tn else "intent-classify"
+
+
+def build_goal_loop_langfuse_bootstrap(
+    soothe_config: SootheConfig,
+    *,
+    session_id: str | None,
+    loop_id: str | None,
+) -> dict[str, Any]:
+    """Shared Langfuse RunnableConfig root for one agentic goal turn (IG-540 Langfuse merge).
+
+    Intent-classify and ``strange-loop-graph`` share this config's callback handler so both
+    stages nest under a single Langfuse trace. Pass the return value to
+    ``classify_intake(langfuse_bootstrap=...)`` and ``run_with_progress(langfuse_bootstrap=...)``.
+
+    Args:
+        soothe_config: Active Soothe configuration.
+        session_id: Conversation thread id (Langfuse session).
+        loop_id: StrangeLoop loop id for dashboard correlation.
+
+    Returns:
+        RunnableConfig dict with Langfuse handler and loop-graph metadata/tags.
+    """
+    base: dict[str, Any] = {"configurable": {"thread_id": loop_id or session_id or ""}}
+    run_name = loop_graph_langfuse_run_display_name(soothe_config.observability.langfuse.trace_name)
+    merged = merge_langfuse_runnable_config(
+        base,
+        soothe_config,
+        session_id=session_id,
+        run_name=run_name,
+        loop_id=loop_id,
+    )
+    out = dict(merged)
+    meta = dict(out.get("metadata") or {})
+    if loop_id:
+        meta.setdefault("loop_id", loop_id)
+    meta.setdefault("soothe_component", "strange_loop_graph")
+    meta.setdefault("soothe_component_version", "strange-loop-v2")
+    tags = list(meta.get("langfuse_tags") or [])
+    for label in ("goal_execution_loop", "strange-loop-graph"):
+        if label not in tags:
+            tags.append(label)
+    meta["langfuse_tags"] = tags
+    out["metadata"] = meta
+    return out
+
+
+def build_intake_langfuse_invoke_config(
+    soothe_config: SootheConfig,
+    *,
+    langfuse_bootstrap: dict[str, Any],
+    purpose: str,
+    component: str,
+    phase: str = "pre-stream",
+    extra_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """RunnableConfig for off-graph intent-classify under the goal loop Langfuse trace.
+
+    Reuses the bootstrap handler so intent-classify nests under the same trace as
+    ``strange-loop-graph`` instead of opening a second root trace.
+
+    Args:
+        soothe_config: Active Soothe configuration.
+        langfuse_bootstrap: Output of ``build_goal_loop_langfuse_bootstrap``.
+        purpose: Call purpose for observability metadata.
+        component: Component identifier for observability metadata.
+        phase: Execution phase label.
+        extra_metadata: Optional extra metadata fields.
+
+    Returns:
+        RunnableConfig for the intake LLM ``ainvoke``.
+    """
+    from soothe.middleware._utils import create_llm_call_metadata
+
+    metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
+    base = dict(langfuse_bootstrap)
+    meta = dict(base.get("metadata") or {})
+    meta.update(metadata)
+    base["metadata"] = meta
+
+    run_name = intent_classify_langfuse_run_display_name(
+        soothe_config.observability.langfuse.trace_name
+    )
+    session_id = meta.get("langfuse_session_id") or meta.get("thread_id")
+    loop_id = meta.get("loop_id")
+
+    return merge_langfuse_runnable_config(
+        base,
+        soothe_config,
+        session_id=str(session_id).strip() if session_id else None,
+        run_name=run_name,
+        loop_id=str(loop_id).strip() if loop_id else None,
+        inherit_callbacks_from=langfuse_bootstrap,
+    )
 
 
 def _merge_trace_fields_via_ingestion(

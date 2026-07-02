@@ -63,7 +63,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
     Returns:
         Content of the last non-planning AI message, or empty string if none found.
     """
-    planning_phases = {"plan_assess", "plan_generate"}
+    planning_phases = {"plan_assess", "plan_generate", "intent_classify"}
     for msg in reversed(state.loop_messages):
         if (
             isinstance(msg, LoopAIMessage)
@@ -128,6 +128,7 @@ class LoopHumanMessage(HumanMessage):
     workspace: str | None = None
     phase: (
         Literal[
+            "intent_classify",  # IG-540: Pre-stream intake classification
             "plan_assess",  # RFC-214: Plan assess phase
             "plan_generate",  # RFC-214: Plan generate phase
             "execute_wave",  # Parallel execution wave

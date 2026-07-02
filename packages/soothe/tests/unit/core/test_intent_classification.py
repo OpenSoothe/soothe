@@ -17,8 +17,8 @@ from soothe.foundation.sloop.intention.models import (
     derive_task_complexity_from_intake,
 )
 from soothe.foundation.sloop.intention.prompts import (
-    INTAKE_CLASSIFICATION_PROMPT,
     INTAKE_CLASSIFICATION_RETRY_PROMPT,
+    INTAKE_CLASSIFICATION_SYSTEM_PROMPT,
 )
 
 
@@ -119,7 +119,7 @@ class TestIntakeClassificationPrompts:
 
     def test_primary_prompt_has_four_labels(self) -> None:
         for label in ("quiz", "trivial", "simple", "complex"):
-            assert label in INTAKE_CLASSIFICATION_PROMPT
+            assert label in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_retry_prompt_has_four_labels(self) -> None:
         for label in ("quiz", "trivial", "simple", "complex"):
@@ -128,28 +128,45 @@ class TestIntakeClassificationPrompts:
     def test_primary_prompt_biases_toward_complex(self) -> None:
         """When uncertain, the intake must prefer the more capable label (RFC-630 §9.3)."""
         assert (
-            "prefer" in INTAKE_CLASSIFICATION_PROMPT.lower()
-            or "complex" in INTAKE_CLASSIFICATION_PROMPT
+            "prefer" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()
+            or "complex" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
         )
 
     def test_primary_prompt_uses_assistant_name(self) -> None:
-        assert "{assistant_name}" in INTAKE_CLASSIFICATION_PROMPT
-        assert "not vendor/model names" in INTAKE_CLASSIFICATION_PROMPT
+        assert "{assistant_name}" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        assert "not vendor/model names" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_primary_prompt_excludes_runtime_state_from_quiz(self) -> None:
-        assert "runtime state" in INTAKE_CLASSIFICATION_PROMPT
-        assert "workspace" in INTAKE_CLASSIFICATION_PROMPT
+        assert "runtime state" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        assert "workspace" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_primary_prompt_omits_task_complexity(self) -> None:
-        assert "task_complexity" not in INTAKE_CLASSIFICATION_PROMPT
+        assert "task_complexity" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_retry_prompt_omits_task_complexity(self) -> None:
         assert "task_complexity" not in INTAKE_CLASSIFICATION_RETRY_PROMPT
 
     def test_primary_prompt_requests_first_person_reasoning(self) -> None:
-        prompt = INTAKE_CLASSIFICATION_PROMPT.lower()
+        prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()
         assert "first-person" in prompt or "i'll" in prompt
         assert "let me" in prompt
+
+    def test_primary_prompt_leads_with_output_contract(self) -> None:
+        prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        assert prompt.index("Output contract") < prompt.index("intake_label (internal routing")
+
+    def test_primary_prompt_forbids_label_jargon_in_reasoning(self) -> None:
+        prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()
+        assert "forbidden prefixes" in prompt or "forbidden:" in prompt
+        assert "single focused step" in prompt
+        assert "cognition card" in prompt
+
+    def test_human_envelope_uses_goal_and_task(self) -> None:
+        from soothe.foundation.sloop.intention.intake_messages import build_intake_human_message
+
+        human = build_intake_human_message(query="summarize readme")
+        assert human.startswith("GOAL:\nsummarize readme")
+        assert "TASK:" in human
 
 
 @pytest.mark.asyncio
@@ -164,7 +181,7 @@ class TestIntakeClassifier:
             task_complexity=TaskComplexity.MINIMAL,
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_llm_result
+            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "quiz"})
             result = await classifier.classify_intake("你好")
         assert result.intent_type == "quiz"
         assert result.intake_label == IntakeLabel.QUIZ
@@ -178,7 +195,11 @@ class TestIntakeClassifier:
             task_complexity=TaskComplexity.COMPLEX,
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_llm_result
+            mock_llm.return_value = (
+                mock_llm_result,
+                "human",
+                {"intake_label": "complex", "goal_description": "Refactor persistence"},
+            )
             result = await classifier.classify_intake("Refactor the persistence layer")
         assert result.intent_type == "agentic"
         assert result.intake_label == IntakeLabel.COMPLEX
@@ -198,7 +219,7 @@ class TestIntakeClassifier:
             task_complexity=TaskComplexity.MINIMAL,
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_llm_result
+            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "quiz"})
             result = await classifier.classify_intake(long_query)
         # Long query reached the LLM (mock called) and was classified quiz —
         # the length heuristic is gone.
@@ -225,7 +246,11 @@ class TestIntakeClassifier:
             reasoning=None,
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = mock_llm_result
+            mock_llm.return_value = (
+                mock_llm_result,
+                "human",
+                {"intake_label": "simple", "goal_description": "summarize readme"},
+            )
             result = await classifier.classify_intake("summarize readme")
         assert result.reasoning == "I'll use tools to work through this goal."
 
