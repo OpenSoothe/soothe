@@ -283,6 +283,78 @@ class SystemPromptMiddleware(AgentMiddleware):
         # Dedup preserves most-recent-first insertion order; cap as a final guard.
         return list(dict.fromkeys(ordered_names))[:RECENT_TOOL_NAME_CAP]
 
+    @staticmethod
+    def _effective_messages_for_prompt(
+        request: ModelRequest[ContextT],
+    ) -> list[AnyMessage]:
+        """Merge graph state messages with the in-flight ModelRequest message list.
+
+        On the first model hop of an execute step, ``LoopHumanMessage.workspace``
+        often appears only on ``request.messages`` before LangGraph merges state.
+        """
+        state_messages: list[AnyMessage] = []
+        if hasattr(request.state, "get"):
+            raw = request.state.get("messages")
+            if isinstance(raw, list):
+                state_messages = raw
+        request_messages = list(getattr(request, "messages", None) or [])
+        if len(request_messages) > len(state_messages):
+            return request_messages
+        return state_messages or request_messages
+
+    def _resolve_workspace_for_prompt(self, state: dict[str, Any] | None) -> str | None:
+        """Resolve workspace for system-prompt assembly (config, state, messages).
+
+        Execute-step graph input often carries workspace on ``configurable`` or on
+        the latest ``LoopHumanMessage`` rather than ``state['workspace']`` after
+        LangGraph merges. ``modify_request`` merges ``request.messages`` into the
+        resolution state so first-hop execute steps still receive workspace blocks.
+        """
+        if not state:
+            return None
+        from soothe.foundation.workspace.runtime_resolution import (
+            resolve_workspace_for_tool_execution,
+        )
+
+        resolved = resolve_workspace_for_tool_execution(
+            state=state,
+            use_langgraph_config=True,
+        )
+        if resolved is None:
+            return None
+        return str(resolved)
+
+    def _build_workspace_tail_sections(
+        self,
+        workspace: str,
+        *,
+        env_section: str,
+    ) -> list[str]:
+        """Workspace-stable blocks appended at the system-prompt tail (RFC-214).
+
+        Order: ENVIRONMENT → WORKSPACE_RULES → WORKSPACE → AGENT_INSTRUCTIONS.
+        """
+        from soothe.foundation.sloop.prompts.project_instructions import load_agent_instructions
+        from soothe.foundation.sloop.prompts.system_templates import (
+            EXECUTE_WORKSPACE_RULES_FRAGMENT,
+        )
+
+        tail: list[str] = [env_section, EXECUTE_WORKSPACE_RULES_FRAGMENT]
+
+        ws_section = self._build_workspace_section(workspace)
+        if ws_section:
+            tail.append(ws_section)
+
+        headline_cap = int(self._config.agent.agent_instructions_max_chars)
+        agent_instructions = load_agent_instructions(
+            workspace,
+            headline_max_chars=headline_cap,
+        )
+        if agent_instructions:
+            tail.append(agent_instructions)
+
+        return tail
+
     def _should_inject_workspace(self, state: dict[str, Any]) -> bool:
         """Determine if WORKSPACE section should be injected.
 
@@ -297,7 +369,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             True when ``state["workspace"]`` is set.
         """
-        return bool(state.get("workspace"))
+        return bool(self._resolve_workspace_for_prompt(state))
 
     def _should_inject_thread(self, state: dict[str, Any]) -> bool:
         """Determine if THREAD section should be injected.
@@ -360,14 +432,12 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Agent loop output contract (execute-step only)
 
         Semi-Static Tier (goal-stable, changes infrequently):
-        - Workspace rules, workspace metadata, workspace instructions
-          (always-on when ``state['workspace']`` is set, including ``minimal``)
-        - Environment
-        - Memory summary (long-term persona/preferences)
-        - Context projection
         - Thread context (complex only)
         - Protocol summary (complex only)
         - Scenario guidance
+
+        Workspace tail (execute-step; when workspace resolved):
+        - ENVIRONMENT, WORKSPACE_RULES, WORKSPACE metadata, AGENT_INSTRUCTIONS
 
         NOT in system prompt (moved to user message):
         - Execution hints → EXPECTED OUTPUT / INSTRUCTIONS / EXECUTION METADATA in user envelope
@@ -409,67 +479,26 @@ class SystemPromptMiddleware(AgentMiddleware):
         if env_section is None:
             env_section = self._build_environment_section()
 
-        workspace = state.get("workspace") if state else None
+        workspace = self._resolve_workspace_for_prompt(state)
 
-        # ── Workspace prelude ─────────────────────────────────────────
-        # Block order (RFC-214 cache-friendly; all workspace-stable):
+        # ── Static prelude (behavioral core; workspace blocks live at tail) ─
+        # Block order:
         #   1. base_core
-        #   2. <RESPONSE_LANGUAGE_HINT>    (always — moved from user envelope)
+        #   2. <RESPONSE_LANGUAGE_HINT>    (always)
         #   3. <AVAILABLE_TOOLS>           (when progressive tools enabled)
-        #   4. <WORKSPACE_RULES>           (when workspace bound)
-        #   5. <AGENT_INSTRUCTIONS>         (when AGENTS.md/CLAUDE.md present)
-        #   6. <ENVIRONMENT>               (always)
-        #   7. <WORKSPACE>                 (when workspace bound)
-        # Everything that follows is gated (context/memory/directive/contract)
-        # or semi-static (thread/protocols/scenarios/skills/MCP).
+        # Gated blocks (context/memory/directive/contract) and semi-static
+        # sections follow. Workspace tail (when bound):
+        #   ENVIRONMENT → WORKSPACE_RULES → WORKSPACE → AGENT_INSTRUCTIONS
         from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
         static_sections: list[str] = [base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
 
-        # Insert AVAILABLE_TOOLS between RESPONSE_LANGUAGE_HINT and WORKSPACE_RULES
         deferred_tools = state.get("_deferred_tools_for_listing") if state else None
         tools_block = self._compose_available_tools_block(state, deferred_tools=deferred_tools)
         if tools_block:
             static_sections.append(tools_block)
 
-        if workspace:
-            static_sections.append(
-                "<WORKSPACE_RULES>\n"
-                "The open project root (absolute path) is under <WORKSPACE><root> above.\n\n"
-                "Rules:\n"
-                "- Use file tools (list_files, read_file, grep, glob, run_command) against this directory.\n"
-                "- For goals about architecture, structure, or the codebase: inspect this directory immediately.\n"
-                "- Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal explicitly names "
-                "a different project outside this directory.\n"
-                "- Do NOT tell the user you need them to share the project first — it is already available here.\n"
-                '- If a tool result reports `truncated=true` (or ends with a "...truncated" marker), '
-                "do NOT paste its body as data into another tool (e.g. as a Python list literal for run_python). "
-                "The body is incomplete and downstream analysis will be wrong. Instead, re-query the filesystem "
-                "directly with a narrower glob/grep filter or a shell pipeline "
-                "(`find . -type f | awk ... | sort | uniq -c`) so the count or analysis runs over the live tree.\n"
-                "</WORKSPACE_RULES>"
-            )
-            # Agent instructions (AGENTS.md / CLAUDE.md) - goal-stable.
-            from soothe.foundation.sloop.prompts.project_instructions import (
-                load_agent_instructions,
-            )
-
-            headline_cap = int(self._config.agent.agent_instructions_max_chars)
-            agent_instructions = load_agent_instructions(
-                workspace,
-                headline_max_chars=headline_cap,
-            )
-            if agent_instructions:
-                static_sections.append(agent_instructions)
-
-        static_sections.append(env_section)
-
-        if state and self._should_inject_workspace(state):
-            ws_section = self._build_workspace_section(state.get("workspace"))
-            if ws_section:
-                static_sections.append(ws_section)
-
-        # ── Gated static blocks (after the workspace prelude) ─────────
+        # ── Gated static blocks ─────────────────────────────────────────
 
         # Context projection (static — changes infrequently)
         if state and self._tool_trigger_registry:
@@ -571,12 +600,22 @@ class SystemPromptMiddleware(AgentMiddleware):
         if mcp_block:
             static_sections.append(mcp_block)
 
-        # ── Assemble: static + semi-static ────────────────────────────────
+        # ── Assemble: static + semi-static + workspace tail ─────────────
         from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
 
         parts = ["\n\n".join(static_sections)]
         if semi_static_sections:
             parts.append("\n\n".join(semi_static_sections))
+
+        if workspace:
+            workspace_tail = self._build_workspace_tail_sections(
+                workspace,
+                env_section=env_section,
+            )
+            parts.append("\n\n".join(workspace_tail))
+        else:
+            parts.append(env_section)
+
         parts.append(build_timestamp_xml_footer())
 
         return "\n\n".join(parts)
@@ -1006,11 +1045,12 @@ class SystemPromptMiddleware(AgentMiddleware):
         # Extract state for XML section building
         state_dict: dict[str, Any] = {}
         if hasattr(request.state, "get"):
+            effective_messages = self._effective_messages_for_prompt(request)
             state_dict = {
                 "workspace": request.state.get("workspace"),
                 "thread_context": request.state.get("thread_context", {}),
                 "protocol_summary": request.state.get("protocol_summary", {}),
-                "messages": request.state.get("messages", []),
+                "messages": effective_messages,
                 "active_goals": request.state.get("active_goals", []),
                 "context_projection": request.state.get("context_projection"),
                 "recalled_memories": request.state.get("recalled_memories"),
@@ -1020,6 +1060,9 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "skill_activation": request.state.get("skill_activation"),
                 "tool_activation": request.state.get("tool_activation"),
             }
+            resolved_workspace = self._resolve_workspace_for_prompt(state_dict)
+            if resolved_workspace:
+                state_dict["workspace"] = resolved_workspace
 
         # Pass deferred tools through state so AVAILABLE_TOOLS can be inserted
         # in the correct position (between RESPONSE_LANGUAGE_HINT and WORKSPACE_RULES)
