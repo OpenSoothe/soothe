@@ -74,6 +74,14 @@ async def release_idle_pool_connections(
         logger.debug("%s pool idle release failed", label, exc_info=True)
 
 
+def _is_cross_loop_close_error(exc: BaseException) -> bool:
+    """Return True when ``pool.close()`` was invoked from the wrong event loop."""
+    if not isinstance(exc, ValueError):
+        return False
+    text = str(exc).lower()
+    return "different loop" in text or "belongs to a different loop" in text
+
+
 async def close_async_pool(pool: AsyncConnectionPool | None, *, label: str) -> None:
     """Close a pool if present and not already closed."""
     if pool is None:
@@ -83,6 +91,14 @@ async def close_async_pool(pool: AsyncConnectionPool | None, *, label: str) -> N
             return
         await pool.close()
         logger.info("Closed %s PostgreSQL connection pool", label)
+    except ValueError as exc:
+        if _is_cross_loop_close_error(exc):
+            logger.warning(
+                "Skipped closing %s pool from a different event loop; abandoning stale pool",
+                label,
+            )
+            return
+        logger.debug("Failed to close %s pool", label, exc_info=True)
     except Exception:
         logger.debug("Failed to close %s pool", label, exc_info=True)
 

@@ -14,6 +14,44 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def is_duplicate_schema_error(exc: Exception) -> bool:
+    """Return True when concurrent DDL already created the same PostgreSQL object.
+
+    LangGraph ``AsyncPostgresSaver.setup()`` is not safe under parallel calls;
+    losers often surface as ``UniqueViolation`` on ``pg_type_typname_nsp_index``.
+
+    Args:
+        exc: Exception raised during schema initialization.
+
+    Returns:
+        True if the schema likely already exists from a concurrent setup.
+    """
+    recoverable_classes: tuple[type[BaseException], ...] = ()
+    try:
+        from psycopg import errors as pg_errors
+
+        recoverable_classes = (
+            pg_errors.UniqueViolation,
+            pg_errors.DuplicateTable,
+            pg_errors.DuplicateObject,
+        )
+    except Exception:
+        recoverable_classes = ()
+
+    if recoverable_classes and isinstance(exc, recoverable_classes):
+        return True
+
+    text = str(exc).lower()
+    return any(
+        needle in text
+        for needle in (
+            "duplicate key value violates unique constraint",
+            "pg_type_typname_nsp_index",
+            "already exists",
+        )
+    )
+
+
 def is_recoverable_connection_error(exc: Exception) -> bool:
     """Return True for transient PostgreSQL connection failures.
 
@@ -43,6 +81,14 @@ def is_recoverable_connection_error(exc: Exception) -> bool:
 
     if recoverable_classes and isinstance(exc, recoverable_classes):
         return True
+
+    try:
+        from psycopg_pool import PoolTimeout
+
+        if isinstance(exc, PoolTimeout):
+            return True
+    except Exception:
+        pass
 
     # Fallback: check error message for known patterns
     text = str(exc).lower()
@@ -136,4 +182,8 @@ async def run_with_connection_retry(
     raise RuntimeError(f"Unexpected retry loop exit for {action}")
 
 
-__all__ = ["is_recoverable_connection_error", "run_with_connection_retry"]
+__all__ = [
+    "is_duplicate_schema_error",
+    "is_recoverable_connection_error",
+    "run_with_connection_retry",
+]

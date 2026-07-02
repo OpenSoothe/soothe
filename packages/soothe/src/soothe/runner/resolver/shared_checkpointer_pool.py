@@ -7,8 +7,10 @@ Each ``SootheRunner`` in the same process reuses this pool instead of creating
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import threading
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.persistence.postgres_pool_lifecycle import (
@@ -26,8 +28,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _shared_checkpointer_pool: AsyncConnectionPool | None = None
+_checkpointer_setup_done = False
+_setup_waiter: threading.Event | None = None
 _sync_lock = threading.Lock()
-_async_lock = asyncio.Lock()
+
+
+def _checkpointer_setup_lock_key() -> int:
+    """Stable 63-bit advisory lock id for LangGraph checkpointer DDL."""
+    digest = hashlib.sha256(b"langgraph_checkpoint_setup").digest()
+    return int.from_bytes(digest[:8], "big") & 0x7FFF_FFFF_FFFF_FFFF
 
 
 class SharedCheckpointerPool:
@@ -78,6 +87,81 @@ class SharedCheckpointerPool:
             return pool
 
     @classmethod
+    async def setup_checkpointer(
+        cls,
+        pool: AsyncConnectionPool,
+        setup: Callable[[], Awaitable[None]],
+    ) -> None:
+        """Run LangGraph checkpointer ``setup()`` once under a PostgreSQL advisory lock.
+
+        Concurrent ``SootheRunner`` instances share one pool and may call setup in
+        parallel (lazy CoreAgent materialization, thread-pool workers). Without
+        serialization, PostgreSQL raises ``UniqueViolation`` on checkpoint types.
+
+        Args:
+            pool: Open checkpointer connection pool.
+            setup: Async callable that runs ``AsyncPostgresSaver.setup()``.
+        """
+        from soothe.foundation.sloop.state.persistence.retry_utils import (
+            is_duplicate_schema_error,
+        )
+
+        global _checkpointer_setup_done, _setup_waiter
+
+        if _checkpointer_setup_done:
+            return
+
+        leader = False
+        waiter: threading.Event | None = None
+        with _sync_lock:
+            if _checkpointer_setup_done:
+                return
+            if _setup_waiter is None:
+                _setup_waiter = threading.Event()
+                leader = True
+            else:
+                waiter = _setup_waiter
+
+        if not leader:
+            assert waiter is not None
+            completed = await asyncio.to_thread(waiter.wait, 120.0)
+            if not completed:
+                logger.warning("Timed out waiting for shared checkpointer setup")
+            return
+
+        lock_key = _checkpointer_setup_lock_key()
+        try:
+            if _checkpointer_setup_done:
+                return
+            async with pool.connection() as conn:
+                await conn.set_autocommit(True)
+                async with conn.cursor() as cur:
+                    await cur.execute("SELECT pg_advisory_lock(%s)", (lock_key,))
+                try:
+                    if _checkpointer_setup_done:
+                        return
+                    try:
+                        await setup()
+                    except Exception as exc:
+                        if not is_duplicate_schema_error(exc):
+                            raise
+                        logger.debug(
+                            "Checkpointer schema already exists (concurrent setup): %s: %s",
+                            type(exc).__name__,
+                            exc,
+                        )
+                    _checkpointer_setup_done = True
+                finally:
+                    async with conn.cursor() as cur:
+                        await cur.execute("SELECT pg_advisory_unlock(%s)", (lock_key,))
+        finally:
+            with _sync_lock:
+                setup_event = _setup_waiter
+                _setup_waiter = None
+            if setup_event is not None:
+                setup_event.set()
+
+    @classmethod
     def is_shared_pool(cls, pool: Any) -> bool:
         """Return whether *pool* is the process singleton (must not be closed per request)."""
         return pool is not None and pool is _shared_checkpointer_pool
@@ -90,11 +174,14 @@ class SharedCheckpointerPool:
     @classmethod
     async def close_shared_instance(cls) -> None:
         """Close the singleton at daemon shutdown."""
-        global _shared_checkpointer_pool
+        global _checkpointer_setup_done, _shared_checkpointer_pool
 
-        async with _async_lock:
-            await close_async_pool(_shared_checkpointer_pool, label="checkpointer")
+        with _sync_lock:
+            pool_to_close = _shared_checkpointer_pool
             _shared_checkpointer_pool = None
+            _checkpointer_setup_done = False
+
+        await close_async_pool(pool_to_close, label="checkpointer")
 
     @classmethod
     async def reset_shared_instance(cls, config: SootheConfig) -> AsyncConnectionPool | None:
@@ -110,25 +197,19 @@ class SharedCheckpointerPool:
         Returns:
             New pool instance, or None if not using PostgreSQL.
         """
-        global _shared_checkpointer_pool
+        global _checkpointer_setup_done, _shared_checkpointer_pool
 
-        async with _async_lock:
-            # Close stale pool
-            if _shared_checkpointer_pool is not None:
-                try:
-                    await _shared_checkpointer_pool.close()
-                    logger.info("Closed stale shared checkpointer pool for reset")
-                except Exception:
-                    logger.debug(
-                        "Error closing stale checkpointer pool during reset", exc_info=True
-                    )
-                _shared_checkpointer_pool = None
+        with _sync_lock:
+            pool_to_close = _shared_checkpointer_pool
+            _shared_checkpointer_pool = None
+            _checkpointer_setup_done = False
 
-            # Create fresh pool
-            new_pool = cls.get_or_create_pool(config)
-            if new_pool is not None:
-                logger.info("Created fresh shared checkpointer pool after reset")
-            return new_pool
+        await close_async_pool(pool_to_close, label="checkpointer")
+
+        new_pool = cls.get_or_create_pool(config)
+        if new_pool is not None:
+            logger.info("Created fresh shared checkpointer pool after reset")
+        return new_pool
 
 
 __all__ = ["SharedCheckpointerPool"]
