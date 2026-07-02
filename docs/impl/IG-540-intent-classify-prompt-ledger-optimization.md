@@ -12,7 +12,7 @@ recording intent-classify Human/AI pairs in the CE ledger.
 - System prompt carries static rules + `<TIMESTAMP>` footer
 - Prior goal completion via ledger projection (not inline human injection)
 - Ledger phase `intent_classify`; include in new-goal plan projection
-- Langfuse: intent-classify and `strange-loop-graph` share one trace via `build_goal_loop_langfuse_bootstrap`
+- Langfuse: intent-classify and `strange-loop-graph` share one trace via per-goal handler with pinned `trace_context.trace_id` (Langfuse opens a new trace per invocation even when reusing the cached handler)
 - Human envelope adds `TASK:` section (plan-assess pattern) restating reasoning output contract at invoke time
 - System prompt leads with output contract; label definitions renamed to avoid "single focused step" bleed into reasoning
 

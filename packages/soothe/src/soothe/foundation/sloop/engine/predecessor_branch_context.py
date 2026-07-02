@@ -4,13 +4,14 @@ When the executor uses a branched LangGraph ``thread_id`` (``{logical}__step_{st
 checkpoint namespace starts empty. This module provides helpers for:
 
 - **Transitive dependency closure** (``transitive_dependency_step_ids``): used by
-  ``build_prior_step_evidence()`` for same-goal dependent steps.
+  ``predecessor_messages_for_step()`` / ``project_predecessor_execute_ledger_for_step()``
+  for same-goal dependent steps.
 - **Legacy ledger replay** (``prior_loop_execute_messages()``): retained for tests and
   tooling; loop-continuation bootstrap now grounds via ``PRIOR GOAL COMPLETION`` in the
   execute envelope (``continuation_context``) instead of replaying prior execute rows.
 
-Same-goal DAG dependent steps ground predecessors via ``PRIOR STEP EVIDENCE`` in the execute
-envelope only (RFC-214 §3.1).
+Same-goal DAG dependent steps ground predecessors via projected execute-step ledger rows
+(RFC-214 §3.1); the current-step envelope carries only the task and hints.
 """
 
 from __future__ import annotations

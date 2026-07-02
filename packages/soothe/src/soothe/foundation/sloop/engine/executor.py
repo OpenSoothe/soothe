@@ -64,6 +64,7 @@ from soothe.foundation.sloop.engine.metadata_generator import (
 from soothe.foundation.sloop.engine.step_predecessor_context import (
     build_dependent_execution_hints,
     build_prior_step_evidence,
+    build_prior_steps_summary_block,
     step_needs_brief_hydration,
 )
 from soothe.foundation.sloop.engine.step_wave_types import (
@@ -394,15 +395,24 @@ class Executor:
         wire_subagent: str | None,
         workspace: str | None,
     ) -> str:
-        """Build the execute-step user envelope with optional predecessor evidence."""
+        """Build the execute-step user envelope (task + hints; predecessor context via ledger)."""
         from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 
-        decision = loop_state.current_decision if loop_state is not None else None
-        predecessor_evidence = ""
         prior_goal_completion = ""
-        if loop_state is not None and decision is not None and (step.dependencies or []):
-            predecessor_evidence = build_prior_step_evidence(step, decision, loop_state)
-        elif (
+        has_predecessor_ledger = bool(step.dependencies or [])
+        prior_steps = ""
+        if (
+            loop_state is not None
+            and loop_state.current_decision is not None
+            and has_predecessor_ledger
+        ):
+            prior_steps = build_prior_steps_summary_block(
+                step,
+                loop_state.current_decision,
+                loop_state,
+                evidence_in_ledger=True,
+            )
+        if (
             loop_state is not None
             and getattr(loop_state, "continue_loop", False)
             and loop_state.iteration == 0
@@ -418,7 +428,7 @@ class Executor:
         else:
             execution_hints = build_dependent_execution_hints(
                 step,
-                has_predecessor_evidence=bool(predecessor_evidence.strip()),
+                has_predecessor_evidence=has_predecessor_ledger,
                 wire_subagent=wire_subagent,
                 workspace=workspace,
                 expected_output=step.expected_output,
@@ -426,7 +436,7 @@ class Executor:
         return UserMessageBuilder().build_execute_step_message(
             step_goal_text,
             execution_hints=execution_hints,
-            predecessor_evidence=predecessor_evidence or None,
+            prior_steps=prior_steps or None,
             prior_goal_completion=prior_goal_completion or None,
             skill_context=loop_state.skill_context if loop_state else None,
         )
@@ -1492,8 +1502,8 @@ class Executor:
 
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.
-        IG-477: Thread isolation via __step_<id> namespace; predecessor context via message
-        injection (no checkpoint fork).
+        IG-477: Thread isolation via __step_<id> namespace; predecessor context via ledger
+        projection into graph input (no checkpoint fork).
 
         Args:
             step: StepAction with description and optional hints
@@ -1568,10 +1578,22 @@ class Executor:
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
-            # Build user message with execution hints (RFC-214).
-            # Dependent steps: PRIOR STEP EVIDENCE in envelope only.
+            # Build graph input: predecessor ledger projection + current envelope.
+            # Dependent steps: transitive-predecessor execute_step ledger replay.
             # Loop continuation bootstrap: PRIOR GOAL COMPLETION in envelope only.
             graph_input_messages: list[BaseMessage] = []
+            if loop_state is not None and loop_state.current_decision is not None:
+                from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+                    project_predecessor_execute_ledger_for_step,
+                )
+
+                graph_input_messages.extend(
+                    project_predecessor_execute_ledger_for_step(
+                        loop_state.loop_messages,
+                        step,
+                        loop_state.current_decision,
+                    )
+                )
 
             envelope = self._compose_execute_step_envelope(
                 step,

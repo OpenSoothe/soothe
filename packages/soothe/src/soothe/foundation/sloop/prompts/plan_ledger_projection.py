@@ -23,7 +23,7 @@ from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_mes
 
 if TYPE_CHECKING:
     from soothe.config.models import PlanPromptLedgerConfig
-    from soothe.foundation.sloop.state.schemas import LoopState
+    from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +287,51 @@ def project_prior_goal_completion_for_intake(
             )
             return projected
     return []
+
+
+def project_predecessor_execute_ledger_for_step(
+    loop_messages: list[BaseMessage],
+    step: StepAction,
+    decision: AgentDecision,
+    *,
+    max_messages: int | None = None,
+) -> list[BaseMessage]:
+    """Project transitive-predecessor execute_step ledger rows for branched CoreAgent input.
+
+    Branched step threads (``{logical}__step_{step_id}``) start with empty checkpoints.
+    Dependent steps receive predecessor Human/AI pairs from the orchestration ledger
+    instead of an inline ``PRIOR STEP EVIDENCE`` block in the current envelope.
+
+    Args:
+        loop_messages: RFC-214 ledger from ``LoopState.loop_messages``.
+        step: Step about to execute on an isolated branch thread.
+        decision: Current scoped plan decision (for transitive dependency closure).
+        max_messages: Cap on copied ledger rows; ``None`` uses the branch default.
+
+    Returns:
+        Deep-copied predecessor execute_step messages in ledger order.
+    """
+    from soothe.foundation.sloop.engine.predecessor_branch_context import (
+        DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
+    )
+    from soothe.foundation.sloop.engine.step_predecessor_context import (
+        predecessor_messages_for_step,
+    )
+
+    cap = max_messages if max_messages is not None else DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
+    projected = predecessor_messages_for_step(
+        loop_messages,
+        step,
+        decision,
+        max_messages=cap,
+    )
+    logger.debug(
+        "Execute-step predecessor projection: step=%s deps=%d out_msgs=%d",
+        step.id,
+        len(step.dependencies or []),
+        len(projected),
+    )
+    return projected
 
 
 def project_loop_messages_for_core_agent(

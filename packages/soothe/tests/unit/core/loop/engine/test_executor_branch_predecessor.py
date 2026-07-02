@@ -44,8 +44,8 @@ def _astream_messages(mock_agent: MagicMock) -> list:
 
 
 @pytest.mark.asyncio
-async def test_multi_dep_step_uses_envelope_evidence_only() -> None:
-    """Multi-dependency steps ground predecessors via PRIOR STEP EVIDENCE, not ledger replay."""
+async def test_multi_dep_step_uses_ledger_projection() -> None:
+    """Multi-dependency steps ground predecessors via ledger projection, not envelope injection."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -105,14 +105,15 @@ async def test_multi_dep_step_uses_envelope_evidence_only() -> None:
     )
 
     messages = _astream_messages(mock_agent)
-    assert len(messages) == 1
-    envelope = str(messages[0].content)
-    assert "PRIOR STEP EVIDENCE" in envelope
-    assert "ledger-ai-A" in envelope
-    assert "ledger-ai-B" in envelope
-    assert "ledger-human-A" not in envelope
-    assert isinstance(messages[0], LoopHumanMessage)
-    assert messages[0].phase == "execute_step"
+    assert len(messages) == 5
+    envelope = str(messages[-1].content)
+    assert "PRIOR STEPS:" in envelope
+    assert "PRIOR STEP EVIDENCE" not in envelope
+    assert "(completed)" in envelope
+    assert "first" in envelope or "second" in envelope
+    assert "ledger-ai-A" in str(messages[1].content)
+    assert "ledger-ai-B" in str(messages[3].content)
+    assert "ledger-human-A" in str(messages[0].content)
     assert "third" in envelope
 
     cfg = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
@@ -120,8 +121,8 @@ async def test_multi_dep_step_uses_envelope_evidence_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_singleton_dependent_step_uses_fresh_thread_and_evidence() -> None:
-    """Dependent steps use a fresh thread; predecessor context is injected explicitly."""
+async def test_singleton_dependent_step_uses_fresh_thread_and_ledger_projection() -> None:
+    """Dependent steps use a fresh thread; predecessor context is projected from the ledger."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -172,12 +173,14 @@ async def test_singleton_dependent_step_uses_fresh_thread_and_evidence() -> None
     assert state.step_thread_ids.get("B") == "logical-t__step_B"
 
     messages = _astream_messages(mock_agent)
-    assert len(messages) == 1
-    envelope = str(messages[0].content)
-    assert "PRIOR STEP EVIDENCE" in envelope
-    assert "ledger-ai-A with failure details" in envelope
+    assert len(messages) == 3
+    envelope = str(messages[-1].content)
+    assert "PRIOR STEPS:" in envelope
+    assert "PRIOR STEP EVIDENCE" not in envelope
+    assert "(completed)" in envelope
+    assert "ledger-ai-A with failure details" in str(messages[1].content)
     assert "do not repeat completed discovery steps" in envelope
-    assert "ledger-human-A" not in envelope
+    assert "ledger-human-A" in str(messages[0].content)
 
 
 @pytest.mark.asyncio
@@ -237,8 +240,8 @@ async def test_step_without_loop_state_uses_main_thread() -> None:
 
 
 @pytest.mark.asyncio
-async def test_multi_dep_sends_single_envelope_message() -> None:
-    """Dependent steps send one execute envelope; no predecessor ledger replay."""
+async def test_multi_dep_replays_predecessor_ledger_rows() -> None:
+    """Dependent steps prepend transitive-predecessor execute ledger rows before the envelope."""
     mock_agent = _make_mock_agent()
     mock_checkpointer = _make_mock_checkpointer()
 
@@ -276,7 +279,9 @@ async def test_multi_dep_sends_single_envelope_message() -> None:
     )
 
     messages = _astream_messages(mock_agent)
-    assert len(messages) == 1
+    assert len(messages) == 11
+    assert str(messages[-1].content).startswith("EXECUTION TASK:")
+    assert "PRIOR STEP EVIDENCE" not in str(messages[-1].content)
 
 
 @pytest.mark.asyncio
@@ -339,10 +344,10 @@ async def test_step_without_current_decision_uses_main_thread() -> None:
 
 
 @pytest.mark.asyncio
-async def test_multi_dep_does_not_log_threadfork_injection(
+async def test_multi_dep_projects_predecessor_ledger_without_threadfork_log(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Dependent steps no longer replay predecessor ledger rows into graph input."""
+    """Dependent steps project predecessor ledger rows without checkpoint fork logging."""
     caplog.set_level(logging.INFO)
 
     mock_agent = _make_mock_agent()
@@ -380,7 +385,9 @@ async def test_multi_dep_does_not_log_threadfork_injection(
     )
 
     assert "[ThreadFork]" not in caplog.text
-    assert len(_astream_messages(mock_agent)) == 1
+    messages = _astream_messages(mock_agent)
+    assert len(messages) == 3
+    assert "aA" in str(messages[1].content)
 
 
 @pytest.mark.asyncio
