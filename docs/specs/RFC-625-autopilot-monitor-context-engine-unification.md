@@ -7,7 +7,7 @@
 **Created**: 2026-06-15
 **Updated**: 2026-06-16
 **Dependencies**: RFC-624 (Context Engine), RFC-222 (Autopilot and Goal Engine Architecture), RFC-200 (Autonomous Goal Management)
-**Related**: RFC-204 (Autopilot Mode), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)
+**Related**: RFC-204 (Autopilot Mode — user-facing surface: CLI, HTTP endpoints, consensus semantics; RFC-625 defines runtime implementation: AutopilotMonitor, ContextEngine integration, proactive DAG monitoring), RFC-217 (Goal Context Management), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)
 **Supersedes**: RFC-200 (Goal Management) — GoalEngine deleted, features migrated to ContextEngine
 **Implements**: RFC-303 (MemoryProtocol) — CE's EpisodicSubmodule implements MemoryProtocol API for persistent episodic memory
 
@@ -103,7 +103,11 @@ Import path changes:
 | `foundation/autopilot/engine/backoff_reasoner.py` | Move to `foundation/autopilot/monitor/backoff_reasoner.py` |
 | `foundation/autopilot/engine/file_lock_registry.py` | Delete (WorkspaceReservation suffices per RFC-222) |
 
+**WorkerPool disposition**: Not affected by GoalEngine deletion. `WorkerPool` remains in `AutopilotService` (unchanged per RFC-222) — manages subprocess workers independently of goal state management. AutopilotMonitor does not own WorkerPool; it only monitors DAG state and triggers events. Worker dispatch continues via `AutopilotService.dispatch_loop()`.
+
 **GoalNode enhancement (absorbs Goal fields from `autopilot/engine/models.py`):**
+
+Existing GoalNode fields (RFC-624, `context/models.py`):
 
 Existing GoalNode fields (RFC-624, `context/models.py`):
 - `id`, `description`, `status`, `priority`

@@ -1,7 +1,7 @@
 # RFC-204: Autopilot Mode
 
 **RFC**: 204
-**Title**: Autopilot Mode (Layer 3 Extension)
+**Title**: Autopilot Mode
 **Status**: Implemented — runtime architecture refined by RFC-222 (revised 2026-05-28)
 **Kind**: Architecture Design
 **Created**: 2026-04-03
@@ -15,17 +15,17 @@
 
 ## Abstract
 
-This RFC defines Autopilot Mode, an extension of Layer 3 that enables Soothe to operate as a long-running autonomous agent. Autopilot introduces: (1) a consensus loop for validating Layer 2 completions, (2) dreaming mode for continuous operation without termination, (3) a channel protocol for user communication, (4) a scheduler service for time-based task execution, and (5) comprehensive UX surfaces for monitoring and control. Autopilot treats Layer 2 as a black-box ReAct engine while maintaining bidirectional communication through query and proposal tools.
+This RFC defines Autopilot Mode, an autonomous extension that enables Soothe to operate as a long-running agent. Autopilot introduces: (1) a consensus loop for validating StrangeLoop completions, (2) dreaming mode for continuous operation without termination, (3) a channel protocol for user communication, (4) a scheduler service for time-based task execution, and (5) comprehensive UX surfaces for monitoring and control. Autopilot treats StrangeLoop as a black-box ReAct engine while maintaining bidirectional communication through query and proposal tools.
 
 ## Position in Architecture
 
-### Layer 3 Extension
+### Autonomous Goal Management Extension
 
-Autopilot extends RFC-200 (Layer 3 Autonomous Goal Management) with additional capabilities:
+Autopilot extends RFC-200 (Autonomous Goal Management) with additional capabilities:
 
 ```
-Layer 3: Autonomous Goal Management (RFC-200)
-  ├─ Core: Goal DAG orchestration, Layer 2 delegation
+Autonomous Goal Management (RFC-200)
+  ├─ Core: Goal DAG orchestration, StrangeLoop delegation
   └─ Autopilot Extension (this RFC):
        ├─ Consensus loop with send-back budget
        ├─ Dreaming mode (no termination)
@@ -39,16 +39,16 @@ Layer 3: Autonomous Goal Management (RFC-200)
 | Aspect | RFC-200 | This RFC |
 |--------|---------|----------|
 | Goal creation | File-discovered + dynamic | Adds MUST confirmation, scheduler-fed |
-| Layer 2 delegation | Black-box | Adds bidirectional tools |
-| Completion | Layer 2 judges | Adds Layer 3 consensus validation |
+| StrangeLoop delegation | Black-box | Adds bidirectional tools |
+| Completion | StrangeLoop judges | Adds Autopilot consensus validation |
 | Termination | All goals resolved | Transitions to dreaming mode |
 | Persistence | Checkpoint on state changes | Adds periodic + milestone checkpoints |
 
 ## 1. Execution Flow
 
-### 1.1 Layer Delegation Model
+### 1.1 Delegation Model
 
-Layer 3 treats Layer 2 as a black-box Plan-and-Execute engine:
+Autopilot treats StrangeLoop as a black-box Plan-and-Execute engine:
 
 **Input**: Rich context envelope
 **Output**: PlanResult with status, evidence, confidence, goal_progress
@@ -64,9 +64,9 @@ Layer 3 treats Layer 2 as a black-box Plan-and-Execute engine:
 | Memory | Query tool | `search_memory(query)` |
 | Instructions | System prompt | High-level guidance, success criteria |
 
-### 1.2 Bidirectional Layer 2 ↔ Layer 3 Communication
+### 1.2 Bidirectional StrangeLoop ↔ Autopilot Communication
 
-Layer 2 can query and propose updates through tools:
+StrangeLoop can query and propose updates through tools:
 
 **Query Operations** (read-only):
 - `get_related_goals()` — Goals that might inform current work
@@ -80,29 +80,47 @@ Layer 2 can query and propose updates through tools:
 - `suggest_goal(description, priority)` — Propose new goal
 - `flag_blocker(reason, dependencies)` — Signal goal is blocked
 
-**Queuing Semantics**: Proposals collected during Layer 2 execution, applied by Layer 3 after iteration completes. Preserves black-box abstraction while enabling dynamic adaptation.
+**Queuing Semantics**: Proposals collected during StrangeLoop execution, applied by Autopilot after iteration completes. Preserves black-box abstraction while enabling dynamic adaptation.
 
 ### 1.3 Consensus Loop
 
-Layer 3 validates Layer 2's completion judgment:
+Autopilot validates StrangeLoop's completion judgment:
 
 **Process**:
-1. Layer 2 returns `PlanResult` with `status: "done"` and confidence
-2. Layer 3 reflection LLM evaluates holistically:
+1. StrangeLoop returns `PlanResult` with `status: "done"` and confidence
+2. Autopilot reflection LLM evaluates holistically:
    - Evidence quality and completeness
    - Success criteria satisfaction
    - Finding coherence
-3. Layer 3 decides: accept, send back, or suspend
+3. Autopilot decides: accept, send back, or suspend
 
 **Send-Back Mechanics**:
 - Separate send-back budget per goal (default: 3 rounds)
 - Refined instructions accompany send-back
-- Independent from Layer 2's Plan-and-Execute iteration budget
+- Independent from StrangeLoop's Plan-and-Execute iteration budget
 
 **Budget Exhaustion**:
 - Suspended goals preserved with current state
 - Continue with other ready goals
 - Dependency-driven reactivation when blockers clear
+
+**Reflection LLM Decision Criteria**:
+
+| Decision | Conditions | Outcome |
+|----------|------------|---------|
+| **Accept** | Evidence satisfies success criteria; high confidence (>0.8); no unresolved blockers | Goal → `validated` state |
+| **Send back** | Evidence incomplete; low confidence (<0.8); minor gaps in findings | Refined instructions → StrangeLoop retry |
+| **Suspend** | Budget exhausted (3 send-backs); unrecoverable blocker; external dependency required | Goal → `suspended` state, await resolution |
+
+**Suspension Triggers** (explicit conditions):
+1. Send-back budget exhausted (3 rounds without acceptable result)
+2. External blocker identified (user input required, resource unavailable)
+3. Dependency on suspended/blocked goal
+4. Unrecoverable error (tool failure, permission denied, timeout exceeded)
+
+> **Implementation Note**: The reflection LLM is configured via `agentic.reflection_model` (separate from the StrangeLoop planner/executor model). Reflection prompts include: goal description, success criteria, accumulated evidence, StrangeLoop confidence score, and iteration history. The decision output is structured (`decision: accept | send_back | suspend`, `reasoning: string`, `refined_instructions: string?`).
+
+### 1.4 Termination → Dreaming Transition
 
 ### 1.4 Termination → Dreaming Transition
 
@@ -130,6 +148,8 @@ Autopilot does not terminate—it transitions to dreaming mode:
 - User sends `wake` signal via HTTP/CLI
 - Scheduled task becomes due
 
+> **Implementation Reference**: Dreaming mode semantics are defined at the user-facing level in this section. Runtime implementation details — including multi-loop dreaming coordination, LLM-driven memory distillation, and proactive DAG restructuring — are specified in RFC-625 §5 (AutopilotMonitor Dreaming Submodule). Full semantics for cross-workspace dreaming, RAG integration, and topic-based scoping are deferred to a future RFC.
+
 ## 2. Goal Management Extensions
 
 ### 2.1 Goal Creation Sources
@@ -140,8 +160,8 @@ Autopilot does not terminate—it transitions to dreaming mode:
 - `SOOTHE_HOME/autopilot/goals/*/GOAL.md` — Per-goal subdirectories
 
 **Autopilot-Created**:
-- Layer 2 proposals via `suggest_goal()`
-- Layer 3 reflection findings
+- StrangeLoop proposals via `suggest_goal()`
+- Autopilot reflection findings
 - Scheduled tasks from SchedulerService
 
 ### 2.2 MUST Goal Confirmation
@@ -173,7 +193,7 @@ MUST goals queue for user confirmation before creation.
 |-------|---------|------------|
 | pending | Waiting for dependencies | Created, reactivated |
 | active | Being executed | pending → activated |
-| validated | Layer 3 accepted completion | active → accepted |
+| validated | Autopilot accepted completion | active → accepted |
 | completed | Finished successfully | validated → reported |
 | failed | Unrecoverable error | active → error |
 | suspended | Budget exhausted, needs context | active → exhausted |
@@ -183,7 +203,7 @@ MUST goals queue for user confirmation before creation.
 
 ```
 pending → active           (ready_goals() activates)
-active → validated         (Layer 3 accepts completion)
+active → validated         (Autopilot accepts completion)
 active → suspended         (send-back budget exhausted)
 active → blocked           (external input needed)
 active → failed            (unrecoverable error)
@@ -204,7 +224,7 @@ validated → completed      (reporting done)
 
 **Discovery**:
 - Explicit declaration in `GOAL.md` frontmatter
-- Auto-detection by Layer 3 during execution
+- Auto-detection by Autopilot during execution
 
 **Auto-Detection Signals**:
 
@@ -281,6 +301,11 @@ class ChannelMessage:
 ### 3.3 Transport
 
 **Current implementation**: HTTP REST via daemon-owned `AutopilotService` (`POST /api/v1/autopilot/submit`, `POST /api/v1/autopilot/wake`, etc.). Platform messaging adapters (RFC-620) are separate from autopilot task submission.
+
+**API Specifications**:
+- **HTTP REST endpoints**: See `docs/specs/rest-api-spec.md` for thread management, configuration, and file operation endpoints. Autopilot-specific HTTP endpoints (`/api/v1/autopilot/*`) are defined in RFC-228 (Autopilot Job IPC Commands) §3.3.
+- **WebSocket protocol**: See `docs/specs/asyncapi.yaml` for the full WebSocket message schema, including job creation/status/cancel commands and autopilot event subscriptions.
+- **IPC commands**: RFC-228 defines WebSocket IPC commands for desktop client integration (`job_create`, `job_status`, `job_pause`, `job_resume`, `job_cancel`, `job_dag`, `job_guidance`, `autopilot_subscribe`).
 
 **Removed**: File-based inbox/outbox directories (`autopilot/inbox/`, `autopilot/outbox/`).
 
@@ -473,15 +498,15 @@ autopilot:
 |------|--------|-------------|
 | `soothe.autopilot.dreaming_entered` | `timestamp` | Entered dreaming mode |
 | `soothe.autopilot.dreaming_exited` | `timestamp`, `trigger` | Exited dreaming |
-| `soothe.autopilot.goal_validated` | `goal_id`, `confidence` | Layer 3 accepted |
+| `soothe.autopilot.goal_validated` | `goal_id`, `confidence` | Autopilot accepted |
 | `soothe.autopilot.goal_suspended` | `goal_id`, `reason` | Budget exhausted |
-| `soothe.autopilot.send_back` | `goal_id`, `remaining_budget`, `feedback` | Sent back to Layer 2 |
+| `soothe.autopilot.send_back` | `goal_id`, `remaining_budget`, `feedback` | Sent back to StrangeLoop |
 | `soothe.autopilot.relationship_detected` | `from_goal`, `to_goal`, `type`, `confidence` | Auto-detected relationship |
 | `soothe.autopilot.checkpoint.saved` | `thread_id`, `trigger` | Checkpoint persisted |
 
 ## 10. Constraints
 
-- Layer 2 remains black-box—no mid-execution intervention
+- StrangeLoop remains black-box—no mid-execution intervention
 - Proposals queued, not applied immediately
 - Send-back budget per goal, not global
 - TUI is read-only—all control via CLI
@@ -490,7 +515,7 @@ autopilot:
 ## 11. Implementation Phases
 
 ### Phase 1: Core Execution
-- Layer 2 ↔ Layer 3 tool interface
+- StrangeLoop ↔ Autopilot tool interface
 - Consensus loop with send-back budget
 - Extended goal lifecycle
 
@@ -541,7 +566,7 @@ After initial Phases 1-4 implementation, 12 gaps remain. These are organized int
 - **Fix**: Add `_send_autopilot_webhook(self, event_type: str, payload: dict)` method that instantiates `WebhookService` from config and calls `send_webhook`. Wire additional call sites on `goal_failed`, `dreaming_entered`, `dreaming_exited`.
 - **Dependency**: Requires Gap 12 (config schema) for webhook URL resolution.
 
-### Group B: Missing Layer 2 Tools
+### Group B: Missing StrangeLoop Tools
 
 **Gap 2 — `get_world_info()` tool**
 
@@ -555,13 +580,13 @@ After initial Phases 1-4 implementation, 12 gaps remain. These are organized int
 - Delegates to memory protocol's `recall(query, limit=5)` — already available
 - Returns list of recalled memory snippets
 
-**Gap 4 — Layer 2 proposal tools**
+**Gap 4 — StrangeLoop proposal tools**
 
 - `add_finding()` and `suggest_goal()` tools in `tools/proposal/` (see Group C for full specification)
 - Both write to `ProposalQueue` attached to `LoopRuntimeContext`
 - Signature: `add_finding(summary, relevance_score?, tags?)`, `suggest_goal(description, priority?, depends_on?, rationale?)`
 
-All Layer 2 proposal tools added to `create_layer2_tools()` return confirmation string.
+All StrangeLoop proposal tools added to `create_strangeloop_tools()` return confirmation string.
 
 ### Group C: Proposal Queuing (Updated 2026-06-07)
 
@@ -572,15 +597,15 @@ All Layer 2 proposal tools added to `create_layer2_tools()` return confirmation 
 |-----------|--------|
 | `ProposalQueue` class | ✅ Implemented (`proposal_queue.py`) |
 | Unit tests | ✅ Passing (`test_proposal_queue.py`) |
-| Layer 2 tools (`suggest_goal`, `add_finding`) | ❌ Not implemented |
+| StrangeLoop tools (`suggest_goal`, `add_finding`) | ❌ Not implemented |
 | Runner drains proposals | ❌ Not connected |
 | GoalDirective application | ❌ Not connected |
 
 **Implementation design (RFC-229 integration):**
 
-The proposal queue provides **proactive path** for Layer 2 → Layer 3 communication. A **reactive path** via `GoalDirective` is also required. Both paths unify at `GoalCompletionChunk.goal_directives`.
+The proposal queue provides **proactive path** for StrangeLoop → Autopilot communication. A **reactive path** via `GoalDirective` is also required. Both paths unify at `GoalCompletionChunk.goal_directives`.
 
-#### Proactive Path: Layer 2 Tools → ProposalQueue → GoalDirective
+#### Proactive Path: StrangeLoop Tools → ProposalQueue → GoalDirective
 
 **New tools in `tools/proposal/`:**
 
@@ -766,7 +791,7 @@ async def apply_directives(
 |-------|-------|-------|
 | C.1 | GoalCompletionChunk extension + apply_directives | `engine.py`, `_runner_autopilot_worker.py`, `daemon/autopilot/service.py` |
 | C.2 | Reflection directive extraction | `_runner_autopilot_worker.py` |
-| C.3 | Layer 2 tools + ProposalQueue wiring | `tools/proposal/`, `core/loop/__init__.py`, `core/loop/state/schemas.py` |
+| C.3 | StrangeLoop tools + ProposalQueue wiring | `tools/proposal/`, `core/loop/__init__.py`, `core/loop/state/schemas.py` |
 
 ### Group D: Goal Management
 
@@ -870,9 +895,8 @@ async def apply_directives(
 
 ## Related Documents
 
-- [RFC-200](./RFC-200-autonomous-goal-management.md) — Layer 3 Foundation
-- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) — Layer 2 Execution
-- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) — Unified StrangeLoop execution
+- [RFC-200](./RFC-200-autonomous-goal-management.md) — Goal Management Foundation
+- [RFC-201](./RFC-201-strangeloop-plan-execute-loop.md) — StrangeLoop Execution
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) — Daemon Protocol
 - [RFC-500](./RFC-500-cli-tui-architecture.md) — CLI/TUI Architecture
 
@@ -881,7 +905,7 @@ async def apply_directives(
 ### 2026-06-07
 - **Major update to Group C (Proposal Queuing):** Expanded Gap 5 with full integration design for ProposalQueue → GoalDirective → GoalEngine pathway.
 - Added **Gap 5a** (GoalCompletionChunk.goal_directives) and **Gap 5b** (GoalEngine.apply_directives) to gap inventory.
-- Defined **dual-path architecture:** proactive (Layer 2 tools → ProposalQueue) and reactive (Reflection → goal_directives), unified at GoalCompletionChunk.
+- Defined **dual-path architecture:** proactive (StrangeLoop tools → ProposalQueue) and reactive (Reflection → goal_directives), unified at GoalCompletionChunk.
 - Specified `suggest_goal` and `add_finding` tool implementations with full signatures.
 - Added Runner wiring for ProposalQueue lifecycle, StrangeLoop injection, and daemon-side `_route_chunk` consumer.
 - Defined implementation phases C.1, C.2, C.3 for Group C.
@@ -903,4 +927,4 @@ async def apply_directives(
 
 ---
 
-*Autopilot Mode extends Layer 3 with continuous operation, consensus validation, and comprehensive user control surfaces.*
+*Autopilot Mode extends autonomous goal management with continuous operation, consensus validation, and comprehensive user control surfaces.*
