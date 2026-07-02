@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from soothe.foundation.sloop.engine.step_predecessor_context import ExecuteStepEnvelopeBody
 from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 
 if TYPE_CHECKING:
@@ -258,10 +259,12 @@ def build_continuation_plan_prior_goal_completion(
     )
 
 
-def build_continuation_execution_hints(*, has_prior_goal_completion: bool) -> str:
-    """Build EXECUTION HINTS for a loop-continuation bootstrap step."""
+def build_continuation_execution_hints(
+    *, has_prior_goal_completion: bool
+) -> ExecuteStepEnvelopeBody:
+    """Build INSTRUCTIONS body for a loop-continuation bootstrap step."""
     instruction_lines = [
-        "- Execute the step described in GOAL above",
+        "- Execute the step described in EXECUTION TASK above",
         "- Produce output matching the expected output specification",
     ]
     if has_prior_goal_completion:
@@ -273,7 +276,7 @@ def build_continuation_execution_hints(*, has_prior_goal_completion: bool) -> st
             1,
             "- Implement or advance the recommended next actions from that report",
         )
-    return "Instructions:\n" + "\n".join(instruction_lines)
+    return ExecuteStepEnvelopeBody(instructions="\n".join(instruction_lines))
 
 
 __all__ = [

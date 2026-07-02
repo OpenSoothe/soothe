@@ -19,11 +19,11 @@ def test_flatten_execute_envelope_extracts_goal() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Search the repo for *.yml config",
-        execution_hints="hint",
+        instructions="- hint",
     )
     flat = flatten_execute_human_content(msg)
     assert flat == "Search the repo for *.yml config"
-    assert "EXECUTION HINTS" not in flat
+    assert "INSTRUCTIONS" not in flat
 
 
 def test_build_synthesis_message_is_task_only() -> None:

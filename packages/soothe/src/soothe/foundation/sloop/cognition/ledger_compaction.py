@@ -94,7 +94,7 @@ def compact_execute_human_content(step: Any, *, envelope: str = "") -> str:
     """Return ledger-ready content for a recorded execute-step HumanMessage.
 
     Stores EXECUTION TASK + EXPECTED OUTPUT only. Volatile sections (WORKSPACE STATE,
-    SKILL CONTEXT, EXECUTION HINTS) and predecessor context (projected separately
+    SKILL CONTEXT, INSTRUCTIONS, EXECUTION METADATA) and predecessor context (projected separately
     into CoreAgent input) are omitted.
     """
     from soothe.foundation.sloop.prompts.user_message import (

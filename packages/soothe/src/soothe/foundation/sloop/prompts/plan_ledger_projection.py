@@ -15,19 +15,32 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import TYPE_CHECKING, Literal
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
-    from soothe.config.models import PlanPromptLedgerConfig
+    from soothe.config.models import ExecutePromptLedgerConfig, PlanPromptLedgerConfig
+    from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint
     from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
 
 logger = logging.getLogger(__name__)
 
 PlannerProjectionMode = Literal["new_goal", "mid_goal"]
+ExecuteProjectionMode = Literal["goal_boundary", "mid_goal"]
+
+
+@dataclass
+class ProjectedExecuteStepInput:
+    """Result of execute-step graph ledger projection (IG-542)."""
+
+    messages: list[BaseMessage] = field(default_factory=list)
+    cross_goal_projected: bool = False
+    mode: ExecuteProjectionMode = "mid_goal"
+
 
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
@@ -287,6 +300,221 @@ def project_prior_goal_completion_for_intake(
             )
             return projected
     return []
+
+
+def resolve_execute_projection_mode(state: LoopState) -> ExecuteProjectionMode:
+    """Return ``goal_boundary`` at first execute slice of a goal, else ``mid_goal``."""
+    if state.iteration == 0 and not state.step_results:
+        return "goal_boundary"
+    return "mid_goal"
+
+
+def _execute_plan_tail_index(loop_messages: list[BaseMessage]) -> int:
+    """Index before trailing plan-phase rows for the current goal (exclude from Slice A scan)."""
+    idx = len(loop_messages)
+    plan_phases = frozenset({"plan_assess", "plan_generate", "intent_classify", "continuation"})
+    while idx > 0:
+        phase = getattr(loop_messages[idx - 1], "phase", None)
+        if phase in plan_phases:
+            idx -= 1
+        else:
+            break
+    return idx
+
+
+def _goal_segment_start(loop_messages: list[BaseMessage], unit_start: int) -> int:
+    """Return index of the ``plan_assess`` (iteration=0) that opened the goal for ``unit_start``."""
+    for i in range(unit_start, -1, -1):
+        if getattr(loop_messages[i], "phase", None) != "plan_assess":
+            continue
+        iteration = getattr(loop_messages[i], "iteration", None)
+        if iteration == 0:
+            return i
+    return 0
+
+
+def _find_last_phase_pair_indices(
+    loop_messages: list[BaseMessage],
+    before_index: int,
+    phase: str,
+) -> tuple[int, int] | None:
+    """Return ``(human_idx, ai_idx)`` for the last ``phase`` pair ending before ``before_index``."""
+    if before_index <= 0:
+        return None
+    ai_idx: int | None = None
+    for i in range(before_index - 1, -1, -1):
+        msg = loop_messages[i]
+        if getattr(msg, "phase", None) == phase and _is_loop_ai_message(msg):
+            ai_idx = i
+            break
+    if ai_idx is None:
+        return None
+    human_idx: int | None = None
+    for j in range(ai_idx - 1, -1, -1):
+        msg = loop_messages[j]
+        if getattr(msg, "phase", None) == phase and _is_loop_human_message(msg):
+            human_idx = j
+            break
+    if human_idx is not None:
+        return human_idx, ai_idx
+    return ai_idx, ai_idx
+
+
+def resolve_goal_completion_unit(
+    loop_messages: list[BaseMessage],
+    before_index: int,
+) -> tuple[list[BaseMessage], int] | None:
+    """Resolve one prior-goal completion unit ending before ``before_index``.
+
+    Prefers synthesized ``goal_completion`` pairs; falls back to ledger-direct terminal
+    ``execute_step`` pairs (same resolution order as intake classification).
+    """
+    for phase in ("goal_completion", "execute_step"):
+        idxs = _find_last_phase_pair_indices(loop_messages, before_index, phase)
+        if idxs is None:
+            continue
+        start, end = idxs
+        unit = [_deep_copy_message(loop_messages[i]) for i in range(start, end + 1)]
+        return unit, start
+    return None
+
+
+def collect_cross_goal_completion_units(
+    loop_messages: list[BaseMessage],
+    *,
+    k: int,
+) -> list[list[BaseMessage]]:
+    """Collect up to ``k`` prior-goal completion units, oldest first."""
+    if k <= 0 or not loop_messages:
+        return []
+
+    units_rev: list[list[BaseMessage]] = []
+    cursor = _execute_plan_tail_index(loop_messages)
+    while len(units_rev) < k and cursor > 0:
+        found = resolve_goal_completion_unit(loop_messages, cursor)
+        if found is None:
+            break
+        unit, start = found
+        units_rev.append(unit)
+        cursor = _goal_segment_start(loop_messages, start)
+    units_rev.reverse()
+    return units_rev
+
+
+def project_cross_goal_completion_tail(
+    loop_messages: list[BaseMessage],
+    *,
+    k: int,
+    ledger_cfg: PlanPromptLedgerConfig | None,
+    checkpoint: StrangeLoopCheckpoint | None = None,
+) -> list[BaseMessage]:
+    """Project K prior-goal completion units for execute Slice A (IG-542)."""
+    units = collect_cross_goal_completion_units(loop_messages, k=k)
+    if not units and k > 0 and checkpoint is not None:
+        from soothe.foundation.sloop.engine.continuation_context import (
+            build_prior_goal_completion_block,
+        )
+        from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+
+        body = build_prior_goal_completion_block(loop_messages, checkpoint=checkpoint).strip()
+        if body:
+            units = [
+                [
+                    LoopHumanMessage(content="Prior goal completion.", phase="goal_completion"),
+                    LoopAIMessage(content=body, phase="goal_completion"),
+                ]
+            ]
+
+    flat: list[BaseMessage] = []
+    for unit in units:
+        flat.extend(unit)
+    if not flat:
+        return []
+
+    projected = project_loop_messages_for_plan(flat, ledger_cfg)
+    logger.debug(
+        "Execute Slice A projection: k=%d units=%d out_msgs=%d",
+        k,
+        len(units),
+        len(projected),
+    )
+    return projected
+
+
+def _execute_prompt_ledger_config(config: Any | None) -> ExecutePromptLedgerConfig:
+    from soothe.config.models import ExecutePromptLedgerConfig
+
+    if config is None:
+        return ExecutePromptLedgerConfig()
+    loop_cfg = getattr(config, "agent", None)
+    loop_cfg = getattr(loop_cfg, "loop", None) if loop_cfg is not None else None
+    exec_cfg = getattr(loop_cfg, "execute_prompt_ledger", None) if loop_cfg is not None else None
+    if exec_cfg is None:
+        return ExecutePromptLedgerConfig()
+    return exec_cfg
+
+
+def _plan_prompt_ledger_config(config: Any | None) -> PlanPromptLedgerConfig | None:
+    if config is None:
+        return None
+    loop_cfg = getattr(config, "agent", None)
+    loop_cfg = getattr(loop_cfg, "loop", None) if loop_cfg is not None else None
+    return getattr(loop_cfg, "plan_prompt_ledger", None) if loop_cfg is not None else None
+
+
+def project_execute_step_graph_input(
+    loop_messages: list[BaseMessage],
+    *,
+    state: LoopState,
+    step: StepAction,
+    decision: AgentDecision,
+    checkpoint: StrangeLoopCheckpoint | None = None,
+    soothe_config: Any | None = None,
+) -> ProjectedExecuteStepInput:
+    """Assemble Slice A + Slice B ledger messages for execute-step CoreAgent input."""
+    exec_cfg = _execute_prompt_ledger_config(soothe_config)
+    plan_cfg = _plan_prompt_ledger_config(soothe_config)
+    mode = resolve_execute_projection_mode(state)
+    out: list[BaseMessage] = []
+    cross_goal_projected = False
+
+    if mode == "goal_boundary" and exec_cfg.cross_goal_completion_tail > 0:
+        if getattr(state, "continue_loop", False):
+            slice_a = project_cross_goal_completion_tail(
+                loop_messages,
+                k=exec_cfg.cross_goal_completion_tail,
+                ledger_cfg=plan_cfg,
+                checkpoint=checkpoint,
+            )
+            if slice_a:
+                out.extend(slice_a)
+                cross_goal_projected = True
+
+    if step.dependencies:
+        cap = exec_cfg.predecessor_max_messages
+        if cap <= 0:
+            cap = None
+        out.extend(
+            project_predecessor_execute_ledger_for_step(
+                loop_messages,
+                step,
+                decision,
+                max_messages=cap,
+            )
+        )
+
+    logger.debug(
+        "Execute-step graph projection: mode=%s cross_goal=%s out_msgs=%d step=%s",
+        mode,
+        cross_goal_projected,
+        len(out),
+        step.id,
+    )
+    return ProjectedExecuteStepInput(
+        messages=out,
+        cross_goal_projected=cross_goal_projected,
+        mode=mode,
+    )
 
 
 def project_predecessor_execute_ledger_for_step(

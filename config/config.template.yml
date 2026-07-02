@@ -1,88 +1,567 @@
-# Soothe — minimal configuration template
+# Soothe Configuration Template (SootheConfig)
+# ------------------------------------------------------------------------------
+# Full reference for packages/soothe/src/soothe/config/{models,settings}.py.
+# Values match Pydantic defaults except the OpenAI providers example.
 #
-# Defaults live in packages/soothe/src/soothe/config/models.py (Pydantic).
-# Zero-config: export OPENAI_API_KEY=... and run — no config file required.
-#
+# Zero-config: export OPENAI_API_KEY — no YAML required.
 # Usage: soothe --config /path/to/this-file.yaml
-# Secrets: ${ENV_VAR} syntax; export OPENAI_API_KEY, TAVILY_API_KEY, etc.
+# Daemon server: config/daemon.template.yml (SootheDaemonConfig — separate file)
+# Secrets: ${ENV_VAR} expanded recursively before validation.
+# Env overrides: SOOTHE_<KEY> or SOOTHE_<SECTION>__<KEY>
+#
+# Legacy top-level keys merged at load (prefer nested forms):
+#   logging: → observability (+ agent.loop.report_output)
+#   strange_loop: → agent.loop
+
+# ============================================================
+# MODELS & ROUTING
+# ============================================================
+# ModelProviderConfig — api_key supports ${ENV_VAR}.
+# provider_type: openai | anthropic | ollama.
+# OpenAI-compatible endpoints (DashScope, vLLM, LMStudio): provider_type openai + api_base_url.
 
 providers:
-  - name: openai
-    provider_type: openai
-    api_key: ${OPENAI_API_KEY}
-    api_base_url: null
-    models:
-      - gpt-4o
-      - gpt-4o-mini
-      - o3-mini
+- name: openai
+  provider_type: openai
+  api_key: "${OPENAI_API_KEY}"
+  api_base_url: null
+  models:
+  - gpt-4o
+  - gpt-4o-mini
+  - o3-mini
 
-    # OpenAI-compatible (DashScope, OpenRouter, vLLM, LMStudio):
-    # - name: dashscope
-    #   provider_type: openai
-    #   api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    #   api_key: "${DASHSCOPE_API_KEY}"
-    #   models: [qwen-max]
-
-    # Anthropic:
-    # - name: anthropic
-    #   provider_type: anthropic
-    #   api_key: "${ANTHROPIC_API_KEY}"
-    #   models: [claude-sonnet-4-20250514]
+# ============================================================
+# ROUTER PROFILES
+# ============================================================
+# RouterProfile — named preset of ModelRouter + embedding_dims.
+# ModelRole keys: default | think | fast | image | ocr | embedding (null → default).
+# active_router_profile selects preset; env SOOTHE_ACTIVE_ROUTER_PROFILE overrides YAML.
 
 router_profiles:
-  - name: default
-    router:
-      default: openai:gpt-4o-mini
-      think: null
-      fast: null
-      image: null
-      ocr: null
-      embedding: null
-    embedding_dims: 1536
-
+- name: default
+  router:
+    default: openai:gpt-4o-mini
+    think: null
+    fast: null
+    image: null
+    ocr: null
+    embedding: null
+  embedding_dims: 1536
 active_router_profile: default
 
-# --- Optional overrides (uncomment as needed) ---
-#
-# agent:
-#   name: Soothe
-#   runtime:
-#     lazy_core_agent: true   # defer graph compile; pair with daemon thread_pool.warmup_core_agent
-#   loop:
-#     plan_assess_model_role: think   # router role for plan-assess + continuation routing
-#     plan_generate_model_role: think # router role for plan-generate
-#     goal_synthesis_model_role: think # router role for goal-completion synthesis
-#   autonomous:
-#     enabled: true          # start 24/7 AutopilotService scheduling loop (default: false)
-#     goal_deadline_seconds: 3600  # recommended for guarded production pilot
-#   core_agent_backend: langgraph  # or claude (requires soothe[claude])
-#
-# tools:
-#   deepxiv:
-#     enabled: true
-#     token: ${DEEPXIV_API_KEY}
-#
-# persistence:
-#   default_backend: postgresql
-#   postgres_base_dsn: ${DATABASE_URL}
-#
-# observability:
-#   verbosity: debug
-#   langfuse:
-#     enabled: true
-#     public_key: ${LANGFUSE_PUBLIC_KEY}
-#     secret_key: ${LANGFUSE_SECRET_KEY}
-#     host: ${LANGFUSE_HOST}
-#
-# security:
-#   sandbox: true
-#
-# mcp_servers:
-#   - name: filesystem
-#     transport: stdio
-#     command: npx
-#     args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
-#     defer: true
-#
-# plugins: []
-# skills: []
+# ============================================================
+# AGENT
+# ============================================================
+# AgentConfig — identity, self-driving, StrangeLoop, protocol backends.
+# goal_completion_mode / final_response at agent.* are mirrored under agent.loop.* for loop reads.
+
+agent:
+  # Identity
+  name: Soothe
+  system_prompt: null
+  workspace_instructions_max_chars: 8000
+  goal_completion_mode: llm_only
+  final_response: adaptive
+  # Autonomous — AutopilotService scheduling and goal pool (AutonomousConfig)
+  autonomous:
+    enabled: false
+    max_iterations: 10
+    max_retries: 2
+    max_total_goals: 50
+    max_goal_depth: 5
+    max_parallel_goals: 3
+    enable_dynamic_goals: true
+    max_send_backs: 3
+    checkpoint_interval: 10
+    dreaming_enabled: true
+    dreaming_consolidation_interval: 300
+    dreaming_health_check_interval: 60
+    verify_interval: 30
+    dreaming_interval: 300
+    dreaming_scope: workspace
+    dreaming_modes:
+      episodic:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      procedure:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      semantic:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      profile:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+    scheduler_enabled: true
+    max_scheduled_tasks: 100
+    webhooks: {}
+    max_loops: 4
+    loop_idle_timeout: 300
+    poll_interval: 5
+    dreaming_poll_interval: 60
+    goal_deadline_seconds: null
+    context_projection:
+      max_findings: 20
+      max_files: 50
+      max_plan_steps: 30
+      context_retention_hours: 168
+    workspace_reservation:
+      enabled: true
+      strict_overlap: true
+  # StrangeLoop — plan/execute loop tuning (StrangeLoopConfig)
+  loop:
+    enabled: true
+    max_iterations: 99
+    max_subagent_tasks_per_wave: 4
+    strange_loop_output_contract_enabled: true
+    goal_completion_mode: llm_only
+    final_response: adaptive
+    step_brief_hydration_enabled: true
+    prior_conversation_limit: 10
+    context_window_limit: 200000
+    context_overflow_threshold_pct: 0.8
+    context_compaction_target_pct: 0.6
+    step_context_check_enabled: false
+    plan_assess_model_role: think
+    plan_generate_model_role: think
+    goal_synthesis_model_role: think
+    # Output delivery: batch | adaptive | streaming (OutputStreamingConfig)
+    output_streaming:
+      mode: adaptive
+      streaming_interval_ms: 100
+      tui_flush_interval_ms: 200
+      adaptive_threshold_chars: 500
+      adaptive_block_chars: 500
+      adaptive_block_interval_ms: 250
+      file_output_threshold_chars: 0
+      file_output_preview_chars: 500
+      file_output_dir: null
+      message_coalesce_enabled: true
+      tool_batch_enabled: true
+      tool_batch_interval_ms: 200
+      suppress_redundant_stream_tool_updates: true
+      skip_redundant_tool_message_wire: false
+    # In-loop scratchpad; large entries spill to disk (LoopWorkingMemoryConfig)
+    working_memory:
+      enabled: true
+      max_inline_chars: 4000
+      max_entry_chars_before_spill: 1500
+    # Prior-goal injection for Plan/Execute (GoalContextConfig)
+    goal_context:
+      plan_limit: 10
+      execute_limit: 10
+      enabled: true
+    # Context Engine projection caps (ContextEngineConfig)
+    context_engine:
+      projection_max_goals: 5
+      projection_max_steps_per_goal: 10
+      projection_max_ledger_chars: 4000
+      projection_max_ledger_messages: 20
+      projection_max_lineage_chars: 2000
+      projection_max_project_instructions_chars: 8000
+    # Plan-phase ledger trim; 0 = unlimited (PlanPromptLedgerConfig)
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 0
+      plan_ledger_max_total_chars: 0
+      plan_ledger_max_message_chars: 0
+    # Execute-step ledger projection (ExecutePromptLedgerConfig)
+    execute_prompt_ledger:
+      cross_goal_completion_tail: 3
+      predecessor_max_messages: 96
+    report_output:
+      display_threshold: 20000
+      preview_chars: 500
+      synthesis_max_chars: 0
+    checkpoint:
+      progressive: true
+      auto_resume_on_start: false
+    # Parallelism caps; checkpoint.async_write = fire-and-forget writes
+    concurrency:
+      max_parallel_goals: 4
+      max_parallel_steps: 4
+      max_parallel_subagents: 4
+      global_max_llm_calls: 10
+      step_parallelism: dependency
+      max_parallel_tools: 50
+      checkpoint:
+        async_write: true
+        flush_interval: 5.0
+        queue_size: 100
+    tool_output:
+      code_exec_max_output_chars: 32000
+      tool_output_max_chars: 10000
+    # ToolCallLimitMiddleware per thread/run
+    tool_call_limit:
+      global_thread_limit: 200
+      global_run_limit: 200
+      tool_specific_limits:
+        wizsearch_search:
+          thread_limit: 5
+          run_limit: 3
+        wizsearch_crawl:
+          thread_limit: 5
+          run_limit: 3
+        web_search:
+          thread_limit: 5
+          run_limit: 3
+        fetch_url:
+          thread_limit: 5
+          run_limit: 3
+        search:
+          thread_limit: 5
+          run_limit: 3
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
+    # Per-tool invocation timeout middleware (ToolTimeoutConfig)
+    tool_timeout:
+      enabled: true
+      default_seconds: 60.0
+      per_tool:
+        grep: 30.0
+        glob: 20.0
+        read_file: 30.0
+        explore: 1800.0
+        browser_use: 1800.0
+        task: 86400.0
+      skip_tools_with_internal_timeout: true
+    # RPM, concurrency, timeouts, 429 retry (LLMRateLimitConfig)
+    llm_rate_limit:
+      enabled: true
+      rpm_limit: 60
+      concurrent_limit: 8
+      call_timeout_seconds: 600
+      call_timeout_max_seconds: 900
+      retry_on_timeout: true
+      max_timeout_retries: 10
+      timeout_retry_multiplier: 1.2
+      retry_on_rate_limit: true
+      max_rate_limit_retries: 10
+      rate_limit_backoff_base: 2.0
+      rate_limit_backoff_max: 60.0
+      respect_retry_after_header: true
+    loop_orchestrator_evidence_validate: true
+  # Protocol backends — planner, policy, durability, MemU (ProtocolsConfig)
+  protocols:
+    memory:
+      enabled: false
+      persist_dir: null
+      llm_chat_role: fast
+      llm_embed_role: embedding
+      enable_embeddings: true
+      enable_auto_categorization: true
+      enable_category_summaries: true
+      memory_categories:
+      - name: personal_info
+        description: Personal information
+      - name: preferences
+        description: User preferences and interests
+      - name: knowledge
+        description: Facts and learned information
+      - name: experiences
+        description: Past experiences and events
+      - name: goals
+        description: Goals and objectives
+    planner:
+      model: think
+      routing: auto
+    policy:
+      profile: standard
+    durability:
+      backend: default
+      checkpointer: default
+      persist_dir: null
+      thread_inactivity_timeout_hours: 72
+  # QuickJS programmatic tool calling; opt-in (CodeInterpreterConfig)
+  code_interpreter:
+    enabled: false
+    ptc_allowlist: []
+    memory_limit_mb: 128
+    timeout_seconds: 30
+    max_ptc_calls: 50
+    max_result_size: 100000
+    console_capture: true
+    snapshot_between_turns: false
+  # CoreAgent cold-start — lazy_core_agent defers graph compile (AgentRuntimeConfig)
+  runtime:
+    lazy_core_agent: true
+  # ask_user interrupt relay: auto (veritas) or manual TUI (ClarificationConfig)
+  clarification:
+    auto_policy: veritas
+    auto_min_confidence: 0.4
+    max_defer_age_hours: 168
+    default_mode: auto
+  # Auto-answerer for clarification interrupts (VeritasConfig)
+  veritas:
+    model_role: think
+    max_context_steps: 8
+  # langgraph (default) | claude — requires soothe[claude] extra
+  core_agent_backend: langgraph
+  claude_permission_mode: bypassPermissions
+  claude_max_turns: 25
+  claude_model: null
+
+# ============================================================
+# TOOLS & EXTENSIONS
+# ============================================================
+# ToolsConfig groups, SubagentConfig overrides, MCP (RFC-412), plugins, skills, memory paths.
+# progressive_* — token budget for deferred tool/skill/MCP listings in prompts.
+# MCP example: {name, transport: stdio, command, args, defer: true}
+
+tools:
+  execution:
+    enabled: true
+  file_ops:
+    enabled: true
+  datetime:
+    enabled: true
+  data:
+    enabled: true
+  wizsearch:
+    enabled: true
+    default_engines:
+    - tavily
+    max_results_per_engine: 10
+    timeout: 30
+  http_requests:
+    enabled: true
+    allow_dangerous_requests: true
+    headers: {}
+    verify_ssl: true
+  # DeepXivToolsConfig — academic search; token from ${DEEPXIV_API_KEY} or env
+  deepxiv:
+    enabled: false
+    token: null
+    timeout: 60
+    max_retries: 3
+
+# SubagentConfig — overrides merge with builtin explore/plan/tacitus/browser_use
+subagents:
+  explore:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  plan:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  tacitus:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  browser_use:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+
+# MCPServerConfig — unique name per server; defer=true for progressive disclosure
+mcp_servers: []
+progressive_mcp:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
+
+plugins: []
+
+# SKILL.md source paths (SkillsMiddleware)
+skills: []
+progressive_skills:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
+progressive_tools:
+  enabled: true
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 120
+  min_listing_chars_per_entry: 20
+  core_tools: null
+  search_tools_enabled: true
+
+# AGENTS.md paths (MemoryMiddleware)
+memory: []
+
+# ============================================================
+# PERSISTENCE & VECTOR STORES
+# ============================================================
+# PersistenceConfig — sqlite default; postgresql via postgres_base_dsn (RFC-612).
+# postgres_databases maps component → DB name when using multi-DB layout.
+# VectorStoreProviderConfig — sqlite_vec | pgvector | weaviate | in_memory.
+# vector_store_router values: provider_name:collection_name.
+
+persistence:
+  default_backend: sqlite
+  postgres_base_dsn: null
+  postgres_databases:
+    checkpoints: soothe_checkpoints
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    memory: soothe_memory
+  soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
+  postgres_pool_min_size: 4
+  checkpointer_pool_size: 24
+  sloop_pool_size: 24
+  postgres_pool_max_idle_seconds: 120.0
+  postgres_pool_max_lifetime_seconds: 1800.0
+  postgres_pool_acquire_timeout_seconds: 30.0
+  sqlite_reader_pool_size: 8
+  archive_enabled: true
+  archive_retention_days: 90
+  archive_max_count: 1000
+
+vector_stores:
+- name: sqlite_vec_default
+  provider_type: sqlite_vec
+  dsn: null
+  pool_size: 5
+  index_type: hnsw
+  url: null
+  api_key: null
+  grpc_port: 50051
+
+vector_store_router:
+  default: sqlite_vec_default:soothe_default
+
+# ============================================================
+# SECURITY & WORKSPACE
+# ============================================================
+# SecurityConfig — sandbox enables execute tool via SandboxBackendProtocol.
+# Path evaluation: denied_paths → allowed_paths → workspace boundary → file types.
+# FilesystemMiddlewareConfig — backup on delete; sandboxing from security.allow_paths_outside_workspace.
+# WorkspaceMountConfig — host_root + container_root for container deployments (RFC-621).
+
+security:
+  sandbox: false
+  allow_paths_outside_workspace: false
+  require_approval_for_outside_paths: true
+  denied_paths:
+  - /etc/**
+  - /bin/**
+  - /sbin/**
+  - /usr/**
+  - /System/**
+  - /Library/**
+  - /private/etc/**
+  - ~/.ssh/**
+  - ~/.gnupg/**
+  - ~/.aws/**
+  - "**/.env"
+  - "**/credentials.json"
+  - "**/secrets.json"
+  allowed_paths:
+  - "**"
+  denied_file_types: []
+  require_approval_for_file_types:
+  - .env
+  - .pem
+  - .key
+  - .p12
+  - .pfx
+  - .crt
+  whitelist_paths_bypass: []
+  whitelist_commands_bypass: []
+filesystem_middleware:
+  backup_enabled: true
+  backup_dir: null
+  workspace_root: null
+  max_file_size_mb: 10
+  tool_token_limit_before_evict: 20000
+workspace_mount:
+  host_root: null
+  container_root: null
+
+# ============================================================
+# OBSERVABILITY & SCHEDULING
+# ============================================================
+# ObservabilityConfig — file/console logging, verbosity, Langfuse callbacks.
+# CronConfig — natural-language scheduled jobs via Autopilot (RFC-229).
+
+observability:
+  log_file_level: INFO
+  log_file_path: null
+  log_file_max_bytes: 5242880
+  log_file_backup_count: 3
+  console:
+    enabled: false
+    level: WARNING
+    stream: stderr
+    format: "%(level_short)s %(name)s %(message)s"
+  global_history:
+    enabled: true
+    max_size: 5000
+    dedup_window: 10
+    retention_days: 90
+  verbosity: normal
+  thread_logging_enabled: true
+  thread_logging_retention_days: 30
+  thread_logging_max_size_mb: 100
+  profile_model_calls: false
+  langfuse:
+    enabled: false
+    public_key: null
+    secret_key: null
+    host: null
+    environment: null
+    release: null
+    sample_rate: null
+    trace_name: null
+    tags: null
+    user_id: null
+cron:
+  enabled: true
+  max_jobs: 100
+  poll_interval: 60
+  extraction_model: fast
+  extraction_timeout: 30
+  default_priority: 50
+
+# ============================================================
+# CLIENT & TUI
+# ============================================================
+# UIConfig theme, UpdateConfig PyPI check, LangGraph debug flag.
+
+debug: false
+activity_max_lines: 300
+tui_debug: false
+ui:
+  theme: null
+update:
+  check: true
+  auto_update: true
+
+# ============================================================
+# OPTIMIZATION
+# ============================================================
+# OptimizationConfig — semantic risk/relationships, failure intent, structured plan (IG-433).
+
+optimization:
+  semantic_risk:
+    enabled: true
+    cache_enabled: true
+    cache_similarity_threshold: 0.9
+    confidence_threshold: 0.5
+  semantic_relationships:
+    enabled: true
+    auto_apply_threshold: 0.85
+    flag_threshold: 0.7
+  failure_intent:
+    enabled: true
+    llm_confidence_threshold: 0.7
+  structured_plan:
+    enabled: false

@@ -83,6 +83,9 @@ agent:
     plan_assess_model_role: fast
     plan_generate_model_role: think
     goal_synthesis_model_role: fast
+    execute_prompt_ledger:
+      cross_goal_completion_tail: 3
+      predecessor_max_messages: 96
 
 # ============================================================
 # PERSISTENCE
