@@ -13,8 +13,8 @@ from textual.widgets import Static
 
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.tui.markdown_theme import build_markdown
 from soothe_cli.tui.preview_limits import SKILL_CARD_PREVIEW_CHARS, SKILL_CARD_PREVIEW_LINES
-from soothe_cli.tui.widgets.messages._helpers import _code_theme_for_app
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -278,9 +278,7 @@ class SkillMessage(Vertical):
         if self._md_rendered or not self._md_widget:
             return
         try:
-            from rich.markdown import Markdown as RichMarkdown
-
-            self._md_widget.update(RichMarkdown(body, code_theme=_code_theme_for_app(self)))
+            self._md_widget.update(build_markdown(body, self))
         except Exception:
             self._md_widget.update(body)
         self._md_rendered = True

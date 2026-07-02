@@ -11,7 +11,7 @@ from textual.strip import Strip
 from textual.widgets import Static
 
 from soothe_cli.tui.config import is_ascii_mode
-from soothe_cli.tui.widgets.messages._helpers import _code_theme_for_app
+from soothe_cli.tui.markdown_theme import build_markdown
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -113,7 +113,8 @@ class AssistantMessage(Vertical):
     """Assistant reply card: markdown or plain text body (no title row).
 
     When ``render_markdown`` is enabled (default), model output is rendered as
-    Markdown via ``rich.markdown.Markdown`` inside a single ``Static`` widget.
+    Markdown via the configured markdown theme preset inside a single
+    ``Static`` widget.
     When disabled, output is shown verbatim. This avoids the heavy widget tree
     that ``textual.widgets.Markdown`` creates (one child widget per block).
     """
@@ -206,9 +207,7 @@ class AssistantMessage(Vertical):
             self._body.update("")
             return
         if self._render_markdown:
-            from rich.markdown import Markdown as RichMarkdown
-
-            self._body.update(RichMarkdown(self._content, code_theme=_code_theme_for_app(self)))
+            self._body.update(build_markdown(self._content, self))
         else:
             self._body.update(self._content)
 
