@@ -66,6 +66,22 @@ Soothe's context handling is scattered across multiple modules with overlapping 
 | 4 Stage 1 | CE-backed properties + loop-scoped CE lifecycle | Property migration, persistence polish, loop-scoped CE, projection config | Done |
 | 4 Stage 2 | Remaining cleanup + deeper integration | Slim GER, CE-only ledger writes, delete deprecated functions, replace goal_history reads with CE queries | This update |
 
+### StrangeLoop Context Integration Philosophy
+
+RFC-222 established the invariant: **"StrangeLoop is the pure execution unit. Autopilot is the orchestrator."** StrangeLoop must not know about the DAG, sibling goals, scheduling, or cross-loop conflicts. ContextEngine integration in Phase 3–4 introduced a tension between this invariant and the need for context-aware execution.
+
+**Resolution principle**: StrangeLoop receives context through a **value-typed contract** — the `GoalDispatchContextBundle` (RFC-222) or `ContextBundle` (RFC-624). This preserves the invariant:
+
+1. **StrangeLoop pulls context, never pushes state**: StrangeLoop reads from CE via property accessors backed by GoalNode. It never writes to CE's DAG directly — only through `LedgerManager` (prompt pipeline) and `PlanManager` adapter (step creation). Phase 4 eliminates adapters but retains the pull-only pattern: StrangeLoop calls `ce.planning.create_step()` and `ce.ledger.record_message()`, never `ce.dag.add_goal()`.
+
+2. **Context is immutable during execution**: The `ContextBundle` is a snapshot at dispatch time. StrangeLoop's execution cannot modify parent goals, sibling state, or the DAG structure. The only mutation path is through completion callbacks applied **after** StrangeLoop returns a `PlanResult`.
+
+3. **ExecutionState is a facade, not an authority**: RFC-626 replaces LoopState with `ExecutionState`, a thin facade holding only execution-only fields (wave metrics, max_iterations). All goal-level state (tokens, iteration, plan history) is backed by CE GoalNode properties. StrangeLoop never "owns" state — it borrows from CE.
+
+4. **Adapter pattern as transition scaffold**: Phase 3 adapters (`ContextEnginePlanAdapter`, `ContextEngineLedgerAdapter`) translate existing StrangeLoop interfaces to CE operations. This ensures behavioral equivalence without changing StrangeLoop's internal logic. Phase 4 deletes adapters and wires StrangeLoop nodes to CE directly, but the **interface contract** remains unchanged.
+
+**Key insight**: The "pure execution unit" invariant constrains *what* StrangeLoop knows (no DAG, no siblings), not *how* it receives context (pull via typed bundle). CE provides rich context while StrangeLoop remains execution-focused — the boundary is defined by the contract, not by context richness.
+
 ---
 
 ## Solution

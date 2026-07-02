@@ -45,11 +45,17 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 
 | Term | Definition | Source |
 |------|------------|--------|
-| **Job** | Root Goal submitted to AutopilotService | RFC-700 §2.2 |
-| **AutopilotService** | Daemon-owned singleton managing GoalEngine and WorkerPool | RFC-222 §86-89 |
-| **GoalEngine** | DAG-based goal management within AutopilotService | RFC-222 §75-89, RFC-200 |
+| **Job** | Root GoalNode submitted to AutopilotService (parent_id=None) | RFC-626 §44 |
+| **GoalNode** | CE entity model for goals; root GoalNode = Job | RFC-626 §40-44 |
+| **AutopilotService** | Daemon-owned singleton managing ContextEngine and WorkerPool | RFC-222 §86-89, RFC-625 §1 |
+| **ContextEngine** | Unified goal/step DAG management (supersedes GoalEngine) | RFC-624, RFC-625 |
 | **Worker** | StrangeLoop subprocess assigned to execute a goal | RFC-222 §95-104 |
 | **Worker loop_id** | Namespaced `autopilot__w001`, `autopilot__w002`, etc. | RFC-222 §467-468 |
+
+> **Job Abstraction Clarification (RFC-626)**: The Job concept originally referenced "root Goal" from GoalEngine's flat goal dict (RFC-222). RFC-626 eliminated GoalEngine and consolidated entity models under ContextEngine. A **Job** is now defined as a **root GoalNode** (GoalNode with `parent_id=None`) managed by ContextEngine. No intermediate `Goal` wrapper model exists — Job IPC commands query ContextEngine directly for root goals. This unification ensures:
+> - Job state = GoalNode state (no dual-source-of-truth)
+> - Job lifecycle transitions = GoalNode status transitions
+> - Job cancellation operates on GoalNode and descendant StepNodes via CE DAG traversal
 
 ## Protocol Specification
 
