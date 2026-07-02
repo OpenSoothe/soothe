@@ -114,7 +114,7 @@ def test_compact_execute_human_content_uses_brief_and_expected_output() -> None:
         expected_output="RFC list with scope summaries",
     )
     out = compact_execute_human_content(step)
-    assert out.startswith("GOAL RECAP:\n")
+    assert out.startswith("EXECUTION TASK RECAP:\n")
     assert "autopilot RFC" in out
     assert "EXPECTED OUTPUT:\nRFC list with scope summaries" in out
 
@@ -122,7 +122,7 @@ def test_compact_execute_human_content_uses_brief_and_expected_output() -> None:
 def test_compact_execute_human_content_includes_prior_evidence_from_envelope() -> None:
     step = StepAction(id="02", description="Fix failures", expected_output="tests pass")
     envelope = (
-        "GOAL:\nFix failures\n\n"
+        "EXECUTION TASK:\nFix failures\n\n"
         "PRIOR STEP EVIDENCE:\nStep 01 — run tests (completed)\n---\nF821 in foo.py\n\n"
         "EXECUTION HINTS:\nExpected output:\n- tests pass"
     )

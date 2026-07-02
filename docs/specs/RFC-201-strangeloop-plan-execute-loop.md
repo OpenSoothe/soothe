@@ -255,6 +255,8 @@ class AgentDecision(BaseModel):
 - Execution mode (parallel/sequential/dependency)
 - Hybrid flexibility (step-level execution hints: subagent, expected output; no per-step tool allowlist in `StepAction`)
 
+**Cross-wave step DAG (IG-539)**: Each replan wave adds steps to the goal's unified `StepDAG`. New steps declare dependencies on prior-wave composite ids (`KFA-01`) via `dependencies` or `continues_from`. Plan-generate injects a **Step Anchor Registry** listing completed anchors; **Plan DAG Normalizer** validates edges before execute. See RFC-624 §3.1.
+
 **Legacy plan JSON**: A per-step `tools` array may still appear in older model output; the runtime maps known subagent names from that list onto `subagent` and does not pass ordinary tool names through `config.configurable` (IG-382).
 
 ### Adaptive Step Granularity

@@ -99,16 +99,19 @@ def compact_plan_assess_ai_dump(response: Any) -> str:
 def compact_execute_human_content(step: Any, *, envelope: str = "") -> str:
     """Return ledger-ready content for a recorded execute-step HumanMessage.
 
-    Stores GOAL RECAP + EXPECTED OUTPUT (+ optional PRIOR STEP EVIDENCE).
+    Stores EXECUTION TASK RECAP + EXPECTED OUTPUT (+ optional PRIOR STEP EVIDENCE).
     Volatile sections (WORKSPACE STATE, SKILL CONTEXT, EXECUTION HINTS) are omitted.
     """
+    from soothe.foundation.sloop.prompts.user_message import (
+        EXECUTION_TASK_RECAP_LABEL,
+        flatten_user_message_content,
+    )
+
     brief = (step.full_description or step.description or "").strip()
     if not brief and envelope:
-        from soothe.foundation.sloop.prompts.user_message import flatten_user_message_content
-
         brief = flatten_user_message_content(envelope)
 
-    sections: list[str] = [f"GOAL RECAP:\n{brief}"]
+    sections: list[str] = [f"{EXECUTION_TASK_RECAP_LABEL}:\n{brief}"]
 
     expected = (getattr(step, "expected_output", None) or "").strip()
     if expected:

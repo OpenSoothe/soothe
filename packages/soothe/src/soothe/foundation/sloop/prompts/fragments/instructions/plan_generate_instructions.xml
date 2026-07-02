@@ -24,7 +24,7 @@ paths, identifiers, and quoted literals unchanged.
   ``dependencies`` is set, state what to do with predecessor output and forbid repeating
   predecessor discovery (see EXECUTION_POLICIES dependent chains).
 - ``expected_output``: Checkable completion signal.
-- ``dependencies``: Optional; sibling step ``id`` strings.
+- ``dependencies``: Optional; in-wave sibling ids or cross-wave composite ids from STEP ANCHOR REGISTRY.
 - ``kind``: ``action`` (default) or ``ask_user``.
 - ``questions``: REQUIRED when ``kind=ask_user`` — non-empty list of plain-text questions,
   each ending in ``?``; forbidden otherwise.

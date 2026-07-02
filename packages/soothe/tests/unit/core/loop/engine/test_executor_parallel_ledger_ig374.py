@@ -68,12 +68,12 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
     ledger_msgs = ce.ledger.get_messages()
     assert len(ledger_msgs) == 4
     h0, a0, h1, a1 = ledger_msgs
-    assert h0.content.startswith("GOAL RECAP:\n")
+    assert h0.content.startswith("EXECUTION TASK RECAP:\n")
     assert "glob READMEs" in h0.content
     assert "EXPECTED OUTPUT:\npaths" in h0.content
     assert getattr(h0, "step_id", None) == "s1"
     assert "a.md b.md" in (a0.content or "")
-    assert h1.content.startswith("GOAL RECAP:\n")
+    assert h1.content.startswith("EXECUTION TASK RECAP:\n")
     assert "count them" in h1.content
     assert a1.content == ""
 

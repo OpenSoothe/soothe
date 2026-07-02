@@ -178,6 +178,29 @@ Bounding strategy per section:
 | `goal_lineage` | GoalStepDAG.goal_lineage() | Chain of descriptions, max `max_lineage_chars` |
 | `step_lineage` | StepNode.reasoning_trace | Recent reasoning, max `max_lineage_chars` |
 
+### §3.1 Cross-Wave Step Dependency Planning (IG-539)
+
+Plan waves accumulate into a single flat `StepDAG` per goal. Cross-wave edges use composite step ids (`KFA-01`) in `StepNode.dependencies`. LLM plan-generate historically under-specified these edges because prompts showed aggregate `DAG STATUS` counts but not canonical completed-step ids.
+
+**Step Anchor Registry** (plan-generate envelope section):
+
+- Built from `GoalNode.steps` (preferred) or `LoopState.step_results` (fallback).
+- Lists completed / pending / failed steps with composite id, status, description, outcome snippet.
+- Includes next local id range and explicit cross-wave dependency rules.
+- Module: `soothe.foundation.sloop.cognition.step_anchor_registry`.
+
+**Plan DAG Normalizer** (deterministic post-process):
+
+- Runs after plan-generate (`_finalize_generated_plan_result`) and after `assign_plan_step_ids` in `resolve_decision`.
+- Resolves bare numeric tokens (`01`) to unique completed composite ids via `expand_dependency_satisfaction_ids`.
+- Merges `PlanGenerateStep.continues_from` into `dependencies` at conversion time.
+- Drops unresolved dependency targets; breaks in-plan cycles; forces `execution_mode="dependency"` when any edge exists.
+- Module: `soothe.foundation.sloop.cognition.plan_dag_normalizer`.
+
+**Schema**: `PlanGenerateStep.continues_from: list[str] | None` — cross-wave composite ids only; merged into runtime `StepAction.dependencies`.
+
+**Relationship to IG-536**: IG-536 grounds **execute** envelopes when deps exist; IG-539 ensures deps are **authored and validated at plan time**.
+
 ### §4 LedgerManager
 
 Replaces `LoopWorkingMemory` and the `loop_messages` list in StrangeLoop state. Provides:

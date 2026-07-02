@@ -101,7 +101,7 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
     plan = builder.build_plan_assess_message(
         goal="g",
     )
-    assert "GOAL:" in execute
+    assert "EXECUTION TASK:" in execute
     assert "GOAL:" in plan
     assert "TIMESTAMP:" not in execute
     assert "TIMESTAMP:" not in plan
