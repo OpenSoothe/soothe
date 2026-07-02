@@ -1,8 +1,9 @@
 """Unified scenario-based user message builder for all loop phases.
 
-Replaces XML envelopes with structured text sections (GOAL/CONTEXT/TASK).
-Plan and execute user messages omit INTENT — routing is decided in code before
-the plan LLM runs. Goal-synthesis uses a TASK-only closing human message.
+Replaces XML envelopes with structured text sections (GOAL/EXECUTION TASK/TASK).
+Plan phases use ``GOAL`` for the parent objective; execute-step uses
+``EXECUTION TASK`` for the planner step work unit. Goal-synthesis uses a
+TASK-only closing human message.
 
 System messages retain XML. Only user messages use this format.
 """
@@ -30,6 +31,10 @@ _MCP_RESOURCE_REF_RE = re.compile(r"@(\w+):(\S+)")
 
 # Hard cap on the rendered PRIOR PROGRESS section (RFC-227).
 PRIOR_PROGRESS_MAX_CHARS = 600
+
+# Execute-step envelope labels (distinct from plan-phase GOAL / GOAL RECAP).
+EXECUTION_TASK_LABEL = "EXECUTION TASK"
+EXECUTION_TASK_RECAP_LABEL = "EXECUTION TASK RECAP"
 
 
 def _goal_text(goal: str | None) -> str:
@@ -177,6 +182,7 @@ def _append_plan_context_sections(
     current_iteration: int | None = None,
     context_bundle: ContextBundle | None = None,
     step_id_hint: str | None = None,
+    step_anchor_registry: str | None = None,
     projection_mode: str | None = None,
     completion_in_ledger: bool = False,
     prior_goals_override: list[PriorGoalSummary] | None = None,
@@ -228,6 +234,9 @@ def _append_plan_context_sections(
 
     if (skill_context or "").strip():
         sections.append(("SKILL REFERENCE", skill_context.strip()))
+
+    if step_anchor_registry:
+        sections.append(("STEP ANCHOR REGISTRY", step_anchor_registry))
 
     if step_id_hint:
         sections.append(("STEP ID HINT", step_id_hint))
@@ -342,6 +351,7 @@ class UserMessageBuilder:
         goal: str,
         *,
         step_id_hint: str | None = None,
+        step_anchor_registry: str | None = None,
         dag_context: Any = None,
         skill_context: str | None = None,
         prior_progress: PriorProgressDigest | None = None,
@@ -382,6 +392,7 @@ class UserMessageBuilder:
             current_iteration=current_iteration,
             context_bundle=context_bundle,
             step_id_hint=step_id_hint,
+            step_anchor_registry=step_anchor_registry,
             projection_mode=projection_mode,
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals_override,
@@ -452,7 +463,7 @@ class UserMessageBuilder:
             Structured text message for the execute-step LoopHumanMessage.
         """
         sections: list[tuple[str, str]] = [
-            ("GOAL", _goal_text(step_description)),
+            (EXECUTION_TASK_LABEL, _goal_text(step_description)),
         ]
 
         if (predecessor_evidence or "").strip():
@@ -497,15 +508,27 @@ class UserMessageBuilder:
 
 
 def flatten_user_message_content(content: str) -> str:
-    """Extract the GOAL line from a scenario-formatted user message.
+    """Extract the primary directive from a scenario-formatted user message.
 
-    Falls back to raw content for backward compat with old XML-format ledger messages.
+    Execute-step envelopes use ``EXECUTION TASK:`` / ``EXECUTION TASK RECAP:``;
+    plan envelopes use ``GOAL:`` / ``GOAL RECAP:``. Legacy execute envelopes that
+    still use ``GOAL:`` are accepted for backward compat.
+
+    Falls back to raw content for old XML-format ledger messages.
     """
     text = (content or "").strip()
     if not text:
         return ""
 
-    # New format: extract content after "GOAL:" or compacted "GOAL RECAP:" until next section
+    execution_task_match = re.match(
+        rf"{re.escape(EXECUTION_TASK_LABEL)}(?:\s+RECAP)?:\s*\n(.+?)(?:\n\n|\Z)",
+        text,
+        re.DOTALL,
+    )
+    if execution_task_match:
+        return execution_task_match.group(1).strip()
+
+    # Plan-phase or legacy execute format
     goal_match = re.match(r"GOAL(?:\s+RECAP)?:\s*\n(.+?)(?:\n\n|\Z)", text, re.DOTALL)
     if goal_match:
         return goal_match.group(1).strip()
@@ -519,6 +542,8 @@ def flatten_user_message_content(content: str) -> str:
 
 
 __all__ = [
+    "EXECUTION_TASK_LABEL",
+    "EXECUTION_TASK_RECAP_LABEL",
     "PRIOR_PROGRESS_MAX_CHARS",
     "UserMessageBuilder",
     "_append_plan_context_sections",

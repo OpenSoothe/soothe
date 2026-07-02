@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     StepAction,
@@ -61,11 +62,13 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
         plan_id = allocate_plan_id(decision, reserved_step_ids=reserved)
         state.plan_id = plan_id
         decision = assign_plan_step_ids(decision, plan_id=plan_id)
+        decision = normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
     elif plan_result.plan_action == "keep" and state.current_decision is None:
         reserved = set(state.dependency_completion_ids())
         plan_id = state.plan_id or allocate_plan_id(decision, reserved_step_ids=reserved)
         state.plan_id = plan_id
         decision = assign_plan_step_ids(decision, plan_id=plan_id)
+        decision = normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
 
     if plan_result.plan_action == "new":
         # RFC-624 Phase 4 Stage 2: No longer clear completed_step_ids on new plan.

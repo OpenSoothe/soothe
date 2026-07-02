@@ -433,7 +433,18 @@ class PromptBuilder:
             )
 
         step_id_hint = None
+        step_anchor_registry = None
         if kind == "generate":
+            from soothe.foundation.sloop.cognition.step_anchor_registry import (
+                build_step_anchor_registry,
+            )
+
+            goal_node = context_bundle.active_goal if context_bundle is not None else None
+            if goal_node is not None or state.step_results:
+                step_anchor_registry = build_step_anchor_registry(
+                    goal_node=goal_node,
+                    state=state,
+                )
             nxt = next_goal_local_step_id_start(state)
             if nxt > 1:
                 width = max(2, len(str(nxt + 1)))
@@ -459,4 +470,8 @@ class PromptBuilder:
 
         if kind == "assess":
             return builder.build_plan_assess_message(**common_kwargs)
-        return builder.build_plan_generate_message(**common_kwargs, step_id_hint=step_id_hint)
+        return builder.build_plan_generate_message(
+            **common_kwargs,
+            step_id_hint=step_id_hint,
+            step_anchor_registry=step_anchor_registry,
+        )

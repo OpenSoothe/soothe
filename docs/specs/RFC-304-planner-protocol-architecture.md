@@ -133,6 +133,7 @@ class Reflection(BaseModel):
 - Emit structured `PlanGeneration` (`plan_action`, `decision`, `next_action` only; IG-329)
 - Uses execution policies plus `plan_generate_instructions`
 - Merged with phase 1 in StrangeLoop’s `LLMPlanner` into `PlanResult` for execution
+- Cross-wave step dependencies: plan-generate envelope includes **Step Anchor Registry** (RFC-624 §3.1, IG-539); `PlanGenerateStep.continues_from` lists completed composite ids from prior waves; runtime **Plan DAG Normalizer** validates the merged DAG before execute
 
 **Implementation** (in Layer 2 StrangeLoop, RFC-201):
 ```python

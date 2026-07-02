@@ -38,9 +38,9 @@ class TestExecutionHintsEnvelopeIntegration:
         assert "Suggested subagent: tacitus" in envelope
         assert "Expected output: Page summary" in envelope
         assert "Consider using the suggested approach first" in envelope
-        goal_idx = envelope.index("GOAL:")
+        task_idx = envelope.index("EXECUTION TASK:")
         hints_idx = envelope.index("EXECUTION HINTS:")
-        assert 0 <= goal_idx < hints_idx
+        assert 0 <= task_idx < hints_idx
 
     def test_envelope_expected_output_only(self) -> None:
         """Hints may omit subagent when only expected_output is set."""
@@ -63,4 +63,4 @@ class TestExecutionHintsEnvelopeIntegration:
             execution_hints=None,
         )
         assert "EXECUTION HINTS:" not in envelope
-        assert "GOAL:" in envelope
+        assert "EXECUTION TASK:" in envelope
