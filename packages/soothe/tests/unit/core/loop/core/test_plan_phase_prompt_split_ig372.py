@@ -41,8 +41,8 @@ def test_generate_system_includes_policies_and_plan_generate() -> None:
     assert "same natural language as the current goal statement" in system.content
 
 
-def test_assess_with_config_still_includes_environment_workspace() -> None:
-    """Assess retains ENVIRONMENT / WORKSPACE when config and workspace set."""
+def test_assess_with_config_omits_environment_workspace() -> None:
+    """Assess omits ENVIRONMENT / WORKSPACE — workspace blocks are execute-step only."""
     state = LoopState(goal="analyze", thread_id="t1", iteration=0, max_iterations=8)
     ctx = PlanContext(workspace="/abs/ws")
     config = MagicMock()
@@ -51,20 +51,14 @@ def test_assess_with_config_still_includes_environment_workspace() -> None:
     messages = builder.build_plan_messages("analyze", state, ctx, plan_phase="assess")
     system = messages[0].content
     assert isinstance(messages[1], LoopHumanMessage)
-    assert "<ENVIRONMENT" in system
-    assert "<WORKSPACE" in system
-    assert "/abs/ws" in system
-    # System prompt may mention GOAL: in instruction text, but
-    # the actual user query content is in the human message only.
-    assert "</USER_QUERY>" not in system  # goal text in human message only
+    assert "<ENVIRONMENT" not in system
+    assert "<WORKSPACE" not in system
+    assert "/abs/ws" not in system
+    assert "</USER_QUERY>" not in system
 
 
 def test_assess_omits_workspace_rules_and_instructions(tmp_path) -> None:
-    """plan-assess is a meta-decision; workspace conventions must NOT appear in assess.
-
-    plan-generate keeps WORKSPACE_RULES (path semantics) but not AGENT_INSTRUCTIONS
-    (AGENTS.md / CLAUDE.md) — those are injected on execute via CoreAgent.
-    """
+    """plan-assess and plan-generate omit workspace blocks and AGENT_INSTRUCTIONS."""
     (tmp_path / "AGENTS.md").write_text("# Project rules\n\nBe terse.\n", encoding="utf-8")
     state = LoopState(goal="analyze", thread_id="t1", iteration=0, max_iterations=8)
     ctx = PlanContext(workspace=str(tmp_path))
@@ -78,12 +72,11 @@ def test_assess_omits_workspace_rules_and_instructions(tmp_path) -> None:
         0
     ].content
 
-    # Assess: stripped.
-    assert "<WORKSPACE_RULES>" not in assess_system
-    assert "<AGENT_INSTRUCTIONS>" not in assess_system
-    # Generate: path rules only; project instructions omitted from planner.
-    assert "<WORKSPACE_RULES>" in generate_system
-    assert "<AGENT_INSTRUCTIONS>" not in generate_system
+    for system in (assess_system, generate_system):
+        assert "<WORKSPACE_RULES>" not in system
+        assert "<AGENT_INSTRUCTIONS>" not in system
+        assert "<ENVIRONMENT" not in system
+        assert "<WORKSPACE>" not in system
     assert "Be terse." not in generate_system
 
 

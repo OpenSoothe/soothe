@@ -141,6 +141,19 @@ RESPONSE_LANGUAGE_HINT_FRAGMENT = (
     "</RESPONSE_LANGUAGE_HINT>"
 )
 
+# Execute-step workspace path semantics (RFC-214 cache-stable tail).
+EXECUTE_WORKSPACE_RULES_FRAGMENT = (
+    "<WORKSPACE_RULES>\n"
+    "Project root is under <WORKSPACE><root>. Filesystem tools: workspace-relative "
+    "or host-absolute paths under that root. Shell tools (run_command, run_python): "
+    "cwd = workspace root; leading '/' in shell = host root — use '.' or relative paths.\n\n"
+    "For architecture/codebase/structure goals: inspect this directory immediately.\n"
+    "Do NOT ask the user for a local path, GitHub URL, or file upload unless the goal "
+    "names a different project outside this directory.\n"
+    "Do NOT tell the user you need them to share the project first — it is already here.\n"
+    "</WORKSPACE_RULES>"
+)
+
 
 def current_timestamp_iso() -> str:
     """Return current local-timezone ISO-8601 timestamp for system prompts."""

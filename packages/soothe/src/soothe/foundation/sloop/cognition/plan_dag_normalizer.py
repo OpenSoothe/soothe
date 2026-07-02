@@ -66,6 +66,41 @@ def _resolve_dependency_ref(
     return None
 
 
+def _infer_linear_dependencies_when_mode_dependency(
+    steps: list[StepAction],
+    *,
+    execution_mode: str,
+) -> tuple[list[StepAction], bool]:
+    """Fill missing in-wave edges when planner chose dependency mode.
+
+    Models often set ``execution_mode`` to ``dependency`` while omitting
+    ``dependencies`` on some downstream steps. Each step without deps (after the
+    first) is chained to its list-order predecessor so diagnose→fix→verify
+    pipelines stay sequential instead of running in parallel.
+    """
+    if execution_mode != "dependency" or len(steps) < 2:
+        return steps, False
+
+    updated: list[StepAction] = []
+    changed = False
+    for i, step in enumerate(steps):
+        if i == 0 or step.dependencies:
+            updated.append(step)
+            continue
+        updated.append(step.model_copy(update={"dependencies": [steps[i - 1].id]}))
+        changed = True
+
+    if changed:
+        filled = sum(1 for s in updated[1:] if s.dependencies)
+        logger.info(
+            "Plan dependency mode missing edges; filled %d/%d downstream step(s) "
+            "with list-order predecessors",
+            filled,
+            len(steps) - 1,
+        )
+    return updated, changed
+
+
 def _drop_in_plan_cycles(steps: list[StepAction]) -> list[StepAction]:
     """Remove in-plan dependency edges that participate in a cycle."""
     id_set = {s.id for s in steps}
@@ -151,6 +186,13 @@ def normalize_plan_dag(
         if resolved != raw_deps:
             changed = True
         new_steps.append(step.model_copy(update={"dependencies": resolved or None}))
+
+    new_steps, inferred = _infer_linear_dependencies_when_mode_dependency(
+        new_steps,
+        execution_mode=decision.execution_mode,
+    )
+    if inferred:
+        changed = True
 
     normalized_steps = _drop_in_plan_cycles(new_steps)
     if normalized_steps is not new_steps:
