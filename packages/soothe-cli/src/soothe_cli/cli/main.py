@@ -15,6 +15,12 @@ from soothe_sdk.client.config import SOOTHE_HOME  # noqa: E402
 
 from soothe_cli.config.cli_config import CLIConfig  # noqa: E402
 from soothe_cli.config.loader import set_runtime_config  # noqa: E402
+from soothe_cli.tui.markdown_theme import (  # noqa: E402
+    DEFAULT_MARKDOWN_THEME,
+    REGISTRY,
+    load_markdown_theme_preference,
+    markdown_theme_help,
+)
 
 app = typer.Typer(
     name="soothe",
@@ -101,6 +107,16 @@ def main(
             help="Render assistant messages as Markdown in the TUI.",
         ),
     ] = True,
+    markdown_theme: Annotated[
+        str | None,
+        typer.Option(
+            "--markdown-theme",
+            help=(
+                "Markdown appearance preset for TUI cards "
+                f"({markdown_theme_help()}). Default: {DEFAULT_MARKDOWN_THEME}."
+            ),
+        ),
+    ] = None,
     soothe_home: Annotated[
         str | None,
         typer.Option("--soothe-home", help="Soothe home directory (default: ~/.soothe)."),
@@ -168,11 +184,22 @@ def main(
     if mode is not None and mode not in ("manual", "auto"):
         typer.echo(f"Invalid --mode {mode!r}; expected 'manual' or 'auto'.", err=True)
         raise typer.Exit(code=2)
+    if markdown_theme is not None and markdown_theme not in REGISTRY:
+        typer.echo(
+            f"Invalid --markdown-theme {markdown_theme!r}; "
+            f"expected one of: {markdown_theme_help()}.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    resolved_markdown_theme = (
+        markdown_theme if markdown_theme is not None else load_markdown_theme_preference()
+    )
     cli_cfg = CLIConfig(
         daemon_host=daemon_host,
         daemon_port=daemon_port,
         logging_level=log_level,
         render_markdown=render_markdown,
+        markdown_theme=resolved_markdown_theme,
         output_streaming_enabled=streaming,
         output_streaming_mode=streaming_mode,
         clarification_mode=mode,

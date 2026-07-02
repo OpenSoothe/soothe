@@ -5,7 +5,7 @@
 **Status**: Implemented
 **Kind**: Architecture Design
 **Created**: 2026-03-12
-**Updated**: 2026-06-26  
+**Updated**: 2026-07-02  
 **Related**: RFC-000, RFC-001, RFC-302, RFC-303, RFC-628 (step card display)
 
 ## Abstract
@@ -76,6 +76,28 @@ LangGraph `(namespace, mode, data)` 3-tuple:
 After `completed`, the runner emits **one** phased `goal_completion` chunk when `skip_goal_completion_wire_duplicate=False`. StrangeLoop sets the flag **true** only after a **successful streamed `synthesize`** (body already arrived on `messages` via `stream_event`). It stays **false** for **`ledger_direct`** and **`summary`** so **headless** stdout still receives an answer: execute-phase prose is suppressed there (IG-343), and without this replay there would be no `goal_completion` line to print.
 
 **Headless** (`--no-tui`): stdout shows loop-tagged assistant text only (`HeadlessCliRenderer`), following the same `messages` + `phase` contract. Slash routes such as `/research` or `/explore` set `preferred_subagent` as a planner hint; they do not bypass the streaming contract.
+
+### Markdown rendering (TUI)
+
+Assistant and skill markdown bodies render via **Rich** inside `AssistantMessage` / `SkillMessage` (not Textual's block-per-widget `Markdown` widget). Appearance is controlled by a **markdown theme preset** — independent from TUI chrome (`/theme`) but can track it.
+
+| Preset ID | Display label | Behavior |
+|-----------|---------------|----------|
+| `match-app` (default) | Match App Theme | Element colors from active TUI theme; code blocks use a bundled Pygments theme keyed by TUI theme name |
+| `langchain` | LangChain | Fixed LangChain dark palette |
+| `langchain-light` | LangChain Light | Fixed LangChain light palette |
+| `standard` | Standard | Neutral foreground-first styling; primary links |
+| `minimal` | Minimal | Subdued headings and links |
+
+**Configuration** (precedence: CLI → CLI client `~/SOOTHE_HOME/config/config.yml` → default):
+
+- CLI: `soothe --markdown-theme match-app` (global flag on root command)
+- TUI preferences file (`ui.markdown_theme` under `~/SOOTHE_HOME/config/config.yml` — **not** daemon repo `config/config.yml`)
+- Disable all markdown: `--no-render-markdown`
+
+**Surfaces**: all markdown-enabled assistant cards (including `goal_completion` synthesis), skill expanded bodies, and hydrated resume cards. Resume re-renders with the **current** preset (not per-message snapshot). Headless stdout remains plain text.
+
+**Module**: `soothe_cli.tui.markdown_theme` — registry, `build_markdown()`, Pygments mapping for `match-app`.
 
 ### Protocol Custom Events
 

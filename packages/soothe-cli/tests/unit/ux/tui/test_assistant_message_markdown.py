@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from soothe_cli.tui.markdown_theme import ThemedMarkdownRenderer
 from soothe_cli.tui.widgets.messages import (
     AssistantMessage,
     _rich_style_with_textual_selection,
@@ -44,15 +45,13 @@ async def test_constructor_render_markdown_override_disables_rich_markdown() -> 
     await msg.stop_stream()
 
     body.update.assert_called_with("I will complete this goal directly: read file")
-    from rich.markdown import Markdown as RichMarkdown
-
     for call in body.update.call_args_list:
-        assert not isinstance(call.args[0], RichMarkdown)
+        assert not isinstance(call.args[0], ThemedMarkdownRenderer)
 
 
 @pytest.mark.asyncio
-async def test_stop_stream_renders_content_to_body() -> None:
-    """stop_stream() renders final content via _render_to_body."""
+async def test_stop_stream_renders_themed_markdown_to_body() -> None:
+    """stop_stream() renders final content via configured markdown theme."""
     msg = AssistantMessage(id="asst-test")
     msg._content = "```python\nprint('hello')\n```"
     msg._streaming_active = True
@@ -60,19 +59,12 @@ async def test_stop_stream_renders_content_to_body() -> None:
     body = MagicMock()
     msg._body = body
 
-    with patch(
-        "soothe_cli.tui.widgets.messages.assistant._code_theme_for_app",
-        return_value="monokai",
-    ):
-        await msg.stop_stream()
+    await msg.stop_stream()
 
     assert not msg._streaming_active
     body.update.assert_called_once()
-    # Verify we passed a RichMarkdown instance
-    from rich.markdown import Markdown as RichMarkdown
-
     call_arg = body.update.call_args[0][0]
-    assert isinstance(call_arg, RichMarkdown)
+    assert isinstance(call_arg, ThemedMarkdownRenderer)
 
 
 @pytest.mark.asyncio
@@ -107,8 +99,8 @@ async def test_stop_stream_no_op_when_content_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_flush_renders_rich_markdown_to_body() -> None:
-    """_flush_pending_content renders accumulated content as RichMarkdown."""
+async def test_flush_renders_themed_markdown_to_body() -> None:
+    """_flush_pending_content renders accumulated content with markdown theme."""
     msg = AssistantMessage(id="asst-test")
     msg._content = "# Hello\n\nSome text"
     msg._pending_buffer = "Some text"
@@ -116,41 +108,28 @@ async def test_flush_renders_rich_markdown_to_body() -> None:
     body = MagicMock()
     msg._body = body
 
-    with patch(
-        "soothe_cli.tui.widgets.messages.assistant._code_theme_for_app",
-        return_value="monokai",
-    ):
-        await msg._flush_pending_content()
-
-    from rich.markdown import Markdown as RichMarkdown
+    await msg._flush_pending_content()
 
     assert msg._pending_buffer == ""
     body.update.assert_called_once()
     call_arg = body.update.call_args[0][0]
-    assert isinstance(call_arg, RichMarkdown)
+    assert isinstance(call_arg, ThemedMarkdownRenderer)
 
 
 @pytest.mark.asyncio
-async def test_set_content_hydration_uses_rich_markdown() -> None:
-    """set_content() (used by hydration) renders content as RichMarkdown."""
+async def test_set_content_hydration_uses_themed_markdown() -> None:
+    """set_content() (used by hydration) renders content with markdown theme."""
     msg = AssistantMessage(id="asst-test")
     msg._render_markdown = True
     msg._streaming_active = False
     body = MagicMock()
     msg._body = body
 
-    with patch(
-        "soothe_cli.tui.widgets.messages.assistant._code_theme_for_app",
-        return_value="monokai",
-    ):
-        await msg.set_content("# Hydrated\n\nContent here")
-
-    from rich.markdown import Markdown as RichMarkdown
+    await msg.set_content("# Hydrated\n\nContent here")
 
     assert msg._content == "# Hydrated\n\nContent here"
-    # stop_stream renders empty (no content yet), then set_content renders final
     last_call_arg = body.update.call_args[0][0]
-    assert isinstance(last_call_arg, RichMarkdown)
+    assert isinstance(last_call_arg, ThemedMarkdownRenderer)
 
 
 @pytest.mark.asyncio
@@ -188,14 +167,7 @@ def test_assistant_message_has_left_border() -> None:
 
 
 def test_selectable_markdown_body_render_line_annotates_offset_meta() -> None:
-    """`render_line` must add `offset` style meta to each segment.
-
-    Without it the compositor's `get_widget_and_offset_at` walks the line and
-    finds no segment with `offset` in its style meta, so click + drag never
-    resolves to a content offset and the screen drops the selection silently.
-    Regression: 'I will complete this…' and goal-completion 'Result …' cards
-    couldn't be selected with the mouse.
-    """
+    """`render_line` must add `offset` style meta to each segment."""
     from rich.segment import Segment
     from textual.strip import Strip
 
@@ -203,9 +175,6 @@ def test_selectable_markdown_body_render_line_annotates_offset_meta() -> None:
     raw = Strip([Segment("Hello world")])
     body._render_cache = type(body._render_cache)(body._render_cache.size, [raw])
 
-    # Bypass Widget.render_line() (which needs a mounted app) by feeding the
-    # raw strip directly through apply_offsets — same code path render_line
-    # delegates to.
     annotated = raw.apply_offsets(0, 0)
     segments_with_offset = [
         seg
@@ -216,19 +185,12 @@ def test_selectable_markdown_body_render_line_annotates_offset_meta() -> None:
 
 
 def test_selectable_markdown_body_extracts_text_from_render_cache() -> None:
-    """`_SelectableMarkdownBody.get_selection` returns visible text even when
-    the underlying renderable is a `rich.markdown.Markdown` instance.
-
-    Regression test for the perf refactor that swapped `textual.widgets.Markdown`
-    for `Static + RichMarkdown` and accidentally disabled copy-to-clipboard on
-    the goal-completion card.
-    """
+    """`_SelectableMarkdownBody.get_selection` returns visible text for themed markdown."""
     from rich.segment import Segment
     from textual.selection import Selection
     from textual.strip import Strip
 
     body = _SelectableMarkdownBody("", markup=False)
-    # Simulate two rendered lines from a RichMarkdown render
     body._render_cache = type(body._render_cache)(
         body._render_cache.size,
         [Strip([Segment("Result")]), Strip([Segment("Hello world")])],

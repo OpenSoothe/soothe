@@ -6,7 +6,6 @@ Each widget type is in its own module for better organization.
 
 from soothe_cli.tui.widgets.messages._helpers import (
     _assemble_card_header,
-    _code_theme_for_app,
     _get_tui_refresh_interval_ms,
     _is_widget_animation_visible,
     _mode_color,
@@ -44,7 +43,6 @@ from soothe_cli.tui.widgets.messages.user import (
 __all__ = [
     # Helpers
     "_assemble_card_header",
-    "_code_theme_for_app",
     "_get_tui_refresh_interval_ms",
     "_is_widget_animation_visible",
     "_mode_color",

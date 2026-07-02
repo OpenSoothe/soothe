@@ -15,6 +15,7 @@ def test_load_config_returns_defaults_when_no_runtime_config() -> None:
     assert cfg.daemon_port == 8765
     assert cfg.logging_level is None
     assert cfg.render_markdown is True
+    assert cfg.markdown_theme == "match-app"
 
 
 def test_load_config_returns_runtime_config() -> None:
@@ -57,3 +58,17 @@ def test_global_cli_flags_are_parsed() -> None:
     assert cfg.daemon_port == 7777
     assert cfg.logging_level == "WARNING"
     assert cfg.render_markdown is False
+
+
+def test_global_cli_markdown_theme_flag() -> None:
+    from typer.testing import CliRunner
+
+    from soothe_cli.cli.main import app
+    from soothe_cli.config.loader import load_config, reset_runtime_config
+
+    reset_runtime_config()
+    runner = CliRunner()
+    result = runner.invoke(app, ["--markdown-theme", "minimal", "help"])
+    assert result.exit_code == 0
+    assert load_config().markdown_theme == "minimal"
+    reset_runtime_config()

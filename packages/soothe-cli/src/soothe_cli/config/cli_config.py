@@ -29,6 +29,9 @@ class CLIConfig:
     render_markdown: bool = True
     """Render assistant messages as Markdown in TUI (default True)."""
 
+    markdown_theme: str = "match-app"
+    """Markdown appearance preset (``match-app``, ``langchain``, ``standard``, …)."""
+
     # Output streaming overrides (RFC-614)
     output_streaming_enabled: bool | None = None
     """Override daemon streaming enabled setting."""
