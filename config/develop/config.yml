@@ -40,7 +40,7 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "dashscope:kimi-k2.5"
+      default: "dashscope:glm-5"
       fast: "dashscope:kimi-k2.5"
       think: "dashscope:glm-5"
       image: "dashscope:kimi-k2.5"
