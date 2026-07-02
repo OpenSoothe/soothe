@@ -72,11 +72,6 @@ def build_continue_bootstrap_step_briefs(*, user_goal: str) -> ContinueBootstrap
     )
 
 
-def build_continue_bootstrap_step_description(*, user_goal: str) -> str:
-    """Return the bootstrap execute brief (``full_description``) for legacy callers."""
-    return build_continue_bootstrap_step_briefs(user_goal=user_goal).full_description
-
-
 def _message_phase(msg: Any) -> str | None:
     phase = getattr(msg, "phase", None)
     return phase if isinstance(phase, str) else None
@@ -284,7 +279,6 @@ __all__ = [
     "CONTINUATION_ASSESS_REASONING_MAX_CHARS",
     "ContinueBootstrapStepBriefs",
     "build_continue_bootstrap_step_briefs",
-    "build_continue_bootstrap_step_description",
     "build_continuation_execution_hints",
     "build_continuation_plan_prior_goal_completion",
     "build_prior_goal_completion_block",

@@ -17,7 +17,7 @@ from soothe.foundation.sloop.intention.models import (
     derive_task_complexity_from_intake,
 )
 from soothe.foundation.sloop.intention.prompts import (
-    INTAKE_CLASSIFICATION_RETRY_PROMPT,
+    INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT,
     INTAKE_CLASSIFICATION_SYSTEM_PROMPT,
 )
 
@@ -123,7 +123,7 @@ class TestIntakeClassificationPrompts:
 
     def test_retry_prompt_has_four_labels(self) -> None:
         for label in ("quiz", "trivial", "simple", "complex"):
-            assert label in INTAKE_CLASSIFICATION_RETRY_PROMPT
+            assert label in INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT
 
     def test_primary_prompt_biases_toward_complex(self) -> None:
         """When uncertain, the intake must prefer the more capable label (RFC-630 §9.3)."""
@@ -144,7 +144,7 @@ class TestIntakeClassificationPrompts:
         assert "task_complexity" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_retry_prompt_omits_task_complexity(self) -> None:
-        assert "task_complexity" not in INTAKE_CLASSIFICATION_RETRY_PROMPT
+        assert "task_complexity" not in INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT
 
     def test_primary_prompt_requests_first_person_reasoning(self) -> None:
         prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()

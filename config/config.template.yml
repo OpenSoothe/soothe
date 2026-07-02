@@ -59,9 +59,9 @@ agent:
   # Identity
   name: Soothe
   # Source: prompts/fragments/system/prompts/default_system_body.xml
-  # null also resolves to this body; tool guide is appended at runtime for the builtin default.
+  # Omit to use the built-in default body; tool guide is appended at runtime for the builtin default.
   # Custom value replaces body only (no tool guide); supports {assistant_name}.
-  system_prompt: null
+  # system_prompt: null
   workspace_instructions_max_chars: 8000
   goal_completion_mode: llm_only
   final_response: adaptive

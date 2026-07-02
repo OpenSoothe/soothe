@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Checkpoint persist + iteration_completed emission; advance iteration counter."""
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     state_manager = ctx.state_manager
     anchor_manager = ctx.anchor_manager

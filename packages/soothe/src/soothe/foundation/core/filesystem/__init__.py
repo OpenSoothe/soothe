@@ -47,14 +47,6 @@ from .protocol import (
     ReadResult,
     WriteResult,
 )
-from .rate_limiter import (
-    OperationRateLimiter,
-    RateLimitConfig,
-    RateLimiter,
-    RateLimitExceeded,
-    RateLimitStatus,
-    RateLimitStrategy,
-)
 from .unified import UnifiedFilesystem
 from .workspace import WorkspaceFilesystem
 
@@ -73,13 +65,6 @@ __all__ = [
     "PathValidationConfig",
     "SecurityConfig",
     "create_filesystem",
-    # Rate limiting
-    "RateLimiter",
-    "RateLimitConfig",
-    "RateLimitStatus",
-    "RateLimitStrategy",
-    "RateLimitExceeded",
-    "OperationRateLimiter",
     # Audit logging
     "AuditLogger",
     "AuditLoggerConfig",
