@@ -13,7 +13,6 @@ def test_execute_message_omits_response_language_hint() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Read README",
-        execution_hints=None,
     )
     assert "response_language_hint" not in msg.lower()
     assert "RESPONSE_LANGUAGE_HINT" not in msg
@@ -24,7 +23,6 @@ def test_execute_message_uses_execution_task_label() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Do the thing",
-        execution_hints=None,
     )
     assert msg.startswith("EXECUTION TASK:")
     assert "Do the thing" in msg
@@ -59,35 +57,55 @@ def test_execute_message_no_intent_section() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
-        execution_hints="Expected output: error list.",
+        expected_output="- error list",
     )
     assert "INTENT:" not in msg
 
 
 def test_execute_message_no_task_section() -> None:
-    """IG-508: TASK section removed, merged into EXECUTION HINTS."""
+    """IG-508: TASK section removed; instructions live in INSTRUCTIONS."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
-        execution_hints="Expected output: error list.",
+        expected_output="- error list",
     )
     assert not msg.startswith("TASK:")
     assert "\n\nTASK:" not in msg
 
 
-def test_execute_message_hints_contains_task_instructions() -> None:
-    """IG-508: Task instructions are merged into EXECUTION HINTS as list items."""
+def test_execute_message_instructions_section() -> None:
+    """Execute-step instructions use a dedicated INSTRUCTIONS section."""
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Analyze logs",
-        execution_hints="Expected output:\n- error list\n\nInstructions:\n- Execute the step",
+        expected_output="- error list",
+        instructions="- Execute the step",
     )
-    assert "EXECUTION HINTS:" in msg
+    assert "EXECUTION HINTS:" not in msg
+    assert "INSTRUCTIONS:" in msg
     assert "- Execute the step" in msg
+    assert "Expected output:" not in msg
+
+
+def test_execute_message_execution_metadata() -> None:
+    """Step id and TUI card title appear in EXECUTION METADATA after INSTRUCTIONS."""
+    builder = UserMessageBuilder()
+    msg = builder.build_execute_step_message(
+        "Full brief for the step",
+        step_id="WAA-01",
+        short_description="Scan repo",
+        instructions="- Run the scan",
+    )
+    assert "EXECUTION METADATA:" in msg
+    assert "step_id: WAA-01" in msg
+    assert "short_description: Scan repo" in msg
+    instructions_idx = msg.index("INSTRUCTIONS:")
+    metadata_idx = msg.index("EXECUTION METADATA:")
+    assert instructions_idx < metadata_idx
 
 
 def test_execute_message_prior_steps_section() -> None:
-    """Dependent steps include PRIOR STEPS between EXECUTION TASK and EXECUTION HINTS."""
+    """Dependent steps include PRIOR STEPS between EXECUTION TASK and INSTRUCTIONS."""
     from soothe.foundation.sloop.engine.step_predecessor_context import PriorStepSummary
     from soothe.foundation.sloop.prompts.user_message import render_prior_steps_tree
 
@@ -104,7 +122,7 @@ def test_execute_message_prior_steps_section() -> None:
     )
     msg = builder.build_execute_step_message(
         "Fix identified failures",
-        execution_hints="Instructions:\n- Apply fixes from prior outcomes",
+        instructions="- Apply fixes from prior outcomes",
         prior_steps=prior_steps,
     )
     assert "PRIOR STEPS:" in msg
@@ -113,8 +131,8 @@ def test_execute_message_prior_steps_section() -> None:
     assert "see prior assistant message" in msg
     task_idx = msg.index("EXECUTION TASK:")
     prior_idx = msg.index("PRIOR STEPS:")
-    hints_idx = msg.index("EXECUTION HINTS:")
-    assert task_idx < prior_idx < hints_idx
+    instructions_idx = msg.index("INSTRUCTIONS:")
+    assert task_idx < prior_idx < instructions_idx
 
 
 def test_execute_message_no_prior_step_evidence_section() -> None:
@@ -122,7 +140,7 @@ def test_execute_message_no_prior_step_evidence_section() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Fix identified failures",
-        execution_hints="Instructions:\n- Apply fixes from prior ledger evidence",
+        instructions="- Apply fixes from prior ledger evidence",
     )
     assert "PRIOR STEP EVIDENCE:" not in msg
     assert "Fix identified failures" in msg
@@ -249,7 +267,7 @@ def test_envelope_builder_direct_usage() -> None:
 
 
 def test_flatten_user_message_content_extracts_execution_task() -> None:
-    msg = "EXECUTION TASK:\nSearch the repo for *.yml config\n\nEXECUTION HINTS: some hints"
+    msg = "EXECUTION TASK:\nSearch the repo for *.yml config\n\nINSTRUCTIONS:\n- some hints"
     flat = flatten_user_message_content(msg)
     assert flat == "Search the repo for *.yml config"
 
@@ -261,7 +279,7 @@ def test_flatten_user_message_content_extracts_plan_goal() -> None:
 
 
 def test_flatten_user_message_content_extracts_legacy_execute_goal() -> None:
-    msg = "GOAL:\nSearch the repo for *.yml config\n\nEXECUTION HINTS: some hints"
+    msg = "GOAL:\nSearch the repo for *.yml config\n\nINSTRUCTIONS:\n- some hints"
     flat = flatten_user_message_content(msg)
     assert flat == "Search the repo for *.yml config"
 

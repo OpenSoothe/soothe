@@ -1,66 +1,79 @@
-"""Integration tests for StrangeLoop execution hints (RFC-214).
+"""Integration tests for StrangeLoop execution guidance (RFC-214).
 
-Execution hints are delivered in the per-turn user message envelope
-(``EXECUTION HINTS:`` section via ``UserMessageBuilder.build_execute_step_message``), not by mutating
-``system_prompt``.
+Execution guidance is delivered in the per-turn user message envelope
+(``EXPECTED OUTPUT`` / ``INSTRUCTIONS`` via ``UserMessageBuilder.build_execute_step_message``),
+not by mutating ``system_prompt``.
 """
 
 from __future__ import annotations
 
+from soothe.foundation.sloop.engine.step_predecessor_context import (
+    ExecuteStepEnvelopeBody,
+    build_dependent_execution_hints,
+)
 from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
+from soothe.foundation.sloop.state.schemas import StepAction
 
 
-def _execution_hints_text(*, subagent: str | None, expected_output: str | None) -> str | None:
-    """Build the same hint string as ``executor.py`` (single-step and wave paths)."""
-    hints_parts: list[str] = []
-    if subagent:
-        hints_parts.append(f"Suggested subagent: {subagent}")
-    if expected_output:
-        hints_parts.append(f"Expected output: {expected_output}")
-    if not hints_parts:
-        return None
-    return ". ".join(hints_parts) + ". Consider using the suggested approach first."
+def _envelope_body(*, subagent: str | None, expected_output: str | None) -> ExecuteStepEnvelopeBody:
+    """Build the same guidance as ``executor.py`` for a root step without dependencies."""
+    return build_dependent_execution_hints(
+        StepAction(id="01", description="Step"),
+        has_predecessor_evidence=False,
+        wire_subagent=subagent,
+        workspace=None,
+        expected_output=expected_output,
+    )
 
 
-class TestExecutionHintsEnvelopeIntegration:
-    """RFC-214: hints in user envelope via UserMessageBuilder."""
+class TestExecutionGuidanceEnvelopeIntegration:
+    """RFC-214: guidance in user envelope via UserMessageBuilder."""
 
     def test_envelope_includes_subagent_and_expected_output(self) -> None:
-        """Executor-format hints appear inside EXECUTION HINTS: section."""
-        hints = _execution_hints_text(subagent="tacitus", expected_output="Page summary")
-        assert hints is not None
+        """Executor-format guidance appears in EXPECTED OUTPUT and INSTRUCTIONS sections."""
+        body = _envelope_body(subagent="tacitus", expected_output="Page summary")
         builder = UserMessageBuilder()
         envelope = builder.build_execute_step_message(
             "Open the page",
-            execution_hints=hints,
+            step_id="01",
+            short_description="Open the page",
+            expected_output=body.expected_output,
+            instructions=body.instructions,
         )
-        assert "EXECUTION HINTS:" in envelope
+        assert "EXECUTION HINTS:" not in envelope
+        assert "EXPECTED OUTPUT:" in envelope
+        assert "INSTRUCTIONS:" in envelope
         assert "Suggested subagent: tacitus" in envelope
-        assert "Expected output: Page summary" in envelope
-        assert "Consider using the suggested approach first" in envelope
+        assert "Page summary" in envelope
+        assert "EXECUTION METADATA:" in envelope
+        assert "step_id: 01" in envelope
         task_idx = envelope.index("EXECUTION TASK:")
-        hints_idx = envelope.index("EXECUTION HINTS:")
-        assert 0 <= task_idx < hints_idx
+        expected_idx = envelope.index("EXPECTED OUTPUT:")
+        instructions_idx = envelope.index("INSTRUCTIONS:")
+        metadata_idx = envelope.index("EXECUTION METADATA:")
+        assert task_idx < expected_idx < instructions_idx < metadata_idx
 
     def test_envelope_expected_output_only(self) -> None:
-        """Hints may omit subagent when only expected_output is set."""
-        hints = _execution_hints_text(subagent=None, expected_output="File contents")
-        assert hints is not None
+        """Guidance may omit subagent when only expected_output is set."""
+        body = _envelope_body(subagent=None, expected_output="File contents")
         builder = UserMessageBuilder()
         envelope = builder.build_execute_step_message(
             "Read file",
-            execution_hints=hints,
+            expected_output=body.expected_output,
+            instructions=body.instructions,
         )
-        assert "EXECUTION HINTS:" in envelope
-        assert "Expected output: File contents" in envelope
+        assert "EXECUTION HINTS:" not in envelope
+        assert "EXPECTED OUTPUT:" in envelope
+        assert "File contents" in envelope
         assert "Suggested subagent:" not in envelope
 
-    def test_envelope_omits_hints_block_when_empty(self) -> None:
-        """No step metadata → no EXECUTION HINTS: section."""
+    def test_envelope_omits_guidance_sections_when_empty(self) -> None:
+        """No step metadata → no EXPECTED OUTPUT or INSTRUCTIONS sections."""
         builder = UserMessageBuilder()
         envelope = builder.build_execute_step_message(
             "Plain step",
-            execution_hints=None,
         )
         assert "EXECUTION HINTS:" not in envelope
+        assert "EXPECTED OUTPUT:" not in envelope
+        assert "INSTRUCTIONS:" not in envelope
         assert "EXECUTION TASK:" in envelope

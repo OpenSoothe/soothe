@@ -367,7 +367,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Scenario guidance
 
         NOT in system prompt (moved to user message):
-        - Execution hints → EXECUTION HINTS:
+        - Execution hints → EXPECTED OUTPUT / INSTRUCTIONS / EXECUTION METADATA in user envelope
         - Current goal context → ledger / plan turns (not repeated on execute-step message)
         - Per-turn recalled memories → <RETRIEVED_KNOWLEDGE><MEMORY>
 

@@ -211,6 +211,7 @@ class Executor:
         proposal_queue: Any | None = None,  # RFC-204 Group C
         context_engine: Any | None = None,  # RFC-624 Phase 4
         step_brief_hydrator: Any | None = None,
+        checkpoint: Any | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -255,6 +256,7 @@ class Executor:
         self._proposal_queue = proposal_queue
         self._context_engine = context_engine
         self._step_brief_hydrator = step_brief_hydrator
+        self._checkpoint = checkpoint
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -394,13 +396,25 @@ class Executor:
         loop_state: LoopState | None,
         wire_subagent: str | None,
         workspace: str | None,
+        cross_goal_projected: bool = False,
     ) -> str:
-        """Build the execute-step user envelope (task + hints; predecessor context via ledger)."""
-        from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
+        """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
+        from soothe.foundation.sloop.prompts.builder import _prior_goals_from_checkpoint
+        from soothe.foundation.sloop.prompts.user_message import (
+            UserMessageBuilder,
+            _render_prior_goals_tree,
+        )
 
         prior_goal_completion = ""
         has_predecessor_ledger = bool(step.dependencies or [])
         prior_steps = ""
+        prior_goals = ""
+        exec_cfg = None
+        if self._config is not None:
+            exec_cfg = getattr(
+                getattr(self._config.agent, "loop", None), "execute_prompt_ledger", None
+            )
+
         if (
             loop_state is not None
             and loop_state.current_decision is not None
@@ -412,21 +426,36 @@ class Executor:
                 loop_state,
                 evidence_in_ledger=True,
             )
+        if cross_goal_projected and self._checkpoint is not None:
+            tail_k = 1
+            if exec_cfg is not None:
+                tail_k = max(1, int(getattr(exec_cfg, "cross_goal_completion_tail", 3) or 3))
+            summaries = _prior_goals_from_checkpoint(self._checkpoint, exclude_goal_id=None)
+            if summaries:
+                prior_goals = _render_prior_goals_tree(
+                    summaries[-tail_k:],
+                    completion_in_ledger=True,
+                )
         if (
             loop_state is not None
             and getattr(loop_state, "continue_loop", False)
             and loop_state.iteration == 0
-            and not (step.dependencies or [])
+            and not cross_goal_projected
         ):
-            prior_goal_completion = build_prior_goal_completion_block(loop_state.loop_messages)
+            prior_goal_completion = build_prior_goal_completion_block(
+                loop_state.loop_messages,
+                checkpoint=self._checkpoint,
+            )
 
         step_goal_text = step.full_description or step.description
-        if prior_goal_completion.strip():
-            execution_hints = build_continuation_execution_hints(
+        if prior_goal_completion.strip() or (
+            cross_goal_projected and loop_state is not None and loop_state.continue_loop
+        ):
+            envelope_body = build_continuation_execution_hints(
                 has_prior_goal_completion=True,
             )
         else:
-            execution_hints = build_dependent_execution_hints(
+            envelope_body = build_dependent_execution_hints(
                 step,
                 has_predecessor_evidence=has_predecessor_ledger,
                 wire_subagent=wire_subagent,
@@ -435,8 +464,12 @@ class Executor:
             )
         return UserMessageBuilder().build_execute_step_message(
             step_goal_text,
-            execution_hints=execution_hints,
+            step_id=step.id,
+            short_description=step.description,
+            expected_output=envelope_body.expected_output,
+            instructions=envelope_body.instructions,
             prior_steps=prior_steps or None,
+            prior_goals=prior_goals or None,
             prior_goal_completion=prior_goal_completion or None,
             skill_context=loop_state.skill_context if loop_state else None,
         )
@@ -1578,28 +1611,31 @@ class Executor:
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
-            # Build graph input: predecessor ledger projection + current envelope.
-            # Dependent steps: transitive-predecessor execute_step ledger replay.
-            # Loop continuation bootstrap: PRIOR GOAL COMPLETION in envelope only.
+            # Build graph input: Slice A (cross-goal) + Slice B (intra-goal deps) + envelope.
             graph_input_messages: list[BaseMessage] = []
+            cross_goal_projected = False
             if loop_state is not None and loop_state.current_decision is not None:
                 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-                    project_predecessor_execute_ledger_for_step,
+                    project_execute_step_graph_input,
                 )
 
-                graph_input_messages.extend(
-                    project_predecessor_execute_ledger_for_step(
-                        loop_state.loop_messages,
-                        step,
-                        loop_state.current_decision,
-                    )
+                projected = project_execute_step_graph_input(
+                    loop_state.loop_messages,
+                    state=loop_state,
+                    step=step,
+                    decision=loop_state.current_decision,
+                    checkpoint=self._checkpoint,
+                    soothe_config=self._config,
                 )
+                graph_input_messages.extend(projected.messages)
+                cross_goal_projected = projected.cross_goal_projected
 
             envelope = self._compose_execute_step_envelope(
                 step,
                 loop_state=loop_state,
                 wire_subagent=wire_subagent,
                 workspace=workspace,
+                cross_goal_projected=cross_goal_projected,
             )
             logger.debug("[Human Message] %s", log_preview(envelope, chars=150))
             human_msg = LoopHumanMessage(
