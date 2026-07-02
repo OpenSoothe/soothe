@@ -6,9 +6,9 @@ checkpoint namespace starts empty. This module provides helpers for:
 - **Transitive dependency closure** (``transitive_dependency_step_ids``): used by
   ``predecessor_messages_for_step()`` / ``project_predecessor_execute_ledger_for_step()``
   for same-goal dependent steps.
-- **Legacy ledger replay** (``prior_loop_execute_messages()``): retained for tests and
-  tooling; loop-continuation bootstrap now grounds via ``PRIOR GOAL COMPLETION`` in the
-  execute envelope (``continuation_context``) instead of replaying prior execute rows.
+
+Loop-continuation bootstrap grounds via ``PRIOR GOAL COMPLETION`` in the execute envelope
+(``continuation_context``), not by replaying prior execute rows.
 
 Same-goal DAG dependent steps ground predecessors via projected execute-step ledger rows
 (RFC-214 §3.1); the current-step envelope carries only the task and hints.
@@ -77,42 +77,6 @@ def transitive_dependency_step_ids(step: StepAction, decision: AgentDecision) ->
                 if ds and ds not in acc:
                     stack.append(ds)
     return frozenset(acc)
-
-
-def prior_loop_execute_messages(
-    loop_messages: list[Any],
-    *,
-    max_messages: int = DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
-) -> list[BaseMessage]:
-    """Return deep-copied ``execute_step`` ledger rows for loop-continuation bootstrap.
-
-    Used by the executor when a bootstrap step (no dependencies) runs as the first
-    step of a continuation goal. Unlike ``predecessor_execute_messages_for_branch``,
-    this does not filter by step_id — it replays ALL prior execute_step rows
-    from ``LoopState.loop_messages`` (synced from CE ledger for multi-goal context),
-    so the agent sees the prior goal's conversation as context.
-
-    Args:
-        loop_messages: ``LoopState.loop_messages`` ledger (synced from CE or seeded from prior goal).
-        max_messages: Hard cap on copied messages.
-
-    Returns:
-        Messages to prepend before the bootstrap step's execute envelope, in ledger order.
-    """
-    unlimited = max_messages <= 0
-
-    out: list[BaseMessage] = []
-    for msg in loop_messages:
-        if getattr(msg, "phase", None) != "execute_step":
-            continue
-        out.append(_deep_copy_message(msg))
-        if (not unlimited) and len(out) >= max_messages:
-            logger.debug(
-                "[LoopContinuation] truncated prior ledger slice at max_messages=%d",
-                max_messages,
-            )
-            break
-    return out
 
 
 def predecessor_execute_messages_for_branch(

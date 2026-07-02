@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Allocate plan ids, merge keep/new semantics, stash decision on scratch."""
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     plan_result = ctx.scratch.plan_result
 

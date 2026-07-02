@@ -102,11 +102,6 @@ def _has_prior_goal_for_continuation(ctx: LoopRuntimeContext) -> bool:
     return False
 
 
-def _has_prior_completed_goal(ctx: LoopRuntimeContext) -> bool:
-    """Check CE DAG for at least one completed prior goal (legacy alias)."""
-    return _has_prior_goal_for_continuation(ctx)
-
-
 def build_continue_loop_bootstrap_plan(
     goal: str,
     *,
@@ -168,7 +163,6 @@ def build_continue_loop_bootstrap_plan(
 async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Run assess phase and decide whether generation is needed."""
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     plan_manager = ctx.plan_manager
     context = strange_loop._build_plan_context(state)

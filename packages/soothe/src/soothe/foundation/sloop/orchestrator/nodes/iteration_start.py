@@ -13,7 +13,6 @@ from ..runtime_context import LoopRuntimeContext
 async def node_iteration_start(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Emit iteration start, capture start anchor, reset per-iteration planner scratch."""
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
 
     ctx.scratch = LoopPhaseScratch(iteration_perf_start=time.perf_counter())
