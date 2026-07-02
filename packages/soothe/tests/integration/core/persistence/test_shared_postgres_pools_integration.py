@@ -128,11 +128,15 @@ async def _reset_pool_singletons() -> None:
     await SharedCheckpointerPool.close_shared_instance()
     agent_mod._shared_pool = None
     cp_mod._shared_checkpointer_pool = None
+    cp_mod._checkpointer_setup_done = False
+    cp_mod._setup_waiter = None
     yield
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()
     agent_mod._shared_pool = None
     cp_mod._shared_checkpointer_pool = None
+    cp_mod._checkpointer_setup_done = False
+    cp_mod._setup_waiter = None
 
 
 @pytest.mark.asyncio

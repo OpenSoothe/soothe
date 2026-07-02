@@ -77,10 +77,14 @@ async def _reset_singletons() -> None:
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()
     cp_mod._shared_checkpointer_pool = None
+    cp_mod._checkpointer_setup_done = False
+    cp_mod._setup_waiter = None
     yield
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()
     cp_mod._shared_checkpointer_pool = None
+    cp_mod._checkpointer_setup_done = False
+    cp_mod._setup_waiter = None
 
 
 def _thread_worker_init_checkpointer(config: SootheConfig) -> object:
