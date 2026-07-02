@@ -68,11 +68,8 @@ def test_new_goal_projection_excludes_execute_step() -> None:
 def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> None:
     prior = GoalExecutionRecord(
         goal_id="g0",
-        goal_text="analyze trace",
         thread_id="tid",
         status="completed",
-        goal_completion="Checkpoint completion body with recommendations.",
-        loop_messages=[],
         started_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),
     )
@@ -91,7 +88,7 @@ def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> No
     assert len(msgs) == 4  # system + 2 goal_completion ledger + task human
     human = msgs[-1].content
     assert "PRIOR GOALS:" in human
-    assert "GOAL: analyze trace (completed)" in human
+    assert "GOAL: g0 (completed)" in human
     assert "outcome: see prior assistant message" in human
     assert "PRIOR GOAL COMPLETION:" not in human
     assert "Checkpoint completion body" not in human

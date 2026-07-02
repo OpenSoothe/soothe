@@ -7,7 +7,7 @@ Two failure modes show up in practice (trace 19c3ed3):
 1. The recorded AI dump carries the prior `assessment_reasoning` verbatim.
    Structured-output models echo it on the next assess, producing repeated
    reasoning even when fresh evidence has arrived. (Ablation A2.)
-2. The recorded human carries `GOAL:` (or legacy `<USER_QUERY>`). The duplicated
+2. The recorded human carries `GOAL:` (legacy rows may use ``GOAL RECAP:``). The duplicated
    goal anchors recency away from the latest evidence (ablation D1).
 
 Volatile timestamps live on execute CoreAgent system prompts (``<TIMESTAMP>`` XML footer), not
@@ -20,23 +20,12 @@ recorded so the live LLM call still sees the full rendered message — only the
 
 from __future__ import annotations
 
-import re
 from typing import Any
-
-# Legacy format: <CONTEXT_INFO>...</CONTEXT_INFO> (multi-line block, migration)
-_CONTEXT_INFO_RE = re.compile(
-    r"\n?<CONTEXT_INFO>.*?</CONTEXT_INFO>\n?",
-    re.DOTALL,
-)
 
 # D1 — Collapse the recorded GOAL: into a non-anchoring GOAL RECAP: so
 # the next turn's GOAL: is the only one the model sees as a directive.
 _GOAL_PREFIX = "GOAL:"
 _GOAL_RECAP_PREFIX = "GOAL RECAP:"
-_USER_QUERY_OPEN = "<USER_QUERY>"
-_USER_QUERY_CLOSE = "</USER_QUERY>"
-_GOAL_RECAP_OPEN = "<GOAL_RECAP>"
-_GOAL_RECAP_CLOSE = "</GOAL_RECAP>"
 
 # A2 — fields preserved on the recorded plan-assess AI dump.
 _PLAN_ASSESS_LEDGER_FIELDS: frozenset[str] = frozenset(
@@ -47,8 +36,7 @@ _PLAN_ASSESS_LEDGER_FIELDS: frozenset[str] = frozenset(
 def compact_planning_human_content(content: str) -> str:
     """Return ledger-ready content for a recorded plan-phase HumanMessage.
 
-    Applies D1 (rewrite ``GOAL:``/``<USER_QUERY>`` to non-anchoring recap) and
-    strips legacy ``<CONTEXT_INFO>`` blocks when present.
+    Applies D1 (rewrite ``GOAL:`` to non-anchoring recap) when present.
 
     Args:
         content: Rendered envelope text from ``UserMessageBuilder``.
@@ -59,13 +47,8 @@ def compact_planning_human_content(content: str) -> str:
     if not isinstance(content, str) or not content:
         return content
 
-    stripped = _CONTEXT_INFO_RE.sub("", content) if _CONTEXT_INFO_RE.search(content) else content
-
-    if _USER_QUERY_OPEN in stripped:
-        stripped = stripped.replace(_USER_QUERY_OPEN, _GOAL_RECAP_OPEN).replace(
-            _USER_QUERY_CLOSE, _GOAL_RECAP_CLOSE
-        )
-    elif stripped.startswith(_GOAL_PREFIX + "\n") or "\n" + _GOAL_PREFIX in stripped:
+    stripped = content
+    if stripped.startswith(_GOAL_PREFIX + "\n") or "\n" + _GOAL_PREFIX in stripped:
         stripped = stripped.replace(_GOAL_PREFIX, _GOAL_RECAP_PREFIX, 1)
 
     return stripped.rstrip() + "\n" if stripped.endswith(("\n", "\r")) else stripped.rstrip()

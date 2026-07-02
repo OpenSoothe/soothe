@@ -293,6 +293,7 @@ agent:
   # CoreAgent cold-start — lazy_core_agent defers graph compile (AgentRuntimeConfig)
   runtime:
     lazy_core_agent: true
+    general_purpose_subagent: false
   # ask_user interrupt relay: auto (veritas) or manual TUI (ClarificationConfig)
   clarification:
     auto_policy: veritas

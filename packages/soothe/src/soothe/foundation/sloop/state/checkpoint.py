@@ -139,17 +139,12 @@ class GoalExecutionRecord(BaseModel):
     - evidence_ledger → not populated after clear_goal_state()
     - current_plan → clear_goal_state() sets None before finalize
 
-    The checkpoint goal_history is now a lightweight index. CE DAG is the
+    The checkpoint goal_history is a lightweight execution index. CE DAG is the
     real data store for goal/step/ledger state.
-
-    RFC-626 Phase 3: goal_text, plan_revision_count, goal_completion removed.
-    Use GoalIndexEntry for schema 5.0 checkpoints. GoalExecutionRecord retained
-    for backward compatibility with schema 3.x/4.x.
     """
 
     # Identity (RFC-216: goal_id independent of thread)
     goal_id: str  # "{loop_id}_goal_{seq}"
-    goal_text: str  # DEPRECATED in schema 5.0 — recovered from CE GoalNode
     thread_id: str  # RFC-216: which thread executed this goal
 
     # Execution state
@@ -157,11 +152,7 @@ class GoalExecutionRecord(BaseModel):
     max_iterations: int = DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
     status: Literal["running", "completed", "failed", "cancelled"] = "running"
 
-    # Plan revision tracking (still useful for monitoring)
-    plan_revision_count: int = 0  # DEPRECATED in schema 5.0
-
-    # Goal output (kept for checkpoint-level summary)
-    goal_completion: str = ""  # DEPRECATED in schema 5.0 — recovered from CE GoalNode
+    plan_revision_count: int = 0
 
     # Metrics
     duration_ms: int = 0
@@ -272,8 +263,19 @@ def normalize_checkpoint_data(
     out.setdefault("thread_switch_pending", False)
 
     # Schema version handling
-    schema_version = out.get("schema_version", "3.4")
+    schema_version = out.get("schema_version", "5.0")
     out.setdefault("schema_version", schema_version)
+
+    # Strip legacy goal content fields from goal_history (schema 5.0+).
+    if schema_version >= "5.0" and out.get("goal_history"):
+        slim_history: list[dict[str, Any]] = []
+        for item in out["goal_history"]:
+            if not isinstance(item, dict):
+                slim_history.append(item)
+                continue
+            slim = {k: v for k, v in item.items() if k not in ("goal_text", "goal_completion")}
+            slim_history.append(slim)
+        out["goal_history"] = slim_history
 
     # RFC-626 Phase 3: execution_checkpoint defaults for schema 5.0
     if schema_version == "5.0" and "execution_checkpoint" not in out:

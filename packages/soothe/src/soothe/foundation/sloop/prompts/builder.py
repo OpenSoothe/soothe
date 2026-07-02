@@ -34,7 +34,7 @@ def _prior_goals_from_checkpoint(
     *,
     exclude_goal_id: str | None,
 ) -> list[Any]:
-    """Build ``PriorGoalSummary`` rows from checkpoint goal history for envelope trees."""
+    """Build ``PriorGoalSummary`` rows from checkpoint goal index (metadata only)."""
     from soothe.foundation.context.projection import PriorGoalSummary
 
     if checkpoint is None:
@@ -45,16 +45,13 @@ def _prior_goals_from_checkpoint(
             continue
         if rec.status not in ("completed", "cancelled", "failed"):
             continue
-        description = (rec.goal_text or "").strip()
-        if not description:
-            continue
         out.append(
             PriorGoalSummary(
                 goal_id=rec.goal_id,
-                description=description,
+                description=rec.goal_id,
                 status=rec.status,
                 step_summary="",
-                completion_text=(rec.goal_completion or "").strip(),
+                completion_text="",
             )
         )
     return out
@@ -66,24 +63,9 @@ def _enrich_prior_goals(
     *,
     exclude_goal_id: str | None,
 ) -> list[Any]:
-    """Fill missing ``completion_text`` from checkpoint goal records."""
-    if not prior_goals or checkpoint is None:
-        return prior_goals
-    from soothe.foundation.sloop.engine.continuation_context import (
-        checkpoint_completions_by_goal_text,
-    )
-
-    by_text = checkpoint_completions_by_goal_text(checkpoint, exclude_goal_id=exclude_goal_id)
-    enriched: list[Any] = []
-    for pg in prior_goals:
-        completion = (pg.completion_text or "").strip()
-        if not completion:
-            completion = by_text.get((pg.description or "").strip(), "")
-        if completion and completion != (pg.completion_text or ""):
-            enriched.append(pg.model_copy(update={"completion_text": completion}))
-        else:
-            enriched.append(pg)
-    return enriched
+    """Return prior goals unchanged — completion text is resolved from CE/ledger."""
+    _ = checkpoint, exclude_goal_id
+    return prior_goals
 
 
 def _format_dag_context(dag_ctx: Any) -> str:

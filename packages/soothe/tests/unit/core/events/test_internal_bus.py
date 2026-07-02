@@ -2,11 +2,7 @@
 
 import pytest
 
-from soothe.foundation.events.internal_bus import (
-    InternalEventBus,
-    get_internal_bus,
-    reset_internal_bus,
-)
+from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_COMPLETED,
     INTERNAL_GOAL_STATE_CHANGED,
@@ -158,24 +154,3 @@ class TestInternalEventBus:
 
         bus.subscribe(INTERNAL_GOAL_COMPLETED, handler)
         assert bus.has_subscribers(INTERNAL_GOAL_COMPLETED)
-
-
-class TestSingletonBus:
-    """Tests for singleton InternalEventBus."""
-
-    def test_get_internal_bus_returns_singleton(self) -> None:
-        """Test get_internal_bus returns same instance."""
-        reset_internal_bus()
-
-        bus1 = get_internal_bus()
-        bus2 = get_internal_bus()
-
-        assert bus1 is bus2
-
-    def test_reset_internal_bus(self) -> None:
-        """Test reset_internal_bus clears singleton."""
-        bus1 = get_internal_bus()
-        reset_internal_bus()
-        bus2 = get_internal_bus()
-
-        assert bus1 is not bus2

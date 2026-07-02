@@ -11,6 +11,8 @@ from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 
+from .fakes import IdleFakeFactory
+
 
 def _mock_consensus_model(*, decision: str, reasoning: str) -> AsyncMock:
     mock_model = AsyncMock()
@@ -31,6 +33,7 @@ async def test_short_evidence_triggers_send_back() -> None:
             decision="send_back",
             reasoning="Evidence is too short to verify completion.",
         ),
+        runner_factory=IdleFakeFactory(),
     )
     goal = await svc.submit_task("short evidence test", max_send_backs=3)
     ce.claim_goal(goal.id, loop_id="w1")

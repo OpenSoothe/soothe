@@ -26,6 +26,7 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
 )
 from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
+from soothe.foundation.sloop.utils.messages import last_ledger_ai_content
 
 from ..runtime_context import LoopRuntimeContext
 from ..state import PLAN_ROUTE_GOAL_DONE
@@ -323,7 +324,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             decision=None,
             next_action="Goal achieved successfully",
             require_goal_completion=require_completion,
-            full_output=state.last_execute_assistant_text,
+            full_output=last_ledger_ai_content(state) or None,
         )
         plan_result = strange_loop.plan_phase.finalize_plan_result(
             state=state,

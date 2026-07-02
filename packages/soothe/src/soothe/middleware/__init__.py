@@ -9,7 +9,6 @@ This package provides middleware implementations:
 - PerTurnModelMiddleware: Per-stream model override for daemon/TUI
 - SootheFilesystemMiddleware: Extended filesystem tools middleware
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
-- FileLockMiddleware: File lock conflict resolution for autopilot mode (RFC-222)
 - MCPToolSearchMiddleware: MCP progressive disclosure telemetry (RFC-412)
 - ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-511)
 
@@ -30,7 +29,6 @@ if TYPE_CHECKING:
     )
     from soothe.middleware._utils import create_llm_call_metadata as create_llm_call_metadata
     from soothe.middleware.code_interpreter import CodeInterpreterMiddleware
-    from soothe.middleware.file_lock import FileLockMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.identity import IdentityMiddleware
     from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
@@ -51,7 +49,6 @@ if TYPE_CHECKING:
 __all__ = [
     "AKSKConfig",
     "CodeInterpreterMiddleware",
-    "FileLockMiddleware",
     "IdentityConfig",
     "IdentityMiddleware",
     "IdentityRuntime",
@@ -85,7 +82,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "CodeInterpreterMiddleware",
     ),
     "create_llm_call_metadata": ("soothe.middleware._utils", "create_llm_call_metadata"),
-    "FileLockMiddleware": ("soothe.middleware.file_lock", "FileLockMiddleware"),
     "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
     "IdentityConfig": ("soothe.middleware.identity", "IdentityConfig"),
     "IdentityMiddleware": ("soothe.middleware.identity", "IdentityMiddleware"),

@@ -29,7 +29,7 @@ from soothe.foundation.sloop.utils.json_parsing import (
     _strip_markdown_json_fence,
     _try_parse_json_dict,
 )
-from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+from soothe.foundation.sloop.utils.messages import LoopHumanMessage, last_ledger_ai_content
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.reflection import (
     _default_agent_decision,
@@ -1417,7 +1417,7 @@ class LLMPlanner:
                 decision=None,
                 next_action="Goal achieved successfully",
                 require_goal_completion=require_completion,
-                full_output=state.last_execute_assistant_text,
+                full_output=last_ledger_ai_content(state) or None,
             )
 
         if (
@@ -1711,7 +1711,7 @@ class LLMPlanner:
                         decision=None,
                         next_action="Goal achieved successfully",
                         require_goal_completion=require_completion,
-                        full_output=state.last_execute_assistant_text,
+                        full_output=last_ledger_ai_content(state) or None,
                     )
                 else:
                     # RFC-630: the legacy simple-query bypass (prefixed 1-step

@@ -23,7 +23,6 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.autopilot.service.loop_pool import LoopHandle, LoopPool
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode
 from soothe.foundation.events.internal_bus import InternalEventBus
@@ -42,7 +41,6 @@ from soothe.foundation.events.internal_events import (
     InternalLoopIdleEvent,
     InternalLoopPoolChangedEvent,
     InternalLoopReleasedEvent,
-    InternalLoopSpawnedEvent,
 )
 
 if TYPE_CHECKING:
@@ -86,7 +84,7 @@ class AutopilotService:
         *,
         monitor: AutopilotMonitor | None = None,
         subscribe_to_bus: bool = True,
-        runner_factory: Any | None = None,
+        runner_factory: Any,
         workspace_reservation: Any | None = None,
         consensus_model: Any | None = None,
         goal_persist_store: Any | None = None,
@@ -109,12 +107,9 @@ class AutopilotService:
                 instance must pass ``subscribe_to_bus=False`` to avoid
                 double-handling every event. Phase D will retire the
                 per-runner instance and the daemon's will start subscribing.
-            runner_factory: Optional ``LoopRunnerFactory``-shaped object
-                exposing ``create_runner(loop_id) -> LoopRunnerProtocol``.
-                When provided (Phase C+), the scheduling loop dispatches
-                goals to real subprocess workers via a ``WorkerPool``. When
-                ``None`` (legacy / per-runner usage), the service uses the
-                in-memory ``LoopPool`` which never spawns workers.
+            runner_factory: ``LoopRunnerFactory``-shaped object exposing
+                ``create_runner(loop_id) -> LoopRunnerProtocol``. Required for
+                worker-pool dispatch (RFC-222 Phase C+).
             workspace_reservation: Optional ``WorkspaceReservation`` gate.
                 When provided, the scheduling loop refuses to dispatch a
                 goal whose workspace overlaps an active reservation. When
@@ -124,11 +119,13 @@ class AutopilotService:
             goal_persist_store: Optional ``AsyncPersistStore`` for persisting
                 the ContextEngine DAG snapshot across daemon restarts.
         """
+        if runner_factory is None:
+            msg = "runner_factory is required"
+            raise ValueError(msg)
         self._ce = ce
         self._monitor = monitor
         self._config = config
         self._internal_bus = internal_bus if internal_bus is not None else InternalEventBus()
-        self._loop_pool = LoopPool(max_loops=self._config.max_loops)
         self._running = False
         self._dreaming = False
         self._scheduling_task: asyncio.Task | None = None
@@ -144,13 +141,11 @@ class AutopilotService:
         self._assignment_lock = asyncio.Lock()
         self._execution_semaphore = asyncio.Semaphore(self._config.max_parallel_goals)
 
-        # RFC-222 revised (Phase C): optional WorkerPool-driven dispatch.
-        # When ``runner_factory`` is supplied, ``WorkerPool`` wraps it and
-        # the scheduling loop uses real subprocess dispatch. When None, the
-        # legacy in-memory LoopPool path runs (used by the per-runner
-        # AutopilotService instance for backward compat).
+        # RFC-222 revised (Phase C): WorkerPool-driven dispatch.
         self._runner_factory = runner_factory
-        self._worker_pool: Any = None  # WorkerPool | None
+        from soothe.foundation.autopilot.service.worker_pool import WorkerPool
+
+        self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
         self._workspace_reservation = workspace_reservation
         self._consensus_model = consensus_model
         self._goal_persist_store = goal_persist_store
@@ -158,23 +153,10 @@ class AutopilotService:
         self._context_store: Any = None
         self._context_projector: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
-        if runner_factory is not None:
-            from soothe.foundation.autopilot.service.worker_pool import WorkerPool
-
-            self._worker_pool = WorkerPool(factory=runner_factory, max_loops=self._config.max_loops)
 
         if subscribe_to_bus:
             self._setup_subscriptions()
             self._subscribed = True
-
-    @property
-    def has_real_dispatch(self) -> bool:
-        """True when a ``runner_factory`` was provided (RFC-222 Phase C+).
-
-        When True, the scheduling loop uses ``WorkerPool`` + real subprocess
-        dispatch. When False, it uses the legacy in-memory ``LoopPool``.
-        """
-        return self._worker_pool is not None
 
     def _setup_subscriptions(self) -> None:
         """Subscribe to InternalEventBus events."""
@@ -247,35 +229,33 @@ class AutopilotService:
             await self._schedule_goal(event.goal_id)
 
     async def _mark_loop_idle(self, loop_id: str, goal_id: str) -> None:
-        """Mark loop as idle after goal completion.
+        """Mark worker idle after goal completion (idempotent with stream consumer).
 
         Args:
-            loop_id: Loop to mark idle.
+            loop_id: Worker loop id.
             goal_id: Completed goal.
         """
-        loop = self._loop_pool.loops.get(loop_id)
-        if loop:
-            loop.mark_idle()
-            self._loop_pool.idle_loops.append(loop_id)
-            self._loop_pool.goal_to_loop[goal_id] = loop_id
+        worker = self._worker_pool.get_worker(loop_id)
+        if worker is not None and worker.current_goal_id == goal_id:
+            await self._worker_pool.mark_idle(loop_id, success=True)
 
-            await self._internal_bus.emit(
-                InternalLoopIdleEvent(
-                    loop_id=loop_id,
-                    last_goal_id=goal_id,
-                    goal_history_count=loop.get_history_count(),
-                )
+        await self._internal_bus.emit(
+            InternalLoopIdleEvent(
+                loop_id=loop_id,
+                last_goal_id=goal_id,
+                goal_history_count=len(worker.last_goal_ids) if worker else 0,
             )
+        )
 
-            await self._internal_bus.emit(
-                InternalLoopPoolChangedEvent(
-                    active_count=self._loop_pool.active_count(),
-                    idle_count=self._loop_pool.idle_count(),
-                    total_count=self._loop_pool.total_count(),
-                    change_type="idle",
-                    loop_id=loop_id,
-                )
+        await self._internal_bus.emit(
+            InternalLoopPoolChangedEvent(
+                active_count=self._worker_pool.active_count(),
+                idle_count=self._worker_pool.idle_count(),
+                total_count=self._worker_pool.total_count(),
+                change_type="idle",
+                loop_id=loop_id,
             )
+        )
 
     async def start(self) -> None:
         """Start AutopilotService.
@@ -349,15 +329,15 @@ class AutopilotService:
                     await task
             self._dispatch_tasks.pop(goal_id, None)
 
-        # Release all loops
-        for loop_id in list(self._loop_pool.loops.keys()):
-            await self._release_loop(loop_id, reason="shutdown")
+        # Release all workers
+        for worker in list(self._worker_pool.workers()):
+            await self._release_worker(worker.loop_id, reason="shutdown")
 
         await self._internal_bus.emit(
             InternalAutopilotStoppedEvent(
                 reason=reason,
-                active_loops=self._loop_pool.active_count(),
-                goals_completed=len(self._loop_pool.goal_to_loop),
+                active_loops=self._worker_pool.active_count(),
+                goals_completed=sum(1 for g in self._ce.get_all_goals() if g.status == "completed"),
             )
         )
 
@@ -501,34 +481,29 @@ class AutopilotService:
 
     # ---- Internals ----------------------------------------------------
 
-    async def _release_loop(self, loop_id: str, reason: str = "idle_timeout") -> LoopHandle | None:
-        """Release a loop from the pool.
+    async def _release_worker(self, loop_id: str, reason: str = "idle_timeout") -> None:
+        """Release a worker from the pool.
 
         Args:
-            loop_id: Loop to release.
-            reason: Why the loop is released.
-
-        Returns:
-            Released LoopHandle if found.
+            loop_id: Worker to release.
+            reason: Why the worker is released.
         """
-        loop = self._loop_pool.remove_loop(loop_id)
-        if loop:
+        worker = await self._worker_pool.release_worker(loop_id)
+        if worker is not None:
             await self._internal_bus.emit(
                 InternalLoopReleasedEvent(
                     loop_id=loop_id,
                     reason=reason if reason in ("idle_timeout", "shutdown", "error") else "error",
-                    goals_processed=loop.get_history_count(),
+                    goals_processed=len(worker.last_goal_ids),
                 )
             )
 
             logger.info(
-                "Released loop %s: %s (processed %d goals)",
+                "Released worker %s: %s (processed %d goals)",
                 loop_id,
                 reason,
-                loop.get_history_count(),
+                len(worker.last_goal_ids),
             )
-
-        return loop
 
     async def _run_scheduling_loop(self) -> None:
         """Main scheduling loop coroutine.
@@ -595,30 +570,8 @@ class AutopilotService:
                 scheduler.cancel_task(task.id)
 
     async def _schedule_ready_goals(self) -> None:
-        """Schedule all ready goals from GoalEngine.
-
-        Two paths:
-        - ``has_real_dispatch`` True (RFC-222 Phase C+): use ``WorkerPool``
-          to pick subprocess workers and dispatch via ``LoopRunRequest``.
-        - Else: legacy in-memory ``LoopPool`` path (per-runner instance).
-        """
-        if self.has_real_dispatch:
-            await self._schedule_via_worker_pool()
-            return
-
-        # Legacy path (per-runner instance, no real dispatch)
-        max_par = self._config.max_loops - self._loop_pool.active_count()
-        if max_par <= 0:
-            return
-
-        candidates = await self._ce.peek_ready_goals(limit=max_par)
-        for candidate in candidates:
-            loop = await self._assign_loop_with_lineage(candidate)
-            if not loop:
-                # Pool filled mid-iteration; remaining candidates wait.
-                logger.warning("No loop capacity for goal %s; deferring", candidate.id)
-                break
-            await self._activate_and_record(candidate.id, loop)
+        """Schedule all ready goals via WorkerPool dispatch (RFC-222 Phase C+)."""
+        await self._schedule_via_worker_pool()
 
     async def _schedule_via_worker_pool(self) -> None:
         """RFC-222 Phase C: schedule via WorkerPool + real subprocess dispatch.
@@ -629,7 +582,7 @@ class AutopilotService:
         the worker's terminal ``GoalCompletionChunk``.
         """
         if self._worker_pool is None:
-            return  # safety: should never happen when has_real_dispatch is True
+            return
 
         # Bound by min(WorkerPool capacity, max_parallel_goals semaphore)
         cap_remaining = max(0, self._config.max_loops - self._worker_pool.active_count())
@@ -638,42 +591,52 @@ class AutopilotService:
 
         candidates = self._ce.peek_ready_goals(limit=cap_remaining)
         for candidate in candidates:
-            # Workspace reservation gate (RFC-222 revised Q1).
-            if self._workspace_reservation is not None:
-                ws = self._infer_workspace(candidate)
-                conflict = self._workspace_reservation.conflicts_with_active(
-                    ws, exclude_goal_id=candidate.id
-                )
-                if conflict:
-                    logger.debug(
-                        "Goal %s deferred: workspace %s conflicts with active goal %s",
-                        candidate.id,
-                        ws,
-                        conflict,
-                    )
-                    continue
-                if not self._workspace_reservation.acquire(candidate.id, ws):
-                    continue
-
-            worker = await self._worker_pool.pick_worker(candidate)
-            if worker is None:
-                # Pool filled mid-iteration; release the reservation we just took.
-                if self._workspace_reservation is not None:
-                    self._workspace_reservation.release(candidate.id)
-                logger.debug("No worker capacity for goal %s; deferring", candidate.id)
+            if not await self._try_dispatch_goal(candidate):
                 break
 
-            # Atomically claim — re-checks conflicts at flip time.
-            claimed = self._ce.claim_goal(candidate.id, loop_id=worker.loop_id)
-            if claimed is None:
-                # Race: another path consumed the goal first.
-                logger.debug("Goal %s vanished before claim; releasing worker", candidate.id)
-                await self._worker_pool.mark_idle(worker.loop_id, success=True)
-                if self._workspace_reservation is not None:
-                    self._workspace_reservation.release(candidate.id)
-                continue
+    async def _try_dispatch_goal(self, goal: GoalNode) -> bool:
+        """Attempt WorkerPool dispatch for one ready goal."""
+        if self._workspace_reservation is not None:
+            ws = self._infer_workspace(goal)
+            conflict = self._workspace_reservation.conflicts_with_active(
+                ws, exclude_goal_id=goal.id
+            )
+            if conflict:
+                logger.debug(
+                    "Goal %s deferred: workspace %s conflicts with active goal %s",
+                    goal.id,
+                    ws,
+                    conflict,
+                )
+                return False
+            if not self._workspace_reservation.acquire(goal.id, ws):
+                return False
 
-            await self._dispatch_to_worker(claimed, worker)
+        worker = await self._worker_pool.pick_worker(goal)
+        if worker is None:
+            if self._workspace_reservation is not None:
+                self._workspace_reservation.release(goal.id)
+            logger.debug("No worker capacity for goal %s; deferring", goal.id)
+            return False
+
+        claimed = self._ce.claim_goal(goal.id, loop_id=worker.loop_id)
+        if claimed is None:
+            logger.debug("Goal %s vanished before claim; releasing worker", goal.id)
+            await self._worker_pool.mark_idle(worker.loop_id, success=True)
+            if self._workspace_reservation is not None:
+                self._workspace_reservation.release(goal.id)
+            return False
+
+        await self._internal_bus.emit(
+            InternalLoopAssignedEvent(
+                loop_id=worker.loop_id,
+                goal_id=goal.id,
+                parent_goal_id=goal.parent_id,
+                reused=False,
+            )
+        )
+        await self._dispatch_to_worker(claimed, worker)
+        return True
 
     async def _dispatch_to_worker(self, goal: GoalNode, worker: Any) -> None:
         """Build the LoopRunRequest and spawn a stream-consuming task."""
@@ -914,139 +877,19 @@ class AutopilotService:
         return f"$autopilot/goal/{goal.id}"
 
     async def _schedule_goal(self, goal_id: str) -> None:
-        """Schedule a single goal to a loop.
-
-        Used by reactive paths (e.g. ``_handle_goals_ready``) where the
-        scheduler already knows which goal to act on.
-
-        Args:
-            goal_id: Goal to schedule.
-        """
+        """Schedule a single ready goal to a worker."""
         goal = await self._ce.get_goal(goal_id)
         if not goal:
             logger.warning("Goal %s not found for scheduling", goal_id)
             return
 
-        loop = await self._assign_loop_with_lineage(goal)
-        if not loop:
-            logger.warning("No loop available for goal %s", goal_id)
+        ready = self._ce.peek_ready_goals(limit=self._config.max_loops)
+        if not any(g.id == goal_id for g in ready):
             return
 
-        await self._activate_and_record(goal_id, loop)
-
-    async def _activate_and_record(self, goal_id: str, loop: LoopHandle) -> None:
-        """Atomically claim the goal and stamp the assigned loop_id.
-
-        Args:
-            goal_id: Goal to activate.
-            loop: Assigned LoopHandle.
-        """
-        claimed = self._ce.claim_goal(goal_id, loop_id=loop.loop_id)
-        if not claimed:
-            logger.warning("Goal %s no longer claimable; releasing loop %s", goal_id, loop.loop_id)
-            # Loop was already moved out of idle by assignment; put it back.
-            self._loop_pool.idle_loops.append(loop.loop_id)
-            loop.current_goal_id = None
-            loop.mark_idle()
-            return
-        logger.info("Scheduled goal %s to loop %s", goal_id, loop.loop_id)
-
-    async def _assign_loop_with_lineage(self, goal: GoalNode) -> LoopHandle | None:
-        """Assign loop with lineage-aware reuse.
-
-        Prefers parent's loop for context preservation.
-
-        Args:
-            goal: GoalNode to assign loop for.
-
-        Returns:
-            LoopHandle if assigned, None if no capacity.
-        """
-        # 1. Check lineage affinity
-        if goal.parent_id:
-            parent_loop_id = self._loop_pool.goal_to_loop.get(goal.parent_id)
-            if parent_loop_id:
-                parent_loop = self._loop_pool.loops.get(parent_loop_id)
-                if parent_loop and parent_loop.can_reuse_for_child(goal.parent_id):
-                    # REUSE: preserves working_memory
-                    self._loop_pool.assign_loop_to_goal(parent_loop, goal.id)
-
-                    await self._internal_bus.emit(
-                        InternalLoopAssignedEvent(
-                            loop_id=parent_loop.loop_id,
-                            goal_id=goal.id,
-                            parent_goal_id=goal.parent_id,
-                            reused=True,
-                        )
-                    )
-
-                    logger.info(
-                        "Reused loop %s for child goal %s (parent: %s)",
-                        parent_loop.loop_id,
-                        goal.id,
-                        goal.parent_id,
-                    )
-                    return parent_loop
-
-        # 2. Check idle loops
-        idle_loop = self._loop_pool.pop_idle_loop()
-        if idle_loop:
-            self._loop_pool.assign_loop_to_goal(idle_loop, goal.id)
-
-            await self._internal_bus.emit(
-                InternalLoopAssignedEvent(
-                    loop_id=idle_loop.loop_id,
-                    goal_id=goal.id,
-                    reused=False,
-                )
-            )
-
-            logger.info("Assigned idle loop %s to goal %s", idle_loop.loop_id, goal.id)
-            return idle_loop
-
-        # 3. Spawn new loop
-        if self._loop_pool.can_spawn():
-            new_loop = await self._spawn_loop()
-            self._loop_pool.assign_loop_to_goal(new_loop, goal.id)
-
-            await self._internal_bus.emit(
-                InternalLoopAssignedEvent(
-                    loop_id=new_loop.loop_id,
-                    goal_id=goal.id,
-                    reused=False,
-                )
-            )
-
-            logger.info("Spawned new loop %s for goal %s", new_loop.loop_id, goal.id)
-            return new_loop
-
-        # 4. No capacity
-        logger.warning("No loop capacity for goal %s", goal.id)
-        return None
-
-    async def _spawn_loop(self) -> LoopHandle:
-        """Spawn a new StrangeLoop worker.
-
-        Returns:
-            New LoopHandle.
-        """
-        loop = LoopHandle(status="idle")
-        self._loop_pool.add_loop(loop)
-
-        await self._internal_bus.emit(InternalLoopSpawnedEvent(loop_id=loop.loop_id))
-
-        await self._internal_bus.emit(
-            InternalLoopPoolChangedEvent(
-                active_count=self._loop_pool.active_count(),
-                idle_count=self._loop_pool.idle_count(),
-                total_count=self._loop_pool.total_count(),
-                change_type="spawn",
-                loop_id=loop.loop_id,
-            )
-        )
-
-        logger.debug("Spawned loop %s", loop.loop_id)
-        return loop
+        candidate = next(g for g in ready if g.id == goal_id)
+        if not await self._try_dispatch_goal(candidate):
+            logger.warning("No worker capacity for goal %s", goal_id)
 
     async def _schedule_next_goal(self) -> None:
         """Schedule next ready goal (single goal trigger)."""
@@ -1062,7 +905,7 @@ class AutopilotService:
         the cancel and unwind cleanly (releasing reservation + worker).
         """
         if self._worker_pool is None:
-            return  # legacy in-memory LoopPool path has no real workers
+            return
 
         deadline = getattr(self._config, "goal_deadline_seconds", None)
         if not deadline or deadline <= 0:
@@ -1119,16 +962,15 @@ class AutopilotService:
                 )
 
     async def _release_idle_loops(self) -> None:
-        """Release idle loops past timeout."""
+        """Release idle workers past timeout."""
         timeout = self._config.loop_idle_timeout
         now = datetime.now(UTC)
 
-        for loop_id in list(self._loop_pool.idle_loops):
-            loop = self._loop_pool.loops.get(loop_id)
-            if loop and loop.idle_since:
-                elapsed = (now - loop.idle_since).total_seconds()
+        for worker in self._worker_pool.idle_workers():
+            if worker.idle_since:
+                elapsed = (now - worker.idle_since).total_seconds()
                 if elapsed > timeout:
-                    await self._release_loop(loop_id, reason="idle_timeout")
+                    await self._release_worker(worker.loop_id, reason="idle_timeout")
 
     async def _enter_dreaming_mode(self) -> None:
         """Enter dreaming mode when no goals active."""
@@ -1277,13 +1119,13 @@ class AutopilotService:
             "running": self._running,
             "dreaming": self._dreaming,
             "loop_pool": {
-                "active": self._loop_pool.active_count(),
-                "idle": self._loop_pool.idle_count(),
-                "total": self._loop_pool.total_count(),
-                "max": self._loop_pool.max_loops,
+                "active": self._worker_pool.active_count(),
+                "idle": self._worker_pool.idle_count(),
+                "total": self._worker_pool.total_count(),
+                "max": self._worker_pool.max_loops,
             },
             "goals": {
-                "completed": len(self._loop_pool.goal_to_loop),
+                "completed": sum(1 for g in self._ce.get_all_goals() if g.status == "completed"),
             },
             "config": {
                 "max_loops": self._config.max_loops,

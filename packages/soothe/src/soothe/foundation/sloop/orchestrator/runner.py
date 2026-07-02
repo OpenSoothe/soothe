@@ -14,6 +14,7 @@ from typing import Any
 
 from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.sloop.utils.messages import last_ledger_ai_content
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.observability.langfuse import (
     loop_graph_langfuse_run_display_name,
@@ -27,9 +28,14 @@ logger = logging.getLogger(__name__)
 
 def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
     """Best-effort final user-visible text for Langfuse trace output (IG-395)."""
-    gr = ctx.goal_record
-    if gr is not None and (gr.goal_completion or "").strip():
-        return gr.goal_completion.strip()
+    from soothe.foundation.sloop.engine.continuation_context import ledger_goal_completion_text
+
+    completion = ledger_goal_completion_text(ctx.loop_state.loop_messages)
+    if completion:
+        return completion
+    last = last_ledger_ai_content(ctx.loop_state)
+    if last:
+        return last
     pp = ctx.loop_state.previous_plan
     if pp is not None:
         if pp.full_output and str(pp.full_output).strip():
@@ -37,9 +43,6 @@ def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
         action_text = resolve_plan_action_text(pp)
         if action_text:
             return action_text
-    last = ctx.loop_state.last_execute_assistant_text
-    if last and str(last).strip():
-        return str(last).strip()
     return ""
 
 

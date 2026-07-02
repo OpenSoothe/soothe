@@ -1016,9 +1016,7 @@ class LoopState(BaseModel):
         total_duration_ms: Total loop duration
         working_memory: Loop working-memory instance (RFC-203) when enabled.
         loop_messages: RFC-214: Unified message ledger (CE-backed property when bound).
-        last_execute_assistant_text: Resolved visible answer for the latest Execute wave — see
-            :mod:`soothe.core.loop.engine.executor` (IG-357).
-        last_wave_answer_from_delegate_final: True when that text came from ``task`` tool returns
+        last_wave_answer_from_delegate_final: True when the latest execute wave answer came from ``task`` tool returns
             (``task_tool_aggregate`` provenance), not root-graph assistant stream (IG-355).
         last_execute_wave_parallel_multi_step: True when the last wave ran multiple parallel steps (IG-199).
         continue_loop: RFC-225 flag — True when this loop has prior goals (carrier for executor wiring).
@@ -1121,8 +1119,7 @@ class LoopState(BaseModel):
         description="Chronological action descriptions for progression tracking",
     )
 
-    # Last Execute wave assistant text for adaptive final response (IG-199)
-    last_execute_assistant_text: str | None = None
+    # Last Execute wave provenance for adaptive final response (IG-199, IG-355)
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals

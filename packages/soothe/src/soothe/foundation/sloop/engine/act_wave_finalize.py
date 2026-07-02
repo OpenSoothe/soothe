@@ -1,8 +1,10 @@
 """Act-wave finalize resolution (IG-355, IG-356, IG-357, RFC-227).
 
 This module handles the computation of visible assistant text for Execute waves.
-After each Execute wave, adaptive goal completion and headless replay use
-``LoopState.last_execute_assistant_text``. That string may come from:
+After each Execute wave, adaptive goal completion and headless replay read the
+latest non-planning assistant message from the orchestration ledger via
+:func:`~soothe.foundation.sloop.utils.messages.last_ledger_ai_content`.
+That string may come from:
 
 - **root_assistant_stream** — aggregated root-graph ``AIMessage`` / chunk text
 - **task_tool_aggregate** — ordered ``task`` ``ToolMessage`` bodies (delegate finals)

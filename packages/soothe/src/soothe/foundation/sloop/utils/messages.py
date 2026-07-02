@@ -52,7 +52,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
 
     Used by goal completion when ``require_goal_completion=False`` to provide
     the user with the most recent non-planning assistant response from the
-    ledger, replacing the deprecated ``last_execute_assistant_text`` path.
+    ledger.
     RFC-214 records plan-assess and plan-generate turns in the same ledger,
     but these planning messages must not be surfaced as final user output in
     ``ledger_direct`` completion mode.

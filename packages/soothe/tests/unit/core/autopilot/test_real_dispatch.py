@@ -114,24 +114,6 @@ async def _wait_until(predicate, *, timeout: float = 1.0, interval: float = 0.01
 # ---- Tests -------------------------------------------------------------
 
 
-class TestRealDispatchHasFlag:
-    def test_factory_present_enables_real_dispatch(self) -> None:
-        svc = _service()
-        assert svc.has_real_dispatch is True
-        assert svc._worker_pool is not None
-
-    def test_no_factory_keeps_legacy_path(self) -> None:
-        bus = InternalEventBus()
-        ce = ContextEngine()
-        svc = AutopilotService(
-            ce=ce,
-            config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
-            internal_bus=bus,
-        )
-        assert svc.has_real_dispatch is False
-        assert svc._worker_pool is None
-
-
 class TestEndToEndCompleted:
     @pytest.mark.asyncio
     async def test_submit_then_schedule_dispatches_and_completes(self) -> None:

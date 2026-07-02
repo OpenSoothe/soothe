@@ -284,14 +284,6 @@ def __getattr__(name: str) -> object:
         from soothe.foundation.events.internal_bus import InternalEventBus
 
         return InternalEventBus
-    if name == "get_internal_bus":
-        from soothe.foundation.events.internal_bus import get_internal_bus
-
-        return get_internal_bus
-    if name == "reset_internal_bus":
-        from soothe.foundation.events.internal_bus import reset_internal_bus
-
-        return reset_internal_bus
     # RFC-222: Internal event types (lazy import to avoid circular deps)
     if name == "INTERNAL_EVENT_TYPES":
         from soothe.foundation.events.internal_events import INTERNAL_EVENT_TYPES  # noqa: F401

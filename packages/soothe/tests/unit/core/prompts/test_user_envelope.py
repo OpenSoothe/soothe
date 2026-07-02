@@ -284,11 +284,11 @@ def test_flatten_user_message_content_extracts_legacy_execute_goal() -> None:
     assert flat == "Search the repo for *.yml config"
 
 
-def test_flatten_user_message_content_legacy_xml() -> None:
-    """Legacy XML format still extractable for backward compat."""
+def test_flatten_user_message_content_legacy_xml_passthrough() -> None:
+    """Legacy USER_QUERY XML is no longer parsed; content passes through unchanged."""
     msg = "<USER_QUERY>\nSearch the repo\n</USER_QUERY>"
     flat = flatten_user_message_content(msg)
-    assert flat == "Search the repo"
+    assert flat == msg
 
 
 def test_plan_generate_omits_redundant_goal_lineage() -> None:

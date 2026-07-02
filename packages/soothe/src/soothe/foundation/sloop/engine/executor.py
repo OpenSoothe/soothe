@@ -2,8 +2,9 @@
 
 Act-wave visible answer resolution is integrated here (IG-355, IG-356, IG-357).
 
-After each Execute wave, adaptive goal completion and headless replay use
-``LoopState.last_execute_assistant_text``. That string may come from:
+After each Execute wave, adaptive goal completion and headless replay read the
+latest non-planning assistant message from the orchestration ledger via
+``last_ledger_ai_content``. That string may come from:
 
 - **root_assistant_stream** — aggregated root-graph ``AIMessage`` / chunk text (same path as act
   aggregation for the main graph).
@@ -831,7 +832,6 @@ class Executor:
         )
         state.last_execute_wave_parallel_multi_step = parallel_multi_step
         state.last_wave_answer_from_delegate_final = provenance_is_task_delegate(snap)
-        state.last_execute_assistant_text = snap.visible_text
 
     def _assemble_assistant_text_from_stream_messages(self, messages: list[BaseMessage]) -> str:
         """Extract assistant-visible text from CoreAgent stream message list.
