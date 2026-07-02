@@ -57,6 +57,14 @@ def step_needs_brief_hydration(step: StepAction) -> bool:
 
 
 @dataclass(frozen=True)
+class ExecuteStepEnvelopeBody:
+    """Structured execute-step guidance sections (no EXECUTION HINTS wrapper)."""
+
+    expected_output: str | None = None
+    instructions: str | None = None
+
+
+@dataclass(frozen=True)
 class PriorStepSummary:
     """Lightweight predecessor step row for execute-step human envelopes."""
 
@@ -270,22 +278,10 @@ def build_dependent_execution_hints(
     wire_subagent: str | None,
     workspace: str | None,
     expected_output: str | None,
-) -> str:
-    """Build EXECUTION HINTS for an execute-step envelope."""
-    hints_lines: list[str] = []
-    if wire_subagent:
-        hints_lines.append(f"Suggested subagent: {wire_subagent}")
-    if wire_subagent == "explore" and workspace:
-        hints_lines.append(
-            f"Workspace root: {workspace}\n"
-            "Use paths relative to this workspace (e.g. packages/..., docs/...). "
-            "Do not use absolute paths like /packages/."
-        )
-    if expected_output:
-        hints_lines.append(f"Expected output:\n- {expected_output}")
-
+) -> ExecuteStepEnvelopeBody:
+    """Build EXPECTED OUTPUT and INSTRUCTIONS bodies for an execute-step envelope."""
     instruction_lines = [
-        "- Execute the step described in GOAL above",
+        "- Execute the step described in EXECUTION TASK above",
         "- Use the suggested approach when provided",
         "- Produce output matching the expected output specification",
     ]
@@ -299,13 +295,28 @@ def build_dependent_execution_hints(
             1,
             "- Apply fixes or follow-up actions using concrete details from prior step outcomes",
         )
-    hints_lines.append("Instructions:\n" + "\n".join(instruction_lines))
-    return "\n\n".join(hints_lines)
+    if wire_subagent:
+        instruction_lines.insert(0, f"- Suggested subagent: {wire_subagent}")
+    if wire_subagent == "explore" and workspace:
+        insert_at = 1 if wire_subagent else 0
+        instruction_lines.insert(
+            insert_at,
+            "- " + f"Workspace root: {workspace}. "
+            "Use paths relative to this workspace (e.g. packages/..., docs/...). "
+            "Do not use absolute paths like /packages/.",
+        )
+
+    expected_body = f"- {expected_output.strip()}" if (expected_output or "").strip() else None
+    return ExecuteStepEnvelopeBody(
+        expected_output=expected_body,
+        instructions="\n".join(instruction_lines),
+    )
 
 
 __all__ = [
     "PRIOR_STEP_EVIDENCE_MAX_CHARS",
     "PRIOR_STEPS_SUMMARY_OUTCOME_PREVIEW_CHARS",
+    "ExecuteStepEnvelopeBody",
     "PriorStepSummary",
     "build_dependent_execution_hints",
     "build_prior_step_evidence",

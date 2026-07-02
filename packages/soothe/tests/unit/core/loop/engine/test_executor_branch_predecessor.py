@@ -463,8 +463,8 @@ async def test_hydrate_dependent_steps_skipped_when_disabled() -> None:
 
 
 @pytest.mark.asyncio
-async def test_continue_loop_bootstrap_uses_prior_goal_completion_envelope() -> None:
-    """Loop continuation bootstrap grounds prior work via PRIOR GOAL COMPLETION only."""
+async def test_continue_loop_bootstrap_projects_goal_completion_ledger() -> None:
+    """Loop continuation bootstrap projects prior goal completion via Slice A ledger."""
     mock_agent = _make_mock_agent()
     step = StepAction(id="bootstrap", description="Continue prior work")
     decision = AgentDecision(
@@ -513,9 +513,9 @@ async def test_continue_loop_bootstrap_uses_prior_goal_completion_envelope() -> 
     )
 
     messages = _astream_messages(mock_agent)
-    assert len(messages) == 1
-    envelope = str(getattr(messages[0], "content", ""))
-    assert "PRIOR GOAL COMPLETION" in envelope
-    assert completion_body in envelope
+    assert len(messages) == 2
+    envelope = str(getattr(messages[-1], "content", ""))
+    assert "PRIOR GOAL COMPLETION:\n" not in envelope
+    assert completion_body in str(getattr(messages[0], "content", ""))
     assert "ledger-human-prior" not in envelope
     assert "ledger-ai-prior git diff output" not in envelope

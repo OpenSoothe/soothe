@@ -892,6 +892,23 @@ class PlanPromptLedgerConfig(BaseModel):
     )
 
 
+class ExecutePromptLedgerConfig(BaseModel):
+    """Caps for execute-step CoreAgent ledger projection (IG-542)."""
+
+    cross_goal_completion_tail: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Prior-goal completion units at goal boundary (0 = disable Slice A)",
+    )
+    predecessor_max_messages: int = Field(
+        default=96,
+        ge=0,
+        le=500,
+        description="Max predecessor execute_step ledger rows for Slice B (0 = unlimited)",
+    )
+
+
 class LoopCheckpointConfig(BaseModel):
     """Loop checkpoint and recovery configuration (RFC-203).
 
@@ -1521,6 +1538,11 @@ class StrangeLoopConfig(BaseModel):
     plan_prompt_ledger: PlanPromptLedgerConfig = Field(
         default_factory=PlanPromptLedgerConfig,
         description="Plan-phase ledger projection limits; zeros = full ledger passthrough",
+    )
+
+    execute_prompt_ledger: ExecutePromptLedgerConfig = Field(
+        default_factory=ExecutePromptLedgerConfig,
+        description="Execute-step CoreAgent ledger projection (IG-542)",
     )
 
     checkpoint: LoopCheckpointConfig = Field(

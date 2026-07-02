@@ -96,7 +96,7 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
     builder = UserMessageBuilder()
     execute = builder.build_execute_step_message(
         "step",
-        execution_hints="hint text",
+        instructions="hint text",
     )
     plan = builder.build_plan_assess_message(
         goal="g",

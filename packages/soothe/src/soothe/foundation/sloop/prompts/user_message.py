@@ -36,6 +36,18 @@ PRIOR_PROGRESS_MAX_CHARS = 600
 EXECUTION_TASK_LABEL = "EXECUTION TASK"
 
 
+def _render_execution_metadata(step_id: str | None, short_description: str | None) -> str:
+    """Render step identity lines aligned with TUI step card header."""
+    lines: list[str] = []
+    sid = (step_id or "").strip()
+    desc = (short_description or "").strip()
+    if sid:
+        lines.append(f"step_id: {sid}")
+    if desc:
+        lines.append(f"short_description: {desc}")
+    return "\n".join(lines)
+
+
 def _goal_text(goal: str | None) -> str:
     """Normalize goal string (strip iteration suffix)."""
     raw = (goal or "").strip()
@@ -470,8 +482,12 @@ class UserMessageBuilder:
         self,
         step_description: str,
         *,
-        execution_hints: str | None = None,
+        step_id: str | None = None,
+        short_description: str | None = None,
+        expected_output: str | None = None,
+        instructions: str | None = None,
         prior_steps: str | None = None,
+        prior_goals: str | None = None,
         prior_goal_completion: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
@@ -481,8 +497,12 @@ class UserMessageBuilder:
 
         Args:
             step_description: The step's description or full_description (what to execute).
-            execution_hints: Hints text with merged task instructions (IG-508).
+            step_id: Planner step id (matches TUI step card).
+            short_description: Brief step title shown on the TUI card header.
+            expected_output: Bullet-list expected output body (EXPECTED OUTPUT section).
+            instructions: Bullet-list execution instructions (INSTRUCTIONS section).
             prior_steps: Transitive predecessor step descriptions and statuses.
+            prior_goals: Prior goals tree at goal boundary (metadata only).
             prior_goal_completion: Prior goal synthesis report for loop continuation.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
@@ -498,12 +518,21 @@ class UserMessageBuilder:
         if (prior_steps or "").strip():
             sections.append(("PRIOR STEPS", prior_steps.strip()))
 
+        if (prior_goals or "").strip():
+            sections.append(("PRIOR GOALS", prior_goals.strip()))
+
         if (prior_goal_completion or "").strip():
             sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
 
-        # IG-508: EXECUTION HINTS now contains merged task instructions
-        if execution_hints:
-            sections.append(("EXECUTION HINTS", execution_hints))
+        if (expected_output or "").strip():
+            sections.append(("EXPECTED OUTPUT", expected_output.strip()))
+
+        if (instructions or "").strip():
+            sections.append(("INSTRUCTIONS", instructions.strip()))
+
+        metadata = _render_execution_metadata(step_id, short_description)
+        if metadata:
+            sections.append(("EXECUTION METADATA", metadata))
 
         if (skill_context or "").strip():
             sections.append(("SKILL CONTEXT", skill_context.strip()))

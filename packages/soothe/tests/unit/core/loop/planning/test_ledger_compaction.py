@@ -124,7 +124,8 @@ def test_compact_execute_human_content_omits_prior_evidence_from_envelope() -> N
     envelope = (
         "EXECUTION TASK:\nFix failures\n\n"
         "PRIOR STEP EVIDENCE:\nStep 01 — run tests (completed)\n---\nF821 in foo.py\n\n"
-        "EXECUTION HINTS:\nExpected output:\n- tests pass"
+        "EXPECTED OUTPUT:\n- tests pass\n\n"
+        "INSTRUCTIONS:\n- run tests"
     )
     out = compact_execute_human_content(step, envelope=envelope)
     assert "PRIOR STEP EVIDENCE:" not in out
