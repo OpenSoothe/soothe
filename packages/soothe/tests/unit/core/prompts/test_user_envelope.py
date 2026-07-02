@@ -20,19 +20,20 @@ def test_execute_message_omits_response_language_hint() -> None:
     assert "TIMESTAMP:" not in msg
 
 
-def test_execute_message_uses_goal_label() -> None:
+def test_execute_message_uses_execution_task_label() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_execute_step_message(
         "Do the thing",
         execution_hints=None,
     )
-    assert msg.startswith("GOAL:")
+    assert msg.startswith("EXECUTION TASK:")
     assert "Do the thing" in msg
+    assert "GOAL:" not in msg
     assert "SKILL CONTEXT:" not in msg
 
 
-def test_execute_message_skill_context_after_goal() -> None:
-    """Skill reference appears in SKILL CONTEXT section after GOAL."""
+def test_execute_message_skill_context_after_execution_task() -> None:
+    """Skill reference appears in SKILL CONTEXT section after EXECUTION TASK."""
     skill_ref = (
         "Skill: demo\n\n"
         "Skill folder: /skills/demo\n"
@@ -48,9 +49,9 @@ def test_execute_message_skill_context_after_goal() -> None:
     assert "Skill: demo" in msg
     assert "Skill folder: /skills/demo" in msg
     assert "User instruction" not in msg
-    goal_idx = msg.index("GOAL:")
+    task_idx = msg.index("EXECUTION TASK:")
     skill_idx = msg.index("SKILL CONTEXT:")
-    assert goal_idx < skill_idx
+    assert task_idx < skill_idx
 
 
 def test_execute_message_no_intent_section() -> None:
@@ -70,7 +71,8 @@ def test_execute_message_no_task_section() -> None:
         "Analyze logs",
         execution_hints="Expected output: error list.",
     )
-    assert "TASK:" not in msg
+    assert not msg.startswith("TASK:")
+    assert "\n\nTASK:" not in msg
 
 
 def test_execute_message_hints_contains_task_instructions() -> None:
@@ -85,7 +87,7 @@ def test_execute_message_hints_contains_task_instructions() -> None:
 
 
 def test_execute_message_prior_step_evidence_section() -> None:
-    """Dependent steps include PRIOR STEP EVIDENCE between GOAL and EXECUTION HINTS."""
+    """Dependent steps include PRIOR STEP EVIDENCE between EXECUTION TASK and EXECUTION HINTS."""
     builder = UserMessageBuilder()
     evidence = "Step 01 — verify (completed)\n---\n✗ F821 undefined name `Any`"
     msg = builder.build_execute_step_message(
@@ -95,10 +97,10 @@ def test_execute_message_prior_step_evidence_section() -> None:
     )
     assert "PRIOR STEP EVIDENCE:" in msg
     assert "F821 undefined name `Any`" in msg
-    goal_idx = msg.index("GOAL:")
+    task_idx = msg.index("EXECUTION TASK:")
     evidence_idx = msg.index("PRIOR STEP EVIDENCE:")
     hints_idx = msg.index("EXECUTION HINTS:")
-    assert goal_idx < evidence_idx < hints_idx
+    assert task_idx < evidence_idx < hints_idx
 
 
 def test_execute_message_omits_prior_step_evidence_when_absent() -> None:
@@ -196,17 +198,44 @@ def test_plan_generate_message_includes_step_id_hint() -> None:
     assert "03" in msg
 
 
+def test_plan_generate_message_includes_step_anchor_registry() -> None:
+    builder = UserMessageBuilder()
+    registry = (
+        "Completed (valid cross-wave dependency targets — use EXACT ids):\n"
+        "- KFA-01 [completed] Run verify"
+    )
+    msg = builder.build_plan_generate_message(
+        goal="fix lint",
+        step_anchor_registry=registry,
+    )
+    assert "STEP ANCHOR REGISTRY:" in msg
+    assert "KFA-01 [completed]" in msg
+
+
 def test_envelope_builder_direct_usage() -> None:
     """Use UserMessageBuilder directly (deprecated wrappers removed)."""
     builder = UserMessageBuilder()
     exec_msg = builder.build_execute_step_message("Do it")
-    assert "GOAL:" in exec_msg
+    assert "EXECUTION TASK:" in exec_msg
+    assert "GOAL:" not in exec_msg
 
     plan_msg = builder.build_plan_assess_message(goal="Plan this")
     assert "GOAL:" in plan_msg
 
 
-def test_flatten_user_message_content_extracts_goal() -> None:
+def test_flatten_user_message_content_extracts_execution_task() -> None:
+    msg = "EXECUTION TASK:\nSearch the repo for *.yml config\n\nEXECUTION HINTS: some hints"
+    flat = flatten_user_message_content(msg)
+    assert flat == "Search the repo for *.yml config"
+
+
+def test_flatten_user_message_content_extracts_plan_goal() -> None:
+    msg = "GOAL:\nAssess completion for the parent objective\n\nTASK: assess"
+    flat = flatten_user_message_content(msg)
+    assert flat == "Assess completion for the parent objective"
+
+
+def test_flatten_user_message_content_extracts_legacy_execute_goal() -> None:
     msg = "GOAL:\nSearch the repo for *.yml config\n\nEXECUTION HINTS: some hints"
     flat = flatten_user_message_content(msg)
     assert flat == "Search the repo for *.yml config"

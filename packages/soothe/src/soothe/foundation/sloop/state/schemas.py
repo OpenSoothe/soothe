@@ -59,6 +59,7 @@ class PlanGenerateStep(BaseModel):
             identifiers, and context needed to execute independently (IG-508).
         expected_output: Expected result for evidence accumulation.
         dependencies: Step IDs this depends on (for DAG execution).
+        continues_from: Completed composite step ids from prior plan waves (merged into dependencies).
         kind: ``action`` (normal) or ``ask_user`` (clarification relay).
         questions: Questions for ``ask_user`` steps.
         execution_hint: Preferred execution routing from the planner.
@@ -76,6 +77,10 @@ class PlanGenerateStep(BaseModel):
     )
     expected_output: str = "Step completed successfully"
     dependencies: list[str] | None = None
+    continues_from: list[str] | None = Field(
+        default=None,
+        description="Completed composite step ids from prior plan waves.",
+    )
     kind: StepKind = "action"
     questions: list[str] | None = None
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
@@ -116,6 +121,19 @@ def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:
     return out
 
 
+def _merged_step_dependencies(step: PlanGenerateStep) -> list[str] | None:
+    """Merge in-wave dependencies and cross-wave continues_from tokens."""
+    deps: list[str] = []
+    seen: set[str] = set()
+    for token in list(step.dependencies or []) + list(step.continues_from or []):
+        t = token.strip()
+        if not t or t in seen:
+            continue
+        deps.append(t)
+        seen.add(t)
+    return deps or None
+
+
 def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[StepAction]:
     """Convert plan-generate steps into runtime ``StepAction`` rows."""
     return apply_step_wire_subagents(
@@ -125,7 +143,7 @@ def plan_generate_steps_to_step_actions(steps: list[PlanGenerateStep]) -> list[S
                 description=s.description,
                 full_description=s.full_description,
                 expected_output=s.expected_output,
-                dependencies=s.dependencies,
+                dependencies=_merged_step_dependencies(s),
                 kind=s.kind,
                 questions=list(s.questions) if s.questions else None,
                 execution_hint=s.execution_hint,
@@ -149,6 +167,7 @@ def step_actions_to_plan_generate_steps(steps: list[StepAction]) -> list[PlanGen
             full_description=s.full_description,
             expected_output=s.expected_output,
             dependencies=s.dependencies,
+            continues_from=None,
             kind=s.kind,
             questions=list(s.questions) if s.questions else None,
             execution_hint=s.execution_hint,

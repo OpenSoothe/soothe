@@ -1228,6 +1228,15 @@ class LLMPlanner:
             and result.decision is not None
             and result.decision.steps
         ):
+            from soothe.foundation.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
+
+            normalized = normalize_plan_dag(
+                result.decision,
+                completed_ids=state.dependency_completion_ids(),
+            )
+            if normalized is not result.decision:
+                result = result.model_copy(update={"decision": normalized})
+
             if state.iteration == 0 and len(result.decision.steps) > FIRST_WAVE_MAX_STEPS:
                 logger.warning(
                     "[PlanGen] Truncated first-wave steps from %d to %d",
