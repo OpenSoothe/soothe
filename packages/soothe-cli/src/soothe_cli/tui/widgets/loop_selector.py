@@ -54,10 +54,10 @@ _COL_TOPIC = None  # flex column
 _MAX_SEARCH_TEXT_LEN = 200
 _AUTO_WIDTH_COLUMNS = {"updated_at"}
 _COLUMN_ORDER = (
+    "topic",
+    "updated_at",
     "loop_id",
     "messages",
-    "updated_at",
-    "topic",
 )
 _COLUMN_WIDTHS: dict[str, int | None] = {
     "loop_id": _COL_LID,
@@ -66,7 +66,7 @@ _COLUMN_WIDTHS: dict[str, int | None] = {
     "topic": _COL_TOPIC,
 }
 _COLUMN_LABELS = {
-    "loop_id": "Loop ID",
+    "loop_id": "LoopID",
     "messages": "Msg",
     "updated_at": "Updated",
     "topic": "Topic",
@@ -77,7 +77,7 @@ _COLUMN_TOGGLE_LABELS = {
     "updated_at": "Updated At",
     "topic": "Topic",
 }
-_RIGHT_ALIGNED_COLUMNS: set[str] = {"messages"}
+_RIGHT_ALIGNED_COLUMNS: set[str] = {"updated_at", "loop_id"}
 _SWITCH_ID_PREFIX = "loop-column-"
 _SORT_SWITCH_ID = "loop-sort-toggle"
 _RELATIVE_TIME_SWITCH_ID = "loop-relative-time"
@@ -505,7 +505,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
     }
 
     LoopSelectorScreen .loop-cell-loop_id {
-        width: 10;
+        width: auto;
+        content-align: right middle;
     }
 
     LoopSelectorScreen .loop-cell-agent_name {
@@ -516,11 +517,13 @@ class LoopSelectorScreen(ModalScreen[str | None]):
     }
 
     LoopSelectorScreen .loop-cell-messages {
-        width: 4;
+        width: auto;
+        content-align: right middle;
     }
 
     LoopSelectorScreen .loop-cell-updated_at {
         width: auto;
+        content-align: right middle;
     }
 
     LoopSelectorScreen .loop-cell-topic {
@@ -529,11 +532,6 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         overflow-x: hidden;
         text-wrap: nowrap;
         text-overflow: ellipsis;
-    }
-
-    LoopSelectorScreen .loop-cell-messages {
-        width: auto;
-        content-align: right middle;
     }
 
     LoopSelectorScreen .loop-selector-help {
