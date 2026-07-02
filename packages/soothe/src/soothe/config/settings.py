@@ -903,13 +903,16 @@ class SootheConfig(BaseSettings):
         """
         import datetime as dt
 
-        from soothe.foundation.sloop.prompts import _DEFAULT_SYSTEM_PROMPT
+        from soothe.foundation.sloop.prompts.system_templates import (
+            format_complex_agent_system_prompt_core,
+        )
 
         now = dt.datetime.now(dt.UTC).astimezone()
         current_date = now.strftime("%Y-%m-%d")
 
-        base_prompt = self.agent.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(
-            assistant_name=self.agent.name
+        base_prompt = format_complex_agent_system_prompt_core(
+            self.agent.system_prompt,
+            self.agent.name,
         )
 
         return f"{base_prompt}\n\nToday's date is {current_date}."
