@@ -160,6 +160,26 @@ def build_timestamp_xml_footer() -> str:
 
 _DEFAULT_SYSTEM_PROMPT = DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT + _TOOL_ORCHESTRATION_GUIDE
 
+
+def default_agent_system_prompt_body() -> str:
+    """Return the configurable identity/behavior body (tool guide appended at runtime when builtin)."""
+    return DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT
+
+
+def uses_builtin_agent_system_prompt(system_prompt: str | None) -> bool:
+    """True when YAML/config should resolve to the built-in default (body + tool guide)."""
+    if not system_prompt:
+        return True
+    return system_prompt.strip() == DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT.strip()
+
+
+def format_complex_agent_system_prompt_core(system_prompt: str | None, assistant_name: str) -> str:
+    """Format the complex-tier behavioral core (includes tool guide for builtin default)."""
+    if uses_builtin_agent_system_prompt(system_prompt):
+        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=assistant_name)
+    return system_prompt.format(assistant_name=assistant_name)
+
+
 _SIMPLE_SYSTEM_PROMPT = SIMPLE_SYSTEM_PROMPT_FRAGMENT
 
 _MEDIUM_SYSTEM_PROMPT = MEDIUM_SYSTEM_PROMPT_FRAGMENT

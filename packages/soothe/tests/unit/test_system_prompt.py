@@ -44,15 +44,18 @@ def test_token_reduction_estimates():
 
     # Get prompts for each complexity
     from soothe.foundation.sloop.prompts import (
-        _DEFAULT_SYSTEM_PROMPT,
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
+    )
+    from soothe.foundation.sloop.prompts.system_templates import (
+        format_complex_agent_system_prompt_core,
     )
 
     simple_prompt = _SIMPLE_SYSTEM_PROMPT.format(assistant_name=config.agent.name)
     medium_prompt = _MEDIUM_SYSTEM_PROMPT.format(assistant_name=config.agent.name)
-    complex_prompt = config.agent.system_prompt or _DEFAULT_SYSTEM_PROMPT.format(
-        assistant_name=config.agent.name
+    complex_prompt = format_complex_agent_system_prompt_core(
+        config.agent.system_prompt,
+        config.agent.name,
     )
 
     # Rough token count (words * 1.3 is a common approximation)

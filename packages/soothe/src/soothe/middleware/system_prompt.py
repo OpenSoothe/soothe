@@ -327,9 +327,11 @@ class SystemPromptMiddleware(AgentMiddleware):
     def _get_base_prompt_core(self, complexity: str) -> str:
         """Behavioral system prompt for complexity (no volatile date line; RFC-104 cache order)."""
         from soothe.foundation.sloop.prompts import (
-            _DEFAULT_SYSTEM_PROMPT,
             _MEDIUM_SYSTEM_PROMPT,
             _SIMPLE_SYSTEM_PROMPT,
+        )
+        from soothe.foundation.sloop.prompts.system_templates import (
+            format_complex_agent_system_prompt_core,
         )
 
         # Handle both enum and string values
@@ -341,9 +343,10 @@ class SystemPromptMiddleware(AgentMiddleware):
             return _SIMPLE_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
         if complexity_str == "medium":
             return _MEDIUM_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
-        if self._config.agent.system_prompt:
-            return self._config.agent.system_prompt.format(assistant_name=self._config.agent.name)
-        return _DEFAULT_SYSTEM_PROMPT.format(assistant_name=self._config.agent.name)
+        return format_complex_agent_system_prompt_core(
+            self._config.agent.system_prompt,
+            self._config.agent.name,
+        )
 
     def _get_prompt_for_complexity(
         self, complexity: str, state: dict[str, Any] | None = None
