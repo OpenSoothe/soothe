@@ -88,7 +88,6 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     from this query must be cleared so the next query starts fresh.
     """
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     state_manager = ctx.state_manager
     goal_record = ctx.goal_record

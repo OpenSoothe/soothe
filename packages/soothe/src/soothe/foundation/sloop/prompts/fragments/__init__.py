@@ -44,9 +44,6 @@ PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT = _read(
 # Prefetch static policy fragments (IG-183 merged policies)
 EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", strip=True)
 
-# Currently-unused on-disk fragment, exposed so callers can wire it up later.
-EXECUTION_RULES_FRAGMENT = _read("instructions/execution_rules.xml", strip=True)
-
 
 # ---------------------------------------------------------------------------
 # System prompts and response-length guides
@@ -65,18 +62,9 @@ QUIZ_RESPONSE_GUIDE_FRAGMENT = _read("system/response_guides/quiz_response.xml")
 
 
 # ---------------------------------------------------------------------------
-# Classifier prompts
+# Classifier prompts (non-intake; intake loads via ``intention/prompts.py``)
 # ---------------------------------------------------------------------------
 
-INTAKE_CLASSIFICATION_SYSTEM_PROMPT_FRAGMENT = _read("classifiers/intake_classification_system.xml")
-INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT_FRAGMENT = _read(
-    "classifiers/intake_classification_retry_system.xml"
-)
-# Human envelope is code-built (GOAL: plain text); keep stub for back-compat imports.
-INTAKE_CLASSIFICATION_HUMAN_PROMPT_FRAGMENT = "GOAL:\n{query}"
-INTAKE_CLASSIFICATION_RETRY_HUMAN_PROMPT_FRAGMENT = INTAKE_CLASSIFICATION_HUMAN_PROMPT_FRAGMENT
-INTAKE_CLASSIFICATION_PROMPT_FRAGMENT = INTAKE_CLASSIFICATION_SYSTEM_PROMPT_FRAGMENT
-INTAKE_CLASSIFICATION_RETRY_PROMPT_FRAGMENT = INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT_FRAGMENT
 SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
     "classifiers/scenario_classifier_system.xml", strip=True
 )
@@ -96,9 +84,6 @@ __all__ = [
     "CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
-    "EXECUTION_RULES_FRAGMENT",
-    "INTAKE_CLASSIFICATION_PROMPT_FRAGMENT",
-    "INTAKE_CLASSIFICATION_RETRY_PROMPT_FRAGMENT",
     "LOOP_CONTINUATION_GUIDE_FRAGMENT",
     "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",

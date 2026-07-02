@@ -14,7 +14,6 @@ from soothe.foundation.sloop.intention.intake_messages import (
 )
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.intention.prompts import (
-    INTAKE_CLASSIFICATION_HUMAN_PROMPT,
     INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT,
     INTAKE_CLASSIFICATION_SYSTEM_PROMPT,
 )
@@ -52,9 +51,6 @@ class TestIntakeMessageBuilders:
         assert len(INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT) < len(
             INTAKE_CLASSIFICATION_SYSTEM_PROMPT
         )
-
-    def test_human_template_stub_documents_goal_label(self) -> None:
-        assert "GOAL:" in INTAKE_CLASSIFICATION_HUMAN_PROMPT
 
 
 @pytest.mark.asyncio

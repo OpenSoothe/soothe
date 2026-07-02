@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continue_bootstrap_step_briefs,
-    build_continue_bootstrap_step_description,
     build_prior_goal_completion_block,
     ledger_goal_completion_text,
     resolve_prior_goal_completion,
@@ -153,9 +152,6 @@ def test_continue_keyword_bootstrap_step_briefs() -> None:
     assert briefs.description == "Continue prior goal completion recommendations"
     assert "PRIOR GOAL COMPLETION" in briefs.full_description
     assert "recommended next actions" in briefs.full_description.lower()
-    assert (
-        build_continue_bootstrap_step_description(user_goal="continue") == briefs.full_description
-    )
 
 
 def test_follow_up_bootstrap_step_briefs_split_description_and_full() -> None:

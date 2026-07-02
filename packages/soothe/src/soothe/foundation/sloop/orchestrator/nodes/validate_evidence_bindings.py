@@ -17,7 +17,6 @@ async def node_validate_evidence_bindings(
 ) -> dict[str, Any]:
     """Reject plans whose steps lack valid evidence refs when the ledger is non-empty."""
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     decision = ctx.scratch.decision
 

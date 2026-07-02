@@ -44,7 +44,6 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     3. synthetic, when reached via the ``simple`` intake branch (RFC-630)
     """
     strange_loop = ctx.strange_loop
-    strange_loop = strange_loop  # Legacy alias
     state = ctx.loop_state
     plan_manager = ctx.plan_manager
     assessment = ctx.scratch.plan_assessment
