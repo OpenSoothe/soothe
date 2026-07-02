@@ -2085,6 +2085,13 @@ class AgentRuntimeConfig(BaseModel):
     )
 
 
+def _default_agent_system_prompt_body() -> str:
+    """Lazy import to avoid pulling prompt fragments at config import time."""
+    from soothe.foundation.sloop.prompts.system_templates import default_agent_system_prompt_body
+
+    return default_agent_system_prompt_body()
+
+
 class AgentConfig(BaseModel):
     """Unified agent configuration with progressive disclosure.
 
@@ -2109,8 +2116,14 @@ class AgentConfig(BaseModel):
     name: str = "Soothe"
     """Display name for the assistant identity in system prompts."""
 
-    system_prompt: str | None = None
-    """System prompt override. When None, a default prompt is generated using ``name``."""
+    system_prompt: str | None = Field(
+        default_factory=_default_agent_system_prompt_body,
+        description=(
+            "Behavioral system prompt body; supports {assistant_name}. "
+            "null or the built-in default body uses default_system_body.xml plus the "
+            "runtime tool-orchestration guide. Any other value replaces the body only."
+        ),
+    )
 
     workspace_instructions_max_chars: int = Field(
         default=8000,
@@ -2118,6 +2131,13 @@ class AgentConfig(BaseModel):
         le=100_000,
         description="Max chars inlined from AGENTS.md/CLAUDE.md in WORKSPACE_INSTRUCTIONS",
     )
+
+    @model_validator(mode="after")
+    def _normalize_system_prompt_whitespace(self) -> AgentConfig:
+        """Strip YAML block-scalar trailing newlines so defaults match the XML fragment."""
+        if self.system_prompt is not None:
+            object.__setattr__(self, "system_prompt", self.system_prompt.rstrip())
+        return self
 
     # === BEHAVIOR (Response Mode) ===
     goal_completion_mode: AgenticGoalCompletionMode = Field(
