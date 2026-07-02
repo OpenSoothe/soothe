@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.widgets.loop_selector import _format_column_value
+from soothe_cli.tui.model_config import load_loop_config
+from soothe_cli.tui.widgets.loop_selector import (
+    _format_column_value,
+    _visible_column_keys,
+)
 
 
 def test_format_column_value_topic_falls_back_to_prompt() -> None:
@@ -34,5 +38,9 @@ def test_format_column_value_shows_only_resume_columns() -> None:
         "topic": "Auth bug fix",
     }
     assert "019f1b8a" in _format_column_value(loop, "loop_id")
-    assert _format_column_value(loop, "messages") == "3"
     assert _format_column_value(loop, "topic") == "Auth bug fix"
+
+
+def test_default_resume_columns_topic_updated_loop_id_without_messages() -> None:
+    cfg = load_loop_config()
+    assert _visible_column_keys(cfg.columns) == ["topic", "updated_at", "loop_id"]
