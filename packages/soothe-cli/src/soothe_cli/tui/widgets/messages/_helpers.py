@@ -20,48 +20,6 @@ from soothe_cli.tui.preview_limits import STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
-# Map TUI theme names to Pygments code themes for visually consistent code blocks.
-_CODE_THEME_MAP: dict[str, str] = {
-    "langchain": "monokai",
-    "langchain-light": "default",
-    "textual-dark": "monokai",
-    "textual-light": "default",
-    "textual-ansi": "default",
-    "atom-one-dark": "one-dark",
-    "atom-one-light": "default",
-    "catppuccin-frappe": "monokai",
-    "catppuccin-latte": "default",
-    "catppuccin-macchiato": "monokai",
-    "catppuccin-mocha": "monokai",
-    "dracula": "dracula",
-    "flexoki": "monokai",
-    "gruvbox": "gruvbox-dark",
-    "monokai": "monokai",
-    "nord": "nord",
-    "rose-pine": "monokai",
-    "rose-pine-dawn": "default",
-    "rose-pine-moon": "monokai",
-    "solarized-dark": "solarized-dark",
-    "solarized-light": "solarized-light",
-    "tokyo-night": "monokai",
-}
-_DEFAULT_DARK_CODE_THEME = "monokai"
-_DEFAULT_LIGHT_CODE_THEME = "default"
-
-
-def _code_theme_for_app(widget_or_app: object | None = None) -> str:
-    """Return the Pygments code theme matching the active TUI theme."""
-    colors = theme.get_theme_colors(widget_or_app)
-    try:
-        app = widget_or_app.app if hasattr(type(widget_or_app), "app") else widget_or_app  # type: ignore[attr-defined]
-        theme_name = app.theme  # type: ignore[attr-defined]
-        if theme_name in _CODE_THEME_MAP:
-            return _CODE_THEME_MAP[theme_name]
-    except Exception:  # noqa: BLE001
-        pass
-    return _DEFAULT_DARK_CODE_THEME if colors.background < "#888888" else _DEFAULT_LIGHT_CODE_THEME
-
-
 # IG-420: TUI refresh throttling - minimum interval between widget refreshes
 _DEFAULT_TUI_REFRESH_INTERVAL_MS = 800
 """Default minimum interval between TUI refreshes in milliseconds."""
