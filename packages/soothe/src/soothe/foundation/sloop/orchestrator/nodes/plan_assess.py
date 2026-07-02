@@ -180,7 +180,6 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             not ctx.recovery_valid_resume
             or (
                 ctx.goal_record is not None
-                and ctx.goal_record.iteration == 0
                 and ctx.ce is not None
                 and len(ctx.ce.ledger.get_messages()) == 0
             )

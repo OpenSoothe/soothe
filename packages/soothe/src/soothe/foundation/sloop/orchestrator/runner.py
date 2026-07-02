@@ -17,10 +17,9 @@ from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeCont
 from soothe.foundation.sloop.utils.messages import last_ledger_ai_content
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.observability.langfuse import (
+    SootheLangfuse,
     loop_graph_langfuse_run_display_name,
     merge_langfuse_runnable_config,
-    patch_langfuse_trace_goal_io,
-    resolve_langfuse_config_str,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,22 +58,17 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
         RunnableConfig dict safe to pass to ``ainvoke``.
     """
     loop_id = ctx.state_manager.loop_id
-    inherit = ctx.langfuse_bootstrap
-    if inherit is not None:
-        base = dict(inherit)
-        configurable = dict(base.get("configurable") or {})
-        configurable["thread_id"] = loop_id
-    else:
-        base = {"configurable": {"thread_id": loop_id}}
-        configurable = base["configurable"]
-    # BM-001 fix: propagate workspace to configurable so tools use client workspace
+    configurable: dict[str, Any] = {"thread_id": loop_id}
     if ctx.loop_state.workspace:
         configurable["workspace"] = ctx.loop_state.workspace
-    # RFC-204 Group C: propagate proposal_queue for Layer 2 tools
     if ctx.proposal_queue is not None:
         configurable["proposal_queue"] = ctx.proposal_queue
-    base["configurable"] = configurable
+
     cfg = ctx.strange_loop.config
+    if ctx.goal_trace is not None:
+        return ctx.goal_trace.graph_invoke_config(configurable=configurable)
+
+    base = {"configurable": configurable}
     run_name = loop_graph_langfuse_run_display_name(cfg.observability.langfuse.trace_name)
     merged = merge_langfuse_runnable_config(
         base,
@@ -82,7 +76,6 @@ def build_loop_graph_invoke_config(ctx: LoopRuntimeContext) -> dict[str, Any]:
         session_id=ctx.loop_state.thread_id,
         run_name=run_name,
         loop_id=loop_id,
-        inherit_callbacks_from=inherit,
     )
     out = dict(merged)
     meta = dict(out.get("metadata") or {})
@@ -170,10 +163,9 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
         raise
 
     cfg = ctx.strange_loop.config
-    if cfg.observability.langfuse.enabled:
-        pub = resolve_langfuse_config_str(cfg.observability.langfuse.public_key)
+    if cfg.observability.langfuse.enabled and ctx.goal_trace is not None:
         trace_goal = ctx.loop_state.goal_user_submission or ctx.loop_state.goal
-        patch_langfuse_trace_goal_io(
+        SootheLangfuse(cfg).patch_goal_io(
             config,
             goal_text=trace_goal,
             output_text=_langfuse_goal_output_text(ctx),
@@ -181,5 +173,4 @@ async def invoke_strange_loop_graph(ctx: LoopRuntimeContext) -> None:
                 cfg.observability.langfuse.trace_name
             ),
             session_id=ctx.loop_state.thread_id,
-            public_key=pub,
         )

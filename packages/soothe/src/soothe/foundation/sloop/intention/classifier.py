@@ -74,7 +74,7 @@ class IntentClassifier:
         thread_id: str | None = None,
         context_engine: Any | None = None,
         observability_metadata: dict[str, str] | None = None,
-        langfuse_bootstrap: dict[str, Any] | None = None,
+        goal_trace: Any | None = None,
     ) -> IntentClassification:
         """Classify the query into a 4-class intake label (RFC-630).
 
@@ -87,8 +87,8 @@ class IntentClassifier:
             thread_id: Thread id for ledger metadata (optional).
             context_engine: Optional CE instance for intent-classify ledger writes.
             observability_metadata: Optional metadata for observability.
-            langfuse_bootstrap: Shared Langfuse config from ``build_goal_loop_langfuse_bootstrap``
-                so intent-classify nests under the same trace as ``strange-loop-graph``.
+            goal_trace: ``GoalLoopTrace`` from ``SootheLangfuse.begin_goal_loop`` so
+                intent-classify nests under the same trace as ``strange-loop-graph``.
 
         Returns:
             IntentClassification with ``intake_label`` ∈
@@ -110,7 +110,7 @@ class IntentClassifier:
                     retry_mode=retry_mode,
                     loop_messages=loop_messages,
                     observability_metadata=observability_metadata,
-                    langfuse_bootstrap=langfuse_bootstrap,
+                    goal_trace=goal_trace,
                 )
                 break
             except Exception as exc:
@@ -155,7 +155,7 @@ class IntentClassifier:
         retry_mode: bool = False,
         loop_messages: list[BaseMessage] | None = None,
         observability_metadata: dict[str, str] | None = None,
-        langfuse_bootstrap: dict[str, Any] | None = None,
+        goal_trace: Any | None = None,
     ) -> tuple[IntentClassification, str, dict[str, Any]]:
         """4-class intake LLM call with structured output (RFC-630)."""
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
@@ -174,7 +174,7 @@ class IntentClassifier:
             "classify_intake",
             "intake.primary",
             observability_metadata=observability_metadata,
-            langfuse_bootstrap=langfuse_bootstrap,
+            goal_trace=goal_trace,
         )
 
         messages: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -311,56 +311,39 @@ class IntentClassifier:
         component: str,
         *,
         observability_metadata: dict[str, str] | None = None,
-        langfuse_bootstrap: dict[str, Any] | None = None,
+        goal_trace: Any | None = None,
     ) -> dict[str, Any]:
         """Build RunnableConfig with Langfuse tracing and call metadata."""
         from soothe.middleware._utils import create_llm_call_metadata
 
-        if (
-            langfuse_bootstrap is not None
-            and self._soothe_config is not None
-            and self._soothe_config.observability.langfuse.enabled
-        ):
-            try:
-                from soothe.utils.observability.langfuse import build_intake_langfuse_invoke_config
+        if goal_trace is not None:
+            return goal_trace.intake_invoke_config(
+                purpose=purpose,
+                component=f"classifier.{component}",
+                phase="pre-stream",
+                extra_metadata=observability_metadata,
+            )
 
-                return build_intake_langfuse_invoke_config(
-                    self._soothe_config,
-                    langfuse_bootstrap=langfuse_bootstrap,
-                    purpose=purpose,
-                    component=f"classifier.{component}",
-                    phase="pre-stream",
-                    extra_metadata=observability_metadata,
-                )
-            except Exception:
-                logger.debug("Langfuse intake invoke config build failed", exc_info=True)
-
-        try:
+        if self._soothe_config is not None:
             from soothe.utils.observability.langfuse import (
-                build_traced_config,
+                SootheLangfuse,
                 intent_classify_langfuse_run_display_name,
             )
 
-            trace_name = (
-                (self._soothe_config.observability.langfuse.trace_name or "").strip()
-                if self._soothe_config
-                else ""
-            )
-            return build_traced_config(
-                self._soothe_config,
+            trace_name = (self._soothe_config.observability.langfuse.trace_name or "").strip()
+            return SootheLangfuse(self._soothe_config).traced_llm(
                 purpose=purpose,
                 component=f"classifier.{component}",
                 phase="pre-stream",
                 run_name=intent_classify_langfuse_run_display_name(trace_name or None),
                 extra_metadata=observability_metadata,
-                independent_trace=False,
             )
-        except Exception:
-            metadata = create_llm_call_metadata(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase="pre-stream",
-            )
-            if observability_metadata:
-                metadata.update(observability_metadata)
-            return {"metadata": metadata}
+
+        metadata = create_llm_call_metadata(
+            purpose=purpose,
+            component=f"classifier.{component}",
+            phase="pre-stream",
+        )
+        if observability_metadata:
+            metadata.update(observability_metadata)
+        return {"metadata": metadata}

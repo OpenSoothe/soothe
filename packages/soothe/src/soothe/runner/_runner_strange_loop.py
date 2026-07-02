@@ -413,16 +413,15 @@ class StrangeLoopMixin:
 
         intent_classification = None
         strange_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
-        langfuse_bootstrap = None
+        goal_trace = None
         if self._intent_classifier and not clarification_answer:
             # RFC-630: 4-class intake LLM (quiz | trivial | simple | complex),
             # drives route_by_intent branch routing in the graph.
             yield _custom(StrangeLoopPlanPhaseStatusEvent(label="Classifying request").to_dict())
             if self._config.observability.langfuse.enabled:
-                from soothe.utils.observability.langfuse import build_goal_loop_langfuse_bootstrap
+                from soothe.utils.observability.langfuse import SootheLangfuse
 
-                langfuse_bootstrap = build_goal_loop_langfuse_bootstrap(
-                    self._config,
+                goal_trace = SootheLangfuse(self._config).begin_goal_loop(
                     session_id=tid,
                     loop_id=strange_loop_id,
                 )
@@ -438,7 +437,7 @@ class StrangeLoopMixin:
                 loop_messages=intake_ctx.loop_messages,
                 thread_id=tid,
                 context_engine=intake_ctx.context_engine,
-                langfuse_bootstrap=langfuse_bootstrap,
+                goal_trace=goal_trace,
             )
 
             logger.info(
@@ -539,7 +538,7 @@ class StrangeLoopMixin:
                 clarification_policy=clarification_policy,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
-                langfuse_bootstrap=langfuse_bootstrap,
+                goal_trace=goal_trace,
             ):
                 if event_type == "intent_classified":
                     logger.info(

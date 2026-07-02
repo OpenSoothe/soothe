@@ -58,7 +58,7 @@ def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
     mock_client = MagicMock()
 
     with patch(
-        "soothe.utils.observability.langfuse._merge_trace_fields_via_ingestion",
+        "soothe.utils.observability.langfuse._trace_io._merge_trace_fields_via_ingestion",
         return_value=True,
     ):
         with patch("langfuse.get_client", return_value=mock_client):
@@ -89,7 +89,7 @@ def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
     mock_client.start_span.return_value = mock_span
 
     with patch(
-        "soothe.utils.observability.langfuse._merge_trace_fields_via_ingestion",
+        "soothe.utils.observability.langfuse._trace_io._merge_trace_fields_via_ingestion",
         return_value=False,
     ):
         with patch("langfuse.get_client", return_value=mock_client):
@@ -115,7 +115,7 @@ def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
 
 def test_merge_trace_fields_via_ingestion_enqueues() -> None:
     pytest.importorskip("langfuse")
-    from soothe.utils.observability.langfuse import _merge_trace_fields_via_ingestion
+    from soothe.utils.observability.langfuse._trace_io import _merge_trace_fields_via_ingestion
 
     tid = "b" * 32
     mock_rs = MagicMock()

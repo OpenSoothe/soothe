@@ -1138,23 +1138,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         self,
         goal_id: str,
         loop_id: str,
-        goal_text: str,
         thread_id: str,
-        iteration: int,
         status: str,
         started_at: str,
     ) -> None:
-        """Save goal execution record with retry.
-
-        Args:
-            goal_id: Goal identifier.
-            loop_id: StrangeLoop identifier.
-            goal_text: Goal description.
-            thread_id: Thread identifier.
-            iteration: Iteration number.
-            status: Goal status.
-            started_at: Start timestamp (ISO format).
-        """
+        """Save goal index entry with retry."""
         started_dt = datetime.fromisoformat(started_at)
 
         async def _do_save_goal(pool: AsyncConnectionPool) -> None:
@@ -1163,16 +1151,16 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     await cur.execute(
                         """
                         INSERT INTO goal_records
-                        (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        (goal_id, loop_id, thread_id, status, started_at)
+                        VALUES (%s, %s, %s, %s, %s)
                     """,
-                        (goal_id, loop_id, goal_text, thread_id, iteration, status, started_dt),
+                        (goal_id, loop_id, thread_id, status, started_dt),
                     )
                     logger.debug(
-                        "Saved goal: id=%s loop=%s iter=%d status=%s",
+                        "Saved goal: id=%s loop=%s thread=%s status=%s",
                         goal_id,
                         loop_id,
-                        iteration,
+                        thread_id,
                         status,
                     )
 
@@ -1183,24 +1171,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         goal_id: str,
         loop_id: str,
         status: str,
-        goal_completion: str,
-        evidence_summary: str,
         duration_ms: int,
         tokens_used: int,
         completed_at: str | None,
     ) -> None:
-        """Update goal execution record with retry.
-
-        Args:
-            goal_id: Goal identifier.
-            loop_id: StrangeLoop identifier.
-            status: Goal status.
-            goal_completion: Goal completion summary.
-            evidence_summary: Evidence summary.
-            duration_ms: Duration in milliseconds.
-            tokens_used: Tokens consumed.
-            completed_at: Completion timestamp (ISO format, None if not completed).
-        """
+        """Update goal index entry with retry."""
         completed_dt = datetime.fromisoformat(completed_at) if completed_at else None
 
         async def _do_update_goal(pool: AsyncConnectionPool) -> None:
@@ -1210,8 +1185,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                         """
                         UPDATE goal_records
                         SET status = %s,
-                            goal_completion = %s,
-                            evidence_summary = %s,
                             duration_ms = %s,
                             tokens_used = %s,
                             completed_at = %s
@@ -1219,8 +1192,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                     """,
                         (
                             status,
-                            goal_completion,
-                            evidence_summary,
                             duration_ms,
                             tokens_used,
                             completed_dt,

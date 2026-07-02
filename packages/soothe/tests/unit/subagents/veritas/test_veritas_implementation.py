@@ -142,12 +142,13 @@ async def test_traced_invoke_config_forwarded_when_config_provided(
 
     sentinel = {"metadata": {"purpose": "clarification_answer"}, "callbacks": ["lf"]}
 
-    def _stub_build(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        return sentinel
+    class _StubTracer:
+        def traced_llm(self, **_kwargs: Any) -> dict[str, Any]:
+            return sentinel
 
     monkeypatch.setattr(
-        "soothe.utils.observability.langfuse.build_traced_config",
-        _stub_build,
+        "soothe.utils.observability.langfuse.SootheLangfuse",
+        lambda _cfg: _StubTracer(),
         raising=True,
     )
 

@@ -38,11 +38,31 @@ _LOOP_COLUMN_MIGRATIONS: dict[str, str] = {
     "resume_topic": "TEXT",
 }
 
-# RFC-225 / IG-445: enriched GoalExecutionRecord fields packed as JSON
-# into one column to keep the goal_records schema additive.
-_GOAL_RECORD_COLUMN_MIGRATIONS: dict[str, str] = {
-    "extras_jsonb": "TEXT",
-}
+# RFC-626: legacy goal_records columns dropped; slim index only.
+_LEGACY_GOAL_RECORD_COLUMNS = frozenset(
+    {
+        "goal_text",
+        "iteration",
+        "loop_messages",
+        "goal_completion",
+        "evidence_summary",
+        "reason_history",
+        "act_history",
+        "extras_jsonb",
+    }
+)
+_SLIM_GOAL_RECORD_COLUMNS = frozenset(
+    {
+        "goal_id",
+        "loop_id",
+        "thread_id",
+        "status",
+        "duration_ms",
+        "tokens_used",
+        "started_at",
+        "completed_at",
+    }
+)
 
 
 class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
@@ -900,20 +920,16 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         self,
         goal_id: str,
         loop_id: str,
-        goal_text: str,
         thread_id: str,
-        iteration: int,
         status: str,
         started_at: str,
     ) -> None:
-        """Save goal execution record."""
+        """Save goal index entry."""
         await self._writer_to_thread(
             self._save_goal_sync,
             goal_id,
             loop_id,
-            goal_text,
             thread_id,
-            iteration,
             status,
             started_at,
         )
@@ -923,27 +939,25 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         conn: sqlite3.Connection,
         goal_id: str,
         loop_id: str,
-        goal_text: str,
         thread_id: str,
-        iteration: int,
         status: str,
         started_at: str,
     ) -> None:
-        """Sync save goal."""
+        """Sync save goal index entry."""
         conn.execute(
             """
             INSERT INTO goal_records
-            (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (goal_id, loop_id, thread_id, status, started_at)
+            VALUES (?, ?, ?, ?, ?)
         """,
-            (goal_id, loop_id, goal_text, thread_id, iteration, status, started_at),
+            (goal_id, loop_id, thread_id, status, started_at),
         )
         conn.commit()
         logger.debug(
-            "Saved goal: id=%s loop=%s iter=%d status=%s",
+            "Saved goal: id=%s loop=%s thread=%s status=%s",
             goal_id,
             loop_id,
-            iteration,
+            thread_id,
             status,
         )
 
@@ -952,20 +966,16 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         goal_id: str,
         loop_id: str,
         status: str,
-        goal_completion: str,
-        evidence_summary: str,
         duration_ms: int,
         tokens_used: int,
         completed_at: str | None,
     ) -> None:
-        """Update goal execution record."""
+        """Update goal index entry."""
         await self._writer_to_thread(
             self._update_goal_sync,
             goal_id,
             loop_id,
             status,
-            goal_completion,
-            evidence_summary,
             duration_ms,
             tokens_used,
             completed_at,
@@ -977,19 +987,15 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         goal_id: str,
         loop_id: str,
         status: str,
-        goal_completion: str,
-        evidence_summary: str,
         duration_ms: int,
         tokens_used: int,
         completed_at: str | None,
     ) -> None:
-        """Sync update goal."""
+        """Sync update goal index entry."""
         conn.execute(
             """
             UPDATE goal_records
             SET status = ?,
-                goal_completion = ?,
-                evidence_summary = ?,
                 duration_ms = ?,
                 tokens_used = ?,
                 completed_at = ?
@@ -997,8 +1003,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """,
             (
                 status,
-                goal_completion,
-                evidence_summary,
                 duration_ms,
                 tokens_used,
                 completed_at,
@@ -1041,13 +1045,57 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 db.execute(f"ALTER TABLE agentloop_loops ADD COLUMN {col} {typedef}")  # noqa: S608
 
     @staticmethod
-    def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
-        """Add enriched-goal-record columns to existing ``goal_records`` tables (RFC-225)."""
+    def _migrate_goal_records_slim(db: sqlite3.Connection) -> None:
+        """Replace legacy goal_records columns with RFC-626 GoalIndexEntry schema."""
+        cursor = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='goal_records'"
+        )
+        if cursor.fetchone() is None:
+            return
+
         cursor = db.execute("PRAGMA table_info(goal_records)")
         existing = {row[1] for row in cursor.fetchall()}
-        for col, typedef in _GOAL_RECORD_COLUMN_MIGRATIONS.items():
-            if col not in existing:
-                db.execute(f"ALTER TABLE goal_records ADD COLUMN {col} {typedef}")  # noqa: S608
+        if not existing & _LEGACY_GOAL_RECORD_COLUMNS and existing >= _SLIM_GOAL_RECORD_COLUMNS:
+            return
+
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS goal_records_new (
+                goal_id TEXT PRIMARY KEY,
+                loop_id TEXT NOT NULL,
+                thread_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                duration_ms INTEGER DEFAULT 0,
+                tokens_used INTEGER DEFAULT 0,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
+            )
+        """)
+        if existing:
+            db.execute("""
+                INSERT INTO goal_records_new
+                    (goal_id, loop_id, thread_id, status, duration_ms, tokens_used,
+                     started_at, completed_at)
+                SELECT goal_id, loop_id, thread_id, status,
+                       COALESCE(duration_ms, 0), COALESCE(tokens_used, 0),
+                       started_at, completed_at
+                FROM goal_records
+            """)
+        db.execute("DROP TABLE goal_records")
+        db.execute("ALTER TABLE goal_records_new RENAME TO goal_records")
+        db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_goals_loop
+            ON goal_records(loop_id)
+        """)
+        db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_goals_thread
+            ON goal_records(thread_id)
+        """)
+
+    @staticmethod
+    def _ensure_goal_record_columns(db: sqlite3.Connection) -> None:
+        """Migrate ``goal_records`` to RFC-626 slim schema when legacy columns exist."""
+        SQLitePersistenceBackend._migrate_goal_records_slim(db)
 
     @staticmethod
     def _ensure_loop_columns_on_path(db_path: Path) -> None:
@@ -1179,23 +1227,17 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 ON failed_branches(loop_id, iteration)
             """)
 
-            # Create goal_records table (RFC-214: loop_messages replaces reason_history/act_history)
+            # Create goal_records table (RFC-626 GoalIndexEntry index)
             db.execute("""
                 CREATE TABLE IF NOT EXISTS goal_records (
                     goal_id TEXT PRIMARY KEY,
                     loop_id TEXT NOT NULL,
-                    goal_text TEXT NOT NULL,
                     thread_id TEXT NOT NULL,
-                    iteration INTEGER NOT NULL,
                     status TEXT NOT NULL,
-                    loop_messages TEXT,
-                    goal_completion TEXT,
-                    evidence_summary TEXT,
                     duration_ms INTEGER DEFAULT 0,
                     tokens_used INTEGER DEFAULT 0,
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
-                    extras_jsonb TEXT,
                     FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)
@@ -1337,24 +1379,17 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 ON failed_branches(loop_id, iteration)
             """)
 
-            # Create goal_records table
+            # Create goal_records table (RFC-626 GoalIndexEntry index)
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS goal_records (
                     goal_id TEXT PRIMARY KEY,
                     loop_id TEXT NOT NULL,
-                    goal_text TEXT NOT NULL,
                     thread_id TEXT NOT NULL,
-                    iteration INTEGER NOT NULL,
                     status TEXT NOT NULL,
-                    reason_history TEXT,
-                    act_history TEXT,
-                    goal_completion TEXT,
-                    evidence_summary TEXT,
                     duration_ms INTEGER DEFAULT 0,
                     tokens_used INTEGER DEFAULT 0,
                     started_at TEXT NOT NULL,
                     completed_at TEXT,
-                    extras_jsonb TEXT,
                     FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
                 )
             """)

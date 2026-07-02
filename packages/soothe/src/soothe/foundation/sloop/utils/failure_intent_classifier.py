@@ -156,15 +156,14 @@ async def classify_failure_intent_async(
     try:
         from langchain_core.messages import HumanMessage
 
-        from soothe.utils.observability.langfuse import build_traced_config
+        from soothe.utils.observability.langfuse import SootheLangfuse
 
         prompt = (
             "Classify this tool/step failure for an autonomous agent.\n"
             f"Failure text:\n{text[:2000]}\n"
             "\nReturn category, confidence 0-1, suggested_action, and extracted_entities."
         )
-        invoke_config = build_traced_config(
-            soothe_config,
+        invoke_config = SootheLangfuse(soothe_config).traced_llm(
             purpose="failure_intent_classify",
             component="loop.failure_intent",
             phase="reflect",

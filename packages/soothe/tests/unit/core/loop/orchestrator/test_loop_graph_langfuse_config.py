@@ -7,8 +7,8 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.foundation.sloop.orchestrator.runner import build_loop_graph_invoke_config
 from soothe.utils.observability.langfuse import (
-    build_goal_loop_langfuse_bootstrap,
-    build_intake_langfuse_invoke_config,
+    GoalLoopTrace,
+    SootheLangfuse,
     intent_classify_langfuse_run_display_name,
 )
 
@@ -31,6 +31,8 @@ def test_build_loop_graph_invoke_config_keeps_loop_id_as_graph_thread() -> None:
     ctx.strange_loop = mock_al
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
+    ctx.goal_trace = None
+    ctx.proposal_queue = None
 
     out = build_loop_graph_invoke_config(ctx)
 
@@ -59,6 +61,8 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     ctx.strange_loop = mock_al
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
+    ctx.goal_trace = None
+    ctx.proposal_queue = None
 
     with patch(
         "soothe.foundation.sloop.orchestrator.runner.merge_langfuse_runnable_config",
@@ -80,23 +84,19 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     assert out["metadata"]["loop_id"] == "loop-1"
 
 
-def test_build_loop_graph_invoke_config_inherits_langfuse_bootstrap() -> None:
-    """Graph invoke reuses bootstrap handler so intent-classify and graph share one trace."""
+def test_build_loop_graph_invoke_config_uses_goal_trace_pinned_id() -> None:
+    """Graph invoke pins handler to goal trace id so intent-classify shares one trace."""
     cfg = SootheConfig()
     cfg.observability.langfuse.enabled = True
     cfg.observability.langfuse.trace_name = "soothe-dev"
 
-    handler = MagicMock(name="shared_handler")
-    bootstrap = {
-        "configurable": {"thread_id": "loop-1"},
-        "callbacks": [handler],
-        "metadata": {
-            "langfuse_session_id": "conv-thread-9",
-            "loop_id": "loop-1",
-            "langfuse_tags": ["goal_execution_loop", "strange-loop-graph"],
-        },
-        "run_name": "soothe-dev:strange-loop-graph",
-    }
+    goal_trace = GoalLoopTrace(
+        soothe_config=cfg,
+        trace_id="trace-goal-1",
+        session_id="conv-thread-9",
+        loop_id="loop-1",
+        trace_display_name="soothe-dev:strange-loop-graph",
+    )
 
     mock_al = MagicMock()
     mock_al.config = cfg
@@ -112,71 +112,47 @@ def test_build_loop_graph_invoke_config_inherits_langfuse_bootstrap() -> None:
     ctx.strange_loop = mock_al
     ctx.state_manager = mock_sm
     ctx.loop_state = mock_ls
-    ctx.langfuse_bootstrap = bootstrap
+    ctx.goal_trace = goal_trace
     ctx.proposal_queue = None
 
-    with patch(
-        "soothe.foundation.sloop.orchestrator.runner.merge_langfuse_runnable_config",
-        return_value={
-            "configurable": {"thread_id": "loop-1", "workspace": "/tmp/ws"},
-            "callbacks": [handler],
-            "metadata": {"loop_id": "loop-1"},
-        },
-    ) as m_merge:
-        out = build_loop_graph_invoke_config(ctx)
+    out = build_loop_graph_invoke_config(ctx)
 
-    m_merge.assert_called_once()
-    _args, kwargs = m_merge.call_args
-    assert kwargs["inherit_callbacks_from"] is bootstrap
-    assert kwargs["session_id"] == "conv-thread-9"
-    assert _args[0]["configurable"]["thread_id"] == "loop-1"
-    assert _args[0]["configurable"]["workspace"] == "/tmp/ws"
-    assert out["callbacks"] == [handler]
+    assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
+    assert out["configurable"]["thread_id"] == "loop-1"
+    assert out["configurable"]["workspace"] == "/tmp/ws"
+    assert out["run_name"] == "soothe-dev:strange-loop-graph"
+    assert "callbacks" in out
 
 
-def test_build_goal_loop_langfuse_bootstrap_pins_trace_id(monkeypatch) -> None:
+def test_begin_goal_loop_pins_trace_id(monkeypatch) -> None:
     pytest.importorskip("langfuse")
-    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
     cfg = SootheConfig()
     cfg.observability.langfuse.enabled = True
     cfg.observability.langfuse.trace_name = "soothe-dev"
     cfg.observability.langfuse.public_key = "pk-test"
 
-    handler = SootheLangfuseCallbackHandler(
-        public_key="pk-test",
-        trace_context={"trace_id": "trace-goal-1"},
-    )
     monkeypatch.setattr(
-        "soothe.utils.observability.langfuse._create_goal_loop_langfuse_handler",
-        lambda _c: (handler, "trace-goal-1"),
+        "soothe.utils.observability.langfuse._goal_loop.allocate_langfuse_trace_id",
+        lambda _c: "trace-goal-1",
     )
 
-    out = build_goal_loop_langfuse_bootstrap(
-        cfg,
+    goal_trace = SootheLangfuse(cfg).begin_goal_loop(
         session_id="thread-1",
         loop_id="loop-1",
     )
-    assert out["callbacks"] == [handler]
-    assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
-    assert out["run_name"] == "soothe-dev:strange-loop-graph"
-    assert "goal_execution_loop" in out["metadata"]["langfuse_tags"]
+    assert goal_trace is not None
+    assert goal_trace.trace_id == "trace-goal-1"
+    assert goal_trace.trace_display_name == "soothe-dev:strange-loop-graph"
 
 
-def test_build_goal_loop_langfuse_bootstrap_disabled_has_no_callbacks() -> None:
+def test_begin_goal_loop_disabled_returns_none() -> None:
     cfg = SootheConfig()
     cfg.observability.langfuse.enabled = False
-
-    out = build_goal_loop_langfuse_bootstrap(
-        cfg,
-        session_id="thread-1",
-        loop_id="loop-1",
-    )
-    assert out["configurable"]["thread_id"] == "loop-1"
-    assert "callbacks" not in out
+    assert SootheLangfuse(cfg).begin_goal_loop(session_id="thread-1", loop_id="loop-1") is None
 
 
-def test_build_intake_langfuse_invoke_config_preserves_bootstrap_handler() -> None:
+def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
     pytest.importorskip("langfuse")
     from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
 
@@ -184,27 +160,23 @@ def test_build_intake_langfuse_invoke_config_preserves_bootstrap_handler() -> No
     cfg.observability.langfuse.enabled = True
     cfg.observability.langfuse.trace_name = "soothe-dev"
 
-    handler = SootheLangfuseCallbackHandler(trace_context={"trace_id": "trace-goal-1"})
-    bootstrap = {
-        "configurable": {"thread_id": "loop-1"},
-        "callbacks": [handler],
-        "metadata": {
-            "langfuse_session_id": "thread-1",
-            "loop_id": "loop-1",
-            "langfuse_trace_id": "trace-goal-1",
-            "langfuse_trace_name": "soothe-dev:strange-loop-graph",
-        },
-        "run_name": "soothe-dev:strange-loop-graph",
-    }
+    goal_trace = GoalLoopTrace(
+        soothe_config=cfg,
+        trace_id="trace-goal-1",
+        session_id="thread-1",
+        loop_id="loop-1",
+        trace_display_name="soothe-dev:strange-loop-graph",
+    )
 
-    out = build_intake_langfuse_invoke_config(
-        cfg,
-        langfuse_bootstrap=bootstrap,
+    out = goal_trace.intake_invoke_config(
         purpose="classify_intake",
         component="classifier.intake.primary",
     )
 
-    assert out["callbacks"] == [handler]
+    assert out["callbacks"]
+    handler = out["callbacks"][0]
+    assert isinstance(handler, SootheLangfuseCallbackHandler)
+    assert handler.trace_context == {"trace_id": "trace-goal-1"}
     assert out["run_name"] == intent_classify_langfuse_run_display_name("soothe-dev")
     assert out["metadata"]["langfuse_trace_name"] == "soothe-dev:strange-loop-graph"
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
