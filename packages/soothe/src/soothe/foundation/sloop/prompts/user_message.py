@@ -340,7 +340,7 @@ class UserMessageBuilder:
             (
                 "TASK",
                 "Assess goal completion: return status (continue/replan/done), goal_progress, "
-                "and first-person assessment_reasoning.",
+                "and first-person assessment_reasoning (about 10~20 words).",
             )
         )
 
@@ -402,7 +402,7 @@ class UserMessageBuilder:
             (
                 "TASK",
                 "Generate the execution plan: steps (with full_description for actions), "
-                "execution_mode, and first-person reasoning.",
+                "execution_mode, and first-person reasoning (about 10~20 words).",
             )
         )
 
