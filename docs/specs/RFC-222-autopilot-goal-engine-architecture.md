@@ -2,7 +2,7 @@
 
 **RFC**: 222
 **Title**: Autopilot and Goal Engine Architecture (Daemon-Owned)
-**Status**: Draft (revised 2026-05-28)
+**Status**: Implemented (Partially Superseded) — see superseded-by notes below
 **Kind**: Architecture Design
 **Created**: 2026-05-27
 **Revised**: 2026-05-28 — daemon-ownership pivot; StrangeLoop reframed as pure execution unit; bounded summarization via `GoalDispatchContextBundle` replaces in-memory lineage; `WorkspaceReservation` replaces per-path file-lock coordination. `GoalDispatchContext*` naming chosen to avoid collision with `GoalContext` already defined in RFC-217 (thread ecosystem) and RFC-200 (DAG snapshot for backoff).
@@ -13,8 +13,16 @@
 - RFC-200 §"Pull-Based Architecture" / §"StrangeLoop ↔ GoalEngine Integration": the inverted control flow ("StrangeLoop pulls from GoalEngine, GoalEngine never invokes StrangeLoop") is replaced by **autopilot push**: daemon's `AutopilotService` dispatches goals to StrangeLoop workers via the job contract. StrangeLoop never sees `GoalEngine`. RFC-200's backoff reasoning, evidence schema, and goal-directives sections remain authoritative.
 
 **Superseded by (in part)**:
-- RFC-625 (AutopilotMonitor and ContextEngine Unification) — deletes `GoalEngine` entirely (~1821 lines). All goal/step/ledger state consolidated into `ContextEngine`; autopilot scheduling migrated to `AutopilotMonitor`. This RFC's `GoalEngine` references are historical only.
-- RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination) — consolidates all entity models under ContextEngine, eliminates `LoopState`, unifies ledger management. Job abstraction refined to operate directly on CE GoalNode entities without intermediate state containers.
+- **RFC-625 (AutopilotMonitor and ContextEngine Unification)** — deletes `GoalEngine` entirely (~1821 lines). All goal/step/ledger state consolidated into `ContextEngine`; autopilot scheduling migrated to `AutopilotMonitor`. **All `GoalEngine` references in this RFC are historical reference only.**
+- **RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination)** — consolidates all entity models under ContextEngine, eliminates `LoopState`, unifies ledger management. Job abstraction refined to operate directly on CE GoalNode entities without intermediate state containers. **Sections describing `LoopState` and legacy entity models are historical reference only.**
+
+> ⚠️ **Historical Reference Notice**: The `GoalEngine` architecture described in this RFC has been superseded by RFC-625. The following sections remain for historical reference:
+> - §"Architecture Position" (component model with `GoalEngine`)
+> - §"GoalDispatchContext and ContextProjector" (legacy context projection)
+> - §"GoalEngine Component" (entire component deleted)
+> - §"WorkerPool and Sticky Affinity" (scheduling logic moved to `AutopilotMonitor`)
+>
+> Active implementations should reference RFC-625 (AutopilotMonitor/ContextEngine) and RFC-626 (entity models) instead.
 
 ---
 
@@ -73,17 +81,21 @@ This invariant gates every design choice. If a proposed change would require Str
 
 ## Architecture Position
 
+> ⚠️ **Historical Reference**: This section describes `GoalEngine` which has been superseded by `ContextEngine` (RFC-625). The component diagram and GoalEngine references are preserved for historical context only.
+
 ### Layer Model (revised)
 
 ```
-Layer 3: Autopilot (daemon process, singleton)
+Autopilot (daemon process, singleton)
   ┌──────────────────────────────────────────────────────────────┐
   │ AutopilotService (composes the following)                    │
   │   • GoalEngine            — DAG, state machine, backoff      │
+  │                              ⚠️ SUPERSeded by ContextEngine (RFC-625) │
   │   • WorkspaceReservation  — workspace-prefix conflict gate   │
   │   • WorkerPool            — sticky wrapper over LoopRunner-  │
   │                             Factory (subprocess workers)     │
   │   • ContextProjector      — parents' GoalContexts → bundle   │
+  │                              ⚠️ SUPERSeded by CE projection (RFC-625) │
   │   • GoalDispatchContextStore      — durability-backed context store  │
   │   • InternalEventBus      — injected, not singleton          │
   │   • SchedulerService      — cron-style timed task triggers   │
@@ -96,7 +108,7 @@ Layer 3: Autopilot (daemon process, singleton)
                   (LoopRunRequest + AutopilotJob ↓)
                   (StreamChunk[…] + GoalCompletion ↑)
                                 │
-Layer 2: StrangeLoop (subprocess worker, fungible, RFC-221)
+StrangeLoop (subprocess worker, fungible, RFC-221)
   ┌──────────────────────────────────────────────────────────────┐
   │ One subprocess per worker slot (LoopRunnerFactory).          │
   │ Per request: SootheRunner.astream(autopilot_job=…) →         │
@@ -107,7 +119,7 @@ Layer 2: StrangeLoop (subprocess worker, fungible, RFC-221)
   │ Knows: nothing about the DAG, autopilot, or siblings.        │
   └──────────────────────────────────────────────────────────────┘
 
-Layer 1: CoreAgent (per StrangeLoop)
+CoreAgent (per StrangeLoop)
   Unchanged from prior RFC. Tools, subagents, MCP, middleware.
 ```
 
@@ -224,6 +236,8 @@ Reuse the RFC-221 `cancel_event` mechanism (`pool_runner.py:448`). Autopilot's `
 ---
 
 ## GoalDispatchContext and ContextProjector
+
+> ⚠️ **Historical Reference**: Context projection has been superseded by `ContextEngine` (RFC-625). The `GoalDispatchContextBundle` and `ContextProjector` described here are preserved for historical reference. See RFC-626 for the current entity model.
 
 > **Naming note**: `GoalDispatchContext*` is distinct from `GoalContext` in RFC-217 (thread ecosystem + execution memory) and RFC-200 (DAG snapshot for backoff reasoning). Those concepts continue to exist; this RFC introduces a third, narrower concept: the bounded summary autopilot ships to a worker so StrangeLoop can hydrate without seeing the DAG.
 
@@ -717,7 +731,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 
 - Full dreaming distillation persistence (procedure / semantic / profile modes)
 - Backoff decision application in AutopilotMonitor
-- Layer 2 proposal tools (`suggest_goal`, `add_finding`)
+- StrangeLoop proposal tools (`suggest_goal`, `add_finding`)
 - Webhook notifications
 - Token-budget enforcement (gap H3)
 - Per-loop solo/autopilot toggle (removed; use `/autopilot` job submit + `agent.autonomous.enabled`)
@@ -727,7 +741,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 ## References
 
 - RFC-000: System Conceptual Design
-- RFC-200: Layer 3 Goal Management and Backoff Authority
+- RFC-200: Goal Management and Backoff Authority
 - RFC-201: StrangeLoop Plan-Execute Loop Architecture
 - RFC-204: Goal File Discovery & Status Tracking
 - RFC-220: LangGraph Loop Orchestrator
@@ -740,7 +754,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 ## Changelog
 
 ### 2026-05-27 (Draft)
-- Initial RFC draft defining Autopilot + GoalEngine as Layer 3 peers
+- Initial RFC draft defining Autopilot + GoalEngine architecture
 - Internal EventBus specification with `soothe.internal.*` namespace
 - Goal-AL exclusive assignment and file lock conflict resolution
 - Lineage-aware loop reuse for context preservation
