@@ -2077,11 +2077,19 @@ class AgentRuntimeConfig(BaseModel):
 
     Args:
         lazy_core_agent: Defer ``create_deep_agent`` until first Layer-1 execution.
+        general_purpose_subagent: Expose deepagents ``general-purpose`` delegate via ``task``.
     """
 
     lazy_core_agent: bool = Field(
         default=True,
         description="Defer CoreAgent graph compile until first execute/quiz access",
+    )
+    general_purpose_subagent: bool = Field(
+        default=False,
+        description=(
+            "When true, register deepagents general-purpose subagent on the task tool. "
+            "When false (default), general-purpose is hidden and blocked."
+        ),
     )
 
 

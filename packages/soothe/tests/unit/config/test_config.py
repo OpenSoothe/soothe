@@ -106,6 +106,14 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.agent.name == "Soothe"
 
+    def test_general_purpose_subagent_disabled_by_default(self) -> None:
+        cfg = SootheConfig()
+        assert cfg.agent.runtime.general_purpose_subagent is False
+
+    def test_general_purpose_subagent_config_override(self) -> None:
+        cfg = SootheConfig(agent={"runtime": {"general_purpose_subagent": True}})
+        assert cfg.agent.runtime.general_purpose_subagent is True
+
     def test_resolve_system_prompt_default(self) -> None:
         cfg = SootheConfig()
         prompt = cfg.resolve_system_prompt()

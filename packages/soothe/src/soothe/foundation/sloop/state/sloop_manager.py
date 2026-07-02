@@ -419,13 +419,11 @@ class StrangeLoopStateManager:
                     # RFC-624 Phase 4: GER slimmed to metadata-only; CE owns loop state
                     goal_record = GoalExecutionRecord(
                         goal_id=goal_row[0],
-                        goal_text=goal_row[2],
                         thread_id=goal_row[3],
                         iteration=goal_row[4],
                         max_iterations=extras.get("max_iterations", 10),
                         status=goal_row[5],
                         plan_revision_count=extras.get("plan_revision_count", 0),
-                        goal_completion=goal_row[7] or "",
                         duration_ms=goal_row[9],
                         tokens_used=goal_row[10],
                         started_at=datetime.fromisoformat(goal_row[11]),
@@ -823,12 +821,12 @@ class StrangeLoopStateManager:
                 (
                     goal_record.goal_id,
                     checkpoint.loop_id,
-                    goal_record.goal_text,
+                    "",
                     goal_record.thread_id,
                     goal_record.iteration,
                     goal_record.status,
                     loop_messages_json,
-                    goal_record.goal_completion,
+                    "",
                     "",  # RFC-624 Phase 4 Stage 2: evidence_summary removed, use empty placeholder
                     goal_record.duration_ms,
                     goal_record.tokens_used,
@@ -876,14 +874,10 @@ class StrangeLoopStateManager:
 
         goal_record = GoalExecutionRecord(
             goal_id=goal_id,
-            goal_text=goal,
-            thread_id=checkpoint.current_thread_id,  # Current thread
+            thread_id=checkpoint.current_thread_id,
             iteration=0,
             max_iterations=max_iterations,
-            status="running",  # Implicit
-            loop_messages=[],  # RFC-214: Initialize empty ledger
-            goal_completion="",
-            evidence_summary="",
+            status="running",
             duration_ms=0,
             tokens_used=0,
             started_at=now,
@@ -898,19 +892,15 @@ class StrangeLoopStateManager:
     async def finalize_goal(
         self,
         goal_record: GoalExecutionRecord,
-        goal_completion: str,
+        _goal_completion: str,
         loop_state: LoopState | None = None,
     ) -> None:
         """Mark goal completed, update loop metrics (RFC-216).
 
-        RFC-225: when ``loop_state`` is provided, mirror the latest plan DAG,
-        step results, completed step ids, and evidence ledger into the goal
-        record so the StrangeLoop checkpoint becomes the durable orchestration log.
-
         Args:
             goal_record: Goal execution record to finalize.
-            goal_completion: Generated goal completion content.
-            loop_state: Active LoopState for RFC-225 enrichment mirroring.
+            _goal_completion: Ledger-owned synthesis text (kept for call-site compat).
+            loop_state: Active LoopState (unused; CE owns execution payloads).
         """
         if self._checkpoint is None:
             return
@@ -938,7 +928,6 @@ class StrangeLoopStateManager:
 
         # Update goal record status (modify history object directly)
         target_goal.status = "completed"
-        target_goal.goal_completion = goal_completion
         target_goal.completed_at = datetime.now(UTC)
 
         # RFC-624 Phase 4 Stage 2: No mirroring of CE-owned data.

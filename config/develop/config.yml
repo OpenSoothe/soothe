@@ -67,6 +67,7 @@ active_router_profile: production
 agent:
   runtime:
     lazy_core_agent: true  # pair with daemon thread_pool.warmup_core_agent for fast TUI
+    general_purpose_subagent: false
   autonomous:
     enabled: false
     max_parallel_goals: 6

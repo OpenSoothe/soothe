@@ -33,11 +33,8 @@ def _make_prior_goal() -> GoalExecutionRecord:
     now = datetime.now(UTC)
     return GoalExecutionRecord(
         goal_id="g0",
-        goal_text="analyze trace data",
         thread_id="tid",
         status="completed",
-        goal_completion="Trace analysis complete.",
-        loop_messages=[],
         started_at=now,
         completed_at=now,
     )
@@ -45,12 +42,11 @@ def _make_prior_goal() -> GoalExecutionRecord:
 
 def _make_active_goal(goal: str = "fix to add trace metadata") -> GoalExecutionRecord:
     now = datetime.now(UTC)
+    _ = goal
     return GoalExecutionRecord(
         goal_id="g1",
-        goal_text=goal,
         thread_id="tid",
         status="running",
-        loop_messages=[],
         started_at=now,
         iteration=0,
     )
@@ -175,17 +171,16 @@ async def test_continue_keyword_routes_through_assess_bootstrap() -> None:
 async def test_continue_keyword_respects_assess_plan_generate() -> None:
     """Continue keyword defers bootstrap vs plan_generate to continuation-assess LLM."""
     ctx = _make_ctx(goal="continue")
-    prior = ctx.checkpoint.goal_history[0]
-    prior.goal_completion = (
+    completion_body = (
         "## Recommendations\n"
         "High priority: implement continuation envelope grounding. "
         "Must complete unit tests and update RFC documentation."
     )
     completed_goal = MagicMock()
     completed_goal.id = "goal-0"
-    completed_goal.description = prior.goal_text
+    completed_goal.description = "analyze trace data"
     completed_goal.status = "completed"
-    completed_goal.action_history = []
+    completed_goal.action_history = [completion_body]
     completed_goal.steps = MagicMock()
     completed_goal.steps.nodes = {"s1": MagicMock(status="completed")}
     ctx.ce.get_all_goals.return_value = [completed_goal]

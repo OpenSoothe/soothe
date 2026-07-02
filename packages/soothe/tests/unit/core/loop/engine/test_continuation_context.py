@@ -45,14 +45,11 @@ def test_ledger_goal_completion_text_returns_latest_ai_body() -> None:
     assert ledger_goal_completion_text(ledger) == "final synthesis report"
 
 
-def test_resolve_prior_goal_completion_prefers_checkpoint_match() -> None:
+def test_resolve_prior_goal_completion_uses_ledger() -> None:
     prior = GoalExecutionRecord(
         goal_id="g0",
-        goal_text="analyze trace",
         thread_id="tid",
         status="completed",
-        goal_completion="Checkpoint completion body.",
-        loop_messages=[],
         started_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),
     )
@@ -65,7 +62,7 @@ def test_resolve_prior_goal_completion_prefers_checkpoint_match() -> None:
         checkpoint=checkpoint,
         prior_goal_text="analyze trace",
     )
-    assert resolved == "Checkpoint completion body."
+    assert resolved == "Ledger completion body"
 
 
 def test_build_prior_goal_completion_block_truncates() -> None:
@@ -113,16 +110,13 @@ def test_is_continuation_first_plan_requires_no_step_results() -> None:
     assert is_continuation_first_plan(state) is False
 
 
-def test_build_prior_goal_summaries_uses_checkpoint_completion() -> None:
+def test_build_prior_goal_summaries_uses_ce_action_history() -> None:
     from soothe.foundation.sloop.engine.continuation_context import build_prior_goal_summaries
 
     prior = GoalExecutionRecord(
         goal_id="g0",
-        goal_text="analyze trace",
         thread_id="tid",
         status="completed",
-        goal_completion="Checkpoint completion body.",
-        loop_messages=[],
         started_at=datetime.now(UTC),
         completed_at=datetime.now(UTC),
     )
@@ -133,7 +127,7 @@ def test_build_prior_goal_summaries_uses_checkpoint_completion() -> None:
     goal.description = "analyze trace"
     goal.status = "completed"
     goal.steps.nodes.values.return_value = []
-    goal.action_history = []
+    goal.action_history = ["CE completion body."]
 
     ce = MagicMock()
     ce.get_all_goals.return_value = [goal]
@@ -144,7 +138,7 @@ def test_build_prior_goal_summaries_uses_checkpoint_completion() -> None:
         exclude_goal_id="g1",
     )
     assert len(summaries) == 1
-    assert summaries[0]["completion"] == "Checkpoint completion body."
+    assert summaries[0]["completion"] == "CE completion body."
 
 
 def test_continue_keyword_bootstrap_step_briefs() -> None:

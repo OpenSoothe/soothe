@@ -127,7 +127,6 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     assert final is not None
     assert len(final.goal_history) == 2
     assert final.goal_history[0].status == "completed"
-    assert final.goal_history[0].goal_completion == "There are 12 file types."
     assert final.current_goal_index == 1
 
 

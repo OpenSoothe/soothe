@@ -71,7 +71,6 @@ def create_mock_runtime_context() -> LoopRuntimeContext:
     )
     goal_record = GoalExecutionRecord(
         goal_id="test_goal",
-        goal_text="Test goal",
         thread_id="test_thread",
         started_at=datetime.now(UTC),
     )

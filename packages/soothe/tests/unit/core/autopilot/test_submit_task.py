@@ -9,6 +9,8 @@ from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
 
+from .fakes import IdleFakeFactory
+
 
 def _service() -> AutopilotService:
     bus = InternalEventBus()
@@ -17,6 +19,7 @@ def _service() -> AutopilotService:
         ce=ce,
         config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
+        runner_factory=IdleFakeFactory(),
     )
 
 

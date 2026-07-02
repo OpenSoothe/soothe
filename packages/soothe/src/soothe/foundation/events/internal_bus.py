@@ -132,37 +132,3 @@ class InternalEventBus:
             Number of subscribed handlers.
         """
         return len(self._subscribers.get(event_type, []))
-
-
-# Singleton instance for internal coordination
-_internal_bus: InternalEventBus | None = None
-
-
-def get_internal_bus() -> InternalEventBus:
-    """Get the singleton InternalEventBus instance.
-
-    .. deprecated:: RFC-222 Q8
-        This singleton is deprecated. New code MUST construct its own
-        ``InternalEventBus`` and inject it where needed. Module-global state
-        creates spooky coupling across ``AutopilotService`` instances and
-        breaks isolation between tests. The singleton is kept solely as a
-        fallback for the preserved-unwired ``FileLockMiddleware`` and for
-        backward compatibility with older test fixtures.
-
-    Returns:
-        The singleton InternalEventBus.
-    """
-    global _internal_bus
-    if _internal_bus is None:
-        _internal_bus = InternalEventBus()
-        logger.info("Internal EventBus initialized")
-    return _internal_bus
-
-
-def reset_internal_bus() -> None:
-    """Reset the singleton InternalEventBus.
-
-    Used in tests to isolate between test cases.
-    """
-    global _internal_bus
-    _internal_bus = None

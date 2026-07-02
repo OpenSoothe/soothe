@@ -19,6 +19,7 @@ from soothe.foundation.core.agent._patch_summarization import (
 )
 from soothe.foundation.core.agent._patch_task_tool import (
     apply_task_tool_patch,
+    general_purpose_subagent_build_context,
 )
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.runner.resolver import (
@@ -276,20 +277,22 @@ class AgentBuilder:
         install_model_call_profiler(enabled=is_profiler_enabled(self._config))
 
         def _compile_deep_agent(cp: Checkpointer | None) -> Any:
-            return create_deep_agent(
-                model=resolved_model,
-                tools=all_tools or None,
-                system_prompt=self._config.resolve_system_prompt(),
-                middleware=all_middleware,
-                subagents=all_subagents or None,
-                skills=None,
-                memory=self._config.memory or None,
-                checkpointer=cp,
-                store=store,
-                backend=resolved_backend,
-                interrupt_on=interrupt_on,
-                debug=self._config.debug,
-            )
+            gp_enabled = self._config.agent.runtime.general_purpose_subagent
+            with general_purpose_subagent_build_context(gp_enabled):
+                return create_deep_agent(
+                    model=resolved_model,
+                    tools=all_tools or None,
+                    system_prompt=self._config.resolve_system_prompt(),
+                    middleware=all_middleware,
+                    subagents=all_subagents or None,
+                    skills=None,
+                    memory=self._config.memory or None,
+                    checkpointer=cp,
+                    store=store,
+                    backend=resolved_backend,
+                    interrupt_on=interrupt_on,
+                    debug=self._config.debug,
+                )
 
         deep_agent_start = time.perf_counter()
         graph = _compile_deep_agent(checkpointer)

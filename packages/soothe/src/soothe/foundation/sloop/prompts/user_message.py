@@ -569,9 +569,9 @@ def flatten_user_message_content(content: str) -> str:
     """Extract the primary directive from a scenario-formatted user message.
 
     Execute-step envelopes use ``EXECUTION TASK:``; plan envelopes use ``GOAL:`` /
-    ``GOAL RECAP:``. Legacy ledger rows may still use ``EXECUTION TASK RECAP:`` or ``GOAL:``.
+    ``GOAL RECAP:``. Legacy ledger rows may still use ``EXECUTION TASK RECAP:``.
 
-    Falls back to raw content for old XML-format ledger messages.
+    Returns raw content when no known section prefix matches.
     """
     text = (content or "").strip()
     if not text:
@@ -589,11 +589,6 @@ def flatten_user_message_content(content: str) -> str:
     goal_match = re.match(r"GOAL(?:\s+RECAP)?:\s*\n(.+?)(?:\n\n|\Z)", text, re.DOTALL)
     if goal_match:
         return goal_match.group(1).strip()
-
-    # Legacy XML format: extract <USER_QUERY> body
-    xml_match = re.match(r"<USER_QUERY>\s*(.*?)\s*</USER_QUERY>", text, re.DOTALL)
-    if xml_match:
-        return xml_match.group(1).strip()
 
     return text
 
