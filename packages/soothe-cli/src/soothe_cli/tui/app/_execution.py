@@ -36,6 +36,7 @@ from soothe_cli.tui.app._module_init import (
     _extract_model_params_flag,
 )
 from soothe_cli.tui.hooks import dispatch_hook
+from soothe_cli.tui.shell_color import shell_subprocess_env, wrap_shell_command_for_color
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
@@ -288,10 +289,11 @@ class _ExecutionMixin:
         """
         try:
             proc = await asyncio.create_subprocess_shell(
-                command,
+                wrap_shell_command_for_color(command),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self._cwd,
+                env=shell_subprocess_env(),
                 start_new_session=(sys.platform != "win32"),
             )
             self._shell_process = proc
@@ -312,7 +314,7 @@ class _ExecutionMixin:
                 output += f"\n[stderr]\n{stderr_text}"
 
             if output:
-                msg = AssistantMessage(f"```\n{output}\n```")
+                msg = AssistantMessage(output, render_markdown=False, render_ansi=True)
                 await self._mount_message(msg)
                 await msg.write_initial_content()
             else:
@@ -1031,9 +1033,11 @@ class _ExecutionMixin:
         self._agent_running = False
         self._agent_worker = None
 
-        # Restore input focus FIRST so the user can start typing immediately
+        # Restore input focus first so the user can type immediately
         # while remaining cleanup (spinner, tokens, deferred) runs.
-        if self._chat_input:
+        if self._primary_text_input() is not None:
+            self.focus_primary_input()
+        elif self._chat_input:
             self._chat_input.set_cursor_active(active=True)
 
         # Remove spinner if present

@@ -3,7 +3,7 @@
 /* Define layers for z-ordering */
 Screen {
     layout: vertical;
-    layers: base autocomplete;
+    layers: base plan-quick-view autocomplete;
 }
 
 /* Scrollable regions keep wheel / key scrolling; scrollbar chrome is hidden. */
@@ -118,6 +118,18 @@ Screen {
 .file-change-preview-section-label {
     height: auto;
     margin: 0;
+}
+
+.file-change-preview .diff-line-added,
+.file-change-preview .diff-line-removed,
+.file-change-preview .diff-context {
+    height: auto;
+    margin: 0;
+    padding: 0;
+}
+
+.file-change-preview .diff-context {
+    color: $text-muted;
 }
 
 /* Diff styling — previews and DiffMessage (fg + bg + padding) */

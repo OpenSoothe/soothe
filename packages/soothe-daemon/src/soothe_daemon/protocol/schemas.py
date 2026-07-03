@@ -73,6 +73,11 @@ __all__ = [
     "PingParams",
     "PongParams",
     "DaemonReadyParams",
+    # Cron RPC (RFC-229)
+    "CronAddParams",
+    "CronListParams",
+    "CronShowParams",
+    "CronCancelParams",
     # Registry
     "PARAMS_REGISTRY",
 ]
@@ -423,6 +428,40 @@ class DaemonReadyParams(EmptyParams):
 
 
 # ---------------------------------------------------------------------------
+# Cron RPC param models (RFC-229)
+# ---------------------------------------------------------------------------
+
+
+class CronAddParams(ParamsBase):
+    """Params for method=cron_add, type=request.
+
+    Natural language scheduling request.
+    """
+
+    text: str = Field(..., min_length=1, description="Natural language scheduling request")
+    priority: int | None = Field(default=None, ge=1, le=100)
+
+
+class CronListParams(ParamsBase):
+    """Params for method=cron_list, type=request."""
+
+    status: str | None = None
+
+
+class CronShowParams(ParamsBase):
+    """Params for method=cron_show, type=request."""
+
+    job_id: str = Field(..., min_length=1)
+
+
+class CronCancelParams(ParamsBase):
+    """Params for method=cron_cancel, type=request."""
+
+    job_id: str = Field(..., min_length=1)
+
+
+# ---------------------------------------------------------------------------
+# Wire schema registry — maps (type, method_or_None) → params model.
 # Wire schema registry — maps (type, method_or_None) → params model.
 #
 # The key is ``(msg_type, method)`` where ``method`` is ``None`` for messages
@@ -479,4 +518,9 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("subscribe", "loop_events"): SubscribeParams,
     ("subscribe", "autopilot_events"): AutopilotSubscribeParams,
     ("unsubscribe", None): AutopilotUnsubscribeParams,
+    # Cron RPC (RFC-229)
+    ("request", "cron_add"): CronAddParams,
+    ("request", "cron_list"): CronListParams,
+    ("request", "cron_show"): CronShowParams,
+    ("request", "cron_cancel"): CronCancelParams,
 }

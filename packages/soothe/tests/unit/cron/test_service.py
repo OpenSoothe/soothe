@@ -115,6 +115,7 @@ async def test_tick_dispatches_due_job_to_autopilot(temp_store: CronJobStore) ->
     autopilot.submit_task.assert_awaited_once_with(
         "run nightly backup",
         priority=50,
+        cron_job_id="due001",  # RFC-229: Link goal to cron job for rescheduling
     )
     updated = await temp_store.get("due001")
     assert updated is not None

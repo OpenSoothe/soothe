@@ -127,16 +127,39 @@ def show_review(console: Console, data: dict[str, Any]) -> None:
     console.print(table)
 
 
+def show_cron_add(console: Console, data: dict[str, Any]) -> None:
+    """Render cron job creation response from daemon RPC (RFC-229)."""
+    job = data.get("cron_add", {})
+    if not job:
+        console.print("[dim]No job created.[/dim]")
+        return
+
+    console.print(
+        Panel(
+            f"[cyan]Job ID:[/] {job.get('id', 'N/A')}\n"
+            f"[cyan]Description:[/] {job.get('description', 'N/A')}\n"
+            f"[cyan]Schedule:[/] {job.get('schedule_kind', 'N/A')} = {job.get('schedule_value', 'N/A')}\n"
+            f"[cyan]Next Run:[/] {job.get('next_run', 'N/A')}\n"
+            f"[cyan]Status:[/] {job.get('status', 'N/A')}\n"
+            f"[cyan]Priority:[/] {job.get('priority', 50)}",
+            title="Cron Job Created",
+            border_style="cyan",
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Keyboard Shortcuts
 # ---------------------------------------------------------------------------
 
 KEYBOARD_SHORTCUTS: dict[str, str] = {
+    "Esc": "Dismiss modal, plan overlay, or autocomplete",
     "Ctrl+Q": "Quit TUI: Stop the loop (confirm) and exit client",
     "Ctrl+D": "Detach TUI: Leave the loop running (confirm) and exit client",
     "Ctrl+C": "Cancel running job, press twice within 1s to quit",
     "Ctrl+E": "Focus chat input",
     "Ctrl+Y": "Copy selected text to clipboard (or show hint if none)",
+    "Ctrl+T": "Toggle plan quick-view overlay",
 }
 
 
@@ -240,6 +263,14 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "description": "Submit autopilot job (usage: /autopilot <task>)",
         "requires_query": True,
     },
+    "/cron": {
+        "location": "daemon",
+        "type": "rpc",
+        "daemon_command": "cron_add",
+        "description": "Schedule a job via natural language (usage: /cron <schedule>)",
+        "requires_query": True,
+        "handler": show_cron_add,
+    },
     # Daemon routing commands (3)
     "/plan": {"location": "daemon", "type": "routing", "description": "Trigger plan mode"},
     "/tacitus": {
@@ -267,4 +298,5 @@ __all__ = [
     "show_history",
     "show_config",
     "show_review",
+    "show_cron_add",
 ]

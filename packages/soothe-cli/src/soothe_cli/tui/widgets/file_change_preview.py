@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from textual.containers import Vertical
 from textual.content import Content
+from textual.events import Click
 from textual.widgets import Static
 
 from soothe_cli.tui import theme
@@ -21,9 +22,13 @@ from soothe_cli.tui.preview_limits import (
     TOOL_APPROVAL_PREVIEW_LINES,
     TOOL_APPROVAL_VALUE_PREVIEW_CHARS,
 )
+from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
+from soothe_cli.tui.widgets.diff import DIFF_CODE_GAP, compose_diff_line_list
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
+
+    from soothe_cli.runtime.state.file_tracker import FileOperationRecord
 
 
 def _format_stats(additions: int, deletions: int) -> Content:
@@ -78,13 +83,101 @@ def _count_diff_stats(diff_lines: list[str], old_string: str, new_string: str) -
 
 
 class FileChangePreviewWidget(Vertical):
-    """Base class for filesystem change preview cards."""
+    """Base class for filesystem change preview cards.
+
+    Renders as a single-line summary in the message stream by default. Click to
+    expand and show diff or content details (IG-544).
+    """
+
+    ALLOW_SELECT = True
+
+    DEFAULT_CSS = """
+    FileChangePreviewWidget {
+        height: auto;
+        padding: 0 1;
+        margin: 0;
+    }
+
+    FileChangePreviewWidget.-collapsed {
+        background: transparent;
+        border: none;
+        border-left: wide $text-muted;
+    }
+
+    FileChangePreviewWidget.-expanded {
+        background: $surface-darken-1;
+        border: solid $secondary;
+    }
+
+    FileChangePreviewWidget.-collapsed .file-change-preview-body,
+    FileChangePreviewWidget.-collapsed .file-change-preview-section-label,
+    FileChangePreviewWidget.-collapsed .file-change-preview-label,
+    FileChangePreviewWidget.-collapsed .diff-line-added,
+    FileChangePreviewWidget.-collapsed .diff-line-removed,
+    FileChangePreviewWidget.-collapsed .diff-context {
+        display: none;
+    }
+
+    FileChangePreviewWidget .file-change-preview-header {
+        height: auto;
+        margin: 0;
+    }
+
+    FileChangePreviewWidget.-collapsed .file-change-preview-header {
+        color: $foreground;
+    }
+    """
 
     def __init__(self, data: dict[str, Any], *, action_label: str = "") -> None:
         """Initialize with renderer-built data dict."""
         super().__init__(classes="file-change-preview")
         self.data = data
         self._action_label = action_label.strip()
+        self._finalized = False
+        self._expanded = False
+
+    def on_mount(self) -> None:
+        """Start collapsed so file edits stay one line in the transcript."""
+        self._apply_expand_classes()
+
+    def on_click(self, event: Click) -> None:
+        """Toggle expanded diff/content view without breaking text selection."""
+        event.stop()
+        if screen_has_text_selection(self.screen):
+            return
+        self.toggle_expand()
+
+    @property
+    def is_expanded(self) -> bool:
+        """Return whether the preview body is visible."""
+        return self._expanded
+
+    def toggle_expand(self) -> None:
+        """Expand or collapse the preview body."""
+        self._expanded = not self._expanded
+        self._apply_expand_classes()
+
+    def _apply_expand_classes(self) -> None:
+        if self._expanded:
+            self.remove_class("-collapsed")
+            self.add_class("-expanded")
+        else:
+            self.add_class("-collapsed")
+            self.remove_class("-expanded")
+
+    async def finalize_from_record(self, record: FileOperationRecord) -> None:
+        """Replace pending preview content with completed on-disk results."""
+        from soothe_cli.runtime.state.file_tracker import file_change_action_label
+        from soothe_cli.tui.file_change_renderers import update_preview_data_from_record
+
+        self._action_label = file_change_action_label(record)
+        update_preview_data_from_record(self.data, record)
+        self._finalized = True
+        if not self.is_mounted:
+            return
+        await self.remove_children()
+        await self.mount(*self.compose())
+        self._apply_expand_classes()
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301
         """Default compose — subclasses override."""
@@ -114,78 +207,10 @@ class FileChangePreviewWidget(Vertical):
 
     def _render_diff_lines_only(self, diff_lines: list[str]) -> ComposeResult:
         """Render diff lines with gutter bars and line numbers (matching DiffMessage)."""
-        colors = theme.get_theme_colors()
-        glyphs = get_glyphs()
-
-        # Calculate max line number for width
-        max_line = 0
-        for line in diff_lines:
-            if m := __import__("re").match(r"@@ -(\d+)(?:,\d+)? \+(\d+)", line):
-                max_line = max(max_line, int(m.group(1)), int(m.group(2)))
-        width = max(3, len(str(max_line + len(diff_lines))))
-
-        old_num = new_num = 0
-        lines_shown = 0
-
-        for line in diff_lines:
-            if lines_shown >= TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES:
-                yield Static(
-                    Content.styled(f"... ({len(diff_lines) - lines_shown} more lines)", "dim")
-                )
-                break
-
-            # Skip file headers
-            if line.startswith(("---", "+++")):
-                continue
-
-            # Handle hunk headers - update line numbers, don't display
-            if m := __import__("re").match(r"@@ -(\d+)(?:,\d+)? \+(\d+)", line):
-                old_num, new_num = int(m.group(1)), int(m.group(2))
-                continue
-
-            content = line[1:] if line else ""
-
-            if line.startswith("-"):
-                # Deletion — red gutter bar
-                yield Static(
-                    Content.assemble(
-                        (f"{glyphs.gutter_bar}", f"{colors.error} bold"),
-                        (f"{old_num:>{width}}", "dim"),
-                        f" {content}",
-                    ),
-                    classes="diff-line-removed",
-                )
-                old_num += 1
-                lines_shown += 1
-            elif line.startswith("+"):
-                # Addition — green gutter bar
-                yield Static(
-                    Content.assemble(
-                        (f"{glyphs.gutter_bar}", f"{colors.success} bold"),
-                        (f"{new_num:>{width}}", "dim"),
-                        f" {content}",
-                    ),
-                    classes="diff-line-added",
-                )
-                new_num += 1
-                lines_shown += 1
-            elif line.startswith(" "):
-                # Context line — dim gutter
-                yield Static(
-                    Content.assemble(
-                        (f"{glyphs.box_vertical}{old_num:>{width}}", "dim"),
-                        f"  {content}",
-                    ),
-                )
-                old_num += 1
-                new_num += 1
-                lines_shown += 1
-            elif line.strip() == "...":
-                yield Static(Content.styled("...", "dim"))
-                lines_shown += 1
-            elif line.strip():
-                yield Static(Content.styled(line, "dim"))
-                lines_shown += 1
+        yield from compose_diff_line_list(
+            diff_lines,
+            max_lines=TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES,
+        )
 
     @staticmethod
     def _render_string_lines(text: str, *, is_addition: bool) -> ComposeResult:
@@ -201,9 +226,8 @@ class FileChangePreviewWidget(Vertical):
         for i, line in enumerate(lines[:TOOL_APPROVAL_PREVIEW_LINES], start=1):
             yield Static(
                 Content.assemble(
-                    (f"{glyphs.gutter_bar}", f"{gutter_color} bold"),
-                    (f"{i:>{width}}", "dim"),
-                    f" {line}",
+                    (f"{glyphs.gutter_bar}{i:>{width}}", f"{gutter_color} bold"),
+                    f"{DIFF_CODE_GAP}{line}",
                 ),
                 classes=cls,
             )
@@ -230,7 +254,8 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         total_lines = len(lines)
 
         if is_new_file:
-            yield from self._yield_compact_header(file_path, extra="new file")
+            extra = "new file" if not self._finalized else ""
+            yield from self._yield_compact_header(file_path, extra=extra)
         else:
             yield from self._yield_compact_header(
                 file_path,
@@ -259,9 +284,8 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         for i, line in enumerate(shown_lines, start=1):
             yield Static(
                 Content.assemble(
-                    (f"{glyphs.gutter_bar}", f"{colors.success} bold"),
-                    (f"{i:>{width}}", "dim"),
-                    f" {line}",
+                    (f"{glyphs.gutter_bar}{i:>{width}}", f"{colors.success} bold"),
+                    f"{DIFF_CODE_GAP}{line}",
                 ),
                 classes="diff-line-added",
             )
@@ -303,9 +327,8 @@ class DeleteFilePreviewWidget(FileChangePreviewWidget):
         for i, line in enumerate(preview_lines[:TOOL_APPROVAL_PREVIEW_LINES], start=1):
             yield Static(
                 Content.assemble(
-                    (f"{glyphs.gutter_bar}", f"{colors.error} bold"),
-                    (f"{i:>{width}}", "dim"),
-                    f" {line}",
+                    (f"{glyphs.gutter_bar}{i:>{width}}", f"{colors.error} bold"),
+                    f"{DIFF_CODE_GAP}{line}",
                 ),
                 classes="diff-line-removed",
             )
@@ -376,10 +399,13 @@ class GenericFilePreviewWidget(FileChangePreviewWidget):
     """Fallback preview — key/value args."""
 
     def compose(self) -> ComposeResult:
-        if self._action_label:
+        file_path = str(self.data.get("file_path") or self.data.get("path") or "").strip()
+        if file_path:
+            yield from self._yield_compact_header(file_path)
+        elif self._action_label:
             yield Static(
                 Content.from_markup("[bold]$label[/bold]", label=self._action_label),
-                classes="file-change-preview-label",
+                classes="file-change-preview-header",
             )
         for key, value in self.data.items():
             if value is None:

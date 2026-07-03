@@ -13,6 +13,7 @@ from soothe_cli.tui.file_change_renderers import (
 )
 
 if TYPE_CHECKING:
+    from soothe_cli.runtime.state.file_tracker import FileOperationRecord
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
 
 logger = logging.getLogger(__name__)
@@ -86,9 +87,30 @@ async def mount_file_change_preview(
         widget.id = textual_widget_id("file-preview", tcid)
         await adapter._mount_message(widget)
         adapter._file_change_previews_shown.add(tcid)
+        adapter._file_change_widgets[tcid] = widget
     except asyncio.CancelledError:
         raise
     except Exception:
         # Mark shown so streaming arg updates do not retry-mount and flood logs.
         adapter._file_change_previews_shown.add(tcid)
         logger.debug("Failed to mount file change preview", exc_info=True)
+
+
+async def finalize_file_change_preview(
+    adapter: TextualUIAdapter,
+    *,
+    record: FileOperationRecord,
+) -> bool:
+    """Upgrade a mounted preview card to its completed state.
+
+    Returns:
+        True when an existing preview widget was finalized in place (no ``DiffMessage``).
+    """
+    tcid = str(record.tool_call_id or "").strip()
+    if not tcid:
+        return False
+    widget = adapter._file_change_widgets.get(tcid)
+    if widget is None:
+        return False
+    await widget.finalize_from_record(record)
+    return True

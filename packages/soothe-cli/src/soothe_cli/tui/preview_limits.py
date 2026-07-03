@@ -25,10 +25,10 @@ SKILL_CARD_PREVIEW_LINES: Final[int] = 4
 SKILL_CARD_PREVIEW_CHARS: Final[int] = 300
 
 # --- Write / edit / delete file change preview widgets (`file_change_preview`) ---
-TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 10
+TOOL_APPROVAL_PREVIEW_LINES: Final[int] = 8
 TOOL_APPROVAL_VALUE_PREVIEW_CHARS: Final[int] = 200
-TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 10
-TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 10
+TOOL_APPROVAL_BODY_MAX_LINES: Final[int] = 8
+TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES: Final[int] = 8
 
 # --- Clipboard copy toast ---
 CLIPBOARD_TOAST_PREVIEW_CHARS: Final[int] = 40

@@ -180,3 +180,36 @@ def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
     assert out["run_name"] == intent_classify_langfuse_run_display_name("soothe-dev")
     assert out["metadata"]["langfuse_trace_name"] == "soothe-dev:strange-loop-graph"
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
+
+
+def test_goal_trace_execute_invoke_config_pins_trace_id() -> None:
+    pytest.importorskip("langfuse")
+    from soothe.utils.observability.langfuse._names import execute_step_langfuse_run_display_name
+    from soothe.utils.observability.langfuse_callback_handler import SootheLangfuseCallbackHandler
+
+    cfg = SootheConfig()
+    cfg.observability.langfuse.enabled = True
+    cfg.observability.langfuse.trace_name = "soothe-dev"
+
+    goal_trace = GoalLoopTrace(
+        soothe_config=cfg,
+        trace_id="trace-goal-1",
+        session_id="thread-1",
+        loop_id="loop-1",
+        trace_display_name="soothe-dev:strange-loop-graph",
+    )
+
+    out = goal_trace.execute_invoke_config(
+        fork_thread_id="fork-step-1",
+        configurable={"thread_id": "fork-step-1", "workspace": "/tmp/ws"},
+    )
+
+    assert out["callbacks"]
+    handler = out["callbacks"][0]
+    assert isinstance(handler, SootheLangfuseCallbackHandler)
+    assert handler.trace_context == {"trace_id": "trace-goal-1"}
+    assert out["run_name"] == execute_step_langfuse_run_display_name("soothe-dev")
+    assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
+    assert out["metadata"]["soothe_component"] == "execute_step"
+    assert "execute-step" in out["metadata"]["langfuse_tags"]
+    assert out["configurable"]["thread_id"] == "fork-step-1"

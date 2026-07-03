@@ -128,7 +128,7 @@ def list_jobs(
     """
     client = _require_cron_client()
     try:
-        result = client.cron_list_jobs(status=status)
+        result = client.cron_list(status=status)
     except RuntimeError as exc:
         typer.echo(f"Error: {exc}", err=True)
         sys.exit(1)

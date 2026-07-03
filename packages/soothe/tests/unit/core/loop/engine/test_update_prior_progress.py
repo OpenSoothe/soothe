@@ -542,3 +542,24 @@ def test_called_from_append_parallel_wave_ledger() -> None:
     assert state.prior_progress is not None
     assert state.prior_progress.steps_completed == 1
     assert state.prior_progress.tool_calls[0].name == "run_command"
+
+
+def test_step_summary_truncates_long_full_description() -> None:
+    """WaveStepProgress.description is capped at 500 chars (RFC-227 digest)."""
+    ex = _executor()
+    state = LoopState(goal="g", thread_id="t1", iteration=1)
+    long_brief = "In ws_command_client.py, " + ("detail " * 200)
+    assert len(long_brief) > 500
+    steps = [
+        StepAction(
+            id="KBE-02",
+            description="short label",
+            full_description=long_brief,
+            expected_output="done",
+        )
+    ]
+    ex._update_prior_progress(state, steps, [_ok_payload(step_id="KBE-02")])
+    assert state.prior_progress is not None
+    summary = state.prior_progress.step_summaries[0]
+    assert len(summary.description) == 500
+    assert summary.description == long_brief[:500]

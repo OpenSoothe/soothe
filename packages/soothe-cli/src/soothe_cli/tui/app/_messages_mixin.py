@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from textual.events import Click, Paste, TextSelected
-    from textual.widgets import Static
+    from textual.widget import Widget
+    from textual.widgets import Input, Static
     from textual.worker import Worker
 
 from textual.app import App
@@ -198,6 +199,11 @@ class _MessagesMixin:
         except NoMatches:
             pass
 
+        from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
+
+        if isinstance(widget, ClarificationInputMessage):
+            self.focus_primary_input()
+
     async def _prune_old_messages(self) -> None:
         """Prune oldest message widgets if we exceed the window size.
 
@@ -366,7 +372,7 @@ class _MessagesMixin:
         Args:
             worker: The worker to cancel.
             discard_queue: When ``True`` (default), clear queued messages and
-                deferred actions. Set ``False`` on user interrupt (Ctrl+C / Esc)
+                deferred actions. Set ``False`` on user interrupt (Ctrl+C)
                 so a queued goal starts after the running one is cancelled.
         """
         if discard_queue:
@@ -467,17 +473,17 @@ class _MessagesMixin:
         self.notify(f"Press {shortcut} again to quit", timeout=quit_timeout, markup=False)
         self.set_timer(quit_timeout, lambda: setattr(self, "_quit_pending", False))
 
-    def action_interrupt(self) -> None:
-        """Handle escape key.
+    def action_dismiss_ui(self) -> None:
+        """Handle Escape — dismiss overlays and modals only (never cancel agent work).
 
         Priority order:
         1. If modal screen is active, dismiss it
-        2. If completion popup is open, dismiss it
-        3. If input is in command/shell mode, exit to normal mode
-        4. If shell command is running, kill it
-        5. If queued messages exist, pop the last one (LIFO)
-        6. If agent is running, interrupt it
+        2. If plan quick-view overlay is open, collapse it
+        3. If completion popup is open, dismiss it
+        4. If input is in command/shell mode, exit to normal mode
         """
+        from contextlib import suppress
+
         # If a modal screen is active, let it cancel itself (so it can
         # restore state, e.g. the theme selector reverts the previewed theme).
         # Fall back to a plain dismiss for modals without action_cancel.
@@ -489,6 +495,17 @@ class _MessagesMixin:
                 self.screen.dismiss(None)
             return
 
+        overlay = getattr(self, "_plan_quick_view_overlay", None)
+        if overlay is None:
+            with suppress(Exception):
+                from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
+
+                overlay = self.query_one("#plan-quick-view-overlay", PlanQuickViewOverlay)
+                self._plan_quick_view_overlay = overlay
+        if overlay is not None and overlay.is_expanded:
+            overlay.collapse()
+            return
+
         # Close completion popup or exit slash/shell command mode
         if self._chat_input:
             if self._chat_input.dismiss_completion():
@@ -496,29 +513,9 @@ class _MessagesMixin:
             if self._chat_input.exit_mode():
                 return
 
-        # If shell command is running, cancel the worker
-        if self._shell_running and self._shell_worker:
-            self._cancel_worker(self._shell_worker, discard_queue=False)
-            return
-
-        # If queued messages exist, pop the last one (LIFO) instead of
-        # interrupting the agent.  This lets the user retract queued messages
-        # one at a time; once the queue is empty the next ESC will interrupt.
-        if self._pending_messages:
-            self._pop_last_queued_message()
-            return
-
-        # If agent is running, interrupt it; queued goals start after cleanup
-        if self._agent_running and self._agent_worker:
-            if self._daemon_session is not None:
-                self.run_worker(
-                    self._interrupt_daemon_agent_turn(discard_queue=False),
-                    exclusive=False,
-                    group="daemon-interrupt",
-                )
-            else:
-                self._cancel_worker(self._agent_worker, discard_queue=False)
-            return
+    def action_interrupt(self) -> None:
+        """Backward-compatible alias for :meth:`action_dismiss_ui`."""
+        self.action_dismiss_ui()
 
     def action_quit_app(self) -> None:
         """Handle quit action (Ctrl+D)."""
@@ -642,16 +639,90 @@ class _MessagesMixin:
                     skill_msg.toggle_body()
                     return
 
+    def _active_clarification_inputs(self) -> list[Input]:
+        """Return enabled clarification answer fields awaiting user input."""
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None:
+            return []
+        by_step = getattr(adapter, "_clarification_input_by_step", None) or {}
+        inputs: list[Input] = []
+        for message in by_step.values():
+            if getattr(message, "_submitted", False):
+                continue
+            for inp in getattr(message, "_inputs", []):
+                if not inp.disabled:
+                    inputs.append(inp)
+        return inputs
+
+    def _non_chat_focusable_inputs(self) -> list[Input]:
+        """Return enabled, focusable ``Input`` widgets other than the chat prompt."""
+        from textual.widgets import Input
+
+        return [
+            widget
+            for widget in self.screen.query(Input)
+            if widget.can_focus and not widget.disabled
+        ]
+
+    def _primary_text_input(self) -> Widget | None:
+        """Return the single input that should receive typing focus, if unambiguous.
+
+        When an inline clarification card is active, its answer field takes
+        precedence over the bottom chat prompt. On modal screens, a lone filter
+        box is focused automatically.
+        """
+        clar_inputs = self._active_clarification_inputs()
+        if clar_inputs:
+            return clar_inputs[0]
+
+        non_chat = self._non_chat_focusable_inputs()
+        if len(non_chat) == 1:
+            return non_chat[0]
+
+        return None
+
+    def _schedule_widget_focus(self, widget: Widget) -> None:
+        """Focus ``widget`` after layout settles, winning races with chat refocus."""
+
+        def _focus() -> None:
+            try:
+                self.set_focus(widget)
+            except Exception:  # noqa: BLE001
+                try:
+                    widget.focus()
+                except Exception:  # noqa: BLE001
+                    logger.debug("Failed to focus primary input widget", exc_info=True)
+
+        self.call_after_refresh(_focus)
+        with suppress(Exception):
+            self.set_timer(0.05, _focus)
+
+    def focus_primary_input(self) -> None:
+        """Focus the user's primary text input when it is unambiguous."""
+        target = self._primary_text_input()
+        if target is not None:
+            self._schedule_widget_focus(target)
+            return
+        if self._chat_input and not self.screen.is_modal:
+            self._chat_input.focus_input()
+
     def _is_input_focused(self) -> bool:
-        """Check if the chat input (or its text area) has focus.
+        """Check if a primary text input widget currently has focus.
 
         Returns:
-            True if the input widget has focus, False otherwise.
+            True if chat input or an inline clarification field has focus.
         """
-        if not self._chat_input:
-            return False
         focused = self.focused
         if focused is None:
+            return False
+
+        clar_inputs = self._active_clarification_inputs()
+        if clar_inputs:
+            for inp in clar_inputs:
+                if focused is inp or focused in inp.walk_children(with_self=True):
+                    return True
+
+        if not self._chat_input:
             return False
         # Check if focused widget is the text area inside chat input
         return focused.id == "chat-input" or focused in self._chat_input.walk_children()
@@ -697,20 +768,26 @@ class _MessagesMixin:
             event.stop()
 
     def on_app_focus(self) -> None:
-        """Restore chat input focus when the terminal regains OS focus.
+        """Restore primary input focus when the terminal regains OS focus.
 
         When the user opens a link via `webbrowser.open`, OS focus shifts to
         the browser. On returning to the terminal, Textual fires `AppFocus`
-        (requires a terminal that supports FocusIn events). Re-focusing the chat
-        input here keeps it ready for typing — but only when no other focusable
-        widget (e.g., an inline clarification Input) currently owns focus, so
+        (requires a terminal that supports FocusIn events). Re-focusing the
+        primary input keeps it ready for typing — but only when no other
+        focusable widget (e.g., a step card control) currently owns focus, so
         the user does not lose an in-progress answer to a tab-out and back.
         """
-        if not self._chat_input:
-            return
         if self.screen.is_modal:
             return
         focused = self.focused
+        primary = self._primary_text_input()
+        if primary is not None:
+            if focused is primary or focused in primary.walk_children(with_self=True):
+                return
+            self.focus_primary_input()
+            return
+        if not self._chat_input:
+            return
         if focused is not None and not self._is_input_focused():
             return
         self._chat_input.focus_input()
@@ -735,7 +812,7 @@ class _MessagesMixin:
             return
         if self._click_landed_on_focusable(_event):
             return
-        self.call_after_refresh(self._chat_input.focus_input)
+        self.call_after_refresh(self.focus_primary_input)
 
     def _click_landed_on_focusable(self, event: Click) -> bool:
         """Return True if the click target (or any ancestor) is focusable.

@@ -57,6 +57,13 @@ def test_loading_widget_activate_status_clears_pause() -> None:
     assert widget._status == "Executing step"
 
 
+def test_loading_widget_default_omits_interrupt_hint() -> None:
+    """Task spinners show elapsed time only (no esc hint)."""
+    widget = LoadingWidget("Thinking")
+    assert widget._show_interrupt_hint is False
+    assert widget._format_hint_line(12.0) == "(12s)"
+
+
 def test_loading_widget_startup_mode_omits_interrupt_hint() -> None:
     widget = LoadingWidget("Connecting to daemon", show_interrupt_hint=False)
     assert widget._show_interrupt_hint is False

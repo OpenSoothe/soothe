@@ -16,6 +16,7 @@ from .nodes.bounded_evidence_gather import node_bounded_evidence_gather
 from .nodes.execute_steps import node_execute
 from .nodes.goal_completion import node_goal_completion
 from .nodes.init_or_resume import node_init_or_resume
+from .nodes.intent_classify import node_intent_classify
 from .nodes.iteration_gate import node_iteration_gate
 from .nodes.iteration_start import node_iteration_start
 from .nodes.plan_assess import node_plan_assess
@@ -64,6 +65,9 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     goal and the prior interrupt would dangle (RFC-622 / IG-462).
     """
 
+    async def intent_classify(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_intent_classify(ctx, state)
+
     async def init_or_resume(state: dict[str, Any]) -> dict[str, Any]:
         return await node_init_or_resume(ctx, state)
 
@@ -101,6 +105,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         return await node_await_clarification(ctx, state)
 
     graph = StateGraph(LoopGraphState)
+    graph.add_node("intent_classify", intent_classify)
     graph.add_node("init_or_resume", init_or_resume)
     graph.add_node("iteration_gate", iteration_gate)
     graph.add_node("iteration_start", iteration_start)
@@ -114,7 +119,8 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node("record_iteration", record_iteration)
     graph.add_node("await_clarification", await_clarification)
 
-    graph.add_edge(START, "init_or_resume")
+    graph.add_edge(START, "intent_classify")
+    graph.add_edge("intent_classify", "init_or_resume")
     graph.add_conditional_edges(
         "init_or_resume",
         route_by_intent,

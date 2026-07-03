@@ -127,7 +127,6 @@ from soothe.utils.network_errors import (
 from soothe.utils.network_errors import (
     is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
 )
-from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
 
 if TYPE_CHECKING:
@@ -214,6 +213,7 @@ class Executor:
         context_engine: Any | None = None,  # RFC-624 Phase 4
         step_brief_hydrator: Any | None = None,
         checkpoint: Any | None = None,
+        goal_trace: Any | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -259,22 +259,51 @@ class Executor:
         self._context_engine = context_engine
         self._step_brief_hydrator = step_brief_hydrator
         self._checkpoint = checkpoint
+        self._goal_trace = goal_trace
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
     ) -> dict[str, Any]:
         """Merge Langfuse callback into RunnableConfig with execute-phase run name (IG-377)."""
-        if self._config is None:
+        parent_runnable_config: dict[str, Any] | None = None
+        try:
+            from langgraph.config import get_config as _lg_get_config
+
+            parent_runnable_config = _lg_get_config()
+        except RuntimeError:
+            parent_runnable_config = None
+
+        if self._goal_trace is not None and getattr(self._goal_trace, "enabled", False):
+            graph_config = self._goal_trace.execute_invoke_config(
+                fork_thread_id=thread_id or "",
+                configurable=base.get("configurable"),
+                inherit_callbacks_from=parent_runnable_config,
+            )
+        elif self._config is None:
             return base
-        tn = (self._config.observability.langfuse.trace_name or "").strip()
-        run_name = f"{tn}:execute-step" if tn else "execute-step"
-        return merge_langfuse_runnable_config(
-            base,
-            self._config,
-            session_id=thread_id,
-            run_name=run_name,
-            loop_id=self._loop_id,
-        )
+        else:
+            from soothe.utils.observability.langfuse._merge import (
+                merge_langfuse_runnable_config,
+                pinned_trace_id_from_config,
+            )
+
+            tn = (self._config.observability.langfuse.trace_name or "").strip()
+            run_name = f"{tn}:execute-step" if tn else "execute-step"
+            graph_config = merge_langfuse_runnable_config(
+                base,
+                self._config,
+                session_id=thread_id,
+                run_name=run_name,
+                loop_id=self._loop_id,
+                inherit_callbacks_from=parent_runnable_config,
+                pinned_trace_id=pinned_trace_id_from_config(parent_runnable_config),
+            )
+
+        if parent_runnable_config is not None:
+            from langchain_core.runnables.config import merge_configs
+
+            return merge_configs(parent_runnable_config, graph_config)
+        return graph_config
 
     async def _claude_runner_config_extras(self, thread_id: str) -> dict[str, Any]:
         """Load Claude session ids + durability handle for subagent resume (IG-202)."""
@@ -1227,8 +1256,10 @@ class Executor:
         excerpt_prefixes: set[str] = set()
 
         for i, step in enumerate(steps):
-            step_id = (step.id or "").strip()
-            description = (step.full_description or step.description or step_id or "step").strip()
+            step_id = (step.id or "").strip()[:64]
+            description = (step.full_description or step.description or step_id or "step").strip()[
+                :500
+            ]
             status: Literal["completed", "failed", "unknown"] = "unknown"
             outcome_preview = ""
             raw = gather_results[i] if i < len(gather_results) else None

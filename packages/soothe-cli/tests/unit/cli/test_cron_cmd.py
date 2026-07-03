@@ -56,7 +56,7 @@ def test_cron_add_with_priority(monkeypatch) -> None:
 
 def test_cron_list_empty(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.cron_list_jobs.return_value = {"jobs": []}
+    mock_client.cron_list.return_value = {"jobs": []}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -69,7 +69,7 @@ def test_cron_list_empty(monkeypatch) -> None:
 
 def test_cron_list_with_jobs(monkeypatch) -> None:
     mock_client = MagicMock()
-    mock_client.cron_list_jobs.return_value = {"jobs": [_job_payload()]}
+    mock_client.cron_list.return_value = {"jobs": [_job_payload()]}
     monkeypatch.setattr(
         "soothe_cli.cli.commands.cron_cmd._require_cron_client",
         lambda: mock_client,
@@ -78,7 +78,7 @@ def test_cron_list_with_jobs(monkeypatch) -> None:
     result = CliRunner().invoke(app, ["cron", "list", "--status", "pending"])
     assert result.exit_code == 0
     assert "abc123" in result.output
-    mock_client.cron_list_jobs.assert_called_once_with(status="pending")
+    mock_client.cron_list.assert_called_once_with(status="pending")
 
 
 def test_cron_show_job(monkeypatch) -> None:

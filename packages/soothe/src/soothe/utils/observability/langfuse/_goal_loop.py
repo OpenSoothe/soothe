@@ -9,6 +9,7 @@ from soothe.utils.observability.langfuse._client import resolve_str, resolved_la
 from soothe.utils.observability.langfuse._handlers import allocate_langfuse_trace_id
 from soothe.utils.observability.langfuse._merge import merge_langfuse_runnable_config
 from soothe.utils.observability.langfuse._names import (
+    execute_step_langfuse_run_display_name,
     intent_classify_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
 )
@@ -95,7 +96,7 @@ class GoalLoopTrace:
         phase: str = "pre-stream",
         extra_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """RunnableConfig for off-graph intent-classify under this trace."""
+        """RunnableConfig for in-graph intent-classify under this trace."""
         from soothe.middleware._utils import create_llm_call_metadata
 
         metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
@@ -149,3 +150,39 @@ class GoalLoopTrace:
         meta["langfuse_tags"] = tags
         out["metadata"] = meta
         return out
+
+    def execute_invoke_config(
+        self,
+        *,
+        fork_thread_id: str,
+        configurable: dict[str, Any] | None = None,
+        inherit_callbacks_from: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """RunnableConfig for Execute-phase CoreAgent streams under this trace."""
+        trace_name = (self.soothe_config.observability.langfuse.trace_name or "").strip()
+        run_name = execute_step_langfuse_run_display_name(trace_name or None)
+
+        conf = dict(configurable or {})
+        conf.setdefault("thread_id", fork_thread_id)
+
+        meta = dict(self.base_metadata())
+        meta["soothe_component"] = "execute_step"
+        tags = list(meta.get("langfuse_tags") or [])
+        if "execute-step" not in tags:
+            tags.append("execute-step")
+        meta["langfuse_tags"] = tags
+
+        base: dict[str, Any] = {
+            "configurable": conf,
+            "metadata": meta,
+            "run_name": run_name,
+        }
+        return merge_langfuse_runnable_config(
+            base,
+            self.soothe_config,
+            session_id=fork_thread_id,
+            run_name=run_name,
+            loop_id=self.loop_id,
+            pinned_trace_id=self.trace_id,
+            inherit_callbacks_from=inherit_callbacks_from,
+        )

@@ -400,73 +400,16 @@ class StrangeLoopMixin:
         # One load for unified classification (tail) - IG-128, IG-133
         # IG-506: defer CoreAgent/checkpointer init until quiz or execute materialize.
 
-        # RFC-225: intent classification is quiz vs. agentic only.
-        # Loop continuation is derived structurally inside StrangeLoop from the
-        # loaded checkpoint, not by the runner.
+        # RFC-630: intake classification runs in the graph entry ``intent_classify`` node.
+        # Loop continuation is derived structurally inside StrangeLoop from the checkpoint.
         #
-        # When the caller flags this turn as a clarification answer (RFC-622),
-        # skip classification entirely: a bare word like "soothe" would
-        # otherwise classify as quiz and short-circuit the StrangeLoop, never
-        # reaching the orchestrator's Command(resume=...) path. The
-        # orchestrator runner verifies the actual pending state and falls back
-        # to a normal turn if no clarification is really pending.
-
-        intent_classification = None
+        # When the caller flags this turn as a clarification answer (RFC-622), the graph
+        # skips classification so a bare word like "soothe" does not short-circuit resume.
         strange_loop_id = (self._client_loop_id_for_stream or tid).strip() or tid
-        goal_trace = None
-        if self._intent_classifier and not clarification_answer:
-            # RFC-630: 4-class intake LLM (quiz | trivial | simple | complex),
-            # drives route_by_intent branch routing in the graph.
-            yield _custom(StrangeLoopPlanPhaseStatusEvent(label="Classifying request").to_dict())
-            if self._config.observability.langfuse.enabled:
-                from soothe.utils.observability.langfuse import SootheLangfuse
-
-                goal_trace = SootheLangfuse(self._config).begin_goal_loop(
-                    session_id=tid,
-                    loop_id=strange_loop_id,
-                )
-            from soothe.foundation.sloop.intention.intake_context import load_intake_context
-
-            intake_ctx = await load_intake_context(
-                self._config,
-                strange_loop_id,
-                workspace=workspace,
-            )
-            intent_classification = await self._intent_classifier.classify_intake(
-                user_input,
-                loop_messages=intake_ctx.loop_messages,
-                thread_id=tid,
-                context_engine=intake_ctx.context_engine,
-                goal_trace=goal_trace,
-            )
-
+        if clarification_answer:
             logger.info(
-                "[StrangeLoop] intent_type=%s intake=%s - %s",
-                intent_classification.intent_type,
-                intent_classification.intake_label,
-                user_input[:50],
+                "[StrangeLoop] clarification_answer=True - graph will skip intent classification"
             )
-
-            # IG-518: Emit IntentClassifiedEvent for agentic intents (reasoning for client)
-            if intent_classification.intent_type == "agentic" and intent_classification.reasoning:
-                yield _custom(
-                    IntentClassifiedEvent(
-                        intent_type="agentic",
-                        reasoning=intent_classification.reasoning,
-                        goal_description=intent_classification.goal_description,
-                    ).to_dict()
-                )
-
-            # Fast path: skip StrangeLoop entirely for quiz (greetings + trivia)
-            if intent_classification.intent_type == "quiz":
-                await self._materialize_core_agent()
-                async for chunk in self._run_quiz(
-                    user_input, tid, classification=intent_classification
-                ):
-                    yield chunk
-                return
-        elif clarification_answer:
-            logger.info("[StrangeLoop] clarification_answer=True - bypassing intent classification")
 
         # Emit loop started event (Level 1)
         display_goal = preview_first(user_input, 100)
@@ -512,10 +455,7 @@ class StrangeLoopMixin:
             )
             clarification_policy = None
 
-        # Build routing classification from pre-computed intent (avoids redundant classification in graph)
-        routing_classification = build_loop_routing_classification(
-            intent_classification, preferred_subagent
-        )
+        routing_classification = build_loop_routing_classification(None, preferred_subagent)
 
         # Loop status liveness heartbeat (IG-466 follow-up):
         # While the loop runs, tick `updated_at` so periodic reconciliation can
@@ -530,7 +470,7 @@ class StrangeLoopMixin:
                 loop_id=strange_loop_id,
                 workspace=workspace,
                 max_iterations=max_iterations,
-                intent=intent_classification,
+                intent=None,
                 routing_classification=routing_classification,
                 intent_classifier=self._intent_classifier,
                 preferred_subagent=preferred_subagent,
@@ -538,9 +478,20 @@ class StrangeLoopMixin:
                 clarification_policy=clarification_policy,
                 clarification_answer=clarification_answer,
                 clarification_answers=clarification_answers,
-                goal_trace=goal_trace,
             ):
-                if event_type == "intent_classified":
+                if event_type == "intent_classified_reasoning":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    reasoning = str(payload.get("reasoning", "")).strip()
+                    if reasoning:
+                        yield _custom(
+                            IntentClassifiedEvent(
+                                intent_type="agentic",
+                                reasoning=reasoning,
+                                goal_description=payload.get("goal_description"),
+                            ).to_dict()
+                        )
+
+                elif event_type == "intent_classified":
                     logger.info(
                         "[Intent] Classified in graph as %s",
                         event_data.get("intent_type")
@@ -555,9 +506,17 @@ class StrangeLoopMixin:
                     intent_type = (
                         event_data.get("intent_type") if isinstance(event_data, dict) else None
                     )
+                    quiz_ce = (
+                        event_data.get("context_engine") if isinstance(event_data, dict) else None
+                    )
                     if intent_type == "quiz":
                         await self._materialize_core_agent()
-                        async for chunk in self._run_quiz(user_input, tid, classification):
+                        async for chunk in self._run_quiz(
+                            user_input,
+                            tid,
+                            classification,
+                            context_engine=quiz_ce,
+                        ):
                             yield chunk
                         return
 

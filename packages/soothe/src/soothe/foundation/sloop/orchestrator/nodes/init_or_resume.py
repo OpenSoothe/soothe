@@ -1,12 +1,12 @@
 """Loop Graph ``init_or_resume`` node (RFC-220, RFC-630).
 
-Hydrates intent/routing from the pre-classified intake passed by the runner.
-The runner handles quiz detection; loop continuation is derived in
-``StrangeLoop`` from the checkpoint. This node emits the classified intake
-for event streaming, surfaces the 4-class ``intake_label`` and a structural
-``is_continuation`` flag onto the graph state for ``route_by_intent``, and —
-for the ``trivial`` label — injects a minimal synthetic plan into
-``ctx.scratch`` so the loop skips ``plan_generate`` entirely.
+Hydrates intent/routing from intake classified in the graph entry node.
+Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
+node emits the classified intake for event streaming, surfaces the 4-class
+``intake_label`` and a structural ``is_continuation`` flag onto the graph
+state for ``route_by_intent``, and — for the ``trivial`` label — injects a
+minimal synthetic plan into ``ctx.scratch`` so the loop skips
+``plan_generate`` entirely.
 """
 
 from __future__ import annotations
@@ -76,6 +76,8 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             {
                 "intent_type": intent_type,
                 "classification": intent,
+                "context_engine": getattr(ctx, "ce", None),
+                "thread_id": ctx.loop_state.thread_id,
             },
         )
         return {

@@ -266,6 +266,10 @@ class GoalNode(BaseModel):
     # Guidance (from Goal, RFC-228)
     guidance_accumulated: list[dict[str, Any]] = Field(default_factory=list)
 
+    # Cron job tracking (RFC-229)
+    cron_job_id: str | None = None  # Cron job that spawned this goal (for recurring rescheduling)
+
+    # Dreaming (NEW, RFC-625)
     # Dreaming (NEW, RFC-625)
     topic: str | None = None  # Topic tag for cross-loop dreaming
     findings: list[str] = Field(default_factory=list)  # Key findings from execution

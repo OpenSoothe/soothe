@@ -119,6 +119,8 @@ class CognitionGoalTreeMessage(Vertical):
         self._footer_plain: str = ""
         self._footer_visible: bool = False
         self._footer_tone: str = "muted"  # success | error | muted (step/tool completion parity)
+        self._execution_mode: str = ""
+        self._spinner_position: int = 0
         self._steps_static: Static | None = None
 
     @staticmethod
@@ -133,6 +135,9 @@ class CognitionGoalTreeMessage(Vertical):
         body = g
         if self._max_iterations > 1:
             body = f"{body} · iter<={self._max_iterations}"
+        mode = self._execution_mode.strip().lower()
+        if mode:
+            body = f"{body} · {mode}"
         return _assemble_card_header(self, "📍 ", body)
 
     def _goal_footer_styled_content(self) -> Content:
@@ -166,18 +171,36 @@ class CognitionGoalTreeMessage(Vertical):
             colors = theme.DARK_COLORS
         gutter = self._indent_prefix()
         body = self._clip(st.description, _MAX_GOAL_STEP_DESC)
+        label = f"{st.step_id}: {body}" if st.step_id else body
+        if st.phase == "pending":
+            rest = f"{g.circle_empty} {label}"
+            return Content.assemble(
+                Content.styled(gutter, "dim"),
+                Content.styled(rest, "dim"),
+            )
+        if st.phase == "queued":
+            rest = f"{g.circle_empty} {label} · queued"
+            return Content.assemble(
+                Content.styled(gutter, "dim"),
+                Content.styled(rest, colors.cognition),
+            )
         if st.phase == "running":
-            rest = f"{g.circle_empty} {body}"
-        else:
-            icon = g.checkmark if st.success else g.error
-            dur_s = max(0.001, st.duration_ms / 1000.0)
-            dur = format_duration(dur_s)
-            rest = f"{icon} {body} · {dur}"
-            if st.tool_call_count > 0:
-                rest += f" · {st.tool_call_count} tools"
-            tail = (st.summary or "").strip()
-            if tail and tail not in ("Done", "Failed"):
-                rest += f" — {self._clip(tail, 80)}"
+            frames = g.spinner_frames
+            frame = frames[self._spinner_position % len(frames)]
+            rest = f"{frame} {label}"
+            return Content.assemble(
+                Content.styled(gutter, "dim"),
+                Content.styled(rest, colors.foreground),
+            )
+        icon = g.checkmark if st.success else g.error
+        dur_s = max(0.001, st.duration_ms / 1000.0)
+        dur = format_duration(dur_s)
+        rest = f"{icon} {label} · {dur}"
+        if st.tool_call_count > 0:
+            rest += f" · {st.tool_call_count} tools"
+        tail = (st.summary or "").strip()
+        if tail and tail not in ("Done", "Failed"):
+            rest += f" — {self._clip(tail, 80)}"
         if st.phase == "error" or (st.phase == "done" and not st.success):
             return Content.assemble(
                 Content.styled(gutter, "dim"),
@@ -188,9 +211,7 @@ class CognitionGoalTreeMessage(Vertical):
             Content.styled(rest, colors.foreground),
         )
 
-    def _refresh_steps_display(self) -> None:
-        if self._steps_static is None:
-            return
+    def _assemble_steps_content(self) -> Content:
         line_contents: list[Content] = []
         for sid in self._step_order:
             st = self._steps.get(sid)
@@ -198,14 +219,36 @@ class CognitionGoalTreeMessage(Vertical):
                 continue
             line_contents.append(self._goal_tree_step_line_content(st))
         if not line_contents:
-            self._steps_static.update(Content(""))
-            return
+            return Content("")
         parts: list[object] = []
         for i, c in enumerate(line_contents):
             if i:
                 parts.append("\n")
             parts.append(c)
-        self._steps_static.update(Content.assemble(*parts))
+        return Content.assemble(*parts)
+
+    def _refresh_steps_display(self) -> None:
+        if self._steps_static is None:
+            return
+        self._steps_static.update(self._assemble_steps_content())
+
+    def plan_quick_view_content(self) -> Content:
+        """Full goal tree snapshot for the sticky plan quick-view overlay."""
+        parts: list[object] = [self._goal_header_content()]
+        steps = self._assemble_steps_content()
+        if steps.plain.strip():
+            parts.extend([Content("\n"), steps])
+        if self._footer_visible and self._footer_plain:
+            parts.extend([Content("\n"), self._goal_footer_styled_content()])
+        return Content.assemble(*parts)
+
+    def tick_running_spinner(self) -> None:
+        """Advance the running-row spinner when any step is in flight."""
+        if not any(st.phase == "running" for st in self._steps.values()):
+            return
+        frames = get_glyphs().spinner_frames
+        self._spinner_position = (self._spinner_position + 1) % len(frames)
+        self._refresh_steps_display()
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -263,6 +306,7 @@ class CognitionGoalTreeMessage(Vertical):
         return {
             "goal": self._goal_text,
             "max_iterations": self._max_iterations,
+            "execution_mode": self._execution_mode,
             "steps": steps_out,
             "footer_visible": self._footer_visible,
             "footer_text": self._footer_plain,
@@ -273,6 +317,7 @@ class CognitionGoalTreeMessage(Vertical):
         """Restore in-memory goal tree state from :meth:`snapshot_dict` output."""
         self._goal_text = str(snap.get("goal", self._goal_text))
         self._max_iterations = int(snap.get("max_iterations", self._max_iterations))
+        self._execution_mode = str(snap.get("execution_mode", self._execution_mode))
         self._footer_plain = str(snap.get("footer_text", ""))
         self._footer_visible = bool(snap.get("footer_visible", False))
         tone = str(snap.get("footer_tone", "muted") or "muted")
@@ -295,16 +340,73 @@ class CognitionGoalTreeMessage(Vertical):
             self._step_order.append(sid)
             self._steps[sid] = st
 
+    def set_execution_mode(self, mode: str) -> None:
+        """Show dependency/parallel mode in the goal header."""
+        self._execution_mode = (mode or "").strip()
+        try:
+            hdr = self.query_one("#cognition-goal-tree-header", Static)
+            hdr.update(self._goal_header_content())
+        except Exception:  # noqa: BLE001
+            logger.debug("goal tree execution mode sync failed", exc_info=True)
+
+    def sync_plan_steps(self, steps: list[dict[str, Any]]) -> None:
+        """Populate or refresh planned step rows from a plan_decision event."""
+        planned_ids: set[str] = set()
+        for row in steps:
+            if not isinstance(row, dict):
+                continue
+            sid = str(row.get("id", "")).strip()
+            if not sid:
+                continue
+            planned_ids.add(sid)
+            desc = str(row.get("description", "")).strip() or "(step)"
+            existing = self._steps.get(sid)
+            if existing is None:
+                self._step_order.append(sid)
+                self._steps[sid] = _StepLineState(sid, desc, phase="pending")
+            elif existing.phase in ("pending", "queued"):
+                existing.description = desc
+            elif existing.phase == "running" and desc:
+                existing.description = desc
+        for sid in list(self._step_order):
+            st = self._steps.get(sid)
+            if st is not None and st.phase == "pending" and sid not in planned_ids:
+                self._step_order.remove(sid)
+                del self._steps[sid]
+        self._refresh_steps_display()
+
+    def set_step_phase(
+        self,
+        step_id: str,
+        phase: str,
+        *,
+        description: str | None = None,
+    ) -> None:
+        """Update a step row to pending, queued, or running."""
+        sid = step_id.strip()
+        if not sid or phase not in ("pending", "queued", "running"):
+            return
+        desc = (description or "").strip()
+        st = self._steps.get(sid)
+        if st is None:
+            self._step_order.append(sid)
+            st = _StepLineState(sid, desc or "(step)", phase=phase)
+            self._steps[sid] = st
+        else:
+            if st.phase in ("done", "error"):
+                return
+            if phase == "pending" and st.phase in ("queued", "running"):
+                return
+            if phase == "queued" and st.phase == "running":
+                return
+            st.phase = phase
+            if desc:
+                st.description = desc
+        self._refresh_steps_display()
+
     def add_step_running(self, step_id: str, description: str) -> None:
         """Register a step in running state and refresh the aggregate."""
-        sid = step_id.strip()
-        if not sid:
-            return
-        desc = (description or "").strip() or "(step)"
-        if sid not in self._steps:
-            self._step_order.append(sid)
-        self._steps[sid] = _StepLineState(sid, desc, phase="running")
-        self._refresh_steps_display()
+        self.set_step_phase(step_id, "running", description=description)
 
     def complete_step(
         self,
@@ -378,7 +480,7 @@ class CognitionGoalTreeMessage(Vertical):
         msg = (message or "Interrupted").strip()
         for sid in list(self._step_order):
             st = self._steps.get(sid)
-            if st is not None and st.phase == "running":
+            if st is not None and st.phase in ("pending", "queued", "running"):
                 st.phase = "error"
                 st.success = False
                 st.duration_ms = 0

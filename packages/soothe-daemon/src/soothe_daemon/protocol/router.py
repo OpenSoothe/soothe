@@ -3115,3 +3115,242 @@ class MessageRouter:
         logger.info(
             "[AutopilotUnsubscribe] Client %s unsubscribed from autopilot events", client_id
         )
+
+    # -- Cron RPC handlers (RFC-229) ---------------------------------------------
+
+    async def _require_cron_service(self, client_id: Any, request_id: str | None) -> Any | None:
+        """Return CronService if available, else send error response and return None.
+
+        Args:
+            client_id: Client connection identifier.
+            request_id: Request correlation id.
+
+        Returns:
+            CronService instance or None if unavailable.
+        """
+        d = self._daemon
+        service = getattr(d, "_cron_service", None)
+        if service is None:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.AUTOPILOT_NOT_READY,
+                    "Cron service not initialized or disabled",
+                    request_id=request_id,
+                ),
+            )
+            return None
+        return service
+
+    async def _handle_cron_add(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle cron_add RPC request (RFC-229).
+
+        Create a scheduled job from natural language input.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with text (required), priority (optional), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        text = msg.get("text")
+        priority = msg.get("priority")
+
+        if not isinstance(text, str) or not text.strip():
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "text (non-empty string) is required",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        service = await self._require_cron_service(client_id, request_id)
+        if service is None:
+            return
+
+        # Default user for daemon (single-user mode)
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+
+        user_id = DEFAULT_CRON_USER_ID
+
+        # Create job via CronService
+        try:
+            job = await service.add_job(text.strip(), user_id, priority=priority)
+        except Exception as exc:
+            logger.error("[CronAdd] Failed to create job: %s", exc, exc_info=True)
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INTERNAL_ERROR,
+                    str(exc),
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        await self._send_response(
+            client_id,
+            request_id,
+            {
+                "job_id": job.id,
+                "description": job.description,
+                "schedule_kind": job.schedule_kind.value,
+                "next_run": job.next_run.isoformat() if job.next_run else None,
+                "status": job.status.value,
+                "priority": job.priority,
+            },
+        )
+        logger.info("[CronAdd] Created cron job %s: %s", job.id, job.description[:50])
+
+    async def _handle_cron_list(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle cron_list RPC request (RFC-229).
+
+        List scheduled jobs for the user.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with status (optional filter), request_id.
+        """
+        request_id = msg.get("request_id")
+        status_filter = msg.get("status")
+
+        service = await self._require_cron_service(client_id, request_id)
+        if service is None:
+            return
+
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+
+        user_id = DEFAULT_CRON_USER_ID
+
+        # List jobs via CronService
+        jobs = await service.list_jobs(user_id, status=status_filter)
+
+        jobs_data = [
+            {
+                "id": job.id,
+                "description": job.description,
+                "schedule_kind": job.schedule_kind.value,
+                "next_run": job.next_run.isoformat() if job.next_run else None,
+                "status": job.status.value,
+                "priority": job.priority,
+            }
+            for job in jobs
+        ]
+
+        await self._send_response(client_id, request_id, {"jobs": jobs_data})
+
+    async def _handle_cron_show(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle cron_show RPC request (RFC-229).
+
+        Get details for a specific scheduled job.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "job_id is required",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        service = await self._require_cron_service(client_id, request_id)
+        if service is None:
+            return
+
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+
+        user_id = DEFAULT_CRON_USER_ID
+
+        # Get job via CronService
+        job = await service.show_job(job_id.strip(), user_id)
+        if job is None:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.JOB_NOT_FOUND,
+                    f"Cron job {job_id} not found",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        await self._send_response(
+            client_id,
+            request_id,
+            {
+                "job_id": job.id,
+                "description": job.description,
+                "schedule_kind": job.schedule_kind.value,
+                "schedule_value": job.schedule_value,
+                "end_condition": job.end_condition,
+                "next_run": job.next_run.isoformat() if job.next_run else None,
+                "status": job.status.value,
+                "priority": job.priority,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+            },
+        )
+
+    async def _handle_cron_cancel(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle cron_cancel RPC request (RFC-229).
+
+        Cancel a scheduled job.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request with job_id (required), request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        job_id = msg.get("job_id")
+
+        if not isinstance(job_id, str) or not job_id.strip():
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "job_id is required",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        service = await self._require_cron_service(client_id, request_id)
+        if service is None:
+            return
+
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+
+        user_id = DEFAULT_CRON_USER_ID
+
+        # Cancel job via CronService
+        cancelled = await service.cancel_job(job_id.strip(), user_id)
+        if not cancelled:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.JOB_NOT_FOUND,
+                    f"Cron job {job_id} not found or cannot be cancelled",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        await self._send_response(
+            client_id,
+            request_id,
+            {"job_id": job_id.strip(), "cancelled": True},
+        )
+        logger.info("[CronCancel] Cancelled cron job %s", job_id)

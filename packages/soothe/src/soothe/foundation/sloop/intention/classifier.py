@@ -75,6 +75,8 @@ class IntentClassifier:
         context_engine: Any | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        observability_phase: str = "pre-stream",
+        observability_component: str = "intake.primary",
     ) -> IntentClassification:
         """Classify the query into a 4-class intake label (RFC-630).
 
@@ -89,6 +91,9 @@ class IntentClassifier:
             observability_metadata: Optional metadata for observability.
             goal_trace: ``GoalLoopTrace`` from ``SootheLangfuse.begin_goal_loop`` so
                 intent-classify nests under the same trace as ``strange-loop-graph``.
+            observability_phase: Langfuse/metadata phase label (graph entry uses
+                ``strange_loop_graph``).
+            observability_component: Langfuse component label for the classifier call.
 
         Returns:
             IntentClassification with ``intake_label`` ∈
@@ -111,6 +116,8 @@ class IntentClassifier:
                     loop_messages=loop_messages,
                     observability_metadata=observability_metadata,
                     goal_trace=goal_trace,
+                    observability_phase=observability_phase,
+                    observability_component=observability_component,
                 )
                 break
             except Exception as exc:
@@ -156,6 +163,8 @@ class IntentClassifier:
         loop_messages: list[BaseMessage] | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        observability_phase: str = "pre-stream",
+        observability_component: str = "intake.primary",
     ) -> tuple[IntentClassification, str, dict[str, Any]]:
         """4-class intake LLM call with structured output (RFC-630)."""
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
@@ -172,9 +181,10 @@ class IntentClassifier:
 
         config = self._build_invoke_config(
             "classify_intake",
-            "intake.primary",
+            observability_component,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
+            phase=observability_phase,
         )
 
         messages: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -315,6 +325,7 @@ class IntentClassifier:
         *,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        phase: str = "pre-stream",
     ) -> dict[str, Any]:
         """Build RunnableConfig with Langfuse tracing and call metadata."""
         from soothe.middleware._utils import create_llm_call_metadata
@@ -323,7 +334,7 @@ class IntentClassifier:
             return goal_trace.intake_invoke_config(
                 purpose=purpose,
                 component=f"classifier.{component}",
-                phase="pre-stream",
+                phase=phase,
                 extra_metadata=observability_metadata,
             )
 
@@ -337,7 +348,7 @@ class IntentClassifier:
             return SootheLangfuse(self._soothe_config).traced_llm(
                 purpose=purpose,
                 component=f"classifier.{component}",
-                phase="pre-stream",
+                phase=phase,
                 run_name=intent_classify_langfuse_run_display_name(trace_name or None),
                 extra_metadata=observability_metadata,
             )
@@ -345,7 +356,7 @@ class IntentClassifier:
         metadata = create_llm_call_metadata(
             purpose=purpose,
             component=f"classifier.{component}",
-            phase="pre-stream",
+            phase=phase,
         )
         if observability_metadata:
             metadata.update(observability_metadata)
