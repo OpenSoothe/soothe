@@ -89,6 +89,29 @@ def _deep_copy_message(msg: BaseMessage) -> BaseMessage:
     return copy.deepcopy(msg)
 
 
+def _message_step_id(msg: BaseMessage) -> str | None:
+    """Extract step_id from a message's direct attribute or additional_kwargs."""
+    sid = getattr(msg, "step_id", None)
+    if isinstance(sid, str) and sid.strip():
+        return sid.strip()
+    add = getattr(msg, "additional_kwargs", None) or {}
+    if isinstance(add, dict):
+        v = add.get("step_id")
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+def _extract_step_ids_from_messages(messages: list[BaseMessage]) -> frozenset[str]:
+    """Extract all unique step_id values from a list of messages."""
+    step_ids: set[str] = set()
+    for msg in messages:
+        sid = _message_step_id(msg)
+        if sid:
+            step_ids.add(sid)
+    return frozenset(step_ids)
+
+
 def _message_text_len(msg: BaseMessage) -> int:
     return len(extract_text_from_message_content(getattr(msg, "content", "")))
 
@@ -478,6 +501,8 @@ def project_execute_step_graph_input(
     mode = resolve_execute_projection_mode(state)
     out: list[BaseMessage] = []
     cross_goal_projected = False
+    # Track step_ids from Slice A fallback to prevent duplication in Slice B
+    excluded_step_ids: frozenset[str] = frozenset()
 
     if mode == "goal_boundary" and exec_cfg.cross_goal_completion_tail > 0:
         if getattr(state, "continue_loop", False):
@@ -490,6 +515,11 @@ def project_execute_step_graph_input(
             if slice_a:
                 out.extend(slice_a)
                 cross_goal_projected = True
+                # Extract step_ids from Slice A to exclude from Slice B.
+                # This prevents duplicate ledger messages when Slice A falls back
+                # to execute_step pairs and those same steps are in the current
+                # step's transitive dependencies.
+                excluded_step_ids = _extract_step_ids_from_messages(slice_a)
 
     predecessor_projected = False
     if step.dependencies:
@@ -501,6 +531,7 @@ def project_execute_step_graph_input(
             step,
             decision,
             max_messages=cap,
+            exclude_step_ids=excluded_step_ids,
         )
         if slice_b:
             out.extend(slice_b)
@@ -528,6 +559,7 @@ def project_predecessor_execute_ledger_for_step(
     decision: AgentDecision,
     *,
     max_messages: int | None = None,
+    exclude_step_ids: frozenset[str] | None = None,
 ) -> list[BaseMessage]:
     """Project transitive-predecessor execute_step ledger rows for branched CoreAgent input.
 
@@ -540,6 +572,7 @@ def project_predecessor_execute_ledger_for_step(
         step: Step about to execute on an isolated branch thread.
         decision: Current scoped plan decision (for transitive dependency closure).
         max_messages: Cap on copied ledger rows; ``None`` uses the branch default.
+        exclude_step_ids: Step ids to exclude (already included in Slice A fallback).
 
     Returns:
         Deep-copied predecessor execute_step messages in ledger order.
@@ -557,6 +590,7 @@ def project_predecessor_execute_ledger_for_step(
         step,
         decision,
         max_messages=cap,
+        exclude_step_ids=exclude_step_ids,
     )
     logger.debug(
         "Execute-step predecessor projection: step=%s deps=%d out_msgs=%d",
