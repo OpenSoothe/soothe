@@ -45,22 +45,24 @@ def _append_goal_completion_ledger_pair(
     final_output: str | None,
     context_engine: Any | None = None,
 ) -> None:
-    """Append RFC-214 Human–AI pair for synthesized or fallback final text (not ledger-direct).
+    """Append RFC-214 Human–AI pair for the goal completion report.
 
-    ``LEDGER_DIRECT`` already surfaces the last execute assistant turn; duplicating it here
-    would bloat the ledger and the next synthesis prompt.
+    Every completion strategy (``synthesize``, ``summary``, ``ledger_direct``) writes
+    an independent ``goal_completion`` unit so the ledger has one canonical terminal
+    report per goal regardless of how the text was produced.
 
     Args:
         state: Loop state whose ``loop_messages`` list is extended.
         iteration_completed: Iteration index that just finished (before ``state.iteration`` bump).
-        action: Completion strategy used for this goal.
+        action: Completion strategy used for this goal (logged at record sites only).
         final_output: Final user-visible text (may be empty).
         context_engine: ContextEngine instance for direct LedgerManager writes.
     """
     from soothe.foundation.sloop.utils.messages import _record_ledger_message
 
+    _ = action
     text = (final_output or "").strip()
-    if not text or action == CompletionStrategy.LEDGER_DIRECT:
+    if not text:
         return
     human_msg = LoopHumanMessage(
         content=_GOAL_COMPLETION_LEDGER_HUMAN,

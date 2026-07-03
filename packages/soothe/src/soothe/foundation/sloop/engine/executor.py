@@ -51,7 +51,7 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
 )
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continuation_execution_hints,
-    build_prior_goal_completion_block,
+    ledger_goal_completion_text,
 )
 from soothe.foundation.sloop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
@@ -438,7 +438,6 @@ class Executor:
             _render_prior_goals_tree,
         )
 
-        prior_goal_completion = ""
         has_predecessor_ledger = bool(step.dependencies or [])
         prior_steps = ""
         prior_goals = ""
@@ -470,20 +469,16 @@ class Executor:
                     summaries[-tail_k:],
                     completion_in_ledger=True,
                 )
+
+        has_prior_completion_in_ledger = bool(
+            loop_state is not None and ledger_goal_completion_text(loop_state.loop_messages).strip()
+        )
+        step_goal_text = step.full_description or step.description
         if (
             loop_state is not None
             and getattr(loop_state, "continue_loop", False)
             and loop_state.iteration == 0
-            and not cross_goal_projected
-        ):
-            prior_goal_completion = build_prior_goal_completion_block(
-                loop_state.loop_messages,
-                checkpoint=self._checkpoint,
-            )
-
-        step_goal_text = step.full_description or step.description
-        if prior_goal_completion.strip() or (
-            cross_goal_projected and loop_state is not None and loop_state.continue_loop
+            and (cross_goal_projected or has_prior_completion_in_ledger)
         ):
             envelope_body = build_continuation_execution_hints(
                 has_prior_goal_completion=True,
@@ -504,7 +499,6 @@ class Executor:
             instructions=envelope_body.instructions,
             prior_steps=prior_steps or None,
             prior_goals=prior_goals or None,
-            prior_goal_completion=prior_goal_completion or None,
             skill_context=loop_state.skill_context if loop_state else None,
         )
 

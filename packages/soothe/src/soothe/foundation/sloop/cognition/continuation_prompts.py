@@ -1,18 +1,13 @@
-"""Prompt template and formatter for RFC-226 continuation-assess LLM call.
+"""Legacy RFC-226 continuation-assess prompt helpers.
 
-The continuation-assess prompt is a single-turn structured-output call that
-discriminates a follow-up agentic query between a one-shot bootstrap (answer
-from prior context) and a full ``plan_generate`` escalation (new tools or
-multi-step work). Kept in its own module to avoid bloating ``planner.py``
-or the heavyweight ``PromptBuilder``; the discriminator is intentionally
-lightweight and self-contained.
+Superseded by unified planner assembly (``LLMPlanner.assess_continuation`` via
+``PromptBuilder.build_plan_messages``). Prior goal completion is projected from
+``goal_completion`` ledger pairs — not pasted inline.
 """
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.continuation_context import (
-    format_prior_goal_completion_section,
-)
+from soothe.foundation.sloop.engine.continuation_context import ledger_goal_completion_text
 
 LOOP_CONTINUATION_ASSESS_PROMPT = """\
 You are deciding how to handle a follow-up query in an in-progress conversation loop.
@@ -41,22 +36,23 @@ Return a ContinuationAssessment JSON object with fields: action, reasoning, goal
 def format_loop_continuation_assess_prompt(
     *,
     current_goal: str,
-    prior_goal_completion: str = "",
+    loop_messages: list | None = None,
     capabilities: list[str],
 ) -> str:
-    """Render LOOP_CONTINUATION_ASSESS_PROMPT with the per-call context.
+    """Render legacy continuation-assess prompt (prefer unified planner assembly).
 
     Args:
         current_goal: The new user query (``LoopState.goal``).
-        prior_goal_completion: Full prior goal synthesis report (same body as plan-generate).
+        loop_messages: Orchestration ledger for ``goal_completion`` lookup.
         capabilities: Available tool + subagent names (top 30 used).
 
     Returns:
         Formatted prompt string suitable for a single ``HumanMessage``.
     """
-    prior_section = format_prior_goal_completion_section(prior_goal_completion)
-    if prior_section:
-        prior_section = prior_section + "\n\n"
+    body = ledger_goal_completion_text(loop_messages or [])
+    prior_section = ""
+    if body:
+        prior_section = f"PRIOR GOAL COMPLETION:\n{body}\n\n"
 
     if capabilities:
         caps_block = ", ".join(capabilities[:30])

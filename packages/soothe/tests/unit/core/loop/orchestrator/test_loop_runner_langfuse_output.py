@@ -33,10 +33,10 @@ def test_langfuse_goal_output_text_falls_back_to_next_action() -> None:
     assert _langfuse_goal_output_text(ctx) == "max iter msg"
 
 
-def test_langfuse_goal_output_text_falls_back_to_execute_ledger() -> None:
+def test_langfuse_goal_output_text_ignores_execute_ledger_without_goal_completion() -> None:
     ctx = MagicMock()
     ctx.loop_state.previous_plan = None
     ctx.loop_state.loop_messages = [
         LoopAIMessage(content="wave text", phase="execute_step", thread_id="t"),
     ]
-    assert _langfuse_goal_output_text(ctx) == "wave text"
+    assert _langfuse_goal_output_text(ctx) == ""

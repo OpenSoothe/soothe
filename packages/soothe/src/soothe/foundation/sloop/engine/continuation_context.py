@@ -1,8 +1,9 @@
 """Loop-continuation context for execute envelopes and plan prompts.
 
-When ``continue_loop`` is set, the prior goal's synthesized ``goal_completion``
-report (RFC-225) is the authoritative source for what to do next — not a replay of
-prior ``execute_step`` ledger rows.
+When ``continue_loop`` is set, each prior goal's canonical ``goal_completion``
+ledger pair is the authoritative outcome document. Downstream prompts project those
+native Human/AI turns (execute Slice A, planner ``new_goal`` ledger) instead of
+replaying ``execute_step`` rows or pasting inline completion prose.
 """
 
 from __future__ import annotations
@@ -14,19 +15,17 @@ from soothe.foundation.sloop.engine.step_predecessor_context import ExecuteStepE
 from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 
 if TYPE_CHECKING:
-    from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint
     from soothe.foundation.sloop.state.schemas import LoopState
 
-PRIOR_GOAL_COMPLETION_MAX_CHARS = 12_000
 CONTINUATION_ASSESS_REASONING_MAX_CHARS = 240
 
 _CONTINUE_KEYWORD_DESCRIPTION = "Continue prior goal completion recommendations"
 _CONTINUE_KEYWORD_FULL_DESCRIPTION = (
     "Advance the loop by executing the recommended next actions from the prior goal's "
-    "completion report (PRIOR GOAL COMPLETION in this message). Prioritize concrete "
-    "follow-up work — implementation, fixes, tests, or deliverables named in that report. "
-    "Do not repeat discovery, reading, RFC review, trace analysis, or other work already "
-    "finished in the prior goal; treat the completion report as authoritative context."
+    "completion report in the projected ledger. Prioritize concrete follow-up work — "
+    "implementation, fixes, tests, or deliverables named in that report. Do not repeat "
+    "discovery, reading, RFC review, trace analysis, or other work already finished in "
+    "the prior goal; treat the completion report as authoritative context."
 )
 
 
@@ -62,8 +61,8 @@ def build_continue_bootstrap_step_briefs(*, user_goal: str) -> ContinueBootstrap
     description = _truncate_description(goal)
     full_description = (
         f"Address the follow-up request: {goal}. "
-        "Use the prior goal's completion report (PRIOR GOAL COMPLETION) as authoritative "
-        "background. Do not re-run prior goal execute steps or redo finished analysis; "
+        "Use the prior goal's projected completion report as authoritative background. "
+        "Do not re-run prior goal execute steps or redo finished analysis; "
         "build on what was already concluded and produce concrete output for this request."
     )
     return ContinueBootstrapStepBriefs(
@@ -89,48 +88,6 @@ def ledger_goal_completion_text(loop_messages: list[Any]) -> str:
             if text:
                 content = text
     return content
-
-
-def resolve_prior_goal_completion(
-    *,
-    loop_messages: list[Any],
-    checkpoint: StrangeLoopCheckpoint | None = None,
-    prior_goal_text: str | None = None,
-    exclude_goal_id: str | None = None,
-) -> str:
-    """Resolve the best prior-goal completion body for continuation grounding."""
-    _ = checkpoint, prior_goal_text, exclude_goal_id
-    return ledger_goal_completion_text(loop_messages)
-
-
-def build_prior_goal_completion_block(
-    loop_messages: list[Any],
-    *,
-    checkpoint: StrangeLoopCheckpoint | None = None,
-    prior_goal_text: str | None = None,
-    exclude_goal_id: str | None = None,
-    max_chars: int = PRIOR_GOAL_COMPLETION_MAX_CHARS,
-) -> str:
-    """Build capped PRIOR GOAL COMPLETION text for execute/plan prompts."""
-    body = resolve_prior_goal_completion(
-        loop_messages=loop_messages,
-        checkpoint=checkpoint,
-        prior_goal_text=prior_goal_text,
-        exclude_goal_id=exclude_goal_id,
-    ).strip()
-    if not body:
-        return ""
-    if max_chars <= 0 or len(body) <= max_chars:
-        return body
-    return body[: max_chars - 1].rstrip() + "…"
-
-
-def format_prior_goal_completion_section(body: str) -> str:
-    """Render PRIOR GOAL COMPLETION section (same label as plan-generate / execute)."""
-    text = (body or "").strip()
-    if not text:
-        return ""
-    return f"PRIOR GOAL COMPLETION:\n{text}"
 
 
 def polish_continuation_assess_reasoning(
@@ -160,13 +117,13 @@ def is_continuation_first_plan(state: LoopState) -> bool:
 def build_prior_goal_summaries(
     *,
     ce: Any | None,
-    checkpoint: StrangeLoopCheckpoint | None,
+    checkpoint: Any | None,
     exclude_goal_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Compact summary of prior goals for continuation-assess and plan-generate.
 
     Reads goal metadata from the CE GoalStepDAG. Completion bodies come from
-    CE ``action_history`` or the orchestration ledger.
+    CE ``action_history`` when present; full reports live in the ledger.
 
     Args:
         ce: ContextEngine (or compatible) exposing ``get_all_goals()``.
@@ -177,6 +134,7 @@ def build_prior_goal_summaries(
         List of dicts with keys ``goal_id``, ``goal_text``, ``completion``,
         ``step_count``.
     """
+    _ = checkpoint
     completions_by_text: dict[str, str] = {}
     if ce is None:
         return []
@@ -202,22 +160,6 @@ def build_prior_goal_summaries(
     return out
 
 
-def build_continuation_plan_prior_goal_completion(
-    *,
-    loop_messages: list[Any],
-    checkpoint: StrangeLoopCheckpoint | None = None,
-    exclude_goal_id: str | None = None,
-    max_chars: int = 0,
-) -> str:
-    """Build full PRIOR GOAL COMPLETION text for continuation plan prompts."""
-    return build_prior_goal_completion_block(
-        loop_messages,
-        checkpoint=checkpoint,
-        exclude_goal_id=exclude_goal_id,
-        max_chars=max_chars,
-    )
-
-
 def build_continuation_execution_hints(
     *, has_prior_goal_completion: bool
 ) -> ExecuteStepEnvelopeBody:
@@ -229,7 +171,8 @@ def build_continuation_execution_hints(
     if has_prior_goal_completion:
         instruction_lines.insert(
             0,
-            "- PRIOR GOAL COMPLETION is authoritative; do not repeat prior goal execute steps",
+            "- The projected prior goal completion report is authoritative; "
+            "do not repeat prior goal execute steps",
         )
         instruction_lines.insert(
             1,
@@ -239,17 +182,12 @@ def build_continuation_execution_hints(
 
 
 __all__ = [
-    "PRIOR_GOAL_COMPLETION_MAX_CHARS",
     "CONTINUATION_ASSESS_REASONING_MAX_CHARS",
     "ContinueBootstrapStepBriefs",
     "build_continue_bootstrap_step_briefs",
     "build_continuation_execution_hints",
-    "build_continuation_plan_prior_goal_completion",
-    "build_prior_goal_completion_block",
     "build_prior_goal_summaries",
-    "format_prior_goal_completion_section",
     "is_continuation_first_plan",
     "ledger_goal_completion_text",
     "polish_continuation_assess_reasoning",
-    "resolve_prior_goal_completion",
 ]

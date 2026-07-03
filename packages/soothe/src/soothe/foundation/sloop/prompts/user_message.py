@@ -138,14 +138,14 @@ def _should_inject_goal_lineage(
     goal: str,
     goal_lineage: str,
     *,
-    prior_goal_completion: str | None = None,
+    completion_in_ledger: bool = False,
 ) -> bool:
     """Return True when parent-chain GOAL LINEAGE adds context beyond GOAL.
 
     Skips redundant single-node lineage that duplicates GOAL, and skips entirely
-    when PRIOR GOAL COMPLETION already grounds a continuation goal.
+    when a prior ``goal_completion`` turn is already in the projected ledger.
     """
-    if (prior_goal_completion or "").strip():
+    if completion_in_ledger:
         return False
     normalized_goal = _goal_text(goal)
     lineage = (goal_lineage or "").strip()
@@ -256,7 +256,6 @@ def _append_plan_context_sections(
     dag_context: Any = None,
     skill_context: str | None = None,
     prior_progress: PriorProgressDigest | None = None,
-    prior_goal_completion: str | None = None,
     current_iteration: int | None = None,
     context_bundle: ContextBundle | None = None,
     step_id_hint: str | None = None,
@@ -278,21 +277,17 @@ def _append_plan_context_sections(
         )
         if tree:
             sections.append(("PRIOR GOALS", tree))
-    elif not is_new_goal:
-        if (prior_goal_completion or "").strip() and not completion_in_ledger:
-            sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
-
-        if prior_goals:
-            prior_goals_text = _render_prior_goals_section(prior_goals)
-            if prior_goals_text:
-                sections.append(("PRIOR GOALS", prior_goals_text))
+    elif not is_new_goal and prior_goals:
+        prior_goals_text = _render_prior_goals_section(prior_goals)
+        if prior_goals_text:
+            sections.append(("PRIOR GOALS", prior_goals_text))
 
     if context_bundle is not None:
         goal_lineage = (context_bundle.goal_lineage or "").strip()
         if (not is_new_goal or not prior_goals) and _should_inject_goal_lineage(
             goal,
             goal_lineage,
-            prior_goal_completion=prior_goal_completion,
+            completion_in_ledger=completion_in_ledger,
         ):
             sections.append(("GOAL LINEAGE", goal_lineage))
 
@@ -433,7 +428,6 @@ class UserMessageBuilder:
         dag_context: Any = None,
         skill_context: str | None = None,
         prior_progress: PriorProgressDigest | None = None,
-        prior_goal_completion: str | None = None,
         current_iteration: int | None = None,
         context_bundle: ContextBundle | None = None,
         display_goal: str | None = None,
@@ -451,7 +445,6 @@ class UserMessageBuilder:
             dag_context: Optional DagPlanningContext.
             skill_context: Skill reference body.
             prior_progress: RFC-227 per-wave digest.
-            prior_goal_completion: Prior goal synthesis report for loop continuation.
             current_iteration: Current loop iteration.
             context_bundle: Optional ContextBundle from ContextEngine.project().
             assessment_status: Assess ``status`` (inline envelope; not in projected ledger).
@@ -470,7 +463,6 @@ class UserMessageBuilder:
             dag_context=dag_context,
             skill_context=skill_context,
             prior_progress=prior_progress,
-            prior_goal_completion=prior_goal_completion,
             current_iteration=current_iteration,
             context_bundle=context_bundle,
             step_id_hint=step_id_hint,
@@ -540,7 +532,6 @@ class UserMessageBuilder:
         instructions: str | None = None,
         prior_steps: str | None = None,
         prior_goals: str | None = None,
-        prior_goal_completion: str | None = None,
         workspace_state: str | None = None,
         skill_context: str | None = None,
         mcp_resource_blocks: list[str] | None = None,
@@ -555,7 +546,6 @@ class UserMessageBuilder:
             instructions: Bullet-list execution instructions (INSTRUCTIONS section).
             prior_steps: Transitive predecessor step descriptions and statuses.
             prior_goals: Prior goals tree at goal boundary (metadata only).
-            prior_goal_completion: Prior goal synthesis report for loop continuation.
             workspace_state: Optional lightweight workspace diff summary.
             skill_context: Skill reference only (SKILL.md).
             mcp_resource_blocks: Optional pre-resolved MCP resource blocks.
@@ -572,9 +562,6 @@ class UserMessageBuilder:
 
         if (prior_goals or "").strip():
             sections.append(("PRIOR GOALS", prior_goals.strip()))
-
-        if (prior_goal_completion or "").strip():
-            sections.append(("PRIOR GOAL COMPLETION", prior_goal_completion.strip()))
 
         if (expected_output or "").strip():
             sections.append(("EXPECTED OUTPUT", expected_output.strip()))

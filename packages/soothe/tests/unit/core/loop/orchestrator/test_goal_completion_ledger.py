@@ -239,7 +239,7 @@ async def test_goal_completion_dag_reflects_finalized_goal_status(
 
 
 @pytest.mark.asyncio
-async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
+async def test_ledger_direct_appends_goal_completion_ledger_pair() -> None:
     ce = _make_ce()
     loop_state = LoopState(goal="g", thread_id="thr-1")
     goal = GoalNode(description="g")
@@ -297,8 +297,14 @@ async def test_ledger_direct_does_not_duplicate_completion_in_ledger() -> None:
     assert completed_payload.get("skip_goal_completion_wire_duplicate") is False
 
     lm = loop_state.loop_messages
-    assert len(lm) == 2
+    assert len(lm) == 4
+    assert lm[1].phase == "execute_step"
     assert lm[1].content == "already the answer"
+    assert isinstance(lm[2], LoopHumanMessage)
+    assert lm[2].phase == "goal_completion"
+    assert isinstance(lm[3], LoopAIMessage)
+    assert lm[3].phase == "goal_completion"
+    assert lm[3].content == "already the answer"
 
 
 @pytest.mark.asyncio

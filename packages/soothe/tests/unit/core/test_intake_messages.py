@@ -149,9 +149,9 @@ class TestLoadIntakeContext:
 class TestIntakePriorGoalProjection:
     """Prior goal completion projection for intake classify."""
 
-    def test_prefers_goal_completion_pair(self) -> None:
+    def test_projects_last_goal_completion_pair(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-            project_prior_goal_completion_for_intake,
+            project_last_goal_completion_for_intake,
         )
 
         ledger = [
@@ -160,13 +160,31 @@ class TestIntakePriorGoalProjection:
             LoopHumanMessage(content="finalize", phase="goal_completion"),
             LoopAIMessage(content="synthesized report", phase="goal_completion"),
         ]
-        projected = project_prior_goal_completion_for_intake(ledger, None)
+        projected = project_last_goal_completion_for_intake(ledger, None)
         assert len(projected) == 2
+        assert projected[0].content == "Prior goal completed. Terminal report follows."
         assert projected[-1].content == "synthesized report"
 
-    def test_falls_back_to_last_execute_step_for_ledger_direct(self) -> None:
+    def test_prefers_latest_goal_completion_before_trailing_plan_rows(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-            project_prior_goal_completion_for_intake,
+            project_last_goal_completion_for_intake,
+        )
+
+        ledger = [
+            LoopHumanMessage(content="old", phase="goal_completion"),
+            LoopAIMessage(content="older report", phase="goal_completion"),
+            LoopHumanMessage(content="new", phase="goal_completion"),
+            LoopAIMessage(content="latest report", phase="goal_completion"),
+            LoopHumanMessage(content="plan", phase="plan_assess", iteration=0),
+            LoopAIMessage(content='{"status":"continue"}', phase="plan_assess", iteration=0),
+        ]
+        projected = project_last_goal_completion_for_intake(ledger, None)
+        assert len(projected) == 2
+        assert projected[-1].content == "latest report"
+
+    def test_returns_empty_when_no_goal_completion_unit(self) -> None:
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            project_last_goal_completion_for_intake,
         )
 
         ledger = [
@@ -175,17 +193,28 @@ class TestIntakePriorGoalProjection:
             LoopHumanMessage(content="step-2", phase="execute_step"),
             LoopAIMessage(content="final answer", phase="execute_step"),
         ]
-        projected = project_prior_goal_completion_for_intake(ledger, None)
+        projected = project_last_goal_completion_for_intake(ledger, None)
+        assert projected == []
+
+    def test_falls_back_to_quiz_pair_when_no_goal_completion(self) -> None:
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            project_last_goal_completion_for_intake,
+        )
+
+        ledger = [
+            LoopHumanMessage(content="what is python?", phase="quiz"),
+            LoopAIMessage(content="A programming language.", phase="quiz"),
+        ]
+        projected = project_last_goal_completion_for_intake(ledger, None)
         assert len(projected) == 2
-        assert projected[0].content == "step-2"
-        assert projected[1].content == "final answer"
+        assert projected[-1].content == "A programming language."
 
     def test_empty_ledger_projects_nothing(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-            project_prior_goal_completion_for_intake,
+            project_last_goal_completion_for_intake,
         )
 
-        assert project_prior_goal_completion_for_intake([], None) == []
+        assert project_last_goal_completion_for_intake([], None) == []
 
 
 class TestIntentClassifyLedgerProjection:

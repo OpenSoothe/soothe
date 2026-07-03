@@ -91,7 +91,7 @@ def test_build_bootstrap_plan_shape() -> None:
     assert step.description == "user follow-up"
     assert step.full_description
     assert "user follow-up" in step.full_description
-    assert "PRIOR GOAL COMPLETION" in step.full_description
+    assert "completion report" in step.full_description.lower()
     # RFC-226 default: not terminal
     assert pr.terminal_after_execute is False
 

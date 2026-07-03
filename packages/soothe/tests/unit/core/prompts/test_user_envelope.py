@@ -314,16 +314,15 @@ def test_plan_generate_keeps_hierarchical_goal_lineage() -> None:
     assert "Root mission → Child task" in msg
 
 
-def test_plan_generate_skips_goal_lineage_when_prior_goal_completion_present() -> None:
+def test_plan_generate_skips_goal_lineage_when_completion_in_ledger() -> None:
     from soothe.foundation.context.projection import ContextBundle
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
         goal="continue",
-        prior_goal_completion="Prior synthesis with recommended next actions.",
         context_bundle=ContextBundle(goal_lineage="Root → continue"),
+        completion_in_ledger=True,
     )
-    assert "PRIOR GOAL COMPLETION:" in msg
     assert "GOAL LINEAGE:" not in msg
 
 
@@ -359,7 +358,6 @@ def test_plan_generate_context_section_order() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
         goal="Child task",
-        prior_goal_completion="Full prior report.",
         step_id_hint="Use step ids 03, 04.",
         prior_progress=PriorProgressDigest(
             iteration=0,
@@ -381,10 +379,10 @@ def test_plan_generate_context_section_order() -> None:
             ],
         ),
         skill_context="Skill body",
+        completion_in_ledger=True,
     )
     labels = [
         "GOAL:",
-        "PRIOR GOAL COMPLETION:",
         "PRIOR GOALS:",
         "PRIOR PROGRESS:",
         "STEP LINEAGE:",

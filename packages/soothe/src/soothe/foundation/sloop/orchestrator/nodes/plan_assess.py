@@ -113,8 +113,8 @@ def build_continue_loop_bootstrap_plan(
 ) -> PlanResult:
     """Build a synthetic first ``PlanResult`` for loop continuation (RFC-225, RFC-226).
 
-    The executor grounds prior work via ``PRIOR GOAL COMPLETION`` in the execute
-    envelope (synthesized prior goal report), not by replaying execute-step ledger rows.
+    The executor grounds prior work via projected ``goal_completion`` ledger rows
+    (execute Slice A), not by replaying prior execute-step ledger rows.
 
     Args:
         goal: Resolved continuation goal text (often same as ``raw_user_goal``).

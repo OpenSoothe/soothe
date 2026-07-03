@@ -14,7 +14,6 @@ from typing import Any
 
 from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.utils.messages import last_ledger_ai_content
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.utils.observability.langfuse import (
     SootheLangfuse,
@@ -32,9 +31,6 @@ def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
     completion = ledger_goal_completion_text(ctx.loop_state.loop_messages)
     if completion:
         return completion
-    last = last_ledger_ai_content(ctx.loop_state)
-    if last:
-        return last
     pp = ctx.loop_state.previous_plan
     if pp is not None:
         if pp.full_output and str(pp.full_output).strip():

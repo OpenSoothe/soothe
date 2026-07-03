@@ -350,16 +350,30 @@ def _extract_last_phase_pair(
     return [loop_messages[last_ai_idx]]
 
 
-def project_prior_goal_completion_for_intake(
+def _compact_goal_completion_unit_for_projection(unit: list[BaseMessage]) -> list[BaseMessage]:
+    """Rewrite goal_completion human envelopes for downstream prompt projection."""
+    compact_human = "Prior goal completed. Terminal report follows."
+    out: list[BaseMessage] = []
+    for msg in unit:
+        copy_msg = _deep_copy_message(msg)
+        if getattr(copy_msg, "phase", None) == "goal_completion" and _is_loop_human_message(
+            copy_msg
+        ):
+            copy_msg = _set_message_content(copy_msg, compact_human)
+        out.append(copy_msg)
+    return out
+
+
+def project_last_goal_completion_for_intake(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None,
 ) -> list[BaseMessage]:
-    """Project the last prior goal's completion for intake classification (IG-540).
+    """Project the last ``goal_completion`` ledger unit into intake classify input (IG-540).
 
-    Resolution order mirrors goal completion:
-    1. ``goal_completion`` human/AI pair when synthesis wrote a final report.
-    2. Last ``execute_step`` human/AI pair for ledger-direct completion.
-    3. Last ``quiz`` human/AI pair for a prior quiz turn.
+    Uses the same ``goal_completion`` resolution as execute Slice A. The synthesis
+    human envelope is rewritten to a short label so the classifier focuses on the
+    terminal AI report. Falls back to the last ``quiz`` pair only when no completion
+    row exists (legacy quiz-only threads).
 
     Args:
         loop_messages: Full RFC-214 ledger loaded from CE persistence.
@@ -371,18 +385,34 @@ def project_prior_goal_completion_for_intake(
     if not loop_messages:
         return []
 
-    for phase in ("goal_completion", "execute_step", "quiz"):
-        tail = _extract_last_phase_pair(loop_messages, phase)
-        if tail:
-            projected = project_loop_messages_for_plan(tail, ledger_cfg)
-            logger.debug(
-                "Intake prior-goal projection: phase=%s in=%d out=%d",
-                phase,
-                len(tail),
-                len(projected),
-            )
-            return projected
-    return []
+    found = resolve_goal_completion_unit(loop_messages, len(loop_messages))
+    if found is not None:
+        unit, _ = found
+        projected = project_loop_messages_for_plan(
+            _compact_goal_completion_unit_for_projection(unit),
+            ledger_cfg,
+        )
+        logger.debug(
+            "Intake goal-completion projection: in=%d out=%d",
+            len(unit),
+            len(projected),
+        )
+        return projected
+
+    tail = _extract_last_phase_pair(loop_messages, "quiz")
+    if not tail:
+        return []
+    projected = project_loop_messages_for_plan(tail, ledger_cfg)
+    logger.debug(
+        "Intake prior-goal projection: phase=quiz in=%d out=%d",
+        len(tail),
+        len(projected),
+    )
+    return projected
+
+
+# Backward-compatible alias.
+project_prior_goal_completion_for_intake = project_last_goal_completion_for_intake
 
 
 def _current_goal_has_execute_ledger(state: LoopState) -> bool:
@@ -471,19 +501,13 @@ def resolve_goal_completion_unit(
     loop_messages: list[BaseMessage],
     before_index: int,
 ) -> tuple[list[BaseMessage], int] | None:
-    """Resolve one prior-goal completion unit ending before ``before_index``.
-
-    Prefers synthesized ``goal_completion`` pairs; falls back to ledger-direct terminal
-    ``execute_step`` pairs (same resolution order as intake classification).
-    """
-    for phase in ("goal_completion", "execute_step"):
-        idxs = _find_last_phase_pair_indices(loop_messages, before_index, phase)
-        if idxs is None:
-            continue
-        start, end = idxs
-        unit = [_deep_copy_message(loop_messages[i]) for i in range(start, end + 1)]
-        return unit, start
-    return None
+    """Resolve one prior-goal ``goal_completion`` unit ending before ``before_index``."""
+    idxs = _find_last_phase_pair_indices(loop_messages, before_index, "goal_completion")
+    if idxs is None:
+        return None
+    start, end = idxs
+    unit = [_deep_copy_message(loop_messages[i]) for i in range(start, end + 1)]
+    return unit, start
 
 
 def collect_cross_goal_completion_units(
@@ -508,33 +532,52 @@ def collect_cross_goal_completion_units(
     return units_rev
 
 
+def execute_step_ids_subsumed_by_cross_goal_completion(
+    loop_messages: list[BaseMessage],
+    *,
+    k: int,
+) -> frozenset[str]:
+    """Return execute ``step_id`` values subsumed by projected ``goal_completion`` units.
+
+    When Slice A replays a prior goal's terminal ``goal_completion`` report, the
+    ``execute_step`` rows from that same goal segment must not appear again in Slice B
+    (including ``ledger_direct`` goals where the completion body copies execute text).
+    """
+    if k <= 0 or not loop_messages:
+        return frozenset()
+
+    subsumed: set[str] = set()
+    cursor = _execute_plan_tail_index(loop_messages)
+    collected = 0
+    while collected < k and cursor > 0:
+        found = resolve_goal_completion_unit(loop_messages, cursor)
+        if found is None:
+            break
+        _unit, start = found
+        segment_start = _goal_segment_start(loop_messages, start)
+        for i in range(segment_start, start):
+            msg = loop_messages[i]
+            if getattr(msg, "phase", None) != "execute_step":
+                continue
+            sid = _message_step_id(msg)
+            if sid:
+                subsumed.add(sid)
+        collected += 1
+        cursor = segment_start
+    return frozenset(subsumed)
+
+
 def project_cross_goal_completion_tail(
     loop_messages: list[BaseMessage],
     *,
     k: int,
     ledger_cfg: PlanPromptLedgerConfig | None,
-    checkpoint: StrangeLoopCheckpoint | None = None,
 ) -> list[BaseMessage]:
-    """Project K prior-goal completion units for execute Slice A (IG-542)."""
+    """Project K prior-goal ``goal_completion`` units for execute Slice A (IG-542)."""
     units = collect_cross_goal_completion_units(loop_messages, k=k)
-    if not units and k > 0 and checkpoint is not None:
-        from soothe.foundation.sloop.engine.continuation_context import (
-            build_prior_goal_completion_block,
-        )
-        from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-
-        body = build_prior_goal_completion_block(loop_messages, checkpoint=checkpoint).strip()
-        if body:
-            units = [
-                [
-                    LoopHumanMessage(content="Prior goal completion.", phase="goal_completion"),
-                    LoopAIMessage(content=body, phase="goal_completion"),
-                ]
-            ]
-
     flat: list[BaseMessage] = []
     for unit in units:
-        flat.extend(unit)
+        flat.extend(_compact_goal_completion_unit_for_projection(unit))
     if not flat:
         return []
 
@@ -584,25 +627,23 @@ def project_execute_step_graph_input(
     mode = resolve_execute_projection_mode(state)
     out: list[BaseMessage] = []
     cross_goal_projected = False
-    # Track step_ids from Slice A fallback to prevent duplication in Slice B
     excluded_step_ids: frozenset[str] = frozenset()
 
     if mode == "goal_boundary" and exec_cfg.cross_goal_completion_tail > 0:
         if getattr(state, "continue_loop", False):
+            tail_k = exec_cfg.cross_goal_completion_tail
             slice_a = project_cross_goal_completion_tail(
                 loop_messages,
-                k=exec_cfg.cross_goal_completion_tail,
+                k=tail_k,
                 ledger_cfg=plan_cfg,
-                checkpoint=checkpoint,
             )
             if slice_a:
                 out.extend(slice_a)
                 cross_goal_projected = True
-                # Extract step_ids from Slice A to exclude from Slice B.
-                # This prevents duplicate ledger messages when Slice A falls back
-                # to execute_step pairs and those same steps are in the current
-                # step's transitive dependencies.
-                excluded_step_ids = _extract_step_ids_from_messages(slice_a)
+                excluded_step_ids = execute_step_ids_subsumed_by_cross_goal_completion(
+                    loop_messages,
+                    k=tail_k,
+                )
 
     predecessor_projected = False
     if step.dependencies:
@@ -655,7 +696,7 @@ def project_predecessor_execute_ledger_for_step(
         step: Step about to execute on an isolated branch thread.
         decision: Current scoped plan decision (for transitive dependency closure).
         max_messages: Cap on copied ledger rows; ``None`` uses the branch default.
-        exclude_step_ids: Step ids to exclude (already included in Slice A fallback).
+        exclude_step_ids: Step ids to exclude (execute rows subsumed by Slice A goal_completion).
 
     Returns:
         Deep-copied predecessor execute_step messages in ledger order.
