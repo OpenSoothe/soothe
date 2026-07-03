@@ -1,20 +1,31 @@
-"""Tests for ``soothe.skills.registry`` (RFC-105)."""
+"""Tests for ``soothe.skills.registry`` (RFC-105 / IG-543)."""
 
 from __future__ import annotations
 
 from soothe.skills.index import SkillIndexEntry
-from soothe.skills.registry import ProgressiveSkillRegistry
+from soothe.skills.registry import (
+    DEFAULT_CORE_SKILL_NAMES,
+    ProgressiveSkillRegistry,
+    is_core_skill,
+)
 
 
-def _entry(name: str, *, paths: tuple[str, ...] | None = None) -> SkillIndexEntry:
+def _entry(
+    name: str,
+    *,
+    paths: tuple[str, ...] | None = None,
+    source: str = "user",
+    core: bool | None = None,
+) -> SkillIndexEntry:
     return SkillIndexEntry(
         name=name,
         description=f"{name} skill",
         tags="test",
-        source="user",
+        source=source,
         path="/tmp",
         mtime=0.0,
         paths=paths,
+        core=core,
     )
 
 
@@ -33,6 +44,63 @@ class TestPartition:
         unconditional, conditional = reg.partition([])
         assert unconditional == []
         assert conditional == []
+
+
+class TestPartitionCoreDeferred:
+    def test_builtin_is_core(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        entries = [_entry("weather", source="builtin"), _entry("custom")]
+        core, deferred = reg.partition_core_deferred(entries, DEFAULT_CORE_SKILL_NAMES)
+        assert [entry.name for entry in core] == ["weather"]
+        assert [entry.name for entry in deferred] == ["custom"]
+
+    def test_core_frontmatter_overrides_user(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        entries = [_entry("custom", core=True)]
+        core, deferred = reg.partition_core_deferred(entries, DEFAULT_CORE_SKILL_NAMES)
+        assert [entry.name for entry in core] == ["custom"]
+        assert deferred == []
+
+    def test_core_false_demotes_builtin(self) -> None:
+        entry = _entry("weather", source="builtin", core=False)
+        assert not is_core_skill(entry, DEFAULT_CORE_SKILL_NAMES)
+
+
+class TestSearchDeferred:
+    def test_finds_by_description(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        deferred = [_entry("db-migrate")]
+        matches = reg.search_deferred("postgres", deferred, discovered=set(), limit=5)
+        assert matches == []
+
+        entry = _entry("db-migrate")
+        entry_with_tags = SkillIndexEntry(
+            name=entry.name,
+            description="postgres migration helpers",
+            tags=entry.tags,
+            source=entry.source,
+            path=entry.path,
+            mtime=entry.mtime,
+        )
+        matches = reg.search_deferred("postgres", [entry_with_tags], discovered=set(), limit=5)
+        assert len(matches) == 1
+        assert matches[0].name == "db-migrate"
+
+    def test_skips_already_discovered(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        deferred = [_entry("db-migrate")]
+        matches = reg.search_deferred("db", deferred, discovered={"db-migrate"}, limit=5)
+        assert matches == []
+
+
+class TestDiscover:
+    def test_idempotent(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        state = ProgressiveSkillRegistry.init_activation_state()
+        added = reg.discover(state, ["a"], via="search")
+        assert added == ["a"]
+        assert reg.discover(state, ["a"], via="search") == []
+        assert state["activated"] == {"a"}
 
 
 class TestInitActivationState:

@@ -1,4 +1,4 @@
-"""Skillify data models (RFC-0004)."""
+"""Skillify data models."""
 
 from __future__ import annotations
 

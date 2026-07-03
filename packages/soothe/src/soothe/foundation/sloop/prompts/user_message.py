@@ -10,8 +10,8 @@ System messages retain XML. Only user messages use this format.
 
 from __future__ import annotations
 
-import json
 import re
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.context.projection import PriorGoalSummary
@@ -31,6 +31,7 @@ _MCP_RESOURCE_REF_RE = re.compile(r"@(\w+):(\S+)")
 
 # Hard cap on the rendered PRIOR PROGRESS section (RFC-227).
 PRIOR_PROGRESS_MAX_CHARS = 600
+PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS = 160
 
 # Execute-step envelope label (distinct from plan-phase GOAL / GOAL RECAP).
 EXECUTION_TASK_LABEL = "EXECUTION TASK"
@@ -71,29 +72,65 @@ def _render_sections(sections: list[tuple[str, str]]) -> str:
     return "\n\n".join(parts)
 
 
-def _render_prior_progress(digest: PriorProgressDigest) -> str:
-    """Render a PriorProgressDigest as plain-text PRIOR PROGRESS section.
+def _render_assessment_envelope(*, status: str, goal_progress: str) -> str:
+    """Render inline assess summary for plan-generate when assess is not in the ledger."""
+    status_text = (status or "unknown").strip()
+    progress_text = (goal_progress or "none").strip()
+    return f"Status: {status_text}\nProgress: {progress_text}"
 
-    Hard-capped at ``PRIOR_PROGRESS_MAX_CHARS``; evidence lines drop when budget exceeded.
+
+def _render_prior_progress(digest: PriorProgressDigest) -> str:
+    """Render a PriorProgressDigest as structured plain text (RFC-227).
+
+    Uses the same nested STEP list shape as execute ``PRIOR STEPS``. Hard-capped
+    at ``PRIOR_PROGRESS_MAX_CHARS``; trailing step rows drop when budget exceeded.
     """
     header = (
         f"iter={digest.iteration} wave={digest.wave_index} "
-        f"done={digest.steps_completed} failed={digest.steps_failed} "
-        f"hint={digest.derived_progress_hint}"
+        f"completed={digest.steps_completed} failed={digest.steps_failed} "
+        f"progress_hint={digest.derived_progress_hint}"
     )
-    evidence_lines = [f"- {json.dumps(e, ensure_ascii=False)}" for e in digest.evidence_excerpts]
 
-    def _assemble(evidence: list[str]) -> str:
-        parts = [header]
-        if evidence:
-            parts.append("evidence:")
-            parts.extend(evidence)
-        return "\n".join(parts)
+    summaries: list[Any] = list(digest.step_summaries)
+    if not summaries and digest.evidence_excerpts:
+        summaries = [
+            SimpleNamespace(
+                step_id="",
+                description="prior wave",
+                status="completed",
+                outcome_preview=excerpt,
+            )
+            for excerpt in digest.evidence_excerpts
+        ]
 
-    rendered = _assemble(evidence_lines)
-    while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and evidence_lines:
-        evidence_lines.pop()
-        rendered = _assemble(evidence_lines)
+    def _assemble(tree: str) -> str:
+        tree_text = (tree or "").strip()
+        if tree_text:
+            return f"{header}\n\n{tree_text}"
+        return header
+
+    step_tree = (
+        render_prior_steps_tree(
+            summaries,
+            evidence_in_ledger=False,
+            outcome_preview_chars=PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS,
+        )
+        if summaries
+        else ""
+    )
+    rendered = _assemble(step_tree)
+    while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and summaries:
+        summaries.pop()
+        step_tree = (
+            render_prior_steps_tree(
+                summaries,
+                evidence_in_ledger=False,
+                outcome_preview_chars=PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS,
+            )
+            if summaries
+            else ""
+        )
+        rendered = _assemble(step_tree)
     return rendered
 
 
@@ -403,6 +440,8 @@ class UserMessageBuilder:
         projection_mode: str | None = None,
         completion_in_ledger: bool = False,
         prior_goals_override: list[PriorGoalSummary] | None = None,
+        assessment_status: str | None = None,
+        assessment_progress: str | None = None,
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -415,6 +454,8 @@ class UserMessageBuilder:
             prior_goal_completion: Prior goal synthesis report for loop continuation.
             current_iteration: Current loop iteration.
             context_bundle: Optional ContextBundle from ContextEngine.project().
+            assessment_status: Assess ``status`` when assess was skipped (no ledger row).
+            assessment_progress: Assess ``goal_progress`` when assess was skipped.
 
         Returns:
             Structured text message for the plan-generate LoopHumanMessage.
@@ -438,6 +479,17 @@ class UserMessageBuilder:
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals_override,
         )
+
+        if (assessment_status or "").strip() and (assessment_progress or "").strip():
+            sections.append(
+                (
+                    "ASSESSMENT",
+                    _render_assessment_envelope(
+                        status=assessment_status.strip(),
+                        goal_progress=assessment_progress.strip(),
+                    ),
+                )
+            )
 
         sections.append(
             (
@@ -596,6 +648,7 @@ def flatten_user_message_content(content: str) -> str:
 __all__ = [
     "EXECUTION_TASK_LABEL",
     "PRIOR_PROGRESS_MAX_CHARS",
+    "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
     "UserMessageBuilder",
     "_append_plan_context_sections",
     "_render_prior_goals_section",

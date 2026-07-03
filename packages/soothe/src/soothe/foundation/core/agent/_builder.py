@@ -225,6 +225,16 @@ class AgentBuilder:
             all_tools.append(create_search_tools_tool())
             logger.debug("[Init] Progressive search_tools added")
 
+        if self._config.progressive_skills.search_skills_enabled:
+            from soothe.skills.discovery_tools import (
+                create_invoke_skill_tool,
+                create_search_skills_tool,
+            )
+
+            all_tools.append(create_search_skills_tool())
+            all_tools.append(create_invoke_skill_tool())
+            logger.debug("[Init] Progressive search_skills + invoke_skill added")
+
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 

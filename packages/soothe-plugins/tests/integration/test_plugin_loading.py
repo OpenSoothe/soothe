@@ -24,7 +24,6 @@ def test_entry_points_registered() -> None:
     names = {ep.name for ep in eps_list}
     assert "paperscout" in names, "paperscout entry point not registered"
     assert "sample_echo" in names, "sample_echo entry point not registered"
-    assert "skillify" in names, "skillify entry point not registered"
     assert "weaver" in names, "weaver entry point not registered"
 
 
@@ -33,7 +32,6 @@ def test_plugins_importable() -> None:
     plugins = [
         "soothe_plugins.paperscout",
         "soothe_plugins.sample_echo",
-        "soothe_plugins.skillify",
         "soothe_plugins.weaver",
     ]
 
@@ -51,7 +49,6 @@ async def test_community_plugins_have_manifest() -> None:
     plugin_classes = [
         ("soothe_plugins.paperscout", "PaperScoutPlugin"),
         ("soothe_plugins.sample_echo", "SampleEchoPlugin"),
-        ("soothe_plugins.skillify", "SkillifyPlugin"),
         ("soothe_plugins.weaver", "WeaverPlugin"),
     ]
 
@@ -73,7 +70,6 @@ async def test_community_plugins_have_subagent_decorator() -> None:
     plugin_instances = [
         ("soothe_plugins.paperscout", "PaperScoutPlugin"),
         ("soothe_plugins.sample_echo", "SampleEchoPlugin"),
-        ("soothe_plugins.skillify", "SkillifyPlugin"),
         ("soothe_plugins.weaver", "WeaverPlugin"),
     ]
 
@@ -109,7 +105,6 @@ def test_plugin_manifest_trust_levels() -> None:
     plugin_classes = [
         ("soothe_plugins.paperscout", "PaperScoutPlugin"),
         ("soothe_plugins.sample_echo", "SampleEchoPlugin"),
-        ("soothe_plugins.skillify", "SkillifyPlugin"),
         ("soothe_plugins.weaver", "WeaverPlugin"),
     ]
 

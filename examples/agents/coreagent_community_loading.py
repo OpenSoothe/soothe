@@ -1,7 +1,7 @@
-"""Example: Loading community subagents (Skillify, Weaver) via the plugin system.
+"""Example: Loading community subagents (Weaver) via the plugin system.
 
 This example demonstrates how Soothe core discovers and loads community plugins
-through the RFC-600 entry-point discovery mechanism.
+through the RFC-600 entry-point discovery mechanism. Skillify is built into core.
 
 Prerequisites:
     pip install soothe-plugins   # installs soothe-plugins with entry points
@@ -43,8 +43,9 @@ async def main() -> None:
     subagent_names = [s.get("name") if isinstance(s, dict) else str(s) for s in subagents]
     logger.info("Resolved subagents: %s", subagent_names)
 
-    # 5. Verify community subagents are present
-    expected_community = {"skillify", "weaver"}
+    # 5. Verify built-in skillify and optional community weaver
+    assert "skillify" in subagent_names, "skillify should be a built-in subagent"
+    expected_community = {"weaver"}
     found_community = set(subagent_names) & expected_community
     logger.info("Community subagents found: %s", found_community)
     logger.info("Community subagents missing: %s", expected_community - found_community)

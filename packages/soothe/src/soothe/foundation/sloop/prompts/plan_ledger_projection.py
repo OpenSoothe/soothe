@@ -169,6 +169,33 @@ def _trim_total_chars_front(
     return out, shrunk
 
 
+def _compact_intent_classify_human_for_projection(msg: BaseMessage) -> BaseMessage:
+    """Rewrite ``GOAL:`` to ``GOAL RECAP:`` on projected intent-classify humans (D1)."""
+    if getattr(msg, "phase", None) != "intent_classify" or not _is_loop_human_message(msg):
+        return msg
+    from soothe.foundation.sloop.cognition.ledger_compaction import compact_planning_human_content
+
+    text = extract_text_from_message_content(getattr(msg, "content", ""))
+    compacted = compact_planning_human_content(text)
+    if compacted == text:
+        return msg
+    return _set_message_content(_deep_copy_message(msg), compacted)
+
+
+def _apply_intent_classify_human_compaction(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Return messages with intent-classify humans compacted for plan prompt projection."""
+    if not messages:
+        return messages
+    out: list[BaseMessage] = []
+    changed = False
+    for msg in messages:
+        compacted = _compact_intent_classify_human_for_projection(msg)
+        if compacted is not msg:
+            changed = True
+        out.append(compacted)
+    return out if changed else messages
+
+
 def project_loop_messages_for_plan(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None,
@@ -184,14 +211,14 @@ def project_loop_messages_for_plan(
         Deep-trimmed copies when any limit is positive.
     """
     if ledger_cfg is None:
-        return list(loop_messages)
+        return _apply_intent_classify_human_compaction(list(loop_messages))
 
     max_msg = int(ledger_cfg.plan_ledger_max_messages)
     max_total = int(ledger_cfg.plan_ledger_max_total_chars)
     max_per = int(ledger_cfg.plan_ledger_max_message_chars)
 
     if max_msg <= 0 and max_total <= 0 and max_per <= 0:
-        return list(loop_messages)
+        return _apply_intent_classify_human_compaction(list(loop_messages))
 
     copies = [_deep_copy_message(m) for m in loop_messages]
     omitted_prefix = False
@@ -227,7 +254,7 @@ def project_loop_messages_for_plan(
         max_total or "off",
         max_per or "off",
     )
-    return copies
+    return _apply_intent_classify_human_compaction(copies)
 
 
 def project_planner_ledger(
@@ -255,6 +282,22 @@ def project_planner_ledger(
         len(projected),
     )
     return projected
+
+
+def current_iteration_plan_assess_in_ledger(
+    loop_messages: list[BaseMessage],
+    iteration: int,
+) -> bool:
+    """Return True when a ``plan_assess`` human/AI pair exists for ``iteration``."""
+    for msg in reversed(loop_messages):
+        if getattr(msg, "phase", None) != "plan_assess":
+            continue
+        msg_iter = getattr(msg, "iteration", None)
+        if msg_iter == iteration:
+            return True
+        if isinstance(msg_iter, int) and msg_iter < iteration:
+            return False
+    return False
 
 
 def _is_loop_human_message(msg: BaseMessage) -> bool:
@@ -326,9 +369,33 @@ def project_prior_goal_completion_for_intake(
     return []
 
 
+def _current_goal_has_execute_ledger(state: LoopState) -> bool:
+    """True when the active plan already has execute_step rows in the orchestration ledger."""
+    decision = state.current_decision
+    if decision is None:
+        return False
+    plan_step_ids = {s.id for s in decision.steps}
+    if not plan_step_ids:
+        return False
+    for msg in state.loop_messages:
+        if getattr(msg, "phase", None) != "execute_step":
+            continue
+        sid = _message_step_id(msg)
+        if sid and sid in plan_step_ids:
+            return True
+    return False
+
+
 def resolve_execute_projection_mode(state: LoopState) -> ExecuteProjectionMode:
     """Return ``goal_boundary`` at first execute slice of a goal, else ``mid_goal``."""
     if state.iteration == 0 and not state.step_results:
+        # CE-bound loops record execute_step ledger per wave; step_results stay empty
+        # until record_iteration. Treat in-flight plan execution as mid_goal so Slice A
+        # does not replay same-goal execute rows as cross-goal completion units.
+        if _current_goal_has_execute_ledger(state):
+            return "mid_goal"
+        if state.dependency_completion_ids():
+            return "mid_goal"
         return "goal_boundary"
     return "mid_goal"
 

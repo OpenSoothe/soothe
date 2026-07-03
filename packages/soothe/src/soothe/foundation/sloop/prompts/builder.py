@@ -124,6 +124,7 @@ class PromptBuilder:
         context_bundle: ContextBundle | None = None,
         checkpoint: Any | None = None,
         exclude_goal_id: str | None = None,
+        inline_assessment: Any | None = None,
     ) -> list[BaseMessage]:
         """Build SystemMessage + projected ledger + task envelope (RFC-214 §4, IG-538)."""
         from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -160,6 +161,7 @@ class PromptBuilder:
             projection_mode=projection_mode,
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals or None,
+            inline_assessment=inline_assessment,
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -355,6 +357,7 @@ class PromptBuilder:
         projection_mode: str | None = None,
         completion_in_ledger: bool = False,
         prior_goals_override: list[Any] | None = None,
+        inline_assessment: Any | None = None,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -431,8 +434,14 @@ class PromptBuilder:
 
         if kind == "assess":
             return builder.build_plan_assess_message(**common_kwargs)
-        return builder.build_plan_generate_message(
+        generate_kwargs: dict[str, Any] = {
             **common_kwargs,
-            step_id_hint=step_id_hint,
-            step_anchor_registry=step_anchor_registry,
-        )
+            "step_id_hint": step_id_hint,
+            "step_anchor_registry": step_anchor_registry,
+        }
+        if inline_assessment is not None:
+            generate_kwargs["assessment_status"] = getattr(inline_assessment, "status", None)
+            generate_kwargs["assessment_progress"] = getattr(
+                inline_assessment, "goal_progress", None
+            )
+        return builder.build_plan_generate_message(**generate_kwargs)

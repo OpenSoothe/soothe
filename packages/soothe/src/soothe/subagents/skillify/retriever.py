@@ -1,4 +1,4 @@
-"""SkillRetriever -- semantic search over the skill index (RFC-0004)."""
+"""Semantic search over the Skillify vector index."""
 
 from __future__ import annotations
 
@@ -7,6 +7,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+
 from .models import SkillBundle, SkillRecord, SkillSearchResult
 
 if TYPE_CHECKING:
@@ -14,12 +16,7 @@ if TYPE_CHECKING:
 
     from langchain_core.embeddings import Embeddings
 
-from soothe_sdk.protocols import (
-    ActionRequest,
-    PermissionSet,
-    PolicyContext,
-    VectorStoreProtocol,
-)
+    from soothe.protocols.vector_store import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +41,6 @@ class LazyEmbeddings:
 
     async def aembed_query(self, text: str) -> list[float]:
         return await self._get_instance().aembed_query(text)
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._get_instance().embed_documents(texts)
-
-    def embed_query(self, text: str) -> list[float]:
-        return self._get_instance().embed_query(text)
 
 
 class SkillRetriever:
@@ -88,12 +79,18 @@ class SkillRetriever:
             try:
                 await asyncio.wait_for(self._ready_event.wait(), timeout=_INDEXING_WAIT_TIMEOUT)
             except TimeoutError:
-                logger.warning("Skillify index still not ready after %.0fs timeout", _INDEXING_WAIT_TIMEOUT)
+                logger.warning(
+                    "Skillify index still not ready after %.0fs timeout",
+                    _INDEXING_WAIT_TIMEOUT,
+                )
                 return SkillBundle(
-                    query="[Indexing in progress] The skill warehouse is still being indexed. Please retry shortly.",
+                    query=(
+                        "[Indexing in progress] The skill warehouse is still being indexed. "
+                        "Please retry shortly."
+                    ),
                 )
 
-        k = top_k or self._top_k
+        limit = top_k or self._top_k
 
         try:
             vector = await self._embeddings.aembed_query(query)
@@ -105,17 +102,17 @@ class SkillRetriever:
             records = await self._vector_store.search(
                 query=query,
                 vector=vector,
-                limit=k,
+                limit=limit,
             )
         except Exception:
             logger.exception("Vector store search failed")
             return SkillBundle(query=query)
 
         results: list[SkillSearchResult] = []
-        for vr in records:
-            payload = vr.payload
+        for vector_record in records:
+            payload = vector_record.payload
             record = SkillRecord(
-                id=payload.get("skill_id", vr.id),
+                id=payload.get("skill_id", vector_record.id),
                 name=payload.get("name", "unknown"),
                 description=payload.get("description", ""),
                 path=payload.get("path", ""),
@@ -124,7 +121,7 @@ class SkillRetriever:
                 indexed_at=datetime.now(UTC),
                 content_hash=payload.get("content_hash", ""),
             )
-            results.append(SkillSearchResult(record=record, score=vr.score or 0.0))
+            results.append(SkillSearchResult(record=record, score=vector_record.score or 0.0))
 
         total_records = await self._count_indexed()
 

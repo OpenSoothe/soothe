@@ -119,8 +119,9 @@ Tool selection rules (follow strictly):
 {_SUBAGENT_GUIDE}
 
 Progressive tool binding:
-- Always bound: filesystem, surgical edits, execution (run_command, run_python, run_background, kill_process), search_tools, write_todos, task, current_datetime.
+- Always bound: filesystem, surgical edits, execution (run_command, run_python, run_background, kill_process), search_tools, search_skills, invoke_skill, write_todos, task, current_datetime.
 - <AVAILABLE_TOOLS> lists deferred tools not yet bound to this hop. Use search_tools(query) or call a listed name to promote it for subsequent hops.
+- Core skills appear in <AVAILABLE_SKILLS> on turn 0. Deferred skills are hidden until search_skills(query), invoke_skill(name), or a matching file-op path auto-discovers them.
 
 Key rules:
 - Prefer single-purpose tools over unified dispatch tools.

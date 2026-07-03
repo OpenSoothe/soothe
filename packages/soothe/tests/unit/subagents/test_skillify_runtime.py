@@ -1,0 +1,39 @@
+"""Tests for Skillify runtime warehouse path resolution."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from soothe.subagents.skillify.runtime import _default_warehouse_paths, resolve_warehouse_paths
+
+
+def test_default_warehouse_paths_include_user_skill_dirs(tmp_path: Path) -> None:
+    soothe_home = tmp_path / ".soothe"
+    defaults = _default_warehouse_paths(soothe_home)
+    assert defaults == [
+        str(soothe_home / "skills"),
+        str(Path.home() / ".agents" / "skills"),
+    ]
+
+
+def test_resolve_warehouse_paths_prepends_defaults(tmp_path: Path) -> None:
+    soothe_home = tmp_path / ".soothe"
+    resolved = resolve_warehouse_paths(soothe_home, [])
+    assert resolved == _default_warehouse_paths(soothe_home)
+
+
+def test_resolve_warehouse_paths_keeps_custom_paths(tmp_path: Path) -> None:
+    soothe_home = tmp_path / ".soothe"
+    custom = "/tmp/extra-skills"
+    resolved = resolve_warehouse_paths(soothe_home, [custom])
+    assert resolved[0] == str(soothe_home / "skills")
+    assert resolved[1] == str(Path.home() / ".agents" / "skills")
+    assert resolved[2] == custom
+
+
+def test_resolve_warehouse_paths_dedupes_configured_defaults(tmp_path: Path) -> None:
+    soothe_home = tmp_path / ".soothe"
+    agents = str(Path.home() / ".agents" / "skills")
+    resolved = resolve_warehouse_paths(soothe_home, [agents, "/tmp/more"])
+    assert resolved.count(agents) == 1
+    assert resolved[-1] == "/tmp/more"

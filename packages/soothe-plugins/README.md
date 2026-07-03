@@ -14,9 +14,9 @@ pip install soothe-plugins
 
 Minimal echo subagent for testing soothe-plugins integration. See [CONTRIBUTING.md](CONTRIBUTING.md) for plugin development guide.
 
-### Skillify
+### Skillify (core)
 
-Skill warehouse indexing and semantic retrieval agent. Provides background indexing loop and retrieval capabilities for skill discovery.
+Skill warehouse indexing and semantic retrieval — **built into `soothe`** (`soothe.subagents.skillify`), not this package. Enable via `subagents.skillify` in config.
 
 ### Weaver
 

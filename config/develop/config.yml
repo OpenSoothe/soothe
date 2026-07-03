@@ -84,7 +84,6 @@ agent:
     max_subagent_tasks_per_wave: 8
     plan_assess_model_role: fast
     plan_generate_model_role: think
-    goal_synthesis_model_role: fast
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96
@@ -124,3 +123,18 @@ vector_stores:
 
 vector_store_router:
   default: pgvector_dev:soothe_default
+
+# ============================================================
+# PROGRESSIVE SKILLS (RFC-105 / IG-543)
+# ============================================================
+progressive_skills:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
+  core_skills: null
+  search_skills_enabled: true
+  semantic_search_enabled: true
+  semantic_search_min_score: 0.0
+  intent_prefetch_enabled: true
+  intent_prefetch_top_k: 2
+  intent_prefetch_min_query_chars: 12

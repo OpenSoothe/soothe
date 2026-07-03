@@ -40,6 +40,7 @@ class TestPriorProgressDigest:
         assert d.steps_failed == 0
         assert d.tool_calls == []
         assert d.evidence_excerpts == []
+        assert d.step_summaries == []
         assert d.derived_progress_hint == "low"
 
     def test_full_round_trip(self):

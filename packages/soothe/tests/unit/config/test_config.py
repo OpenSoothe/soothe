@@ -95,10 +95,10 @@ class TestSootheConfig:
         assert "plan" in cfg.subagents
         assert "tacitus" in cfg.subagents
         assert "browser_use" in cfg.subagents
+        assert "skillify" in cfg.subagents
         assert "claude" not in cfg.subagents
-        # skillify and weaver are community plugins, not built-in
         assert "scout" not in cfg.subagents
-        for name in ("explore", "plan", "tacitus"):
+        for name in ("explore", "plan", "tacitus", "skillify"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
         assert cfg.subagents["browser_use"].enabled is True
 

@@ -1,14 +1,13 @@
 <PLAN_GENERATE>
 Output: type, steps, execution_mode, reasoning, adaptive_granularity.
 
-Assess already ran: ``Status: …, Progress: …`` is authoritative. Goal is in GOAL:.
-When assess ``Status: continue`` and DAG STATUS shows pending or ready steps, the runtime
-reuses the in-flight plan automatically — emit a fresh plan only when needed.
+If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; else
+``ASSESSMENT:`` in the user message. Goal is in GOAL:. When ``Status: continue`` and DAG
+STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan only when needed.
 
 **Language lock**: Use the same natural language as the current goal statement in GOAL: for
 ``steps[].description``, ``steps[].expected_output``, and ``reasoning``.
-Do not switch output language unless the user explicitly requests another. Keep code, file
-paths, identifiers, and quoted literals unchanged.
+Do not switch language unless requested; keep paths, identifiers, and quoted literals unchanged.
 
 **Step count**: Follow EXECUTION_POLICIES (first wave: 1–2 only; later: 1–3).
 
@@ -19,10 +18,9 @@ paths, identifiers, and quoted literals unchanged.
 **steps** fields:
 - ``id``: Short token (``01``, ``02``) or per STEP ID HINT.
 - ``description``: Milestone line (&lt;20 words). Executor handles fine-grained work.
-- ``full_description``: REQUIRED for every ``kind=action`` step. Standalone execution brief
-  (50–120 words) with concrete scope (paths, modules, identifiers) when known. When
-  ``dependencies`` is set, state what to do with predecessor output and forbid repeating
-  predecessor discovery (see EXECUTION_POLICIES dependent chains).
+- ``full_description``: REQUIRED for every ``kind=action`` step — standalone brief (50–120 words)
+  with concrete scope when known. With ``dependencies``, state how to use predecessor output; forbid
+  repeating predecessor discovery (EXECUTION_POLICIES dependent chains).
 - ``expected_output``: Checkable completion signal.
 - ``dependencies``: Optional; in-wave sibling ids or cross-wave composite ids from STEP ANCHOR REGISTRY.
 - ``kind``: ``action`` (default) or ``ask_user``.
@@ -34,10 +32,9 @@ Never output ``sequential`` (removed); invalid values fail validation. Use ``dep
 any step has ``dependencies`` (EXECUTION_POLICIES).
 
 **ask_user** (PRIMARY clarification — executor will NOT ask the user for you):
-- REQUIRED when: goal is ambiguous; essential context missing and not inferable; user
-  preference needed; iteration 0 and you cannot proceed without answers.
-- NOT when: goal is concrete/actionable; context suffices; intent is reasonably inferable;
-  or you could act instead of confirming.
+- REQUIRED when: goal ambiguous; essential context missing; user preference needed; iteration 0
+  and you cannot proceed without answers.
+- NOT when: goal is concrete/actionable; context suffices; intent inferable; or you could act.
 - AT MOST ONE ``ask_user`` step per wave; pair with NO other steps. ``description`` = short
   third-person summary; put question text in ``questions``. Runtime relays answers next iteration.
 - WRONG: ``kind="action"`` with "ask user…" prose — no one will answer.
@@ -50,8 +47,7 @@ sentences justifying plan strategy. Make step ``description`` lines concrete mil
 
 **Loop continuation** (``continue_loop_mode`` or continue/resume/proceed in the same loop):
 - Read ``PRIOR GOAL COMPLETION`` — prior goal synthesis with recommended next actions.
-- Plan implementation for those actions; do NOT re-run prior discovery or analysis unless a
-  new gap is identified.
+- Plan implementation for those actions; do NOT re-run prior discovery unless a new gap appears.
 - Prefer ``dependency`` when steps build on prior output; use ``full_description`` with concrete
-  modules, files, or RFC items.
+  modules, files, or design-doc items.
 </PLAN_GENERATE>

@@ -117,8 +117,7 @@ class IntentClassification(BaseModel):
         description="Primary intent: quiz (greeting/thanks/trivia without tools) or agentic (everything else)"
     )
     intake_label: IntakeLabel = Field(
-        description="4-class intake label for branch routing (RFC-630): "
-        "quiz, trivial, simple, or complex"
+        description="4-class intake label for branch routing: quiz, trivial, simple, or complex"
     )
     reasoning: str | None = Field(
         default=None,

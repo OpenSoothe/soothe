@@ -7,6 +7,7 @@ subagent's ``events`` module. ``browser_use`` ships with core dependencies; its
 
 from .browser_use import events as _browser_use_events  # noqa: F401
 from .explore import events as _explore_events  # noqa: F401
+from .skillify import events as _skillify_events  # noqa: F401
 from .tacitus import events as _tacitus_events  # noqa: F401
 
 __all__: list[str] = []
