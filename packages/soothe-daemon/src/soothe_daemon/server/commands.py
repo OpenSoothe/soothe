@@ -521,6 +521,7 @@ async def _cmd_cron_add(
         Dict with created job details: id, description, next_run, status.
     """
     from soothe.foundation.cron import CronService, ExtractionError
+    from soothe.foundation.cron.extraction import AutopilotDisabledError
 
     text = params.get("text", "")
     priority = params.get("priority")
@@ -555,6 +556,8 @@ async def _cmd_cron_add(
                 "priority": job.priority,
             }
         }
+    except AutopilotDisabledError as exc:
+        raise ValueError(exc.message) from exc
     except ExtractionError as e:
         raise ValueError(e.message) from e
 

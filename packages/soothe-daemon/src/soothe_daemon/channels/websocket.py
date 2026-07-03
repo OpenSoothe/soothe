@@ -870,6 +870,7 @@ class WebSocketChannel(Channel):
         """
 
         from soothe.foundation.cron import ExtractionError
+        from soothe.foundation.cron.extraction import AutopilotDisabledError
         from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
 
         service = self._cron_service
@@ -881,6 +882,8 @@ class WebSocketChannel(Channel):
                 raise RuntimeError("text is required")
             try:
                 job = await service.add_job(text, DEFAULT_CRON_USER_ID, priority=priority)
+            except AutopilotDisabledError as exc:
+                raise RuntimeError(exc.message) from exc
             except ExtractionError as exc:
                 raise RuntimeError(exc.message) from exc
             return {"job": job.to_dict(), "source": "cron_service"}

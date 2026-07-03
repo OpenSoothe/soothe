@@ -209,7 +209,7 @@ class AutopilotMonitor:
 
     async def _verification_loop(self) -> None:
         """Background DAG health verification."""
-        interval = getattr(self._config.agent.autonomous, "verify_interval", 30)
+        interval = getattr(self._config.agent.autopilot, "verify_interval", 30)
         while not self._shutdown_event.is_set():
             await asyncio.sleep(interval)
             try:
@@ -227,7 +227,7 @@ class AutopilotMonitor:
 
     async def _dreaming_timer_loop(self) -> None:
         """Background dreaming timer."""
-        interval = getattr(self._config.agent.autonomous, "dreaming_interval", 300)
+        interval = getattr(self._config.agent.autopilot, "dreaming_interval", 300)
         while not self._shutdown_event.is_set():
             await asyncio.sleep(interval)
             try:

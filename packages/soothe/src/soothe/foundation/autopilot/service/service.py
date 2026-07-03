@@ -44,7 +44,7 @@ from soothe.foundation.events.internal_events import (
 )
 
 if TYPE_CHECKING:
-    from soothe.config.models import AutonomousConfig
+    from soothe.config.models import AutopilotConfig
     from soothe.foundation.autopilot.monitor.monitor import AutopilotMonitor
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class AutopilotService:
 
     Args:
         ce: ContextEngine instance for goal management (RFC-625).
-        config: AutonomousConfig (RFC-222 fields live in this unified config).
+        config: AutopilotConfig (RFC-222 fields live in this unified config).
         internal_bus: Internal EventBus for coordination.
         monitor: Optional AutopilotMonitor for proactive DAG monitoring.
     """
@@ -79,7 +79,7 @@ class AutopilotService:
     def __init__(
         self,
         ce: ContextEngine,
-        config: AutonomousConfig,
+        config: AutopilotConfig,
         internal_bus: Any | None = None,
         *,
         monitor: AutopilotMonitor | None = None,
@@ -93,7 +93,7 @@ class AutopilotService:
 
         Args:
             ce: ContextEngine instance for goal management (RFC-625).
-            config: Project-level AutonomousConfig carrying RFC-222 loop pool
+            config: Project-level AutopilotConfig carrying RFC-222 loop pool
                 fields (``max_loops``, ``loop_idle_timeout``, ``poll_interval``,
                 ``dreaming_poll_interval``).
             internal_bus: Internal EventBus (uses singleton if None).

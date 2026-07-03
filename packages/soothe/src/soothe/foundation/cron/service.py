@@ -12,7 +12,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.autopilot.engine.scheduled_tasks import SchedulerService, ScheduleSpec
-from soothe.foundation.cron.extraction import CronExtractionService
+from soothe.foundation.cron.extraction import AutopilotDisabledError, CronExtractionService
+from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.foundation.cron.models import CronJob, JobStatus
 from soothe.foundation.cron.store import CronJobStore
 
@@ -73,18 +74,13 @@ class CronService:
         self._tick_task: asyncio.Task | None = None
 
         logger.info(
-            "CronService initialized: enabled=%s max_jobs=%d poll_interval=%d",
-            self._cron_config.enabled,
+            "CronService initialized: max_jobs=%d poll_interval=%d",
             self._cron_config.max_jobs,
             self._cron_config.poll_interval,
         )
 
     async def start(self) -> None:
         """Start the cron service monitoring loop."""
-        if not self._cron_config.enabled:
-            logger.info("Cron service disabled, not starting")
-            return
-
         if self._running:
             logger.warning("CronService already running")
             return
@@ -134,9 +130,17 @@ class CronService:
             Created CronJob with id and next_run set.
 
         Raises:
+            AutopilotDisabledError: If autopilot scheduling is disabled in config.
             ExtractionError: If NL extraction fails.
             ValueError: If max_jobs limit exceeded.
         """
+        if not self._config.agent.autopilot.enabled:
+            logger.warning(
+                "Cron job submission rejected: agent.autopilot.enabled=false (user=%s)",
+                user_id,
+            )
+            raise AutopilotDisabledError(AUTOPILOT_REQUIRED_FOR_CRON)
+
         # Check job limit
         current_count = await self._store.count_by_user(user_id)
         if current_count >= self._cron_config.max_jobs:

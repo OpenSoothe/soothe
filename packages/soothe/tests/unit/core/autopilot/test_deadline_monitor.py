@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from soothe.config.models import AutonomousConfig
+from soothe.config.models import AutopilotConfig
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
@@ -32,7 +32,7 @@ class _FakeFactory:
 def _service(*, deadline: float | None) -> AutopilotService:
     bus = InternalEventBus()
     ce = ContextEngine()
-    cfg = AutonomousConfig(max_loops=2, max_parallel_goals=2)
+    cfg = AutopilotConfig(max_loops=2, max_parallel_goals=2)
     cfg.goal_deadline_seconds = deadline
     return AutopilotService(
         ce=ce,

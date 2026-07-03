@@ -55,7 +55,7 @@ def run(
     max_iterations: int | None = typer.Option(
         None,
         "--max-iterations",
-        help="Ignored — use daemon config agent.autonomous.max_iterations.",
+        help="Ignored — use daemon config agent.autopilot.max_iterations.",
     ),
     workspace: str | None = typer.Option(
         None,

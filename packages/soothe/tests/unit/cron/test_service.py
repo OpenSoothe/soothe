@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from soothe.foundation.cron.extraction import AutopilotDisabledError
 from soothe.foundation.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
@@ -20,7 +21,7 @@ from soothe.foundation.cron.store import CronJobStore
 
 def _mock_config(*, max_jobs: int = 100, poll_interval: int = 60) -> MagicMock:
     cfg = MagicMock()
-    cfg.cron.enabled = True
+    cfg.agent.autopilot.enabled = True
     cfg.cron.max_jobs = max_jobs
     cfg.cron.poll_interval = poll_interval
     cfg.cron.extraction_model = "fast"
@@ -47,6 +48,21 @@ def _extraction(
 @pytest.fixture
 def temp_store(tmp_path) -> CronJobStore:
     return CronJobStore(db_path=str(tmp_path / "cron.db"), reader_pool_size=1)
+
+
+@pytest.mark.asyncio
+async def test_add_job_rejects_when_autopilot_disabled(temp_store: CronJobStore) -> None:
+    """Pending jobs must not be created when autopilot scheduling is disabled."""
+    svc = CronService(config=_mock_config(), store=temp_store)
+    svc._config.agent.autopilot.enabled = False
+    svc._extraction_service.extract = AsyncMock(return_value=_extraction())
+
+    with pytest.raises(AutopilotDisabledError, match="Autopilot is disabled"):
+        await svc.add_job("in 1 hour check deploy", DEFAULT_CRON_USER_ID)
+
+    assert await svc.list_jobs(DEFAULT_CRON_USER_ID) == []
+    svc._extraction_service.extract.assert_not_awaited()
+    await svc.stop()
 
 
 @pytest.mark.asyncio

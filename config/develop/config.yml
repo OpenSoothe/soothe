@@ -83,8 +83,8 @@ agent:
       orchestration_model_role: fast
       generation_model_role: default
       max_orchestration_hops: 1
-  autonomous:
-    enabled: false
+  autopilot:
+    enabled: true
     max_parallel_goals: 6
     max_loops: 8
   loop:
@@ -127,6 +127,16 @@ observability:
     trace_name: soothe-dev
     tags:
       - soothe
+
+# ============================================================
+# CRON (RFC-229 — natural language scheduled jobs)
+# ============================================================
+cron:
+  max_jobs: 100
+  poll_interval: 60
+  extraction_model: fast
+  extraction_timeout: 30
+  default_priority: 50
 
 # ============================================================
 # VECTOR STORES (pgvector; DSN auto-resolved from postgres_base_dsn)

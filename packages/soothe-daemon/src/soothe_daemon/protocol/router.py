@@ -3135,7 +3135,7 @@ class MessageRouter:
                 client_id,
                 build_error_response(
                     ErrorCode.AUTOPILOT_NOT_READY,
-                    "Cron service not initialized or disabled",
+                    "Cron service not initialized",
                     request_id=request_id,
                 ),
             )
@@ -3172,6 +3172,7 @@ class MessageRouter:
             return
 
         # Default user for daemon (single-user mode)
+        from soothe.foundation.cron.extraction import AutopilotDisabledError
         from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
@@ -3179,6 +3180,17 @@ class MessageRouter:
         # Create job via CronService
         try:
             job = await service.add_job(text.strip(), user_id, priority=priority)
+        except AutopilotDisabledError as exc:
+            logger.warning("[CronAdd] Rejected: %s", exc.message)
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.AUTOPILOT_NOT_READY,
+                    exc.message,
+                    request_id=request_id,
+                ),
+            )
+            return
         except Exception as exc:
             logger.error("[CronAdd] Failed to create job: %s", exc, exc_info=True)
             await d._send_client_message(

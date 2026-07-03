@@ -65,8 +65,8 @@ agent:
   agent_instructions_max_chars: 8000
   goal_completion_mode: llm_only
   final_response: adaptive
-  # Autonomous — AutopilotService scheduling and goal pool (AutonomousConfig)
-  autonomous:
+  # Autopilot — AutopilotService scheduling and goal pool (AutopilotConfig)
+  autopilot:
     enabled: false
     max_iterations: 10
     max_retries: 2
@@ -540,7 +540,6 @@ observability:
     tags: null
     user_id: null
 cron:
-  enabled: true
   max_jobs: 100
   poll_interval: 60
   extraction_model: fast

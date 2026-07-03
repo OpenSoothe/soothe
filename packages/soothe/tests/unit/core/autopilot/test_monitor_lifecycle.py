@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.config.models import AutonomousConfig
+from soothe.config.models import AutopilotConfig
 from soothe.foundation.autopilot.monitor.models import GoalIntakeResult
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
@@ -20,7 +20,7 @@ def _service(*, monitor: MagicMock | None = None) -> AutopilotService:
     ce = ContextEngine()
     return AutopilotService(
         ce=ce,
-        config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
+        config=AutopilotConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
         monitor=monitor,
         runner_factory=IdleFakeFactory(),
