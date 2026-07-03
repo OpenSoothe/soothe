@@ -238,8 +238,17 @@ def predecessor_messages_for_step(
     decision: AgentDecision,
     *,
     max_messages: int,
+    exclude_step_ids: frozenset[str] | None = None,
 ) -> list[BaseMessage]:
-    """Deep-copy predecessor execute_step ledger rows for any dependent step."""
+    """Deep-copy predecessor execute_step ledger rows for any dependent step.
+
+    Args:
+        loop_messages: LoopState.loop_messages ledger.
+        step: Step about to execute on an isolated branch thread.
+        decision: Current scoped plan decision (for transitive dependency closure).
+        max_messages: Cap on copied ledger rows.
+        exclude_step_ids: Step ids to exclude (already included in Slice A fallback).
+    """
     predecessor_ids = transitive_dependency_step_ids(step, decision)
     if not predecessor_ids:
         return []
@@ -247,6 +256,7 @@ def predecessor_messages_for_step(
         loop_messages,
         predecessor_ids,
         max_messages=max_messages,
+        exclude_step_ids=exclude_step_ids,
     )
 
 
