@@ -537,6 +537,8 @@ class StepActivityTree:
 
         # Main-agent tool preview
         if main_preview:
+            if not first_block:
+                parts.append("\n")
             first_block = False
             append_tool_activity_lines(
                 parts,
@@ -547,6 +549,11 @@ class StepActivityTree:
                 spinner_position=spinner_position,
                 animate_running=step_status == "running",
             )
+            hidden_tools = index.main_tool_count - len(main_preview)
+            if hidden_tools > 0:
+                label = f"+{hidden_tools} more tool{'s' if hidden_tools != 1 else ''}"
+                parts.append("\n")
+                parts.append(Content.styled(f"{branch_gutter}· {label}", colors.muted))
 
         # Global subagent notes
         for note in subagent_notes:

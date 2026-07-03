@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 # Display names for known soothe core subagents (IG-517).
-# Only include subagents that actually exist in soothe core:
-# - Built-in: explore, plan, tacitus (registered in SUBAGENT_FACTORIES)
-# - Plugin-based: browser_use (registered via @plugin decorator)
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
-    "explore": "Explore",
-    "plan": "Plan",
+    "planner": "Planner",
     "tacitus": "Tacitus",
     "browser_use": "Browser",
 }
 
 # Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
-SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("tacitus", "explore")
+SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("tacitus",)
 
 BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_SLASH_ROUTE_IDS)
 
@@ -37,7 +33,7 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/tacitus``, ``/explore``)
+    Detects subagent routing commands (e.g. ``/tacitus``)
     and extracts the subagent name along with the cleaned input text.
 
     Args:
@@ -50,7 +46,6 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
 
     Examples:
         ``"/tacitus check this"`` -> ``("tacitus", "check this")``
-        ``"/explore map the repo"`` -> ``("explore", "map the repo")``
         ``"hello world"`` -> ``(None, "hello world")``
     """
     first_match: tuple[int, str] | None = None

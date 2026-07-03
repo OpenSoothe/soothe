@@ -95,7 +95,7 @@ def test_subagent_completion_status_includes_token_suffix() -> None:
     card = create_subagent_card(
         step_id="ZCH-01",
         description="Scan repo",
-        subagent_type="explore",
+        subagent_type="tacitus",
         parent_step_id="ZCH-01",
         parent_task_key="ZCH-01:s:task:0",
         task_idx=0,

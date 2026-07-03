@@ -436,21 +436,29 @@ class TestPlanGeneration:
                 expected_output="List",
                 dependencies=None,
                 execution_hint="subagent",
-                subagent="explore",
+                subagent="tacitus",
             )
         ]
         out = plan_generate_steps_to_step_actions(steps)
         assert len(out) == 1
         assert out[0].description == "Search papers"
-        assert out[0].wire_subagent == "explore"
+        assert out[0].wire_subagent == "tacitus"
         assert "evidence_refs" not in StepAction.model_fields
 
     def test_resolve_step_wire_subagent(self) -> None:
         assert resolve_step_wire_subagent(execution_hint="auto") is None
-        assert resolve_step_wire_subagent(execution_hint="subagent") == "explore"
+        assert resolve_step_wire_subagent(execution_hint="subagent") is None
         assert (
-            resolve_step_wire_subagent(execution_hint="subagent", subagent="explore") == "explore"
+            resolve_step_wire_subagent(execution_hint="subagent", subagent="tacitus") == "tacitus"
         )
+        assert (
+            resolve_step_wire_subagent(
+                execution_hint="subagent",
+                subagent="exactly_one_subagent_for_each_step_without_explicit_confirmation",
+            )
+            is None
+        )
+        assert resolve_step_wire_subagent(execution_hint="subagent", subagent="plan") is None
 
     def test_apply_step_wire_subagents(self) -> None:
         steps = [
@@ -459,27 +467,27 @@ class TestPlanGeneration:
                 description="Recon",
                 expected_output="map",
                 execution_hint="subagent",
-                subagent="explore",
+                subagent="tacitus",
             )
         ]
         wired = apply_step_wire_subagents(steps)
-        assert wired[0].wire_subagent == "explore"
+        assert wired[0].wire_subagent == "tacitus"
 
     def test_resolve_wire_subagent_for_step_prefers_planner_hint(self) -> None:
         step = StepAction(
             id="s1",
             description="Recon",
             expected_output="map",
-            wire_subagent="explore",
+            wire_subagent="tacitus",
         )
-        routing = {"routing_hint": "subagent", "preferred_subagent": "tacitus"}
-        assert resolve_wire_subagent_for_step(step, routing) == "explore"
-        assert resolve_wire_subagent_for_step(step, None) == "explore"
+        routing = {"routing_hint": "subagent", "preferred_subagent": "planner"}
+        assert resolve_wire_subagent_for_step(step, routing) == "tacitus"
+        assert resolve_wire_subagent_for_step(step, None) == "tacitus"
 
     def test_resolve_wire_subagent_falls_back_to_routing(self) -> None:
         step = StepAction(id="s1", description="Recon", expected_output="map")
-        routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
-        assert resolve_wire_subagent_for_step(step, routing) == "explore"
+        routing = {"routing_hint": "subagent", "preferred_subagent": "tacitus"}
+        assert resolve_wire_subagent_for_step(step, routing) == "tacitus"
 
     def test_new_requires_type(self) -> None:
         """Plan generation requires top-level type."""

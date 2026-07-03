@@ -9,28 +9,28 @@ from soothe_cli.runtime.state.step_router import StepTaskRouter
 
 def test_register_task_spawn_normalizes_task_level_opaque_delegation_id() -> None:
     router = StepTaskRouter()
-    assert router.register_task_spawn("ZCH_01:t0:tool-abc123", "explore", step_id="ZCH-01") is True
+    assert router.register_task_spawn("ZCH_01:t0:tool-abc123", "tacitus", step_id="ZCH-01") is True
     assert router._spawns_by_step_id["ZCH-01"][0] == "ZCH_01:s:task:0"
-    assert router._spawns_by_task_id["ZCH_01:s:task:0"][1] == "explore"
+    assert router._spawns_by_task_id["ZCH_01:s:task:0"][1] == "tacitus"
 
 
 def test_register_task_spawn_rejects_inner_subgraph_task_id() -> None:
     router = StepTaskRouter()
-    assert router.register_task_spawn("MLG_02:t0:task:0", "explore", step_id="MLG-02") is False
+    assert router.register_task_spawn("MLG_02:t0:task:0", "tacitus", step_id="MLG-02") is False
     assert router._spawns_by_step_id.get("MLG-02") is None
 
 
 def test_register_task_spawn_normalizes_unified_task_id() -> None:
     router = StepTaskRouter()
-    assert router.register_task_spawn("functions.task:0", "explore", step_id="YKF-02") is True
+    assert router.register_task_spawn("functions.task:0", "tacitus", step_id="YKF-02") is True
     assert router._spawns_by_step_id["YKF-02"][0] == "YKF_02:s:task:0"
 
 
 def test_parallel_namespace_bind_via_unified_tool_ids() -> None:
     """Namespace binding requires unified tool call IDs, not FIFO order."""
     router = StepTaskRouter()
-    router.register_task_spawn("YKF_01:s:task:0", "explore", step_id="YKF-01")
-    router.register_task_spawn("YKF_02:s:task:0", "explore", step_id="YKF-02")
+    router.register_task_spawn("YKF_01:s:task:0", "tacitus", step_id="YKF-01")
+    router.register_task_spawn("YKF_02:s:task:0", "tacitus", step_id="YKF-02")
     router.on_subgraph_namespace(("tools:aaa",))
     router.on_subgraph_namespace(("tools:bbb",))
     # Namespaces not bound yet without tool calls
@@ -57,8 +57,8 @@ def test_parallel_namespace_bind_via_unified_tool_ids() -> None:
         tool_to_step={},
         tool_display_by_call_id={},
     )
-    assert router.resolve_task_scope(("tools:aaa",)) == ("YKF_01:s:task:0", "explore", "YKF-01")
-    assert router.resolve_task_scope(("tools:bbb",)) == ("YKF_02:s:task:0", "explore", "YKF-02")
+    assert router.resolve_task_scope(("tools:aaa",)) == ("YKF_01:s:task:0", "tacitus", "YKF-01")
+    assert router.resolve_task_scope(("tools:bbb",)) == ("YKF_02:s:task:0", "tacitus", "YKF-02")
 
 
 def test_route_pending_main_tools_requires_unified_tool_call_id() -> None:
@@ -141,8 +141,8 @@ def test_parallel_step_completion_drain_routes_buffered_unified_tool() -> None:
 
 def test_register_task_spawn_is_idempotent_per_step_and_tool() -> None:
     router = StepTaskRouter()
-    assert router.register_task_spawn("S1:s:task:0", "explore", step_id="S1") is True
-    assert router.register_task_spawn("S1:s:task:0", "explore", step_id="S1") is False
+    assert router.register_task_spawn("S1:s:task:0", "tacitus", step_id="S1") is True
+    assert router.register_task_spawn("S1:s:task:0", "tacitus", step_id="S1") is False
 
 
 def test_step_id_for_tool_parses_unified_format() -> None:
@@ -196,8 +196,8 @@ def test_buffered_main_tools_coalesce_per_tool_call_id() -> None:
 def test_parallel_explore_namespaces_bind_from_unified_tool_ids() -> None:
     """Parallel explore: namespaces correlate via embedded step ids, not spawn FIFO."""
     router = StepTaskRouter()
-    router.register_task_spawn("XFJ_02:s:task:0", "explore", step_id="XFJ-02")
-    router.register_task_spawn("XFJ_01:s:task:0", "explore", step_id="XFJ-01")
+    router.register_task_spawn("XFJ_02:s:task:0", "tacitus", step_id="XFJ-02")
+    router.register_task_spawn("XFJ_01:s:task:0", "tacitus", step_id="XFJ-01")
     router.on_subgraph_namespace(("tools:explore-a",))
     router.on_subgraph_namespace(("tools:explore-b",))
     assert router.resolve_task_scope(("tools:explore-a",)) is None
@@ -224,12 +224,12 @@ def test_parallel_explore_namespaces_bind_from_unified_tool_ids() -> None:
     )
     assert router.resolve_task_scope(("tools:explore-a",)) == (
         "XFJ_02:s:task:0",
-        "explore",
+        "tacitus",
         "XFJ-02",
     )
     assert router.resolve_task_scope(("tools:explore-b",)) == (
         "XFJ_01:s:task:0",
-        "explore",
+        "tacitus",
         "XFJ-01",
     )
 
@@ -242,7 +242,7 @@ def test_subgraph_inner_task_tool_is_not_ingested_on_step_card() -> None:
     step_cards = {"FHG-01": step}
     display = {"FHG_01:s:task:0": step}
 
-    router.register_task_spawn("FHG_01:s:task:0", "explore", step_id="FHG-01")
+    router.register_task_spawn("FHG_01:s:task:0", "tacitus", step_id="FHG-01")
     router.on_subgraph_namespace(("tools:sub",))
     # Bind namespace via a non-task tool first
     router.try_route_subgraph_tool(
@@ -266,7 +266,7 @@ def test_subgraph_inner_task_tool_is_not_ingested_on_step_card() -> None:
             lookup_id="task:0",
             display_key="FHG_01:t0:task:0",
             tool_name="task",
-            args={"description": "wrong", "subagent_type": "explore"},
+            args={"description": "wrong", "subagent_type": "tacitus"},
             step_cards=step_cards,
             tool_to_step={},
             tool_display_by_call_id=display,
@@ -285,7 +285,7 @@ def test_subgraph_opaque_task_metadata_tool_is_not_ingested_on_step_card() -> No
     step_cards = {"FHG-01": step}
     display = {"FHG_01:s:task:0": step}
 
-    router.register_task_spawn("FHG_01:s:task:0", "explore", step_id="FHG-01")
+    router.register_task_spawn("FHG_01:s:task:0", "tacitus", step_id="FHG-01")
     router.on_subgraph_namespace(("tools:sub",))
     # Bind namespace via a non-task tool first
     router.try_route_subgraph_tool(
@@ -306,7 +306,7 @@ def test_subgraph_opaque_task_metadata_tool_is_not_ingested_on_step_card() -> No
             display_key="tool-49EA56F8116423E97FF19695B55Cca1",
             tool_name="tool-49EA56F8116423E97FF19695B55Cca1",
             args={
-                "subagent_type": "explore",
+                "subagent_type": "tacitus",
                 "description": "Count all file types in workspace",
             },
             step_cards=step_cards,
@@ -327,7 +327,7 @@ def test_parallel_subgraph_tools_route_under_explore_row() -> None:
     tool_to_step: dict[str, object] = {}
     display = {"XFJ_01:s:task:0": step}
 
-    router.register_task_spawn("XFJ_01:s:task:0", "explore", step_id="XFJ-01")
+    router.register_task_spawn("XFJ_01:s:task:0", "tacitus", step_id="XFJ-01")
     router.on_subgraph_namespace(("tools:sub",))
 
     # Use unified tool call ID to bind namespace and route tool
@@ -349,7 +349,7 @@ def test_parallel_subgraph_tools_route_under_explore_row() -> None:
 def test_late_subgraph_namespace_binds_via_unified_tool_call_id() -> None:
     """Namespace binds via unified tool call ID, not automatic spawn linking."""
     router = StepTaskRouter()
-    router.register_task_spawn("FJS_02:s:task:0", "explore", step_id="FJS-02")
+    router.register_task_spawn("FJS_02:s:task:0", "tacitus", step_id="FJS-02")
     ns = ("tools:late-arrival",)
     router.on_subgraph_namespace(ns)
     # Namespace not bound yet without unified tool call ID
@@ -368,14 +368,14 @@ def test_late_subgraph_namespace_binds_via_unified_tool_call_id() -> None:
     scope = router.resolve_task_scope(ns)
     assert scope is not None
     assert scope[2] == "FJS-02"
-    assert scope[1] == "explore"
+    assert scope[1] == "tacitus"
     assert scope[0].startswith("FJS_02:s:task")
 
 
 def test_two_tasks_on_one_step_bind_by_task_index() -> None:
     """Second ``task:1`` on the same step must not steal ``t0`` namespace bindings."""
     router = StepTaskRouter()
-    router.register_task_spawn("WAV_01:s:task:0", "explore", step_id="WAV-01")
+    router.register_task_spawn("WAV_01:s:task:0", "tacitus", step_id="WAV-01")
     router.register_task_spawn("WAV_01:s:task:1", "tacitus", step_id="WAV-01")
     assert router._spawns_by_step_id["WAV-01"][0] == "WAV_01:s:task:0"
     assert router._spawns_by_task_id["WAV_01:s:task:1"][1] == "tacitus"
@@ -404,7 +404,7 @@ def test_two_tasks_on_one_step_bind_by_task_index() -> None:
     )
     assert router.resolve_task_scope(("tools:first",)) == (
         "WAV_01:s:task:0",
-        "explore",
+        "tacitus",
         "WAV-01",
     )
     assert router.resolve_task_scope(("tools:second",)) == (

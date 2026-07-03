@@ -362,6 +362,7 @@ def _stream_end_pending_error_message(
 # ---------------------------------------------------------------------------
 
 _TOOL_UI_COALESCE_SEC = 0.05
+_EXECUTE_WAVE_UI_COALESCE_SEC = 0.2
 _CHUNK_YIELD_INTERVAL = 24
 _CHUNK_YIELD_BUDGET_SEC = 0.016
 
@@ -414,6 +415,11 @@ class TurnToolUiCoalescer:
             return False
         return self.wire_applied(tool_call_id)
 
+    def _coalesce_interval_sec(self) -> float:
+        if self.execute_wave_active:
+            return _EXECUTE_WAVE_UI_COALESCE_SEC
+        return _TOOL_UI_COALESCE_SEC
+
     async def after_chunk(self, *, force_flush: bool = False) -> None:
         """Yield to Textual when needed and flush deferred tool-list repaints."""
         self._chunk_count += 1
@@ -425,7 +431,7 @@ class TurnToolUiCoalescer:
             await asyncio.sleep(0)
             self._burst_start = now
 
-        if force_flush or (now - self._last_flush_at) >= _TOOL_UI_COALESCE_SEC:
+        if force_flush or (now - self._last_flush_at) >= self._coalesce_interval_sec():
             flush_deferred_tools_refreshes(force=force_flush)
             self._last_flush_at = now
 

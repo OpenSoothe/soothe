@@ -231,6 +231,14 @@ class LLMFactory:
         # Remove use_responses_api for embeddings (not applicable)
         kwargs.pop("use_responses_api", None)
 
+        # Disable tokenization for OpenAI SDK v2+ compatibility.
+        # OpenAI SDK v2+ requires string input, not token arrays (list[int]).
+        # When check_embedding_ctx_length=True (default) + tiktoken_enabled=True (default),
+        # langchain_openai tokenizes text and sends token arrays to the API,
+        # causing 422 UnprocessableEntityError. Disabling context length checking
+        # bypasses tokenization entirely and sends raw strings directly.
+        kwargs["check_embedding_ctx_length"] = False
+
         # DashScope special handling (OpenAI-compatible vs native)
         if provider_name == "dashscope":
             base_url = kwargs.get("base_url", "")

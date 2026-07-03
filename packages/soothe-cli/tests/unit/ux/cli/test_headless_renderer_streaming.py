@@ -42,7 +42,7 @@ def test_suppresses_task_scoped_prose(capsys: pytest.CaptureFixture[str]) -> Non
         "hidden",
         is_main=True,
         is_streaming=False,
-        task_scope=("functions.task:0", "explore"),
+        task_scope=("functions.task:0", "tacitus"),
     )
     out, _ = capsys.readouterr()
     assert out == ""

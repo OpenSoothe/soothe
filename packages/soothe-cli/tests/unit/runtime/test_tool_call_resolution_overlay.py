@@ -65,7 +65,7 @@ def test_merge_tool_display_args_prefers_streaming_overlay() -> None:
     pending = {
         "EZJ_07:s:task:0": {
             "name": "task",
-            "args_str": ('{"description": "Find autopilot_cmd.py", "subagent_type": "explore"}'),
+            "args_str": ('{"description": "Find autopilot_cmd.py", "subagent_type": "tacitus"}'),
             "emitted": False,
             "is_main": True,
         },
@@ -80,7 +80,7 @@ def test_merge_tool_display_args_prefers_streaming_overlay() -> None:
         streaming_overlay=overlay,
         pending_tool_calls_lc=pending,
     )
-    assert merged.get("subagent_type") == "explore"
+    assert merged.get("subagent_type") == "tacitus"
     assert "autopilot" in str(merged.get("description", ""))
 
 
@@ -175,7 +175,7 @@ def test_richest_pending_task_args_scoped_with_placeholder_tool_name() -> None:
         "AGP_01:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "Explore soothe-sdk package", "subagent_type": "explore"}'
+                '{"description": "Explore soothe-sdk package", "subagent_type": "tacitus"}'
             ),
             "is_complete_json": True,
             "emitted": False,
@@ -184,7 +184,7 @@ def test_richest_pending_task_args_scoped_with_placeholder_tool_name() -> None:
         "AGP_02:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "Explore soothe-cli package", "subagent_type": "explore"}'
+                '{"description": "Explore soothe-cli package", "subagent_type": "tacitus"}'
             ),
             "is_complete_json": True,
             "emitted": False,
@@ -207,7 +207,7 @@ def test_richest_pending_same_step_different_task_index() -> None:
     pending = {
         "WAV_01:s:task:0": {
             "name": "task",
-            "args_str": '{"description": "First delegation", "subagent_type": "explore"}',
+            "args_str": '{"description": "First delegation", "subagent_type": "tacitus"}',
             "is_complete_json": True,
             "emitted": False,
             "is_main": True,
@@ -237,7 +237,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
         "AAA_01:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "First step explores the repository", "subagent_type": "explore"}'
+                '{"description": "First step explores the repository", "subagent_type": "tacitus"}'
             ),
             "is_complete_json": True,
             "emitted": False,
@@ -246,7 +246,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
         "BBB_02:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "Second step maps architecture", "subagent_type": "plan"}'
+                '{"description": "Second step maps architecture", "subagent_type": "planner"}'
             ),
             "is_complete_json": True,
             "emitted": False,
@@ -297,7 +297,7 @@ def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
         "STEP_01:s:task:0": {
             "name": "task",
             "args_str": (
-                '{"description": "Explore the whole repository", "subagent_type": "explore"}'
+                '{"description": "Explore the whole repository", "subagent_type": "tacitus"}'
             ),
             "emitted": False,
             "is_main": True,
@@ -323,7 +323,7 @@ def test_merge_inner_tool_on_task_card_uses_tool_args_not_task_desc() -> None:
     pending = {
         "STEP_01:s:task:0": {
             "name": "task",
-            "args_str": '{"description": "Do everything", "subagent_type": "explore"}',
+            "args_str": '{"description": "Do everything", "subagent_type": "tacitus"}',
             "emitted": False,
             "is_main": True,
         },

@@ -7,7 +7,6 @@ from soothe_sdk.core.subagent_wire import (
     register_subagent_wire_event_types,
 )
 
-from soothe.subagents.explore import events as explore_events
 from soothe.subagents.tacitus import events as tacitus_events
 
 
@@ -17,17 +16,9 @@ def test_tacitus_wire_types_registered_via_register_event() -> None:
     assert is_emit_allowed_subagent_wire_event_type(tacitus_events.SUBAGENT_TACITUS_COMPLETED)
 
 
-def test_explore_wire_types_registered_via_register_event() -> None:
-    assert is_emit_allowed_subagent_wire_event_type(explore_events.SUBAGENT_EXPLORE_STARTED)
-    assert is_emit_allowed_subagent_wire_event_type(explore_events.SUBAGENT_EXPLORE_COMPLETED)
-    assert is_emit_allowed_subagent_wire_event_type(explore_events.SUBAGENT_EXPLORE_MILESTONE)
-    assert is_emit_allowed_subagent_wire_event_type(explore_events.SUBAGENT_EXPLORE_STEP_COMPLETED)
-
-
 def test_importing_subagents_package_registers_builtin_wire_types() -> None:
     import soothe.subagents  # noqa: F401
 
-    assert is_emit_allowed_subagent_wire_event_type(explore_events.SUBAGENT_EXPLORE_STARTED)
     assert is_emit_allowed_subagent_wire_event_type(tacitus_events.SUBAGENT_TACITUS_STARTED)
 
 

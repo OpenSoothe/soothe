@@ -69,6 +69,7 @@ _ALWAYS_CLIENT_WIRE_INNER_TYPES = frozenset(
     {
         TOOL_CALL_UPDATES_BATCH,
         STREAM_TOOL_CALL_UPDATE,
+        "stream_degraded",
     }
 )
 

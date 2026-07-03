@@ -145,9 +145,9 @@ agent:
       file_output_dir: null
       message_coalesce_enabled: true
       tool_batch_enabled: true
-      tool_batch_interval_ms: 200
+      tool_batch_interval_ms: 500
       suppress_redundant_stream_tool_updates: true
-      skip_redundant_tool_message_wire: false
+      skip_redundant_tool_message_wire: true
     # In-loop scratchpad; large entries spill to disk (LoopWorkingMemoryConfig)
     working_memory:
       enabled: true
@@ -229,7 +229,6 @@ agent:
         grep: 30.0
         glob: 20.0
         read_file: 30.0
-        explore: 1800.0
         browser_use: 1800.0
         task: 86400.0
       skip_tools_with_internal_timeout: true
@@ -350,16 +349,9 @@ tools:
     timeout: 60
     max_retries: 3
 
-# SubagentConfig — overrides merge with builtin explore/plan/tacitus/browser_use/skillify
+# SubagentConfig — overrides merge with builtin planner/tacitus/browser_use/skillify
 subagents:
-  explore:
-    enabled: true
-    model: null
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
-  plan:
+  planner:
     enabled: true
     model: null
     transport: local

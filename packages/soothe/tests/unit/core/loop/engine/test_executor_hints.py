@@ -64,7 +64,7 @@ class TestExecutorHints:
             description="Map repository layout",
             expected_output="Matching paths",
         )
-        routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
+        routing = {"routing_hint": "subagent", "preferred_subagent": "tacitus"}
 
         await executor._execute_step_collecting_events(
             step, "thread-456", routing_classification=routing
@@ -73,7 +73,7 @@ class TestExecutorHints:
         call_args = mock_agent.execution_astream.call_args
         configurable = call_args.kwargs["config"]["configurable"]
 
-        assert configurable["soothe_step_subagent"] == "explore"
+        assert configurable["soothe_step_subagent"] == "tacitus"
         assert "soothe_step_tools" not in configurable
 
     @pytest.mark.asyncio
@@ -91,14 +91,14 @@ class TestExecutorHints:
             description="Map repository layout",
             expected_output="Matching paths",
             execution_hint="subagent",
-            subagent="explore",
-            wire_subagent="explore",
+            subagent="tacitus",
+            wire_subagent="tacitus",
         )
 
         await executor._execute_step_collecting_events(step, "thread-456")
 
         configurable = mock_agent.execution_astream.call_args.kwargs["config"]["configurable"]
-        assert configurable["soothe_step_subagent"] == "explore"
+        assert configurable["soothe_step_subagent"] == "tacitus"
 
     @pytest.mark.asyncio
     async def test_executor_passes_expected_output(self):
@@ -169,13 +169,13 @@ class TestExecutorHints:
             description="Find files",
             expected_output="File list",
         )
-        routing = {"routing_hint": "subagent", "preferred_subagent": "explore"}
+        routing = {"routing_hint": "subagent", "preferred_subagent": "tacitus"}
 
         await executor._execute_step_collecting_events(
             step, "thread-123", routing_classification=routing
         )
 
-        assert "wire_subagent=explore" in caplog.text
+        assert "wire_subagent=tacitus" in caplog.text
 
     @pytest.mark.asyncio
     async def test_executor_thread_creates_isolated_thread(self) -> None:

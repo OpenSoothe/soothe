@@ -279,12 +279,6 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "description": "Route query to Tacitus subagent",
         "requires_query": True,
     },
-    "/explore": {
-        "location": "daemon",
-        "type": "routing",
-        "description": "Route query to Explore subagent",
-        "requires_query": True,
-    },
 }
 
 

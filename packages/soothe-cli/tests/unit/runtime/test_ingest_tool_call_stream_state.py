@@ -21,7 +21,7 @@ def test_ingest_wire_dict_seeds_complete_tool_calls() -> None:
                 "id": "WAA_01:s:task:0",
                 "args": {
                     "description": "Explore the repo",
-                    "subagent_type": "explore",
+                    "subagent_type": "tacitus",
                 },
             }
         ],
@@ -30,6 +30,6 @@ def test_ingest_wire_dict_seeds_complete_tool_calls() -> None:
     assert "WAA_01:s:task:0" in pending
     parsed = try_parse_pending_tool_call_args(pending["WAA_01:s:task:0"])
     assert parsed is not None
-    assert parsed.get("subagent_type") == "explore"
+    assert parsed.get("subagent_type") == "tacitus"
     overlay = build_streaming_args_overlay(AIMessageChunk(content=""), pending)
     assert overlay["WAA_01:s:task:0"]["description"] == "Explore the repo"

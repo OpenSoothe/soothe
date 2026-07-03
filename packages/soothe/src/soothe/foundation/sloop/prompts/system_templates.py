@@ -94,8 +94,7 @@ Data inspection tools (deferred by default — see <AVAILABLE_TOOLS> or search_t
 _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
-- explore: Readonly repo search (glob/grep/list/read); locate/map/trace; not edits or shell.
-- plan: Agentic recon then plan — multiple explore batches/rounds, then iterative markdown plan; one report.
+- planner: Agentic plan design — iterative markdown execution plan; one report.
 - tacitus: Web or multi-source public-domain investigation—not trivial directory walks.
 Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
 """

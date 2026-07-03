@@ -93,3 +93,33 @@ def test_has_task_activity_body_from_main_tools_only() -> None:
 def test_count_distinct_tool_call_ids_dedupes() -> None:
     rows = [_row("ABC_01:s:grep:0"), _row("ABC_01:s:grep:0")]
     assert count_distinct_tool_call_ids(rows) == 1
+
+
+def test_step_activity_tree_shows_collapsed_tool_overflow() -> None:
+    """IG-546: Step card shows +N more tools when preview is capped."""
+    from types import SimpleNamespace
+
+    from soothe_cli.tui.widgets.messages.cognition_step_activity import StepActivityTree
+
+    rows = [_row(f"ABC_01:s:grep:{i}") for i in range(5)]
+    index = StepRowClassifier.build("ABC-01", rows)
+    g = SimpleNamespace(
+        output_prefix="→",
+        checkmark="✓",
+        error="✗",
+        circle_empty="○",
+        spinner_frames=["|"],
+    )
+    colors = SimpleNamespace(cognition="c", error="e", muted="m", foreground="f")
+    content = StepActivityTree.render(
+        step_id="ABC-01",
+        step_status="running",
+        index=index,
+        subagent_notes=[],
+        subagent_notes_by_task={},
+        spinner_position=0,
+        colors=colors,
+        g=g,
+        preview_limit=3,
+    )
+    assert "+2 more tools" in str(content)

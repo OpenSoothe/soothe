@@ -26,40 +26,26 @@ def create_plan_subagent(
     """Build the plan ``CompiledSubAgent`` spec.
 
     Args:
-        model: Primary chat model for collection and plan-design loops (resolver always passes
+        model: Primary chat model for plan-design loops (resolver always passes
             the router ``think`` role via ``create_chat_model("think")``).
         config: Soothe configuration.
-        context: Must include ``work_dir`` for explore alignment with other subagents.
+        context: Optional resolver context (``work_dir`` ignored; kept for API parity).
 
     Returns:
         Dict with ``name``, ``description``, and ``runnable`` graph.
     """
-    work_dir = context.get("work_dir", "")
-    sub_cfg = config.subagents.get("plan", SubagentConfig())
+    _ = context.get("work_dir", "")
+    sub_cfg = config.subagents.get("planner", SubagentConfig())
     plan_opts = PlanSubagentConfig(**sub_cfg.config)
 
-    explore_runnable = context.get("explore_runnable")
-    if explore_runnable is None:
-        from soothe.subagents.explore.implementation import create_explore_subagent
-
-        explore_model = config.create_chat_model("fast")
-        explore_spec = create_explore_subagent(
-            explore_model,
-            config,
-            {"work_dir": work_dir},
-        )
-        explore_runnable = explore_spec["runnable"]
-
-    runnable = build_plan_engine(model, explore_runnable, plan_opts, soothe_config=config)
+    runnable = build_plan_engine(model, plan_opts, soothe_config=config)
 
     return {
-        "name": "plan",
+        "name": "planner",
         "description": (
-            "Planning delegate with agentic loops: iteratively runs multiple readonly explore "
-            "passes per round (and multiple collection rounds) to gather workspace evidence, then "
-            "iteratively refines a full markdown execution plan before returning one report. "
-            "Use when the main thread needs structured recon-plus-plan without doing every explore "
-            "and rewrite itself."
+            "Planning delegate with agentic plan-design loops: iteratively refines a full "
+            "markdown execution plan before returning one report. Use when the main thread "
+            "needs structured planning; readonly recon belongs on execute-step threads."
         ),
         "runnable": runnable,
     }

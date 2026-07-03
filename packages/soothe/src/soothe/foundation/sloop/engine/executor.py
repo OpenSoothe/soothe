@@ -83,6 +83,7 @@ from soothe.foundation.sloop.engine.step_wave_types import (
     _ParallelStepDone,
     _PendingInterruptFetch,
     _StreamCollectChunk,
+    max_tool_calls_for_step,
 )
 from soothe.foundation.sloop.engine.thread_selection import (
     _select_thread_for_step,
@@ -1610,21 +1611,25 @@ class Executor:
         start = time.perf_counter()
         events: list[StreamEvent] = []
         output = ""  # Still collect for Layer 1 final report
+        wire_subagent = resolve_wire_subagent_for_step(step, routing_classification)
         budget = _ActStreamBudget(
             max_subagent_tasks_per_wave=self._max_subagent_tasks_per_wave(),
-            max_tool_calls_per_step=self._max_tool_calls_per_step(),
+            max_tool_calls_per_step=max_tool_calls_for_step(
+                step,
+                wire_subagent,
+                default=self._max_tool_calls_per_step(),
+            ),
         )
         # IG-519: Init tool_call_args_registry directly (semaphore removed, registry preserved)
         init_tool_call_args_registry()
 
         try:
-            wire_subagent = resolve_wire_subagent_for_step(step, routing_classification)
-
             logger.debug(
-                "execute step: id=%s desc=%s hints: wire_subagent=%s",
+                "execute step: id=%s desc=%s hints: wire_subagent=%s tool_budget=%d",
                 step.id,
                 preview_first(step.description, 100),
                 wire_subagent,
+                budget.max_tool_calls_per_step,
             )
 
             # IG-477: Thread isolation for parallel safety; predecessor context via injection.

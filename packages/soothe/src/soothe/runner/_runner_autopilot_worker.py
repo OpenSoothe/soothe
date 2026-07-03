@@ -35,7 +35,6 @@ from soothe.foundation.autopilot.engine.models import (
     ToolCallStats,
 )
 from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
-from soothe.foundation.sloop import StrangeLoop
 from soothe.foundation.sloop.state.schemas import PlanResult
 from soothe.protocols.planner import GoalDirective
 
@@ -101,6 +100,8 @@ class AutopilotWorkerMixin:
 
         # Build a fresh StrangeLoop for this dispatch. The CoreAgent / planner
         # are shared (workers serve many jobs over their lifetime).
+        from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+
         strange_loop = StrangeLoop(
             core_agent=self._agent,  # type: ignore[attr-defined]
             loop_planner=self._planner,  # type: ignore[attr-defined]

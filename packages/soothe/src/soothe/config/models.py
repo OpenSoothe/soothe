@@ -1248,7 +1248,7 @@ class OutputStreamingConfig(BaseModel):
         description="Debounce tool invocation metadata into tool_call_updates_batch events",
     )
     tool_batch_interval_ms: int = Field(
-        default=200,
+        default=500,
         ge=50,
         le=1000,
         description="Debounce window for tool_call_updates_batch (milliseconds)",
@@ -1258,8 +1258,8 @@ class OutputStreamingConfig(BaseModel):
         description="Suppress soothe.stream.tool_call.update when covered by a pending batch",
     )
     skip_redundant_tool_message_wire: bool = Field(
-        default=False,
-        description="Suppress empty ToolMessage wire frames (keep false unless headless-only)",
+        default=True,
+        description="Suppress empty ToolMessage wire frames (keep false for full wire debug)",
     )
 
 
@@ -1365,7 +1365,6 @@ class ToolTimeoutConfig(BaseModel):
             "grep": 30.0,
             "glob": 20.0,
             "read_file": 30.0,
-            "explore": 1800.0,  # Subagent exploration (30 minutes)
             "browser_use": 1800.0,  # Browser automation (30 minutes)
             "task": 86400.0,  # Task tool for autonomous subagent work (24 hours)
         },

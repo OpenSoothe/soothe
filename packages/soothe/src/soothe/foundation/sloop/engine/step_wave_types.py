@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
+from soothe.foundation.sloop.state.schemas import StepAction
+
 if TYPE_CHECKING:
-    from soothe.foundation.sloop.state.schemas import StepAction, StepResult
+    from soothe.foundation.sloop.state.schemas import StepResult
 
 
 # Per execute-step cap on root-graph tool results consumed from the Act stream.
@@ -163,6 +165,18 @@ def _append_parallel_stream_event(
         live_event_queue.put_nowait(event)
 
 
+def max_tool_calls_for_step(
+    step: StepAction,
+    wire_subagent: str | None,
+    *,
+    default: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+) -> int:
+    """Return per-step tool budget."""
+    _ = step
+    _ = wire_subagent
+    return default
+
+
 __all__ = [
     "_ActStreamBudget",
     "_DELEGATE_FINAL_PER_TASK_CAP",
@@ -178,4 +192,5 @@ __all__ = [
     "StepWaveQueued",
     "StepWaveStart",
     "_append_parallel_stream_event",
+    "max_tool_calls_for_step",
 ]

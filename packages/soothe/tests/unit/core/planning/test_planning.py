@@ -246,18 +246,17 @@ class TestLLMPlanner:
         assert "<PLANNING_RULES>" in prompt
         assert "Return 1 step for trivial tasks" in prompt
 
-    def test_build_plan_prompt_workspace_explore_readonly_rules(self) -> None:
-        """Workspace planner XML allows explore for readonly recon."""
+    def test_build_plan_prompt_workspace_efficiency_rules(self) -> None:
+        """Workspace planner XML directs readonly recon to execute-step file tools."""
         mock_model = MagicMock()
         planner = LLMPlanner(mock_model)
         context = PlanContext(workspace="/repo")
         prompt = planner._build_plan_prompt("map the codebase", context)
 
         assert "<FORBIDDEN_ACTIONS>" in prompt
-        assert "explore for writes" in prompt
         assert "execution_hint='subagent'" in prompt
-        assert "subagent='explore'" in prompt
         assert "<EFFICIENCY_RULES>" in prompt
+        assert "full_description" in prompt
 
     def test_build_plan_prompt_with_capabilities(self) -> None:
         """Test building plan prompt with available capabilities."""
@@ -419,7 +418,7 @@ class TestLLMPlanner:
             goal="g",
             steps=[PlanStep(id="1", description="Only step", execution_hint="tool")],
         )
-        out = LLMPlanner._apply_preferred_subagent(plan, "explore")
+        out = LLMPlanner._apply_preferred_subagent(plan, "tacitus")
         assert len(out.steps) == 1
-        assert out.steps[0].subagent == "explore"
+        assert out.steps[0].subagent == "tacitus"
         assert out.steps[0].execution_hint == "subagent"

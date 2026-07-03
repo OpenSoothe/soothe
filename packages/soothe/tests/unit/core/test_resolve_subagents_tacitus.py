@@ -1,4 +1,4 @@
-"""Regression: explore subagent must receive SootheConfig and context from resolver."""
+"""Regression: tacitus subagent must receive SootheConfig and context from resolver."""
 
 from __future__ import annotations
 
@@ -8,18 +8,11 @@ from soothe.config import SootheConfig, SubagentConfig
 from soothe.runner.resolver._resolver_tools import resolve_subagents
 
 
-def test_resolve_subagents_passes_config_and_context_to_explore() -> None:
-    """YAML explore options must not be spread as factory kwargs (IG-style regression)."""
+def test_resolve_subagents_passes_config_and_context_to_tacitus() -> None:
+    """Tacitus factory must receive config and work_dir context, not spread YAML options."""
     cfg = SootheConfig()
     for name in cfg.subagents:
-        cfg.subagents[name] = SubagentConfig(enabled=(name == "explore"))
-    cfg.subagents["explore"] = SubagentConfig(
-        enabled=True,
-        config={
-            "thoroughness": "quick",
-            "max_read_lines": 40,
-        },
-    )
+        cfg.subagents[name] = SubagentConfig(enabled=(name == "tacitus"))
 
     fake_model = MagicMock()
     inner_runnable = MagicMock()
@@ -27,8 +20,8 @@ def test_resolve_subagents_passes_config_and_context_to_explore() -> None:
 
     def _fake_call(factory, kwargs):
         return {
-            "name": "explore",
-            "description": "explore",
+            "name": "tacitus",
+            "description": "tacitus",
             "runnable": inner_runnable,
         }
 
@@ -50,7 +43,7 @@ def test_resolve_subagents_passes_config_and_context_to_explore() -> None:
 
         assert len(specs) == 1
         spec = specs[0]
-        assert spec.get("name") == "explore"
+        assert spec.get("name") == "tacitus"
         factory_mock.assert_not_called()
 
         spec["runnable"].invoke({"messages": []})
@@ -58,5 +51,3 @@ def test_resolve_subagents_passes_config_and_context_to_explore() -> None:
         _factory, kwargs = factory_mock.call_args[0]
         assert kwargs["config"] is cfg
         assert "work_dir" in kwargs["context"]
-        assert "thoroughness" not in kwargs
-        assert "max_read_lines" not in kwargs

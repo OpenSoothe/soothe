@@ -85,10 +85,10 @@ class TestToolTimeoutMiddleware:
     def test_per_tool_timeout_override(self) -> None:
         """Per-tool timeout should override default."""
         middleware = ToolTimeoutMiddleware(
-            per_tool_timeout={"grep": 15.0, "explore": 120.0},
+            per_tool_timeout={"grep": 15.0, "browser_use": 120.0},
         )
         assert middleware._get_timeout_for_tool("grep") == 15.0
-        assert middleware._get_timeout_for_tool("explore") == 120.0
+        assert middleware._get_timeout_for_tool("browser_use") == 120.0
 
     def test_filesystem_category_timeout(self) -> None:
         """Filesystem tools should use filesystem category timeout."""
@@ -262,8 +262,7 @@ class TestTimeoutCategories:
     def test_subagent_tool_names(self) -> None:
         """Subagent tool names should be categorized."""
         assert "browser_use" in SUBAGENT_TOOL_NAMES
-        assert "explore" in SUBAGENT_TOOL_NAMES
-        assert "plan" in SUBAGENT_TOOL_NAMES
+        assert "planner" in SUBAGENT_TOOL_NAMES
         assert "tacitus" in SUBAGENT_TOOL_NAMES
         assert "delegate" in SUBAGENT_TOOL_NAMES
         assert "task" in SUBAGENT_TOOL_NAMES  # Deepagents task tool for subagent invocation

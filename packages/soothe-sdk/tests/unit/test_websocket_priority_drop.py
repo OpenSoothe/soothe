@@ -96,6 +96,25 @@ class TestInboundFrameDropPriority:
         }
         assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_HIGH
 
+    def test_event_batch_top_level_is_high(self) -> None:
+        """Transport-level event_batch bundles user-visible frames — prefer keep."""
+        event = {
+            "type": "event_batch",
+            "loop_id": "loop-1",
+            "events": [
+                {
+                    "type": "event",
+                    "mode": "custom",
+                    "data": {"type": "soothe.cognition.step.started"},
+                }
+            ],
+        }
+        assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_HIGH
+
+    def test_tool_call_updates_batch_top_level_is_high(self) -> None:
+        event = {"type": "tool_call_updates_batch", "updates": []}
+        assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_HIGH
+
     def test_streaming_text_is_normal(self) -> None:
         """Regular streaming text chunks are acceptable drop candidates."""
         event = {

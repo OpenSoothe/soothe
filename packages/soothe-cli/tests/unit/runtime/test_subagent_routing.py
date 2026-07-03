@@ -14,7 +14,6 @@ from soothe_cli.tui.commands.subagent_routing import (
     ("raw", "expected_subagent", "expected_cleaned"),
     [
         ("/tacitus papers", "tacitus", "papers"),
-        ("/explore map repo", "explore", "map repo"),
         ("Please /tacitus find sources", "tacitus", "Please find sources"),
         ("hello", None, "hello"),
     ],
