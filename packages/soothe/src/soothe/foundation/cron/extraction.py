@@ -258,12 +258,23 @@ class CronExtractionService:
             )
             kind = ScheduleKind.AT
 
+        confidence = schema.confidence
+        if (
+            confidence < 0.5
+            and schema.task_description.strip()
+            and schema.schedule_kind
+            and schema.schedule_value.strip()
+        ):
+            # Many providers omit ``confidence`` in structured JSON (defaults to 0.0).
+            # Treat complete schedule payloads as high confidence.
+            confidence = 0.9
+
         return ExtractionResult(
             description=schema.task_description,
             schedule_kind=kind,
             schedule_value=schema.schedule_value,
             end_condition=schema.end_condition,
-            confidence=schema.confidence,
+            confidence=confidence,
             raw_input=raw_input,
         )
 

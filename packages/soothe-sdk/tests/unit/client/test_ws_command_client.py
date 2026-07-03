@@ -57,16 +57,74 @@ def _patch_connect(fake_ws: _FakeWebSocket):
     )
 
 
-def _capture_sent_method(fake_ws: _FakeWebSocket) -> tuple[str, dict[str, Any]]:
-    """Return (sent_method, sent_dict) from the last frame ``fake_ws`` sent."""
-    assert fake_ws._send_captured, "WsCommandClient did not send any frame"
+def _connection_ack_json(*, readiness_state: str = "ready") -> str:
+    """Return a ready ``connection_ack`` frame for handshake mocks."""
+    return json.dumps(
+        {
+            "proto": "1",
+            "type": "connection_ack",
+            "result": {
+                "server_version": "0.0.0",
+                "protocol_version": "1",
+                "capabilities": ["streaming", "batch", "heartbeat"],
+                "readiness_state": readiness_state,
+                "heartbeat_interval_ms": 30000,
+            },
+        }
+    )
+
+
+def _last_sent_type(fake_ws: _FakeWebSocket) -> str:
+    """Return the ``type`` field of the most recently sent wire frame."""
+    return json.loads(fake_ws._send_captured[-1]).get("type", "")
+
+
+def _response_for_last_request(
+    fake_ws: _FakeWebSocket,
+    *,
+    result: dict[str, Any] | None = None,
+) -> str:
+    """Build a matching ``response`` envelope for the latest request frame."""
     sent = json.loads(fake_ws._send_captured[-1])
-    return sent.get("method"), sent
+    return json.dumps({"proto": "1", "type": "response", "result": result or {}, "id": sent["id"]})
+
+
+def _install_handshake_then_response_recv(
+    fake_ws: _FakeWebSocket,
+    *,
+    result: dict[str, Any] | None = None,
+) -> None:
+    """Mock recv to complete handshake, then return one matching response."""
+
+    async def recv() -> str:
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
+        return _response_for_last_request(fake_ws, result=result)
+
+    fake_ws.recv = AsyncMock(side_effect=recv)
 
 
 # ---------------------------------------------------------------------------
 # Request envelope construction
 # ---------------------------------------------------------------------------
+
+
+async def test_send_command_performs_connection_handshake_before_request() -> None:
+    """_send_command sends connection_init and waits for connection_ack first."""
+    fake_ws = _FakeWebSocket()
+    _install_handshake_then_response_recv(fake_ws, result={"ok": True})
+    client = WsCommandClient("ws://localhost:8765/")
+
+    with _patch_connect(fake_ws):
+        result = await client._send_command("autopilot_status")
+
+    assert result == {"ok": True}
+    assert len(fake_ws._send_captured) == 2
+    init = json.loads(fake_ws._send_captured[0])
+    request = json.loads(fake_ws._send_captured[1])
+    assert init["type"] == "connection_init"
+    assert request["type"] == "request"
+    assert request["method"] == "autopilot_status"
 
 
 async def test_send_command_uses_protocol1_request_envelope() -> None:
@@ -76,6 +134,8 @@ async def test_send_command_uses_protocol1_request_envelope() -> None:
 
     async def recv() -> str:
         nonlocal captured_id
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
         captured_id = sent["id"]
         return json.dumps(
@@ -91,7 +151,7 @@ async def test_send_command_uses_protocol1_request_envelope() -> None:
     # Result is the response's `result` payload.
     assert result == {"ok": True}
 
-    # The sent frame is a protocol-1 request envelope.
+    # The sent request frame is a protocol-1 request envelope.
     sent = json.loads(fake_ws._send_captured[-1])
     assert sent["proto"] == "1"
     assert sent["type"] == "request"
@@ -106,12 +166,7 @@ async def test_send_command_uses_protocol1_request_envelope() -> None:
 async def test_send_command_no_old_command_key() -> None:
     """The old 'command' key is gone; 'method' is used instead (IG-522 Phase 6)."""
     fake_ws = _FakeWebSocket()
-
-    async def recv() -> str:
-        sent = json.loads(fake_ws._send_captured[-1])
-        return json.dumps({"proto": "1", "type": "response", "result": {}, "id": sent["id"]})
-
-    fake_ws.recv = AsyncMock(side_effect=recv)
+    _install_handshake_then_response_recv(fake_ws)
     client = WsCommandClient("ws://localhost:8765/")
 
     with _patch_connect(fake_ws):
@@ -130,12 +185,7 @@ async def test_send_command_no_old_command_key() -> None:
 async def test_send_command_default_payload_is_empty_dict() -> None:
     """Omitting payload still produces a valid request with no extra param fields."""
     fake_ws = _FakeWebSocket()
-
-    async def recv() -> str:
-        sent = json.loads(fake_ws._send_captured[-1])
-        return json.dumps({"proto": "1", "type": "response", "result": {}, "id": sent["id"]})
-
-    fake_ws.recv = AsyncMock(side_effect=recv)
+    _install_handshake_then_response_recv(fake_ws)
     client = WsCommandClient("ws://localhost:8765/")
 
     with _patch_connect(fake_ws):
@@ -156,19 +206,7 @@ async def test_send_command_default_payload_is_empty_dict() -> None:
 async def test_send_command_returns_result_from_response_envelope() -> None:
     """A {type:'response', result:...} envelope returns its result dict."""
     fake_ws = _FakeWebSocket()
-
-    async def recv() -> str:
-        sent = json.loads(fake_ws._send_captured[-1])
-        return json.dumps(
-            {
-                "proto": "1",
-                "type": "response",
-                "result": {"goals": ["g1", "g2"]},
-                "id": sent["id"],
-            }
-        )
-
-    fake_ws.recv = AsyncMock(side_effect=recv)
+    _install_handshake_then_response_recv(fake_ws, result={"goals": ["g1", "g2"]})
     client = WsCommandClient("ws://localhost:8765/")
 
     with _patch_connect(fake_ws):
@@ -182,6 +220,8 @@ async def test_send_command_error_envelope_raises_runtimeerror() -> None:
     fake_ws = _FakeWebSocket()
 
     async def recv() -> str:
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
         return json.dumps(
             {
@@ -213,6 +253,8 @@ async def test_send_command_error_envelope_without_data() -> None:
     fake_ws = _FakeWebSocket()
 
     async def recv() -> str:
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
         return json.dumps(
             {
@@ -239,6 +281,8 @@ async def test_send_command_error_form_propagated() -> None:
     fake_ws = _FakeWebSocket()
 
     async def recv() -> str:
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
         return json.dumps(
             {
@@ -268,8 +312,10 @@ async def test_send_command_correlates_response_by_id() -> None:
     async def recv() -> str:
         nonlocal calls
         calls += 1
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
-        if calls == 1:
+        if calls == 2:
             # Unrelated response with a different id — must be skipped.
             return json.dumps(
                 {"proto": "1", "type": "response", "result": {"stale": True}, "id": "other-id"}
@@ -286,7 +332,7 @@ async def test_send_command_correlates_response_by_id() -> None:
         result = await client._send_command("autopilot_status")
 
     assert result == {"matched": True}
-    assert calls == 2
+    assert calls == 3
 
 
 async def test_send_command_skips_unrelated_message_types() -> None:
@@ -297,8 +343,10 @@ async def test_send_command_skips_unrelated_message_types() -> None:
     async def recv() -> str:
         nonlocal calls
         calls += 1
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
-        if calls == 1:
+        if calls == 2:
             # A stray 'next' message, unrelated type for a blocking request.
             return json.dumps({"proto": "1", "type": "next", "payload": {"x": 1}, "id": sent["id"]})
         return json.dumps(
@@ -317,7 +365,16 @@ async def test_send_command_skips_unrelated_message_types() -> None:
 async def test_send_command_invalid_json_raises_runtimeerror() -> None:
     """A non-JSON or non-dict response raises RuntimeError."""
     fake_ws = _FakeWebSocket()
-    fake_ws.recv = AsyncMock(return_value="not json")
+    calls = 0
+
+    async def recv() -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _connection_ack_json()
+        return "not json"
+
+    fake_ws.recv = AsyncMock(side_effect=recv)
     client = WsCommandClient("ws://localhost:8765/")
 
     with _patch_connect(fake_ws):
@@ -333,12 +390,7 @@ async def test_send_command_invalid_json_raises_runtimeerror() -> None:
 async def test_send_command_uses_encode_envelope_not_raw_json_dumps() -> None:
     """The sent frame is produced by encode_envelope (compact, proto-1 compliant)."""
     fake_ws = _FakeWebSocket()
-
-    async def recv() -> str:
-        sent = json.loads(fake_ws._send_captured[-1])
-        return json.dumps({"proto": "1", "type": "response", "result": {}, "id": sent["id"]})
-
-    fake_ws.recv = AsyncMock(side_effect=recv)
+    _install_handshake_then_response_recv(fake_ws)
     client = WsCommandClient("ws://localhost:8765/")
 
     with _patch_connect(fake_ws):
@@ -410,7 +462,7 @@ async def test_cron_add_delegates_to_send_command() -> None:
 
     result = await client.cron_add("in 1 hour remind me to deploy", priority=10)
 
-    assert result == {"job_id": "cj-1"}
+    assert result == {"job": {"id": "cj-1"}}
     method, payload = captured[0]
     assert method == "cron_add"
     assert payload == {"text": "in 1 hour remind me to deploy", "priority": 10}
@@ -445,6 +497,8 @@ async def test_error_envelope_propagates_as_runtime_error() -> None:
     fake_ws = _FakeWebSocket()
 
     async def recv() -> str:
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
         return json.dumps(
             {
@@ -479,6 +533,8 @@ async def test_request_id_is_unique_uuid4_per_call() -> None:
     fake_ws = _FakeWebSocket()
 
     async def recv() -> str:
+        if _last_sent_type(fake_ws) == "connection_init":
+            return _connection_ack_json()
         sent = json.loads(fake_ws._send_captured[-1])
         ids.append(sent["id"])
         return json.dumps({"proto": "1", "type": "response", "result": {}, "id": sent["id"]})

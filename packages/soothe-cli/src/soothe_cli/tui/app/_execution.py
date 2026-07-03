@@ -28,7 +28,6 @@ from soothe_cli.cli.execution.daemon_errors import (
 from soothe_cli.runtime.state.session_stats import SessionStats, format_token_count
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext
-from soothe_cli.tui._version import DOCS_URL
 from soothe_cli.tui.app._module_init import (
     _COMMAND_URLS,
     DeferredAction,
@@ -486,37 +485,14 @@ class _ExecutionMixin:
                     self.query_one("#chat", VerticalScroll).anchor()
                 return
 
-        from soothe_cli.tui.config import newline_shortcut, settings
+        from soothe_cli.tui.config import settings
 
         cmd = command.lower().strip()
 
         if cmd in {"/quit", "/q"}:
             self._detach_or_exit()
         elif cmd == "/help":
-            await self._mount_message(UserMessage(command))
-            help_body = (
-                "Commands: /quit, /clear, /editor, /autopilot <task>, /cron <schedule>, "
-                "/context, /mcp, "
-                "/model [--model-params JSON] [--default], /notifications, "
-                "/reload, /skill:<name>, /theme, "
-                "/tokens, /resume, "
-                "/research, /plan, /«subagent» (when configured), "
-                "/update, /auto-update, /changelog, /docs, /feedback, /help\n\n"
-                "Interactive Features:\n"
-                "  Enter           Submit your message\n"
-                f"  {newline_shortcut():<15} Insert newline\n"
-                "  Ctrl+X          Open prompt in external editor\n"
-                "  Shift+Tab       Cycle loop selector\n"
-                "  @filename       Auto-complete files and inject content\n"
-                "  /command        Slash commands (/help, /clear, /quit)\n"
-                "  !command        Run shell commands directly\n\n"
-                "Docs: "
-            )
-            help_text = Content.assemble(
-                (help_body, "dim italic"),
-                (DOCS_URL, TStyle(dim=True, italic=True, link=DOCS_URL)),
-            )
-            await self._mount_message(AppMessage(help_text))
+            await self._show_help_screen()
 
         elif cmd in {"/changelog", "/docs", "/feedback"}:
             await self._open_url_command(command, cmd)

@@ -7,8 +7,13 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
-from soothe.foundation.cron.extraction import ExtractionError
+from soothe.foundation.cron.extraction import (
+    CronExtractionService,
+    ExtractionError,
+    ExtractionSchema,
+)
 from soothe.foundation.cron.models import ExtractionResult, ScheduleKind
 
 
@@ -111,6 +116,23 @@ class TestCronExtractionService:
 
         assert result.confidence < 0.5
         assert not result.is_valid(0.5)
+
+
+class TestSchemaConfidenceInference:
+    """Tests for confidence inference when providers omit the field."""
+
+    def test_schema_to_result_infers_confidence_from_complete_payload(self) -> None:
+        """Complete structured output without confidence should pass threshold."""
+        service = CronExtractionService(config=MagicMock())
+        schema = ExtractionSchema(
+            task_description="send status report",
+            schedule_kind="cron",
+            schedule_value="0 9 * * *",
+        )
+        result = service._schema_to_result(schema, "every day at 9am send status report")
+
+        assert result.confidence == 0.9
+        assert result.is_valid(0.5)
 
 
 class TestExtractionError:
