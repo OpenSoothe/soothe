@@ -168,7 +168,7 @@ class IntentClassifier:
     ) -> tuple[IntentClassification, str, dict[str, Any]]:
         """4-class intake LLM call with structured output (RFC-630)."""
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-            project_prior_goal_completion_for_intake,
+            project_last_goal_completion_for_intake,
         )
 
         system_content = build_intake_system_message(self._assistant_name, retry=retry_mode)
@@ -177,7 +177,7 @@ class IntentClassifier:
         ledger_cfg = (
             self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
         )
-        projected = project_prior_goal_completion_for_intake(loop_messages or [], ledger_cfg)
+        projected = project_last_goal_completion_for_intake(loop_messages or [], ledger_cfg)
 
         config = self._build_invoke_config(
             "classify_intake",

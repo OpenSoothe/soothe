@@ -114,7 +114,7 @@ def test_collect_units_synthesized_goal_completion() -> None:
     assert units[0][-1].content == "synthesized report"
 
 
-def test_collect_units_ledger_direct_execute_step() -> None:
+def test_collect_units_requires_goal_completion_pair() -> None:
     ledger = [
         LoopHumanMessage(content="step-1", phase="execute_step"),
         LoopAIMessage(content="first", phase="execute_step"),
@@ -122,9 +122,7 @@ def test_collect_units_ledger_direct_execute_step() -> None:
         LoopAIMessage(content="final answer", phase="execute_step"),
     ]
     units = collect_cross_goal_completion_units(ledger, k=1)
-    assert len(units) == 1
-    assert units[0][0].content == "step-2"
-    assert units[0][1].content == "final answer"
+    assert units == []
 
 
 def test_project_cross_goal_completion_tail_k2() -> None:
@@ -136,7 +134,7 @@ def test_project_cross_goal_completion_tail_k2() -> None:
         LoopAIMessage(content="report two", phase="goal_completion"),
         LoopHumanMessage(content="plan2", phase="plan_assess", iteration=0),
     ]
-    projected = project_cross_goal_completion_tail(ledger, k=2, ledger_cfg=None, checkpoint=None)
+    projected = project_cross_goal_completion_tail(ledger, k=2, ledger_cfg=None)
     assert len(projected) == 4
     bodies = [str(getattr(m, "content", "")) for m in projected]
     assert "report one" in bodies
@@ -237,19 +235,25 @@ def test_project_execute_step_graph_input_predecessor_false_when_ledger_empty() 
     assert result.messages == []
 
 
-def test_project_execute_step_graph_input_no_duplicate_when_slice_a_fallback_overlaps_predecessor() -> (
-    None
-):
-    """IG-542: Slice A fallback execute_step pairs should not repeat in Slice B.
+def test_execute_step_ids_subsumed_by_cross_goal_completion() -> None:
+    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        execute_step_ids_subsumed_by_cross_goal_completion,
+    )
 
-    When resolve_goal_completion_unit falls back to execute_step pairs (no goal_completion
-    synthesized), and those execute_step pairs have step_ids that are in the current step's
-    transitive dependencies, they must NOT be included again by project_predecessor_execute_ledger_for_step.
+    ledger = [
+        LoopHumanMessage(content="h0", phase="execute_step", step_id="00"),
+        LoopAIMessage(content="a0", phase="execute_step", step_id="00"),
+        LoopHumanMessage(content="h1", phase="execute_step", step_id="01"),
+        LoopAIMessage(content="a1", phase="execute_step", step_id="01"),
+        LoopHumanMessage(content="finalize", phase="goal_completion"),
+        LoopAIMessage(content="terminal report", phase="goal_completion"),
+    ]
+    subsumed = execute_step_ids_subsumed_by_cross_goal_completion(ledger, k=1)
+    assert subsumed == frozenset({"00", "01"})
 
-    This scenario occurs in goal_boundary mode (iteration=0, no step_results) with continue_loop=True,
-    where the ledger contains prior goal's execute_step pairs but no synthesized goal_completion.
-    """
-    # Step-02 depends on step-01 completed in a prior goal (not part of the new plan).
+
+def test_project_execute_step_graph_input_no_duplicate_when_slice_a_overlaps_predecessor() -> None:
+    """Slice A goal_completion must not replay subsumed execute_step rows in Slice B."""
     step_02 = StepAction(id="02", description="Fix", dependencies=["01"])
     decision = AgentDecision(
         type="execute_steps",
@@ -258,14 +262,11 @@ def test_project_execute_step_graph_input_no_duplicate_when_slice_a_fallback_ove
         reasoning="r",
     )
 
-    # Ledger has NO goal_completion, so Slice A falls back to last execute_step pair
-    # The last execute_step pair (step-01) will be included in Slice A
-    # Slice B would normally include step-01 messages again (since step-02 depends on step-01)
-    # The fix ensures step-01 is excluded from Slice B to prevent duplicates
     ledger = [
         LoopHumanMessage(content="h1", phase="execute_step", step_id="01"),
         LoopAIMessage(content="a1", phase="execute_step", step_id="01"),
-        # No goal_completion pair - triggers fallback to execute_step in Slice A
+        LoopHumanMessage(content="finalize", phase="goal_completion"),
+        LoopAIMessage(content="prior goal completion report", phase="goal_completion"),
     ]
 
     state = LoopState(
@@ -273,9 +274,9 @@ def test_project_execute_step_graph_input_no_duplicate_when_slice_a_fallback_ove
         thread_id="t",
         current_decision=decision,
         loop_messages=ledger,
-        continue_loop=True,  # Triggers Slice A
+        continue_loop=True,
         iteration=0,
-        step_results=[],  # Required for goal_boundary mode
+        step_results=[],
     )
 
     result = project_execute_step_graph_input(
@@ -285,27 +286,52 @@ def test_project_execute_step_graph_input_no_duplicate_when_slice_a_fallback_ove
         decision=decision,
     )
 
-    # Slice A should have projected (fallback to execute_step pair)
     assert result.cross_goal_projected is True
-    # Slice B has no messages to add (step-01 was the only predecessor and already in Slice A)
-    # predecessor_projected reflects whether messages were actually added, not whether deps exist
     assert result.predecessor_projected is False
+    assert len(result.messages) == 2
+    assert "prior goal completion report" in str(result.messages[1].content)
+    assert "a1" not in " ".join(str(getattr(m, "content", "")) for m in result.messages)
 
-    # Total messages should be exactly 2 (the step-01 Human+AI pair from Slice A)
-    # NOT 4 (which would happen if step-01 was duplicated in Slice B)
-    assert len(result.messages) == 2, (
-        f"Expected 2 messages (no duplicates), got {len(result.messages)}: "
-        f"{[getattr(m, 'step_id', None) for m in result.messages]}"
+
+def test_project_execute_step_graph_input_ledger_direct_subsumed_execute_not_replayed() -> None:
+    """ledger_direct completion copies execute text; projection must not replay both."""
+    step = StepAction(id="bootstrap", description="Continue")
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="parallel",
+        reasoning="r",
     )
+    answer = "Same final answer from execute and completion rows."
+    ledger = [
+        LoopHumanMessage(content="Execute task", phase="execute_step", step_id="01"),
+        LoopAIMessage(content=answer, phase="execute_step", step_id="01"),
+        LoopHumanMessage(content="finalize", phase="goal_completion"),
+        LoopAIMessage(content=answer, phase="goal_completion"),
+    ]
+    state = LoopState(
+        goal="continue",
+        thread_id="t",
+        current_decision=decision,
+        loop_messages=ledger,
+        continue_loop=True,
+        iteration=0,
+    )
+    result = project_execute_step_graph_input(
+        ledger,
+        state=state,
+        step=step,
+        decision=decision,
+    )
+    bodies = [str(getattr(m, "content", "")) for m in result.messages]
+    assert result.cross_goal_projected is True
+    assert len(result.messages) == 2
+    assert answer in bodies
+    assert bodies.count(answer) == 1
 
 
 def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_steps() -> None:
-    """IG-542: Slice B still includes predecessor steps NOT in Slice A.
-
-    When Slice A includes step-01 messages (fallback), and the current step depends on
-    BOTH step-01 and step-00 from a prior goal, step-00 messages should still appear in Slice B.
-    """
-    # step-02 depends on prior-goal steps 00 and 01; only step-02 is in the new plan.
+    """When deps reference execute rows outside subsumed segments, Slice B still projects them."""
     step_02 = StepAction(id="02", description="Fix", dependencies=["00", "01"])
     decision = AgentDecision(
         type="execute_steps",
@@ -317,9 +343,11 @@ def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_s
     ledger = [
         LoopHumanMessage(content="h0", phase="execute_step", step_id="00"),
         LoopAIMessage(content="a0", phase="execute_step", step_id="00"),
+        LoopHumanMessage(content="plan0", phase="plan_assess", iteration=0),
         LoopHumanMessage(content="h1", phase="execute_step", step_id="01"),
         LoopAIMessage(content="a1", phase="execute_step", step_id="01"),
-        # No goal_completion - Slice A falls back to last execute_step (step-01)
+        LoopHumanMessage(content="finalize", phase="goal_completion"),
+        LoopAIMessage(content="prior completion", phase="goal_completion"),
     ]
 
     state = LoopState(
@@ -329,7 +357,7 @@ def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_s
         loop_messages=ledger,
         continue_loop=True,
         iteration=0,
-        step_results=[],  # Required for goal_boundary mode
+        step_results=[],
     )
 
     result = project_execute_step_graph_input(
@@ -339,13 +367,8 @@ def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_s
         decision=decision,
     )
 
-    # Slice A projected step-01 (fallback)
     assert result.cross_goal_projected is True
-    # Slice B should project step-00 (NOT step-01 since it's excluded)
     assert result.predecessor_projected is True
-
-    # Total: 2 from step-01 (Slice A) + 2 from step-00 (Slice B) = 4
-    assert len(result.messages) == 4, (
-        f"Expected 4 messages (2 from Slice A, 2 from Slice B for step-00), "
-        f"got {len(result.messages)}"
-    )
+    assert len(result.messages) == 4
+    assert "a0" in str(result.messages[-1].content)
+    assert "a1" not in " ".join(str(getattr(m, "content", "")) for m in result.messages)

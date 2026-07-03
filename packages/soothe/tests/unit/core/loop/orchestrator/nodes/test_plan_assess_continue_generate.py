@@ -160,7 +160,7 @@ async def test_continue_keyword_routes_through_assess_bootstrap() -> None:
     assert ctx.scratch.plan_assessment is None
     step = ctx.scratch.plan_result.decision.steps[0]
     assert step.description == "Continue prior goal completion recommendations"
-    assert "PRIOR GOAL COMPLETION" in (step.full_description or "")
+    assert "completion report" in (step.full_description or "").lower()
     assert "review all local changes" not in (step.full_description or "")
     assert "review all local changes" not in step.description
     assert ctx.scratch.plan_result.terminal_after_execute is True

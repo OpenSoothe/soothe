@@ -247,7 +247,7 @@ def predecessor_messages_for_step(
         step: Step about to execute on an isolated branch thread.
         decision: Current scoped plan decision (for transitive dependency closure).
         max_messages: Cap on copied ledger rows.
-        exclude_step_ids: Step ids to exclude (already included in Slice A fallback).
+        exclude_step_ids: Step ids to exclude (execute rows subsumed by Slice A goal_completion).
     """
     predecessor_ids = transitive_dependency_step_ids(step, decision)
     if not predecessor_ids:

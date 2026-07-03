@@ -7,8 +7,8 @@ checkpoint namespace starts empty. This module provides helpers for:
   ``predecessor_messages_for_step()`` / ``project_predecessor_execute_ledger_for_step()``
   for same-goal dependent steps.
 
-Loop-continuation bootstrap grounds via ``PRIOR GOAL COMPLETION`` in the execute envelope
-(``continuation_context``), not by replaying prior execute rows.
+Loop-continuation bootstrap grounds via projected ``goal_completion`` ledger rows
+(execute Slice A), not by replaying prior execute rows.
 
 Same-goal DAG dependent steps ground predecessors via projected execute-step ledger rows
 (RFC-214 §3.1); the current-step envelope carries only the task and hints.
@@ -96,7 +96,7 @@ def predecessor_execute_messages_for_branch(
         loop_messages: ``LoopState.loop_messages`` ledger.
         predecessor_step_ids: Step ids whose execute evidence should be replayed.
         max_messages: Hard cap on copied messages (Human+AI rows each count as one).
-        exclude_step_ids: Step ids to exclude (already included in Slice A fallback).
+        exclude_step_ids: Step ids to exclude (execute rows subsumed by Slice A goal_completion).
 
     Returns:
         Messages to prepend before the current step's execute envelope.
@@ -104,7 +104,7 @@ def predecessor_execute_messages_for_branch(
     if not predecessor_step_ids:
         return []
     unlimited = max_messages <= 0
-    # Exclude step_ids already included in Slice A fallback to prevent duplicates
+    # Exclude execute_step ids subsumed by Slice A goal_completion units.
     excluded = exclude_step_ids or frozenset()
 
     out: list[BaseMessage] = []
