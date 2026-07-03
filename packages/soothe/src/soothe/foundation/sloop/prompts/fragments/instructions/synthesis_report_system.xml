@@ -1,10 +1,10 @@
-<SYNTHESIS_REPORT>
+<SYNTHESIS_INSTRUCTIONS>
 You are writing the final report for the person who submitted this request:
 {{ user_goal }}
 
 Write only what they need: findings, outcomes, artifacts, and clear next steps when relevant.
 
-Available report formats (IG-524: moved from user message for prompt caching):
+Available report formats (reference only — do not copy this list into your reply):
 1. code_architecture_design - System/module structure analysis
 2. code_implementation_design - Concrete implementation patterns and examples
 3. research_synthesis - Multi-source information gathering and findings
@@ -18,7 +18,7 @@ Available report formats (IG-524: moved from user message for prompt caching):
 
 Report style: {{ scenario }}
 
-Required sections (use these headings):
+Required sections (use these headings in your reply):
 {% for section in sections %}
 - {{ section }}
 {% endfor %}
@@ -30,11 +30,13 @@ How to use the evidence:
 {{ evidence_emphasis }}
 
 Rules:
-1. Use only the execution evidence in the preceding conversation — do not invent steps or results.
-2. Summarize by theme or outcome, not by replaying messages in order.
-3. Omit meta-narration ("Now let me...", "I will check...") unless needed for a failure or blocker.
-4. Be specific: names, numbers, paths, and concrete outputs where they matter.
-5. Match the language of the user request unless they asked for another language.
-6. Do not mention how you were invoked, internal modules, loops, prompts, or planning machinery.
-7. Do not call tools — produce the finished report in this reply.
-</SYNTHESIS_REPORT>
+1. Your reply is ONLY the finished report — start immediately with the first required section heading (e.g. `## Summary`). Never output `<SYNTHESIS_INSTRUCTIONS>`, `</SYNTHESIS_INSTRUCTIONS>`, or any text from this block.
+2. Do not repeat, quote, or summarize these instructions, the scenario list, focus areas, or rules.
+3. Use only the execution evidence in the preceding conversation — do not invent steps or results.
+4. Summarize by theme or outcome, not by replaying messages in order.
+5. Omit meta-narration ("Now let me...", "I will check...") unless needed for a failure or blocker.
+6. Be specific: names, numbers, paths, and concrete outputs where they matter.
+7. Match the language of the user request unless they asked for another language.
+8. Do not mention how you were invoked, internal modules, loops, prompts, or planning machinery.
+9. Do not call tools — produce the finished report in this reply.
+</SYNTHESIS_INSTRUCTIONS>

@@ -13,6 +13,7 @@ from soothe.skills.registry import ProgressiveSkillRegistry
 @pytest.fixture
 def middleware() -> SkillActivationMiddleware:
     config = MagicMock()
+    config.progressive_skills.intent_prefetch_enabled = False
     return SkillActivationMiddleware(
         registry=ProgressiveSkillRegistry(),
         catalog_provider=lambda: [],
@@ -32,7 +33,13 @@ class TestAbeforeAgent:
 
     @pytest.mark.asyncio
     async def test_skips_if_already_present(self, middleware) -> None:
-        state = {"skill_activation": {"activated": {"x"}}}
+        state = {
+            "skill_activation": {
+                **ProgressiveSkillRegistry.init_activation_state(),
+                "activated": {"x"},
+                "intent_prefetched": True,
+            }
+        }
         runtime = MagicMock()
         result = await middleware.abefore_agent(state, runtime)
         assert result is None

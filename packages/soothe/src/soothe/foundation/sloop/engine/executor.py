@@ -111,6 +111,7 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
     StepResult,
     ToolCallHead,
+    WaveStepProgress,
 )
 from soothe.foundation.sloop.utils.messages import (
     LoopAIMessage,
@@ -1222,59 +1223,80 @@ class Executor:
         steps_failed = 0
         tool_calls: list[ToolCallHead] = []
         evidence_excerpts: list[str] = []
+        step_summaries: list[WaveStepProgress] = []
         excerpt_prefixes: set[str] = set()
 
-        for i, _step in enumerate(steps):
+        for i, step in enumerate(steps):
+            step_id = (step.id or "").strip()
+            description = (step.full_description or step.description or step_id or "step").strip()
+            status: Literal["completed", "failed", "unknown"] = "unknown"
+            outcome_preview = ""
             raw = gather_results[i] if i < len(gather_results) else None
             if raw is None or isinstance(raw, Exception):
                 steps_failed += 1
-                continue
-            result: _ExecuteStepResult = raw
-            if result.step_result and result.step_result.success:
-                steps_completed += 1
+                status = "failed"
+                outcome_preview = str(raw)[:200] if isinstance(raw, Exception) else "step failed"
             else:
-                steps_failed += 1
+                result: _ExecuteStepResult = raw
+                if result.step_result and result.step_result.success:
+                    steps_completed += 1
+                    status = "completed"
+                else:
+                    steps_failed += 1
+                    status = "failed"
+                    if result.step_result:
+                        outcome_preview = (result.step_result.error or "").strip()[:200]
 
-            # Tool call heads: aggregate per-call across streamed chunks
-            # (per-chunk `tool_calls` is partial; real name/args live across
-            # `tool_call_chunks` deltas).
-            for call in _aggregate_tool_calls_from_step_messages(result.messages):
-                if len(tool_calls) >= 8:
-                    break
-                name = (call.get("name") or "tool").strip()[:64]
-                head = _first_arg_head_for_tool_call(call)
-                tool_calls.append(ToolCallHead(name=name, head=head[:120]))
+                # Tool call heads: aggregate per-call across streamed chunks
+                # (per-chunk `tool_calls` is partial; real name/args live across
+                # `tool_call_chunks` deltas).
+                for call in _aggregate_tool_calls_from_step_messages(result.messages):
+                    if len(tool_calls) >= 8:
+                        break
+                    name = (call.get("name") or "tool").strip()[:64]
+                    head = _first_arg_head_for_tool_call(call)
+                    tool_calls.append(ToolCallHead(name=name, head=head[:120]))
 
-            # Evidence excerpt: assistant prose, then tool evidence fallback.
-            ai_messages = [m for m in result.messages if isinstance(m, AIMessage)]
-            final_ai = ai_messages[-1] if ai_messages else None
-            excerpt_src = ""
-            if final_ai is not None:
-                from soothe.foundation.sloop.utils.stream_normalize import (
-                    extract_text_from_message_content,
-                )
+                # Evidence excerpt: assistant prose, then tool evidence fallback.
+                ai_messages = [m for m in result.messages if isinstance(m, AIMessage)]
+                final_ai = ai_messages[-1] if ai_messages else None
+                excerpt_src = ""
+                if final_ai is not None:
+                    from soothe.foundation.sloop.utils.stream_normalize import (
+                        extract_text_from_message_content,
+                    )
 
-                excerpt_src = extract_text_from_message_content(
-                    getattr(final_ai, "content", None)
-                ).strip()
-                if not excerpt_src:
-                    excerpt_src = self._assemble_assistant_text_from_stream_messages(
-                        result.messages
+                    excerpt_src = extract_text_from_message_content(
+                        getattr(final_ai, "content", None)
                     ).strip()
-            if not excerpt_src:
-                excerpt_src = _last_tool_result_block(result.messages)
-            if not excerpt_src and result.step_result:
-                excerpt_src = _outcome_summary_text(result.step_result.outcome)
-            if not excerpt_src and result.delegate_final:
-                excerpt_src = (result.delegate_final or "").strip()
-            if not excerpt_src:
-                continue
-            excerpt = excerpt_src[:200]
-            prefix = excerpt[:64]
-            if prefix in excerpt_prefixes:
-                continue
-            excerpt_prefixes.add(prefix)
-            evidence_excerpts.append(excerpt)
+                    if not excerpt_src:
+                        excerpt_src = self._assemble_assistant_text_from_stream_messages(
+                            result.messages
+                        ).strip()
+                if not excerpt_src:
+                    excerpt_src = _last_tool_result_block(result.messages)
+                if not excerpt_src and result.step_result:
+                    excerpt_src = _outcome_summary_text(result.step_result.outcome)
+                if not excerpt_src and result.delegate_final:
+                    excerpt_src = (result.delegate_final or "").strip()
+                if excerpt_src:
+                    excerpt = excerpt_src[:200]
+                    if status == "completed" or not outcome_preview:
+                        outcome_preview = excerpt
+                    prefix = excerpt[:64]
+                    if prefix not in excerpt_prefixes:
+                        excerpt_prefixes.add(prefix)
+                        evidence_excerpts.append(excerpt)
+
+            if len(step_summaries) < 8:
+                step_summaries.append(
+                    WaveStepProgress(
+                        step_id=step_id,
+                        description=description,
+                        status=status,
+                        outcome_preview=outcome_preview,
+                    )
+                )
 
         # Keep last 3 excerpts (most recent steps).
         if len(evidence_excerpts) > 3:
@@ -1299,6 +1321,7 @@ class Executor:
             steps_failed=steps_failed,
             tool_calls=tool_calls,
             evidence_excerpts=evidence_excerpts,
+            step_summaries=step_summaries,
             derived_progress_hint=hint,
         )
 

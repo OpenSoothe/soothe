@@ -710,6 +710,15 @@ class ToolCallHead(BaseModel):
     head: str = Field(default="", max_length=120)
 
 
+class WaveStepProgress(BaseModel):
+    """One executed step row in the most recent wave (RFC-227 plan-context digest)."""
+
+    step_id: str = Field(default="", max_length=64)
+    description: str = Field(default="", max_length=500)
+    status: Literal["completed", "failed", "unknown"] = "unknown"
+    outcome_preview: str = Field(default="", max_length=200)
+
+
 class PriorProgressDigest(BaseModel):
     """Compact, truthful snapshot of the most recent execute wave (RFC-227).
 
@@ -726,6 +735,7 @@ class PriorProgressDigest(BaseModel):
         steps_failed: Number of failed steps in the wave.
         tool_calls: Up to 8 ``ToolCallHead`` rows in arrival order.
         evidence_excerpts: Up to 3 deduplicated AI-text excerpts, each ≤200 chars.
+        step_summaries: Up to 8 per-step rows rendered like execute ``PRIOR STEPS``.
         derived_progress_hint: Pure-function classification over wave outputs.
     """
 
@@ -735,6 +745,7 @@ class PriorProgressDigest(BaseModel):
     steps_failed: int = 0
     tool_calls: list[ToolCallHead] = Field(default_factory=list, max_length=8)
     evidence_excerpts: list[str] = Field(default_factory=list, max_length=3)
+    step_summaries: list[WaveStepProgress] = Field(default_factory=list, max_length=8)
     derived_progress_hint: Literal["none", "low", "medium", "high"] = "low"
 
 

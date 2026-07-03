@@ -51,11 +51,13 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     """
     from soothe.subagents.explore import create_explore_subagent
     from soothe.subagents.plan import create_plan_subagent
+    from soothe.subagents.skillify import create_skillify_subagent
     from soothe.subagents.tacitus import create_tacitus_subagent
 
     return {
         "explore": create_explore_subagent,
         "plan": create_plan_subagent,
+        "skillify": create_skillify_subagent,
         "tacitus": create_tacitus_subagent,
     }
 
@@ -596,6 +598,10 @@ def resolve_subagents(
             # Explore YAML options live in ``config.subagents["explore"].config`` only.
             # Do not spread them as kwargs — ``create_explore_subagent`` accepts ``model``,
             # ``SootheConfig``, and ``context`` only.
+            extra_kwargs.clear()
+            extra_kwargs["config"] = config
+            extra_kwargs["context"] = {"work_dir": resolved_cwd}
+        elif name == "skillify":
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}

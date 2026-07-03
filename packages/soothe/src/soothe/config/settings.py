@@ -438,6 +438,7 @@ class SootheConfig(BaseSettings):
             "plan": SubagentConfig(),
             "tacitus": SubagentConfig(),
             "browser_use": SubagentConfig(enabled=True),
+            "skillify": SubagentConfig(enabled=True),
         }
 
         # Import here to avoid circular dependency

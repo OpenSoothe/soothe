@@ -179,7 +179,7 @@ def _build_weaver_graph(
         _emit_event(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict(), logger)
 
         # Fetch skills (with indexing-not-ready tolerance)
-        from soothe_plugins.skillify.models import SkillBundle
+        from soothe.subagents.skillify.models import SkillBundle
 
         skill_bundle = SkillBundle(query=capability.description)
         if skillify_retriever:
@@ -369,12 +369,12 @@ class WeaverPlugin:
         import soothe_plugins.weaver.events  # noqa: F401
 
         try:
-            from soothe_plugins.skillify.models import SkillBundle  # noqa: F401
+            from soothe.subagents.skillify.models import SkillBundle  # noqa: F401
 
             context.logger.info("Weaver plugin loaded (Skillify available)")
         except ImportError:
             raise PluginError(
-                "Weaver requires Skillify plugin. Install soothe-plugins with skillify support.",
+                "Weaver requires Skillify (built into soothe core).",
             )
 
     async def on_unload(self) -> None:
@@ -476,7 +476,7 @@ class WeaverPlugin:
         skillify_cfg = plugin_cfg.get("skillify") or {}
         if skillify_cfg.get("enabled", False):
             try:
-                from soothe_plugins.skillify.retriever import SkillRetriever
+                from soothe.subagents.skillify.retriever import SkillRetriever
 
                 vs = soothe_cfg.create_vector_store_for_role("skillify")
                 skill_embeddings = soothe_cfg.create_embedding_model()

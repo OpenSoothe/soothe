@@ -1992,7 +1992,7 @@ class CodeInterpreterConfig(BaseModel):
 
 
 class ProgressiveSkillsConfig(BaseModel):
-    """RFC-105: Tunables for progressive skill listing budget."""
+    """RFC-105 / IG-543: Tunables for progressive skill listing and discovery."""
 
     budget_pct: float = Field(
         default=0.01,
@@ -2012,6 +2012,41 @@ class ProgressiveSkillsConfig(BaseModel):
         default=20,
         ge=0,
         description="Below this, non-builtin entries fall back to names-only mode.",
+    )
+    core_skills: list[str] | None = Field(
+        default=None,
+        description=(
+            "Skill names always listed on turn 0 (core tier). When null, built-in defaults apply."
+        ),
+    )
+    search_skills_enabled: bool = Field(
+        default=True,
+        description="Register search_skills and invoke_skill tools for deferred discovery.",
+    )
+    semantic_search_enabled: bool = Field(
+        default=True,
+        description="Use Skillify vector search to supplement substring search_skills results.",
+    )
+    semantic_search_min_score: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Minimum vector similarity score for semantic search_skills matches.",
+    )
+    intent_prefetch_enabled: bool = Field(
+        default=True,
+        description="Auto-discover deferred skills from the first user message on a cold thread.",
+    )
+    intent_prefetch_top_k: int = Field(
+        default=2,
+        ge=0,
+        le=10,
+        description="Maximum deferred skills to discover on turn-0 intent prefetch.",
+    )
+    intent_prefetch_min_query_chars: int = Field(
+        default=12,
+        ge=0,
+        description="Skip intent prefetch when the user message is shorter than this.",
     )
 
 

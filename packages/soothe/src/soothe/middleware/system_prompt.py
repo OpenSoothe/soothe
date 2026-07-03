@@ -744,17 +744,19 @@ class SystemPromptMiddleware(AgentMiddleware):
 
             self._skill_index = SkillIndex()
         if self._skill_registry is None:
-            from soothe.skills.registry import ProgressiveSkillRegistry
+            from soothe.skills.registry import ProgressiveSkillRegistry, resolve_core_skill_names
 
             self._skill_registry = ProgressiveSkillRegistry()
+        else:
+            from soothe.skills.registry import resolve_core_skill_names
 
         entries = self._skill_index.rebuild_if_stale()
-        unconditional, _ = self._skill_registry.partition(entries)
-        activated_entries = [e for e in entries if e.name in activated]
-        # Merge: unconditional + activated, dedup by name (activated wins for overlap)
-        by_name = {e.name: e for e in unconditional}
-        by_name.update({e.name: e for e in activated_entries})
-        candidates = sorted(by_name.values(), key=lambda e: e.name.lower())
+        core_names = resolve_core_skill_names(self._config.progressive_skills.core_skills)
+        core_entries, _deferred = self._skill_registry.partition_core_deferred(entries, core_names)
+        activated_entries = [entry for entry in entries if entry.name in activated]
+        by_name = {entry.name: entry for entry in core_entries}
+        by_name.update({entry.name: entry for entry in activated_entries})
+        candidates = sorted(by_name.values(), key=lambda entry: entry.name.lower())
 
         new_entries = self._skill_registry.new_for_thread(activation, candidates)
 

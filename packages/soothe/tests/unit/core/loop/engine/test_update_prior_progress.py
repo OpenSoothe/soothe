@@ -121,6 +121,10 @@ def test_tool_calls_extracted_from_aimessage_tool_calls() -> None:
     assert d.tool_calls[1].head == "wc -l *.json"
     assert d.derived_progress_hint == "high"
     assert any("1139" in e for e in d.evidence_excerpts)
+    assert len(d.step_summaries) == 2
+    assert d.step_summaries[0].step_id == "s1"
+    assert d.step_summaries[0].status == "completed"
+    assert "1139" in d.step_summaries[0].outcome_preview
 
 
 def test_tool_call_head_handles_missing_args() -> None:

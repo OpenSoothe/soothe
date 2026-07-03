@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from soothe.foundation.sloop.prompts import PromptBuilder
-from soothe.foundation.sloop.state.schemas import LoopState, PriorProgressDigest, ToolCallHead
+from soothe.foundation.sloop.state.schemas import (
+    LoopState,
+    PriorProgressDigest,
+    ToolCallHead,
+    WaveStepProgress,
+)
 from soothe.protocols.planner import PlanContext
 
 
@@ -15,6 +20,14 @@ def _digest(iteration: int = 1) -> PriorProgressDigest:
         steps_failed=0,
         tool_calls=[ToolCallHead(name="run_command", head="hello")],
         evidence_excerpts=["found marker 42 in output"],
+        step_summaries=[
+            WaveStepProgress(
+                step_id="s1",
+                description="scan output",
+                status="completed",
+                outcome_preview="found marker 42 in output",
+            )
+        ],
         derived_progress_hint="high",
     )
 
@@ -25,7 +38,7 @@ def test_assess_phase_includes_prior_progress_when_present() -> None:
     msgs = PromptBuilder().build_plan_messages("g", state, ctx, plan_phase="assess")
     assess_human = msgs[-1].content
     assert "PRIOR PROGRESS:" in assess_human
-    assert "hint=high" in assess_human
+    assert "progress_hint=high" in assess_human
     assert "found marker 42" in assess_human
 
 
