@@ -213,6 +213,36 @@ def test_build_delete_file_preview_reads_disk(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_mount_renders_collapsed_one_line_summary() -> None:
+    """Regression: invalid collapsed border CSS must not prevent preview mount (IG-544)."""
+    from textual.app import App, ComposeResult
+    from textual.containers import VerticalScroll
+
+    built = build_file_change_preview(
+        "edit_file",
+        {"file_path": "src/a.py", "old_string": "foo", "new_string": "bar"},
+        assistant_id=None,
+    )
+    assert built is not None
+    cls, data = built
+
+    class PreviewApp(App):
+        def compose(self) -> ComposeResult:
+            yield VerticalScroll(cls(data, action_label="Editing file"))
+
+    app = PreviewApp()
+    async with app.run_test(size=(100, 10)):
+        widget = app.query_one(cls)
+        header = app.query_one(".file-change-preview-header")
+        assert widget.has_class("-collapsed")
+        assert widget.size.height >= 1
+        assert header.size.height >= 1
+        rendered = str(header.render())
+        assert "Editing file" in rendered
+        assert "src/a.py" in rendered
+
+
+@pytest.mark.asyncio
 async def test_mount_file_change_preview_accepts_unified_tool_call_id() -> None:
     """Mount succeeds when tool_call_id contains colons (unified id format)."""
     adapter = MagicMock()

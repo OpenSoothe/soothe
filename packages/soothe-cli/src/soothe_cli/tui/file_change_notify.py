@@ -93,7 +93,7 @@ async def mount_file_change_preview(
     except Exception:
         # Mark shown so streaming arg updates do not retry-mount and flood logs.
         adapter._file_change_previews_shown.add(tcid)
-        logger.debug("Failed to mount file change preview", exc_info=True)
+        logger.warning("Failed to mount file change preview", exc_info=True)
 
 
 async def finalize_file_change_preview(
