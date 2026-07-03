@@ -2,9 +2,12 @@
 
 Background: in the trace `19c3ed340552149f2aa95616cf375226`, plan-assess #2 read
 the full ledger left behind by plan-assess #1 + plan-generate #1 + 2 execute
-steps, yet emitted assessment_reasoning that echoed the iter=0 text. This
-module reproduces the same 8-turn ledger shape the model actually saw and
-measures how candidate ablations change the prompt:
+steps, yet emitted assessment_reasoning that echoed the iter=0 text. Production
+projection now omits ``plan_assess`` pairs by default; this harness still
+mutates the raw ledger to compare other ablations (plan_generate drops, goal
+dedup, digest-only, etc.).
+
+Measures:
 
 - char/approx-token count of the prompt
 - cache-prefix stability across iterations (sha256 of the system message)
@@ -335,35 +338,35 @@ def _run_all_conditions() -> dict[str, PromptMetrics]:
 # ---------------------------------------------------------------------------
 
 
-def test_baseline_carries_anchor_and_duplicated_goal() -> None:
-    """The bug shape: prior assessment_reasoning text and duplicated GOAL: are both present."""
+def test_baseline_omits_plan_assess_anchor_by_default() -> None:
+    """Production projection drops prior plan_assess pairs (no iter=0 reasoning echo)."""
     results = _run_all_conditions()
     base = results["baseline"]
-    assert base.anchor_present, "baseline must contain the iter=0 assessment_reasoning text"
-    # 2 recorded planning humans + 1 current plan-context human = 3 occurrences.
-    assert base.duplicated_goal_count >= 3, (
-        f"baseline should show duplicated GOAL:; got {base.duplicated_goal_count}"
+    assert not base.anchor_present
+    # plan_generate human + current plan-context human still carry GOAL:.
+    assert base.duplicated_goal_count >= 2, (
+        f"baseline should still show duplicated GOAL:; got {base.duplicated_goal_count}"
     )
 
 
-def test_a1_removes_anchor_and_drops_planning_pair() -> None:
+def test_a1_matches_baseline_when_projection_already_drops_plan_assess() -> None:
     results = _run_all_conditions()
     a1 = results["A1_drop_plan_assess"]
     base = results["baseline"]
-    assert not a1.anchor_present, "A1 must remove the iter=0 assessment_reasoning text"
-    assert a1.message_count == base.message_count - 2
-    # plan_generate still uses GOAL:, plus current turn = 2 occurrences.
-    assert a1.duplicated_goal_count == 2
+    assert not a1.anchor_present
+    assert a1.message_count == base.message_count
+    assert a1.total_chars == base.total_chars
+    assert a1.duplicated_goal_count == base.duplicated_goal_count
 
 
-def test_a2_removes_anchor_keeps_pair() -> None:
-    """A2 only compresses the AI dump — fewer-token mitigation; planning pair stays."""
+def test_a2_matches_baseline_when_plan_assess_not_projected() -> None:
+    """A2 only helps when plan_assess AI rows are in the prompt; projection excludes them."""
     results = _run_all_conditions()
     a2 = results["A2_compress_plan_assess_ai"]
     base = results["baseline"]
     assert not a2.anchor_present
     assert a2.message_count == base.message_count
-    assert a2.total_chars < base.total_chars
+    assert a2.total_chars == base.total_chars
 
 
 def test_b1_drops_all_planning_turns() -> None:
@@ -371,8 +374,8 @@ def test_b1_drops_all_planning_turns() -> None:
     b1 = results["B1_drop_all_planning"]
     base = results["baseline"]
     assert not b1.anchor_present
-    # Drop 4 (2 plan_assess + 2 plan_generate).
-    assert b1.message_count == base.message_count - 4
+    # Drop 2 plan_generate turns (plan_assess already excluded by projection).
+    assert b1.message_count == base.message_count - 2
     # Only the current plan-context human carries GOAL:.
     assert b1.duplicated_goal_count == 1
 
@@ -405,8 +408,7 @@ def test_d1_dedupes_goal() -> None:
     d1 = results["D1_collapse_goal"]
     # Only the current plan-context human still carries GOAL:.
     assert d1.duplicated_goal_count == 1
-    # Anchor still present (D1 targets recency anchor, not the prior-reasoning anchor).
-    assert d1.anchor_present
+    assert not d1.anchor_present
 
 
 def test_system_sha_is_identical_across_ablations() -> None:

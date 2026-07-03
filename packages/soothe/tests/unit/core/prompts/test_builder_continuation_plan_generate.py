@@ -95,6 +95,28 @@ def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> No
     assert "prior execute human" not in " ".join(str(getattr(m, "content", "")) for m in msgs)
 
 
+def test_continuation_assess_omits_plan_assess_ledger() -> None:
+    state = _continuation_state()
+    state.loop_messages.extend(
+        [
+            LoopHumanMessage(content="assess h", phase="plan_assess", iteration=0, thread_id="tid"),
+            LoopAIMessage(content="assess a", phase="plan_assess", iteration=0, thread_id="tid"),
+        ]
+    )
+    msgs = PromptBuilder().build_plan_messages(
+        state.goal,
+        state,
+        PlanContext(),
+        call_kind="continuation",
+    )
+    contents = " ".join(str(getattr(m, "content", "")) for m in msgs)
+    assert "assess h" not in contents
+    assert "assess a" not in contents
+    assert "ledger completion body" in contents
+    assert "TASK:" in msgs[-1].content
+    assert "bootstrap vs plan_generate" in msgs[-1].content
+
+
 def test_non_continuation_mid_goal_includes_execute_ledger() -> None:
     state = LoopState(
         goal="read readme",

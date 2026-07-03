@@ -132,7 +132,11 @@ class PromptBuilder:
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
         projection_mode = resolve_planner_projection_mode(state)
         ledger_cfg = self.config.agent.loop.plan_prompt_ledger if self.config is not None else None
-        projected = project_planner_ledger(state.loop_messages, projection_mode, ledger_cfg)
+        projected = project_planner_ledger(
+            state.loop_messages,
+            projection_mode,
+            ledger_cfg,
+        )
         completion_in_ledger = projected_ledger_has_goal_completion(projected)
 
         prior_goals = _enrich_prior_goals(

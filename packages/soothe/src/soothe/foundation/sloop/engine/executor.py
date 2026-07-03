@@ -918,7 +918,11 @@ class Executor:
         ``ledger_direct`` goal completion must surface the last turn, not a
         concatenation of every hop's narration.
         """
-        ai_message_indices = [i for i, msg in enumerate(messages) if isinstance(msg, AIMessage)]
+        ai_message_indices = [
+            i
+            for i, msg in enumerate(messages)
+            if isinstance(msg, AIMessage) and not isinstance(msg, AIMessageChunk)
+        ]
         if not ai_message_indices:
             return [m for m in messages if isinstance(m, (AIMessage, AIMessageChunk))]
 

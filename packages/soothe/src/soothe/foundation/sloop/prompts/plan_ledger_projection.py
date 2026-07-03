@@ -1,9 +1,10 @@
 """Project StrangeLoop ledger messages for plan-assess / plan-generate (IG-380, RFC-214).
 
 RFC-214: The complete ledger includes all phases (plan_assess, plan_generate,
-execute_step). Plan prompts see the full ledger for cache maximization.
-CoreAgent execution sees only execute_step messages (plan-phase reasoning
-not injected into CoreAgent thread).
+execute_step). Plan-assess, plan-generate, and continuation-assess prompts omit prior
+``plan_assess`` pairs from projected ledger; generate receives assess status
+via the inline ``ASSESSMENT`` task envelope instead. CoreAgent execution sees only execute_step
+messages (plan-phase reasoning not injected into CoreAgent thread).
 
 When ``PlanPromptLedgerConfig`` limits are all zero/unset behavior, the caller
 receives the same message object references as ``state.loop_messages`` (shallow
@@ -45,9 +46,8 @@ class ProjectedExecuteStepInput:
 
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
-_NEW_GOAL_LEDGER_PHASES = frozenset(
-    {"intent_classify", "plan_assess", "plan_generate", "goal_completion"}
-)
+_NEW_GOAL_LEDGER_PHASES = frozenset({"intent_classify", "plan_generate", "goal_completion"})
+_PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"plan_assess"})
 
 
 def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
@@ -70,6 +70,16 @@ def filter_loop_messages_for_planner_mode(
         if phase in _NEW_GOAL_LEDGER_PHASES:
             out.append(msg)
     return out
+
+
+def filter_ledger_phases(
+    loop_messages: list[BaseMessage],
+    exclude_phases: frozenset[str],
+) -> list[BaseMessage]:
+    """Drop ledger rows whose ``phase`` is in ``exclude_phases``."""
+    if not exclude_phases:
+        return list(loop_messages)
+    return [msg for msg in loop_messages if getattr(msg, "phase", None) not in exclude_phases]
 
 
 def projected_ledger_has_goal_completion(projected: list[BaseMessage]) -> bool:
@@ -261,6 +271,8 @@ def project_planner_ledger(
     loop_messages: list[BaseMessage],
     mode: PlannerProjectionMode,
     ledger_cfg: PlanPromptLedgerConfig | None,
+    *,
+    exclude_phases: frozenset[str] | None = None,
 ) -> list[BaseMessage]:
     """Project CE ledger for planner prompts with ``new_goal`` / ``mid_goal`` phase filter (IG-538).
 
@@ -268,18 +280,22 @@ def project_planner_ledger(
         loop_messages: Full RFC-214 ledger from ``LoopState.loop_messages``.
         mode: ``new_goal`` excludes ``execute_step`` by default; ``mid_goal`` includes all phases.
         ledger_cfg: Optional tail/char caps (IG-380).
+        exclude_phases: Extra phase tags to omit in addition to ``plan_assess``.
 
     Returns:
         Filtered then capped message list for plan LLM prompts.
     """
     filtered = filter_loop_messages_for_planner_mode(loop_messages, mode)
+    phases_to_exclude = _PLANNER_PROJECTED_EXCLUDED_PHASES | (exclude_phases or frozenset())
+    filtered = filter_ledger_phases(filtered, phases_to_exclude)
     projected = project_loop_messages_for_plan(filtered, ledger_cfg)
     logger.debug(
-        "Planner ledger projection: mode=%s in=%d filtered=%d out=%d",
+        "Planner ledger projection: mode=%s in=%d filtered=%d out=%d exclude=%s",
         mode,
         len(loop_messages),
         len(filtered),
         len(projected),
+        sorted(phases_to_exclude),
     )
     return projected
 

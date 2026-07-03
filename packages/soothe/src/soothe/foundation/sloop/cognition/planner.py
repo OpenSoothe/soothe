@@ -1458,15 +1458,6 @@ class LLMPlanner:
             except Exception:
                 logger.debug("ContextEngine.project() failed, proceeding without bundle")
 
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-            current_iteration_plan_assess_in_ledger,
-        )
-
-        inline_assessment = (
-            None
-            if current_iteration_plan_assess_in_ledger(state.loop_messages, state.iteration)
-            else assessment
-        )
         generate_messages = self._prompt_builder.build_plan_messages(
             goal,
             state,
@@ -1476,7 +1467,7 @@ class LLMPlanner:
             context_bundle=context_bundle,
             checkpoint=checkpoint,
             exclude_goal_id=exclude_goal_id,
-            inline_assessment=inline_assessment,
+            inline_assessment=assessment,
         )
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,

@@ -454,8 +454,8 @@ class UserMessageBuilder:
             prior_goal_completion: Prior goal synthesis report for loop continuation.
             current_iteration: Current loop iteration.
             context_bundle: Optional ContextBundle from ContextEngine.project().
-            assessment_status: Assess ``status`` when assess was skipped (no ledger row).
-            assessment_progress: Assess ``goal_progress`` when assess was skipped.
+            assessment_status: Assess ``status`` (inline envelope; not in projected ledger).
+            assessment_progress: Assess ``goal_progress`` (inline envelope).
 
         Returns:
             Structured text message for the plan-generate LoopHumanMessage.
