@@ -3198,6 +3198,7 @@ class MessageRouter:
                 "job_id": job.id,
                 "description": job.description,
                 "schedule_kind": job.schedule_kind.value,
+                "schedule_value": job.schedule_value,
                 "next_run": job.next_run.isoformat() if job.next_run else None,
                 "status": job.status.value,
                 "priority": job.priority,

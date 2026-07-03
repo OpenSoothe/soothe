@@ -168,8 +168,8 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/help",
-        description="Show help",
-        bypass_tier=BypassTier.QUEUED,
+        description="Show commands and keyboard shortcuts",
+        bypass_tier=BypassTier.IMMEDIATE_UI,
     ),
     SlashCommand(
         name="/quit",

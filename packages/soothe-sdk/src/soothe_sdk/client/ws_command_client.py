@@ -14,6 +14,8 @@ from uuid import uuid4
 
 from soothe_sdk.client.helpers import websocket_url_from_config
 from soothe_sdk.client.wire import (
+    ConnectionInitEnvelope,
+    ConnectionInitParams,
     ErrorEnvelope,
     MessageType,
     WireEnvelope,
@@ -22,6 +24,101 @@ from soothe_sdk.client.wire import (
 )
 
 logger = logging.getLogger(__name__)
+
+_TRANSITIONAL_DAEMON_READY_STATES = frozenset({"starting", "warming"})
+_DAEMON_READY_POLL_INTERVAL_S = 0.05
+
+try:
+    from soothe_sdk import __version__ as _client_version
+except Exception:  # pragma: no cover
+    _client_version = "0.0.0"
+
+
+def _normalize_cron_add_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize daemon cron_add payloads to ``{"job": {...}}`` for CLI callers."""
+    if "job" in result:
+        return result
+    job_id = result.get("job_id") or result.get("id")
+    if not job_id:
+        return result
+    job = dict(result)
+    job["id"] = job_id
+    job.pop("job_id", None)
+    return {"job": job}
+
+
+def _normalize_cron_show_result(result: dict[str, Any]) -> dict[str, Any]:
+    """Normalize daemon cron_show payloads to ``{"job": {...}}`` for CLI callers."""
+    if "job" in result:
+        return result
+    job_id = result.get("job_id") or result.get("id")
+    if not job_id:
+        return {"job": None}
+    job = dict(result)
+    job["id"] = job_id
+    job.pop("job_id", None)
+    return {"job": job}
+
+
+async def _perform_handshake(ws: Any, *, timeout: float) -> None:
+    """Complete protocol-1 ``connection_init`` / ``connection_ack`` (RFC-450 §8.2).
+
+    Args:
+        ws: Connected WebSocket.
+        timeout: Maximum seconds to wait for a ready ``connection_ack``.
+
+    Raises:
+        RuntimeError: If the handshake fails or times out.
+    """
+    init = ConnectionInitEnvelope(
+        params=ConnectionInitParams(
+            client_version=_client_version,
+            client_name="soothe-sdk",
+            accept_proto=["1"],
+            capabilities=["streaming", "batch", "heartbeat"],
+        )
+    )
+
+    async with asyncio.timeout(timeout):
+        await ws.send(encode_envelope(init))
+        while True:
+            response_str = await ws.recv()
+            response = decode_envelope(response_str)
+            if not isinstance(response, dict):
+                continue
+
+            msg_type = response.get("type")
+            if msg_type == "status":
+                continue
+
+            if msg_type == MessageType.ERROR.value:
+                err = ErrorEnvelope.from_wire_dict(response)
+                raise RuntimeError(
+                    f"[{err.code}] {err.message}" + (f" ({err.data})" if err.data else "")
+                )
+
+            if msg_type != "connection_ack":
+                continue
+
+            result = response.get("result") or {}
+            state = result.get("readiness_state")
+            if state == "incompatible":
+                raise RuntimeError(
+                    "Protocol version incompatible: "
+                    f"daemon returned {result.get('protocol_version')!r}"
+                )
+            if state == "ready":
+                return
+            if state == "error":
+                raise RuntimeError("Daemon startup failed")
+            if state == "degraded":
+                raise RuntimeError("Daemon is degraded")
+            if state in _TRANSITIONAL_DAEMON_READY_STATES:
+                await asyncio.sleep(_DAEMON_READY_POLL_INTERVAL_S)
+                await ws.send(encode_envelope(init))
+                continue
+            raise RuntimeError(f"Daemon state is {state}")
+
 
 # Command message types
 _AUTOPilot_COMMANDS = {
@@ -107,6 +204,8 @@ class WsCommandClient:
 
         try:
             async with websockets.connect(self._ws_url, open_timeout=self._timeout) as ws:
+                await _perform_handshake(ws, timeout=self._timeout)
+
                 # Send the protocol-1 request envelope.
                 await ws.send(encode_envelope(envelope))
 
@@ -323,7 +422,8 @@ class WsCommandClient:
         payload = {"text": text}
         if priority is not None:
             payload["priority"] = priority
-        return await self._send_command("cron_add", payload)
+        result = await self._send_command("cron_add", payload)
+        return _normalize_cron_add_result(result)
 
     async def cron_list(self, *, status: str | None = None) -> dict[str, Any]:
         """List scheduled jobs (RFC-229 canonical method).
@@ -345,7 +445,8 @@ class WsCommandClient:
 
     async def cron_show(self, job_id: str) -> dict[str, Any]:
         """Get job details."""
-        return await self._send_command("cron_show", {"job_id": job_id})
+        result = await self._send_command("cron_show", {"job_id": job_id})
+        return _normalize_cron_show_result(result)
 
     async def cron_cancel(self, job_id: str) -> dict[str, Any]:
         """Cancel a scheduled job."""

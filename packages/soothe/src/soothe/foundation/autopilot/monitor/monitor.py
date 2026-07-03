@@ -146,8 +146,6 @@ class AutopilotMonitor:
             source=source,
         )
 
-        await self._bus.emit("goal_created", {"goal_id": goal.id})
-
         return GoalIntakeResult(
             status="accepted",
             goal_id=goal.id,

@@ -38,27 +38,27 @@ Identify issues in the goal DAG:
 
 Output JSON structure (strict format):
 ```json
-{
+{{
   "reset_goals": ["goal_id1", "goal_id2"],
   "remove_goals": ["goal_id3"],
   "merge_goals": [
-    {
+    {{
       "goal_ids": ["goal_id4", "goal_id5"],
       "merged_description": "Consolidated description..."
-    }
+    }}
   ],
   "decompose_goals": [
-    {
+    {{
       "goal_id": "goal_id6",
       "subgoals": [
-        {"description": "Subgoal 1...", "priority": 50},
-        {"description": "Subgoal 2...", "priority": 40}
+        {{"description": "Subgoal 1...", "priority": 50}},
+        {{"description": "Subgoal 2...", "priority": 40}}
       ]
-    }
+    }}
   ],
-  "priority_adjustments": {"goal_id7": 70, "goal_id8": 30},
+  "priority_adjustments": {{"goal_id7": 70, "goal_id8": 30}},
   "reasoning": "Overall DAG health assessment..."
-}
+}}
 ```
 
 Constraints:
@@ -102,20 +102,20 @@ After goal completion, analyze:
 
 Output JSON structure (strict format):
 ```json
-{
+{{
   "new_goals": [
-    {"description": "Follow-up goal...", "priority": 50, "depends_on": ["{completed_goal_id}"]}
+    {{"description": "Follow-up goal...", "priority": 50, "depends_on": ["{completed_goal_id}"]}}
   ],
   "redundant_goals": ["goal_id_that_is_now_redundant"],
   "ready_goals": ["goal_id_with_deps_now_satisfied"],
-  "decomposition": {
+  "decomposition": {{
     "goal_id": "{completed_goal_id}",
     "subgoals": [
-      {"description": "Subgoal from decomposition...", "priority": 45}
+      {{"description": "Subgoal from decomposition...", "priority": 45}}
     ]
-  },
+  }},
   "reasoning": "Analysis of completion impact on DAG..."
-}
+}}
 ```
 
 Constraints:
@@ -154,14 +154,14 @@ Determine optimal placement for new goal:
 
 Output JSON structure (strict format):
 ```json
-{
+{{
   "priority": 50,
   "depends_on": ["existing_goal_id1"],
   "informs": ["existing_goal_id2"],
   "merge_with": null,
   "complexity": "moderate",
   "reasoning": "Placement decision reasoning..."
-}
+}}
 ```
 
 Constraints:

@@ -271,6 +271,16 @@ class _ModelMixin:
         screen = ContextViewerScreen(loop_id=loop_id)
         self.push_screen(screen, handle_result)
 
+    async def _show_help_screen(self) -> None:
+        """Show slash commands and keyboard shortcuts as a modal screen."""
+        from soothe_cli.tui.widgets.help_screen import HelpScreen
+
+        def handle_result(result: None) -> None:  # noqa: ARG001
+            if self._chat_input:
+                self._chat_input.focus_input()
+
+        self.push_screen(HelpScreen(), handle_result)
+
     async def _submit_autopilot_job(self, task: str) -> None:
         """Submit an autopilot job via WebSocket (like CLI `soothe autopilot run`).
 
