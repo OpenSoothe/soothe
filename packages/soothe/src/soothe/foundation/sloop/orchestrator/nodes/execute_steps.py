@@ -511,6 +511,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         context_engine=ctx.ce,  # RFC-624 Phase 4
         step_brief_hydrator=step_brief_hydrator,
         checkpoint=checkpoint,
+        goal_trace=ctx.goal_trace,
     )
     async for item in run_executor.execute(
         decision=decision,

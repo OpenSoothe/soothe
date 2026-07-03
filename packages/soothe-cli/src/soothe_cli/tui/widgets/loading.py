@@ -52,7 +52,7 @@ class Spinner:
 class LoadingWidget(Static):
     """Animated loading indicator with status text and elapsed time.
 
-    Displays: <spinner> Thinking...  (12s · esc to interrupt)
+    Displays: <spinner> Thinking...  (12s)
 
     Renders as a single Static so elapsed-time ticks do not relayout sibling
     widgets (which caused the spinner to flash on each second boundary).
@@ -71,7 +71,7 @@ class LoadingWidget(Static):
         status: str = "Thinking",
         *,
         turn_start_mono: float | None = None,
-        show_interrupt_hint: bool = True,
+        show_interrupt_hint: bool = False,
     ) -> None:
         """Initialize loading widget.
 
@@ -79,7 +79,7 @@ class LoadingWidget(Static):
             status: Initial status text to display.
             turn_start_monotonic: Start of the current query/turn (``time.monotonic()``). When
                 omitted, the first mount time is used so elapsed still advances monotonically.
-            show_interrupt_hint: When ``False``, omit only the esc-to-interrupt hint (e.g. startup connect).
+            show_interrupt_hint: When ``True``, append an esc-to-interrupt hint (off by default).
         """
         super().__init__()
         self._status = status
@@ -95,7 +95,7 @@ class LoadingWidget(Static):
     def _format_status_line(status: str) -> str:
         return f" {status}... "
 
-    def _format_hint_line(self, elapsed_secs: float, *, include_interrupt: bool = True) -> str:
+    def _format_hint_line(self, elapsed_secs: float, *, include_interrupt: bool = False) -> str:
         duration = format_duration(elapsed_secs)
         if include_interrupt:
             return f"({duration} · esc to interrupt)"

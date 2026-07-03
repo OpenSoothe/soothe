@@ -107,7 +107,10 @@ from soothe_cli.runtime.turn.prepare import (
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
-from soothe_cli.tui.file_change_notify import mount_file_change_preview
+from soothe_cli.tui.file_change_notify import (
+    finalize_file_change_preview,
+    mount_file_change_preview,
+)
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
@@ -115,6 +118,7 @@ from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
     ClarificationInputMessage,
+    CognitionGoalTreeMessage,
     CognitionReasonMessage,
     CognitionStepMessage,
     DiffMessage,
@@ -131,7 +135,7 @@ LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
 # Thinking-row spinner labels (turn-level; step cards carry finer detail).
 SPINNER_LABEL_THINKING = "Thinking"
-SPINNER_LABEL_CLASSIFYING = "Classifying request"
+SPINNER_LABEL_INTERPRETING = "Interpreting goal"
 SPINNER_LABEL_EXECUTING = "Executing step"
 SPINNER_LABEL_RUNNING_TOOLS = "Running tools"
 SPINNER_LABEL_AWAITING_ANSWER = "Awaiting your answer"
@@ -216,6 +220,9 @@ class TextualUIAdapter:
         self._file_change_previews_shown: set[str] = set()
         """tool_call_ids that already have a non-blocking file-change preview card."""
 
+        self._file_change_widgets: dict[str, Any] = {}
+        """tool_call_id → mounted preview widget (finalized in place on tool completion)."""
+
         self._file_preview_assistant_id: str | None = None
         """Agent id for the active turn (path resolution in file previews)."""
 
@@ -264,6 +271,12 @@ class TextualUIAdapter:
         stale answers.
         """
 
+        self._last_plan_execution_mode: str | None = None
+        """Execution mode from the latest ``plan_decision`` (``dependency`` / ``parallel``)."""
+
+        self._goal_tree_message: CognitionGoalTreeMessage | None = None
+        """In-memory goal→steps state for the Ctrl+t plan quick view (not mounted in #messages)."""
+
     def finalize_pending_tools_with_error(self, error: str) -> None:
         """Mark all pending/running tool widgets as error and clear tracking.
 
@@ -284,7 +297,10 @@ class TextualUIAdapter:
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
         self._file_change_previews_shown.clear()
+        self._file_change_widgets.clear()
         self._file_preview_assistant_id = None
+        if self._goal_tree_message is not None:
+            self._goal_tree_message.set_interrupted(error)
 
         # Clear active streaming message to avoid stale "active" state in the store.
         if self._set_active_message:
@@ -309,6 +325,8 @@ class TextualUIAdapter:
         self._subagent_cards_by_key.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
+        if self._goal_tree_message is not None:
+            self._goal_tree_message.set_interrupted(message)
 
 
 def _stream_end_pending_error_message(
@@ -1179,6 +1197,43 @@ def _fallback_ingest_subgraph_tool_on_step_card(
     return True
 
 
+def _sync_goal_tree_step_phase(
+    adapter: TextualUIAdapter,
+    step_id: str,
+    phase: str,
+    *,
+    description: str = "",
+) -> None:
+    """Update the live goal tree row for a step lifecycle transition."""
+    tree = adapter._goal_tree_message
+    if tree is None:
+        return
+    tree.set_step_phase(step_id, phase, description=description or None)
+
+
+async def _ensure_goal_tree_message(
+    adapter: TextualUIAdapter,
+    *,
+    goal: str = "",
+    max_iterations: int = 0,
+) -> CognitionGoalTreeMessage:
+    """Create or refresh in-memory goal tree state for the plan quick view."""
+    tree = adapter._goal_tree_message
+    if tree is not None:
+        if goal.strip():
+            tree._goal_text = goal.strip()
+        if max_iterations > 0:
+            tree._max_iterations = max_iterations
+        return tree
+    widget = CognitionGoalTreeMessage(
+        goal=goal.strip() or "Goal",
+        max_iterations=max_iterations,
+        id=f"goal-tree-{uuid.uuid4().hex[:8]}",
+    )
+    adapter._goal_tree_message = widget
+    return widget
+
+
 async def sync_pending_step_cards_from_plan(
     adapter: TextualUIAdapter,
     *,
@@ -1213,6 +1268,90 @@ async def sync_pending_step_cards_from_plan(
         )
         await adapter._mount_message(step_widget)
         adapter._current_step_messages[sid] = step_widget
+
+
+def _step_card_lookup_keys(step_id: str) -> list[str]:
+    """Return dict lookup keys for a step id (canonical and wire variants)."""
+    sid = str(step_id or "").strip()
+    if not sid:
+        return []
+    keys = [sid]
+    wire = sid.replace("-", "_")
+    if wire not in keys:
+        keys.append(wire)
+    dash = sid.replace("_", "-")
+    if dash not in keys:
+        keys.append(dash)
+    return keys
+
+
+def _lookup_step_card(
+    adapter: TextualUIAdapter,
+    step_id: str,
+) -> tuple[str, CognitionStepMessage | None]:
+    """Resolve a tracked step card by registry key or widget ``_step_id``."""
+    for key in _step_card_lookup_keys(step_id):
+        widget = adapter._current_step_messages.get(key)
+        if widget is not None:
+            return key, widget
+    target = str(step_id or "").strip()
+    for key, widget in adapter._current_step_messages.items():
+        if str(getattr(widget, "_step_id", "") or "").strip() == target:
+            return key, widget
+    return "", None
+
+
+def _pop_step_card_from_adapter(
+    adapter: TextualUIAdapter,
+    step_id: str,
+) -> CognitionStepMessage | None:
+    """Remove and return the step card for ``step_id``, trying alias keys."""
+    dict_key, widget = _lookup_step_card(adapter, step_id)
+    if widget is None:
+        return None
+    adapter._current_step_messages.pop(dict_key, None)
+    for key in _step_card_lookup_keys(step_id):
+        adapter._current_step_messages.pop(key, None)
+    return widget
+
+
+def _finalize_stuck_dependency_predecessors(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+    *,
+    next_step_id: str,
+    ns_key: tuple[Any, ...],
+) -> None:
+    """Finalize predecessor cards still ``running`` when a dependent step starts."""
+    if adapter._last_plan_execution_mode != "dependency":
+        return
+    next_id = str(next_step_id or "").strip()
+    if not next_id:
+        return
+    for sid, widget in list(adapter._current_step_messages.items()):
+        card_id = str(getattr(widget, "_step_id", "") or sid).strip()
+        if card_id == next_id:
+            continue
+        if getattr(widget, "_status", "") != "running":
+            continue
+        logger.warning(
+            "Dependency step %s started while %s still running in UI; finalizing predecessor",
+            next_id,
+            card_id,
+        )
+        router.on_step_completed(card_id)
+        adapter._current_step_messages.pop(sid, None)
+        complete_tracked_step_card(
+            adapter,
+            router,
+            step_id=card_id,
+            widget=widget,
+            ns_key=ns_key,
+            success=True,
+            duration_ms=0,
+            tool_call_count=_step_card_tool_count(widget),
+            summary="Done",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1907,9 +2046,6 @@ async def _handle_interrupt_cleanup(
     if adapter._set_spinner:
         await adapter._set_spinner(None)
 
-    if not app_exiting:
-        await adapter._mount_message(AppMessage("Interrupted by user"))
-
     interrupted_msg = _build_interrupted_ai_message(pending_text_by_namespace, adapter)
 
     # Save accumulated state before marking tools as rejected (best-effort).
@@ -1947,7 +2083,7 @@ async def _handle_interrupt_cleanup(
     adapter._tool_display_by_call_id.clear()
 
     for step_msg in list(adapter._current_step_messages.values()):
-        step_msg.set_interrupted("Interrupted by user")
+        step_msg.set_interrupted("")
     adapter._current_step_messages.clear()
     adapter._tool_to_step.clear()
     adapter._step_by_namespace.clear()
@@ -2310,10 +2446,12 @@ async def execute_task_textual(
     file_op_tracker = FileOpTracker(assistant_id=assistant_id)
     adapter._file_preview_assistant_id = assistant_id
     adapter._file_change_previews_shown.clear()
+    adapter._file_change_widgets.clear()
     router = adapter._step_router
     router.reset_turn()
     ui_coalesce = TurnToolUiCoalescer()
     adapter._goal_completion_mounted_this_turn = False
+    adapter._goal_tree_message = None
     tool_call_buffers: dict[str | int, dict] = {}
     # Streaming tool-call args (``tool_call_chunks``) — mirrors EventProcessor / IG-053
     pending_tool_calls_lc: dict[str, dict[str, Any]] = {}
@@ -2526,8 +2664,8 @@ async def execute_task_textual(
                                     adapter, clarification_pending=clarification_pending
                                 )
 
-                            # Show file operation results - always show diffs in chat
-                            if record:
+                            # Finalize mounted file previews in place; fall back to DiffMessage
+                            if record and record.tool_name in FILE_CHANGE_TOOLS:
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -2538,7 +2676,11 @@ async def execute_task_textual(
                                         router=router,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
-                                if record.diff and record.tool_name in FILE_CHANGE_TOOLS:
+                                finalized = await finalize_file_change_preview(
+                                    adapter,
+                                    record=record,
+                                )
+                                if not finalized and record.diff:
                                     await adapter._mount_message(
                                         DiffMessage(
                                             record.diff,
@@ -3216,6 +3358,13 @@ async def execute_task_textual(
                                     ui_coalesce.execute_wave_active = True
                                     adapter._last_completed_main_step_execute_prose = ""
                                     adapter._last_main_flushed_assistant_prose = ""
+                                    goal = str(data.get("goal", "")).strip()
+                                    max_iter = int(data.get("max_iterations", 0) or 0)
+                                    await _ensure_goal_tree_message(
+                                        adapter,
+                                        goal=goal,
+                                        max_iterations=max_iter,
+                                    )
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -3230,6 +3379,17 @@ async def execute_task_textual(
                                 continue
 
                             if event_type == STRANGE_LOOP_COMPLETED:
+                                if not ns_key and adapter._goal_tree_message is not None:
+                                    adapter._goal_tree_message.set_loop_finished(
+                                        status=str(data.get("status", "done")),
+                                        goal_progress=str(data.get("goal_progress", "")),
+                                        completion_summary=str(
+                                            data.get("completion_summary", "")
+                                            or data.get("evidence_summary", "")
+                                            or ""
+                                        ),
+                                        total_steps=int(data.get("total_steps", 0) or 0),
+                                    )
                                 continue
 
                             if event_type in (
@@ -3301,10 +3461,18 @@ async def execute_task_textual(
                                 raw_steps = data.get("steps")
                                 if isinstance(raw_steps, list):
                                     execution_mode = str(data.get("execution_mode", "")).strip()
+                                    adapter._last_plan_execution_mode = execution_mode or None
                                     await sync_pending_step_cards_from_plan(
                                         adapter,
                                         steps=raw_steps,
                                     )
+                                    if adapter._goal_tree_message is None:
+                                        await _ensure_goal_tree_message(adapter)
+                                    tree = adapter._goal_tree_message
+                                    if tree is not None:
+                                        tree.sync_plan_steps(raw_steps)
+                                        if execution_mode:
+                                            tree.set_execution_mode(execution_mode)
                                     if execution_mode == "parallel":
                                         ui_coalesce.execute_wave_active = True
                                 continue
@@ -3325,6 +3493,13 @@ async def execute_task_textual(
                                     elif description:
                                         step_widget.set_description(description)
                                     step_widget.set_queued()
+                                    if not ns_key:
+                                        _sync_goal_tree_step_phase(
+                                            adapter,
+                                            step_id,
+                                            "queued",
+                                            description=description,
+                                        )
                                 continue
 
                             if event_type == STRANGE_LOOP_STEP_STARTED:
@@ -3348,7 +3523,13 @@ async def execute_task_textual(
                                         )
                                         pending_text_by_namespace[ns_key] = ""
                                         assistant_message_by_namespace.pop(ns_key, None)
-                                    step_widget = adapter._current_step_messages.get(step_id)
+                                    _finalize_stuck_dependency_predecessors(
+                                        adapter,
+                                        router,
+                                        next_step_id=step_id,
+                                        ns_key=ns_key,
+                                    )
+                                    _, step_widget = _lookup_step_card(adapter, step_id)
                                     if step_widget is None:
                                         step_widget = CognitionStepMessage(
                                             step_id=step_id,
@@ -3360,6 +3541,13 @@ async def execute_task_textual(
                                     elif description:
                                         step_widget.set_description(description)
                                     step_widget.set_running()
+                                    if not ns_key:
+                                        _sync_goal_tree_step_phase(
+                                            adapter,
+                                            step_id,
+                                            "running",
+                                            description=description,
+                                        )
                                     adapter._step_by_namespace[ns_key] = step_widget
                                     router.on_step_started(step_id)
                                     if adapter._set_spinner and not clarification_pending:
@@ -3435,7 +3623,12 @@ async def execute_task_textual(
                                         duration_ms=duration_ms,
                                         summary=summary,
                                     )
-                                    widget = adapter._current_step_messages.pop(step_id, None)
+                                    widget = _pop_step_card_from_adapter(adapter, step_id)
+                                    if widget is None:
+                                        logger.warning(
+                                            "step.completed for %s but no tracked step card found",
+                                            step_id,
+                                        )
                                     if widget is not None:
                                         if adapter._step_by_namespace.get(ns_key) is widget:
                                             adapter._step_by_namespace.pop(ns_key, None)
@@ -3466,6 +3659,14 @@ async def execute_task_textual(
                                             tool_call_count,
                                             summary,
                                         )
+                                        if not ns_key and adapter._goal_tree_message is not None:
+                                            adapter._goal_tree_message.complete_step(
+                                                step_id,
+                                                success,
+                                                duration_ms,
+                                                tool_call_count,
+                                                summary,
+                                            )
                                         clarification = data.get("clarification")
                                         if isinstance(clarification, dict) and success:
                                             raw_questions = clarification.get("questions") or []

@@ -123,6 +123,13 @@ class _StartupMixin:
 
         self._status_bar = self.query_one("#status-bar", StatusBar)
         self._chat_input = self.query_one("#input-area", ChatInput)
+        with suppress(NoMatches):
+            from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
+
+            self._plan_quick_view_overlay = self.query_one(
+                "#plan-quick-view-overlay",
+                PlanQuickViewOverlay,
+            )
 
         # Seed the badge from the app-level clarification mode (CLI flag, default Auto).
         self._status_bar.set_clarification_mode(self._clarification_mode)

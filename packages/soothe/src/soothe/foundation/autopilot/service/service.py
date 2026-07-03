@@ -357,6 +357,7 @@ class AutopilotService:
         informs: list[str] | None = None,
         source_file: str | None = None,
         workspace: str | None = None,
+        cron_job_id: str | None = None,  # RFC-229: Cron job tracking for recurring rescheduling
     ) -> GoalNode:
         """Create a goal in this service's ContextEngine (RFC-222 revised, RFC-625).
 
@@ -378,6 +379,7 @@ class AutopilotService:
                 (RFC-204).
             workspace: Optional client workspace path. When set, workers execute
                 in this directory and scheduling-time reservation uses it.
+            cron_job_id: Optional cron job ID for tracking recurring job goals (RFC-229).
 
         Returns:
             The newly-created ``GoalNode``. Callers can read ``.id`` to track it.
@@ -423,6 +425,10 @@ class AutopilotService:
                 source_file=source_file,
                 workspace=resolved_workspace,
             )
+        # RFC-229: Set cron_job_id on goal for recurring job rescheduling
+        if cron_job_id is not None:
+            goal.cron_job_id = cron_job_id
+            logger.debug("Goal %s linked to cron job %s", goal.id, cron_job_id)
         if self._dreaming:
             await self.wake_from_dreaming(trigger="new_task")
         await self._persist_goals()

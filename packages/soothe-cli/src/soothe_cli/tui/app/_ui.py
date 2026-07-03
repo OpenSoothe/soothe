@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -300,13 +301,13 @@ class _UIMixin:
         self,
         status: SpinnerStatus,
         *,
-        show_interrupt_hint: bool = True,
+        show_interrupt_hint: bool = False,
     ) -> None:
         """Show, update, or hide the loading spinner.
 
         Args:
             status: The spinner status to display, or `None` to hide.
-            show_interrupt_hint: When ``False``, omit only the esc-to-interrupt hint on the row.
+            show_interrupt_hint: When ``True``, append an esc-to-interrupt hint on the row.
         """
         if status is None:
             # Hide
@@ -358,3 +359,18 @@ class _UIMixin:
         """Resume the thinking-row spinner after a clarification pause."""
         if self._loading_widget is not None:
             self._loading_widget.resume()
+
+    def action_toggle_plan_quick_view(self) -> None:
+        """Expand or collapse the sticky plan quick-view panel."""
+        if self.screen.is_modal:
+            return
+        overlay = getattr(self, "_plan_quick_view_overlay", None)
+        if overlay is None:
+            with suppress(Exception):
+                from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
+
+                overlay = self.query_one("#plan-quick-view-overlay", PlanQuickViewOverlay)
+                self._plan_quick_view_overlay = overlay
+        if overlay is None:
+            return
+        overlay.toggle()

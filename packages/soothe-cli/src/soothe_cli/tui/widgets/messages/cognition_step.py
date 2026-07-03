@@ -1456,8 +1456,11 @@ class CognitionStepMessage(Vertical):
         if self._status_widget:
             self._status_widget.remove_class("pending")
             self._status_widget.add_class("error")
-            self._status_widget.update(Content.styled(message, colors.error))
-            self._status_widget.display = True
+            if message.strip():
+                self._status_widget.update(Content.styled(message, colors.error))
+                self._status_widget.display = True
+            else:
+                self._status_widget.display = False
         if self._detail_widget:
             self._detail_widget.display = False
 

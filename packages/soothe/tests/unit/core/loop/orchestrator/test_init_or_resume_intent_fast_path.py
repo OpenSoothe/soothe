@@ -37,6 +37,10 @@ async def test_init_or_resume_routes_fast_path_for_quiz() -> None:
         preferred_subagent=None,
         state_manager=SimpleNamespace(loop_id="L1"),
         emit=_emit,
+        ce=None,
+        continue_loop_mode=False,
+        recovery_valid_resume=False,
+        scratch=SimpleNamespace(plan_result=None, plan_assessment=None),
     )
 
     result = await node_init_or_resume(ctx, {})

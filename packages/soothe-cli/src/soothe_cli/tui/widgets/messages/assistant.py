@@ -150,6 +150,7 @@ class AssistantMessage(Vertical):
         content: str = "",
         *,
         render_markdown: bool | None = None,
+        render_ansi: bool = False,
         **kwargs: Any,
     ) -> None:
         """Initialize an assistant message.
@@ -158,12 +159,15 @@ class AssistantMessage(Vertical):
             content: Initial assistant text (rendered as Markdown if enabled).
             render_markdown: When set, overrides CLI ``render_markdown`` config for
                 this card (e.g. simple-bypass ``plan_direct`` next-action lines).
+            render_ansi: When True and markdown is disabled, parse ANSI escape
+                sequences in ``content`` via Rich (e.g. TUI shell command output).
             **kwargs: Additional arguments passed to parent.
         """
         super().__init__(**kwargs)
         self._content = content
         self._body: Static | None = None
         self._streaming_active: bool = False
+        self._render_ansi = render_ansi
 
         # Batching buffer for streaming content
         self._pending_buffer: str = ""
@@ -208,6 +212,10 @@ class AssistantMessage(Vertical):
             return
         if self._render_markdown:
             self._body.update(build_markdown(self._content, self))
+        elif self._render_ansi:
+            from rich.text import Text
+
+            self._body.update(Text.from_ansi(self._content))
         else:
             self._body.update(self._content)
 

@@ -9,11 +9,21 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe_cli.runtime.state.file_tracker import (
+    FileOperationRecord,
+    FileOpMetrics,
     apply_edit_file_lines_to_content,
     extract_line_range_text,
+    file_change_action_label,
 )
-from soothe_cli.tui.file_change_notify import mount_file_change_preview, textual_widget_id
-from soothe_cli.tui.file_change_renderers import build_file_change_preview
+from soothe_cli.tui.file_change_notify import (
+    finalize_file_change_preview,
+    mount_file_change_preview,
+    textual_widget_id,
+)
+from soothe_cli.tui.file_change_renderers import (
+    build_file_change_preview,
+    update_preview_data_from_record,
+)
 from soothe_cli.tui.widgets.file_change_preview import (
     DeleteFilePreviewWidget,
     EditFileLinesPreviewWidget,
@@ -60,6 +70,55 @@ def test_build_write_file_preview_shows_diff_on_overwrite(tmp_path: Path) -> Non
     assert any(line.startswith("-") or line.startswith("+") for line in data["diff_lines"])
 
 
+def test_write_file_preview_starts_collapsed() -> None:
+    """File previews default to a single-line summary in the message stream."""
+    widget = WriteFilePreviewWidget(
+        {"file_path": "src/a.py", "content": "hello", "is_new_file": True},
+        action_label="Writing file",
+    )
+    assert widget.is_expanded is False
+    widget.toggle_expand()
+    assert widget.is_expanded is True
+    assert widget.has_class("-expanded")
+    widget.toggle_expand()
+    assert widget.is_expanded is False
+    assert widget.has_class("-collapsed")
+
+
+def test_write_file_preview_compose_includes_header_and_body() -> None:
+    """Expanded compose still includes header and diff/content children."""
+    widget = WriteFilePreviewWidget(
+        {"file_path": "src/a.py", "content": "line1\nline2", "is_new_file": True},
+        action_label="Writing file",
+    )
+    children = list(widget.compose())
+    classes = [c for child in children for c in (getattr(child, "classes", None) or set())]
+    assert "file-change-preview-header" in classes
+    assert "diff-line-added" in classes or "file-change-preview-body" in classes
+
+
+@pytest.mark.asyncio
+async def test_finalize_preserves_collapsed_state() -> None:
+    """Finalizing on-disk results does not force the preview open."""
+    widget = WriteFilePreviewWidget(
+        {"file_path": "/tmp/x.txt", "content": "draft", "is_new_file": True},
+        action_label="Writing file",
+    )
+    widget._finalized = False
+    record = FileOperationRecord(
+        tool_name="write_file",
+        display_path="/tmp/x.txt",
+        physical_path=None,
+        tool_call_id="tc-1",
+        before_content="",
+        after_content="final",
+        metrics=FileOpMetrics(lines_written=1),
+    )
+    await widget.finalize_from_record(record)
+    assert widget._finalized is True
+    assert widget.is_expanded is False
+
+
 def test_write_file_overwrite_diff_compose_renders_diff_lines(tmp_path: Path) -> None:
     """Regression: overwrite preview uses compact gutter-bar style (diff-line-* classes)."""
     target = tmp_path / "existing.txt"
@@ -92,6 +151,17 @@ def test_build_edit_file_preview_has_diff_lines() -> None:
     cls, data = built
     assert cls is EditFilePreviewWidget
     assert any(line.startswith("-") or line.startswith("+") for line in data["diff_lines"])
+
+
+def test_edit_file_preview_diff_rows_align_context_and_additions() -> None:
+    """Regression: added lines must align with context lines in diff previews."""
+    from soothe_cli.tui.widgets.diff import format_diff_row_plain
+
+    width = 3
+    content = "        if self._autopilot is not None:"
+    context = format_diff_row_plain(" ", content, line_num=92, width=width)
+    added = format_diff_row_plain("+", content, line_num=96, width=width)
+    assert context.index(content) == added.index(content)
 
 
 def test_build_edit_file_lines_preview_uses_line_range(tmp_path: Path) -> None:
@@ -147,6 +217,7 @@ async def test_mount_file_change_preview_accepts_unified_tool_call_id() -> None:
     """Mount succeeds when tool_call_id contains colons (unified id format)."""
     adapter = MagicMock()
     adapter._file_change_previews_shown = set()
+    adapter._file_change_widgets = {}
     adapter._mount_message = AsyncMock()
 
     args = {"file_path": "/tmp/x.txt", "content": "body"}
@@ -162,6 +233,72 @@ async def test_mount_file_change_preview_accepts_unified_tool_call_id() -> None:
     mounted = adapter._mount_message.await_args_list[0].args[0]
     assert mounted.id == "file-preview-JWZ_01_s_write_file_23"
     assert "JWZ_01:s:write_file:23" in adapter._file_change_previews_shown
+    assert adapter._file_change_widgets["JWZ_01:s:write_file:23"] is mounted
+
+
+@pytest.mark.asyncio
+async def test_finalize_file_change_preview_upgrades_mounted_widget() -> None:
+    """Completion finalizes the preview card instead of mounting a second diff."""
+    adapter = MagicMock()
+    adapter._file_change_previews_shown = set()
+    adapter._file_change_widgets = {}
+    adapter._mount_message = AsyncMock()
+
+    args = {"file_path": "/tmp/x.txt", "content": "hello"}
+    await mount_file_change_preview(
+        adapter,
+        tool_name="write_file",
+        args=args,
+        tool_call_id="tc-1",
+        assistant_id=None,
+    )
+    widget = adapter._file_change_widgets["tc-1"]
+    assert widget._action_label == "Writing file"
+
+    record = FileOperationRecord(
+        tool_name="write_file",
+        display_path="/tmp/x.txt",
+        physical_path=None,
+        tool_call_id="tc-1",
+        before_content="",
+        after_content="hello",
+        metrics=FileOpMetrics(lines_written=1),
+    )
+    handled = await finalize_file_change_preview(adapter, record=record)
+
+    assert handled is True
+    assert widget._finalized is True
+    assert widget._action_label == file_change_action_label(record)
+
+
+def test_update_preview_data_from_record_write_file_new() -> None:
+    data = {"file_path": "/tmp/x.txt", "content": "draft", "is_new_file": True}
+    record = FileOperationRecord(
+        tool_name="write_file",
+        display_path="/tmp/x.txt",
+        physical_path=None,
+        tool_call_id="tc-1",
+        before_content="",
+        after_content="final",
+    )
+    update_preview_data_from_record(data, record)
+    assert data["content"] == "final"
+    assert data["is_new_file"] is True
+    assert "diff_lines" not in data
+
+
+@pytest.mark.asyncio
+async def test_finalize_file_change_preview_returns_false_without_widget() -> None:
+    adapter = MagicMock()
+    adapter._file_change_widgets = {}
+    record = FileOperationRecord(
+        tool_name="edit_file",
+        display_path="a.py",
+        physical_path=None,
+        tool_call_id="missing",
+        diff="-foo\n+bar",
+    )
+    assert await finalize_file_change_preview(adapter, record=record) is False
 
 
 @pytest.mark.asyncio
@@ -169,6 +306,7 @@ async def test_mount_file_change_preview_dedupes_by_tool_call_id() -> None:
     """Only one preview card is mounted per tool_call_id per turn."""
     adapter = MagicMock()
     adapter._file_change_previews_shown = set()
+    adapter._file_change_widgets = {}
     adapter._mount_message = AsyncMock()
 
     args = {"file_path": "/tmp/x.txt", "content": "body"}

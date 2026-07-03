@@ -155,19 +155,20 @@ class StrangeLoop:
             workspace: Thread-specific workspace path (RFC-103)
             max_iterations: Maximum loop iterations (default: 8)
             loop_id: Optional loop_id (None → auto-generate UUID)
-            intent: IntentClassification (RFC-225). ``quiz`` is short-circuited by the runner;
-                ``agentic`` is handled here. Loop continuation is derived from the checkpoint.
+            intent: IntentClassification (RFC-225). When omitted, the graph entry
+                ``intent_classify`` node runs classification. Loop continuation is
+                derived from the checkpoint.
             shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
                 - new_goal: Normal goal execution flow
-                - quiz: Should not reach here (handled in runner)
+                - quiz: Handled via graph fast-path and runner quiz response
             routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
             clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
                 requests are deferred via the legacy no-policy path.
             proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
                 tools to enqueue goal suggestions and findings during execution.
-            goal_trace: ``GoalLoopTrace`` from ``SootheLangfuse.begin_goal_loop`` so off-graph
-                intent-classify and ``strange-loop-graph`` nest under one trace.
+            goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
+                is enabled, one is opened before graph entry classification.
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -555,6 +556,20 @@ class StrangeLoop:
                 persistence_backend,
             )
 
+            active_goal_trace = goal_trace
+            if (
+                active_goal_trace is None
+                and intent_classifier is not None
+                and not clarification_answer
+                and self.config.observability.langfuse.enabled
+            ):
+                from soothe.utils.observability.langfuse import SootheLangfuse
+
+                active_goal_trace = SootheLangfuse(self.config).begin_goal_loop(
+                    session_id=main_thread_id,
+                    loop_id=state_manager.loop_id,
+                )
+
             ctx = LoopRuntimeContext(
                 strange_loop=self,
                 state_manager=state_manager,
@@ -579,7 +594,7 @@ class StrangeLoop:
                 proposal_queue=proposal_queue,  # RFC-204 Group C
                 ce=ce_instance,
                 ce_goal_id=ce_goal.id,
-                goal_trace=goal_trace,
+                goal_trace=active_goal_trace,
             )
 
             async def pump_graph() -> None:

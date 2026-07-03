@@ -9,7 +9,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.autopilot.engine.scheduled_tasks import SchedulerService, ScheduleSpec
 from soothe.foundation.cron.extraction import CronExtractionService
@@ -91,6 +91,15 @@ class CronService:
 
         self._running = True
         self._tick_task = asyncio.create_task(self._tick_loop())
+
+        # RFC-229: Subscribe to goal completion events for recurring job rescheduling
+        if self._autopilot is not None:
+            self._autopilot._internal_bus.subscribe(
+                "soothe.internal.goal.completed",
+                self._handle_internal_goal_completed,
+            )
+            logger.debug("CronService subscribed to goal completion events")
+
         logger.info("CronService started with poll_interval=%ds", self._cron_config.poll_interval)
 
     async def stop(self) -> None:
@@ -263,6 +272,7 @@ class CronService:
                     goal = await self._autopilot.submit_task(
                         job.description,
                         priority=job.priority,
+                        cron_job_id=job.id,  # RFC-229: Link goal to cron job for rescheduling
                     )
                     logger.info(
                         "Cron job dispatched: id=%s goal_id=%s",
@@ -383,6 +393,42 @@ class CronService:
             )
         else:
             await self._store.update_status(job_id, JobStatus.FAILED)
+
+    async def _handle_internal_goal_completed(self, event: Any) -> None:
+        """Handle InternalGoalCompletedEvent for recurring job rescheduling (RFC-229).
+
+        Bridge from internal event to handle_goal_completion when goal has cron_job_id.
+
+        Args:
+            event: InternalGoalCompletedEvent from AutopilotService.
+        """
+        # Extract goal_id from event
+        goal_id = getattr(event, "goal_id", None)
+        if goal_id is None:
+            return
+
+        # Look up goal to check if it has cron_job_id
+        if self._autopilot is None:
+            return
+        goal = await self._autopilot.get_goal(goal_id)
+        if goal is None:
+            return
+
+        cron_job_id = getattr(goal, "cron_job_id", None)
+        if cron_job_id is None:
+            return
+
+        # Check if plan_result indicates success
+        plan_result = getattr(event, "plan_result", {})
+        success = plan_result.get("outcome", "success") == "success"
+
+        logger.debug(
+            "Goal %s completed (success=%s), triggering cron job %s rescheduling",
+            goal_id,
+            success,
+            cron_job_id,
+        )
+        await self.handle_goal_completion(cron_job_id, success=success)
 
 
 import contextlib  # noqa: E402  # Used in stop() above

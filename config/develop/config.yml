@@ -17,13 +17,22 @@ providers:
     api_base_url: "${DASHSCOPE_BASE_URL}"
     api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - glm-5
       - glm-5.2
       - qwen3.7-plus
       - qwen3.6-plus
       - kimi-k2.5
       - MiniMax-M2.5
       - multimodal-embedding-v1
+
+  - name: coding-plan
+    provider_type: openai
+    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
+    api_key: "${DASHSCOPE_CP_API_KEY}"
+    models:
+      - glm-5
+      - qwen3.6-plus
+      - kimi-k2.5
+      - MiniMax-M2.5
 
   - name: omlx
     provider_type: openai
@@ -40,13 +49,13 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "dashscope:glm-5"
-      fast: "dashscope:kimi-k2.5"
-      think: "dashscope:glm-5"
-      image: "dashscope:kimi-k2.5"
-      ocr: null
-      embedding: "dashscope:multimodal-embedding-v1"
-    embedding_dims: 1024  # multimodal-embedding-v1 fixed output size
+      default: "dashscope:glm-5.2"
+      fast: "coding-plan:kimi-k2.5"
+      think: "dashscope:glm-5.2"
+      image: "coding-plan:kimi-k2.5"
+      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
+      embedding: "omlx:nomicai-modernbert-embed-base-bf16"
+    embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
 
   - name: local-deploy
     router:

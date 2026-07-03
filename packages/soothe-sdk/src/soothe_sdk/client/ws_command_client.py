@@ -41,7 +41,8 @@ _AUTOPilot_COMMANDS = {
 
 _CRON_COMMANDS = {
     "add": "cron_add",
-    "list_jobs": "cron_list_jobs",
+    "list": "cron_list",
+    "list_jobs": "cron_list",
     "show": "cron_show",
     "cancel": "cron_cancel",
 }
@@ -200,19 +201,6 @@ class WsCommandClient:
         """Get job status with DAG snapshot."""
         return await self._send_command("autopilot_get_job", {"job_id": job_id})
 
-    async def job_pause(self, job_id: str) -> dict[str, Any]:
-        """Pause a running autopilot job."""
-        return await self._send_command("autopilot_pause", {"job_id": job_id})
-
-    async def job_guidance(
-        self, job_id: str, text: str, *, goal_id: str | None = None
-    ) -> dict[str, Any]:
-        """Send guidance to an autopilot job or specific goal."""
-        payload = {"job_id": job_id, "text": text}
-        if goal_id:
-            payload["goal_id"] = goal_id
-        return await self._send_command("autopilot_guidance", payload)
-
     async def autopilot_subscribe(self) -> dict[str, Any]:
         """Subscribe to autopilot worker events."""
         return await self._send_command("autopilot_subscribe")
@@ -220,6 +208,113 @@ class WsCommandClient:
     async def autopilot_unsubscribe(self) -> dict[str, Any]:
         """Unsubscribe from autopilot worker events."""
         return await self._send_command("autopilot_unsubscribe")
+
+    # RFC-228 canonical job commands (recommended)
+
+    async def job_create(
+        self,
+        goal: str,
+        *,
+        workspace: str | None = None,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
+        guidance: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new autopilot job (RFC-228 canonical method).
+
+        Args:
+            goal: Job goal text (required).
+            workspace: Optional workspace path.
+            autonomous: Whether to run autonomously.
+            max_iterations: Optional iteration limit.
+            guidance: Optional initial guidance.
+
+        Returns:
+            Dict with job_id and status.
+        """
+        payload = {"goal": goal}
+        if workspace:
+            payload["workspace"] = workspace
+        if autonomous:
+            payload["autonomous"] = autonomous
+        if max_iterations:
+            payload["max_iterations"] = max_iterations
+        if guidance:
+            payload["guidance"] = guidance
+        return await self._send_command("job_create", payload)
+
+    async def job_status(self, job_id: str) -> dict[str, Any]:
+        """Get job status with goal counts and workers (RFC-228 canonical method).
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Dict with job_id, status, active_goals, completed_goals, workers.
+        """
+        return await self._send_command("job_status", {"job_id": job_id})
+
+    async def job_pause(self, job_id: str) -> dict[str, Any]:
+        """Pause a running job (RFC-228 canonical method).
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Dict with job_id and status="suspended".
+        """
+        return await self._send_command("job_pause", {"job_id": job_id})
+
+    async def job_resume(self, job_id: str) -> dict[str, Any]:
+        """Resume a paused job (RFC-228 canonical method).
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Dict with job_id and status="pending".
+        """
+        return await self._send_command("job_resume", {"job_id": job_id})
+
+    async def job_cancel(self, job_id: str) -> dict[str, Any]:
+        """Cancel a job (RFC-228 canonical method).
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Dict with job_id and status="cancelled".
+        """
+        return await self._send_command("job_cancel", {"job_id": job_id})
+
+    async def job_dag(self, job_id: str) -> dict[str, Any]:
+        """Get job DAG snapshot for visualization (RFC-228 canonical method).
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Dict with job_id and dag (nodes/edges).
+        """
+        return await self._send_command("job_dag", {"job_id": job_id})
+
+    async def job_guidance(
+        self, job_id: str, content: str, *, goal_id: str | None = None
+    ) -> dict[str, Any]:
+        """Send guidance to a job or specific goal (RFC-228 canonical method).
+
+        Args:
+            job_id: Job identifier.
+            content: Guidance text.
+            goal_id: Optional specific goal to target.
+
+        Returns:
+            Dict with job_id, goal_id, absorbed.
+        """
+        payload = {"job_id": job_id, "content": content}
+        if goal_id:
+            payload["goal_id"] = goal_id
+        return await self._send_command("job_guidance", payload)
 
     # Cron commands
 
@@ -230,12 +325,23 @@ class WsCommandClient:
             payload["priority"] = priority
         return await self._send_command("cron_add", payload)
 
-    async def cron_list_jobs(self, *, status: str | None = None) -> dict[str, Any]:
-        """List scheduled jobs."""
+    async def cron_list(self, *, status: str | None = None) -> dict[str, Any]:
+        """List scheduled jobs (RFC-229 canonical method).
+
+        Sends the ``cron_list`` method, which the daemon routes to
+        ``_handle_cron_list``. The former ``cron_list_jobs`` method name is
+        deprecated; it sent a method the daemon did not handle.
+
+        Args:
+            status: Optional status filter.
+
+        Returns:
+            Dict with jobs list.
+        """
         payload = {}
         if status:
             payload["status"] = status
-        return await self._send_command("cron_list_jobs", payload)
+        return await self._send_command("cron_list", payload)
 
     async def cron_show(self, job_id: str) -> dict[str, Any]:
         """Get job details."""
@@ -340,6 +446,42 @@ class SyncWsCommandClient:
         """Send guidance to an autopilot job or specific goal (sync)."""
         return self._run_async(self._client.job_guidance(job_id, text, goal_id=goal_id))
 
+    def job_create(
+        self,
+        goal: str,
+        *,
+        workspace: str | None = None,
+        autonomous: bool = False,
+        max_iterations: int | None = None,
+        guidance: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new autopilot job (sync, RFC-228 canonical)."""
+        return self._run_async(
+            self._client.job_create(
+                goal,
+                workspace=workspace,
+                autonomous=autonomous,
+                max_iterations=max_iterations,
+                guidance=guidance,
+            )
+        )
+
+    def job_status(self, job_id: str) -> dict[str, Any]:
+        """Get job status with goal counts and workers (sync, RFC-228 canonical)."""
+        return self._run_async(self._client.job_status(job_id))
+
+    def job_resume(self, job_id: str) -> dict[str, Any]:
+        """Resume a paused autopilot job (sync, RFC-228 canonical)."""
+        return self._run_async(self._client.job_resume(job_id))
+
+    def job_cancel(self, job_id: str) -> dict[str, Any]:
+        """Cancel an autopilot job (sync, RFC-228 canonical)."""
+        return self._run_async(self._client.job_cancel(job_id))
+
+    def job_dag(self, job_id: str) -> dict[str, Any]:
+        """Get job DAG snapshot for visualization (sync, RFC-228 canonical)."""
+        return self._run_async(self._client.job_dag(job_id))
+
     def autopilot_subscribe(self) -> dict[str, Any]:
         """Subscribe to autopilot worker events (sync)."""
         return self._run_async(self._client.autopilot_subscribe())
@@ -352,9 +494,9 @@ class SyncWsCommandClient:
         """Submit a natural-language scheduled job (sync)."""
         return self._run_async(self._client.cron_add(text, priority=priority))
 
-    def cron_list_jobs(self, *, status: str | None = None) -> dict[str, Any]:
+    def cron_list(self, *, status: str | None = None) -> dict[str, Any]:
         """List scheduled jobs (sync)."""
-        return self._run_async(self._client.cron_list_jobs(status=status))
+        return self._run_async(self._client.cron_list(status=status))
 
     def cron_show(self, job_id: str) -> dict[str, Any]:
         """Get job details (sync)."""

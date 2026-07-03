@@ -139,10 +139,10 @@ async def test_send_command_default_payload_is_empty_dict() -> None:
     client = WsCommandClient("ws://localhost:8765/")
 
     with _patch_connect(fake_ws):
-        await client._send_command("cron_list_jobs")
+        await client._send_command("cron_list")
 
     sent = json.loads(fake_ws._send_captured[-1])
-    assert sent["method"] == "cron_list_jobs"
+    assert sent["method"] == "cron_list"
     # No stray payload/command keys; empty params omitted from wire.
     assert "payload" not in sent
     assert "command" not in sent

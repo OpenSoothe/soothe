@@ -43,6 +43,7 @@ from soothe_cli.tui.widgets.messages import (
     AssistantMessage,
     QueuedUserMessage,
 )
+from soothe_cli.tui.widgets.plan_quick_view_overlay import PlanQuickViewOverlay
 from soothe_cli.tui.widgets.status import StatusBar
 from soothe_cli.tui.widgets.welcome import WelcomeBanner
 
@@ -79,7 +80,7 @@ class SootheApp(
     """Vertical scroll speed (reduced from Textual default for finer control)."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "interrupt", "Interrupt", show=False, priority=True),
+        Binding("escape", "dismiss_ui", "Dismiss", show=False, priority=True),
         Binding(
             "ctrl+c",
             "quit_or_interrupt",
@@ -115,8 +116,15 @@ class SootheApp(
             "Copy Selection",
             show=False,
         ),
+        Binding(
+            "ctrl+t",
+            "toggle_plan_quick_view",
+            "Plan View",
+            show=False,
+            priority=True,
+        ),
     ]
-    """App-level keybindings for interrupt, quit, and navigation."""
+    """App-level keybindings for dismiss, quit, and navigation."""
 
     class ServerStartFailed(Message):
         """Posted when daemon bootstrap or background connection fails."""
@@ -216,6 +224,7 @@ class SootheApp(
         self._status_bar: StatusBar | None = None
 
         self._chat_input: ChatInput | None = None
+        self._plan_quick_view_overlay: PlanQuickViewOverlay | None = None
 
         self._quit_pending = False
 
@@ -374,6 +383,7 @@ class SootheApp(
                 )
                 yield Container(id="messages")
         with Container(id="bottom-app-container"):
+            yield PlanQuickViewOverlay(id="plan-quick-view-overlay")
             yield Container(id="thinking-status")
             yield ChatInput(
                 cwd=self._cwd,

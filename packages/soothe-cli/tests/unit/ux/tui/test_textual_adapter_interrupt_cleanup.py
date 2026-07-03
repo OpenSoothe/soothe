@@ -37,6 +37,7 @@ async def test_interrupt_cleanup_cancels_remote_query_not_detach() -> None:
 
     daemon_session.cancel_remote_query.assert_awaited_once()
     daemon_session.detach.assert_not_called()
+    adapter._mount_message.assert_not_awaited()
 
 
 @pytest.mark.asyncio

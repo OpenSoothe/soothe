@@ -7,6 +7,22 @@ from soothe_cli.tui.widgets.message_store import MessageType
 from soothe_cli.tui.widgets.messages import CognitionGoalTreeMessage
 
 
+def test_cognition_goal_tree_pending_and_queued_phases() -> None:
+    """Plan rows show pending and queued phases before execution."""
+    w = CognitionGoalTreeMessage(goal="Plan work", id="msg-gt-02")
+    w.sync_plan_steps([{"id": "S1", "description": "First"}])
+    assert w._steps["S1"].phase == "pending"
+
+    w.set_step_phase("S1", "queued", description="First")
+    assert w._steps["S1"].phase == "queued"
+
+    w.set_step_phase("S1", "running", description="First")
+    assert w._steps["S1"].phase == "running"
+
+    content = w._assemble_steps_content()
+    assert "S1" in content.plain
+
+
 def test_cognition_goal_tree_message_store_round_trip() -> None:
     """Serialize and restore a goal→steps tree card."""
     w = CognitionGoalTreeMessage(

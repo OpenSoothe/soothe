@@ -96,6 +96,8 @@ class PhasesMixin:
         user_input: str,
         thread_id: str,
         classification: Any | None = None,
+        *,
+        context_engine: Any | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for quiz-style queries (greetings, thanks, brief trivia).
 
@@ -107,6 +109,7 @@ class PhasesMixin:
             user_input: User message.
             thread_id: Thread ID for state tracking.
             classification: IntentClassification from classifier (may contain piggybacked quiz_response).
+            context_engine: Optional loop ContextEngine for ledger persistence.
 
         Yields:
             StreamChunk events for quiz response.
@@ -124,7 +127,12 @@ class PhasesMixin:
                     phase="quiz",
                     thread_id=thread_id,
                 )
-                await self._save_quiz_to_state(user_input, piggybacked_answer.strip(), thread_id)
+                await self._save_quiz_to_state(
+                    user_input,
+                    piggybacked_answer.strip(),
+                    thread_id,
+                    context_engine=context_engine,
+                )
                 return
 
         # Fallback: separate LLM call for quiz answer
@@ -144,7 +152,12 @@ class PhasesMixin:
                 thread_id=thread_id,
             )
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
-            await self._save_quiz_to_state(user_input, fallback_response, thread_id)
+            await self._save_quiz_to_state(
+                user_input,
+                fallback_response,
+                thread_id,
+                context_engine=context_engine,
+            )
             return
 
         from soothe.foundation.sloop.intention.quiz_messages import build_quiz_system_message
@@ -194,7 +207,9 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 thread_id=thread_id,
             )
             logger.debug("Quiz completed (%s model): %s", model_label, user_input[:50])
-            await self._save_quiz_to_state(user_input, answer, thread_id)
+            await self._save_quiz_to_state(
+                user_input, answer, thread_id, context_engine=context_engine
+            )
         except Exception:
             logger.exception("Quiz LLM call failed")
             fallback_response = "I couldn't answer that question. Please try again."
@@ -203,12 +218,21 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 phase="quiz",
                 thread_id=thread_id,
             )
-            await self._save_quiz_to_state(user_input, fallback_response, thread_id)
+            await self._save_quiz_to_state(
+                user_input, fallback_response, thread_id, context_engine=context_engine
+            )
 
-    async def _save_quiz_to_state(self, query: str, response: str, thread_id: str) -> None:
+    async def _save_quiz_to_state(
+        self,
+        query: str,
+        response: str,
+        thread_id: str,
+        *,
+        context_engine: Any | None = None,
+    ) -> None:
         """Persist quiz (minimal-path) Human+AI pair to checkpointer and loop ledger."""
         await self._save_quiz_to_checkpointer(query, response, thread_id)
-        await self._save_quiz_to_ledger(query, response, thread_id)
+        await self._save_quiz_to_ledger(query, response, thread_id, context_engine=context_engine)
 
     async def _save_quiz_to_checkpointer(self, query: str, response: str, thread_id: str) -> None:
         """Persist quiz Human+AI pair to the LangGraph checkpointer."""
@@ -229,7 +253,14 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         except Exception:
             logger.debug("Failed to save quiz to checkpointer", exc_info=True)
 
-    async def _save_quiz_to_ledger(self, query: str, response: str, thread_id: str) -> None:
+    async def _save_quiz_to_ledger(
+        self,
+        query: str,
+        response: str,
+        thread_id: str,
+        *,
+        context_engine: Any | None = None,
+    ) -> None:
         """Persist quiz Human+AI pair to the loop ContextEngine ledger."""
         from pathlib import Path
 
@@ -244,9 +275,27 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
             _record_ledger_message,
         )
 
-        loop_id = (getattr(self, "_client_loop_id_for_stream", None) or thread_id or "").strip()
         answer = (response or "").strip()
-        if not loop_id or not answer:
+        if not answer:
+            return
+
+        if context_engine is not None:
+            try:
+                human = LoopHumanMessage(content=query, thread_id=thread_id, phase="quiz")
+                ai = LoopAIMessage(content=answer, thread_id=thread_id, phase="quiz")
+                _record_ledger_message(context_engine, human, "quiz")
+                _record_ledger_message(context_engine, ai, "quiz")
+                await context_engine.save()
+                logger.debug(
+                    "Quiz exchange saved to active loop ledger (loop=%s)",
+                    getattr(self, "_client_loop_id_for_stream", None) or thread_id,
+                )
+                return
+            except Exception:
+                logger.debug("Failed to save quiz to active loop ledger", exc_info=True)
+
+        loop_id = (getattr(self, "_client_loop_id_for_stream", None) or thread_id or "").strip()
+        if not loop_id:
             return
 
         try:

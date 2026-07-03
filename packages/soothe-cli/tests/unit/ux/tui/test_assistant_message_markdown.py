@@ -84,6 +84,26 @@ async def test_stop_stream_renders_plain_text_when_markdown_disabled() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stop_stream_renders_ansi_when_render_ansi_enabled() -> None:
+    """stop_stream() parses ANSI escapes when render_ansi is True."""
+    from rich.text import Text
+
+    msg = AssistantMessage(id="asst-test", render_markdown=False, render_ansi=True)
+    msg._content = "\x1b[31mred\x1b[0m"
+    msg._streaming_active = True
+    body = MagicMock()
+    msg._body = body
+
+    await msg.stop_stream()
+
+    body.update.assert_called_once()
+    rendered = body.update.call_args[0][0]
+    assert isinstance(rendered, Text)
+    assert rendered.plain == "red"
+    assert rendered.spans
+
+
+@pytest.mark.asyncio
 async def test_stop_stream_no_op_when_content_empty() -> None:
     """stop_stream() renders empty string when content is empty."""
     msg = AssistantMessage(id="asst-test")

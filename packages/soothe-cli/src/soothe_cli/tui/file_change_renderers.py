@@ -6,6 +6,7 @@ from typing import Any
 
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
+    FileOperationRecord,
     extract_line_range_text,
     parse_line_range_args,
     read_physical_file_text,
@@ -124,3 +125,43 @@ def build_file_change_preview(
         }
 
     return GenericFilePreviewWidget, dict(args)
+
+
+def update_preview_data_from_record(data: dict[str, Any], record: FileOperationRecord) -> None:
+    """Refresh an in-flight preview widget's data from a completed tracker record."""
+    data["file_path"] = record.display_path
+
+    if record.tool_name == "write_file":
+        before = record.before_content or ""
+        after = record.after_content or ""
+        if not before:
+            data["is_new_file"] = True
+            data["content"] = after
+            data.pop("diff_lines", None)
+            data.pop("old_string", None)
+            data.pop("new_string", None)
+        else:
+            data["is_new_file"] = False
+            data["content"] = after
+            if record.diff:
+                data["diff_lines"] = record.diff.splitlines()
+                data["old_string"] = before
+                data["new_string"] = after
+        return
+
+    if record.tool_name == "delete_file":
+        before = record.before_content or ""
+        lines = before.splitlines()
+        data["preview_lines"] = lines[:TOOL_APPROVAL_PREVIEW_LINES]
+        data["total_lines"] = len(lines)
+        return
+
+    if record.tool_name == "edit_file_lines":
+        line_range = parse_line_range_args(record.args)
+        if line_range is not None:
+            data["start_line"], data["end_line"] = line_range
+
+    if record.diff:
+        data["diff_lines"] = record.diff.splitlines()
+        data["old_string"] = record.before_content or ""
+        data["new_string"] = record.after_content or ""
