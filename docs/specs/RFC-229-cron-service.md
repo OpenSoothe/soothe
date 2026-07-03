@@ -181,6 +181,24 @@ class CronService:
 
     async def _tick(self) -> None:
         """Periodic check: find due jobs, dispatch to AutopilotService."""
+
+    async def _on_goal_completed(self, event: dict) -> None:
+        """Handle goal_completed event: reschedule recurring or mark one-time completed."""
+
+    async def _on_goal_failed(self, event: dict) -> None:
+        """Handle goal_failed event: increment failures, apply backoff or circuit-break."""
+
+    async def _on_goal_cancelled(self, event: dict) -> None:
+        """Handle goal_cancelled event: mark cron job cancelled, no reschedule."""
+
+    async def _reschedule_with_backoff(self, job: CronJob) -> None:
+        """Reschedule a failed recurring job with exponential backoff.
+
+        If consecutive_failures >= max_consecutive_failures, trip the circuit-breaker
+        (set status to 'failed', emit cron_job_circuit_broken, do NOT reschedule).
+        Otherwise, compute next_run = now + failure_backoff_base * (2 ** consecutive_failures),
+        capped at max_backoff_delay. Keep status 'pending' for retry.
+        """
 ```
 
 **Integration Points**:
@@ -188,6 +206,95 @@ class CronService:
 - `SchedulerService` for schedule calculation (wrapped, not replaced)
 - `AutopilotService` for goal submission
 - `CronJobStore` for database persistence
+- `InternalEventBus` for goal-completion callback subscription (RFC-450)
+
+#### Goal-Completion Callback Routing
+
+CronService does **not** poll AutopilotService for goal status. Instead, it subscribes to the daemon `InternalEventBus` (RFC-450) for goal lifecycle events and routes them to the originating cron job via the `cron_job_id` correlation key.
+
+**Mechanism**: EventBus subscription (not CE callbacks, not direct method calls).
+
+When `AutopilotService.submit_task(cron_job_id=...)` creates a goal, the `cron_job_id` is stored on the root `GoalNode` (RFC-626). As the goal progresses through the StrangeLoop lifecycle, AutopilotService emits goal-lifecycle events to `InternalEventBus`. CronService subscribes to these events, filters by `cron_job_id`, and performs rescheduling or status updates.
+
+**Subscription setup**: CronService registers its handler during daemon startup:
+
+```python
+# CronService.start() — called on daemon startup
+self._bus.subscribe("goal_completed", self._on_goal_completed)
+self._bus.subscribe("goal_failed", self._on_goal_failed)
+self._bus.subscribe("goal_cancelled", self._on_goal_cancelled)
+```
+
+**Handler implementations**:
+
+```python
+async def _on_goal_completed(self, event: GoalCompletedEvent) -> None:
+    """Handle goal completion: reschedule recurring jobs or mark one-time jobs done."""
+    cron_job_id = event.metadata.get("cron_job_id")
+    if not cron_job_id:
+        return  # Not a cron-dispatched goal
+    await self._handle_goal_completion(cron_job_id, success=True, error=None)
+
+async def _on_goal_failed(self, event: GoalFailedEvent) -> None:
+    """Handle goal failure: increment retry counter, apply backoff or circuit-break."""
+    cron_job_id = event.metadata.get("cron_job_id")
+    if not cron_job_id:
+        return
+    await self._handle_goal_completion(cron_job_id, success=False, error=event.error)
+
+async def _on_goal_cancelled(self, event: GoalCancelledEvent) -> None:
+    """Handle goal cancellation: mark cron job as cancelled (no reschedule)."""
+    cron_job_id = event.metadata.get("cron_job_id")
+    if not cron_job_id:
+        return
+    await self._store.update_status(cron_job_id, "cancelled", last_run=datetime.now())
+    await self._emit_event("cron_job_cancelled", cron_job_id)
+```
+
+**Core completion handler** (shared logic for completed/failed):
+
+```python
+async def _handle_goal_completion(self, cron_job_id: str, success: bool, error: str | None) -> None:
+    job = await self._store.get(cron_job_id)
+    if job is None:
+        return  # Job was deleted
+
+    now = datetime.now()
+    run_count = job.run_count + 1
+
+    if success:
+        await self._store.update_status(cron_job_id, "completed", last_run=now, run_count=run_count)
+        await self._emit_event("cron_job_completed", cron_job_id, run_count=run_count)
+    else:
+        await self._store.update_status(cron_job_id, "failed", last_run=now, run_count=run_count, last_error=error)
+        await self._emit_event("cron_job_failed", cron_job_id, run_count=run_count, error=error)
+
+    # End-condition check before reschedule
+    if self._is_job_expired(job, now):
+        await self._store.update_status(cron_job_id, "completed", last_run=now)
+        await self._emit_event("cron_job_expired", cron_job_id, run_count=run_count)
+        return
+
+    # Reschedule recurring jobs (with circuit-breaker check on failure)
+    if job.schedule_kind in ("every", "cron"):
+        if success:
+            await self._reschedule(job, now)
+        else:
+            await self._reschedule_with_backoff(job, now, run_count)
+    # One-time jobs: no reschedule (status already set above)
+```
+
+**Receiving-side event types** (CronService subscribes to these from `InternalEventBus`):
+
+| Event | Source | Payload Fields Used | CronService Action |
+|-------|--------|---------------------|--------------------|
+| `goal_completed` | AutopilotService | `metadata.cron_job_id`, `goal_id` | Reschedule recurring or mark one-time as completed |
+| `goal_failed` | AutopilotService | `metadata.cron_job_id`, `goal_id`, `error` | Increment failure count, apply backoff or circuit-break |
+| `goal_cancelled` | AutopilotService | `metadata.cron_job_id`, `goal_id` | Mark cron job as cancelled, no reschedule |
+
+> **Design note**: The EventBus approach was chosen over direct method calls or CE callbacks because: (1) it decouples CronService from AutopilotService's internal lifecycle — CronService doesn't need to know when or how a goal completes, only that it did; (2) it survives daemon restarts — if the daemon restarts after goal submission but before completion, the event is queued and delivered on reconnection (eventual consistency); (3) it allows multiple consumers — future services (e.g., notification service) can subscribe to the same events without coupling to CronService.
+
+> **Filtering**: CronService ignores all goal events where `metadata.cron_job_id` is absent or `None`. This means manually submitted goals (non-cron) do not trigger any cron-side processing. The filter is the first check in every handler.
 
 ### 2. CronExtractionService
 
@@ -379,9 +486,109 @@ class CronJob:
     next_run: datetime           # Computed next execution time
     last_run: datetime | None    # Last execution time (null if never run)
     run_count: int               # Number of executions (0 initially)
+    consecutive_failures: int = 0  # Consecutive failure count (resets on success; triggers circuit-breaker at threshold)
     created_at: datetime         # Creation timestamp
     updated_at: datetime         # Last modification timestamp
+    last_error: str | None = None  # Last failure error message (for retry/circuit-breaker tracking)
+
+    def __post_init__(self) -> None:
+        """Validate field constraints after dataclass initialization."""
+        if not (1 <= self.priority <= 100):
+            raise ValueError(
+                f"CronJob priority must be in range 1-100, got {self.priority}"
+            )
+        if self.run_count < 0:
+            raise ValueError(f"CronJob run_count must be >= 0, got {self.run_count}")
+        if self.consecutive_failures < 0:
+            raise ValueError(f"CronJob consecutive_failures must be >= 0, got {self.consecutive_failures}")
 ```
+
+**Priority validation enforcement points**:
+
+| Enforcement Point | Mechanism | Rationale |
+|-------------------|-----------|-----------|
+| **`CronJob.__post_init__`** | `ValueError` if `priority` is outside 1-100 | Catches invalid values at construction time — any code path that creates a `CronJob` with an out-of-range priority fails immediately |
+| **`CronExtractionService.extract()`** | LLM prompt instructs: `"priority": integer 1-100 (default 50)`. If extracted `priority` is `None`, use `CronConfig.default_priority`. If extracted value is outside 1-100, clamp to nearest valid value and log a WARNING. | The LLM may produce out-of-range values; clamping is safer than rejection because the user's intent is clear (high/low priority), just the magnitude is off |
+| **`CronService.add_job()`** | If `priority` parameter is explicitly passed (from `cron_add_request`), validate 1-100 before passing to `CronJob` construction. If invalid, raise `ValueError` — do NOT silently clamp user-provided values (only LLM-extracted values are clamped). | User-provided values should be explicit; silent clamping of user input masks bugs. LLM-extracted values are best-effort and clamping is appropriate. |
+
+```python
+# CronService.add_job() — priority validation
+async def add_job(self, natural_language: str, user_id: str, priority: int = 50) -> CronJob:
+    if not (1 <= priority <= 100):
+        raise ValueError(f"Priority must be 1-100, got {priority}")
+
+    result = await self._extraction.extract(natural_language)
+    # Extraction may produce a priority; clamp if out of range
+    extracted_priority = result.priority or self._config.default_priority
+    if not (1 <= extracted_priority <= 100):
+        logger.warning(
+            "Extracted priority %d out of range, clamping to %d",
+            extracted_priority, max(1, min(100, extracted_priority))
+        )
+        extracted_priority = max(1, min(100, extracted_priority))
+
+    # User-provided priority takes precedence over LLM-extracted priority
+    final_priority = priority if priority != 50 else extracted_priority
+    # ... rest of add_job
+```
+
+#### CronJob vs ScheduledTask: Direction of Truth
+
+The RFC defines two dataclasses with overlapping fields: `CronJob` (§5 above) and `ScheduledTask` (§3, enhanced from RFC-204). This section clarifies their relationship to avoid implementation ambiguity.
+
+**`CronJob` is the direction of truth for cron-service operations.** `CronService` operates exclusively on `CronJob` objects — `add_job()`, `list_jobs()`, `cancel_job()`, `show_job()`, and all internal methods (`_tick()`, `_handle_goal_completion()`, `_is_job_expired()`) read and write `CronJob` instances. The `CronJobStore` is the canonical persistence layer; `CronJob` is its native object model.
+
+**`ScheduledTask` is the internal representation used by `SchedulerService`** (RFC-204) for schedule math — `ScheduleSpec` parsing, `next_after()` calculation, and `get_due_tasks()` filtering. It is a lower-level scheduling primitive that predates cron-service and is shared with non-cron scheduled tasks.
+
+**Interop boundary**: The translation between the two models happens **at the `SchedulerService` call boundary inside `CronService._tick()`** — not inside the store, not inside `SchedulerService`:
+
+```python
+async def _tick(self) -> None:
+    now = datetime.now()
+
+    # Step 1: SchedulerService returns ScheduledTask objects (its native model)
+    due_tasks: list[ScheduledTask] = await self._scheduler.get_due_tasks(now)
+
+    for task in due_tasks:
+        # Step 2: Translate ScheduledTask → CronJob at the boundary
+        #   CronJobStore is the source of truth; the ScheduledTask from
+        #   get_due_tasks() is used only for its next_run filtering.
+        #   We re-load the full CronJob from the store to get all fields
+        #   (end_condition, priority, user_id, run_count, etc.) that
+        #   ScheduledTask does not carry.
+        job: CronJob = await self._store.get(task.id)
+        if job is None or job.status != "pending":
+            continue  # Deleted or no longer pending since the query
+
+        # Step 3: Operate on CronJob (direction of truth)
+        if self._is_job_expired(job, now):
+            await self._store.update_status(job.id, "completed", last_run=now)
+            await self._emit_event("cron_job_expired", job.id)
+            continue
+
+        await self._store.update_status(job.id, "running")
+        await self._emit_event("cron_job_dispatched", job.id)
+
+        goal = await self._autopilot.submit_task(
+            description=job.description,
+            priority=job.priority,
+            cron_job_id=job.id,
+        )
+        # Completion is handled asynchronously via EventBus callback
+        # (see §1 Goal-Completion Callback Routing) — _tick() does NOT
+        # block on goal completion.
+```
+
+**Mapping rules** (ScheduledTask ↔ CronJob):
+
+| Direction | When | Mechanism |
+|-----------|------|-----------|
+| `CronJob` → `ScheduledTask` | When `CronService.add_job()` calls `SchedulerService.add_task()` | `SchedulerService.add_task()` accepts `description`, `schedule_spec`, `next_run`; CronService passes these from the `CronJob` fields. The resulting `ScheduledTask` is transient — used only to compute `next_run`. |
+| `ScheduledTask` → `CronJob` | At the top of `_tick()` after `get_due_tasks()` | `CronService` uses `task.id` to load the full `CronJob` from `CronJobStore`. The `ScheduledTask`'s `next_run` is used only for due-filtering; all subsequent logic uses `CronJob` fields. |
+
+**Why not unify?** `ScheduledTask` is not replaced by `CronJob` because: (1) `SchedulerService` is a shared RFC-204 component used by non-cron features (e.g., delayed tasks, simple timers); (2) `CronJob` carries cron-specific fields (`end_condition`, `natural_language`, `run_count`, `last_error`) that `ScheduledTask` should not carry; (3) the store layer (`CronJobStore`) is cron-specific, while `SchedulerService`'s persistence adapter is swappable (JSON file for legacy, `CronJobStore` for cron).
+
+> **Implementation note**: `CronJobStore` is wired as the persistence adapter for `SchedulerService` when cron-service is enabled (see §3 SchedulerService Enhancement). This means `SchedulerService.get_due_tasks()` ultimately reads from the `cron_jobs` table via `CronJobStore`, but returns `ScheduledTask` objects (its API contract). The `ScheduledTask` objects are lightweight projections — they carry only scheduling fields, not cron-specific metadata. CronService always re-loads the full `CronJob` from the store after receiving a `ScheduledTask` from the scheduler.
 
 ### 6. Database Schema
 
@@ -401,6 +608,8 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     next_run TEXT NOT NULL,         -- ISO datetime
     last_run TEXT,                  -- ISO datetime
     run_count INTEGER DEFAULT 0,
+    consecutive_failures INTEGER DEFAULT 0,  -- Consecutive failure count (circuit-breaker tracking)
+    last_error TEXT,               -- Last failure error message (for retry/circuit-breaker tracking)
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -434,6 +643,8 @@ The `cron_jobs` table is created via `CREATE TABLE IF NOT EXISTS` on daemon star
 # CronJobStore._ensure_schema() — called on daemon startup
 SCHEMA_EXTENSIONS = [
     "ALTER TABLE cron_jobs ADD COLUMN natural_language TEXT",
+    "ALTER TABLE cron_jobs ADD COLUMN last_error TEXT",
+    "ALTER TABLE cron_jobs ADD COLUMN consecutive_failures INTEGER DEFAULT 0",
 ]
 
 def _ensure_schema_sync(self):
@@ -464,6 +675,10 @@ agent:
     extraction_retry_backoff: 2.0  # Exponential backoff base (seconds)
     min_confidence: 0.5        # Minimum extraction confidence (0.0-1.0)
     default_priority: 50       # Default job priority when not specified
+    # --- Recurring failure handling ---
+    max_consecutive_failures: 5   # Circuit-breaker threshold: consecutive failures before halting reschedule
+    failure_backoff_base: 60      # Base backoff delay (seconds) for failing recurring jobs
+    max_backoff_delay: 3600       # Maximum backoff delay cap (seconds, 1 hour default)
 ```
 
 **Pydantic Model**:
@@ -481,6 +696,9 @@ class CronConfig(BaseModel):
     extraction_retry_backoff: float = Field(default=2.0, ge=0.0, le=60.0, description="Exponential backoff base (seconds)")
     min_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Minimum extraction confidence threshold")
     default_priority: int = Field(default=50, ge=1, le=100, description="Default job priority")
+    max_consecutive_failures: int = Field(default=5, ge=1, le=50, description="Circuit-breaker threshold: consecutive failures before halting reschedule")
+    failure_backoff_base: float = Field(default=60.0, ge=1.0, le=3600.0, description="Base backoff delay (seconds) for failing recurring jobs")
+    max_backoff_delay: float = Field(default=3600.0, ge=60.0, le=86400.0, description="Maximum backoff delay cap (seconds)")
 ```
 
 **Field validation notes**:
@@ -524,7 +742,17 @@ Follows RFC-450 JSON message format with required `type` field.
 
 | Type | Fields | Description |
 |------|--------|-------------|
-| `cron_add_request` | `natural_language` (req, string), `user_id` (opt, string), `priority` (opt, int), `request_id` (opt, string) | Submit natural language cron job. Daemon routes to `CronService.add_job()`. |
+| `cron_add_request` | `natural_language` (req, string), `user_id` (opt, string), `priority` (opt, int), `request_id` (opt, string) | Submit natural language cron job. Daemon routes to `CronService.add_job()`. See User Identity Precedence below. |
+
+**User Identity Precedence** (`cron_add_request.user_id` field):
+
+The optional `user_id` field in the request body is **secondary** to the session-derived identity. The resolution order is:
+
+1. **Session-derived `user_id`** (authoritative): For TUI sessions, `session.user_id` is set during authentication. For HTTP REST, the `X-User-Id` header value. This is the identity used for ownership validation.
+2. **Request-body `user_id`** (override, restricted): If present AND the session-derived identity has admin privileges (future capability), the request-body value may override. In the current architecture (no admin roles), the request-body `user_id` is **ignored** when it differs from the session-derived identity, and a WARNING is logged: `"cron_add_request user_id mismatch: session=%s request=%s, using session identity"`. If the request-body `user_id` matches the session identity, it is accepted (redundant but harmless).
+3. **Fallback**: If no session identity exists (e.g., unauthenticated local TUI), the request-body `user_id` is used. If neither is present, defaults to `"default"`.
+
+This ensures a client cannot escalate privileges by sending an arbitrary `user_id` in the request body — the session identity always wins for authenticated sessions.
 
 **Server → Client Messages**:
 
@@ -697,7 +925,7 @@ The `user_id` used for ownership validation is derived differently per channel:
 
 | Channel | `user_id` Source | Notes |
 |---------|------------------|-------|
-| **TUI** (WebSocket RPC) | `session.user_id` from daemon session | Set during TUI session authentication; defaults to `"tui_user"` for unauthenticated local sessions |
+| **TUI** (WebSocket RPC) | `session.user_id` from daemon session | Set during TUI session authentication; defaults to `"tui_user"` for unauthenticated local sessions. The optional `user_id` field in `cron_add_request` is ignored if it differs from session identity (see User Identity Precedence above). |
 | **CLI** (HTTP REST) | `"http_api"` (constant) | CLI commands do not carry per-user identity in the current architecture. All CLI-managed jobs are scoped to the `"http_api"` pseudo-user. Multi-user CLI identity is deferred to a future auth RFC. |
 | **HTTP REST** (programmatic) | `X-User-Id` header, fallback `"http_api"` | Programmatic clients may pass `X-User-Id` header for user-scoped operations. If absent, defaults to `"http_api"`. |
 
@@ -733,11 +961,11 @@ The `user_id` used for ownership validation is derived differently per channel:
 4. On goal completion event:
    - **End-condition check** (before reschedule): If `job.end_condition` is set and expired, call `update_status(job.id, "completed", last_run=now)` and do NOT reschedule. Log at INFO.
    - If recurring (`every` or `cron`) and not expired:
-     - Compute next `next_run` via `SchedulerService.next_after()`
-     - `update_next_run()` with incremented `run_count`
-     - `update_status(job.id, "pending")` to requeue for next tick
+     - **On success**: Reset `consecutive_failures` to 0. Compute next `next_run` via `SchedulerService.next_after()`. `update_next_run()` with incremented `run_count`. `update_status(job.id, "pending")` to requeue for next tick.
+     - **On failure**: Call `_reschedule_with_backoff(job)`. If `consecutive_failures < max_consecutive_failures`: compute `next_run = now + failure_backoff_base * (2 ** consecutive_failures)` (capped at `max_backoff_delay`), keep status `pending` for retry. If `consecutive_failures >= max_consecutive_failures`: set status to `failed` (terminal), emit `cron_job_circuit_broken`, do NOT reschedule.
    - If one-time (`once`, `delay`, `at`):
-     - `update_status(job.id, "completed", last_run=now)`
+     - **On success**: `update_status(job.id, "completed", last_run=now)`
+     - **On failure**: `update_status(job.id, "failed", last_run=now, last_error=error)` — no reschedule for one-time jobs
 
 #### End-Condition Evaluation
 
@@ -778,8 +1006,10 @@ The `user_id` used for ownership validation is derived differently per channel:
 
 | Scenario | Handling |
 |----------|----------|
-| Goal execution fails | Mark job `failed`, increment `run_count`, log error |
-| Recurring job fails | Still reschedule for next run (don't block future executions) |
+| Goal execution fails | Mark job `failed`, increment `run_count`, store `last_error`, log error. Increment `consecutive_failures` counter. |
+| Recurring job fails (< `max_consecutive_failures`) | Reschedule for next run with exponential backoff: `next_run = now + base_delay * (2 ** consecutive_failures)`, capped at `max_backoff_delay`. Do NOT block future executions — the job remains `pending` and will be retried at the backoff-adjusted time. |
+| Recurring job fails (>= `max_consecutive_failures`) | **Circuit-breaker trips**: job status set to `failed` (terminal), `cron_job_circuit_broken` event emitted. The job is NOT rescheduled. User must explicitly cancel and re-create the job, or an admin resets `consecutive_failures` via a future maintenance command. |
+| Recurring job succeeds after failures | Reset `consecutive_failures` counter to 0. Reschedule normally (no backoff). |
 | AutopilotService unavailable | Skip tick, retry next interval |
 
 ### Persistence Failures
@@ -793,7 +1023,17 @@ The `user_id` used for ownership validation is derived differently per channel:
 
 Users need to know when a cron job has executed (succeeded, failed, or expired). The notification mechanism uses the existing daemon event bus (RFC-450) rather than introducing a new channel.
 
-**Event Types**: CronService emits events to the daemon `InternalEventBus` on every job state transition:
+**Event Types**: CronService interacts with the daemon `InternalEventBus` (RFC-450) in two directions — it **receives** goal-lifecycle events from AutopilotService (for completion callback routing) and **emits** cron-job events to the bus (for notification delivery).
+
+**Receiving-side events** (CronService subscribes to these — see §1 Goal-Completion Callback Routing):
+
+| Event | Source | Payload Fields Used | CronService Action |
+|-------|--------|---------------------|--------------------|
+| `goal_completed` | AutopilotService | `metadata.cron_job_id`, `goal_id` | Reschedule recurring or mark one-time as completed |
+| `goal_failed` | AutopilotService | `metadata.cron_job_id`, `goal_id`, `error` | Increment failure count, apply backoff or circuit-break |
+| `goal_cancelled` | AutopilotService | `metadata.cron_job_id`, `goal_id` | Mark cron job as cancelled, no reschedule |
+
+**Emitting-side events** (CronService emits these on every job state transition):
 
 | Event | Trigger | Payload Fields |
 |-------|---------|----------------|
@@ -802,6 +1042,7 @@ Users need to know when a cron job has executed (succeeded, failed, or expired).
 | `cron_job_failed` | Goal execution failed | `job_id`, `user_id`, `description`, `error`, `run_count` |
 | `cron_job_expired` | End condition reached; job will not reschedule | `job_id`, `user_id`, `description`, `end_condition`, `run_count` |
 | `cron_job_cancelled` | User cancelled the job | `job_id`, `user_id`, `description` |
+| `cron_job_circuit_broken` | Recurring job exceeded `max_consecutive_failures` — circuit-breaker tripped, job will not reschedule | `job_id`, `user_id`, `description`, `consecutive_failures`, `last_error` |
 
 **Notification Delivery**:
 
@@ -884,7 +1125,10 @@ Track per-component completion. All items must be checked before the RFC moves f
 
 - [ ] `CronConfig` Pydantic model with `Literal["fast", "think"]` validation on `extraction_model`
 - [ ] `CronConfig` includes `min_confidence`, `extraction_max_retries`, `extraction_retry_backoff` fields
+- [ ] `CronConfig` includes `max_consecutive_failures`, `failure_backoff_base`, `max_backoff_delay` fields
 - [ ] `CronJob` dataclass includes `natural_language` field
+- [ ] `CronJob` dataclass includes `consecutive_failures` and `last_error` fields
+- [ ] `CronJob.__post_init__` validates priority range (1-100), non-negative run_count and consecutive_failures
 - [ ] `ExtractionResult` dataclass includes `confidence` field
 - [ ] Config template (`config/config.template.yml`) updated with all new cron fields
 - [ ] Develop config (`config/develop/config.yml`) synced with template
@@ -902,7 +1146,8 @@ Track per-component completion. All items must be checked before the RFC moves f
 
 - [ ] `create()`, `get()`, `list_by_user()`, `update_status()`, `update_next_run()`, `get_due_jobs()` implemented
 - [ ] `cron_jobs` table DDL includes `natural_language` column
-- [ ] Migration strategy documented and implemented (ALTER TABLE for schema evolution)
+- [ ] `cron_jobs` table DDL includes `consecutive_failures` and `last_error` columns
+- [ ] Migration strategy documented and implemented (ALTER TABLE for schema evolution, including `consecutive_failures` and `last_error` columns)
 - [ ] Indexes on `(user_id, status)` and `next_run WHERE status='pending'` created
 - [ ] Unit tests with mocked DB
 
@@ -918,10 +1163,13 @@ Track per-component completion. All items must be checked before the RFC moves f
 - [ ] `add_job()` orchestrates extraction → scheduling → persistence
 - [ ] `list_jobs()`, `cancel_job()`, `show_job()` implement ownership validation
 - [ ] `_tick()` calls `get_due_tasks()` and dispatches to `AutopilotService.submit_task()`
+- [ ] `_on_goal_completed()`, `_on_goal_failed()`, `_on_goal_cancelled()` event handlers subscribe to InternalEventBus and route by `cron_job_id` metadata
+- [ ] `_reschedule_with_backoff()` implements exponential backoff and circuit-breaker (>= `max_consecutive_failures`)
+- [ ] `_to_cron_job()` / `_to_scheduled_task()` conversion methods defined at CronService↔SchedulerService interop boundary
 - [ ] `_is_job_expired()` evaluates `end_condition` before dispatch and before reschedule
 - [ ] Recurring rescheduling: `update_next_run()` + `update_status("pending")`
 - [ ] One-time completion: `update_status("completed", last_run=now)`
-- [ ] Goal-completion events emitted to `InternalEventBus` (`cron_job_dispatched`, `cron_job_completed`, `cron_job_failed`, `cron_job_expired`, `cron_job_cancelled`)
+- [ ] Goal-completion events emitted to `InternalEventBus` (`cron_job_dispatched`, `cron_job_completed`, `cron_job_failed`, `cron_job_expired`, `cron_job_cancelled`, `cron_job_circuit_broken`)
 - [ ] Unit tests with mocked dependencies
 
 ### TUI Integration
@@ -939,12 +1187,18 @@ Track per-component completion. All items must be checked before the RFC moves f
 - [ ] `soothe cron cancel <job_id>` implemented (DELETE `/api/v1/cron/jobs/{job_id}`)
 - [ ] HTTP REST endpoints return JSON with documented status codes (200, 403, 404, 409)
 - [ ] `user_id` derivation: TUI session, CLI `"http_api"`, HTTP `X-User-Id` header
+- [ ] `user_id` precedence: session-derived identity authoritative, request-body `user_id` ignored on mismatch (WARNING logged)
 
-### Integration Tests
+### Integration Test Checklist
 
 - [ ] End-to-end submission: TUI → daemon → DB → verify persisted
 - [ ] Execution flow: due job → AutopilotService → verify goal created
 - [ ] Rescheduling: recurring job completes → verify `next_run` updated
+- [ ] Failure backoff: recurring job fails → verify `consecutive_failures` incremented and `next_run` delayed by backoff
+- [ ] Circuit-breaker: recurring job fails `max_consecutive_failures` times → verify status `failed` (terminal), `cron_job_circuit_broken` emitted, no reschedule
+- [ ] Failure recovery: recurring job succeeds after failures → verify `consecutive_failures` reset to 0
+- [ ] Goal-completion callback: AutopilotService emits `goal_completed` → verify CronService reschedules (recurring) or marks completed (one-time)
+- [ ] Priority validation: `CronJob(priority=0)` and `CronJob(priority=101)` raise `ValueError`
 - [ ] End-condition expiry: job with `end_condition` → verify `completed` and no reschedule
 - [ ] Daemon restart: jobs persist across restart, due jobs picked up
 - [ ] Ownership isolation: cross-user access rejected
@@ -983,3 +1237,10 @@ Track per-component completion. All items must be checked before the RFC moves f
 - Added implementation checklist (per-component)
 - Added RFC-624 and RFC-626 to References
 - Added database migration strategy for `cron_jobs` table
+
+### 2026-07-03 (revision 2)
+- **G10**: Added goal-completion callback routing mechanism — CronService subscribes to `goal_completed`/`goal_failed`/`goal_cancelled` EventBus events from AutopilotService via `cron_job_id` metadata correlation; added receiving-side event types to events table
+- **G9**: Clarified CronJob vs ScheduledTask dual-model — CronJob is the domain model (direction of truth), ScheduledTask is the scheduler-persistence adapter; defined interop boundary in `_tick()` via explicit `_to_cron_job()` / `_to_scheduled_task()` conversions
+- **G5**: Added `__post_init__` validation to CronJob dataclass enforcing priority range 1-100 and non-negative run_count/consecutive_failures
+- **G8**: Added max-retry/backoff/circuit-breaker for failing recurring jobs — `max_consecutive_failures` threshold, exponential backoff with `failure_backoff_base`/`max_backoff_delay`, `cron_job_circuit_broken` event, `consecutive_failures`/`last_error` fields
+- **G1**: Clarified user_id precedence in `cron_add_request` — session-derived identity is authoritative, request-body `user_id` is ignored on mismatch (anti-privilege-escalation)
