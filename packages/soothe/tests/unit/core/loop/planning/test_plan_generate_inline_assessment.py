@@ -1,4 +1,4 @@
-"""Planner passes inline assess only when plan_assess is absent from ledger."""
+"""Planner passes inline assess on plan-generate (assess rows excluded from projection)."""
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_ski
 
 
 @pytest.mark.asyncio
-async def test_generate_from_assessment_omits_inline_assessment_when_assess_in_ledger() -> None:
+async def test_generate_from_assessment_passes_inline_assessment_when_assess_in_ledger() -> None:
     from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
     planner = LLMPlanner(MagicMock())
@@ -114,4 +114,4 @@ async def test_generate_from_assessment_omits_inline_assessment_when_assess_in_l
             assessment,
         )
 
-    assert build_mock.call_args.kwargs["inline_assessment"] is None
+    assert build_mock.call_args.kwargs["inline_assessment"] is assessment
