@@ -80,7 +80,7 @@ All client → server commands accept an optional `request_id` field (string). T
 
 | Type | Fields | Description |
 |------|--------|-------------|
-| `job_create` | `goal` (req, string), `verification_rules` (opt, string), `request_id` (opt) | Submit root goal to AutopilotService, returns job_id (goal.id) |
+| `job_create` | `goal` (req, string), `verification_rules` (opt, string), `user_id` (opt, string), `request_id` (opt) | Submit root goal to AutopilotService, returns job_id (goal.id). `user_id` is session-derived; see §Authentication Model. |
 | `job_status` | `job_id` (req, string), `request_id` (opt) | Query job state: goal status, counts, assigned workers |
 | `job_pause` | `job_id` (req, string), `request_id` (opt) | Pause goal execution (suspends scheduling) |
 | `job_resume` | `job_id` (req, string), `request_id` (opt) | Resume paused goal execution |
@@ -111,7 +111,7 @@ All client → server commands accept an optional `request_id` field (string). T
 |------|-------------|
 | `JOB_NOT_FOUND` | job_id does not match any root goal in ContextEngine |
 | `GOAL_NOT_FOUND` | goal_id does not match any goal in DAG |
-| `AUTOPLOT_NOT_READY` | AutopilotService not initialized or in degraded state |
+| `AUTOPILOT_NOT_READY` | AutopilotService not initialized or in degraded state |
 | `JOB_ALREADY_PAUSED` | Pause requested on already paused job |
 | `JOB_ALREADY_RUNNING` | Resume requested on already running job |
 | `JOB_COMPLETED` | Operation not valid on completed job |
@@ -215,6 +215,8 @@ Creates a new autopilot job by submitting a root goal to AutopilotService.
 }
 ```
 
+> **`user_id` Derivation**: The `user_id` associated with a job is **session-derived**, not passed in the request body. The daemon resolves `user_id` from the authenticated WebSocket session (RFC-450 §30-38). For authenticated sessions this is the real user identity; for unauthenticated CLI sessions in development mode, it defaults to the `http_api` pseudo-user. The resolved `user_id` is recorded on the root GoalNode at creation time and used for subsequent ownership checks (see §Authorization Rules). Clients MUST NOT send a `user_id` field in the request body; if present, it is silently ignored in favor of the session-derived value. This ensures ownership cannot be spoofed by client-supplied data.
+
 **Response**:
 ```json
 {
@@ -227,9 +229,10 @@ Creates a new autopilot job by submitting a root goal to AutopilotService.
 
 **Processing**:
 1. AutopilotService receives goal submission
-2. AutopilotMonitor calls `ce.create_goal()` to create root GoalNode with status `pending`
-3. Scheduler begins planning and worker assignment
-4. Return GoalNode.id as job_id
+2. Daemon resolves `user_id` from the authenticated session and attaches it to the goal submission
+3. AutopilotMonitor calls `ce.create_goal()` to create root GoalNode with status `pending` and `user_id` recorded on the node
+4. Scheduler begins planning and worker assignment
+5. Return GoalNode.id as job_id
 
 #### `verification_rules` Lifecycle
 
@@ -312,10 +315,26 @@ Controls job execution state.
 3. Active workers continue until current step completes, then pause
 4. Return confirmation
 
+**Worker Pause Semantics**:
+
+The pause operation is **cooperative, not preemptive**. The following rules govern in-flight worker behavior:
+
+| Aspect | Behavior |
+|--------|---------|
+| **Mid-tool-call handling** | A worker currently executing a tool call (e.g., file write, shell command) is **not interrupted mid-call**. The tool call runs to completion, the worker processes the result, and then pauses before initiating the next step. Pausing mid-tool-call would leave external state in an inconsistent state (partial file writes, half-run shell commands). |
+| **LLM inference in progress** | If the worker is awaiting an LLM response, the inference completes normally. The worker processes the response and then pauses before the next tool call or step transition. |
+| **Forced-pause timeout** | A grace period of **60 seconds** (configurable via `AutopilotConfig.pause_grace_seconds`, default 60) is granted for the current step to complete. If the step does not complete within the grace period, the daemon logs a WARNING (`autopilot.pause_grace_exceeded`) and transitions the worker to `suspended` state. The worker's current step result, if it arrives after the timeout, is **discarded** (not applied to the GoalNode). |
+| **Resource handling** | Paused workers **hold their resources** — the StrangeLoop instance, LLM context, and tool handles remain allocated. This allows rapid resumption without re-initialization. Workers are NOT released back to the pool during pause; only cancel releases workers. |
+| **Step completion signal** | A worker signals step completion via its normal `step_completed` callback. The daemon intercepts this when the root goal is `suspended` and parks the worker instead of scheduling the next step. |
+| **New subgoal creation** | While paused, the scheduler does not decompose new subgoals. If a worker was mid-decomposition when pause was requested, the decomposition completes (it is a single planning step) but the resulting subgoals are created in `pending` state and not assigned workers. |
+
 **Resume** reverses suspension:
 1. Set root goal status to `active`
 2. Scheduler resumes worker assignment
-3. Paused workers resume execution
+3. Paused workers resume execution from their next pending step (LLM context preserved)
+4. Any subgoals created during pause transition to `active` and become eligible for worker assignment
+
+> **Note**: Resume is idempotent — resuming an already-active job returns `JOB_ALREADY_RUNNING`. The `pause_grace_seconds` timeout is per-pause-operation; it does not accumulate across multiple pause cycles.
 
 ### job_cancel
 
@@ -344,6 +363,23 @@ Cancels job and all descendant goals.
 3. Release all assigned workers
 4. Workers terminate their StrangeLoop execution
 5. Return confirmation
+
+**Worker Termination Semantics**:
+
+The cancel operation follows a **graceful-then-forced** termination protocol. The following rules govern worker shutdown:
+
+| Aspect | Behavior |
+|--------|---------|
+| **Termination mode** | Workers are first asked to terminate **gracefully** (cooperative shutdown). The daemon sends a `terminate` signal to each worker's StrangeLoop, allowing it to finish the current tool call, write a partial-progress checkpoint, and exit cleanly. If the worker does not terminate within the shutdown timeout, the daemon performs **forced termination** (abrupt loop cancellation). |
+| **Graceful shutdown timeout** | A grace period of **30 seconds** (configurable via `AutopilotConfig.cancel_grace_seconds`, default 30) is granted per worker. If the worker has not exited by then, forced termination is applied. |
+| **Stuck-worker handling** | A worker that is unresponsive (e.g., blocked on a hung subprocess, infinite LLM token stream, or deadlocked tool) is force-terminated after the grace period. The daemon logs a WARNING (`autopilot.cancel_forced_termination`) with the worker's `loop_id`, `goal_id`, and the last known step. Forced termination cancels the underlying asyncio task or thread backing the StrangeLoop. |
+| **Tool-call in progress** | During graceful shutdown, a worker mid-tool-call is allowed to complete the call, but only if it finishes within the remaining grace period. If the tool call exceeds the timeout, it is abandoned — the underlying subprocess (if any) is sent SIGTERM, then SIGKILL after 5 additional seconds. |
+| **Partial side-effect cleanup** | Cancel does **not** automatically roll back side effects (written files, created branches, modified state). Workers are instructed during graceful shutdown to record a `partial_progress` note on their GoalNode describing uncommitted work. The DAG snapshot retains all partial `summary`/`findings` for forensic inspection. Cleanup of side effects is the **client's responsibility** — the daemon does not perform git reverts, file deletion, or state rollback. |
+| **Worker release** | After termination (graceful or forced), the worker's `loop_id` is removed from `GoalNode.assigned_loop_id`, the worker is released back to the pool, and a `soothe.worker.unassigned` event is emitted. |
+| **Idempotency** | Cancel is idempotent — cancelling an already-cancelled or completed job returns `JOB_COMPLETED` or `JOB_FAILED` without re-issuing termination signals. |
+| **Concurrent cancel** | If multiple clients issue `job_cancel` for the same job concurrently, the first request processes normally; subsequent requests receive the idempotent response. Only one set of termination signals is sent. |
+
+> **Note**: The `cancel_grace_seconds` timeout is per-worker, not per-job. Jobs with many concurrent workers may take up to `cancel_grace_seconds` to fully terminate even after the cancel response is returned (the response confirms goal status change, not worker shutdown completion). Clients should poll `job_status` to confirm workers have been released (`workers` array empty).
 
 ### job_dag
 
@@ -539,7 +575,7 @@ All IPC commands require an authenticated WebSocket session (RFC-450 §30-38). T
 
 | Command | Authorization Requirement |
 |---------|---------------------------|
-| `job_create` | Any authenticated client may create jobs. No per-user quota in current scope. |
+| `job_create` | Any authenticated client may create jobs. No per-user quota in current scope. The session-derived `user_id` is recorded on the root GoalNode at creation time and serves as the job owner for subsequent ownership checks. |
 | `job_status` | Any authenticated client may query any job's status (read-only, no ownership check). |
 | `job_dag` | Same as `job_status` — read-only, no ownership check. |
 | `job_pause` / `job_resume` | **Job owner only.** The `user_id` of the requesting session must match the `user_id` recorded on the job's root GoalNode at creation time. Mismatch → `error` with code `JOB_NOT_AUTHORIZED`. |
