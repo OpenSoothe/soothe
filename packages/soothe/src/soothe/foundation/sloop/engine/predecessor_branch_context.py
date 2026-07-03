@@ -84,6 +84,7 @@ def predecessor_execute_messages_for_branch(
     predecessor_step_ids: frozenset[str],
     *,
     max_messages: int = DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
+    exclude_step_ids: frozenset[str] | None = None,
 ) -> list[BaseMessage]:
     """Return deep-copied ledger messages for predecessor steps, in ledger order.
 
@@ -95,6 +96,7 @@ def predecessor_execute_messages_for_branch(
         loop_messages: ``LoopState.loop_messages`` ledger.
         predecessor_step_ids: Step ids whose execute evidence should be replayed.
         max_messages: Hard cap on copied messages (Human+AI rows each count as one).
+        exclude_step_ids: Step ids to exclude (already included in Slice A fallback).
 
     Returns:
         Messages to prepend before the current step's execute envelope.
@@ -102,6 +104,8 @@ def predecessor_execute_messages_for_branch(
     if not predecessor_step_ids:
         return []
     unlimited = max_messages <= 0
+    # Exclude step_ids already included in Slice A fallback to prevent duplicates
+    excluded = exclude_step_ids or frozenset()
 
     out: list[BaseMessage] = []
     for msg in loop_messages:
@@ -109,6 +113,8 @@ def predecessor_execute_messages_for_branch(
             continue
         sid = _message_step_id(msg)
         if sid is None or sid not in predecessor_step_ids:
+            continue
+        if sid in excluded:
             continue
         out.append(_deep_copy_message(msg))
         if (not unlimited) and len(out) >= max_messages:
