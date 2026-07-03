@@ -311,7 +311,22 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Tool timeout disabled")
 
-    # 8. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 8. Per-hop role routing (IG-545) — before per-turn override
+    role_routing = config.agent.runtime.role_routing
+    if role_routing.enabled:
+        from .role_routing import RoleRoutingMiddleware
+
+        stack.append(RoleRoutingMiddleware(config))
+        logger.info(
+            "[Middleware] Role routing enabled: orchestration=%s generation=%s max_hops=%d",
+            role_routing.orchestration_model_role,
+            role_routing.generation_model_role,
+            role_routing.max_orchestration_hops,
+        )
+    else:
+        logger.debug("[Middleware] Role routing disabled")
+
+    # 9. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

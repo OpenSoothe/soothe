@@ -2107,12 +2107,44 @@ class ProgressiveMCPConfig(BaseModel):
     )
 
 
+class RoleRoutingConfig(BaseModel):
+    """Per-hop model role routing for CoreAgent ReAct loop (IG-545).
+
+    Args:
+        enabled: When true, ``RoleRoutingMiddleware`` swaps the chat model per hop.
+        orchestration_model_role: Router role for tool-orchestration hops.
+        generation_model_role: Router role for synthesis and post-cap hops.
+        max_orchestration_hops: Use orchestration role for the first N model hops
+            after each user message (hop 0 = first call in the segment).
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable per-hop orchestration vs generation model routing in CoreAgent",
+    )
+    orchestration_model_role: ModelRole = Field(
+        default="fast",
+        description="Router role for tool-orchestration model hops",
+    )
+    generation_model_role: ModelRole = Field(
+        default="default",
+        description="Router role for content synthesis and hops after the orchestration cap",
+    )
+    max_orchestration_hops: int = Field(
+        default=1,
+        ge=1,
+        le=50,
+        description="Orchestration role applies while hop index since last user message is below this",
+    )
+
+
 class AgentRuntimeConfig(BaseModel):
     """CoreAgent startup and materialization tuning (IG-506).
 
     Args:
         lazy_core_agent: Defer ``create_deep_agent`` until first Layer-1 execution.
         general_purpose_subagent: Expose deepagents ``general-purpose`` delegate via ``task``.
+        role_routing: Per-hop orchestration vs generation model roles (IG-545).
     """
 
     lazy_core_agent: bool = Field(
@@ -2125,6 +2157,10 @@ class AgentRuntimeConfig(BaseModel):
             "When true, register deepagents general-purpose subagent on the task tool. "
             "When false (default), general-purpose is hidden and blocked."
         ),
+    )
+    role_routing: RoleRoutingConfig = Field(
+        default_factory=RoleRoutingConfig,
+        description="Per-hop model role routing for CoreAgent ReAct loop",
     )
 
 
