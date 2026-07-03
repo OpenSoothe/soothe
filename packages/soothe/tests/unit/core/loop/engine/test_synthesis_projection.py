@@ -198,3 +198,18 @@ def test_system_prompt_includes_scenario_list() -> None:
     assert "code_architecture_design" in text
     assert "research_synthesis" in text
     assert "general_summary" in text
+
+
+def test_system_prompt_uses_synthesis_instructions_wrapper_and_anti_echo_rules() -> None:
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary", "Key Points"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by theme",
+    )
+    text = render_synthesis_system_prompt(classification, user_goal="analyze gitignore")
+    assert "<SYNTHESIS_INSTRUCTIONS>" in text
+    assert "</SYNTHESIS_INSTRUCTIONS>" in text
+    assert "SYNTHESIS_REPORT" not in text
+    assert "Never output `<SYNTHESIS_INSTRUCTIONS>`" in text
+    assert "start immediately with the first required section heading" in text

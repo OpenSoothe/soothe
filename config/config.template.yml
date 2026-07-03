@@ -344,7 +344,7 @@ tools:
     timeout: 60
     max_retries: 3
 
-# SubagentConfig — overrides merge with builtin explore/plan/tacitus/browser_use
+# SubagentConfig — overrides merge with builtin explore/plan/tacitus/browser_use/skillify
 subagents:
   explore:
     enabled: true
@@ -374,6 +374,13 @@ subagents:
     url: null
     config: {}
     runtime_dir: ''
+  skillify:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
 
 # MCPServerConfig — unique name per server; defer=true for progressive disclosure
 mcp_servers: []
@@ -390,6 +397,13 @@ progressive_skills:
   budget_pct: 0.01
   max_listing_chars_per_entry: 250
   min_listing_chars_per_entry: 20
+  core_skills: null
+  search_skills_enabled: true
+  semantic_search_enabled: true
+  semantic_search_min_score: 0.0
+  intent_prefetch_enabled: true
+  intent_prefetch_top_k: 2
+  intent_prefetch_min_query_chars: 12
 progressive_tools:
   enabled: true
   budget_pct: 0.01

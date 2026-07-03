@@ -227,6 +227,9 @@ class IntentClassifier:
         """Append intent-classify Human/AI pair to the CE ledger (RFC-214, IG-540)."""
         if context_engine is None:
             return
+        from soothe.foundation.sloop.cognition.ledger_compaction import (
+            compact_planning_human_content,
+        )
         from soothe.foundation.sloop.utils.messages import (
             LoopAIMessage,
             LoopHumanMessage,
@@ -235,7 +238,7 @@ class IntentClassifier:
 
         tid = (thread_id or "").strip()
         human_msg = LoopHumanMessage(
-            content=human_content,
+            content=compact_planning_human_content(human_content),
             thread_id=tid or None,
             iteration=0,
             phase="intent_classify",

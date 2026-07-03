@@ -36,6 +36,71 @@ def test_resolve_execute_projection_mode_mid_goal() -> None:
     assert resolve_execute_projection_mode(state) == "mid_goal"
 
 
+def test_resolve_execute_projection_mode_mid_goal_when_ce_bound_ledger_has_plan_steps() -> None:
+    """Iteration 0 with empty step_results but prior-wave execute ledger is mid_goal."""
+    step_01 = StepAction(id="01", description="first")
+    step_02 = StepAction(id="02", description="second", dependencies=["01"])
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step_01, step_02],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    ledger = [
+        LoopHumanMessage(content="h1", phase="execute_step", step_id="01"),
+        LoopAIMessage(content="a1", phase="execute_step", step_id="01"),
+    ]
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        iteration=0,
+        step_results=[],
+        current_decision=decision,
+        loop_messages=ledger,
+        continue_loop=True,
+    )
+    assert resolve_execute_projection_mode(state) == "mid_goal"
+
+
+def test_project_execute_step_graph_input_no_slice_a_when_intra_goal_ledger_at_iteration_zero() -> (
+    None
+):
+    """Dependent step 02 at iteration=0 must not replay step 01 via Slice A + Slice B."""
+    step_01 = StepAction(id="01", description="first")
+    step_02 = StepAction(id="02", description="second", dependencies=["01"])
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step_01, step_02],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    ledger = [
+        LoopHumanMessage(content="plan", phase="plan_assess", iteration=0),
+        LoopHumanMessage(content="h1", phase="execute_step", step_id="01"),
+        LoopAIMessage(content="a1", phase="execute_step", step_id="01"),
+    ]
+    state = LoopState(
+        goal="continue goal",
+        thread_id="t",
+        current_decision=decision,
+        loop_messages=ledger,
+        continue_loop=True,
+        iteration=0,
+        step_results=[],
+    )
+    result = project_execute_step_graph_input(
+        ledger,
+        state=state,
+        step=step_02,
+        decision=decision,
+    )
+    assert result.mode == "mid_goal"
+    assert result.cross_goal_projected is False
+    assert result.predecessor_projected is True
+    assert len(result.messages) == 2
+    assert [getattr(m, "step_id", None) for m in result.messages] == ["01", "01"]
+
+
 def test_collect_units_synthesized_goal_completion() -> None:
     ledger = [
         LoopHumanMessage(content="step", phase="execute_step"),
@@ -184,12 +249,11 @@ def test_project_execute_step_graph_input_no_duplicate_when_slice_a_fallback_ove
     This scenario occurs in goal_boundary mode (iteration=0, no step_results) with continue_loop=True,
     where the ledger contains prior goal's execute_step pairs but no synthesized goal_completion.
     """
-    # Step-02 depends on step-01 (from prior goal)
+    # Step-02 depends on step-01 completed in a prior goal (not part of the new plan).
     step_02 = StepAction(id="02", description="Fix", dependencies=["01"])
-    step_01 = StepAction(id="01", description="Verify")
     decision = AgentDecision(
         type="execute_steps",
-        steps=[step_01, step_02],
+        steps=[step_02],
         execution_mode="dependency",
         reasoning="r",
     )
@@ -239,15 +303,13 @@ def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_s
     """IG-542: Slice B still includes predecessor steps NOT in Slice A.
 
     When Slice A includes step-01 messages (fallback), and the current step depends on
-    BOTH step-01 and step-00, step-00 messages should still appear in Slice B.
+    BOTH step-01 and step-00 from a prior goal, step-00 messages should still appear in Slice B.
     """
-    step_00 = StepAction(id="00", description="Setup")
-    step_01 = StepAction(id="01", description="Verify")
-    # step-02 depends on both step-00 and step-01
+    # step-02 depends on prior-goal steps 00 and 01; only step-02 is in the new plan.
     step_02 = StepAction(id="02", description="Fix", dependencies=["00", "01"])
     decision = AgentDecision(
         type="execute_steps",
-        steps=[step_00, step_01, step_02],
+        steps=[step_02],
         execution_mode="dependency",
         reasoning="r",
     )

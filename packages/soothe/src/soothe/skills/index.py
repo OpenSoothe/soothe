@@ -30,6 +30,21 @@ _SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
 )
 
 
+def _parse_core_frontmatter(raw: object) -> bool | None:
+    """Parse optional ``core:`` frontmatter scalar."""
+    if raw is None:
+        return None
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        token = raw.strip().lower()
+        if token in ("true", "yes", "1"):
+            return True
+        if token in ("false", "no", "0"):
+            return False
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class SkillIndexEntry:
     """Lightweight skill metadata cached by the index."""
@@ -42,6 +57,7 @@ class SkillIndexEntry:
     mtime: float
     paths: tuple[str, ...] | None = None  # RFC-105: conditional activation patterns
     when_to_use: str | None = None  # RFC-105: multi-line guidance for listing
+    core: bool | None = None  # IG-543: True=core tier, False=deferred, None=inherit
 
 
 @dataclass
@@ -191,6 +207,7 @@ class SkillIndex:
             mtime=mtime,
             paths=tuple(fm["paths"]) if "paths" in fm and isinstance(fm["paths"], list) else None,
             when_to_use=fm.get("when_to_use") or None,
+            core=_parse_core_frontmatter(fm.get("core")),
         )
 
     def _load_cache(self) -> None:
@@ -208,6 +225,7 @@ class SkillIndex:
                 # Tolerate old cache rows missing RFC-105 fields
                 raw.setdefault("paths", None)
                 raw.setdefault("when_to_use", None)
+                raw.setdefault("core", None)
                 entry = SkillIndexEntry(**raw)
                 self._entries[entry.name.lower()] = entry
             except (TypeError, KeyError):

@@ -75,7 +75,8 @@ class TestIntakeClassifierLedger:
         ce = MagicMock()
         ce.save = AsyncMock()
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = (mock_result, "human body", llm_dict)
+            recorded_human = build_intake_human_message(query="summarize readme")
+            mock_llm.return_value = (mock_result, recorded_human, llm_dict)
             await classifier.classify_intake(
                 "summarize readme",
                 thread_id="thread-1",
@@ -83,6 +84,11 @@ class TestIntakeClassifierLedger:
             )
         assert ce.ledger.record_message.call_count == 2
         ce.save.assert_awaited_once()
+        human_call = ce.ledger.record_message.call_args_list[0]
+        human_msg = human_call[0][0]
+        assert human_msg.phase == "intent_classify"
+        assert human_msg.content.startswith("GOAL RECAP:\n")
+        assert "summarize readme" in human_msg.content
         ai_call = ce.ledger.record_message.call_args_list[1]
         ai_msg = ai_call[0][0]
         parsed = json.loads(ai_msg.content)
@@ -180,3 +186,50 @@ class TestIntakePriorGoalProjection:
         )
 
         assert project_prior_goal_completion_for_intake([], None) == []
+
+
+class TestIntentClassifyLedgerProjection:
+    """Intent-classify humans use GOAL RECAP in plan ledger projection (D1)."""
+
+    def test_project_loop_messages_rewrites_intent_classify_goal(self) -> None:
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            project_loop_messages_for_plan,
+        )
+
+        ledger = [
+            LoopHumanMessage(
+                content="GOAL:\nsummarize readme\n\nTASK:\nClassify intake.",
+                phase="intent_classify",
+                thread_id="t",
+            ),
+            LoopAIMessage(
+                content='{"intake_label":"simple"}',
+                phase="intent_classify",
+                thread_id="t",
+            ),
+        ]
+        projected = project_loop_messages_for_plan(ledger, None)
+        assert projected[0].content.startswith("GOAL RECAP:\n")
+        assert "GOAL:\n" not in projected[0].content.split("TASK:")[0]
+        assert projected[1] is ledger[1]
+
+    def test_project_planner_ledger_new_goal_includes_compacted_intent_classify(self) -> None:
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            project_planner_ledger,
+        )
+
+        ledger = [
+            LoopHumanMessage(
+                content="GOAL:\nchild goal\n\nTASK:\nClassify intake.",
+                phase="intent_classify",
+                thread_id="t",
+            ),
+            LoopAIMessage(
+                content='{"intake_label":"complex"}', phase="intent_classify", thread_id="t"
+            ),
+            LoopHumanMessage(content="exec h", phase="execute_step", thread_id="t"),
+            LoopAIMessage(content="exec a", phase="execute_step", thread_id="t"),
+        ]
+        projected = project_planner_ledger(ledger, "new_goal", None)
+        assert len(projected) == 2
+        assert projected[0].content.startswith("GOAL RECAP:\n")

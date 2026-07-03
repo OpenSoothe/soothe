@@ -11,7 +11,7 @@
 
 ## 1. Abstract
 
-This RFC defines the architecture of community plugin agents for Soothe: **Skillify** (skill indexing and retrieval), **Weaver** (generative agent composition), **BrowserUse** (browser-use automation), and **Claude** (Claude Code via claude-agent-sdk). These agents are distributed via the `soothe-plugins` package and loaded through RFC-600 entry-point discovery.
+This RFC defines the architecture of community plugin agents for Soothe: **Weaver** (generative agent composition), **BrowserUse** (browser-use automation), and **Claude** (Claude Code via claude-agent-sdk). **Skillify** moved to the core `soothe` package (`soothe.subagents.skillify`) in 2026-07; see RFC-601 in the main soothe specs. Remaining agents are distributed via `soothe-plugins` and loaded through RFC-600 entry-point discovery.
 
 ---
 
@@ -28,6 +28,8 @@ This RFC defines:
 ---
 
 ## 3. Skillify Agent
+
+> **Moved to core (2026-07)**: Implementation lives in `packages/soothe/src/soothe/subagents/skillify/`. Weaver imports `soothe.subagents.skillify` directly. The sections below describe behavior; they are not shipped from `soothe-plugins` anymore.
 
 ### 3.1 Purpose
 
@@ -247,18 +249,18 @@ class WeaverPlugin:
 
 ### 5.4 Cross-Plugin Dependency
 
-Weaver imports from Skillify:
-- `soothe_plugins.skillify.models.SkillBundle` — used during skill fetching
-- `soothe_plugins.skillify.retriever.SkillRetriever` — used to retrieve skills during agent composition
+Weaver imports from core Skillify:
+- `soothe.subagents.skillify.models.SkillBundle` — used during skill fetching
+- `soothe.subagents.skillify.retriever.SkillRetriever` — optional retriever during agent composition
 
 Weaver verifies Skillify availability at load time in `on_load()`:
 
 ```python
 async def on_load(self, context):
     try:
-        from soothe_plugins.skillify.models import SkillBundle
+        from soothe.subagents.skillify.models import SkillBundle
     except ImportError:
-        raise PluginError("Weaver requires Skillify plugin.", plugin_name="weaver")
+        raise PluginError("Weaver requires Skillify (built into soothe core).", plugin_name="weaver")
 ```
 
 ---
@@ -270,13 +272,6 @@ community/src/soothe_plugins/
 ├── browser_use/              # BrowserUsePlugin (browser-use)
 ├── claude/                   # ClaudePlugin (claude-agent-sdk)
 ├── sample_echo/              # SampleEchoPlugin (minimal test subagent)
-├── skillify/
-│   ├── __init__.py           # SkillifyPlugin + exports
-│   ├── events.py             # Skillify events
-│   ├── indexer.py            # SkillIndexer
-│   ├── retriever.py          # Retrieval logic
-│   ├── warehouse.py          # Skill scanning
-│   └── models.py             # SkillRecord, SkillBundle
 └── weaver/
     ├── __init__.py           # WeaverPlugin + exports
     ├── events.py             # Weaver events
@@ -306,7 +301,6 @@ Plugins are auto-discovered via entry points in `pyproject.toml`:
 browser_use = "soothe_plugins.browser_use:BrowserUsePlugin"
 claude = "soothe_plugins.claude:ClaudePlugin"
 sample_echo = "soothe_plugins.sample_echo:SampleEchoPlugin"
-skillify = "soothe_plugins.skillify:SkillifyPlugin"
 weaver = "soothe_plugins.weaver:WeaverPlugin"
 ```
 
@@ -338,11 +332,12 @@ weaver = "soothe_plugins.weaver:WeaverPlugin"
 
 This RFC documents community plugin agents for Soothe:
 
-- **Skillify**: Skill warehouse indexing and semantic retrieval
-- **Weaver**: Generative agent composition with skill harmonization
+- **Weaver**: Generative agent composition with skill harmonization (depends on core Skillify)
 - **BrowserUse**: Browser-use automation (optional extra)
 - **Claude**: Claude Code agent wrapper (optional extra)
 - **Sample Echo**: Minimal test subagent for integration testing
+
+Skillify is a built-in core subagent (`soothe.subagents.skillify`), not a `soothe-plugins` entry point.
 
 All follow the RFC-600 plugin architecture with `@plugin` + `@subagent` decorators, self-contained package structure, and entry-point discovery via `soothe-plugins`.
 

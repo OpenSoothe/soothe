@@ -13,7 +13,7 @@ Output contract (quiz):
 intake_label (routing only — never echo in reasoning):
 - "quiz": greeting/thanks/static trivia/definitions/simple math WITHOUT tools/files/web/live-data.
 - "trivial": single obvious tool call or direct answer; no decomposition ("what time is it?", "list files in this directory").
-- "simple": one deliverable, light planning ("read RFC-220 and summarize topology").
+- "simple": one deliverable, light planning ("read the architecture spec and summarize topology").
 - "complex": multi-step, architectural, migration, multi-phase ("refactor the persistence layer", "add subcommand with tests").
 
 NOT quiz (use trivial/simple/complex): real-time/time-sensitive; web/API/files/code/tools; not confident from training alone; follow-ups (prior goal completion in message history; current in GOAL:); runtime state (workspace, cwd, model, tools, loop/goal/thread, policies, environment).

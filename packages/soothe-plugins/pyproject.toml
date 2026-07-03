@@ -51,7 +51,6 @@ dev = [
 
 [project.entry-points."soothe.plugins"]
 sample_echo = "soothe_plugins.sample_echo:SampleEchoPlugin"
-skillify = "soothe_plugins.skillify:SkillifyPlugin"
 weaver = "soothe_plugins.weaver:WeaverPlugin"
 
 [tool.hatch.build.targets.wheel]

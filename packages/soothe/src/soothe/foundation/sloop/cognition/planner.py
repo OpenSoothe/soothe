@@ -1007,15 +1007,7 @@ class LLMPlanner:
         Returns:
             Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
         """
-        from langchain_core.messages import SystemMessage
-
         plan_schema = plan_generation_model_for_iteration(iteration)
-
-        # Add assessment context to plan generation prompt
-        context_msg = SystemMessage(
-            content=f"Status: {assessment.status}, Progress: {assessment.goal_progress}"
-        )
-        plan_messages = messages + [context_msg]
 
         model = _plan_phase_chat_model(self._plan_generate_model)
 
@@ -1030,7 +1022,7 @@ class LLMPlanner:
                 )
                 plan_result = await self._invoke_structured(
                     model,
-                    plan_messages,
+                    messages,
                     plan_schema,
                     config=lf_cfg,
                     thread_id=thread_id,
@@ -1098,7 +1090,7 @@ class LLMPlanner:
                             )
                             plan_result = await self._invoke_structured(
                                 model,
-                                plan_messages,
+                                messages,
                                 plan_schema,
                                 config=lf_cfg_retry,
                                 thread_id=thread_id,
@@ -1467,6 +1459,15 @@ class LLMPlanner:
             except Exception:
                 logger.debug("ContextEngine.project() failed, proceeding without bundle")
 
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            current_iteration_plan_assess_in_ledger,
+        )
+
+        inline_assessment = (
+            None
+            if current_iteration_plan_assess_in_ledger(state.loop_messages, state.iteration)
+            else assessment
+        )
         generate_messages = self._prompt_builder.build_plan_messages(
             goal,
             state,
@@ -1476,6 +1477,7 @@ class LLMPlanner:
             context_bundle=context_bundle,
             checkpoint=checkpoint,
             exclude_goal_id=exclude_goal_id,
+            inline_assessment=inline_assessment,
         )
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
@@ -1740,6 +1742,7 @@ class LLMPlanner:
                         context_bundle=context_bundle,
                         checkpoint=checkpoint,
                         exclude_goal_id=exclude_goal_id,
+                        inline_assessment=assessment,
                     )
                     messages_for_retry = generate_messages
                     t_plan = time.perf_counter()

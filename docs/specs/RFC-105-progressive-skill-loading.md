@@ -5,16 +5,36 @@
 **Status**: Draft
 **Kind**: Implementation Interface Design
 **Created**: 2026-05-29
-**Last Updated**: 2026-05-29
+**Last Updated**: 2026-07-03
 **Authors**: Platonic brainstorming session
 **Design Draft**: [2026-05-29-progressive-skill-loading-design.md](../drafts/2026-05-29-progressive-skill-loading-design.md)
+**Revision Draft**: [2026-07-03-skill-runtime-discovery-design.md](../drafts/2026-07-03-skill-runtime-discovery-design.md) (IG-543)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-104 (Dynamic System Context), RFC-214 (StrangeLoop Loop Message Surface), RFC-600 (Plugin Extension System)
 
 ## Abstract
 
-This RFC replaces deepagents' always-emit-all skill listing with a three-stage progressive disclosure pipeline modeled on Claude Code: (1) a budgeted, delta-only metadata listing injected on every turn; (2) path-driven conditional activation during file-op tool calls; (3) lazy SKILL.md body injection on invocation. Activation state lives on the agent graph state at runtime and is snapshotted to `LoopState` at each iteration boundary so reconnect, resume, and compaction restore the per-thread view. The change is local to the soothe-owned `SystemPromptOptimizationMiddleware` assembly point and a new `SkillActivationMiddleware`; deepagents' `SkillsMiddleware` is suppressed at construction time by passing `skills=None` to `create_deep_agent`.
+This RFC replaces deepagents' always-emit-all skill listing with a progressive disclosure pipeline modeled on Claude Code and symmetric with `progressive_tools`: (1) a budgeted, delta-only **core-tier** metadata listing on turn 0; (2) **deferred** skills discovered via path hooks or `search_skills`; (3) lazy SKILL.md body injection via `invoke_skill` or `/skill:`. Activation state lives on the agent graph state at runtime and is snapshotted to `LoopState` at each iteration boundary so reconnect, resume, and compaction restore the per-thread view. The change is local to `SystemPromptMiddleware._compose_skills_block` and `SkillActivationMiddleware`; deepagents' `SkillsMiddleware` is suppressed at construction time by passing `skills=None` to `create_deep_agent`.
 
-## Motivation
+### Revision 2026-07-03 — Runtime discovery (IG-543)
+
+**Problem addressed**: RFC-105 P0 listed every skill without `paths:` on turn 0; no model-facing search; three disjoint discovery channels.
+
+**Changes**:
+
+1. **Core / deferred partition** replaces unconditional / conditional for **listing**. Built-ins (and `core: true` / `core_skills` config) are core; all others deferred and hidden until discovered.
+2. **`paths:`** remains an auto-discovery rule on **deferred** skills (file-op hook unchanged).
+3. **`search_skills(query)`** — model discovers deferred skills by substring match; promotes metadata to next turn's `<AVAILABLE_SKILLS>`.
+4. **`invoke_skill(name, args?)`** — model loads full SKILL.md body into `<SKILL_CONTEXT>` (CLI `/skill:` unchanged).
+5. **`discover()`** — single registry mutation for path, search, and explicit channels; stored in `activation_state["activated"]` (LoopState: `activated_skill_names`).
+
+### Revision 2026-07-03b — Semantic search + intent prefetch (IG-543 P1/P2)
+
+**Changes**:
+
+1. **`search_skills`** — when `progressive_skills.semantic_search_enabled`, substring results are supplemented by Skillify vector retrieval (`subagents/skillify/runtime.py` shared retriever).
+2. **Turn-0 intent prefetch** — when `progressive_skills.intent_prefetch_enabled`, `SkillActivationMiddleware.abefore_agent` matches deferred skill names in the first user message (corpus match) and optionally semantic top-K; sets `intent_prefetched` so prefetch runs once per thread.
+3. **Config** — `semantic_search_enabled`, `semantic_search_min_score`, `intent_prefetch_enabled`, `intent_prefetch_top_k`, `intent_prefetch_min_query_chars`.
+
 
 ### Problem: Linear cost, no filtering, no deltas
 
@@ -35,15 +55,16 @@ Claude Code solved the analogous problem (`src/skills/loadSkillsDir.ts`, `src/ut
 
 ### Design goals
 
-1. **Bounded turn-0 cost** — total skill listing must stay within a configurable fraction of `StrangeLoopConfig.context_window_limit` (default 1%, ~2K tokens on a 200K window).
-2. **Path-aware filtering** — skills with `paths:` frontmatter stay hidden until a file-op tool touches a matching path.
-3. **Delta-only re-emission** — a skill that has been announced to a thread is never re-announced unless evicted by compaction; state survives daemon restart, reconnect, and compaction.
-4. **No double-listing** — exactly one source of truth for the `<AVAILABLE_SKILLS>` block; deepagents' stock listing is suppressed at agent construction.
-5. **No new loop concept** — middleware operates on agent graph state and remains loop-agnostic; durability is achieved via a snapshot copy into `LoopState` at iteration boundaries (same pattern as `goal_user_submission`).
+1. **Bounded turn-0 cost** — only **core-tier** skills appear on turn 0; deferred skills stay hidden until discovered.
+2. **Intent-based discovery** — `search_skills(query)` surfaces deferred skills on demand (parity with `search_tools`).
+3. **Path-aware auto-discovery** — deferred skills with `paths:` frontmatter activate when a file-op tool touches a matching path.
+4. **Delta-only re-emission** — a skill that has been announced to a thread is never re-announced unless evicted by compaction; state survives daemon restart, reconnect, and compaction.
+5. **No double-listing** — exactly one source of truth for the `<AVAILABLE_SKILLS>` block; deepagents' stock listing is suppressed at agent construction.
+6. **No new loop concept** — middleware operates on agent graph state and remains loop-agnostic; durability is achieved via a snapshot copy into `LoopState` at iteration boundaries (same pattern as `goal_user_submission`).
 
 ## Scope
 
-- New: `ProgressiveSkillRegistry` (partitioning + delta + path matching), `format_skills_within_budget` (formatter), `SkillActivationMiddleware` (Stage 2 trigger), `ProgressiveSkillsConfig` (tunables), `<AVAILABLE_SKILLS>` and `<SKILL_CONTEXT>` system-prompt blocks, `SkillActivatedEvent` / `SkillBodyLoadedEvent` events.
+- New: `ProgressiveSkillRegistry` (core/deferred partition + delta + path matching + `search_deferred` + `discover`), `format_skills_within_budget` (formatter), `SkillActivationMiddleware` (path + `search_skills` + `invoke_skill`), `ProgressiveSkillsConfig` (tunables), `<AVAILABLE_SKILLS>` and `<SKILL_CONTEXT>` system-prompt blocks, `search_skills` / `invoke_skill` tool stubs, `SkillActivatedEvent` / `SkillBodyLoadedEvent` events.
 - Modified: `_parse_frontmatter`, `SkillIndexEntry`, `SystemPromptOptimizationMiddleware._get_prompt_for_complexity`, `build_soothe_middleware_stack`, `create_soothe_agent` (passes `skills=None`), `LoopState` (four snapshot fields), `StrangeLoop` iteration boundary (snapshot/rehydrate).
 - Reused unchanged: `SkillIndex` metadata cache, `catalog.wire_entries_for_agent_config` aggregation, `build_skill_context_text`, `try_expand_slash_skill_user_line`, `sync_specific_skill_to_workspace`, `BUILTIN_TOOL_TRIGGERS`, `InternalEventBus`, `register_event` / `custom_event`, `_thread_id_from_request` / `_workspace_from_request`.
 
@@ -221,12 +242,46 @@ These four fields are durable snapshots only; middleware reads/writes the agent 
 
 ```python
 class ProgressiveSkillsConfig(BaseModel):
-    budget_pct: float = 0.01                     # fraction of context_window_limit (chars, not tokens)
-    max_listing_chars_per_entry: int = 250       # per-entry hard cap
-    min_listing_chars_per_entry: int = 20        # below this, fall back to names-only mode
+    budget_pct: float = 0.01
+    max_listing_chars_per_entry: int = 250
+    min_listing_chars_per_entry: int = 20
+    core_skills: list[str] | None = None          # None → built-in defaults
+    search_skills_enabled: bool = True            # bind search_skills + invoke_skill tools
 ```
 
-Referenced from `SootheConfig.progressive_skills`. Mirrored in `config/config.template.yml` and `config/develop/config.yml` per CLAUDE.md Rule #2.
+### Discovery tools (2026-07-03)
+
+Location: `packages/soothe/src/soothe/skills/discovery_tools.py`
+
+```python
+def create_search_skills_tool() -> StructuredTool: ...
+def create_invoke_skill_tool() -> StructuredTool: ...
+```
+
+`SkillActivationMiddleware.awrap_tool_call` handles both tools (returns `Command` with `skill_activation` update). Path hook and slash expansion unchanged.
+
+### Core / deferred partition
+
+```python
+DEFAULT_CORE_SKILL_NAMES = frozenset({"weather", "github", "clawhub", "skill-creator"})
+
+def partition_core_deferred(
+    entries: Sequence[SkillIndexEntry],
+    core_names: frozenset[str],
+) -> tuple[list[SkillIndexEntry], list[SkillIndexEntry]]: ...
+
+def search_deferred(
+    query: str,
+    deferred: Sequence[SkillIndexEntry],
+    *,
+    discovered: set[str],
+    limit: int = 10,
+) -> list[SkillIndexEntry]: ...
+
+def discover(activation_state: dict, names: Iterable[str], *, via: str) -> None: ...
+```
+
+Listing candidates: `core ∪ activated` (where `activated` = discovered set). Deferred skills enter `activated` via path, search, or explicit invoke.
 
 ## API Contracts
 
