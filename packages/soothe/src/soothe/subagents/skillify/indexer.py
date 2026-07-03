@@ -175,6 +175,20 @@ class SkillIndexer:
             )
             return
 
+        if not vectors:
+            logger.error("Embedding model returned no vectors for %d skills", len(records))
+            return
+
+        actual_dims = len(vectors[0])
+        if actual_dims != self._embedding_dims:
+            logger.error(
+                "Embedding dimension mismatch: model returned %d but config embedding_dims=%d. "
+                "Update router_profiles[].embedding_dims or switch embedding model.",
+                actual_dims,
+                self._embedding_dims,
+            )
+            return
+
         payloads: list[dict[str, Any]] = []
         ids: list[str] = []
         for record in records:

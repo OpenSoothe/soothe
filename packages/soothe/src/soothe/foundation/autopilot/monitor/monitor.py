@@ -255,7 +255,7 @@ class AutopilotMonitor:
         scope: DreamingScope = "loop",
     ) -> None:
         """Trigger dreaming distillation."""
-        await self._bus.emit("dreaming_mode_entered", {})
+        await self._bus.emit_autopilot_dreaming()
 
         enabled_modes = modes or ["episodic", "procedure", "semantic", "profile"]
         context = await self._gather_dreaming_context(scope)
@@ -267,7 +267,7 @@ class AutopilotMonitor:
             except Exception:
                 logger.exception("Dreaming mode %s failed", mode)
 
-        await self._bus.emit("dreaming_mode_exited", {})
+        await self._bus.emit_autopilot_awake()
 
     async def _gather_dreaming_context(self, scope: DreamingScope) -> DreamingContext:
         """Gather goals and ledger for dreaming."""

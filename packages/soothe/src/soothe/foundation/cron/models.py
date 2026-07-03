@@ -5,6 +5,7 @@ Dataclasses and enums for scheduled job representation.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -12,6 +13,27 @@ from typing import Any
 
 # Single-owner id for basic mode (no per-user isolation). Used by HTTP REST and RPC.
 DEFAULT_CRON_USER_ID = "http_api"
+
+
+def normalize_cron_description(description: str) -> str:
+    """Normalize task text for duplicate detection (case/whitespace insensitive)."""
+    return re.sub(r"\s+", " ", description.strip().casefold())
+
+
+def cron_descriptions_equivalent(left: str, right: str) -> bool:
+    """Return True when two task descriptions refer to the same scheduled work."""
+    a = normalize_cron_description(left)
+    b = normalize_cron_description(right)
+    if not a or not b:
+        return False
+    if a == b or a in b or b in a:
+        return True
+    words_a = set(a.split())
+    words_b = set(b.split())
+    if not words_a or not words_b:
+        return False
+    overlap = len(words_a & words_b) / min(len(words_a), len(words_b))
+    return overlap >= 0.85
 
 
 class ScheduleKind(StrEnum):
@@ -48,6 +70,23 @@ class JobStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
+
+# Active statuses considered when blocking duplicate submissions.
+ACTIVE_CRON_JOB_STATUSES = frozenset({JobStatus.PENDING, JobStatus.RUNNING})
+
+
+class DuplicateCronJobError(Exception):
+    """Raised when an equivalent active cron job already exists."""
+
+    def __init__(self, existing_job: CronJob, message: str | None = None) -> None:
+        """Initialize with the existing scheduled job."""
+        self.existing_job = existing_job
+        self.message = message or (
+            f"An identical job is already scheduled (id={existing_job.id}, "
+            f"status={existing_job.status.value})"
+        )
+        super().__init__(self.message)
 
 
 @dataclass

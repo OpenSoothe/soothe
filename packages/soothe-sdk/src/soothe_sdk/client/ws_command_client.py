@@ -37,14 +37,18 @@ except Exception:  # pragma: no cover
 def _normalize_cron_add_result(result: dict[str, Any]) -> dict[str, Any]:
     """Normalize daemon cron_add payloads to ``{"job": {...}}`` for CLI callers."""
     if "job" in result:
+        out = dict(result)
+    elif result.get("job_id") or result.get("id"):
+        job_id = result.get("job_id") or result.get("id")
+        job = dict(result)
+        job["id"] = job_id
+        job.pop("job_id", None)
+        out = {"job": job}
+    else:
         return result
-    job_id = result.get("job_id") or result.get("id")
-    if not job_id:
-        return result
-    job = dict(result)
-    job["id"] = job_id
-    job.pop("job_id", None)
-    return {"job": job}
+    if result.get("duplicate"):
+        out["duplicate"] = True
+    return out
 
 
 def _normalize_cron_show_result(result: dict[str, Any]) -> dict[str, Any]:

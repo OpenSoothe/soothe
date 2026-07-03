@@ -23,9 +23,11 @@ from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.foundation.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
+    DuplicateCronJobError,
     ExtractionResult,
     JobStatus,
     ScheduleKind,
+    normalize_cron_description,
 )
 from soothe.foundation.cron.service import CronService
 from soothe.foundation.cron.store import CronJobStore
@@ -38,8 +40,10 @@ __all__ = [
     "CronJob",
     "CronJobStore",
     "CronService",
+    "DuplicateCronJobError",
     "ExtractionError",
     "ExtractionResult",
     "JobStatus",
     "ScheduleKind",
+    "normalize_cron_description",
 ]

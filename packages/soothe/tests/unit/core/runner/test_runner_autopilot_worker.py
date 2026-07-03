@@ -58,6 +58,7 @@ class _BareMixin(AutopilotWorkerMixin):
         self._planner = MagicMock()
         self._config = MagicMock()
         self._ensure_checkpointer_initialized = AsyncMock()
+        self.get_sloop_shared_pool = AsyncMock(return_value=None)
 
 
 # ---- Helper-method tests (no StrangeLoop involvement) -------------------

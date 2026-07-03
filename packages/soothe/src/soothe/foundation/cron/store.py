@@ -272,6 +272,69 @@ class CronJobStore:
 
             return [self._row_to_job(row) for row in rows]
 
+    async def find_active_duplicate(
+        self,
+        user_id: str,
+        *,
+        description: str,
+        schedule_kind: ScheduleKind | str,
+        schedule_value: str,
+    ) -> CronJob | None:
+        """Find an active job with the same task and schedule for this user.
+
+        Args:
+            user_id: Owner user identifier.
+            description: Task description (normalized before compare).
+            schedule_kind: Schedule kind.
+            schedule_value: Schedule value.
+
+        Returns:
+            Matching CronJob if one exists with status pending/running, else None.
+        """
+        from soothe.foundation.cron.models import cron_descriptions_equivalent
+
+        kind_val = schedule_kind.value if isinstance(schedule_kind, ScheduleKind) else schedule_kind
+        await self._ensure_writer_connection()
+
+        async with self._pool_semaphore:
+            conn = await self._get_reader_connection()
+            rows = await asyncio.to_thread(
+                self._find_active_by_schedule_sync,
+                conn,
+                user_id,
+                kind_val,
+                schedule_value,
+            )
+
+            async with self._init_lock:
+                self._reader_pool.append(conn)
+
+        for row in rows:
+            job = self._row_to_job(row)
+            if cron_descriptions_equivalent(job.description, description):
+                return job
+        return None
+
+    def _find_active_by_schedule_sync(
+        self,
+        conn: sqlite3.Connection,
+        user_id: str,
+        schedule_kind: str,
+        schedule_value: str,
+    ) -> list[sqlite3.Row]:
+        """Sync lookup for active jobs sharing schedule kind/value."""
+        return conn.execute(
+            """
+            SELECT * FROM cron_jobs
+            WHERE user_id = ?
+              AND schedule_kind = ?
+              AND schedule_value = ?
+              AND status IN ('pending', 'running')
+            ORDER BY created_at
+            """,
+            (user_id, schedule_kind, schedule_value),
+        ).fetchall()
+
     def _list_by_user_sync(
         self,
         conn: sqlite3.Connection,

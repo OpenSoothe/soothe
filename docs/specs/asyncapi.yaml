@@ -67,6 +67,11 @@ channels:
           - $ref: '#/components/messages/jobCancelRequest'
           - $ref: '#/components/messages/jobDagRequest'
           - $ref: '#/components/messages/jobGuidanceRequest'
+          # Cron RPC requests
+          - $ref: '#/components/messages/cronAddRequest'
+          - $ref: '#/components/messages/cronListRequest'
+          - $ref: '#/components/messages/cronShowRequest'
+          - $ref: '#/components/messages/cronCancelRequest'
           # Daemon & config requests
           - $ref: '#/components/messages/daemonStatusRequest'
           - $ref: '#/components/messages/daemonShutdownRequest'
@@ -467,6 +472,46 @@ components:
         goal_id:
           type: string
           description: Optional specific goal target
+
+    # Cron RPC params (RFC-229)
+    cronAddParams:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Natural language scheduling request
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Optional job priority
+
+    cronListParams:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Optional status filter
+
+    cronShowParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Cron job identifier
+
+    cronCancelParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Cron job to cancel
 
     # Daemon & config params (RFC-450 §9.2)
     daemonStatusParams:
@@ -1004,6 +1049,79 @@ components:
                 const: job_guidance
               params:
                 $ref: '#/components/schemas/jobGuidanceParams'
+              id:
+                type: string
+
+    # Cron RPC request messages
+    cronAddRequest:
+      title: Add cron job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: cron_add
+              params:
+                $ref: '#/components/schemas/cronAddParams'
+              id:
+                type: string
+
+    cronListRequest:
+      title: List cron jobs
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: cron_list
+              params:
+                $ref: '#/components/schemas/cronListParams'
+              id:
+                type: string
+
+    cronShowRequest:
+      title: Show cron job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: cron_show
+              params:
+                $ref: '#/components/schemas/cronShowParams'
+              id:
+                type: string
+
+    cronCancelRequest:
+      title: Cancel cron job
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: cron_cancel
+              params:
+                $ref: '#/components/schemas/cronCancelParams'
               id:
                 type: string
 

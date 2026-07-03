@@ -871,7 +871,7 @@ class WebSocketChannel(Channel):
 
         from soothe.foundation.cron import ExtractionError
         from soothe.foundation.cron.extraction import AutopilotDisabledError
-        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
 
         service = self._cron_service
 
@@ -884,6 +884,11 @@ class WebSocketChannel(Channel):
                 job = await service.add_job(text, DEFAULT_CRON_USER_ID, priority=priority)
             except AutopilotDisabledError as exc:
                 raise RuntimeError(exc.message) from exc
+            except DuplicateCronJobError as exc:
+                job = exc.existing_job
+                payload = job.to_dict()
+                payload["duplicate"] = True
+                return {"job": payload, "source": "cron_service"}
             except ExtractionError as exc:
                 raise RuntimeError(exc.message) from exc
             return {"job": job.to_dict(), "source": "cron_service"}

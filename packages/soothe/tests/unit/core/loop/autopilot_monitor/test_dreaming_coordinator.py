@@ -38,6 +38,8 @@ def mock_bus() -> MagicMock:
     """Create mock InternalEventBus."""
     bus = MagicMock()
     bus.emit = AsyncMock()
+    bus.emit_autopilot_dreaming = AsyncMock()
+    bus.emit_autopilot_awake = AsyncMock()
     return bus
 
 
@@ -105,8 +107,8 @@ class TestDreamingCoordinator:
         """enter_dreaming_mode emits start/end events."""
         await coordinator.enter_dreaming_mode()
 
-        mock_bus.emit.assert_any_call("dreaming_mode_entered", {})
-        mock_bus.emit.assert_any_call("dreaming_mode_exited", {})
+        mock_bus.emit_autopilot_dreaming.assert_awaited_once()
+        mock_bus.emit_autopilot_awake.assert_awaited_once()
 
     async def test_enter_dreaming_mode_sets_state(self, coordinator: DreamingCoordinator) -> None:
         """enter_dreaming_mode sets state to active then back to idle."""
@@ -122,7 +124,7 @@ class TestDreamingCoordinator:
 
         await coordinator.enter_dreaming_mode()
 
-        mock_bus.emit.assert_not_called()
+        mock_bus.emit_autopilot_dreaming.assert_not_called()
 
     async def test_enter_dreaming_mode_with_specific_modes(
         self, coordinator: DreamingCoordinator, mock_bus: MagicMock
@@ -130,7 +132,8 @@ class TestDreamingCoordinator:
         """enter_dreaming_mode can run specific modes."""
         await coordinator.enter_dreaming_mode(modes=["episodic"])
 
-        assert mock_bus.emit.call_count >= 2
+        assert mock_bus.emit_autopilot_dreaming.await_count == 1
+        assert mock_bus.emit_autopilot_awake.await_count == 1
 
     async def test_gather_dreaming_context_loop_scope(
         self, coordinator: DreamingCoordinator

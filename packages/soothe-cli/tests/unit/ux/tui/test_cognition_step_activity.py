@@ -120,6 +120,6 @@ def test_step_activity_tree_shows_collapsed_tool_overflow() -> None:
         spinner_position=0,
         colors=colors,
         g=g,
-        preview_limit=3,
+        preview_limit=1,
     )
-    assert "+2 more tools" in str(content)
+    assert "+4 more tools" in str(content)

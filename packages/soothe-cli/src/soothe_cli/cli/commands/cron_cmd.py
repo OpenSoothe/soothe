@@ -94,6 +94,7 @@ def add_job(
 
     job = result.get("job") or {}
     job_id = job.get("id", "?")
+    is_duplicate = bool(result.get("duplicate"))
     console.print(
         Panel(
             "\n".join(
@@ -105,10 +106,14 @@ def add_job(
                     f"[bold]Status:[/bold] [green]{job.get('status', 'pending')}[/green]",
                 ]
             ),
-            title="Scheduled Job Created",
-            border_style="green",
+            title="Scheduled Job Already Exists" if is_duplicate else "Scheduled Job Created",
+            border_style="yellow" if is_duplicate else "green",
         )
     )
+    if is_duplicate:
+        console.print(
+            "[yellow]An identical active job is already scheduled; no new job was created.[/yellow]"
+        )
 
 
 @app.command("list")

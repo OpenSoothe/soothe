@@ -40,6 +40,37 @@ async def test_close_does_not_close_injected_shared_pool() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ensure_pool_accepts_small_max_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dedicated pools with max_size < psycopg default min_size (4) must not raise."""
+    backend = PostgreSQLPersistenceBackend(dsn="postgresql://localhost/db", pool_size=2)
+    created: dict[str, int] = {}
+
+    class _FakePool:
+        closed = False
+
+        def __init__(self, _dsn: str, **kwargs: object) -> None:
+            created["min_size"] = int(kwargs["min_size"])  # type: ignore[arg-type]
+            created["max_size"] = int(kwargs["max_size"])  # type: ignore[arg-type]
+
+        async def open(self) -> None:
+            return None
+
+    async def _noop_schema(_pool: object) -> None:
+        return None
+
+    backend._initialize_schema = _noop_schema  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        "soothe.foundation.sloop.state.persistence.postgres_backend.AsyncConnectionPool",
+        _FakePool,
+    )
+
+    pool = await backend._ensure_pool()
+
+    assert isinstance(pool, _FakePool)
+    assert created == {"min_size": 2, "max_size": 2}
+
+
+@pytest.mark.asyncio
 async def test_close_closes_owned_pool() -> None:
     pool = MagicMock()
     pool.closed = False
