@@ -5,7 +5,7 @@
 **Status**: Proposed
 **Kind**: Protocol Specification
 **Created**: 2026-06-04
-**Updated**: 2026-06-04
+**Updated**: 2026-07-03
 **Dependencies**: RFC-222 (Autopilot and Goal Engine Architecture), RFC-450 (Daemon Communication Protocol)
 **Related**: RFC-625 (AutopilotMonitor and ContextEngine Unification), RFC-626 (Entity Model and State Management Consolidation — LoopState Elimination), RFC-229 (Cron Service for Autopilot — cron IPC commands)
 
@@ -20,7 +20,7 @@ This RFC defines WebSocket IPC commands for desktop client interaction with the 
 RFC-700 (Desktop App Product Redesign) requires IPC commands to:
 1. Create and manage autopilot jobs (root goals submitted to AutopilotService)
 2. Query job status and DAG structure for visualization
-3. Send user guidance comments to GoalEngine
+3. Send user guidance comments to ContextEngine
 4. Subscribe to autopilot worker events (bypassing `autopilot__*` filter from RFC-222 §467-468)
 
 Current RFC-450 IPC commands support loop-centric interactions (`input`, `command`, `subscribe_thread`) but lack autopilot-specific operations.
@@ -29,7 +29,7 @@ Current RFC-450 IPC commands support loop-centric interactions (`input`, `comman
 
 Extend the daemon IPC protocol with a new command category: **Autopilot Job Commands**. These commands:
 - Operate on the singleton AutopilotService (RFC-222 §86-89)
-- Target root Goals (jobs) managed by GoalEngine
+- Target root Goals (jobs) managed by ContextEngine
 - Support desktop DAG visualization and Loop Observation Room (LOR)
 
 ### Scope
@@ -63,6 +63,19 @@ Extend the daemon IPC protocol with a new command category: **Autopilot Job Comm
 
 Follows RFC-450 JSON message format with required `type` field.
 
+#### `request_id` Semantics
+
+All client → server commands accept an optional `request_id` field (string). The following rules govern its use:
+
+| Rule | Description |
+|------|-------------|
+| **Generation** | Client-generated. Recommended format: UUIDv4 or `<client-prefix>-<seq>`. |
+| **Uniqueness scope** | Unique within a single client session (WebSocket connection). Two different clients may reuse the same `request_id`. |
+| **Echo requirement** | If `request_id` is present in the request, the server MUST echo it verbatim in the corresponding response message. |
+| **Absence handling** | If `request_id` is omitted, the server processes normally but omits it from the response. Clients that do not need request correlation may omit it. |
+| **Event correlation** | `request_id` does NOT appear on async events (`soothe.goal.*`, `soothe.worker.*`). Events are correlated to jobs via `goal_id`/`job_id`, not `request_id`. |
+| **Error responses** | `error` messages echo `request_id` if the failing request carried one. |
+
 ### Client → Server Messages
 
 | Type | Fields | Description |
@@ -72,8 +85,8 @@ Follows RFC-450 JSON message format with required `type` field.
 | `job_pause` | `job_id` (req, string), `request_id` (opt) | Pause goal execution (suspends scheduling) |
 | `job_resume` | `job_id` (req, string), `request_id` (opt) | Resume paused goal execution |
 | `job_cancel` | `job_id` (req, string), `request_id` (opt) | Cancel root goal and all descendants |
-| `job_dag` | `job_id` (req, string), `request_id` (opt) | Get GoalEngine DAG snapshot for visualization |
-| `job_guidance` | `job_id` (req, string), `goal_id` (opt, string), `text` (req, string), `request_id` (opt) | Send user guidance to GoalEngine (absorbed as BackoffDecision) |
+| `job_dag` | `job_id` (req, string), `request_id` (opt) | Get ContextEngine DAG snapshot for visualization |
+| `job_guidance` | `job_id` (req, string), `goal_id` (opt, string), `text` (req, string), `request_id` (opt) | Send user guidance to ContextEngine (absorbed as BackoffDecision) |
 | `autopilot_subscribe` | `request_id` (opt) | Subscribe to all autopilot worker events (bypasses `autopilot__*` filter) |
 | `autopilot_unsubscribe` | `request_id` (opt) | Release autopilot worker subscription |
 
@@ -87,7 +100,7 @@ Follows RFC-450 JSON message format with required `type` field.
 | `job_resume_response` | `job_id` (req), `status` (req, string: "running"), `request_id` (opt) | Resume confirmed |
 | `job_cancel_response` | `job_id` (req), `status` (req, string: "cancelled"), `request_id` (opt) | Cancel confirmed |
 | `job_dag_response` | `job_id` (req), `dag` (req, object), `request_id` (opt) | DAG snapshot for visualization |
-| `job_guidance_response` | `job_id` (req), `goal_id` (opt), `absorbed` (req, bool), `request_id` (opt) | Guidance received by GoalEngine |
+| `job_guidance_response` | `job_id` (req), `goal_id` (opt), `absorbed` (req, bool), `request_id` (opt) | Guidance received by ContextEngine |
 | `autopilot_subscribe_response` | `client_id` (req), `subscribed` (req, bool), `request_id` (opt) | Subscription confirmed |
 | `autopilot_unsubscribe_response` | `client_id` (req), `subscribed` (req, bool: false), `request_id` (opt) | Unsubscription confirmed |
 | `error` | `code` (req), `message` (req), `details` (opt) | Protocol error (see error codes below) |
@@ -96,14 +109,15 @@ Follows RFC-450 JSON message format with required `type` field.
 
 | Code | Description |
 |------|-------------|
-| `JOB_NOT_FOUND` | job_id does not match any root goal in GoalEngine |
+| `JOB_NOT_FOUND` | job_id does not match any root goal in ContextEngine |
 | `GOAL_NOT_FOUND` | goal_id does not match any goal in DAG |
 | `AUTOPLOT_NOT_READY` | AutopilotService not initialized or in degraded state |
 | `JOB_ALREADY_PAUSED` | Pause requested on already paused job |
 | `JOB_ALREADY_RUNNING` | Resume requested on already running job |
 | `JOB_COMPLETED` | Operation not valid on completed job |
 | `JOB_FAILED` | Operation not valid on failed job |
-| `GUIDANCE_REJECTED` | GoalEngine rejected guidance (invalid directive) |
+| `GUIDANCE_REJECTED` | ContextEngine rejected guidance (invalid directive) |
+| `JOB_NOT_AUTHORIZED` | user_id does not match job owner; only the job owner may perform this action |
 
 ---
 
@@ -120,7 +134,7 @@ Per RFC-626, the IPC protocol operates on CE entities directly:
 | `job_id` | `GoalNode.id` | Root goal identifier, 8-char hex |
 | `goal_id` | `GoalNode.id` | Any goal in DAG, same entity type |
 | `status` | `GoalNode.status` | CE GoalStatus enum value |
-| `workers` | `GoalNode.assigned_loop_id` | CE field, not separate registry |
+| `workers` | `GoalNode.assigned_loop_id` | CE field (singular per goal). The IPC `workers` array aggregates one entry per **active** goal: `[{goal_id, loop_id: goal.assigned_loop_id}]`. Each GoalNode has at most one worker; the array is multi-element because multiple goals may be active simultaneously. |
 | `dag` | `GoalStepDAGSnapshot` | CE `get_dag_snapshot()` result |
 
 ### Command Changes (RFC-626 Refined)
@@ -133,7 +147,7 @@ Per RFC-626, the IPC protocol operates on CE entities directly:
 **job_status**:
 - Queries CE via `ce.get_goal(job_id)`
 - `active_goals` = count of `ce.get_goals_by_status("active")`
-- `workers` = `[goal.assigned_loop_id]` from GoalNode field
+- `workers` = array of `{goal_id, loop_id}` for each active goal; `loop_id` = `goal.assigned_loop_id` (singular per GoalNode). Multiple active goals → multiple array entries.
 - No separate worker registry lookup
 
 **job_dag**:
@@ -213,9 +227,24 @@ Creates a new autopilot job by submitting a root goal to AutopilotService.
 
 **Processing**:
 1. AutopilotService receives goal submission
-2. GoalEngine creates root Goal with status `pending`
+2. AutopilotMonitor calls `ce.create_goal()` to create root GoalNode with status `pending`
 3. Scheduler begins planning and worker assignment
-4. Return goal.id as job_id
+4. Return GoalNode.id as job_id
+
+#### `verification_rules` Lifecycle
+
+The optional `verification_rules` field on `job_create` provides natural-language success criteria for the job. Its lifecycle is as follows:
+
+| Phase | Behavior |
+|-------|---------|
+| **Submission** | Client provides `verification_rules` as a free-text string in `job_create`. Stored on the root GoalNode (e.g., `GoalNode.verification_rules` field). |
+| **Planning** | Scheduler/BackoffDecision reasoner reads `verification_rules` to derive acceptance criteria for subgoal decomposition. Influences which StepNodes are generated. |
+| **Execution** | Workers (StrangeLoop instances) read `verification_rules` from their assigned GoalNode to self-check completion before reporting `completed`. |
+| **Completion** | AutopilotService evaluates `verification_rules` before transitioning root GoalNode to `completed`. If rules are not satisfied, goal transitions to `failed` with `last_error` indicating the unsatisfied rule. |
+| **Observation** | `job_status_response.last_error` reflects verification failures. `job_status` does NOT echo `verification_rules` back (it is write-once at creation). `job_dag_response` nodes expose `summary`/`findings` for completed goals (see §Node Fields). |
+| **Absence** | If omitted, the job completes when all subgoals reach `completed` (no explicit verification gate). Default behavior. |
+
+> **Note**: `verification_rules` is stored as opaque text. Structured rule evaluation (parsing into executable checks) is a future enhancement; current implementation uses LLM-based assessment during the completion phase.
 
 ### job_status
 
@@ -249,10 +278,12 @@ Queries current state of a job.
 ```
 
 **Processing**:
-1. Query GoalEngine.get_goal(job_id) for root goal status
-2. Traverse DAG to count active/completed/total goals
-3. Collect workers currently assigned to active goals
+1. Query ContextEngine via `ce.get_goal(job_id)` for root goal status
+2. Traverse CE DAG to count active/completed/total goals
+3. Collect workers currently assigned to active goals (from `GoalNode.assigned_loop_id`)
 4. Return snapshot
+
+> **`workers` Array Format**: Each element is `{goal_id, loop_id}`. Since RFC-626 assigns at most one worker per GoalNode (`assigned_loop_id`), the array contains one entry per active goal — not multiple workers per goal. An empty array indicates no goals are currently active (e.g., all suspended or completed).
 
 ### job_pause / job_resume
 
@@ -354,18 +385,36 @@ Retrieves DAG structure for visualization.
         "steps_completed": 2,
         "steps_total": 5,
         "tool_calls": 8
+      },
+      {
+        "id": "m3n4o5p6",
+        "description": "Audit existing auth endpoints for error handling gaps",
+        "status": "completed",
+        "priority": 90,
+        "depends_on": ["a1b2c3d4"],
+        "assigned_loop_id": null,
+        "steps_completed": 4,
+        "steps_total": 4,
+        "tool_calls": 12,
+        "summary": "Identified 3 endpoints (/login, /refresh, /logout) missing structured error responses. Token refresh endpoint lacks retry-on-429 logic.",
+        "findings": [
+          "/login returns 500 on malformed OAuth state param — needs validation middleware",
+          "/refresh does not handle rate-limit (429) responses from upstream IdP",
+          "/logout has no CSRF token verification on POST"
+        ]
       }
     ],
     "edges": [
       {"source": "a1b2c3d4", "target": "e5f6g7h8"},
-      {"source": "a1b2c3d4", "target": "i9j0k1l2"}
+      {"source": "a1b2c3d4", "target": "i9j0k1l2"},
+      {"source": "a1b2c3d4", "target": "m3n4o5p6"}
     ]
   }
 }
 ```
 
 **Processing**:
-1. Query GoalEngine for all goals in DAG
+1. Query ContextEngine via `ce.get_dag_snapshot()` for all goals in DAG
 2. Build node list with visualization-relevant fields
 3. Build edge list from `depends_on` relationships
 4. Return structured DAG snapshot
@@ -387,7 +436,7 @@ Retrieves DAG structure for visualization.
 
 ### job_guidance
 
-Sends user guidance to GoalEngine for absorption.
+Sends user guidance to ContextEngine for absorption.
 
 **Request**:
 ```json
@@ -413,8 +462,8 @@ Sends user guidance to GoalEngine for absorption.
 
 **Processing**:
 1. AutopilotService receives guidance message
-2. Routes to GoalEngine
-3. GoalEngine absorbs as BackoffDecision directive (RFC-200 §208-425)
+2. Routes to ContextEngine (AutopilotMonitor → `ce.get_goal(goal_id)`)
+3. Guidance stored in `GoalNode.guidance_accumulated` list; BackoffDecision reasoner reads from CE GoalNode (RFC-200 §208-425)
 4. Guidance influences:
    - Goal priority adjustments
    - Constraint additions
@@ -465,7 +514,8 @@ Releases autopilot worker subscription.
 **Request**:
 ```json
 {
-  "type": "autopilot_unsubscribe"
+  "type": "autopilot_unsubscribe",
+  "request_id": "req-005"
 }
 ```
 
@@ -474,9 +524,51 @@ Releases autopilot worker subscription.
 {
   "type": "autopilot_unsubscribe_response",
   "client_id": "client-abc123",
-  "subscribed": false
+  "subscribed": false,
+  "request_id": "req-005"
 }
 ```
+
+## Security and Authorization
+
+### Authentication Model
+
+All IPC commands require an authenticated WebSocket session (RFC-450 §30-38). The daemon associates each session with a `client_id` and a `user_id` (or `http_api` for unauthenticated CLI sessions in development mode).
+
+### Authorization Rules
+
+| Command | Authorization Requirement |
+|---------|---------------------------|
+| `job_create` | Any authenticated client may create jobs. No per-user quota in current scope. |
+| `job_status` | Any authenticated client may query any job's status (read-only, no ownership check). |
+| `job_dag` | Same as `job_status` — read-only, no ownership check. |
+| `job_pause` / `job_resume` | **Job owner only.** The `user_id` of the requesting session must match the `user_id` recorded on the job's root GoalNode at creation time. Mismatch → `error` with code `JOB_NOT_AUTHORIZED`. |
+| `job_cancel` | **Job owner only.** Same ownership check as pause/resume. Cancellation is destructive — terminates all descendant goals and releases workers. |
+| `job_guidance` | Any authenticated client may submit guidance to any job (guidance is advisory, non-destructive). |
+| `autopilot_subscribe` | Any authenticated client may subscribe. Subscription scope is per-session. |
+| `autopilot_unsubscribe` | Session-scoped — only the session that created the subscription may unsubscribe. |
+
+> **New Error Code**: `JOB_NOT_AUTHORIZED` — "user_id does not match job owner; only the job owner may perform this action."
+
+### Multi-Client Contention
+
+Multiple desktop clients may be connected simultaneously and issue conflicting lifecycle commands. The daemon resolves contention using **last-writer-wins** semantics with optimistic concurrency:
+
+| Scenario | Resolution |
+|----------|-----------|
+| Client A pauses, Client B resumes simultaneously | Commands are serialized by the daemon's single-threaded IPC handler. The last command to execute wins. Both clients receive their respective response. The losing client learns of the state change via the `soothe.goal.status` event stream. |
+| Client A cancels while Client B pauses | Cancel takes precedence — once a goal is `cancelled` (`failed` with reason "cancelled"), subsequent `pause`/`resume` commands return `JOB_FAILED` error. |
+| Client A pauses already-paused job | Returns `JOB_ALREADY_PAUSED` error (idempotent rejection, no state change). |
+| Two clients create jobs concurrently | Both succeed — each gets a distinct `job_id`. No contention. |
+| Client A subscribes, Client B unsubscribes | `autopilot_unsubscribe` is session-scoped (see authz table). Client B cannot unsubscribe Client A's subscription. |
+
+> **Optimistic Concurrency Note**: Clients should treat `job_status` as the source of truth and reconcile local state with `soothe.goal.status` events. If a client's `job_pause` succeeds but a subsequent `job_resume` from another client changes state, the first client's next `job_status` query will reflect the actual state.
+
+### Subscription Scoping
+
+`autopilot_subscribe` grants access to **all** autopilot worker events for the daemon's AutopilotService instance. There is no per-job or per-worker filter at the subscription level — clients receive all `soothe.goal.*` and `soothe.worker.*` events. Clients are expected to filter client-side by `goal_id`/`job_id` if they only care about specific jobs.
+
+Future enhancement: scoped subscriptions (`autopilot_subscribe` with optional `job_id` filter) may be added if event volume becomes a concern.
 
 ## Integration with Existing Protocol
 
@@ -521,21 +613,21 @@ Releases autopilot worker subscription.
 ### Daemon Side
 
 - [ ] `job_create` handler in WebSocket protocol handler
-- [ ] `job_status` handler querying GoalEngine
+- [ ] `job_status` handler querying ContextEngine
 - [ ] `job_pause` / `job_resume` handlers controlling scheduler
 - [ ] `job_cancel` handler with DAG traversal
 - [ ] `job_dag` handler returning snapshot structure
-- [ ] `job_guidance` handler routing to GoalEngine
+- [ ] `job_guidance` handler routing to ContextEngine
 - [ ] `autopilot_subscribe` handler bypassing namespace filter
 - [ ] `autopilot_unsubscribe` handler releasing subscription
 - [ ] Event emission for `soothe.goal.*` and `soothe.worker.*`
 
-### GoalEngine Side
+### ContextEngine Side
 
-- [ ] Guidance absorption mechanism (BackoffDecision integration)
-- [ ] DAG snapshot export method
-- [ ] Status transition event emission
-- [ ] Progress update event emission
+- [ ] Guidance absorption mechanism (BackoffDecision integration via `GoalNode.guidance_accumulated`)
+- [ ] DAG snapshot export method (`ce.get_dag_snapshot()`)
+- [ ] Status transition event emission (CE callbacks → InternalEventBus)
+- [ ] Progress update event emission (CE `step_completed` callbacks)
 
 ### Desktop Client Side (RFC-700)
 
@@ -544,6 +636,18 @@ Releases autopilot worker subscription.
 - [ ] DAG data transformation for React Flow
 
 ## Changelog
+
+### 2026-07-03
+- Reconciled all GoalEngine references with RFC-626 ContextEngine alignment (Command Details, Error Codes, Implementation Checklist)
+- Added `request_id` semantics subsection under Message Format
+- Added `verification_rules` lifecycle documentation
+- Added completed node example to `job_dag` response (demonstrates `summary`/`findings` fields)
+- Clarified `workers` array format vs RFC-626 singular `assigned_loop_id`
+- Added `request_id` to `autopilot_unsubscribe` request/response examples
+- Added Security and Authorization section (job ownership authz, multi-client contention, subscription scoping)
+- Added `JOB_NOT_AUTHORIZED` error code
+- Added concurrent command conflict resolution semantics
+- Added RFC-624, RFC-625, RFC-626 to References
 
 ### 2026-06-04
 - Initial RFC proposal
@@ -554,7 +658,10 @@ Releases autopilot worker subscription.
 
 ## References
 
+- RFC-200: Autonomous Goal Management
 - RFC-222: Autopilot and Goal Engine Architecture
 - RFC-450: Daemon Communication Protocol
-- RFC-200: Autonomous Goal Management
+- RFC-624: ContextEngine (AutopilotMonitor Unification)
+- RFC-625: AutopilotMonitor and ContextEngine Unification
+- RFC-626: Entity Model and State Management Consolidation — LoopState Elimination
 - RFC-700: Desktop App Product Redesign

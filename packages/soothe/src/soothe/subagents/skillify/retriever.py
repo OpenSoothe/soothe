@@ -7,6 +7,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 from soothe.protocols.policy import ActionRequest, PermissionSet, PolicyContext
 
 from .models import SkillBundle, SkillRecord, SkillSearchResult
@@ -72,6 +73,7 @@ class SkillRetriever:
         return self._ready_event.is_set()
 
     async def retrieve(self, query: str, top_k: int | None = None) -> SkillBundle:
+        query = extract_text_from_message_content(query)
         self._check_policy(query)
 
         if self._ready_event and not self._ready_event.is_set():

@@ -10,6 +10,8 @@ from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
+from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
+
 from .events import (
     SkillifyCompletedEvent,
     SkillifyDispatchedEvent,
@@ -43,11 +45,19 @@ def build_skillify_graph(retriever: SkillRetriever) -> Any:
         query = ""
         for message in reversed(messages):
             if hasattr(message, "type") and message.type == "human":
-                query = message.content if hasattr(message, "content") else str(message)
+                query = (
+                    extract_text_from_message_content(message.content)
+                    if hasattr(message, "content")
+                    else str(message)
+                )
                 break
         if not query and messages:
             last = messages[-1]
-            query = last.content if hasattr(last, "content") else str(last)
+            query = (
+                extract_text_from_message_content(last.content)
+                if hasattr(last, "content")
+                else str(last)
+            )
 
         _emit_event(SkillifyDispatchedEvent(task=query[:200]).to_dict())
 

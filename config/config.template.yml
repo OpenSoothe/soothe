@@ -294,6 +294,12 @@ agent:
   runtime:
     lazy_core_agent: true
     general_purpose_subagent: false
+    # IG-545: per-hop orchestration (fast) vs generation (default) model roles in CoreAgent
+    role_routing:
+      enabled: false
+      orchestration_model_role: fast
+      generation_model_role: default
+      max_orchestration_hops: 1
   # ask_user interrupt relay: auto (veritas) or manual TUI (ClarificationConfig)
   clarification:
     auto_policy: veritas

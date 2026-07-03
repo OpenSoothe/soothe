@@ -5,7 +5,7 @@
 **Status**: Proposed
 **Kind**: Architecture Design
 **Created**: 2026-06-24
-**Updated**: 2026-06-24
+**Updated**: 2026-07-03
 **Dependencies**: RFC-204 (Autopilot Mode), RFC-222 (Autopilot and Goal Engine Architecture), RFC-802 (Persistence Architecture)
 **Related**: RFC-450 (Daemon Communication Protocol)
 
@@ -74,6 +74,39 @@ This placement follows the foundation module pattern (RFC-001), keeping cron as 
 | **GoalEngine** (RFC-222, RFC-625) | Jobs become goals in ContextEngine; execution via StrangeLoop |
 | **Metadata Database** (RFC-802) | CronJobStore persists jobs in `cron_jobs` table |
 
+### AutopilotService Integration Contract
+
+CronService dispatches due jobs by calling `AutopilotService.submit_task()`. The canonical signature (defined in RFC-222 revised, RFC-625) is:
+
+```python
+async def submit_task(
+    self,
+    description: str,
+    *,
+    priority: int = 50,
+    parent_id: str | None = None,
+    max_retries: int | None = None,
+    max_send_backs: int | None = None,
+    depends_on: list[str] | None = None,
+    informs: list[str] | None = None,
+    source_file: str | None = None,
+    workspace: str | None = None,
+    cron_job_id: str | None = None,  # RFC-229: Cron job tracking for recurring rescheduling
+) -> GoalNode
+```
+
+**CronService call site**: CronService passes `description`, `priority`, and `cron_job_id` (the CronJob.id) on every dispatch. All other parameters use defaults. The `cron_job_id` parameter allows `AutopilotService` to correlate the resulting goal with its originating cron job, enabling completion-callback routing for recurring rescheduling.
+
+```python
+goal = await self._autopilot.submit_task(
+    description=job.description,
+    priority=job.priority,
+    cron_job_id=job.id,
+)
+```
+
+The `priority` parameter is always passed from `CronJob.priority` (default `50` from `CronConfig.default_priority`). There is no separate `submit_task(description)` overload — `priority` is keyword-only with a default value.
+
 ### Data Flow
 
 ```
@@ -98,9 +131,9 @@ Periodic tick (every poll_interval):
   ├─► SchedulerService.get_due_tasks() → SELECT due jobs
   │
   ├─► For each due task:
-  │     ├─► mark_running()
-  │     ├─► AutopilotService.submit_task(description)
-  │     └─► On completion: reschedule or mark_completed
+  │     ├─► update_status(job.id, RUNNING)
+  │     ├─► AutopilotService.submit_task(description, priority=job.priority, cron_job_id=job.id)
+  │     └─► On completion: reschedule or update_status(job.id, COMPLETED)
   │
   ▼
 Continue monitoring
@@ -167,12 +200,18 @@ LLM-based natural language to structured schedule extraction.
 | Pattern | Example Input | schedule_kind | schedule_value |
 |---------|---------------|---------------|----------------|
 | Relative delay | "in 2 hours" | `delay` | `"2h"` |
-| Relative date | "tomorrow morning" | `at` | ISO datetime |
-| Specific time | "at 9am" | `at` | ISO datetime |
+| One-time at specific time | "tomorrow morning" | `once` | ISO datetime |
+| One-time at specific time | "at 9am" | `at` | ISO datetime |
 | Recurring interval | "every hour" | `every` | `"1h"` |
 | Recurring day | "every Monday" | `every` | `"1w:Monday"` |
 | Daily | "daily at 3pm" | `cron` | `"0 15 * * *"` |
 | Cron-like | "every morning at 9" | `cron` | `"0 9 * * *"` |
+
+> **`once` vs `at` semantics**: Both produce an ISO datetime `schedule_value` and both execute exactly once. The distinction is semantic:
+> - **`once`**: Used when the user gives a *natural relative* expression (e.g., "tomorrow morning", "next Wednesday"). The LLM resolves the relative reference to an absolute ISO datetime using the current date. No recurrence is implied.
+> - **`at`**: Used when the user gives an *explicit time* or *absolute datetime* (e.g., "at 9am", "at 2026-06-25T09:00"). The value is already (near-)absolute and needs minimal resolution.
+>
+> Both are one-shot: after execution, the job is marked `completed` and is never rescheduled. The `once`/`at` distinction exists to help downstream tooling and debugging understand the user's original intent (relative vs absolute phrasing).
 
 **End Conditions** (optional):
 - `"until 2026-06-30"` — stop after specific date
@@ -233,6 +272,29 @@ Minimal changes to existing SchedulerService (RFC-204 §3.4) for database persis
 | Execution history | None | `last_run`, `run_count` fields |
 | Persistence methods | `_load_persisted()`, `_save_persisted()` | Store CRUD methods |
 
+**Enhanced ScheduledTask Dataclass**:
+
+The existing `ScheduledTask` dataclass (RFC-204 §3.4) is extended with two new fields for cron-service support:
+
+```python
+@dataclass
+class ScheduledTask:
+    # --- Existing fields (RFC-204) ---
+    id: str                           # UUID
+    description: str                  # Task description
+    schedule_spec: str                # Cron expression or duration string
+    status: str                       # "pending" | "running" | "completed" | "failed" | "cancelled"
+    next_run: datetime                # Next execution time
+    created_at: datetime              # Creation timestamp
+
+    # --- New fields (RFC-229) ---
+    user_id: str = "default"          # Owner identity for multi-user isolation
+    last_run: datetime | None = None  # Last execution timestamp (None if never run)
+    run_count: int = 0                # Total execution count
+```
+
+**Backward compatibility**: The new fields have defaults, so existing `ScheduledTask` construction sites that omit them continue to work. When `CronJobStore` is wired as the persistence adapter, all three fields are populated from the `cron_jobs` table. When the legacy JSON-file adapter is used (non-cron scheduled tasks), the defaults apply and multi-user isolation is disabled (`user_id = "default"`).
+
 **Preserved Logic** (no changes):
 - `ScheduleSpec` parsing (cron expressions, durations)
 - `next_after()` next_run calculation
@@ -287,6 +349,17 @@ class CronJobStore:
         """Get pending jobs where next_run <= now."""
 ```
 
+**Status Transition Helpers**: The flow diagrams reference `mark_running()` and `mark_completed()` for readability. These are not separate store methods — they are convenience calls that map to `update_status()`:
+
+| Flow Diagram Reference | Actual Store Call |
+|------------------------|-------------------|
+| `mark_running(job_id)` | `update_status(job_id, "running")` |
+| `mark_completed(job_id)` | `update_status(job_id, "completed", last_run=now)` |
+| `mark_failed(job_id)` | `update_status(job_id, "failed", last_run=now)` |
+| `mark_cancelled(job_id)` | `update_status(job_id, "cancelled")` |
+
+`CronService` may define thin private wrappers (e.g., `self._mark_running(job_id)` → `self._store.update_status(job_id, JobStatus.RUNNING)`) to keep flow logic readable, but the store interface itself uses only `update_status`.
+
 ### 5. CronJob Model
 
 **Location**: `packages/soothe/src/soothe/foundation/cron/models.py`
@@ -297,6 +370,7 @@ class CronJob:
     id: str                      # UUID, generated on creation
     user_id: str                 # Owner identity
     description: str             # Task description (imperative form)
+    natural_language: str | None # Original user input (null if submitted programmatically)
     schedule_kind: str           # "once" | "delay" | "at" | "every" | "cron"
     schedule_value: str          # Parsed schedule value
     end_condition: str | None    # Optional end condition
@@ -318,13 +392,14 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     description TEXT NOT NULL,
+    natural_language TEXT,          -- Original user input (for audit/re-extraction)
     schedule_kind TEXT NOT NULL,
     schedule_value TEXT NOT NULL,
     end_condition TEXT,
     priority INTEGER DEFAULT 50,
     status TEXT DEFAULT 'pending',
-    next_run TEXT NOT NULL,       -- ISO datetime
-    last_run TEXT,                -- ISO datetime
+    next_run TEXT NOT NULL,         -- ISO datetime
+    last_run TEXT,                  -- ISO datetime
     run_count INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -335,6 +410,39 @@ CREATE INDEX IF NOT EXISTS idx_cron_jobs_user_status
 
 CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run
     ON cron_jobs(next_run) WHERE status = 'pending';
+```
+
+**Column: `natural_language`**: Stores the original user-submitted natural language text verbatim. This enables:
+- Re-extraction if the LLM model or prompt is improved and a job needs re-parsing
+- Auditing and debugging failed extractions
+- Display in TUI/CLI `show_job` output for user context
+
+The column is nullable (`TEXT` without `NOT NULL`) to allow pre-existing rows or programmatic submissions that bypass NL extraction.
+
+### Schema Migration Strategy
+
+The `cron_jobs` table is created via `CREATE TABLE IF NOT EXISTS` on daemon startup. This handles initial provisioning but does not handle column additions for existing deployments.
+
+**Migration approach**: Soothe does not currently use Alembic-style versioned migrations (RFC-802 §5). Schema evolution for `cron_jobs` follows a lightweight additive strategy:
+
+1. **Additive-only columns**: New columns are always added with a `DEFAULT` or `NULL` constraint so existing rows remain valid. The `natural_language` column follows this pattern (nullable).
+2. **Startup `ALTER TABLE`**: On daemon startup, `CronJobStore._ensure_schema()` executes idempotent `ALTER TABLE ... ADD COLUMN` statements wrapped in `try/except` (SQLite does not support `IF NOT EXISTS` on `ADD COLUMN`). Columns that already exist raise `duplicate column name` which is caught and ignored.
+3. **No destructive migrations**: Renamed or dropped columns are not supported. If a column becomes obsolete, it is left in place (unused).
+4. **Version tracking (future)**: When RFC-802 adds Alembic-style migrations, `cron_jobs` will register a migration script. Until then, the additive `ALTER TABLE` approach is sufficient.
+
+```python
+# CronJobStore._ensure_schema() — called on daemon startup
+SCHEMA_EXTENSIONS = [
+    "ALTER TABLE cron_jobs ADD COLUMN natural_language TEXT",
+]
+
+def _ensure_schema_sync(self):
+    for stmt in SCHEMA_EXTENSIONS:
+        try:
+            self._conn.execute(stmt)
+        except Exception as e:
+            if "duplicate column" not in str(e).lower():
+                raise
 ```
 
 ### 7. Configuration
@@ -352,20 +460,33 @@ agent:
     poll_interval: 60          # Seconds between due-job monitoring ticks
     extraction_model: fast     # LLM role for NL extraction (fast|think)
     extraction_timeout: 30     # Timeout for LLM extraction calls
+    extraction_max_retries: 3  # Max LLM retry attempts on failure
+    extraction_retry_backoff: 2.0  # Exponential backoff base (seconds)
+    min_confidence: 0.5        # Minimum extraction confidence (0.0-1.0)
     default_priority: 50       # Default job priority when not specified
 ```
 
 **Pydantic Model**:
 
 ```python
+from typing import Literal
+
 class CronConfig(BaseModel):
     enabled: bool = Field(default=True, description="Enable cron service")
     max_jobs: int = Field(default=100, ge=1, le=1000, description="Max jobs per user")
     poll_interval: int = Field(default=60, ge=10, le=3600, description="Monitoring tick interval")
-    extraction_model: str = Field(default="fast", description="LLM role for NL extraction")
-    extraction_timeout: int = Field(default=30, ge=5, le=120, description="Extraction timeout")
+    extraction_model: Literal["fast", "think"] = Field(default="fast", description="LLM role for NL extraction")
+    extraction_timeout: int = Field(default=30, ge=5, le=120, description="Extraction timeout (seconds)")
+    extraction_max_retries: int = Field(default=3, ge=0, le=10, description="Max LLM retry attempts on failure")
+    extraction_retry_backoff: float = Field(default=2.0, ge=0.0, le=60.0, description="Exponential backoff base (seconds)")
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="Minimum extraction confidence threshold")
     default_priority: int = Field(default=50, ge=1, le=100, description="Default job priority")
 ```
+
+**Field validation notes**:
+- `extraction_model`: Constrained to `Literal["fast", "think"]` — invalid values raise `ValidationError` at config load time rather than failing at first extraction call.
+- `min_confidence`: Replaces the hardcoded `0.5` threshold in the error-handling table. Extraction results with `confidence < min_confidence` are rejected and an error is returned to the user suggesting rephrasing.
+- `extraction_max_retries` / `extraction_retry_backoff`: Configurable retry parameters for LLM extraction calls. Retries use exponential backoff: `delay = backoff * (2 ** attempt)` seconds. Set `extraction_max_retries: 0` to disable retries.
 
 ### 8. TUI Commands (Job Submission Only)
 
@@ -397,19 +518,190 @@ These commands communicate with the daemon via HTTP REST (`/api/v1/cron/*` endpo
 
 **Location**: IPC handlers in daemon (RFC-450)
 
-| RPC Type | Handler | Method |
-|----------|---------|--------|
-| `cron_add_request` | `_cmd_cron_add` | `CronService.add_job()` |
+Follows RFC-450 JSON message format with required `type` field.
+
+**Client → Server Message**:
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| `cron_add_request` | `natural_language` (req, string), `user_id` (opt, string), `priority` (opt, int), `request_id` (opt, string) | Submit natural language cron job. Daemon routes to `CronService.add_job()`. |
+
+**Server → Client Messages**:
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| `cron_add_response` | `job_id` (req, string), `description` (req, string), `schedule_kind` (req, string), `next_run` (req, string, ISO datetime), `request_id` (opt, string) | Job created and persisted. |
+| `cron_add_error` | `code` (req, string), `message` (req, string), `details` (opt, object), `request_id` (opt, string) | Extraction failed, confidence too low, or persistence error. |
+
+**Request Example**:
+
+```json
+{
+  "type": "cron_add_request",
+  "natural_language": "remind me tomorrow at 9am to check the deploy",
+  "user_id": "alice",
+  "priority": 50,
+  "request_id": "cron-001"
+}
+```
+
+**Success Response Example**:
+
+```json
+{
+  "type": "cron_add_response",
+  "job_id": "a3f1b2c4",
+  "description": "Check the deploy",
+  "schedule_kind": "at",
+  "next_run": "2026-06-25T09:00:00+08:00",
+  "request_id": "cron-001"
+}
+```
+
+**Error Response Example** (low confidence):
+
+```json
+{
+  "type": "cron_add_error",
+  "code": "EXTRACTION_LOW_CONFIDENCE",
+  "message": "Could not confidently parse schedule from input. Please rephrase.",
+  "details": {
+    "confidence": 0.3,
+    "min_confidence": 0.5,
+    "input": "remind me to check the deploy"
+  },
+  "request_id": "cron-001"
+}
+```
+
+**Error Codes**:
+
+| Code | Trigger | User Action |
+|------|---------|-------------|
+| `EXTRACTION_LOW_CONFIDENCE` | LLM confidence < `min_confidence` | Rephrase with clearer timing |
+| `EXTRACTION_FAILED` | LLM returned unparseable output | Try structured syntax |
+| `EXTRACTION_TIMEOUT` | LLM timed out after all retries | Retry later |
+| `MAX_JOBS_EXCEEDED` | User has `max_jobs` pending jobs | Cancel existing jobs first |
+| `CRON_DISABLED` | `cron.enabled` is `false` | Enable cron in config |
+
+**Handler**: `_cmd_cron_add` in daemon IPC handler registry. Calls `CronService.add_job(natural_language, user_id, priority)`.
 
 ### 11. HTTP REST Endpoints (CLI Management)
 
 **Location**: `packages/soothe-daemon/src/soothe_daemon/channels/http_rest.py`
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/cron/jobs` | GET | List scheduled jobs (optional `?status=` filter) |
-| `/api/v1/cron/jobs/{job_id}` | GET | Show job details |
-| `/api/v1/cron/jobs/{job_id}` | DELETE | Cancel a scheduled job |
+All endpoints follow JSON request/response convention. `user_id` is derived per channel (see User Identity Derivation below).
+
+#### GET `/api/v1/cron/jobs` — List Scheduled Jobs
+
+**Query Parameters**:
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | no | Filter by status: `pending`, `running`, `completed`, `failed`, `cancelled` |
+
+**Response** `200 OK`:
+
+```json
+{
+  "jobs": [
+    {
+      "id": "a3f1b2c4",
+      "description": "Check the deploy",
+      "schedule_kind": "at",
+      "schedule_value": "2026-06-25T09:00:00+08:00",
+      "end_condition": null,
+      "priority": 50,
+      "status": "pending",
+      "next_run": "2026-06-25T09:00:00+08:00",
+      "last_run": null,
+      "run_count": 0,
+      "created_at": "2026-06-24T15:30:00+08:00"
+    }
+  ],
+  "count": 1
+}
+```
+
+**Error** `403 Forbidden`:
+
+```json
+{
+  "error": "CRON_DISABLED",
+  "message": "Cron service is not enabled"
+}
+```
+
+#### GET `/api/v1/cron/jobs/{job_id}` — Show Job Details
+
+**Path Parameters**: `job_id` (string, required) — 8-char hex job ID
+
+**Response** `200 OK`:
+
+```json
+{
+  "id": "a3f1b2c4",
+  "user_id": "http_api",
+  "description": "Check the deploy",
+  "natural_language": "remind me tomorrow at 9am to check the deploy",
+  "schedule_kind": "at",
+  "schedule_value": "2026-06-25T09:00:00+08:00",
+  "end_condition": null,
+  "priority": 50,
+  "status": "pending",
+  "next_run": "2026-06-25T09:00:00+08:00",
+  "last_run": null,
+  "run_count": 0,
+  "created_at": "2026-06-24T15:30:00+08:00",
+  "updated_at": "2026-06-24T15:30:00+08:00"
+}
+```
+
+**Error** `404 Not Found`:
+
+```json
+{
+  "error": "JOB_NOT_FOUND",
+  "message": "No cron job with id 'xyz123' found for this user"
+}
+```
+
+#### DELETE `/api/v1/cron/jobs/{job_id}` — Cancel Scheduled Job
+
+**Path Parameters**: `job_id` (string, required)
+
+**Response** `200 OK`:
+
+```json
+{
+  "id": "a3f1b2c4",
+  "status": "cancelled",
+  "cancelled_at": "2026-06-24T16:00:00+08:00"
+}
+```
+
+**Error** `404 Not Found`: Same as GET show (job not found or not owned by caller)
+
+**Error** `409 Conflict`:
+
+```json
+{
+  "error": "JOB_ALREADY_COMPLETED",
+  "message": "Cannot cancel job that is already completed"
+}
+```
+
+#### User Identity Derivation
+
+The `user_id` used for ownership validation is derived differently per channel:
+
+| Channel | `user_id` Source | Notes |
+|---------|------------------|-------|
+| **TUI** (WebSocket RPC) | `session.user_id` from daemon session | Set during TUI session authentication; defaults to `"tui_user"` for unauthenticated local sessions |
+| **CLI** (HTTP REST) | `"http_api"` (constant) | CLI commands do not carry per-user identity in the current architecture. All CLI-managed jobs are scoped to the `"http_api"` pseudo-user. Multi-user CLI identity is deferred to a future auth RFC. |
+| **HTTP REST** (programmatic) | `X-User-Id` header, fallback `"http_api"` | Programmatic clients may pass `X-User-Id` header for user-scoped operations. If absent, defaults to `"http_api"`. |
+
+> **Cross-channel note**: A job created via TUI (user `"alice"`) cannot be cancelled via CLI (user `"http_api"`) — the ownership check will reject it. This is intentional: TUI-created jobs must be managed through the TUI or by a REST client that provides the matching `X-User-Id` header.
 
 ## Execution Flow
 
@@ -424,7 +716,7 @@ These commands communicate with the daemon via HTTP REST (`/api/v1/cron/*` endpo
    - `schedule_kind: "at"`
    - `schedule_value: "2026-06-25T09:00:00"`
    - `confidence: 0.95`
-6. Service validates confidence > 0.5 threshold
+6. Service validates confidence >= `min_confidence` threshold
 7. `SchedulerService.add_task()` computes `next_run`
 8. `CronJobStore.create()` persists to database
 9. Response sent to TUI with job ID and next_run
@@ -434,22 +726,40 @@ These commands communicate with the daemon via HTTP REST (`/api/v1/cron/*` endpo
 1. Daemon periodic task `_periodic_cron_tick` fires (every `poll_interval`)
 2. `CronService._tick()` calls `SchedulerService.get_due_tasks(now)`
 3. For each due job:
-   - `mark_running()` updates status to `"running"`
-   - `AutopilotService.submit_task(description, priority)` creates goal
+   - **End-condition check** (before dispatch): If `job.end_condition` is set and evaluates to expired (see End-Condition Evaluation below), call `update_status(job.id, "completed", last_run=now)` and skip dispatch. Log at INFO: `"Cron job expired: id=%s end_condition=%s"`.
+   - `update_status(job.id, "running")` marks the job as running (the store has no separate `mark_running()` method — all status transitions go through `update_status`)
+   - `AutopilotService.submit_task(description, priority=job.priority, cron_job_id=job.id)` creates goal
    - Goal executes via StrangeLoop (RFC-222)
 4. On goal completion event:
-   - If recurring (`every` or `cron`):
-     - Compute next `next_run`
+   - **End-condition check** (before reschedule): If `job.end_condition` is set and expired, call `update_status(job.id, "completed", last_run=now)` and do NOT reschedule. Log at INFO.
+   - If recurring (`every` or `cron`) and not expired:
+     - Compute next `next_run` via `SchedulerService.next_after()`
      - `update_next_run()` with incremented `run_count`
-     - Status back to `"pending"`
+     - `update_status(job.id, "pending")` to requeue for next tick
    - If one-time (`once`, `delay`, `at`):
-     - `update_status("completed")` with `last_run`
+     - `update_status(job.id, "completed", last_run=now)`
+
+#### End-Condition Evaluation
+
+`CronService._is_job_expired(job, now)` evaluates `end_condition` before any dispatch or rescheduling:
+
+| Format | Example | Evaluation |
+|--------|---------|------------|
+| `until <ISO date>` | `"until 2026-06-30"` | `now >= parsed_date` → expired |
+| `for <N> <unit>` | `"for 2 weeks"` | `now >= job.created_at + N units` → expired |
+| `None` / empty | — | Never expires (always `False`) |
+
+- If `end_condition` is unparseable, log a WARNING and return `False` (treat as no end condition — safer to continue than to silently drop a recurring job).
+- `until` dates without timezone are assumed UTC.
+- `for` durations support `day(s)` and `week(s)` units.
+
+> **Note on store interface**: `CronJobStore` does not expose separate `mark_running()` or `mark_completed()` methods. All status transitions are performed via `update_status(job_id, status, last_run=None)`. The method names `mark_running` and `mark_completed` in earlier flow diagrams refer to `update_status(job_id, "running")` and `update_status(job_id, "completed", last_run=now)` respectively.
 
 ### Job Query/Cancel (CLI via HTTP REST)
 
 1. User sends `soothe cron list` or `soothe cron cancel <id>`
 2. CLI sends HTTP GET/DELETE to daemon REST endpoint
-3. Service validates `user_id` ownership (defaults to "http_api" for CLI)
+3. Service validates `user_id` ownership (derived per channel — see User Identity Derivation in §11)
 4. Operation executes via `CronJobStore`
 5. Response returned as JSON to CLI
 
@@ -459,9 +769,9 @@ These commands communicate with the daemon via HTTP REST (`/api/v1/cron/*` endpo
 
 | Scenario | Handling |
 |----------|----------|
-| Low confidence (< 0.5) | Return error to user, suggest rephrasing |
+| Low confidence (< `min_confidence`) | Return error to user, suggest rephrasing |
 | Unparseable schedule | Return error with example syntax |
-| LLM timeout | Retry with exponential backoff, max 3 attempts |
+| LLM timeout | Retry with exponential backoff, max `extraction_max_retries` attempts (backoff base: `extraction_retry_backoff` seconds) |
 | LLM unavailable | Return error, suggest structured syntax |
 
 ### Execution Failures
@@ -478,6 +788,44 @@ These commands communicate with the daemon via HTTP REST (`/api/v1/cron/*` endpo
 |----------|----------|
 | DB write fails | Log error, retry write, keep in-memory state as backup |
 | DB read fails | Use in-memory cache if available, log warning |
+
+### Job-Completion Notifications
+
+Users need to know when a cron job has executed (succeeded, failed, or expired). The notification mechanism uses the existing daemon event bus (RFC-450) rather than introducing a new channel.
+
+**Event Types**: CronService emits events to the daemon `InternalEventBus` on every job state transition:
+
+| Event | Trigger | Payload Fields |
+|-------|---------|----------------|
+| `cron_job_dispatched` | Job transitioned to `running` (dispatched to AutopilotService) | `job_id`, `user_id`, `description`, `goal_id` |
+| `cron_job_completed` | One-time job finished successfully or recurring job completed a run | `job_id`, `user_id`, `description`, `status`, `run_count`, `last_run` |
+| `cron_job_failed` | Goal execution failed | `job_id`, `user_id`, `description`, `error`, `run_count` |
+| `cron_job_expired` | End condition reached; job will not reschedule | `job_id`, `user_id`, `description`, `end_condition`, `run_count` |
+| `cron_job_cancelled` | User cancelled the job | `job_id`, `user_id`, `description` |
+
+**Notification Delivery**:
+
+| Channel | Mechanism |
+|---------|-----------|
+| **TUI** | If the originating user has an active TUI WebSocket session, the daemon pushes a `cron_job_event` message over the session. The TUI displays a transient notification toast. |
+| **CLI** | No push mechanism. Users poll via `soothe cron show <job_id>` or `soothe cron list --status completed`. The CLI output includes `last_run`, `run_count`, and `status` fields. |
+| **HTTP REST** | No push mechanism. Clients poll `GET /api/v1/cron/jobs/{job_id}`. Future RFCs may add SSE or webhook callbacks. |
+
+**TUI Notification Message Format**:
+
+```json
+{
+  "type": "cron_job_event",
+  "event": "cron_job_completed",
+  "job_id": "a3f1b2c4",
+  "description": "Check the deploy",
+  "status": "completed",
+  "run_count": 1,
+  "last_run": "2026-06-25T09:00:15+08:00"
+}
+```
+
+> **Note**: TUI notifications are best-effort. If no active session exists for `user_id`, the event is logged but not delivered. The persisted job state (queryable via CLI/REST) is the source of truth.
 
 ## Security Considerations
 
@@ -528,10 +876,110 @@ These commands communicate with the daemon via HTTP REST (`/api/v1/cron/*` endpo
 | **Phase 4**: TUI Integration | Command registry, daemon RPC handlers |
 | **Phase 5**: Testing & Polish | Unit tests, integration tests, config sync |
 
+## Implementation Checklist
+
+Track per-component completion. All items must be checked before the RFC moves from Proposed to Accepted.
+
+### CronConfig & Models
+
+- [ ] `CronConfig` Pydantic model with `Literal["fast", "think"]` validation on `extraction_model`
+- [ ] `CronConfig` includes `min_confidence`, `extraction_max_retries`, `extraction_retry_backoff` fields
+- [ ] `CronJob` dataclass includes `natural_language` field
+- [ ] `ExtractionResult` dataclass includes `confidence` field
+- [ ] Config template (`config/config.template.yml`) updated with all new cron fields
+- [ ] Develop config (`config/develop/config.yml`) synced with template
+
+### CronExtractionService
+
+- [ ] LLM prompt template implemented with current date/time injection
+- [ ] `extract()` returns `ExtractionResult` with confidence score
+- [ ] Low-confidence rejection (< `min_confidence`) returns error with rephrasing suggestion
+- [ ] LLM timeout retry with exponential backoff (`extraction_max_retries` attempts, `extraction_retry_backoff` base)
+- [ ] LLM unavailable fallback returns structured error
+- [ ] Unit tests with mocked LLM responses
+
+### CronJobStore
+
+- [ ] `create()`, `get()`, `list_by_user()`, `update_status()`, `update_next_run()`, `get_due_jobs()` implemented
+- [ ] `cron_jobs` table DDL includes `natural_language` column
+- [ ] Migration strategy documented and implemented (ALTER TABLE for schema evolution)
+- [ ] Indexes on `(user_id, status)` and `next_run WHERE status='pending'` created
+- [ ] Unit tests with mocked DB
+
+### SchedulerService Enhancement
+
+- [ ] `ScheduledTask` dataclass extended with `user_id`, `last_run`, `run_count` fields
+- [ ] Backward compatibility: existing construction sites with default values still work
+- [ ] `CronJobStore` wired as persistence adapter (replaces JSON file for cron tasks)
+- [ ] Schedule math (`next_after()`, `get_due_tasks()`) preserved unchanged
+
+### CronService Orchestrator
+
+- [ ] `add_job()` orchestrates extraction → scheduling → persistence
+- [ ] `list_jobs()`, `cancel_job()`, `show_job()` implement ownership validation
+- [ ] `_tick()` calls `get_due_tasks()` and dispatches to `AutopilotService.submit_task()`
+- [ ] `_is_job_expired()` evaluates `end_condition` before dispatch and before reschedule
+- [ ] Recurring rescheduling: `update_next_run()` + `update_status("pending")`
+- [ ] One-time completion: `update_status("completed", last_run=now)`
+- [ ] Goal-completion events emitted to `InternalEventBus` (`cron_job_dispatched`, `cron_job_completed`, `cron_job_failed`, `cron_job_expired`, `cron_job_cancelled`)
+- [ ] Unit tests with mocked dependencies
+
+### TUI Integration
+
+- [ ] `/cron <text>` command registered in TUI command registry
+- [ ] `cron_add_request` RPC handler implemented in daemon (`_cmd_cron_add`)
+- [ ] `cron_add_response` sent back to TUI with job details
+- [ ] `cron_job_event` push notifications to active TUI sessions
+- [ ] Hidden keywords (`schedule`, `timer`, `reminder`) registered for discoverability
+
+### CLI Subcommands
+
+- [ ] `soothe cron list [--status <s>]` implemented (GET `/api/v1/cron/jobs`)
+- [ ] `soothe cron show <job_id>` implemented (GET `/api/v1/cron/jobs/{job_id}`)
+- [ ] `soothe cron cancel <job_id>` implemented (DELETE `/api/v1/cron/jobs/{job_id}`)
+- [ ] HTTP REST endpoints return JSON with documented status codes (200, 403, 404, 409)
+- [ ] `user_id` derivation: TUI session, CLI `"http_api"`, HTTP `X-User-Id` header
+
+### Integration Tests
+
+- [ ] End-to-end submission: TUI → daemon → DB → verify persisted
+- [ ] Execution flow: due job → AutopilotService → verify goal created
+- [ ] Rescheduling: recurring job completes → verify `next_run` updated
+- [ ] End-condition expiry: job with `end_condition` → verify `completed` and no reschedule
+- [ ] Daemon restart: jobs persist across restart, due jobs picked up
+- [ ] Ownership isolation: cross-user access rejected
+
 ## References
 
 - RFC-204: Autopilot Mode (scheduler service foundation)
-- RFC-222: Autopilot and Goal Engine Architecture (AutopilotService integration)
-- RFC-450: Daemon Communication Protocol (IPC message format)
-- RFC-625: ContextEngine as goal state source of truth
-- RFC-802: Persistence Architecture (metadata database)
+- RFC-222: Autopilot and Goal Engine Architecture (AutopilotService integration, `submit_task` contract)
+- RFC-450: Daemon Communication Protocol (IPC message format, event bus)
+- RFC-624: Context Engine (unified context management for goals)
+- RFC-625: ContextEngine as goal state source of truth (AutopilotMonitor unification)
+- RFC-626: Entity Model and State Management Consolidation (GoalNode entity model, `cron_job_id` parameter)
+- RFC-802: Persistence Architecture (metadata database, migration framework)
+
+## Changelog
+
+### 2026-06-24
+- Initial RFC proposal
+- Defined CronService architecture, CronExtractionService, CronJobStore
+- Defined database schema, configuration, TUI/CLI interface
+- Defined execution flow and error handling
+
+### 2026-07-03
+- Added `AutopilotService.submit_task()` formal contract with `cron_job_id` parameter
+- Added `cron_add_request` / `cron_add_response` RPC message schemas
+- Added HTTP REST request/response JSON schemas with status codes (200, 403, 404, 409)
+- Added user identity derivation per channel (TUI, CLI, HTTP REST)
+- Added `natural_language` column to `cron_jobs` schema and `CronJob` model
+- Constrained `extraction_model` with `Literal["fast", "think"]` validation
+- Added `min_confidence`, `extraction_max_retries`, `extraction_retry_backoff` to `CronConfig`
+- Added end-condition evaluation logic (`_is_job_expired`) to Monitoring Tick flow
+- Added job-completion notification mechanism (event bus + TUI push)
+- Reconciled `mark_running`/`mark_completed` as `update_status` convenience wrappers
+- Added enhanced `ScheduledTask` dataclass with `user_id`, `last_run`, `run_count`
+- Clarified `once` vs `at` schedule_kind semantics
+- Added implementation checklist (per-component)
+- Added RFC-624 and RFC-626 to References
+- Added database migration strategy for `cron_jobs` table
