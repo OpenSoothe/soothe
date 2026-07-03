@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.config.models import AutonomousConfig
+from soothe.config.models import AutopilotConfig
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
@@ -27,7 +27,7 @@ async def test_short_evidence_triggers_send_back() -> None:
     ce = ContextEngine()
     svc = AutopilotService(
         ce=ce,
-        config=AutonomousConfig(max_loops=1, max_parallel_goals=1),
+        config=AutopilotConfig(max_loops=1, max_parallel_goals=1),
         internal_bus=bus,
         consensus_model=_mock_consensus_model(
             decision="send_back",

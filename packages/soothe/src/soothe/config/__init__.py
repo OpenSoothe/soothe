@@ -17,7 +17,7 @@ from soothe.config.env import (
 )
 from soothe.config.models import (
     AgentConfig,
-    AutonomousConfig,
+    AutopilotConfig,
     ComplexityThresholds,
     ConsoleLoggingConfig,
     DurabilityProtocolConfig,
@@ -67,7 +67,7 @@ __all__ = [
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
     "StrangeLoopConfig",
-    "AutonomousConfig",
+    "AutopilotConfig",
     "ComplexityThresholds",
     "ConsoleLoggingConfig",
     "DurabilityProtocolConfig",

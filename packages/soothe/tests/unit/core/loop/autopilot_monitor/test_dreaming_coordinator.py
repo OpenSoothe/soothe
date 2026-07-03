@@ -17,7 +17,7 @@ def mock_config() -> MagicMock:
     """Create mock SootheConfig with autonomous settings."""
     cfg = MagicMock()
     cfg.agent = MagicMock()
-    cfg.agent.autonomous = MagicMock()
+    cfg.agent.autopilot = MagicMock()
 
     dreaming_cfg = MagicMock()
     dreaming_cfg.episodic = MagicMock()
@@ -28,7 +28,7 @@ def mock_config() -> MagicMock:
     dreaming_cfg.semantic.enabled = True
     dreaming_cfg.profile = MagicMock()
     dreaming_cfg.profile.enabled = True
-    cfg.agent.autonomous.dreaming_modes = dreaming_cfg
+    cfg.agent.autopilot.dreaming_modes = dreaming_cfg
 
     return cfg
 

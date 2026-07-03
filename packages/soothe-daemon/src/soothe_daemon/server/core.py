@@ -405,7 +405,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     bus=daemon_autopilot_bus,
                     config=self._config,
                 )
-                ws_cfg = self._config.agent.autonomous.workspace_reservation
+                ws_cfg = self._config.agent.autopilot.workspace_reservation
                 workspace_reservation = WorkspaceReservation(
                     enabled=ws_cfg.enabled,
                     strict_overlap=ws_cfg.strict_overlap,
@@ -449,7 +449,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 self._autopilot_service = AutopilotService(
                     ce=daemon_ce,
-                    config=self._config.agent.autonomous,
+                    config=self._config.agent.autopilot,
                     internal_bus=daemon_autopilot_bus,
                     monitor=daemon_monitor,
                     subscribe_to_bus=True,
@@ -468,7 +468,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
                 self._autopilot_service._context_projector = ContextProjector(
                     self._autopilot_service._context_store,
-                    self._config.agent.autonomous.context_projection,
+                    self._config.agent.autopilot.context_projection,
                 )
                 logger.info(
                     "[Autopilot] daemon-owned AutopilotService constructed "
@@ -479,15 +479,13 @@ class SootheDaemon(DaemonHandlersMixin):
                 try:
                     from soothe.foundation.cron import CronService
 
-                    if self._config.cron.enabled:
-                        self._cron_service = CronService(
-                            config=self._config,
-                            autopilot=self._autopilot_service,
-                        )
-                        logger.info(
-                            "[Cron] daemon-owned CronService constructed "
-                            "(enabled=true; monitoring loop will start)"
-                        )
+                    self._cron_service = CronService(
+                        config=self._config,
+                        autopilot=self._autopilot_service,
+                    )
+                    logger.info(
+                        "[Cron] daemon-owned CronService constructed (monitoring loop will start)"
+                    )
                 except Exception:
                     logger.exception("[Cron] failed to construct daemon-owned CronService")
                     self._cron_service = None
@@ -642,8 +640,8 @@ class SootheDaemon(DaemonHandlersMixin):
             # scheduling loop so HTTP /autopilot/submit submissions get dispatched.
             # Failure to start is logged but does not block the daemon — autopilot
             # endpoints will return 503-equivalent until the next restart.
-            # Only start if config.agent.autonomous.enabled is True.
-            if self._autopilot_service is not None and self._config.agent.autonomous.enabled:
+            # Only start if config.agent.autopilot.enabled is True.
+            if self._autopilot_service is not None and self._config.agent.autopilot.enabled:
                 try:
                     await self._autopilot_service.start()
                     logger.info("[Autopilot] scheduling loop started (enabled=true)")
@@ -652,14 +650,14 @@ class SootheDaemon(DaemonHandlersMixin):
             elif self._autopilot_service is not None:
                 logger.info(
                     "[Autopilot] service constructed but scheduling loop NOT started "
-                    "(config.agent.autonomous.enabled=false)"
+                    "(config.agent.autopilot.enabled=false)"
                 )
 
             # RFC-229: Start CronService monitoring loop for scheduled jobs
             if self._cron_service is not None:
                 try:
                     await self._cron_service.start()
-                    logger.info("[Cron] monitoring loop started (enabled=true)")
+                    logger.info("[Cron] monitoring loop started")
                 except Exception:
                     logger.exception("[Cron] failed to start monitoring loop")
 

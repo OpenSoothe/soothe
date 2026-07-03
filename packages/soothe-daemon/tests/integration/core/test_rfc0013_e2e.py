@@ -403,7 +403,7 @@ async def test_event_throughput_stress(tmp_path: Path, requires_llm_api) -> None
     config, daemon_cfg = build_daemon_config(tmp_path, websocket_port=ws_port)
     if config.router.fast:
         config.router = config.router.model_copy(update={"default": config.router.fast})
-    config.agent.autonomous.max_iterations = 3
+    config.agent.autopilot.max_iterations = 3
     config.agent.loop.concurrency.global_max_llm_calls = 5
 
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)

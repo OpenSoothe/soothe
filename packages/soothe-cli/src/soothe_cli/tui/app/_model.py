@@ -359,7 +359,11 @@ class _ModelMixin:
             client = async_ws_command_client_from_config(cfg)
             result = await client.cron_add(text)
         except RuntimeError as exc:
-            await self._mount_message(ErrorMessage(str(exc)))
+            message = str(exc)
+            if "Autopilot is disabled" in message:
+                await self._mount_message(AppMessage(message))
+            else:
+                await self._mount_message(ErrorMessage(message))
             return
         except Exception as exc:  # noqa: BLE001
             logger.exception("Cron submit failed")

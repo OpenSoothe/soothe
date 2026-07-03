@@ -8,7 +8,7 @@ to avoid double-handling every event.
 
 from __future__ import annotations
 
-from soothe.config.models import AutonomousConfig
+from soothe.config.models import AutopilotConfig
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
@@ -21,8 +21,8 @@ from soothe.foundation.events.internal_events import (
 from .fakes import IdleFakeFactory
 
 
-def _config() -> AutonomousConfig:
-    return AutonomousConfig(max_loops=2, max_parallel_goals=2)
+def _config() -> AutopilotConfig:
+    return AutopilotConfig(max_loops=2, max_parallel_goals=2)
 
 
 def _factory() -> IdleFakeFactory:

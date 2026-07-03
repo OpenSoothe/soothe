@@ -313,6 +313,26 @@ class CronExtractionService:
         return self._schema_to_result(schema, raw_input)
 
 
+class AutopilotDisabledError(Exception):
+    """Cron submission rejected because autopilot scheduling is disabled.
+
+    Attributes:
+        message: User-facing guidance to enable autopilot.
+    """
+
+    def __init__(self, message: str) -> None:
+        """Initialize autopilot-disabled error.
+
+        Args:
+            message: User-facing guidance.
+        """
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        return self.message
+
+
 class ExtractionError(Exception):
     """Extraction failure with optional partial result.
 

@@ -18,7 +18,7 @@ def mock_config() -> MagicMock:
     """Create mock SootheConfig."""
     cfg = MagicMock()
     cfg.agent = MagicMock()
-    cfg.agent.autonomous = MagicMock()
+    cfg.agent.autopilot = MagicMock()
     return cfg
 
 

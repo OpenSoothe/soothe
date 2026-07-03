@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.config.models import AutonomousConfig
+from soothe.config.models import AutopilotConfig
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.autopilot.service.context_store import InMemoryGoalDispatchContextStore
 from soothe.foundation.autopilot.service.workspace_reservation import WorkspaceReservation
@@ -90,7 +90,7 @@ def _service(*, outcome: str = "completed", with_reservation: bool = False) -> A
     res = WorkspaceReservation() if with_reservation else None
     svc = AutopilotService(
         ce=ce,
-        config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
+        config=AutopilotConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
         runner_factory=factory,
         workspace_reservation=res,

@@ -85,7 +85,11 @@ def add_job(
     try:
         result = client.cron_add(text, priority=priority)
     except RuntimeError as exc:
-        typer.echo(f"Error: {exc}", err=True)
+        message = str(exc)
+        if "Autopilot is disabled" in message:
+            console.print(f"[yellow]{message}[/yellow]")
+        else:
+            typer.echo(f"Error: {message}", err=True)
         sys.exit(1)
 
     job = result.get("job") or {}

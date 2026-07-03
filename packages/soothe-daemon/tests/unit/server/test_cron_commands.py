@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from soothe.foundation.cron import ExtractionError
+from soothe.foundation.cron.extraction import AutopilotDisabledError
+from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.foundation.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
@@ -60,6 +62,23 @@ async def test_cmd_cron_add_missing_text() -> None:
     daemon = MagicMock()
     with pytest.raises(ValueError, match="Natural language text required"):
         await _cmd_cron_add(daemon, None, {}, loop_id="loop-1")
+
+
+@pytest.mark.asyncio
+async def test_cmd_cron_add_autopilot_disabled() -> None:
+    """cron_add surfaces guidance when autopilot scheduling is disabled."""
+    daemon = MagicMock()
+    daemon._cron_service = MagicMock()
+    daemon._cron_service.add_job = AsyncMock(
+        side_effect=AutopilotDisabledError(AUTOPILOT_REQUIRED_FOR_CRON),
+    )
+    with pytest.raises(ValueError, match="Autopilot is disabled"):
+        await _cmd_cron_add(
+            daemon,
+            None,
+            {"text": "in 1 hour check deploy"},
+            loop_id="loop-1",
+        )
 
 
 @pytest.mark.asyncio

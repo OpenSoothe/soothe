@@ -1,4 +1,4 @@
-"""Integration tests: agent.autonomous.enabled starts the scheduling loop."""
+"""Integration tests: agent.autopilot.enabled starts the scheduling loop."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ async def test_enabled_config_starts_scheduling_and_monitor(tmp_path: Path) -> N
     force_isolated_home(tmp_path / "soothe-home")
     port = alloc_ephemeral_port()
     config, daemon_cfg = build_daemon_config(tmp_path=tmp_path, websocket_port=port)
-    config.agent.autonomous = config.agent.autonomous.model_copy(
+    config.agent.autopilot = config.agent.autopilot.model_copy(
         update={"enabled": True, "poll_interval": 2}
     )
 

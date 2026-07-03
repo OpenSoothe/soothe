@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.config.models import AutonomousConfig
+from soothe.config.models import AutopilotConfig
 from soothe.foundation.autopilot.service import AutopilotService
 from soothe.foundation.context import ContextEngine
 from soothe.foundation.events.internal_bus import InternalEventBus
@@ -17,7 +17,7 @@ def _service() -> AutopilotService:
     ce = ContextEngine()
     return AutopilotService(
         ce=ce,
-        config=AutonomousConfig(max_loops=2, max_parallel_goals=2),
+        config=AutopilotConfig(max_loops=2, max_parallel_goals=2),
         internal_bus=bus,
         runner_factory=IdleFakeFactory(),
     )

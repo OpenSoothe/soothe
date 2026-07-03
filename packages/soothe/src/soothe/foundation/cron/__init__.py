@@ -14,7 +14,12 @@ Key components:
 
 from __future__ import annotations
 
-from soothe.foundation.cron.extraction import CronExtractionService, ExtractionError
+from soothe.foundation.cron.extraction import (
+    AutopilotDisabledError,
+    CronExtractionService,
+    ExtractionError,
+)
+from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.foundation.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
@@ -26,7 +31,9 @@ from soothe.foundation.cron.service import CronService
 from soothe.foundation.cron.store import CronJobStore
 
 __all__ = [
+    "AUTOPILOT_REQUIRED_FOR_CRON",
     "DEFAULT_CRON_USER_ID",
+    "AutopilotDisabledError",
     "CronExtractionService",
     "CronJob",
     "CronJobStore",

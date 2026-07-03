@@ -72,7 +72,7 @@ async def daemon_with_autopilot_ws(tmp_path: Path):
         tmp_path=tmp_path,
         websocket_port=port,
     )
-    config.agent.autonomous = config.agent.autonomous.model_copy(update={"poll_interval": 2})
+    config.agent.autopilot = config.agent.autopilot.model_copy(update={"poll_interval": 2})
 
     daemon = SootheDaemon(config, daemon_config=daemon_cfg)
     await daemon.start()

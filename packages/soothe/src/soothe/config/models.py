@@ -618,18 +618,17 @@ class DreamingModesConfig(BaseModel):
     profile: DreamingModeConfig = Field(default_factory=DreamingModeConfig)
 
 
-class AutonomousConfig(BaseModel):
-    """Unified self-running configuration (autonomous + autopilot merged).
+class AutopilotConfig(BaseModel):
+    """Autopilot scheduling and self-running configuration.
 
     Controls 24/7 self-running behavior for both goal-level and daemon-level.
-    Merges former 'autonomous' and 'autopilot' sections into one unified config.
 
     Args:
         enabled: Whether the AutopilotService scheduling loop is enabled.
             When False, the daemon constructs the service but does not start
             the scheduling loop. HTTP /autopilot/submit endpoints are available
             but goals won't be dispatched automatically. Default is False.
-        max_iterations: Maximum iterations per autonomous thread (goal-level).
+        max_iterations: Maximum iterations per autopilot thread (goal-level).
         max_retries: Maximum retries per goal on failure.
         max_total_goals: Maximum goals allowed (RFC-0007 §5.6).
         max_goal_depth: Maximum hierarchy depth (RFC-0007 §5.6).
@@ -2176,7 +2175,7 @@ class AgentConfig(BaseModel):
     Consolidates all agent-related settings into one section:
     - Basic: name, system_prompt (user identity)
     - Behavior: goal_completion_mode, final_response (response mode)
-    - Autonomous: self-driving configuration (merged autonomous+autopilot)
+    - Autopilot: self-driving configuration
     - Loop: StrangeLoop internal tuning
     - Protocols: Planner, Policy, Durability backend selection
 
@@ -2185,7 +2184,7 @@ class AgentConfig(BaseModel):
         system_prompt: System prompt override. None generates default using name.
         goal_completion_mode: How planner completion combines with execution heuristics.
         final_response: Whether to always synthesize final report or use adaptive heuristics.
-        autonomous: Unified self-driving configuration (IG-434: merged autonomous+autopilot).
+        autopilot: Autopilot scheduling and self-running configuration.
         loop: StrangeLoop configuration (IG-407: unified agentic+execution).
         protocols: Protocol backends configuration (planner, policy, durability).
     """
@@ -2236,10 +2235,10 @@ class AgentConfig(BaseModel):
     )
     """Whether to always synthesize a final CoreAgent report or use adaptive heuristics."""
 
-    # === AUTONOMOUS (Self-Driving - Unified) ===
-    autonomous: AutonomousConfig = Field(
-        default_factory=AutonomousConfig,
-        description="Unified self-driving configuration (merged autonomous+autopilot)",
+    # === AUTOPILOT (Self-Driving) ===
+    autopilot: AutopilotConfig = Field(
+        default_factory=AutopilotConfig,
+        description="Autopilot scheduling and self-running configuration",
     )
     """Controls 24/7 self-running behavior for both goal-level and daemon-level."""
 
@@ -2342,7 +2341,6 @@ class CronConfig(BaseModel):
     Natural language scheduled job submission for Autopilot.
 
     Args:
-        enabled: Enable cron service (default: true).
         max_jobs: Maximum scheduled jobs per user.
         poll_interval: Seconds between due-job monitoring ticks.
         extraction_model: LLM role for natural language extraction.
@@ -2350,7 +2348,6 @@ class CronConfig(BaseModel):
         default_priority: Default job priority when not specified.
     """
 
-    enabled: bool = Field(default=True, description="Enable cron service")
     max_jobs: int = Field(default=100, ge=1, le=1000, description="Max scheduled jobs per user")
     poll_interval: int = Field(
         default=60, ge=10, le=3600, description="Monitoring tick interval in seconds"

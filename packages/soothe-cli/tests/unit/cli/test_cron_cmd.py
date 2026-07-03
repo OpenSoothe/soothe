@@ -122,6 +122,23 @@ def test_cron_cancel_job(monkeypatch) -> None:
     mock_client.cron_cancel.assert_called_once_with("abc123def456")
 
 
+def test_cron_add_autopilot_disabled(monkeypatch) -> None:
+    mock_client = MagicMock()
+    mock_client.cron_add.side_effect = RuntimeError(
+        "Autopilot is disabled. Set agent.autopilot.enabled to true in config "
+        "and restart the daemon (soothed restart) before scheduling cron jobs."
+    )
+    monkeypatch.setattr(
+        "soothe_cli.cli.commands.cron_cmd._require_cron_client",
+        lambda: mock_client,
+    )
+
+    result = CliRunner().invoke(app, ["cron", "add", "in 1 hour check deploy"])
+    assert result.exit_code == 1
+    assert "Autopilot is disabled" in result.output
+    assert "agent.autopilot.enabled" in result.output
+
+
 def test_cron_command_error(monkeypatch) -> None:
     mock_client = MagicMock()
     mock_client.cron_add.side_effect = RuntimeError("Command failed: bad schedule")

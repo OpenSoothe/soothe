@@ -115,7 +115,7 @@ class DreamingCoordinator:
     def _get_enabled_modes(self) -> list[DreamingMode]:
         """Get list of enabled dreaming modes from config."""
         # Default all modes enabled
-        cfg = getattr(self._config.agent.autonomous, "dreaming_modes", None)
+        cfg = getattr(self._config.agent.autopilot, "dreaming_modes", None)
         if cfg:
             enabled = []
             if getattr(cfg.episodic, "enabled", True):
@@ -206,14 +206,14 @@ class DreamingCoordinator:
 
     def _get_max_episodes(self) -> int:
         """Get max episodes from config."""
-        cfg = getattr(self._config.agent.autonomous, "dreaming_modes", None)
+        cfg = getattr(self._config.agent.autopilot, "dreaming_modes", None)
         if cfg:
             return getattr(cfg.episodic, "max_episodes", 10)
         return 10
 
     def _get_min_success_rate(self) -> float:
         """Get min success rate for procedure extraction from config."""
-        cfg = getattr(self._config.agent.autonomous, "dreaming_modes", None)
+        cfg = getattr(self._config.agent.autopilot, "dreaming_modes", None)
         if cfg:
             return getattr(cfg.procedure, "min_success_rate", 0.8)
         return 0.8
