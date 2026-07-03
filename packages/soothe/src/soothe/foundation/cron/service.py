@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.foundation.autopilot.engine.scheduled_tasks import SchedulerService, ScheduleSpec
 from soothe.foundation.cron.extraction import AutopilotDisabledError, CronExtractionService
 from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
-from soothe.foundation.cron.models import CronJob, JobStatus
+from soothe.foundation.cron.models import CronJob, DuplicateCronJobError, JobStatus
 from soothe.foundation.cron.store import CronJobStore
 
 if TYPE_CHECKING:
@@ -132,6 +132,7 @@ class CronService:
         Raises:
             AutopilotDisabledError: If autopilot scheduling is disabled in config.
             ExtractionError: If NL extraction fails.
+            DuplicateCronJobError: If an equivalent active job already exists.
             ValueError: If max_jobs limit exceeded.
         """
         if not self._config.agent.autopilot.enabled:
@@ -150,6 +151,21 @@ class CronService:
 
         # Extract schedule from natural language
         extraction = await self._extraction_service.extract(natural_language)
+
+        existing = await self._store.find_active_duplicate(
+            user_id,
+            description=extraction.description,
+            schedule_kind=extraction.schedule_kind,
+            schedule_value=extraction.schedule_value,
+        )
+        if existing is not None:
+            logger.info(
+                "Cron job duplicate rejected: existing=%s user=%s description=%s",
+                existing.id,
+                user_id,
+                extraction.description[:50],
+            )
+            raise DuplicateCronJobError(existing)
 
         # Generate job ID
         job_id = uuid.uuid4().hex[:12]

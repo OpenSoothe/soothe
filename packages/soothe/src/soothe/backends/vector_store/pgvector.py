@@ -59,6 +59,27 @@ class PGVectorStore:
             await self._pool.open()
         return self._pool
 
+    async def _table_vector_dimension(self) -> int | None:
+        """Return the embedding column dimension for an existing table, if any."""
+        pool = await self._ensure_pool()
+        async with pool.connection() as conn:
+            row = await conn.execute(
+                """
+                SELECT a.atttypmod
+                FROM pg_class c
+                JOIN pg_attribute a ON a.attrelid = c.oid
+                WHERE c.relname = %s
+                  AND a.attname = 'embedding'
+                  AND NOT a.attisdropped
+                """,
+                (self._collection,),
+            )
+            result = await row.fetchone()
+            if result is None:
+                return None
+            typmod = int(result[0])
+            return typmod if typmod > 0 else None
+
     async def create_collection(
         self, vector_size: int | None = None, distance: str = "cosine"
     ) -> None:
@@ -68,8 +89,18 @@ class PGVectorStore:
             vector_size: Vector dimension. If None, uses instance's vector_size.
             distance: Distance metric (cosine, l2, ip).
         """
-        # Use provided vector_size or fall back to instance's vector_size
         actual_vector_size = vector_size if vector_size is not None else self._vector_size
+        self._vector_size = actual_vector_size
+
+        existing_dim = await self._table_vector_dimension()
+        if existing_dim is not None and existing_dim != actual_vector_size:
+            logger.warning(
+                "Vector table %r dimension mismatch (%d != %d); recreating table",
+                self._collection,
+                existing_dim,
+                actual_vector_size,
+            )
+            await self.delete_collection()
 
         pool = await self._ensure_pool()
 
@@ -103,32 +134,9 @@ class PGVectorStore:
                     WITH (lists = 100)
                 """)
 
-    async def _ensure_collection(self) -> None:
-        """Ensure the collection/table exists with proper schema."""
-        pool = await self._ensure_pool()
-
-        async with pool.connection() as conn:
-            await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            await conn.execute(f"""
-                CREATE TABLE IF NOT EXISTS {self._collection} (
-                    id TEXT PRIMARY KEY,
-                    embedding vector({self._vector_size}),
-                    payload JSONB DEFAULT '{{}}'::jsonb
-                )
-            """)
-            if self._index_type == "hnsw":
-                await conn.execute(f"""
-                    CREATE INDEX IF NOT EXISTS idx_{self._collection}_hnsw
-                    ON {self._collection}
-                    USING hnsw (embedding vector_cosine_ops)
-                """)
-            elif self._index_type == "ivfflat":
-                await conn.execute(f"""
-                    CREATE INDEX IF NOT EXISTS idx_{self._collection}_ivfflat
-                    ON {self._collection}
-                    USING ivfflat (embedding vector_cosine_ops)
-                    WITH (lists = 100)
-                """)
+    async def _ensure_collection(self, vector_size: int | None = None) -> None:
+        """Ensure the collection/table exists with the expected vector dimension."""
+        await self.create_collection(vector_size=vector_size)
 
     async def insert(
         self,
@@ -139,8 +147,19 @@ class PGVectorStore:
         """Insert vectors into the table."""
         import json
 
-        # Ensure collection exists before inserting
-        await self._ensure_collection()
+        if not vectors:
+            return
+
+        vector_dim = len(vectors[0])
+        for index, vec in enumerate(vectors):
+            if len(vec) != vector_dim:
+                msg = (
+                    f"Vector dimension mismatch at index {index}: "
+                    f"expected {vector_dim}, got {len(vec)}"
+                )
+                raise ValueError(msg)
+
+        await self._ensure_collection(vector_size=vector_dim)
 
         pool = await self._ensure_pool()
         payloads = payloads or [{}] * len(vectors)

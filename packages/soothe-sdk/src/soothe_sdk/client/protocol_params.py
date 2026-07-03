@@ -55,6 +55,11 @@ __all__ = [
     "JobCancelParams",
     "JobDagParams",
     "JobGuidanceParams",
+    # Cron RPC params
+    "CronAddParams",
+    "CronListParams",
+    "CronShowParams",
+    "CronCancelParams",
     # Daemon & config params
     "DaemonStatusParams",
     "DaemonShutdownParams",
@@ -402,6 +407,53 @@ class JobGuidanceParams(ParamsBase):
     job_id: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1, description="Guidance text (canonical)")
     goal_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Cron RPC params (RFC-229)
+# ---------------------------------------------------------------------------
+
+
+class CronAddParams(ParamsBase):
+    """Params for ``method=cron_add`` (RFC-229).
+
+    Attributes:
+        text: Natural language scheduling request (required).
+        priority: Optional job priority (1-100).
+    """
+
+    text: str = Field(..., min_length=1, description="Natural language scheduling request")
+    priority: int | None = Field(default=None, ge=1, le=100)
+
+
+class CronListParams(ParamsBase):
+    """Params for ``method=cron_list`` (RFC-229).
+
+    Attributes:
+        status: Optional status filter.
+    """
+
+    status: str | None = None
+
+
+class CronShowParams(ParamsBase):
+    """Params for ``method=cron_show`` (RFC-229).
+
+    Attributes:
+        job_id: Cron job identifier (required).
+    """
+
+    job_id: str = Field(..., min_length=1)
+
+
+class CronCancelParams(ParamsBase):
+    """Params for ``method=cron_cancel`` (RFC-229).
+
+    Attributes:
+        job_id: Cron job to cancel (required).
+    """
+
+    job_id: str = Field(..., min_length=1)
 
 
 # ---------------------------------------------------------------------------

@@ -98,9 +98,11 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             if self._pool is not None:
                 return self._pool
 
-            # Create connection pool
+            # psycopg defaults min_size=4; cap min_size to max_size (e.g. reader_pool_size=2).
+            min_size = min(4, self.pool_size)
             pool = AsyncConnectionPool(
                 self.dsn,
+                min_size=min_size,
                 max_size=self.pool_size,
                 kwargs={
                     "autocommit": True,

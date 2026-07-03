@@ -522,14 +522,13 @@ async def _cmd_cron_add(
     """
     from soothe.foundation.cron import CronService, ExtractionError
     from soothe.foundation.cron.extraction import AutopilotDisabledError
+    from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
 
     text = params.get("text", "")
     priority = params.get("priority")
 
     if not text:
         raise ValueError("Natural language text required (params.text)")
-
-    from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
 
     user_id = DEFAULT_CRON_USER_ID
 
@@ -558,6 +557,20 @@ async def _cmd_cron_add(
         }
     except AutopilotDisabledError as exc:
         raise ValueError(exc.message) from exc
+    except DuplicateCronJobError as exc:
+        job = exc.existing_job
+        return {
+            "cron_add": {
+                "id": job.id,
+                "description": job.description,
+                "schedule_kind": job.schedule_kind.value,
+                "schedule_value": job.schedule_value,
+                "next_run": job.next_run.isoformat(),
+                "status": job.status.value,
+                "priority": job.priority,
+                "duplicate": True,
+            }
+        }
     except ExtractionError as e:
         raise ValueError(e.message) from e
 

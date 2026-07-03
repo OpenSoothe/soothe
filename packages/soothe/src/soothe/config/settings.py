@@ -666,6 +666,7 @@ class SootheConfig(BaseSettings):
 
             kwargs["pool_size"] = provider.pool_size
             kwargs["index_type"] = provider.index_type
+            kwargs["vector_size"] = self.embedding_dims
 
         elif provider_type == "weaviate":
             if provider.url:
@@ -685,6 +686,9 @@ class SootheConfig(BaseSettings):
                 if resolved:
                     kwargs["api_key"] = resolved
             kwargs["grpc_port"] = provider.grpc_port
+
+        elif provider_type == "sqlite_vec":
+            kwargs["vector_size"] = self.embedding_dims
 
         return provider_type, kwargs
 

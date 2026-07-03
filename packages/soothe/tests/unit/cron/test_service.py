@@ -11,6 +11,7 @@ from soothe.foundation.cron.extraction import AutopilotDisabledError
 from soothe.foundation.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
+    DuplicateCronJobError,
     ExtractionResult,
     JobStatus,
     ScheduleKind,
@@ -89,6 +90,73 @@ async def test_add_job_respects_max_jobs(temp_store: CronJobStore) -> None:
     await svc.add_job("in 1 hour first", DEFAULT_CRON_USER_ID)
     with pytest.raises(ValueError, match="Maximum scheduled jobs"):
         await svc.add_job("in 1 hour second", DEFAULT_CRON_USER_ID)
+    await svc.stop()
+
+
+@pytest.mark.asyncio
+async def test_add_job_rejects_near_duplicate_description(temp_store: CronJobStore) -> None:
+    svc = CronService(config=_mock_config(), store=temp_store)
+    extraction_full = _extraction(
+        "polish packages folder to cleanse dead code package by package and module by module",
+        kind=ScheduleKind.CRON,
+        value="0 3 * * *",
+    )
+    extraction_short = _extraction(
+        "polish packages folder to cleanse dead code package by package",
+        kind=ScheduleKind.CRON,
+        value="0 3 * * *",
+    )
+    svc._extraction_service.extract = AsyncMock(return_value=extraction_full)
+
+    first = await svc.add_job("every day at 3am polish packages", DEFAULT_CRON_USER_ID)
+    svc._extraction_service.extract = AsyncMock(return_value=extraction_short)
+
+    with pytest.raises(DuplicateCronJobError) as exc_info:
+        await svc.add_job("daily at 3am polish packages short wording", DEFAULT_CRON_USER_ID)
+
+    assert exc_info.value.existing_job.id == first.id
+    await svc.stop()
+
+
+@pytest.mark.asyncio
+async def test_add_job_rejects_duplicate_active_job(temp_store: CronJobStore) -> None:
+    svc = CronService(config=_mock_config(), store=temp_store)
+    svc._extraction_service.extract = AsyncMock(
+        return_value=_extraction(
+            "polish packages folder to cleanse dead code",
+            kind=ScheduleKind.CRON,
+            value="0 3 * * *",
+        )
+    )
+
+    first = await svc.add_job(
+        "every day at 3am polish packages folder to cleanse dead code",
+        DEFAULT_CRON_USER_ID,
+    )
+    assert first.id
+
+    with pytest.raises(DuplicateCronJobError) as exc_info:
+        await svc.add_job(
+            "At 3am every day polish packages folder to cleanse dead code",
+            DEFAULT_CRON_USER_ID,
+        )
+
+    assert exc_info.value.existing_job.id == first.id
+    assert len(await svc.list_jobs(DEFAULT_CRON_USER_ID)) == 1
+    await svc.stop()
+
+
+@pytest.mark.asyncio
+async def test_add_job_allows_resubmit_after_cancel(temp_store: CronJobStore) -> None:
+    svc = CronService(config=_mock_config(), store=temp_store)
+    svc._extraction_service.extract = AsyncMock(return_value=_extraction())
+
+    job = await svc.add_job("in 1 hour check deploy", DEFAULT_CRON_USER_ID)
+    await svc.cancel_job(job.id, DEFAULT_CRON_USER_ID)
+
+    second = await svc.add_job("in 1 hour check deploy", DEFAULT_CRON_USER_ID)
+    assert second.id != job.id
+    assert len(await svc.list_jobs(DEFAULT_CRON_USER_ID, status=JobStatus.PENDING)) == 1
     await svc.stop()
 
 

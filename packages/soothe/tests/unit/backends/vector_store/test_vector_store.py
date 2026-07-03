@@ -108,11 +108,38 @@ class TestPGVectorStoreUnit:
             mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
 
             store._pool = mock_pool
+            store._table_vector_dimension = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
             await store.create_collection(vector_size=768, distance="cosine")
 
             # Should execute CREATE TABLE and CREATE INDEX
             assert mock_conn.execute.call_count >= 2
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_create_collection_recreates_on_dimension_mismatch(self) -> None:
+        """Test create_collection drops and recreates when vector size changes."""
+        try:
+            from soothe.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors", vector_size=1024)
+            store._table_vector_dimension = AsyncMock(return_value=1024)  # type: ignore[method-assign]
+            store.delete_collection = AsyncMock()  # type: ignore[method-assign]
+
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock()
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+            store._pool = mock_pool
+
+            await store.create_collection(vector_size=768, distance="cosine")
+
+            store.delete_collection.assert_awaited_once()
+            assert store._vector_size == 768
 
         except ImportError:
             pytest.skip("pgvector dependencies not installed")
@@ -134,6 +161,7 @@ class TestPGVectorStoreUnit:
             mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
 
             store._pool = mock_pool
+            store._table_vector_dimension = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
             vectors = [[0.1, 0.2, 0.3] * 256]
             payloads = [{"data": "test"}]

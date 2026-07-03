@@ -97,6 +97,7 @@ class AutopilotWorkerMixin:
         # Lazy async checkpointer (PostgreSQL pool) must be wired before StrangeLoop
         # touches CoreAgent checkpoints for anchor capture / thread forks.
         await self._ensure_checkpointer_initialized()  # type: ignore[attr-defined]
+        shared_pool = await self.get_sloop_shared_pool()  # type: ignore[attr-defined]
 
         # Build a fresh StrangeLoop for this dispatch. The CoreAgent / planner
         # are shared (workers serve many jobs over their lifetime).
@@ -147,6 +148,7 @@ class AutopilotWorkerMixin:
                 if max_iterations
                 else DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
                 loop_id=tid,
+                shared_pool=shared_pool,
                 clarification_policy=clarification_policy,
                 proposal_queue=proposal_queue,  # RFC-204 Group C
             ):

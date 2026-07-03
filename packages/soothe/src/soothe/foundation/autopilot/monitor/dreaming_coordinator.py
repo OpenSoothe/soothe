@@ -93,7 +93,7 @@ class DreamingCoordinator:
 
         self._dreaming_state = "active"
         if self._bus:
-            await self._bus.emit("dreaming_mode_entered", {})
+            await self._bus.emit_autopilot_dreaming()
 
         enabled_modes = modes or self._get_enabled_modes()
         context = await self._gather_dreaming_context(scope)
@@ -110,7 +110,7 @@ class DreamingCoordinator:
 
         self._dreaming_state = "idle"
         if self._bus:
-            await self._bus.emit("dreaming_mode_exited", {})
+            await self._bus.emit_autopilot_awake()
 
     def _get_enabled_modes(self) -> list[DreamingMode]:
         """Get list of enabled dreaming modes from config."""
