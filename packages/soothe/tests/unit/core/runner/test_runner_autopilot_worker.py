@@ -175,13 +175,15 @@ class _FakeStrangeLoop:
 
 
 def _patch_strange_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeStrangeLoop) -> None:
-    """Replace StrangeLoop where the mixin imports it."""
-    from soothe.runner import _runner_autopilot_worker
+    """Replace StrangeLoop where the mixin imports it (lazy import path)."""
 
     def _factory(*_args: Any, **_kwargs: Any) -> _FakeStrangeLoop:
         return fake
 
-    monkeypatch.setattr(_runner_autopilot_worker, "StrangeLoop", _factory)
+    monkeypatch.setattr(
+        "soothe.foundation.sloop.engine.strange_loop.StrangeLoop",
+        _factory,
+    )
 
 
 @pytest.mark.asyncio

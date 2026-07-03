@@ -221,7 +221,10 @@ class SootheDaemon(DaemonHandlersMixin):
         self._card_manager: LoopCardManager = LoopCardManager(
             self,
             ingest_queue_maxsize=int(
-                getattr(self._daemon_config, "card_ingest_queue_maxsize", 500) or 500
+                getattr(self._daemon_config, "card_ingest_queue_maxsize", 2000) or 2000
+            ),
+            flush_debounce_ms=int(
+                getattr(self._daemon_config, "card_flush_debounce_ms", 200) or 200
             ),
         )
         # IG-475: Memory profiler (tracemalloc) for leak detection

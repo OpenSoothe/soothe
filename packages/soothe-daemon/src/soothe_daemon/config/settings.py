@@ -149,11 +149,20 @@ class SootheDaemonConfig(BaseSettings):
         ),
     )
     card_ingest_queue_maxsize: int = Field(
-        default=500,
+        default=2000,
         ge=1,
         description=(
             "Maximum queued stream frames per loop for background display-card binding "
             "(IG-534 §2.3). Saturated queues drop oldest frames."
+        ),
+    )
+    card_flush_debounce_ms: int = Field(
+        default=200,
+        ge=0,
+        le=2000,
+        description=(
+            "Debounce window for coalescing card-ledger binds after stream ingest (IG-546). "
+            "0 disables debounce (flush on every frame)."
         ),
     )
 

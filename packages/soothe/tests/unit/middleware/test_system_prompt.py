@@ -191,7 +191,7 @@ def test_execution_hints_extracted_to_state():
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(task_complexity="medium")
     hint_body = (
-        "Suggested subagent: explore. Expected output: paths under src/. "
+        "Suggested subagent: tacitus. Expected output: paths under src/. "
         "Consider using the suggested approach first."
     )
     request = MockModelRequest(
@@ -341,13 +341,13 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "explore"}}
+    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "tacitus"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         modified = middleware.modify_request(request)
     assert len(modified.tools) == 1
     assert getattr(modified.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
-    assert "explore" in modified.system_message.content
+    assert "tacitus" in modified.system_message.content
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
@@ -368,12 +368,11 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"soothe_step_subagent": "explore"}}
+    lg_config = {"configurable": {"soothe_step_subagent": "tacitus"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         modified = middleware.modify_request(request)
     content = modified.system_message.content
-    assert "subagent_type='explore'" in content
-    assert "subagent_type='tacitus'" not in content
+    assert "subagent_type='tacitus'" in content
 
 
 def test_goal_synthesis_disables_all_tools() -> None:

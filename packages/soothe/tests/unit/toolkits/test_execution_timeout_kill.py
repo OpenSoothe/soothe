@@ -1,0 +1,56 @@
+"""Unit tests for run_command timeout process-group teardown."""
+
+from __future__ import annotations
+
+import subprocess
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from soothe.toolkits.execution import (
+    RunCommandShellTool,
+    _kill_process_tree,
+    _run_shell_command_sync,
+)
+
+
+def test_kill_process_tree_uses_killpg_on_unix(monkeypatch) -> None:
+    monkeypatch.setattr("soothe.toolkits.execution.sys.platform", "linux")
+    monkeypatch.setattr("soothe.toolkits.execution.os.getpgid", lambda _pid: 999)
+    killed: list[tuple[int, int]] = []
+
+    def fake_killpg(pgid: int, sig: int) -> None:
+        killed.append((pgid, sig))
+
+    monkeypatch.setattr("soothe.toolkits.execution.os.killpg", fake_killpg)
+    _kill_process_tree(42)
+    assert killed == [(999, 9)]
+
+
+def test_run_shell_command_sync_kills_tree_on_timeout(monkeypatch) -> None:
+    proc = MagicMock()
+    proc.pid = 123
+    proc.communicate.side_effect = subprocess.TimeoutExpired(cmd="sleep", timeout=1)
+    monkeypatch.setattr("soothe.toolkits.execution.subprocess.Popen", lambda *a, **k: proc)
+    killed: list[int] = []
+    monkeypatch.setattr(
+        "soothe.toolkits.execution._kill_process_tree",
+        lambda pid, **kw: killed.append(pid),
+    )
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        _run_shell_command_sync("sleep 9", cwd=None, timeout=1)
+
+    proc.kill.assert_called_once()
+    assert killed == [123]
+
+
+def test_run_command_timeout_message_mentions_process_group() -> None:
+    tool = RunCommandShellTool(workspace_root="/tmp", timeout=1)
+    with patch(
+        "soothe.toolkits.execution._run_shell_command_sync",
+        side_effect=subprocess.TimeoutExpired(cmd="sleep", timeout=1),
+    ):
+        result = tool._run("sleep 9")
+    assert "timed out" in result.lower()
+    assert "process group" in result.lower()

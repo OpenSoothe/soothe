@@ -43,6 +43,12 @@ def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
 
     event_type = event.get("type", "")
 
+    # Batched transport frames bundle user-visible events — prefer keep (IG-546).
+    if event_type == "event_batch":
+        return _DROP_PRIORITY_HIGH
+    if event_type == "tool_call_updates_batch":
+        return _DROP_PRIORITY_HIGH
+
     # Unwrap protocol-1 next envelope (RFC-450 §9.3)
     if event_type == "next":
         payload = event.get("payload")

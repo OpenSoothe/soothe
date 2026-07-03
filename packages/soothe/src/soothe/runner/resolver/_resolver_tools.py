@@ -49,14 +49,12 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
 
     This avoids importing heavy subagent modules at module load time.
     """
-    from soothe.subagents.explore import create_explore_subagent
     from soothe.subagents.plan import create_plan_subagent
     from soothe.subagents.skillify import create_skillify_subagent
     from soothe.subagents.tacitus import create_tacitus_subagent
 
     return {
-        "explore": create_explore_subagent,
-        "plan": create_plan_subagent,
+        "planner": create_plan_subagent,
         "skillify": create_skillify_subagent,
         "tacitus": create_tacitus_subagent,
     }
@@ -562,10 +560,10 @@ def resolve_subagents(
 
         if name == "claude":
             model_override = None
-        elif name in ("explore", "tacitus"):
+        elif name == "tacitus":
             model_override = sub_cfg.model or config.create_chat_model("fast")
-        elif name == "plan":
-            # Built-in: always the router ``think`` role (ignore ``subagents.plan.model``).
+        elif name == "planner":
+            # Built-in: always the router ``think`` role (ignore ``subagents.planner.model``).
             model_override = config.create_chat_model("think")
         else:
             model_override = sub_cfg.model or default_model or config.resolve_model("default")
@@ -594,53 +592,21 @@ def resolve_subagents(
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}
-        elif name == "explore":
-            # Explore YAML options live in ``config.subagents["explore"].config`` only.
-            # Do not spread them as kwargs — ``create_explore_subagent`` accepts ``model``,
-            # ``SootheConfig``, and ``context`` only.
-            extra_kwargs.clear()
-            extra_kwargs["config"] = config
-            extra_kwargs["context"] = {"work_dir": resolved_cwd}
         elif name == "skillify":
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}
-        elif name == "plan":
+        elif name == "planner":
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}
 
         pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 
-    # If both explore and plan are pending, register explore first so plan can
-    # reuse the same lazy runnable instead of building a duplicate graph later.
-    explore_spec = None
-    has_plan = any(n == "plan" for n, _, _ in pending)
-    if has_plan:
-        explore_entries = [(i, e) for i, e in enumerate(pending) if e[0] == "explore"]
-        if explore_entries:
-            idx, explore_entry = explore_entries[0]
-            name, factory, kwargs = explore_entry
-            from soothe.runner.resolver._lazy_subagent import lazy_compiled_subagent_spec
-
-            explore_spec = lazy_compiled_subagent_spec(name, factory, kwargs)
-            pending.pop(idx)
-            for i, (n, f, kw) in enumerate(pending):
-                if n == "plan":
-                    ctx = kw.get("context", {})
-                    ctx["explore_runnable"] = explore_spec["runnable"]
-                    kw["context"] = ctx
-                    pending[i] = (n, f, kw)
-                    break
-
     parallel = lazy and len(pending) > 1
     subagents = (
         _resolve_subagents_parallel(pending) if parallel else _resolve_subagents_sequential(pending)
     )
-
-    # Prepend explore (resolved earlier) so ordering stays consistent.
-    if explore_spec is not None:
-        subagents.insert(0, explore_spec)
 
     total_elapsed_ms = (time.perf_counter() - total_start) * 1000
     logger.info(

@@ -115,6 +115,9 @@ def _should_block_on_queue_full(
         return True
     if _wire_has_goal_completion_phase(event):
         return True
+    top_type = event.get("type") if isinstance(event, dict) else None
+    if top_type in ("event_batch", "tool_call_updates_batch"):
+        return queue_size >= int(queue_max * 0.8)
     if priority == EventPriority.NORMAL and queue_size >= int(queue_max * 0.9):
         return _is_user_visible_for_backpressure(event, event_meta)
     return False

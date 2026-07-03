@@ -26,11 +26,7 @@ from typing import Any
 # Re-export from base utilities (no circular deps)
 from soothe.foundation.ai_message import extract_text_from_ai_message
 
-# Re-export from subpackages for convenience (no circular deps)
-from soothe.foundation.core import CoreAgent, create_soothe_agent
-
 # Re-export from shared utilities (no circular deps)
-from soothe.foundation.sloop import LoopState, PlanResult, StrangeLoop
 from soothe.foundation.workspace import (
     FrameworkFilesystem,
     resolve_daemon_workspace,
@@ -67,6 +63,26 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Lazy import for modules with potential circular deps."""
+    if name == "CoreAgent":
+        from soothe.foundation.core.agent._core import CoreAgent
+
+        return CoreAgent
+    if name == "create_soothe_agent":
+        from soothe.foundation.core.agent._builder import create_soothe_agent
+
+        return create_soothe_agent
+    if name in ("StrangeLoop", "Sloop"):
+        from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+
+        return StrangeLoop
+    if name == "LoopState":
+        from soothe.foundation.sloop.state.schemas import LoopState
+
+        return LoopState
+    if name == "PlanResult":
+        from soothe.foundation.sloop.state.schemas import PlanResult
+
+        return PlanResult
     if name == "AutopilotService":
         from soothe.foundation.autopilot.service.service import AutopilotService
 

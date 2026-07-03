@@ -22,7 +22,6 @@ from soothe.foundation.events import (
     StrangeLoopStepQueuedEvent,
     StrangeLoopStepStartedEvent,
 )
-from soothe.foundation.sloop import StrangeLoop
 from soothe.foundation.sloop.clarification.events import (
     ClarificationAnsweredEvent,
     ClarificationDeferredEvent,
@@ -426,6 +425,8 @@ class StrangeLoopMixin:
                 "[Runner] StrangeLoop requires a planner that implements LoopPlannerProtocol.plan"
             )
             return
+
+        from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
 
         loop_agent = StrangeLoop(
             core_agent=self._agent,

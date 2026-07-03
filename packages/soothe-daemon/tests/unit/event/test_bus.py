@@ -195,6 +195,38 @@ async def test_goal_completion_blocks_when_queue_full() -> None:
     assert received_event["data"][0]["phase"] == "goal_completion"
 
 
+@pytest.mark.asyncio
+async def test_event_batch_blocks_when_queue_near_capacity() -> None:
+    """event_batch transport frames block when queue is full instead of dropping."""
+    bus = EventBus()
+    queue: asyncio.Queue[dict[str, any]] = asyncio.Queue(maxsize=10)
+
+    await bus.subscribe("loop:batch", queue)
+    for i in range(10):
+        await bus.publish("loop:batch", {"type": "filler", "i": i})
+    assert queue.full()
+
+    batch_event = {
+        "type": "event_batch",
+        "loop_id": "loop:batch",
+        "events": [
+            {"type": "event", "mode": "custom", "data": {"type": "soothe.cognition.step.started"}}
+        ],
+    }
+    publish_task = asyncio.create_task(bus.publish("loop:batch", batch_event))
+    await asyncio.sleep(0.05)
+    assert not publish_task.done()
+
+    await queue.get()
+    await asyncio.wait_for(publish_task, timeout=1.0)
+
+    received_types = []
+    while not queue.empty():
+        received_event, _ = await queue.get()
+        received_types.append(received_event.get("type"))
+    assert "event_batch" in received_types
+
+
 def test_drop_counter_increments_on_normal_drop() -> None:
     """IG-534 Phase 0: Drop counter tracks NORMAL drops by topic."""
     from soothe_daemon.event.bus import _increment_drop_counter, get_event_bus_drop_counts

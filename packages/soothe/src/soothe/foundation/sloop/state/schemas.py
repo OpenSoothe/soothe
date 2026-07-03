@@ -20,6 +20,15 @@ logger = logging.getLogger(__name__)
 ExecutionMode = Literal["parallel", "dependency"]
 """Planner/executor execution mode for step waves."""
 
+_BUILTIN_WIRE_SUBAGENTS = frozenset(
+    {
+        "planner",
+        "skillify",
+        "browser_use",
+        "tacitus",
+    }
+)
+
 
 class EvidenceEntry(BaseModel):
     """Evidence row for plan validation (RFC-220).
@@ -63,7 +72,7 @@ class PlanGenerateStep(BaseModel):
         kind: ``action`` (normal) or ``ask_user`` (clarification relay).
         questions: Questions for ``ask_user`` steps.
         execution_hint: Preferred execution routing from the planner.
-        subagent: Subagent name when ``execution_hint='subagent'`` (e.g. ``explore``).
+        subagent: Subagent name when ``execution_hint='subagent'`` (e.g. ``tacitus``).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -99,11 +108,20 @@ def resolve_step_wire_subagent(
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto",
     subagent: str | None = None,
 ) -> str | None:
-    """Map planner execution hints to executor subagent wiring (explore default)."""
+    """Map planner execution hints to executor subagent wiring."""
     if execution_hint != "subagent":
         return None
-    name = (subagent or "explore").strip()
-    return name or "explore"
+    name = (subagent or "").strip()
+    if not name:
+        logger.debug("subagent execution_hint without subagent name; using direct tools")
+        return None
+    if name not in _BUILTIN_WIRE_SUBAGENTS:
+        logger.debug(
+            "Ignoring invalid planner subagent %r; using direct tools",
+            name,
+        )
+        return None
+    return name
 
 
 def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:

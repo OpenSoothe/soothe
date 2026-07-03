@@ -11,11 +11,13 @@ Follows the pattern from image.py and audio.py.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import re
 import signal
 import subprocess
+import sys
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -129,6 +131,60 @@ class RunCommandInput(BaseModel):
     )
 
 
+def _kill_process_tree(pid: int, *, sig: int = signal.SIGKILL) -> None:
+    """Terminate ``pid`` and its descendants (process group on Unix)."""
+    if pid <= 0:
+        return
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            check=False,
+            capture_output=True,
+        )
+        return
+    try:
+        pgid = os.getpgid(pid)
+    except ProcessLookupError:
+        with contextlib.suppress(OSError):
+            os.kill(pid, sig)
+        return
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(pgid, sig)
+
+
+def _run_shell_command_sync(
+    command: str,
+    *,
+    cwd: str | None,
+    timeout: int,
+) -> subprocess.CompletedProcess[str]:
+    """Run a shell command with timeout and process-group teardown on expiry."""
+    proc = subprocess.Popen(
+        command,
+        shell=True,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=sys.platform != "win32",
+    )
+    try:
+        stdout, _ = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(OSError):
+            proc.kill()
+        _kill_process_tree(proc.pid)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.communicate(timeout=5)
+        raise
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=proc.returncode if proc.returncode is not None else -1,
+        stdout=stdout or "",
+        stderr="",
+    )
+
+
 class _UnusedShellProcess:
     """``ShellTool`` requires ``process``; Soothe runs commands via ``subprocess``."""
 
@@ -207,18 +263,15 @@ class RunCommandShellTool(ShellTool):
         )
 
         try:
-            completed = subprocess.run(
+            completed = _run_shell_command_sync(
                 command,
-                shell=True,
                 cwd=cwd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
                 timeout=actual_timeout,
             )
-        except subprocess.TimeoutExpired:
+        except (subprocess.TimeoutExpired, TimeoutError):
             return (
                 f"Error: Command timed out after {actual_timeout}s. "
+                "The process group was terminated. "
                 "For long-running operations, use run_background instead, "
                 "or increase the timeout configuration."
             )

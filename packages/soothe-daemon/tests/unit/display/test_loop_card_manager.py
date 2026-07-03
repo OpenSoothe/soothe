@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -176,9 +177,39 @@ async def test_replay_to_client_reads_persisted_cards() -> None:
 
 
 @pytest.mark.asyncio
+async def test_debounced_flush_coalesces_rapid_ingests(monkeypatch) -> None:
+    """Multiple stream frames within the debounce window produce one bind pass (IG-546)."""
+    manager = LoopCardManager(
+        SimpleNamespace(_runner=MagicMock()),
+        flush_debounce_ms=100,
+    )
+    flush_count = 0
+    original_flush = manager._flush_buffers_to_ledger
+
+    async def counting_flush(loop_id: str, state: _BindingBuffers) -> None:
+        nonlocal flush_count
+        flush_count += 1
+        await original_flush(loop_id, state)
+
+    monkeypatch.setattr(manager, "_flush_buffers_to_ledger", counting_flush)
+
+    custom = {"kind": "conversation", "role": "assistant", "content": "a"}
+    for _ in range(8):
+        await manager.ingest_stream_tuple("loop_debounce", (), "custom", dict(custom))
+    await asyncio.sleep(0.05)
+    assert flush_count == 0
+    await asyncio.sleep(0.15)
+    assert flush_count == 1
+    await manager.stop_for_loop("loop_debounce")
+
+
+@pytest.mark.asyncio
 async def test_ingest_stream_tuple_returns_before_flush_completes(monkeypatch) -> None:
     """Stream ingest must not block on ledger flush (IG-534 §2.3)."""
-    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    manager = LoopCardManager(
+        SimpleNamespace(_runner=MagicMock()),
+        flush_debounce_ms=50,
+    )
     flush_started = asyncio.Event()
 
     original_flush = manager._flush_buffers_to_ledger
@@ -209,6 +240,69 @@ async def test_stop_for_loop_releases_in_memory_state(isolated_display_db) -> No
     await manager.stop_for_loop("loop_e")
     assert "loop_e" not in manager._ledgers  # noqa: SLF001
     assert isolated_display_db.list_mutations("loop_e")
+
+
+@pytest.mark.asyncio
+async def test_ingest_overflow_preserves_frames(monkeypatch) -> None:
+    """Overflow deque must not drop frames when the bounded queue is full (IG-546)."""
+    manager = LoopCardManager(
+        SimpleNamespace(_runner=MagicMock()),
+        ingest_queue_maxsize=2,
+        flush_debounce_ms=0,
+    )
+    processed: list[Any] = []
+    original = manager._ingest_stream_tuple_now
+
+    async def record(loop_id: str, namespace, mode, data) -> None:
+        processed.append(data)
+        await original(loop_id, namespace, mode, data)
+
+    monkeypatch.setattr(manager, "_ingest_stream_tuple_now", record)
+
+    custom = {"kind": "conversation", "role": "assistant", "content": "x"}
+    for i in range(5):
+        await manager.ingest_stream_tuple(
+            "loop_overflow",
+            (),
+            "custom",
+            {**custom, "content": f"msg-{i}"},
+        )
+    await asyncio.sleep(0.3)
+    assert len(processed) == 5
+    worker = manager._ingest_workers.get("loop_overflow")  # noqa: SLF001
+    assert worker is not None
+    assert len(worker.overflow) == 0
+    await manager.stop_for_loop("loop_overflow")
+
+
+@pytest.mark.asyncio
+async def test_overflow_emits_stream_degraded(monkeypatch) -> None:
+    """First overflow frame notifies clients via stream_degraded (RFC-450 §14)."""
+    from soothe_daemon.display.loop_card_manager import (
+        reset_card_ingest_overflow_metrics,
+    )
+
+    reset_card_ingest_overflow_metrics()
+    broadcasts: list[dict] = []
+
+    async def capture(msg: dict) -> None:
+        broadcasts.append(msg)
+
+    manager = LoopCardManager(
+        SimpleNamespace(_broadcast=capture),
+        ingest_queue_maxsize=1,
+        flush_debounce_ms=0,
+    )
+    custom = {"kind": "conversation", "role": "assistant", "content": "a"}
+    await manager.ingest_stream_tuple("loop_sd", (), "custom", dict(custom))
+    await manager.ingest_stream_tuple("loop_sd", (), "custom", {**custom, "content": "b"})
+    await asyncio.sleep(0.05)
+    assert any(
+        m.get("mode") == "custom" and (m.get("data") or {}).get("type") == "stream_degraded"
+        for m in broadcasts
+    )
+    await manager.stop_for_loop("loop_sd")
+    reset_card_ingest_overflow_metrics()
 
 
 @pytest.mark.asyncio

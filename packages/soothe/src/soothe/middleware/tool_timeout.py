@@ -56,22 +56,7 @@ def _emit_subagent_timeout_completion_event(
     # Import lazily to avoid circular imports at module load
     from soothe.utils.subagent_emit import emit_subagent_wire_event
 
-    if subagent_type == "explore":
-        from soothe.subagents.explore.events import ExploreCompletedEvent
-
-        emit_subagent_wire_event(
-            ExploreCompletedEvent(
-                total_findings=0,
-                thoroughness="",
-                iterations_used=0,
-                duration_ms=0,
-                search_target="",
-                completion_status="timeout",
-                failure_reason=f"Subagent timed out after {timeout_s:.1f}s",
-            ).to_dict(),
-            logger,
-        )
-    elif subagent_type == "browser_use":
+    if subagent_type == "browser_use":
         from soothe.subagents.browser_use.events import BrowserUseCompletedEvent
 
         emit_subagent_wire_event(
@@ -82,7 +67,7 @@ def _emit_subagent_timeout_completion_event(
             ).to_dict(),
             logger,
         )
-    # For other subagent types (plan, tacitus), no specific completion event exists
+        # For other subagent types (planner, tacitus), no specific completion event exists
     # The timeout error ToolMessage will still mark the step as failed in executor
     logger.debug(
         "Subagent %s timeout completion event emitted (tool_call_id=%s)",
@@ -124,8 +109,7 @@ EXECUTION_TOOL_NAMES: frozenset[str] = frozenset(
 SUBAGENT_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "browser_use",
-        "explore",
-        "plan",
+        "planner",
         "tacitus",
         "delegate",
         "task",  # Deepagents task tool invokes subagents dynamically

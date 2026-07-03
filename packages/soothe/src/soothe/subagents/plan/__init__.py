@@ -1,6 +1,6 @@
 """Plan subagent package (RFC-618).
 
-Structured planning with optional direct invokes of the explore subagent runnable.
+Structured planning delegate for markdown execution plans.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from soothe_sdk.plugin import plugin, subagent
 
 from .implementation import create_plan_subagent
 from .schemas import (
-    CollectorDecision,
     PlanDecomposition,
     PlanRefinement,
     PlanStepDraft,
@@ -19,7 +18,6 @@ from .schemas import (
 )
 
 __all__ = [
-    "CollectorDecision",
     "PlanDecomposition",
     "PlanRefinement",
     "PlanStepDraft",
@@ -30,26 +28,25 @@ __all__ = [
 
 
 @plugin(
-    name="plan",
+    name="planner",
     version="1.0.0",
-    description="Structured planning subagent with optional explore delegation",
+    description="Structured planning subagent",
     trust_level="built-in",
 )
 class PlanPlugin:
-    """Built-in plan subagent plugin."""
+    """Built-in planner subagent plugin."""
 
     async def on_load(self, context: Any) -> None:
         """Record load."""
-        context.logger.info("Loaded plan subagent v1.0.0")
+        context.logger.info("Loaded planner subagent v1.0.0")
 
     @subagent(
-        name="plan",
+        name="planner",
         description=(
-            "Agentic planning delegate: multi-round readonly explore collection (several searches "
-            "per round), then multi-round markdown plan refinement; one report back per task. "
-            "Use for complex objectives needing evidence before a stable plan."
+            "Agentic planning delegate: multi-round markdown plan refinement; one report back "
+            "per task. Use for complex objectives needing a stable execution plan."
         ),
-        triggers=["plan", "decompose", "roadmap", "break down"],
+        triggers=["planner", "decompose", "roadmap", "break down"],
     )
     async def create_subagent(
         self,

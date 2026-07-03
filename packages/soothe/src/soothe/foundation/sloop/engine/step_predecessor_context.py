@@ -307,7 +307,7 @@ def build_dependent_execution_hints(
         )
     if wire_subagent:
         instruction_lines.insert(0, f"- Suggested subagent: {wire_subagent}")
-    if wire_subagent == "explore" and workspace:
+    if wire_subagent and workspace:
         insert_at = 1 if wire_subagent else 0
         instruction_lines.insert(
             insert_at,

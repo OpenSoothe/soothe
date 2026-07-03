@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -34,9 +34,26 @@ CARD_REPLAY_END = "card.replay_end"
 
 _DERIVABLE_CUSTOM_KINDS = frozenset({"event", "tool_call", "tool_result", "conversation"})
 
+_CARD_FLUSH_DEBOUNCE_MS_DEFAULT = 200
+_STREAM_DEGRADED_REASON = "card_ingest_overflow"
+
+# Cumulative overflow frames queued per loop (zero-loss deque path; not drops).
+_card_ingest_overflow_total: dict[str, int] = defaultdict(int)
+
+
+def get_card_ingest_overflow_metrics() -> dict[str, int]:
+    """Return cumulative card-ingest overflow counts keyed by ``loop_id``."""
+    return dict(_card_ingest_overflow_total)
+
+
+def reset_card_ingest_overflow_metrics() -> None:
+    """Clear overflow counters (tests only)."""
+    _card_ingest_overflow_total.clear()
+
+
 # IG-535 Optimization 4: Dedicated executor for card binding (isolated from to_thread pool)
-# 2 workers sufficient since binding is CPU-bound and not latency-critical
 _card_bind_executor: ThreadPoolExecutor | None = None
+_card_bind_max_workers = 4
 
 
 def _get_card_bind_executor() -> ThreadPoolExecutor:
@@ -48,7 +65,7 @@ def _get_card_bind_executor() -> ThreadPoolExecutor:
     global _card_bind_executor
     if _card_bind_executor is None:
         _card_bind_executor = ThreadPoolExecutor(
-            max_workers=2,
+            max_workers=_card_bind_max_workers,
             thread_name_prefix="soothe-card-bind",
         )
     return _card_bind_executor
@@ -75,26 +92,87 @@ _CARD_BIND_QUEUE_MAXSIZE = 500  # IG-534 §2.3: bounded per-loop ingest backlog
 class _LoopIngestWorker:
     queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None]
     task: asyncio.Task[None]
+    overflow: deque[tuple[tuple[str, ...], str, Any]] = field(default_factory=deque)
+
+
+@dataclass
+class _LoopFlushScheduler:
+    task: asyncio.Task[None] | None = None
 
 
 class LoopCardManager:
     """Owns per-loop ``LoopCardLedger`` instances and real-time card binding."""
 
     def __init__(
-        self, daemon: Any, *, ingest_queue_maxsize: int = _CARD_BIND_QUEUE_MAXSIZE
+        self,
+        daemon: Any,
+        *,
+        ingest_queue_maxsize: int = _CARD_BIND_QUEUE_MAXSIZE,
+        flush_debounce_ms: int = _CARD_FLUSH_DEBOUNCE_MS_DEFAULT,
     ) -> None:
         self._daemon = daemon
         self._ledgers: dict[str, LoopCardLedger] = {}
         self._buffers: dict[str, _BindingBuffers] = defaultdict(_BindingBuffers)
         self._ingest_workers: dict[str, _LoopIngestWorker] = {}
+        self._flush_schedulers: dict[str, _LoopFlushScheduler] = defaultdict(_LoopFlushScheduler)
         self._ingest_queue_maxsize = max(1, int(ingest_queue_maxsize))
+        self._flush_debounce_s = max(0.0, int(flush_debounce_ms) / 1000.0)
         self._ingest_lock = asyncio.Lock()
+        self._stream_degraded_sent: set[str] = set()
+
+    def overflow_depth(self, loop_id: str) -> int:
+        """Current overflow deque depth for ``loop_id`` (0 when no worker)."""
+        worker = self._ingest_workers.get(loop_id)
+        if worker is None:
+            return 0
+        return len(worker.overflow)
+
+    async def _notify_card_ingest_pressure(self, loop_id: str, overflow_depth: int) -> None:
+        """Emit ``stream_degraded`` once per backpressure episode (RFC-450 §14)."""
+        if overflow_depth <= 0 or loop_id in self._stream_degraded_sent:
+            return
+        self._stream_degraded_sent.add(loop_id)
+        broadcast = getattr(self._daemon, "_broadcast", None)
+        if broadcast is None:
+            return
+        total = _card_ingest_overflow_total.get(loop_id, 0)
+        msg = {
+            "type": "event",
+            "loop_id": loop_id,
+            "mode": "custom",
+            "data": {
+                "type": "stream_degraded",
+                "reason": _STREAM_DEGRADED_REASON,
+                "dropped_count": 0,
+                "overflow_depth": overflow_depth,
+                "overflow_total": total,
+                "recoverable": True,
+            },
+        }
+        try:
+            await broadcast(msg)
+        except Exception:
+            logger.debug("Failed to emit stream_degraded for loop %s", loop_id, exc_info=True)
+
+    def _maybe_clear_stream_degraded(self, loop_id: str, worker: _LoopIngestWorker) -> None:
+        """Allow a new degradation signal after backlog drains."""
+        if worker.overflow:
+            return
+        if worker.queue.qsize() >= max(1, int(worker.queue.maxsize * 0.5)):
+            return
+        self._stream_degraded_sent.discard(loop_id)
 
     async def stop_for_loop(self, loop_id: str) -> None:
         """Drop in-memory ledger and binding buffers for ``loop_id``."""
         await self._shutdown_ingest_worker(loop_id)
+        await self._cancel_debounced_flush(loop_id)
+        state = self._buffers.get(loop_id)
+        if state is not None and (state.messages or state.log_events):
+            await self._flush_buffers_to_ledger(loop_id, state)
         self._ledgers.pop(loop_id, None)
         self._buffers.pop(loop_id, None)
+        self._flush_schedulers.pop(loop_id, None)
+        self._stream_degraded_sent.discard(loop_id)
 
     async def _shutdown_ingest_worker(self, loop_id: str) -> None:
         async with self._ingest_lock:
@@ -158,28 +236,28 @@ class LoopCardManager:
         if mode == "updates":
             return
         queue = await self._ensure_ingest_queue(loop_id)
+        worker = self._ingest_workers[loop_id]
         item = (namespace, mode, data)
-        dropped = False
         try:
             queue.put_nowait(item)
         except asyncio.QueueFull:
-            with contextlib.suppress(asyncio.QueueEmpty):
-                queue.get_nowait()
-                dropped = True
-            try:
-                queue.put_nowait(item)
-            except asyncio.QueueFull:
-                logger.warning(
-                    "Card ingest queue full for loop %s; dropping frame (dropped_oldest=%s)",
+            worker.overflow.append(item)
+            _card_ingest_overflow_total[loop_id] += 1
+            depth = len(worker.overflow)
+            if depth == 1 or depth % 200 == 0:
+                logger.debug(
+                    "Card ingest overflow depth=%d (queue=%d/%d) loop=%s total=%d",
+                    depth,
+                    queue.qsize(),
+                    queue.maxsize,
                     loop_id,
-                    dropped,
+                    _card_ingest_overflow_total[loop_id],
                 )
-                return
-        if dropped:
-            logger.debug(
-                "Card ingest queue saturated for loop %s; dropped oldest pending frame",
-                loop_id,
-            )
+            if depth == 1 or depth % 200 == 0:
+                asyncio.create_task(
+                    self._notify_card_ingest_pressure(loop_id, depth),
+                    name=f"soothe-card-pressure-{loop_id[:16]}",
+                )
 
     async def _ensure_ingest_queue(self, loop_id: str) -> asyncio.Queue:
         async with self._ingest_lock:
@@ -189,21 +267,40 @@ class LoopCardManager:
             queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None] = asyncio.Queue(
                 maxsize=self._ingest_queue_maxsize
             )
+            overflow: deque[tuple[tuple[str, ...], str, Any]] = deque()
             task = asyncio.create_task(
-                self._ingest_worker(loop_id, queue),
+                self._ingest_worker(loop_id, queue, overflow),
                 name=f"soothe-card-ingest-{loop_id[:16]}",
             )
-            self._ingest_workers[loop_id] = _LoopIngestWorker(queue=queue, task=task)
+            self._ingest_workers[loop_id] = _LoopIngestWorker(
+                queue=queue,
+                task=task,
+                overflow=overflow,
+            )
             return queue
+
+    @staticmethod
+    async def _next_ingest_item(
+        queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None],
+        overflow: deque[tuple[tuple[str, ...], str, Any]],
+    ) -> tuple[tuple[str, ...], str, Any] | None:
+        """Drain overflow first, then the bounded queue (zero-loss ingest)."""
+        if overflow:
+            return overflow.popleft()
+        try:
+            return queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return await queue.get()
 
     async def _ingest_worker(
         self,
         loop_id: str,
         queue: asyncio.Queue[tuple[tuple[str, ...], str, Any] | None],
+        overflow: deque[tuple[tuple[str, ...], str, Any]],
     ) -> None:
         try:
             while True:
-                item = await queue.get()
+                item = await self._next_ingest_item(queue, overflow)
                 if item is None:
                     break
                 namespace, mode, data = item
@@ -211,12 +308,16 @@ class LoopCardManager:
                     await self._ingest_stream_tuple_now(loop_id, namespace, mode, data)
                 except Exception:
                     logger.exception("Card ingest worker failed for loop %s", loop_id)
+                worker_state = self._ingest_workers.get(loop_id)
+                if worker_state is not None:
+                    self._maybe_clear_stream_degraded(loop_id, worker_state)
         except asyncio.CancelledError:
-            while True:
-                try:
-                    item = queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
+            pending: list[tuple[tuple[str, ...], str, Any] | None] = list(overflow)
+            overflow.clear()
+            with contextlib.suppress(asyncio.QueueEmpty):
+                while True:
+                    pending.append(queue.get_nowait())
+            for item in pending:
                 if item is None:
                     continue
                 namespace, mode, data = item
@@ -247,7 +348,68 @@ class LoopCardManager:
                 state.log_events.append(data)
                 changed = True
         if changed:
+            await self._schedule_debounced_flush(loop_id)
+
+    @staticmethod
+    def _custom_event_type(data: dict[str, Any]) -> str | None:
+        event_type = data.get("type")
+        if isinstance(event_type, str) and event_type.strip():
+            return event_type.strip()
+        nested = data.get("data")
+        if isinstance(nested, dict):
+            inner = nested.get("type")
+            if isinstance(inner, str) and inner.strip():
+                return inner.strip()
+        return None
+
+    async def _cancel_debounced_flush(self, loop_id: str) -> None:
+        sched = self._flush_schedulers.get(loop_id)
+        if sched is None or sched.task is None:
+            return
+        task = sched.task
+        if not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        sched.task = None
+
+    async def _schedule_debounced_flush(self, loop_id: str) -> None:
+        """Coalesce rapid stream ingests into one card-bind pass per debounce window."""
+        if self._flush_debounce_s <= 0:
+            state = self._buffers[loop_id]
             await self._flush_buffers_to_ledger(loop_id, state)
+            return
+
+        await self._cancel_debounced_flush(loop_id)
+        debounce_s = self._effective_flush_debounce_s(loop_id)
+
+        async def _debounced() -> None:
+            try:
+                await asyncio.sleep(debounce_s)
+                state = self._buffers[loop_id]
+                await self._flush_buffers_to_ledger(loop_id, state)
+            except asyncio.CancelledError:
+                raise
+            finally:
+                sched = self._flush_schedulers.get(loop_id)
+                if sched is not None:
+                    sched.task = None
+
+        self._flush_schedulers[loop_id].task = asyncio.create_task(
+            _debounced(),
+            name=f"soothe-card-flush-{loop_id[:16]}",
+        )
+
+    def _effective_flush_debounce_s(self, loop_id: str) -> float:
+        """Widen debounce when ingest backlog exceeds 80% capacity (IG-546)."""
+        base = self._flush_debounce_s
+        worker = self._ingest_workers.get(loop_id)
+        if worker is None or worker.queue.maxsize <= 0:
+            return base
+        pending = worker.queue.qsize() + len(worker.overflow)
+        if pending >= int(worker.queue.maxsize * 0.8):
+            return min(base * 2.5, 1.0)
+        return base
 
     @staticmethod
     def _ingest_message_wire(state: _BindingBuffers, msg_wire: dict[str, Any]) -> bool:
@@ -390,4 +552,6 @@ __all__ = [
     "CARD_REPLAY_BEGIN",
     "CARD_REPLAY_END",
     "LoopCardManager",
+    "get_card_ingest_overflow_metrics",
+    "reset_card_ingest_overflow_metrics",
 ]
