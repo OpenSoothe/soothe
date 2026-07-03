@@ -101,7 +101,7 @@ class FileChangePreviewWidget(Vertical):
     FileChangePreviewWidget.-collapsed {
         background: transparent;
         border: none;
-        border-left: wide $text-muted;
+        border-left: tall $secondary;
     }
 
     FileChangePreviewWidget.-expanded {
