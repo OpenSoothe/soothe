@@ -856,7 +856,9 @@ class Executor:
         root_text = (
             ""
             if parallel_multi_step
-            else self._assemble_assistant_text_from_stream_messages(messages).strip()
+            else self._assemble_assistant_text_from_stream_messages(
+                self._messages_for_last_assistant_turn(messages)
+            ).strip()
         )
         snap = compute_act_wave_finalize(
             parallel_multi_step=parallel_multi_step,
@@ -907,6 +909,25 @@ class Executor:
             else final_ai_message_text
         )
         return last_ai_text.strip()
+
+    @staticmethod
+    def _messages_for_last_assistant_turn(messages: list[BaseMessage]) -> list[BaseMessage]:
+        """Return AI messages/chunks belonging to the final CoreAgent hop only.
+
+        Multi-hop tool loops append one assistant turn per hop. Ledger and
+        ``ledger_direct`` goal completion must surface the last turn, not a
+        concatenation of every hop's narration.
+        """
+        ai_message_indices = [i for i, msg in enumerate(messages) if isinstance(msg, AIMessage)]
+        if not ai_message_indices:
+            return [m for m in messages if isinstance(m, (AIMessage, AIMessageChunk))]
+
+        start = ai_message_indices[-2] + 1 if len(ai_message_indices) >= 2 else 0
+        return [
+            msg
+            for i, msg in enumerate(messages)
+            if i >= start and isinstance(msg, (AIMessage, AIMessageChunk))
+        ]
 
     def _aggregate_wave_metrics(
         self,
@@ -1171,15 +1192,16 @@ class Executor:
     def _extract_final_assistant_text_from_step_messages(
         self, step_messages: list[BaseMessage]
     ) -> str:
-        """Return final assistant text from streamed AI messages/chunks only."""
+        """Return final assistant text from the last CoreAgent hop only."""
         from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 
-        ai_messages = [m for m in step_messages if isinstance(m, AIMessage)]
-        ai_chunks = [m for m in step_messages if isinstance(m, AIMessageChunk)]
+        turn_messages = self._messages_for_last_assistant_turn(step_messages)
+        ai_messages = [m for m in turn_messages if isinstance(m, AIMessage)]
+        ai_chunks = [m for m in turn_messages if isinstance(m, AIMessageChunk)]
         final_ai = ai_messages[-1] if ai_messages else None
         content = ""
         if ai_chunks:
-            content = self._assemble_assistant_text_from_stream_messages(step_messages).strip()
+            content = self._assemble_assistant_text_from_stream_messages(turn_messages).strip()
         if not content and final_ai is not None:
             content = extract_text_from_message_content(getattr(final_ai, "content", None)).strip()
         return content
@@ -1303,7 +1325,7 @@ class Executor:
                     ).strip()
                     if not excerpt_src:
                         excerpt_src = self._assemble_assistant_text_from_stream_messages(
-                            result.messages
+                            self._messages_for_last_assistant_turn(result.messages)
                         ).strip()
                 if not excerpt_src:
                     excerpt_src = _last_tool_result_block(result.messages)
