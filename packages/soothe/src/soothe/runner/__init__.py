@@ -208,9 +208,9 @@ class SootheRunner(
         self._default_chat_model: Any | None = None
         try:
             self._default_chat_model = self._config.create_chat_model("default")
-            logger.debug("Default chat model initialized (role=default) for quiz fallback")
+            logger.debug("Default chat model initialized (role=default) for trivial fast-path")
         except Exception:
-            logger.debug("Default chat model unavailable for quiz fallback", exc_info=True)
+            logger.debug("Default chat model unavailable for trivial fast-path", exc_info=True)
 
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
