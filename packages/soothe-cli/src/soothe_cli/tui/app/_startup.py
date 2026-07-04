@@ -418,29 +418,25 @@ class _StartupMixin:
         return await discover_skills_async(daemon_config=self._daemon_config)
 
     @staticmethod
-    def _daemon_connect_attempt_label(*, phase: str, attempt: int, max_attempts: int) -> str:
-        """Format a daemon-connect spinner label with attempt progress.
+    def _daemon_connect_hint_extra(*, attempt: int, max_attempts: int) -> str | None:
+        """Hint suffix for daemon connect retries (label stays a single word)."""
+        from soothe_cli.tui.spinner_labels import daemon_connect_hint_extra
 
-        The first try shows only ``phase``; attempt suffixes appear after a
-        timeout or failure triggers a retry.
-        """
-        if max_attempts <= 1 or attempt <= 1:
-            return phase
-        return f"{phase} (attempt {attempt}/{max_attempts})"
+        return daemon_connect_hint_extra(attempt=attempt, max_attempts=max_attempts)
 
     async def _connect_daemon_background(self) -> None:
         """Background worker: connect the TUI directly to the daemon."""
-        from soothe_cli.tui.textual_adapter import (
-            SPINNER_LABEL_WAITING_AGENT_READY,
-        )
+        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_WAITING
 
         for attempt in range(1, _DAEMON_CONNECT_MAX_ATTEMPTS + 1):
-            waiting_label = self._daemon_connect_attempt_label(
-                phase=SPINNER_LABEL_WAITING_AGENT_READY,
-                attempt=attempt,
-                max_attempts=_DAEMON_CONNECT_MAX_ATTEMPTS,
+            await self._set_spinner(
+                SPINNER_LABEL_WAITING,
+                show_interrupt_hint=False,
+                hint_extra=self._daemon_connect_hint_extra(
+                    attempt=attempt,
+                    max_attempts=_DAEMON_CONNECT_MAX_ATTEMPTS,
+                ),
             )
-            await self._set_spinner(waiting_label, show_interrupt_hint=False)
             try:
                 session, status_event = await self._connect_daemon_once(attempt=attempt)
             except Exception as exc:
@@ -483,7 +479,7 @@ class _StartupMixin:
 
         from soothe_cli.runtime.transport.session import TuiDaemonSession
         from soothe_cli.tui._env_vars import resolve_cli_loop_workspace
-        from soothe_cli.tui.textual_adapter import SPINNER_LABEL_CONNECTING_DAEMON
+        from soothe_cli.tui.spinner_labels import SPINNER_LABEL_CONNECTING
 
         ws_url = websocket_url_from_config(self._daemon_config)
 
@@ -503,12 +499,14 @@ class _StartupMixin:
                 f"Please start the daemon with: soothed start"
             )
 
-        connecting_label = self._daemon_connect_attempt_label(
-            phase=SPINNER_LABEL_CONNECTING_DAEMON,
-            attempt=attempt,
-            max_attempts=_DAEMON_CONNECT_MAX_ATTEMPTS,
+        await self._set_spinner(
+            SPINNER_LABEL_CONNECTING,
+            show_interrupt_hint=False,
+            hint_extra=self._daemon_connect_hint_extra(
+                attempt=attempt,
+                max_attempts=_DAEMON_CONNECT_MAX_ATTEMPTS,
+            ),
         )
-        await self._set_spinner(connecting_label, show_interrupt_hint=False)
 
         session = TuiDaemonSession(
             self._daemon_config,

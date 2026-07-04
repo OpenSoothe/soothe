@@ -35,36 +35,24 @@ class _ConnectProbe(_StartupMixin):
         self.post_message = MagicMock()
 
 
-def test_daemon_connect_attempt_label_omits_suffix_on_first_attempt() -> None:
-    label = _StartupMixin._daemon_connect_attempt_label(
-        phase="Waiting for agent to be ready",
-        attempt=1,
-        max_attempts=3,
-    )
-    assert label == "Waiting for agent to be ready"
+def test_daemon_connect_hint_extra_omits_suffix_on_first_attempt() -> None:
+    hint = _StartupMixin._daemon_connect_hint_extra(attempt=1, max_attempts=3)
+    assert hint is None
 
 
-def test_daemon_connect_attempt_label_includes_progress_after_retry() -> None:
-    label = _StartupMixin._daemon_connect_attempt_label(
-        phase="Waiting for agent to be ready",
-        attempt=2,
-        max_attempts=3,
-    )
-    assert label == "Waiting for agent to be ready (attempt 2/3)"
+def test_daemon_connect_hint_extra_includes_progress_after_retry() -> None:
+    hint = _StartupMixin._daemon_connect_hint_extra(attempt=2, max_attempts=3)
+    assert hint == "attempt 2/3"
 
 
-def test_daemon_connect_attempt_label_omits_suffix_for_single_attempt() -> None:
-    label = _StartupMixin._daemon_connect_attempt_label(
-        phase="Connecting to daemon",
-        attempt=1,
-        max_attempts=1,
-    )
-    assert label == "Connecting to daemon"
+def test_daemon_connect_hint_extra_omits_suffix_for_single_attempt() -> None:
+    hint = _StartupMixin._daemon_connect_hint_extra(attempt=1, max_attempts=1)
+    assert hint is None
 
 
 @pytest.mark.asyncio
 async def test_connect_daemon_background_retries_then_succeeds(monkeypatch) -> None:
-    """Failed attempts should retry with visible attempt labels before success."""
+    """Failed attempts should retry with visible attempt hints before success."""
     probe = _ConnectProbe()
     sleep_calls: list[float] = []
 
@@ -89,10 +77,13 @@ async def test_connect_daemon_background_retries_then_succeeds(monkeypatch) -> N
     probe.post_message.assert_called_once()
     assert probe.post_message.call_args.args[0].session is not None
 
-    spinner_labels = [call.args[0] for call in probe._set_spinner.await_args_list]
-    assert spinner_labels[0] == "Waiting for agent to be ready"
-    assert spinner_labels[1] == "Waiting for agent to be ready (attempt 2/3)"
-    assert spinner_labels[2] == "Waiting for agent to be ready (attempt 3/3)"
+    spinner_calls = probe._set_spinner.await_args_list
+    assert spinner_calls[0].args[0] == "Waiting"
+    assert spinner_calls[0].kwargs.get("hint_extra") is None
+    assert spinner_calls[1].args[0] == "Waiting"
+    assert spinner_calls[1].kwargs.get("hint_extra") == "attempt 2/3"
+    assert spinner_calls[2].args[0] == "Waiting"
+    assert spinner_calls[2].kwargs.get("hint_extra") == "attempt 3/3"
 
 
 @pytest.mark.asyncio
@@ -150,9 +141,10 @@ async def test_connect_daemon_once_uses_extended_ready_timeout(monkeypatch) -> N
     assert status["loop_id"] == "loop-abc"
     assert session is not None
 
-    connecting_labels = [
-        call.args[0]
+    connecting_calls = [
+        call
         for call in probe._set_spinner.await_args_list
-        if call.args[0].startswith("Connecting to daemon")
+        if call.args and call.args[0] == "Connecting"
     ]
-    assert connecting_labels == ["Connecting to daemon"]
+    assert connecting_calls == [connecting_calls[0]]
+    assert connecting_calls[0].kwargs.get("hint_extra") is None
