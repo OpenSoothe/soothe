@@ -56,10 +56,10 @@ def route_by_intent(state: dict[str, Any]) -> str:
     Continuation is checked first from the structural ``is_continuation`` flag
     set by ``init_or_resume`` (derived from checkpoint state, not the LLM
     label) — continuation turns always go to ``plan_assess``. Then matches the
-    4-class intake label:
+    3-class intake label:
 
-    - ``quiz``    → END (handled pre-graph; defensive duplicate)
-    - ``trivial`` → ``resolve_decision`` (synth 1-step plan in scratch, no plan LLM)
+    - ``trivial`` → END when ``intent_route`` is ``fast_path`` (runner
+                    CoreAgent on loop main thread); otherwise ``resolve_decision``
     - ``simple``  → ``plan_generate`` (skip bounded_evidence_gather + plan_assess)
     - ``complex`` → ``bounded_evidence_gather`` (full existing spine, IG-476 intact)
 
@@ -71,7 +71,7 @@ def route_by_intent(state: dict[str, Any]) -> str:
         return "plan_assess"
 
     if state.get("intent_route") == "fast_path":
-        logger.debug("[routing] route_by_intent → END (quiz fast-path)")
+        logger.debug("[routing] route_by_intent → END (trivial fast-path)")
         return END
 
     label = state.get("intake_label")

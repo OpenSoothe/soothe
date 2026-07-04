@@ -504,21 +504,23 @@ class StrangeLoopMixin:
                     classification = (
                         event_data.get("classification") if isinstance(event_data, dict) else None
                     )
-                    intent_type = (
-                        event_data.get("intent_type") if isinstance(event_data, dict) else None
-                    )
-                    quiz_ce = (
+                    fast_ce = (
                         event_data.get("context_engine") if isinstance(event_data, dict) else None
                     )
-                    if intent_type == "quiz":
-                        async for chunk in self._run_quiz(
-                            user_input,
-                            tid,
-                            classification,
-                            context_engine=quiz_ce,
-                        ):
-                            yield chunk
-                        return
+                    ce_goal_id = (
+                        event_data.get("ce_goal_id") if isinstance(event_data, dict) else None
+                    )
+                    async for chunk in self._run_trivial(
+                        user_input,
+                        tid,
+                        workspace=workspace,
+                        classification=classification,
+                        context_engine=fast_ce,
+                        ce_goal_id=ce_goal_id,
+                        loop_id=strange_loop_id,
+                    ):
+                        yield chunk
+                    return
 
                 if event_type == "iteration_started":
                     # Internal event - not shown to user

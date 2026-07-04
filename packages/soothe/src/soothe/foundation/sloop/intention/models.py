@@ -1,33 +1,31 @@
 """Intent classification Pydantic models (RFC-225, RFC-630).
 
-Intent classification produces a 4-class intake label (RFC-630) —
-``quiz`` | ``trivial`` | ``simple`` | ``complex`` — that drives
-``route_by_intent`` branch routing. Whether an agentic query continues an
-in-flight loop is derived structurally inside ``StrangeLoop`` from the
-loaded checkpoint, not classified here.
+Intent classification produces a 3-class intake label (RFC-630) —
+``trivial`` | ``simple`` | ``complex`` — that drives ``route_by_intent``
+branch routing. Whether an agentic query continues an in-flight loop is
+derived structurally inside ``StrangeLoop`` from the loaded checkpoint, not
+classified here.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
 class IntakeLabel(StrEnum):
-    """4-class intake label for branch routing (RFC-630).
+    """3-class intake label for branch routing (RFC-630).
 
     Continuation is NOT a label — it is a structural overlay from the
     checkpoint (RFC-225). The intake LLM never decides continuation.
 
-    - ``quiz``: greeting/thanks/trivia, no tools.
-    - ``trivial``: single obvious action, no planning LLM needed.
+    - ``trivial``: greeting/thanks/trivia, single obvious tool call, or direct
+      answer; no planning LLM (CoreAgent fast-path on loop main thread).
     - ``simple``: single focused step, lightweight plan.
     - ``complex``: multi-step / multi-phase, full plan.
     """
 
-    QUIZ = "quiz"
     TRIVIAL = "trivial"
     SIMPLE = "simple"
     COMPLEX = "complex"
@@ -37,7 +35,7 @@ class TaskComplexity(StrEnum):
     """Unified task complexity levels for routing decisions.
 
     Used by both IntentClassification and RoutingClassification.
-    - minimal: No tools needed (fast-path: quiz intent)
+    - minimal: No tools needed (trivial fast-path)
     - simple: Single focused step
     - medium: Multi-step with moderate tool use
     - complex: Architecture, migration, deep multi-phase work
@@ -57,14 +55,14 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
     signal without a redundant LLM field.
 
     Args:
-        intake_label: 4-class intake label from the classifier.
+        intake_label: 3-class intake label from the classifier.
 
     Returns:
         Task complexity for ``RoutingClassification`` and system prompt tiers.
     """
-    if intake_label == IntakeLabel.QUIZ:
+    if intake_label == IntakeLabel.TRIVIAL:
         return TaskComplexity.MINIMAL
-    if intake_label in (IntakeLabel.TRIVIAL, IntakeLabel.SIMPLE):
+    if intake_label == IntakeLabel.SIMPLE:
         return TaskComplexity.SIMPLE
     return TaskComplexity.COMPLEX
 
@@ -93,46 +91,40 @@ class RoutingClassification(BaseModel):
 class IntentClassification(BaseModel):
     """Primary intent classification model (RFC-225, IG-518, RFC-630).
 
-    4-class LLM intake classification:
-    - ``quiz``: minimal direct reply (greeting/thanks/trivia) without tools.
-    - ``trivial``/``simple``/``complex``: agentic goals of increasing effort;
-      the runner / StrangeLoop derive loop continuation structurally from the
-      checkpoint.
+    3-class LLM intake classification:
+    - ``trivial``: direct CoreAgent on loop main thread (greetings, thanks,
+      trivia, single obvious tool call).
+    - ``simple``/``complex``: agentic goals of increasing effort; the runner /
+      StrangeLoop derive loop continuation structurally from the checkpoint.
 
-    ``intake_label`` carries the 4-class label and drives ``route_by_intent``;
-    ``intent_type`` is derived from it (``quiz`` → ``quiz``, all others →
-    ``agentic``) so the downstream quiz fast-path and event emission keep
-    working.
+    ``intake_label`` drives ``route_by_intent``. ``intent_type`` is always
+    ``agentic`` for wire compatibility with ``IntentClassifiedEvent``.
 
     Args:
-        intent_type: ``quiz`` or ``agentic`` (derived from ``intake_label``).
-        intake_label: 4-class intake label for branch routing (RFC-630).
-        reasoning: Brief reasoning for agentic classification (IG-518, agentic only).
-        goal_description: Normalized goal description (populated for agentic).
-        task_complexity: Routing complexity level.
-        quiz_response: Direct quiz answer piggybacked from the LLM (quiz only).
+        intent_type: Always ``agentic`` (legacy wire field).
+        intake_label: 3-class intake label for branch routing (RFC-630).
+        reasoning: Brief reasoning for classification (IG-518).
+        goal_description: Normalized goal description.
+        task_complexity: Routing complexity level (derived from ``intake_label``).
     """
 
-    intent_type: Literal["quiz", "agentic"] = Field(
-        description="Primary intent: quiz (greeting/thanks/trivia without tools) or agentic (everything else)"
+    intent_type: str = Field(
+        default="agentic",
+        description="Wire compatibility field; always agentic after RFC-630 3-class intake",
     )
     intake_label: IntakeLabel = Field(
-        description="4-class intake label for branch routing: quiz, trivial, simple, or complex"
+        description="3-class intake label for branch routing: trivial, simple, or complex"
     )
     reasoning: str | None = Field(
         default=None,
-        description="Brief first-person reasoning for agentic classification (I'll / Let me …).",
+        description="Brief first-person reasoning (I'll / Let me …).",
     )
     goal_description: str | None = Field(
         default=None,
-        description="Normalized goal description for display and GoalEngine (agentic only)",
+        description="Normalized goal description for display and GoalEngine",
     )
     task_complexity: TaskComplexity = Field(
-        description="Routing complexity: minimal (quiz), simple, medium, or complex"
-    )
-    quiz_response: str | None = Field(
-        default=None,
-        description="Direct quiz answer from classification or quiz answer step",
+        description="Routing complexity derived from intake_label"
     )
 
     def to_routing_classification(self) -> RoutingClassification:
@@ -144,19 +136,16 @@ class IntentClassification(BaseModel):
 
 
 class IntakeClassificationLLMResult(BaseModel):
-    """Structured output from the 4-class intake LLM (RFC-630).
+    """Structured output from the 3-class intake LLM (RFC-630).
 
-    The LLM picks one of ``quiz``/``trivial``/``simple``/``complex``; the
-    label drives ``route_by_intent``. Quiz piggybacks the answer in
-    ``quiz_response`` (preserves the quiz short-circuit). Non-quiz intents
-    carry brief ``reasoning`` for client visibility (IG-518). Loop
-    continuation is derived structurally, not classified.
+    The LLM picks one of ``trivial``/``simple``/``complex``; the label drives
+    ``route_by_intent``. Non-trivial labels carry brief ``reasoning`` for client
+    visibility (IG-518). Loop continuation is derived structurally, not classified.
     """
 
     intake_label: IntakeLabel = Field(
-        description="Primary intake: quiz (greeting/thanks/trivia, no tools), "
-        "trivial (single obvious action, no planning LLM), "
-        "simple (single focused step, lightweight plan), "
+        description="Primary intake: trivial (greeting/thanks/trivia/single obvious action, "
+        "no planning LLM), simple (single focused step, lightweight plan), "
         "complex (multi-step/multi-phase, full plan)"
     )
     reasoning: str | None = Field(
@@ -166,39 +155,18 @@ class IntakeClassificationLLMResult(BaseModel):
     )
     goal_description: str | None = Field(
         default=None,
-        description="Normalized goal description for display and GoalEngine (non-quiz only)",
-    )
-    quiz_response: str | None = Field(
-        default=None,
-        description="Direct answer for quiz intents (greeting/thanks/trivia). Concise, from training knowledge.",
+        description="Normalized goal description for display and GoalEngine",
     )
 
     def to_intent_classification(self) -> IntentClassification:
-        """Convert LLM result to runtime IntentClassification.
-
-        Maps the 4-class label onto ``intent_type`` so the quiz fast-path and
-        event emission keep working: ``quiz`` → ``quiz``, all others →
-        ``agentic``. The 4-class label is preserved on ``intake_label`` for
-        ``route_by_intent``. ``task_complexity`` is derived from
-        ``intake_label`` (not LLM output).
-        """
+        """Convert LLM result to runtime IntentClassification."""
         task_complexity = derive_task_complexity_from_intake(self.intake_label)
-        if self.intake_label == IntakeLabel.QUIZ:
-            return IntentClassification(
-                intent_type="quiz",
-                intake_label=IntakeLabel.QUIZ,
-                reasoning=None,
-                goal_description=None,
-                task_complexity=task_complexity,
-                quiz_response=self.quiz_response,
-            )
         return IntentClassification(
             intent_type="agentic",
             intake_label=self.intake_label,
             reasoning=self.reasoning,
             goal_description=self.goal_description,
             task_complexity=task_complexity,
-            quiz_response=None,
         )
 
 

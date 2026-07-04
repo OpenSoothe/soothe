@@ -1,9 +1,9 @@
 """Intent classifier implementation (RFC-225, RFC-630, IG-540).
 
-4-class LLM intake classification (``quiz`` | ``trivial`` | ``simple`` |
-``complex``) via ``classify_intake``, driving ``route_by_intent`` branch
-routing. Loop continuation is derived structurally inside ``StrangeLoop``
-from the loaded checkpoint and is not a classifier concern.
+3-class LLM intake classification (``trivial`` | ``simple`` | ``complex``) via
+``classify_intake``, driving ``route_by_intent`` branch routing. Loop
+continuation is derived structurally inside ``StrangeLoop`` from the loaded
+checkpoint and is not a classifier concern.
 """
 
 from __future__ import annotations
@@ -39,13 +39,13 @@ logger = logging.getLogger(__name__)
 class IntentClassifier:
     """LLM-driven intent classification (RFC-225, RFC-630).
 
-    - 4-class intake label via a single structured LLM call.
+    - 3-class intake label via a single structured LLM call.
     - No structural / continuation logic — that is owned by ``StrangeLoop``.
     - Robust fallback to ``complex`` on failure (fail-safe: full pipeline runs).
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
-        assistant_name: Name used in quiz fallback replies.
+        assistant_name: Name used in intake identity block.
         soothe_config: Optional config for Langfuse tracing.
     """
 
@@ -78,7 +78,7 @@ class IntentClassifier:
         observability_phase: str = "pre-stream",
         observability_component: str = "intake.primary",
     ) -> IntentClassification:
-        """Classify the query into a 4-class intake label (RFC-630).
+        """Classify the query into a 3-class intake label (RFC-630).
 
         One structured LLM call with retry; fallback to ``complex`` so the full
         pipeline runs (fail-safe, RFC-630 §9.3).
@@ -97,8 +97,7 @@ class IntentClassifier:
 
         Returns:
             IntentClassification with ``intake_label`` ∈
-            {``quiz``, ``trivial``, ``simple``, ``complex``} and ``intent_type``
-            derived from it (``quiz`` → ``quiz``, else ``agentic``).
+            {``trivial``, ``simple``, ``complex``}.
         """
         if not self._fast_model:
             return self._fallback(query)
@@ -166,7 +165,7 @@ class IntentClassifier:
         observability_phase: str = "pre-stream",
         observability_component: str = "intake.primary",
     ) -> tuple[IntentClassification, str, dict[str, Any]]:
-        """4-class intake LLM call with structured output (RFC-630)."""
+        """3-class intake LLM call with structured output (RFC-630)."""
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
@@ -216,7 +215,6 @@ class IntentClassifier:
             raise ValueError("LLM returned None - structured output parsing failed")
 
         if result_dict.get("intake_label") not in (
-            IntakeLabel.QUIZ,
             IntakeLabel.TRIVIAL,
             IntakeLabel.SIMPLE,
             IntakeLabel.COMPLEX,
@@ -273,18 +271,6 @@ class IntentClassifier:
 
     # -- Helpers ------------------------------------------------------------
 
-    @staticmethod
-    def _build_quiz_intent() -> IntentClassification:
-        """Build a quiz IntentClassification (fast-path hint bypass)."""
-        return IntentClassification(
-            intent_type="quiz",
-            intake_label=IntakeLabel.QUIZ,
-            reasoning=None,
-            goal_description=None,
-            task_complexity=derive_task_complexity_from_intake(IntakeLabel.QUIZ),
-            quiz_response=None,
-        )
-
     def _fallback(
         self,
         query: str,
@@ -300,7 +286,6 @@ class IntentClassifier:
             reasoning="Let me run the full agent loop to work through this goal.",
             goal_description=query,
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
-            quiz_response=None,
         )
 
     def _patch_missing_fields(
@@ -308,14 +293,13 @@ class IntentClassifier:
         intent: IntentClassification,
         query: str,
     ) -> IntentClassification:
-        """Patch missing goal_description and reasoning on agentic results (IG-518)."""
-        if intent.intent_type == "agentic":
-            if not intent.goal_description:
-                intent.goal_description = query
-                logger.debug("Patched missing goal_description")
-            if not intent.reasoning:
-                intent.reasoning = "I'll use tools to work through this goal."
-                logger.debug("Patched missing reasoning")
+        """Patch missing goal_description and reasoning (IG-518)."""
+        if not intent.goal_description:
+            intent.goal_description = query
+            logger.debug("Patched missing goal_description")
+        if not intent.reasoning:
+            intent.reasoning = "I'll use tools to work through this goal."
+            logger.debug("Patched missing reasoning")
         return intent
 
     def _build_invoke_config(

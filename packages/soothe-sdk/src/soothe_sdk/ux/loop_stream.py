@@ -23,6 +23,7 @@ LOOP_ASSISTANT_OUTPUT_PHASES: frozenset[str] = frozenset(
     {
         "goal_completion",
         "quiz",
+        "trivial",
         "autonomous_goal",
         "direct_model",
         "text_completion",

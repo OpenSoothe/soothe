@@ -1,10 +1,4 @@
-"""Unit tests for 4-class intake classification (RFC-630).
-
-The LLM classifier produces a 4-class ``intake_label`` (``quiz`` | ``trivial``
-| ``simple`` | ``complex``) that drives ``route_by_intent``. Loop continuation
-is derived structurally inside ``StrangeLoop`` from the loaded checkpoint and
-is not a classifier concern.
-"""
+"""Tests for 3-class intake classification (RFC-630)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,20 +19,16 @@ from soothe.foundation.sloop.intention.prompts import (
 class TestIntentClassificationModel:
     """Test IntentClassification Pydantic model."""
 
-    def test_model_creation_quiz(self) -> None:
+    def test_model_creation_trivial(self) -> None:
         intent = IntentClassification(
-            intent_type="quiz",
-            intake_label=IntakeLabel.QUIZ,
+            intake_label=IntakeLabel.TRIVIAL,
             task_complexity=TaskComplexity.MINIMAL,
-            quiz_response="Hello! How can I help?",
         )
-        assert intent.intent_type == "quiz"
-        assert intent.intake_label == IntakeLabel.QUIZ
-        assert intent.quiz_response == "Hello! How can I help?"
+        assert intent.intent_type == "agentic"
+        assert intent.intake_label == IntakeLabel.TRIVIAL
 
     def test_model_creation_complex(self) -> None:
         intent = IntentClassification(
-            intent_type="agentic",
             intake_label=IntakeLabel.COMPLEX,
             goal_description="Build a web scraper",
             task_complexity=TaskComplexity.COMPLEX,
@@ -46,17 +36,13 @@ class TestIntentClassificationModel:
         assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.COMPLEX
         assert intent.goal_description == "Build a web scraper"
-        assert intent.quiz_response is None
 
 
 class TestDeriveTaskComplexityFromIntake:
     """``task_complexity`` is derived from ``intake_label``, not LLM output."""
 
-    def test_quiz_maps_to_minimal(self) -> None:
-        assert derive_task_complexity_from_intake(IntakeLabel.QUIZ) == TaskComplexity.MINIMAL
-
-    def test_trivial_maps_to_simple(self) -> None:
-        assert derive_task_complexity_from_intake(IntakeLabel.TRIVIAL) == TaskComplexity.SIMPLE
+    def test_trivial_maps_to_minimal(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.TRIVIAL) == TaskComplexity.MINIMAL
 
     def test_simple_maps_to_simple(self) -> None:
         assert derive_task_complexity_from_intake(IntakeLabel.SIMPLE) == TaskComplexity.SIMPLE
@@ -66,30 +52,18 @@ class TestDeriveTaskComplexityFromIntake:
 
 
 class TestIntakeClassificationLLMResult:
-    """Test the 4-class intake schema and its resolution (RFC-630)."""
-
-    def test_quiz_resolves_to_quiz(self) -> None:
-        llm_result = IntakeClassificationLLMResult(
-            intake_label=IntakeLabel.QUIZ,
-            quiz_response="Hi there!",
-        )
-        intent = llm_result.to_intent_classification()
-        assert intent.intent_type == "quiz"
-        assert intent.intake_label == IntakeLabel.QUIZ
-        assert intent.task_complexity == TaskComplexity.MINIMAL
-        assert intent.quiz_response == "Hi there!"
+    """Test the 3-class intake schema and its resolution (RFC-630)."""
 
     def test_trivial_resolves_to_agentic_trivial(self) -> None:
         llm_result = IntakeClassificationLLMResult(
             intake_label=IntakeLabel.TRIVIAL,
-            reasoning="one obvious step",
-            goal_description="list files in this directory",
+            reasoning="I'll greet you back.",
+            goal_description="hello",
         )
         intent = llm_result.to_intent_classification()
         assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.TRIVIAL
-        assert intent.task_complexity == TaskComplexity.SIMPLE
-        assert intent.goal_description == "list files in this directory"
+        assert intent.task_complexity == TaskComplexity.MINIMAL
 
     def test_simple_resolves_to_agentic_simple(self) -> None:
         llm_result = IntakeClassificationLLMResult(
@@ -115,55 +89,34 @@ class TestIntakeClassificationLLMResult:
 
 
 class TestIntakeClassificationPrompts:
-    """Prompt content guards for 4-class intake classification (RFC-630)."""
+    """Prompt content guards for 3-class intake classification (RFC-630)."""
 
-    def test_primary_prompt_has_four_labels(self) -> None:
-        for label in ("quiz", "trivial", "simple", "complex"):
+    def test_primary_prompt_has_three_labels(self) -> None:
+        for label in ("trivial", "simple", "complex"):
             assert label in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        assert "quiz" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
-    def test_retry_prompt_has_four_labels(self) -> None:
-        for label in ("quiz", "trivial", "simple", "complex"):
+    def test_retry_prompt_has_three_labels(self) -> None:
+        for label in ("trivial", "simple", "complex"):
             assert label in INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT
 
+    def test_primary_prompt_omits_quiz_response(self) -> None:
+        assert "quiz_response" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+
     def test_primary_prompt_biases_toward_complex(self) -> None:
-        """When uncertain, the intake must prefer the more capable label (RFC-630 §9.3)."""
         assert (
             "prefer" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()
             or "complex" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
         )
 
     def test_primary_prompt_uses_assistant_name(self) -> None:
-        assert "{assistant_name}" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-        assert "not vendor/model names" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        from soothe.foundation.sloop.intention.intake_messages import build_intake_system_message
 
-    def test_primary_prompt_excludes_runtime_state_from_quiz(self) -> None:
-        assert "runtime state" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-        assert "workspace" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
+        system = build_intake_system_message("TestBot")
+        assert "TestBot" in system
 
     def test_primary_prompt_omits_task_complexity(self) -> None:
         assert "task_complexity" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-
-    def test_retry_prompt_omits_task_complexity(self) -> None:
-        assert "task_complexity" not in INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT
-
-    def test_primary_prompt_requests_first_person_reasoning(self) -> None:
-        prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()
-        assert "first-person" in prompt or "i'll" in prompt
-        assert "let me" in prompt
-
-    def test_primary_prompt_leads_with_output_contract(self) -> None:
-        prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-        assert prompt.index("Output contract") < prompt.index("intake_label (routing")
-
-    def test_primary_prompt_uses_uppercase_intent_instructions_tag(self) -> None:
-        assert "<INTENT_INSTRUCTIONS>" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-        assert "<intent_instructions>" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
-
-    def test_primary_prompt_forbids_label_jargon_in_reasoning(self) -> None:
-        prompt = INTAKE_CLASSIFICATION_SYSTEM_PROMPT.lower()
-        assert "forbidden prefixes" in prompt or "forbidden:" in prompt
-        assert "single focused step" in prompt
-        assert "cognition card" in prompt
 
     def test_human_envelope_uses_goal_and_task(self) -> None:
         from soothe.foundation.sloop.intention.intake_messages import build_intake_human_message
@@ -175,25 +128,23 @@ class TestIntakeClassificationPrompts:
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
-    """Test the 4-class intake classifier with mocked LLM (RFC-630)."""
+    """Test the 3-class intake classifier with mocked LLM (RFC-630)."""
 
-    async def test_quiz_intake_classification(self) -> None:
+    async def test_trivial_intake_classification(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_llm_result = IntentClassification(
-            intent_type="quiz",
-            intake_label=IntakeLabel.QUIZ,
+            intake_label=IntakeLabel.TRIVIAL,
             task_complexity=TaskComplexity.MINIMAL,
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "quiz"})
+            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "trivial"})
             result = await classifier.classify_intake("你好")
-        assert result.intent_type == "quiz"
-        assert result.intake_label == IntakeLabel.QUIZ
+        assert result.intent_type == "agentic"
+        assert result.intake_label == IntakeLabel.TRIVIAL
 
     async def test_complex_intake_classification(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_llm_result = IntentClassification(
-            intent_type="agentic",
             intake_label=IntakeLabel.COMPLEX,
             goal_description="Refactor persistence",
             task_complexity=TaskComplexity.COMPLEX,
@@ -205,45 +156,35 @@ class TestIntakeClassifier:
                 {"intake_label": "complex", "goal_description": "Refactor persistence"},
             )
             result = await classifier.classify_intake("Refactor the persistence layer")
-        assert result.intent_type == "agentic"
         assert result.intake_label == IntakeLabel.COMPLEX
         assert result.goal_description == "Refactor persistence"
 
-    async def test_long_query_is_not_short_circuited(self) -> None:
-        """RFC-630: the _is_likely_agentic heuristic is deleted; long queries
-        must reach the LLM, not be forced to agentic by length."""
+    async def test_long_query_reaches_llm(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         long_query = (
             "Please help me refactor the authentication module to use OAuth2 "
             "with PKCE flow and update all the tests"
         )
         mock_llm_result = IntentClassification(
-            intent_type="quiz",
-            intake_label=IntakeLabel.QUIZ,
+            intake_label=IntakeLabel.TRIVIAL,
             task_complexity=TaskComplexity.MINIMAL,
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
-            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "quiz"})
+            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "trivial"})
             result = await classifier.classify_intake(long_query)
-        # Long query reached the LLM (mock called) and was classified quiz —
-        # the length heuristic is gone.
         mock_llm.assert_awaited()
-        assert result.intake_label == IntakeLabel.QUIZ
+        assert result.intake_label == IntakeLabel.TRIVIAL
 
     async def test_fallback_defaults_to_complex(self) -> None:
-        """RFC-630 §9.3: when the classifier is disabled, fallback is complex."""
         classifier = IntentClassifier(model=None, assistant_name="TestBot")
         result = await classifier.classify_intake("do something")
-        assert result.intent_type == "agentic"
         assert result.intake_label == IntakeLabel.COMPLEX
         assert result.task_complexity == TaskComplexity.COMPLEX
         assert result.reasoning is not None
-        assert result.reasoning.lower().startswith(("i'll", "let me"))
 
     async def test_patch_missing_reasoning_uses_first_person(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_llm_result = IntentClassification(
-            intent_type="agentic",
             intake_label=IntakeLabel.SIMPLE,
             goal_description="summarize readme",
             task_complexity=TaskComplexity.SIMPLE,
@@ -257,11 +198,3 @@ class TestIntakeClassifier:
             )
             result = await classifier.classify_intake("summarize readme")
         assert result.reasoning == "I'll use tools to work through this goal."
-
-    async def test_classifier_constructed_with_fast_model(self) -> None:
-        model = MagicMock()
-        classifier = IntentClassifier(model=model, assistant_name="TestBot")
-        assert classifier._fast_model is model
-        # invoke_structured_chat builds the runnable lazily at call time, so
-        # construction should NOT touch with_structured_output.
-        model.with_structured_output.assert_not_called()

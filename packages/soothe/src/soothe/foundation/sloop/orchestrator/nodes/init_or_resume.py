@@ -2,11 +2,10 @@
 
 Hydrates intent/routing from intake classified in the graph entry node.
 Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
-node emits the classified intake for event streaming, surfaces the 4-class
+node emits the classified intake for event streaming, surfaces the 3-class
 ``intake_label`` and a structural ``is_continuation`` flag onto the graph
-state for ``route_by_intent``, and — for the ``trivial`` label — injects a
-minimal synthetic plan into ``ctx.scratch`` so the loop skips
-``plan_generate`` entirely.
+state for ``route_by_intent``. Trivial labels terminate the graph early; the
+runner handles CoreAgent invocation on the loop main thread.
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 
@@ -64,19 +62,27 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             },
         )
 
-    intent_type = getattr(intent, "intent_type", "")
     intake_label: IntakeLabel | None = getattr(intent, "intake_label", None)
     is_continuation = _is_continuation(ctx)
 
-    # Quiz fast-path: terminate graph before the iteration gate.
-    if intent_type == "quiz":
-        logger.info("[Intent] Fast path in graph: %s", intent_type)
+    # RFC-630 trivial fast-path: runner invokes CoreAgent on the loop main thread
+    # (loop_id), bypassing plan_generate / resolve_decision / execute graph nodes.
+    # Continuation turns still need plan_assess and must not fast-path here.
+    if (
+        intake_label == IntakeLabel.TRIVIAL
+        and not is_continuation
+        and not getattr(ctx, "continue_loop_mode", False)
+        and not is_continue_keyword(ctx.loop_state.goal)
+    ):
+        logger.info("[Intent] Fast path in graph: trivial")
         await ctx.emit(
             "intent_fast_path",
             {
-                "intent_type": intent_type,
+                "fast_path_kind": "trivial",
+                "intent_type": getattr(intent, "intent_type", "agentic"),
                 "classification": intent,
                 "context_engine": getattr(ctx, "ce", None),
+                "ce_goal_id": getattr(ctx, "ce_goal_id", None),
                 "thread_id": ctx.loop_state.thread_id,
             },
         )
@@ -89,24 +95,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "last_outcome": None,
             "resume_synth": None,
         }
-
-    # RFC-630: trivial branch — inject a minimal 1-step plan and skip
-    # plan_generate entirely. resolve_decision reads scratch.plan_result.
-    # Not applicable to continuation turns (they need plan_assess).
-    if (
-        intake_label == IntakeLabel.TRIVIAL
-        and not is_continuation
-        and not getattr(ctx, "continue_loop_mode", False)
-        and not is_continue_keyword(ctx.loop_state.goal)
-        and not getattr(ctx, "recovery_valid_resume", False)
-    ):
-        goal = getattr(intent, "goal_description", None) or ctx.loop_state.goal
-        try:
-            ctx.scratch.plan_result = build_trivial_plan(goal)
-            logger.info("[Intent] Trivial branch: injected 1-step plan, skipping plan_generate")
-        except Exception:
-            logger.exception("[init_or_resume] trivial plan build failed; downgrading to complex")
-            intake_label = IntakeLabel.COMPLEX
 
     # RFC-630: simple branch — reaches plan_generate directly (skipping
     # plan_assess), so synthesize the assessment here. Mirrors the fresh-loop

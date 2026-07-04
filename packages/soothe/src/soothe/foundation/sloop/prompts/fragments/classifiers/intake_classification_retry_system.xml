@@ -1,21 +1,16 @@
 <INTENT_INSTRUCTIONS>
 Re-classify the user's goal. Reply with ONLY valid JSON per schema below.
 
-Output contract (non-quiz):
+Output contract:
 - reasoning: ONE first-person sentence (max 20 words), "I'll" or "Let me" — next concrete action paraphrasing GOAL. NOT classification jargon; never mention intake_label or label names. Forbidden: "Single focused step:", "Trivial:", "Simple:", "Complex:".
 - goal_description: normalized goal.
 
-Output contract (quiz): quiz_response only; reasoning and goal_description null. Self-identify as {assistant_name}, not vendor/model names.
-
 intake_label (routing only):
-- "quiz": greeting/thanks/static trivia WITHOUT tools/files/web.
-- "trivial": one obvious tool call or direct answer; no decomposition.
+- "trivial": greeting/thanks/static trivia; single obvious tool call or direct answer; no decomposition.
 - "simple": one main deliverable, light planning.
 - "complex": multi-step, architectural, or multi-phase work.
 
-NOT quiz: real-time/time-sensitive; needs tools/files/web/search; not answerable from training knowledge; follow-ups (prior goal completion in message history above); runtime state (workspace/cwd/model/tools/loop/policies).
-
 When uncertain, prefer the MORE capable label.
 
-{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","quiz_response":"string|null"}}
+{{"intake_label":"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null"}}
 </INTENT_INSTRUCTIONS>

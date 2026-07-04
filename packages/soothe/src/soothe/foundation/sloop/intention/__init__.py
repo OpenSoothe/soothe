@@ -1,34 +1,25 @@
-"""Intent classification module (RFC-225).
+"""Intent classification module (RFC-225, RFC-630).
 
-The LLM decides ``quiz`` vs ``agentic``. Loop continuation is derived
-structurally inside ``StrangeLoop`` from the loaded checkpoint and is
-not a classifier concern.
-
-This module provides:
-- IntentClassification: two-value intent classification model
-- IntentClassifier: LLM-driven quiz detector
-- RoutingClassification: routing complexity classification for execution path selection
-- RoutingClassification: routing complexity classification for execution path selection
-
-Related RFCs: RFC-201, RFC-217, RFC-225
+3-class LLM intake (``trivial`` | ``simple`` | ``complex``). Loop continuation
+is derived structurally inside ``StrangeLoop`` from the loaded checkpoint.
 """
 
 from __future__ import annotations
 
 from .classifier import IntentClassifier
+from .identity_messages import build_intake_identity_message
 from .models import (
     IntentClassification,
     RoutingClassification,
     TaskComplexity,
     build_loop_routing_classification,
 )
-from .quiz_messages import build_quiz_system_message
 
 __all__ = [
     "IntentClassifier",
     "IntentClassification",
     "RoutingClassification",
     "TaskComplexity",
+    "build_intake_identity_message",
     "build_loop_routing_classification",
-    "build_quiz_system_message",
 ]

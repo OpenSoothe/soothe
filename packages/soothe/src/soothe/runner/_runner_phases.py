@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from soothe_sdk.core.exceptions import ConfigurationError
 
 from soothe.foundation.events import (
@@ -89,205 +89,207 @@ class PhasesMixin:
     on the concrete class.
     """
 
-    # -- quiz fast path (greetings + trivia, IG-250) -----------------------
+    # -- trivial fast path (CoreAgent on loop main thread) -------------------
 
-    async def _run_quiz(
+    async def _run_trivial(
         self,
         user_input: str,
         thread_id: str,
-        classification: Any | None = None,
         *,
+        workspace: str | None = None,
+        classification: Any | None = None,
         context_engine: Any | None = None,
+        ce_goal_id: str | None = None,
+        loop_id: str | None = None,
     ) -> AsyncGenerator[StreamChunk]:
-        """Fast path for quiz-style queries (greetings, thanks, brief trivia).
+        """Fast path for trivial intake: CoreAgent on the loop main thread."""
+        from soothe.runner._runner_strange_loop import _forward_messages_chunk
 
-        Uses piggybacked ``quiz_response`` from intent classification when
-        available (avoiding a second LLM call). Falls back to a separate
-        LLM invocation when the classification did not provide an answer.
-
-        Args:
-            user_input: User message.
-            thread_id: Thread ID for state tracking.
-            classification: IntentClassification from classifier (may contain piggybacked quiz_response).
-            context_engine: Optional loop ContextEngine for ledger persistence.
-
-        Yields:
-            StreamChunk events for quiz response.
-        """
-        logger.info("Quiz: %s", user_input[:50])
-
-        # Use piggybacked quiz_response from intent classification (avoids second LLM call)
-        piggybacked_answer = None
+        goal_text = user_input
         if classification is not None:
-            piggybacked_answer = getattr(classification, "quiz_response", None)
-            if isinstance(piggybacked_answer, str) and piggybacked_answer.strip():
-                logger.debug("Quiz using piggybacked answer from classification")
+            goal_description = getattr(classification, "goal_description", None)
+            if isinstance(goal_description, str) and goal_description.strip():
+                goal_text = goal_description.strip()
+
+        main_thread_id = (loop_id or self._client_loop_id_for_stream or thread_id or "").strip()
+        if not main_thread_id:
+            main_thread_id = thread_id
+
+        logger.info("Trivial: %s (main_thread=%s)", goal_text[:50], main_thread_id)
+
+        await self._materialize_core_agent()
+        await self._ensure_checkpointer_initialized()
+
+        configurable: dict[str, Any] = {"thread_id": main_thread_id}
+        if workspace:
+            configurable["workspace"] = workspace
+
+        from soothe.utils.observability.langfuse import SootheLangfuse
+
+        stream_config = SootheLangfuse(self._config).traced_llm(
+            purpose="trivial_execute",
+            component="runner.trivial",
+            phase="pre-stream",
+            session_id=main_thread_id,
+            run_name="soothe:trivial",
+        )
+        stream_config.setdefault("configurable", {}).update(configurable)
+
+        core_agent = self._materialized_core_agent()
+        final_response = ""
+        try:
+            async for chunk in core_agent.astream(
+                goal_text,
+                config=stream_config,
+                stream_mode=["messages", "custom"],
+                subgraphs=True,
+                durability="exit",
+            ):
+                from soothe.foundation.sloop.utils.messages import (
+                    tag_messages_stream_chunk_for_assistant_phase,
+                )
+
+                tagged = tag_messages_stream_chunk_for_assistant_phase(
+                    chunk,
+                    phase="trivial",
+                    thread_id=main_thread_id,
+                )
+                if _forward_messages_chunk(tagged):
+                    yield tagged
+                final_response = self._extract_fast_path_response_text(tagged, final_response)
+        except Exception:
+            logger.exception("Trivial CoreAgent stream failed")
+            if not final_response.strip():
+                final_response = "I couldn't complete that request. Please try again."
                 yield loop_assistant_messages_chunk(
-                    content=piggybacked_answer.strip(),
-                    phase="quiz",
-                    thread_id=thread_id,
+                    content=final_response,
+                    phase="trivial",
+                    thread_id=main_thread_id,
                 )
-                self._schedule_quiz_persistence(
-                    user_input,
-                    piggybacked_answer.strip(),
-                    thread_id,
-                    context_engine=context_engine,
-                )
-                return
 
-        # Fallback: separate LLM call for quiz answer
-        quiz_model = getattr(self, "_fast_model", None)
-        model_label = "fast"
-        if not quiz_model:
-            quiz_model = getattr(self, "_default_chat_model", None)
-            model_label = "default"
-        if not quiz_model:
-            quiz_model = getattr(self, "_model", None)
-            model_label = "think"
-        if not quiz_model:
-            fallback_response = f"I'll answer that question: {user_input}"
-            yield loop_assistant_messages_chunk(
-                content=fallback_response,
-                phase="quiz",
-                thread_id=thread_id,
+        if not final_response.strip():
+            final_response = await self._read_fast_path_response_from_state(
+                core_agent,
+                stream_config,
             )
-            logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
-            self._schedule_quiz_persistence(
-                user_input,
-                fallback_response,
-                thread_id,
-                context_engine=context_engine,
-            )
-            return
 
-        from soothe.foundation.sloop.intention.quiz_messages import build_quiz_system_message
+        self._schedule_trivial_persistence(
+            user_input,
+            final_response.strip() or goal_text,
+            main_thread_id,
+            context_engine=context_engine,
+            ce_goal_id=ce_goal_id,
+            loop_id=main_thread_id,
+        )
 
-        assistant_name = getattr(getattr(self._config, "agent", None), "name", None) or "Soothe"
-        quiz_user_prompt = f"""Answer this question accurately and concisely using only your training knowledge.
+    @staticmethod
+    def _extract_fast_path_response_text(chunk: object, prior: str) -> str:
+        """Accumulate assistant text from streamed ``messages`` chunks."""
+        from langchain_core.messages import AIMessage, AIMessageChunk
 
-Question: {user_input}
+        from soothe.foundation.sloop.utils.stream_normalize import (
+            extract_text_from_message_content,
+            parse_tuple_stream_chunk,
+        )
 
-Provide a direct, factual answer for static facts, greetings, or simple math.
-Do not use tools or search. If the question needs live/real-time data (weather, news, stocks, etc.), say you cannot provide current data and suggest checking an authoritative source."""
+        parsed = parse_tuple_stream_chunk(chunk)
+        if parsed is None:
+            return prior
+        _namespace, mode, data = parsed
+        if mode != "messages" or not isinstance(data, (tuple, list)) or len(data) < 1:
+            return prior
+        msg = data[0]
+        if isinstance(msg, (AIMessage, AIMessageChunk)):
+            text = extract_text_from_message_content(msg.content)
+            if text.strip():
+                return text.strip()
+        return prior
 
-        quiz_messages = [
-            SystemMessage(content=build_quiz_system_message(assistant_name)),
-            HumanMessage(content=quiz_user_prompt),
-        ]
+    async def _read_fast_path_response_from_state(
+        self,
+        core_agent: Any,
+        stream_config: dict[str, Any],
+    ) -> str:
+        """Best-effort final assistant text from CoreAgent checkpoint state."""
+        from langchain_core.messages import AIMessage
+
+        from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 
         try:
-            from soothe.utils.llm.invoke_policy import (
-                await_with_llm_call_policy,
-                llm_rate_limit_config_from,
-            )
-            from soothe.utils.observability.langfuse import SootheLangfuse
-
-            quiz_config = SootheLangfuse(self._config).traced_llm(
-                purpose="quiz_answer",
-                component="runner.quiz",
-                phase="pre-stream",
-                session_id=thread_id,
-                run_name="soothe:quiz",
-                independent_trace=True,
-            )
-
-            async def _invoke() -> Any:
-                return await quiz_model.ainvoke(quiz_messages, config=quiz_config)
-
-            response = await await_with_llm_call_policy(
-                _invoke,
-                config=llm_rate_limit_config_from(self._config),
-                thread_id=thread_id,
-            )
-            answer = response.content if hasattr(response, "content") else str(response)
-
-            yield loop_assistant_messages_chunk(
-                content=answer,
-                phase="quiz",
-                thread_id=thread_id,
-            )
-            logger.debug("Quiz completed (%s model): %s", model_label, user_input[:50])
-            self._schedule_quiz_persistence(
-                user_input, answer, thread_id, context_engine=context_engine
-            )
+            snapshot = await core_agent.aget_state(config=stream_config)
         except Exception:
-            logger.exception("Quiz LLM call failed")
-            fallback_response = "I couldn't answer that question. Please try again."
-            yield loop_assistant_messages_chunk(
-                content=fallback_response,
-                phase="quiz",
-                thread_id=thread_id,
-            )
-            self._schedule_quiz_persistence(
-                user_input, fallback_response, thread_id, context_engine=context_engine
-            )
+            logger.debug("Fast path aget_state failed", exc_info=True)
+            return ""
+        if not snapshot or not getattr(snapshot, "values", None):
+            return ""
+        messages = snapshot.values.get("messages") or []
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                text = extract_text_from_message_content(msg.content)
+                if text.strip():
+                    return text.strip()
+        return ""
 
-    def _schedule_quiz_persistence(
+    def _schedule_trivial_persistence(
         self,
         query: str,
         response: str,
-        thread_id: str,
+        main_thread_id: str,
         *,
         context_engine: Any | None = None,
+        ce_goal_id: str | None = None,
+        loop_id: str | None = None,
     ) -> None:
-        """Persist quiz exchange without blocking the response stream."""
+        """Persist trivial exchange and finalize loop checkpoint without blocking stream."""
 
         async def _persist() -> None:
             try:
-                await self._save_quiz_to_state(
+                await self._save_trivial_to_state(
                     query,
                     response,
-                    thread_id,
+                    main_thread_id,
                     context_engine=context_engine,
+                    ce_goal_id=ce_goal_id,
+                    loop_id=loop_id or main_thread_id,
                 )
             except Exception:
-                logger.debug("Background quiz persistence failed", exc_info=True)
+                logger.debug("Background trivial persistence failed", exc_info=True)
 
         asyncio.create_task(_persist())
 
-    async def _save_quiz_to_state(
+    async def _save_trivial_to_state(
         self,
         query: str,
         response: str,
-        thread_id: str,
+        main_thread_id: str,
         *,
         context_engine: Any | None = None,
+        ce_goal_id: str | None = None,
+        loop_id: str | None = None,
     ) -> None:
-        """Persist quiz (minimal-path) Human+AI pair to checkpointer and loop ledger."""
-        await self._materialize_core_agent()
-        await self._save_quiz_to_checkpointer(query, response, thread_id)
-        await self._save_quiz_to_ledger(query, response, thread_id, context_engine=context_engine)
+        """Persist trivial Human+AI pair to ledger and finalize loop checkpoint."""
+        await self._save_trivial_to_ledger(
+            query,
+            response,
+            main_thread_id,
+            context_engine=context_engine,
+        )
+        await self._finalize_fast_path_loop(
+            loop_id or main_thread_id,
+            response=response,
+            context_engine=context_engine,
+            ce_goal_id=ce_goal_id,
+        )
 
-    async def _save_quiz_to_checkpointer(self, query: str, response: str, thread_id: str) -> None:
-        """Persist quiz Human+AI pair to the LangGraph checkpointer."""
-        await self._ensure_checkpointer_initialized()
-
-        if not thread_id:
-            return
-
-        config = {"configurable": {"thread_id": thread_id}}
-
-        try:
-            await self._materialized_core_agent().graph.aupdate_state(
-                config,
-                {"messages": [HumanMessage(content=query), AIMessage(content=response)]},
-                as_node="model",
-            )
-            logger.debug("Quiz exchange saved to checkpointer for thread %s", thread_id)
-        except Exception:
-            logger.debug("Failed to save quiz to checkpointer", exc_info=True)
-
-    async def _save_quiz_to_ledger(
+    async def _save_trivial_to_ledger(
         self,
         query: str,
         response: str,
-        thread_id: str,
+        main_thread_id: str,
         *,
         context_engine: Any | None = None,
     ) -> None:
-        """Persist quiz Human+AI pair to the loop ContextEngine ledger."""
-        from pathlib import Path
-
+        """Persist trivial Human+AI pair to the loop ContextEngine ledger."""
         from soothe.config import SOOTHE_HOME
         from soothe.foundation.context.engine import ContextEngine
         from soothe.foundation.context.persistence.factory import (
@@ -305,20 +307,28 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
 
         if context_engine is not None:
             try:
-                human = LoopHumanMessage(content=query, thread_id=thread_id, phase="quiz")
-                ai = LoopAIMessage(content=answer, thread_id=thread_id, phase="quiz")
-                _record_ledger_message(context_engine, human, "quiz")
-                _record_ledger_message(context_engine, ai, "quiz")
+                human = LoopHumanMessage(
+                    content=query,
+                    thread_id=main_thread_id,
+                    phase="trivial",
+                )
+                ai = LoopAIMessage(
+                    content=answer,
+                    thread_id=main_thread_id,
+                    phase="trivial",
+                )
+                _record_ledger_message(context_engine, human, "trivial")
+                _record_ledger_message(context_engine, ai, "trivial")
                 await context_engine.save()
                 logger.debug(
-                    "Quiz exchange saved to active loop ledger (loop=%s)",
-                    getattr(self, "_client_loop_id_for_stream", None) or thread_id,
+                    "Trivial exchange saved to active loop ledger (loop=%s)",
+                    main_thread_id,
                 )
                 return
             except Exception:
-                logger.debug("Failed to save quiz to active loop ledger", exc_info=True)
+                logger.debug("Failed to save trivial to active loop ledger", exc_info=True)
 
-        loop_id = (getattr(self, "_client_loop_id_for_stream", None) or thread_id or "").strip()
+        loop_id = (main_thread_id or "").strip()
         if not loop_id:
             return
 
@@ -332,14 +342,56 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 soothe_home=soothe_home,
             )
             await ce.load()
-            human = LoopHumanMessage(content=query, thread_id=thread_id, phase="quiz")
-            ai = LoopAIMessage(content=answer, thread_id=thread_id, phase="quiz")
-            _record_ledger_message(ce, human, "quiz")
-            _record_ledger_message(ce, ai, "quiz")
+            human = LoopHumanMessage(content=query, thread_id=main_thread_id, phase="trivial")
+            ai = LoopAIMessage(content=answer, thread_id=main_thread_id, phase="trivial")
+            _record_ledger_message(ce, human, "trivial")
+            _record_ledger_message(ce, ai, "trivial")
             await ce.save()
-            logger.debug("Quiz exchange saved to loop ledger for loop %s", loop_id)
+            logger.debug("Trivial exchange saved to loop ledger for loop %s", loop_id)
         except Exception:
-            logger.debug("Failed to save quiz to loop ledger", exc_info=True)
+            logger.debug("Failed to save trivial to loop ledger", exc_info=True)
+
+    async def _finalize_fast_path_loop(
+        self,
+        loop_id: str,
+        *,
+        response: str,
+        context_engine: Any | None = None,
+        ce_goal_id: str | None = None,
+    ) -> None:
+        """Mark the active StrangeLoop goal complete and return checkpoint to idle."""
+        loop_id = (loop_id or "").strip()
+        if not loop_id:
+            return
+
+        if context_engine is not None and ce_goal_id:
+            try:
+                await context_engine.finalize_goal(ce_goal_id, status="completed")
+            except Exception:
+                logger.debug("CE finalize_goal failed for trivial fast path", exc_info=True)
+
+        try:
+            from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
+
+            shared_pool = await self.get_sloop_shared_pool()
+            sm = StrangeLoopStateManager(
+                config=self._config,
+                loop_id=loop_id,
+                shared_pool=shared_pool,
+            )
+            try:
+                checkpoint = await sm.load()
+                if checkpoint is None:
+                    return
+                idx = checkpoint.current_goal_index
+                if idx < 0 or idx >= len(checkpoint.goal_history):
+                    return
+                goal_record = checkpoint.goal_history[idx]
+                await sm.finalize_goal(goal_record, response)
+            finally:
+                await sm.close()
+        except Exception:
+            logger.debug("StrangeLoop finalize failed for fast path", exc_info=True)
 
     # -- LangGraph stream with interrupt auto-resume -------------------------
 

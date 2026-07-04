@@ -25,8 +25,8 @@ class TestIntakeMessageBuilders:
 
     def test_system_message_has_static_rules_and_timestamp(self) -> None:
         system = build_intake_system_message("TestBot", retry=False)
-        assert "quiz" in system
         assert "trivial" in system
+        assert "quiz" not in system
         assert "{query}" not in system
         assert "<TIMESTAMP>" in system
         assert "TestBot" in system
@@ -70,7 +70,6 @@ class TestIntakeClassifierLedger:
             "intake_label": "simple",
             "reasoning": "I'll read the readme.",
             "goal_description": "summarize readme",
-            "quiz_response": None,
         }
         ce = MagicMock()
         ce.save = AsyncMock()
@@ -196,7 +195,20 @@ class TestIntakePriorGoalProjection:
         projected = project_last_goal_completion_for_intake(ledger, None)
         assert projected == []
 
-    def test_falls_back_to_quiz_pair_when_no_goal_completion(self) -> None:
+    def test_falls_back_to_trivial_pair_when_no_goal_completion(self) -> None:
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            project_last_goal_completion_for_intake,
+        )
+
+        ledger = [
+            LoopHumanMessage(content="what time is it?", phase="trivial"),
+            LoopAIMessage(content="It is 3 PM.", phase="trivial"),
+        ]
+        projected = project_last_goal_completion_for_intake(ledger, None)
+        assert len(projected) == 2
+        assert projected[-1].content == "It is 3 PM."
+
+    def test_falls_back_to_legacy_quiz_pair_when_no_goal_completion(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
