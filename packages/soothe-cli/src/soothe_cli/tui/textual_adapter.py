@@ -149,7 +149,7 @@ logger = logging.getLogger(__name__)
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
 # Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
-_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "plan_direct", "autonomous_goal"})
+_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "trivial", "plan_direct", "autonomous_goal"})
 
 
 class TextualUIAdapter:
