@@ -398,7 +398,7 @@ class IntentClassifiedEvent(ProtocolEvent):
     """
 
     type: Literal["soothe.cognition.intent.classified"] = "soothe.cognition.intent.classified"
-    intent_type: Literal["quiz", "agentic"] = "agentic"
+    intent_type: str = "agentic"
     reasoning: str | None = None
     goal_description: str | None = None
 

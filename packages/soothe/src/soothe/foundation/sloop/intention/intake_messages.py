@@ -5,13 +5,13 @@ from __future__ import annotations
 from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
 from soothe.foundation.sloop.prompts.user_message import _goal_text, _render_sections
 
+from .identity_messages import build_intake_identity_message
 from .prompts import (
     INTAKE_CLASSIFICATION_HUMAN_TASK,
     INTAKE_CLASSIFICATION_HUMAN_TASK_RETRY,
     INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT,
     INTAKE_CLASSIFICATION_SYSTEM_PROMPT,
 )
-from .quiz_messages import build_quiz_system_message
 
 
 def build_intake_system_message(assistant_name: str, *, retry: bool = False) -> str:
@@ -31,7 +31,7 @@ def build_intake_system_message(assistant_name: str, *, retry: bool = False) -> 
         INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT if retry else INTAKE_CLASSIFICATION_SYSTEM_PROMPT
     )
     rules = rules_template.format(assistant_name=assistant_name).strip()
-    identity = build_quiz_system_message(assistant_name).strip()
+    identity = build_intake_identity_message(assistant_name).strip()
     timestamp = build_timestamp_xml_footer()
     return f"{identity}\n\n{rules}\n\n{timestamp}"
 

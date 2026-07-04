@@ -134,7 +134,8 @@ class LoopHumanMessage(HumanMessage):
             "execute_wave",  # Parallel execution wave
             "execute_step",  # Single step execution
             "goal_completion",  # Goal completion phase
-            "quiz",  # Quiz / minimal direct reply
+            "quiz",  # Legacy ledger phase (pre-trivial-only fast path)
+            "trivial",  # Trivial intake fast-path (CoreAgent on loop main thread)
         ]
         | None
     ) = None
@@ -215,13 +216,16 @@ def loop_assistant_messages_chunk(
     return ((), "messages", (msg, {}))
 
 
-def tag_messages_stream_chunk_for_goal_completion(
+def tag_messages_stream_chunk_for_assistant_phase(
     chunk: Any,
     *,
+    phase: str,
     thread_id: str,
-    iteration: int,
+    iteration: int | None = None,
 ) -> Any:
-    """Tag AI payloads in a LangGraph ``messages`` chunk with ``phase=goal_completion`` (IG-317)."""
+    """Tag AI payloads in a LangGraph ``messages`` chunk with a loop assistant ``phase``."""
+    if phase not in ASSISTANT_OUTPUT_PHASES:
+        raise ValueError(f"Invalid assistant output phase: {phase}")
     from langchain_core.messages import AIMessage as LCAIMessage
     from langchain_core.messages import AIMessageChunk as LCAIMessageChunk
     from langchain_core.messages import ToolMessage
@@ -237,7 +241,7 @@ def tag_messages_stream_chunk_for_goal_completion(
     msg, meta = data[0], data[1]
     if isinstance(msg, ToolMessage):
         return chunk
-    if loop_message_assistant_output_phase(msg) == "goal_completion":
+    if loop_message_assistant_output_phase(msg) == phase:
         return chunk
     if isinstance(msg, LCAIMessageChunk):
         tagged = LoopAIMessageChunk.model_validate(
@@ -245,7 +249,7 @@ def tag_messages_stream_chunk_for_goal_completion(
                 **msg.model_dump(),
                 "thread_id": thread_id,
                 "iteration": iteration,
-                "phase": "goal_completion",
+                "phase": phase,
             }
         )
         return (namespace, mode, (tagged, meta))
@@ -255,11 +259,26 @@ def tag_messages_stream_chunk_for_goal_completion(
                 **msg.model_dump(),
                 "thread_id": thread_id,
                 "iteration": iteration,
-                "phase": "goal_completion",
+                "phase": phase,
             }
         )
         return (namespace, mode, (tagged, meta))
     return chunk
+
+
+def tag_messages_stream_chunk_for_goal_completion(
+    chunk: Any,
+    *,
+    thread_id: str,
+    iteration: int,
+) -> Any:
+    """Tag AI payloads in a LangGraph ``messages`` chunk with ``phase=goal_completion`` (IG-317)."""
+    return tag_messages_stream_chunk_for_assistant_phase(
+        chunk,
+        phase="goal_completion",
+        thread_id=thread_id,
+        iteration=iteration,
+    )
 
 
 def loop_message_to_thread_metadata(msg: LoopHumanMessage) -> dict[str, str | int | None]:

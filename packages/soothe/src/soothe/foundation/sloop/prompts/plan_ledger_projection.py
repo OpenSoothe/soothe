@@ -399,12 +399,14 @@ def project_last_goal_completion_for_intake(
         )
         return projected
 
-    tail = _extract_last_phase_pair(loop_messages, "quiz")
+    tail = _extract_last_phase_pair(loop_messages, "trivial")
+    if not tail:
+        tail = _extract_last_phase_pair(loop_messages, "quiz")
     if not tail:
         return []
     projected = project_loop_messages_for_plan(tail, ledger_cfg)
     logger.debug(
-        "Intake prior-goal projection: phase=quiz in=%d out=%d",
+        "Intake prior-goal projection: phase=trivial in=%d out=%d",
         len(tail),
         len(projected),
     )

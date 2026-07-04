@@ -8,6 +8,10 @@ from soothe_sdk.client.wire import envelope_langchain_message_dict
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
 
 
+def test_trivial_phase_in_allowlist() -> None:
+    assert "trivial" in LOOP_ASSISTANT_OUTPUT_PHASES
+
+
 def test_direct_model_phase_in_allowlist() -> None:
     assert "direct_model" in LOOP_ASSISTANT_OUTPUT_PHASES
 

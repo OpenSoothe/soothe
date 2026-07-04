@@ -30,11 +30,11 @@ def test_route_by_intent_continuation_overlay_wins() -> None:
     assert route_by_intent(state) == "plan_assess"
 
 
-def test_route_by_intent_quiz_fast_path() -> None:
+def test_route_by_intent_trivial_fast_path() -> None:
     state = {
         "is_continuation": False,
         "intent_route": "fast_path",
-        "intake_label": IntakeLabel.QUIZ,
+        "intake_label": IntakeLabel.TRIVIAL,
     }
     assert route_by_intent(state) == "__end__"
 
@@ -60,13 +60,18 @@ def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
     assert route_by_intent(state) == "bounded_evidence_gather"
 
 
-# -- Group 4: trivial-branch synth plan injection -------------------------
+# -- Group 4: trivial fast-path (runner CoreAgent) ------------------------
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_trivial_injects_synth_plan() -> None:
-    """The trivial label injects a 1-step plan into scratch, skipping plan_generate."""
+async def test_init_or_resume_trivial_emits_fast_path() -> None:
+    """The trivial label terminates the graph; runner invokes CoreAgent directly."""
     from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, event_data: object) -> None:
+        emitted.append((event_type, event_data))
 
     intent = IntentClassification(
         intent_type="agentic",
@@ -75,25 +80,30 @@ async def test_init_or_resume_trivial_injects_synth_plan() -> None:
         task_complexity=TaskComplexity.SIMPLE,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
-    loop_state = SimpleNamespace(intent=intent, goal="list files in this directory")
+    loop_state = SimpleNamespace(
+        intent=intent,
+        goal="list files in this directory",
+        thread_id="loop-main",
+    )
     ctx = SimpleNamespace(
         loop_state=loop_state,
         scratch=scratch,
         ce=None,
+        ce_goal_id=None,
         continue_loop_mode=False,
-        emit=_noop_emit,
+        recovery_valid_resume=True,
+        emit=_emit,
     )
 
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.TRIVIAL
-    assert result["intent_route"] == "continue_loop"
-    assert scratch.plan_result is not None
-    # Goal-as-step-action, no "I will complete this goal directly:" prefix.
-    assert "I will complete this goal directly" not in scratch.plan_result.next_action
-    assert scratch.plan_result.next_action == "list files in this directory"
-    assert scratch.plan_result.decision is not None
-    assert len(scratch.plan_result.decision.steps) == 1
+    assert result["intent_route"] == "fast_path"
+    assert scratch.plan_result is None
+    assert any(t == "intent_fast_path" for t, _ in emitted)
+    payload = next(data for t, data in emitted if t == "intent_fast_path")
+    assert isinstance(payload, dict)
+    assert payload.get("fast_path_kind") == "trivial"
 
 
 @pytest.mark.asyncio

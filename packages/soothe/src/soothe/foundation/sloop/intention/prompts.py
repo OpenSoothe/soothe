@@ -1,4 +1,4 @@
-"""LLM prompts for 4-class intake classification (RFC-630, IG-540).
+"""LLM prompts for 3-class intake classification (RFC-630, IG-540).
 
 Static classification rules live in system fragments. The human message is
 built in Python (``GOAL:`` plain text, same shape as plan-assess).
@@ -24,7 +24,7 @@ INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT = _read_classifier_fragment(
 
 INTAKE_CLASSIFICATION_HUMAN_TASK = (
     "Classify GOAL above. Reply with JSON only. "
-    "When intake_label is not quiz: set reasoning to one first-person sentence "
+    "Set reasoning to one first-person sentence "
     "(I'll or Let me, max 20 words) stating your next concrete action — paraphrase GOAL, "
     "never mention intake labels, complexity, routing, or classification rationale."
 )

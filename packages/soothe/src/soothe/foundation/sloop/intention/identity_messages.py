@@ -1,4 +1,4 @@
-"""System message content for quiz-path LLM calls."""
+"""Assistant identity block for intake classification system prompts."""
 
 from __future__ import annotations
 
@@ -11,25 +11,22 @@ def _read_fragment(relative: str) -> str:
     return _FRAGMENTS_DIR.joinpath(relative).read_text(encoding="utf-8").strip()
 
 
-def build_quiz_system_message(assistant_name: str) -> str:
-    """Build the system message for quiz fast-path LLM invocations.
+def build_intake_identity_message(assistant_name: str) -> str:
+    """Build the assistant identity block for intake classification.
 
-    Used by intent classification (piggybacked ``quiz_response``) and by the
-    runner quiz fallback. Quiz calls do not go through ``SystemPromptMiddleware``,
-    so identity must be set here explicitly.
+    Intake classification does not go through ``SystemPromptMiddleware``, so
+    identity must be set here explicitly.
 
     Args:
         assistant_name: Configured assistant display name (e.g. ``Soothe``).
 
     Returns:
-        System prompt text including assistant identity and quiz response rules.
+        System prompt text including assistant identity.
     """
     identity_template = _read_fragment("system/prompts/simple_system.xml")
-    guide = _read_fragment("system/response_guides/quiz_response.xml")
     identity = identity_template.format(assistant_name=assistant_name).strip()
     return (
         f"{identity}\n\n"
-        f"{guide}\n\n"
         "When the user asks who you are, identify yourself using your assistant name above. "
         "Do not claim to be Claude, ChatGPT, Gemini, or another vendor or base model."
     )

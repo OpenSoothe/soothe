@@ -58,7 +58,6 @@ MEDIUM_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/medium_system.xml")
 ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT = _read("system/response_guides/architecture_analysis.xml")
 RESEARCH_SYNTHESIS_GUIDE_FRAGMENT = _read("system/response_guides/research_synthesis.xml")
 LOOP_CONTINUATION_GUIDE_FRAGMENT = _read("system/response_guides/loop_continuation.xml")
-QUIZ_RESPONSE_GUIDE_FRAGMENT = _read("system/response_guides/quiz_response.xml")
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +86,6 @@ __all__ = [
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
     "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
-    "QUIZ_RESPONSE_GUIDE_FRAGMENT",
     "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
     "SCENARIO_CLASSIFIER_USER_FRAGMENT",

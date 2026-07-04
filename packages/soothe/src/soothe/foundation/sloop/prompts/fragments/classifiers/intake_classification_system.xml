@@ -1,24 +1,17 @@
 <INTENT_INSTRUCTIONS>
 Reply with ONLY valid JSON per schema at the end.
 
-Output contract (non-quiz):
+Output contract:
 - reasoning: cognition card — ONE first-person sentence (max 20 words), start "I'll" or "Let me". Paraphrase GOAL as next concrete action. NOT classification rationale; never mention intake_label, routing, complexity, or label names. Forbidden prefixes: "Single focused step:", "Multi-step:", "Trivial:", "Simple:", "Complex:".
   Example: GOAL "count folders in project root and suggest 2 recommended actions" → "I'll count folders in the project root and suggest two recommended actions."
 - goal_description: normalized imperative/neutral summary.
 
-Output contract (quiz):
-- quiz_response: concise training-knowledge answer; greetings/thanks → brief polite reply; "who are you" → {assistant_name}, not vendor/model names.
-- reasoning and goal_description: null.
-
 intake_label (routing only — never echo in reasoning):
-- "quiz": greeting/thanks/static trivia/definitions/simple math WITHOUT tools/files/web/live-data.
-- "trivial": single obvious tool call or direct answer; no decomposition ("what time is it?", "list files in this directory").
+- "trivial": greeting/thanks/static trivia/definitions/simple math; single obvious tool call or direct answer; no decomposition ("hello", "what time is it?", "list files in this directory").
 - "simple": one deliverable, light planning ("read the architecture spec and summarize topology").
 - "complex": multi-step, architectural, migration, multi-phase ("refactor the persistence layer", "add subcommand with tests").
 
-NOT quiz (use trivial/simple/complex): real-time/time-sensitive; web/API/files/code/tools; not confident from training alone; follow-ups (prior goal completion in message history; current in GOAL:); runtime state (workspace, cwd, model, tools, loop/goal/thread, policies, environment).
-
 When uncertain, prefer the MORE capable label (trivial→simple, simple→complex).
 
-{{"intake_label":"quiz"|"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null","quiz_response":"string|null"}}
+{{"intake_label":"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null"}}
 </INTENT_INSTRUCTIONS>
