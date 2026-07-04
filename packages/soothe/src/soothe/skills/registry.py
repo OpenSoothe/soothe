@@ -279,15 +279,34 @@ class ProgressiveSkillRegistry:
         activation_state.setdefault("invoked_bodies", {})[name] = body
         activation_state.setdefault("just_invoked", set()).add(name)
 
-    def mark_preloaded(
-        self, activation_state: dict[str, Any], name: str, body: str
-    ) -> None:
+    def mark_preloaded(self, activation_state: dict[str, Any], name: str, body: str) -> None:
         """Mark a skill invoked for turn-0 preload (body available in SKILL_CONTEXT immediately)."""
         activation_state.setdefault("invoked", set()).add(name)
         activation_state.setdefault("invoked_bodies", {})[name] = body
 
     def cache_body(self, activation_state: dict[str, Any], name: str, body: str) -> None:
         activation_state.setdefault("invoked_bodies", {})[name] = body
+
+
+def merge_skill_activation(
+    left: dict[str, Any] | None,
+    right: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """LangGraph reducer: union skill activation sets; merge bodies and flags."""
+    merged = ProgressiveSkillRegistry.init_activation_state()
+    for side in (left, right):
+        if not isinstance(side, dict):
+            continue
+        merged["sent"] |= _coerce_name_set(side.get("sent"))
+        merged["activated"] |= _coerce_name_set(side.get("activated"))
+        merged["invoked"] |= _coerce_name_set(side.get("invoked"))
+        merged["just_invoked"] |= _coerce_name_set(side.get("just_invoked"))
+        bodies = side.get("invoked_bodies")
+        if isinstance(bodies, dict):
+            merged["invoked_bodies"].update({str(k): str(v) for k, v in bodies.items()})
+        if side.get("intent_prefetched"):
+            merged["intent_prefetched"] = True
+    return merged
 
 
 def _coerce_name_set(value: Any) -> set[str]:

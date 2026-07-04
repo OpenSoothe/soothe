@@ -291,3 +291,50 @@ class TestIntentPrefetch:
         mock_invoke.assert_called_once()
         assert mock_invoke.call_args.args[1] == "weather"
         assert mock_invoke.call_args.kwargs.get("preload") is True
+
+    @pytest.mark.asyncio
+    async def test_prefetch_skips_deferred_when_core_corpus_matches(
+        self,
+        middleware: SkillActivationMiddleware,
+    ) -> None:
+        config = middleware._config
+        config.progressive_skills.intent_prefetch_enabled = True
+        config.progressive_skills.core_intent_auto_invoke_enabled = True
+        config.progressive_skills.intent_prefetch_top_k = 2
+        config.progressive_skills.intent_prefetch_min_query_chars = 4
+        config.progressive_skills.semantic_search_enabled = True
+
+        middleware._catalog_provider = lambda: [
+            SkillIndexEntry(
+                name="clawhub",
+                description="Search ClawHub registry",
+                tags="clawhub, claw hub",
+                source="builtin",
+                path="/tmp/clawhub",
+                mtime=0.0,
+            ),
+            _entry("find-skills"),
+            _entry("platonic-coding"),
+        ]
+
+        state = {
+            "messages": [
+                HumanMessage(content="is there skill of drawio on claw hub"),
+            ],
+        }
+
+        with patch(
+            "soothe.middleware.skill_activation.SkillActivationMiddleware._invoke_skill_into_activation",
+            return_value="clawhub",
+        ) as mock_invoke:
+            with patch(
+                "soothe.middleware.skill_activation.prefetch_deferred_skills",
+                new_callable=AsyncMock,
+            ) as mock_deferred:
+                result = await middleware.abefore_agent(state, None)
+
+        assert result is not None
+        mock_invoke.assert_called_once()
+        mock_deferred.assert_not_awaited()
+        activation = result["skill_activation"]
+        assert activation["intent_prefetched"] is True
