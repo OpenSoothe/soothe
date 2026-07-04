@@ -92,6 +92,37 @@ class TestSearchDeferred:
         matches = reg.search_deferred("db", deferred, discovered={"db-migrate"}, limit=5)
         assert matches == []
 
+    def test_matches_tag_token_in_query(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        weather = SkillIndexEntry(
+            name="weather",
+            description="Get current weather",
+            tags="weather, 天气, forecast",
+            source="builtin",
+            path="/tmp",
+            mtime=0.0,
+        )
+        matches = reg.search_deferred("上海今天的天气", [weather], discovered=set(), limit=5)
+        assert [entry.name for entry in matches] == ["weather"]
+
+    def test_match_corpus_finds_tag_token(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        weather = SkillIndexEntry(
+            name="weather",
+            description="Get current weather",
+            tags="weather, 天气",
+            source="builtin",
+            path="/tmp",
+            mtime=0.0,
+        )
+        matches = reg.match_deferred_in_corpus(
+            "上海今天的天气",
+            [weather],
+            discovered=set(),
+            limit=5,
+        )
+        assert [entry.name for entry in matches] == ["weather"]
+
 
 class TestDiscover:
     def test_idempotent(self) -> None:

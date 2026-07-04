@@ -1,6 +1,7 @@
 ---
 name: clawhub
 description: Search and install agent skills from ClawHub (public skill registry). Use when the user wants to find, install, update, or list community skills for the current Soothe workspace.
+tags: clawhub, skill registry, install skill, community skills
 metadata: {"emoji":"🦞","requires":{"bins":["npx"]}}
 ---
 

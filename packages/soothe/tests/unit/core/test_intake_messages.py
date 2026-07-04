@@ -28,6 +28,8 @@ class TestIntakeMessageBuilders:
         assert "trivial" in system
         assert "quiz" not in system
         assert "{query}" not in system
+        assert "match GOAL language" in system
+        assert "RESPONSE_LANGUAGE_HINT" not in system
         assert "<TIMESTAMP>" in system
         assert "TestBot" in system
 
@@ -38,14 +40,17 @@ class TestIntakeMessageBuilders:
         assert human.startswith("GOAL:\n")
         assert "\n\nTASK:\n" in human
         assert "count all folder in project root" in human
-        assert "I'll or Let me" in human
+        assert human.endswith("Classify GOAL above. JSON only.")
+        assert "I'll or Let me" not in human
+        assert "match GOAL language" not in human
         assert "<current_query>" not in human
         assert "<intent_inputs>" not in human
         assert "intake_label" not in human.split("TASK:")[0]
+        assert "RESPONSE_LANGUAGE_HINT" not in human
 
     def test_retry_human_message_uses_retry_task(self) -> None:
         human = build_intake_human_message(query="summarize readme", retry=True)
-        assert "Re-classify GOAL above" in human
+        assert human.endswith("Re-classify GOAL above. JSON only.")
 
     def test_retry_system_is_shorter_than_primary(self) -> None:
         assert len(INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT) < len(
