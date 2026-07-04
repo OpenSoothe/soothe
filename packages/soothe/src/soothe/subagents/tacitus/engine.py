@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import atexit
-import datetime
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -227,7 +226,9 @@ def _extract_topic(state: dict[str, Any]) -> str:
 
 
 def _now_str() -> str:
-    return datetime.datetime.now(tz=datetime.UTC).strftime("%Y-%m-%d")
+    from soothe.utils.prompt_clock import local_date_str
+
+    return local_date_str()
 
 
 def _effort_profile_for_state(state: dict[str, Any], config: TacitusConfig) -> TacitusEffortProfile:

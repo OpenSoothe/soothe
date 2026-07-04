@@ -11,6 +11,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from soothe.foundation.autopilot.engine.schedule_timezone import schedule_timezone_label
 from soothe.foundation.autopilot.engine.scheduled_tasks import SchedulerService, ScheduleSpec
 from soothe.foundation.cron.extraction import AutopilotDisabledError, CronExtractionService
 from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
@@ -74,10 +75,37 @@ class CronService:
         self._tick_task: asyncio.Task | None = None
 
         logger.info(
-            "CronService initialized: max_jobs=%d poll_interval=%d",
+            "CronService initialized: max_jobs=%d poll_interval=%d timezone=%s",
             self._cron_config.max_jobs,
             self._cron_config.poll_interval,
+            schedule_timezone_label(self._cron_config.timezone),
         )
+
+    def _schedule_spec(self, kind: str, value: str) -> ScheduleSpec:
+        """Build a schedule spec using the configured cron timezone."""
+        return ScheduleSpec(
+            kind=kind,
+            value=value,
+            timezone=self._cron_config.timezone,
+        )
+
+    async def _reconcile_pending_schedules(self) -> None:
+        """Recompute next_run for pending jobs after timezone config changes."""
+        now = datetime.now(tz=UTC)
+        pending = await self._store.list_pending()
+        for job in pending:
+            spec = self._schedule_spec(job.schedule_kind.value, job.schedule_value)
+            next_run = spec.next_after(now)
+            if next_run is None:
+                continue
+            if next_run != job.next_run:
+                await self._store.update_next_run(job.id, next_run, job.run_count)
+                logger.info(
+                    "Cron job next_run reconciled: id=%s next_run=%s timezone=%s",
+                    job.id,
+                    next_run.isoformat(),
+                    schedule_timezone_label(self._cron_config.timezone),
+                )
 
     async def start(self) -> None:
         """Start the cron service monitoring loop."""
@@ -96,7 +124,13 @@ class CronService:
             )
             logger.debug("CronService subscribed to goal completion events")
 
-        logger.info("CronService started with poll_interval=%ds", self._cron_config.poll_interval)
+        await self._reconcile_pending_schedules()
+
+        logger.info(
+            "CronService started with poll_interval=%ds timezone=%s",
+            self._cron_config.poll_interval,
+            schedule_timezone_label(self._cron_config.timezone),
+        )
 
     async def stop(self) -> None:
         """Stop the cron service monitoring loop."""
@@ -171,7 +205,7 @@ class CronService:
         job_id = uuid.uuid4().hex[:12]
 
         # Compute next_run via ScheduleSpec
-        spec = ScheduleSpec(kind=extraction.schedule_kind.value, value=extraction.schedule_value)
+        spec = self._schedule_spec(extraction.schedule_kind.value, extraction.schedule_value)
         next_run = spec.next_after(datetime.now(tz=UTC))
         if next_run is None:
             raise ValueError(
@@ -381,7 +415,7 @@ class CronService:
 
         if job.is_recurring() and job.status == JobStatus.RUNNING:
             # Compute next run
-            spec = ScheduleSpec(kind=job.schedule_kind.value, value=job.schedule_value)
+            spec = self._schedule_spec(job.schedule_kind.value, job.schedule_value)
             next_run = spec.next_after(datetime.now(tz=UTC))
 
             if next_run and not self._is_job_expired(job, next_run):

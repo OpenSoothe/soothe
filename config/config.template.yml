@@ -545,6 +545,7 @@ cron:
   extraction_model: fast
   extraction_timeout: 30
   default_priority: 50
+  timezone: local
 
 # ============================================================
 # CLIENT & TUI

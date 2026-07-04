@@ -157,9 +157,9 @@ EXECUTE_WORKSPACE_RULES_FRAGMENT = (
 
 def current_timestamp_iso() -> str:
     """Return current local-timezone ISO-8601 timestamp for system prompts."""
-    import datetime as dt
+    from soothe.utils.prompt_clock import local_timestamp_iso
 
-    return dt.datetime.now(dt.UTC).astimezone().isoformat()
+    return local_timestamp_iso()
 
 
 def build_timestamp_xml_footer() -> str:

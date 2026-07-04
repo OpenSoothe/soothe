@@ -272,6 +272,32 @@ class CronJobStore:
 
             return [self._row_to_job(row) for row in rows]
 
+    async def list_pending(self) -> list[CronJob]:
+        """List all pending cron jobs across users.
+
+        Returns:
+            Pending CronJob objects ordered by next_run.
+        """
+        await self._ensure_writer_connection()
+
+        async with self._pool_semaphore:
+            conn = await self._get_reader_connection()
+            rows = await asyncio.to_thread(
+                self._list_pending_sync,
+                conn,
+            )
+
+            async with self._init_lock:
+                self._reader_pool.append(conn)
+
+            return [self._row_to_job(row) for row in rows]
+
+    def _list_pending_sync(self, conn: sqlite3.Connection) -> list[sqlite3.Row]:
+        """Sync list all pending jobs."""
+        return conn.execute(
+            "SELECT * FROM cron_jobs WHERE status = 'pending' ORDER BY next_run",
+        ).fetchall()
+
     async def find_active_duplicate(
         self,
         user_id: str,

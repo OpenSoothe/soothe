@@ -28,6 +28,7 @@ def _mock_config(*, max_jobs: int = 100, poll_interval: int = 60) -> MagicMock:
     cfg.cron.extraction_model = "fast"
     cfg.cron.extraction_timeout = 30
     cfg.cron.default_priority = 50
+    cfg.cron.timezone = "UTC"
     return cfg
 
 

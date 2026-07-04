@@ -905,21 +905,20 @@ class SootheConfig(BaseSettings):
         Returns:
             The system prompt string.
         """
-        import datetime as dt
-
         from soothe.foundation.sloop.prompts.system_templates import (
             format_complex_agent_system_prompt_core,
         )
+        from soothe.utils.prompt_clock import local_date_str, local_timezone_label
 
-        now = dt.datetime.now(dt.UTC).astimezone()
-        current_date = now.strftime("%Y-%m-%d")
+        current_date = local_date_str()
+        tz_label = local_timezone_label()
 
         base_prompt = format_complex_agent_system_prompt_core(
             self.agent.system_prompt,
             self.agent.name,
         )
 
-        return f"{base_prompt}\n\nToday's date is {current_date}."
+        return f"{base_prompt}\n\nToday's date is {current_date} ({tz_label})."
 
     def propagate_env(self) -> None:
         """Set provider-specific env vars for downstream libraries.

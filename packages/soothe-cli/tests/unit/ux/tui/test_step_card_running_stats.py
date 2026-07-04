@@ -439,8 +439,9 @@ def test_main_only_step_activity_has_no_running_line() -> None:
     card._status = "running"
     card._start_time = 0.0
     content = str(card._step_task_activity_content())
-    assert "Grep" in content
+    # Preview shows the latest tool only; earlier grep is summarized.
     assert "Glob" in content
+    assert "+1 more tool" in content
     assert "Running..." not in content
     assert card._stats_title_suffix() == " · 2 tools"
 
