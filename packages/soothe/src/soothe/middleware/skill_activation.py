@@ -16,7 +16,12 @@ from soothe.config import SootheConfig
 from soothe.skills.events import InternalSkillActivatedEvent
 from soothe.skills.index import SkillIndexEntry
 from soothe.skills.registry import ProgressiveSkillRegistry, resolve_core_skill_names
-from soothe.skills.search import latest_human_text, prefetch_deferred_skills, search_deferred_skills
+from soothe.skills.search import (
+    latest_human_text,
+    prefetch_deferred_skills,
+    prefetch_skills_from_goal,
+    search_deferred_skills,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -190,16 +195,21 @@ class SkillActivationMiddleware(AgentMiddleware):
 
         all_entries = list(self._catalog_provider())
         core_names = resolve_core_skill_names(ps.core_skills)
-        _, deferred = self._registry.partition_core_deferred(all_entries, core_names)
-        discovered = activation_state.get("activated", set())
-        if not isinstance(discovered, set):
-            discovered = set(discovered)
+        core_entries, deferred = self._registry.partition_core_deferred(all_entries, core_names)
+        activated = activation_state.get("activated", set())
+        if not isinstance(activated, set):
+            activated = set(activated)
+        invoked = activation_state.get("invoked", set())
+        if not isinstance(invoked, set):
+            invoked = set(invoked)
+        skip_names = activated | invoked
 
         catalog_by_name = {entry.name: entry for entry in all_entries}
+
         matches = await prefetch_deferred_skills(
             goal,
             deferred,
-            discovered=discovered,
+            discovered=skip_names,
             limit=ps.intent_prefetch_top_k,
             registry=self._registry,
             config=self._config,
@@ -212,10 +222,76 @@ class SkillActivationMiddleware(AgentMiddleware):
                 via="search",
             )
             logger.debug(
-                "[Skill] intent prefetch discovered %s",
+                "[Skill] intent prefetch discovered deferred %s",
                 [entry.name for entry in matches],
             )
+
+        if ps.core_intent_auto_invoke_enabled and ps.intent_prefetch_top_k > 0:
+            core_matches = await prefetch_skills_from_goal(
+                goal,
+                core_entries,
+                discovered=skip_names,
+                limit=ps.intent_prefetch_top_k,
+                registry=self._registry,
+                config=self._config,
+                catalog_by_name=catalog_by_name,
+            )
+            if core_matches:
+                workspace_raw = state.get("workspace")
+                workspace = str(workspace_raw) if workspace_raw else None
+                loaded = self._auto_invoke_core_skills(
+                    activation_state,
+                    core_matches,
+                    workspace=workspace,
+                )
+                if loaded:
+                    logger.debug("[Skill] core intent auto-invoked %s", loaded)
         return True
+
+    def _auto_invoke_core_skills(
+        self,
+        activation_state: dict[str, Any],
+        entries: Sequence[SkillIndexEntry],
+        *,
+        workspace: str | None,
+    ) -> list[str]:
+        """Load matched core skill bodies into ``skill_activation`` on turn 0."""
+        loaded: list[str] = []
+        for entry in entries:
+            resolved = self._invoke_skill_into_activation(
+                activation_state,
+                entry.name,
+                workspace=workspace,
+            )
+            if resolved:
+                loaded.append(resolved)
+        return loaded
+
+    def _invoke_skill_into_activation(
+        self,
+        activation_state: dict[str, Any],
+        name: str,
+        *,
+        workspace: str | None,
+    ) -> str | None:
+        """Read SKILL.md and mark a skill invoked. Returns resolved name or None."""
+        from soothe.skills.catalog import (
+            build_skill_context_text,
+            read_skill_markdown,
+            resolve_skill_directory,
+        )
+
+        meta = resolve_skill_directory(self._config, name, workspace)
+        if meta is None:
+            return None
+        markdown = read_skill_markdown(meta)
+        if not markdown:
+            return None
+        resolved_name = str(meta.get("name") or name)
+        body = build_skill_context_text(meta, markdown)
+        self._registry.discover(activation_state, [resolved_name], via="explicit")
+        self._registry.mark_invoked(activation_state, resolved_name, body)
+        return resolved_name
 
     async def _handle_search_skills(self, request: ToolCallRequest) -> Command[Any]:
         tool_call = getattr(request, "tool_call", None) or {}
@@ -290,34 +366,18 @@ class SkillActivationMiddleware(AgentMiddleware):
             )
             return self._command_with_activation(message, activation_state)
 
-        from soothe.skills.catalog import (
-            build_skill_context_text,
-            read_skill_markdown,
-            resolve_skill_directory,
+        resolved_name = self._invoke_skill_into_activation(
+            activation_state,
+            name,
+            workspace=workspace,
         )
-
-        meta = resolve_skill_directory(self._config, name, workspace)
-        if meta is None:
+        if resolved_name is None:
             message = ToolMessage(
                 content=f"Skill not found: {name!r}. Try search_skills(query) first.",
                 tool_call_id=tool_call_id,
                 name=INVOKE_SKILL_TOOL,
             )
             return self._command_with_activation(message, activation_state)
-
-        markdown = read_skill_markdown(meta)
-        if not markdown:
-            message = ToolMessage(
-                content=f"Could not read SKILL.md for {name!r}.",
-                tool_call_id=tool_call_id,
-                name=INVOKE_SKILL_TOOL,
-            )
-            return self._command_with_activation(message, activation_state)
-
-        resolved_name = str(meta.get("name") or name)
-        body = build_skill_context_text(meta, markdown)
-        self._registry.discover(activation_state, [resolved_name], via="explicit")
-        self._registry.mark_invoked(activation_state, resolved_name, body)
 
         if isinstance(state, dict):
             state["skill_activation"] = activation_state

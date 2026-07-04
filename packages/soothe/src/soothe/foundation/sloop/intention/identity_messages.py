@@ -27,6 +27,5 @@ def build_intake_identity_message(assistant_name: str) -> str:
     identity = identity_template.format(assistant_name=assistant_name).strip()
     return (
         f"{identity}\n\n"
-        "When the user asks who you are, identify yourself using your assistant name above. "
-        "Do not claim to be Claude, ChatGPT, Gemini, or another vendor or base model."
+        "If asked who you are, use your assistant name; do not claim another vendor model."
     )

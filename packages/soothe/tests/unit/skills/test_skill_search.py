@@ -11,7 +11,10 @@ from soothe.config import SootheConfig
 from soothe.middleware.skill_activation import SkillActivationMiddleware
 from soothe.skills.index import SkillIndexEntry
 from soothe.skills.registry import ProgressiveSkillRegistry
-from soothe.skills.search import merge_search_results, search_deferred_skills
+from soothe.skills.search import (
+    merge_search_results,
+    search_deferred_skills,
+)
 from soothe.subagents.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 
 
@@ -112,14 +115,22 @@ class TestIntentPrefetch:
         config = MagicMock()
         config.progressive_skills.core_skills = None
         config.progressive_skills.intent_prefetch_enabled = True
+        config.progressive_skills.core_intent_auto_invoke_enabled = True
         config.progressive_skills.intent_prefetch_top_k = 2
-        config.progressive_skills.intent_prefetch_min_query_chars = 8
+        config.progressive_skills.intent_prefetch_min_query_chars = 4
         config.progressive_skills.semantic_search_enabled = False
         config.subagents = {}
         return SkillActivationMiddleware(
             registry=ProgressiveSkillRegistry(),
             catalog_provider=lambda: [
-                _entry("weather", source="builtin"),
+                SkillIndexEntry(
+                    name="weather",
+                    description="Get current weather and forecasts",
+                    tags="weather, 天气, forecast",
+                    source="builtin",
+                    path="/tmp/weather",
+                    mtime=0.0,
+                ),
                 _entry("db-migrate"),
             ],
             config=config,
@@ -156,3 +167,24 @@ class TestIntentPrefetch:
         result = await middleware.abefore_agent(state, None)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_prefetch_auto_invokes_core_weather_from_chinese_query(
+        self,
+        middleware: SkillActivationMiddleware,
+    ) -> None:
+        state = {
+            "messages": [HumanMessage(content="上海今天的天气")],
+        }
+
+        with patch(
+            "soothe.middleware.skill_activation.SkillActivationMiddleware._invoke_skill_into_activation",
+            return_value="weather",
+        ) as mock_invoke:
+            result = await middleware.abefore_agent(state, None)
+
+        assert result is not None
+        activation = result["skill_activation"]
+        assert activation["intent_prefetched"] is True
+        mock_invoke.assert_called_once()
+        assert mock_invoke.call_args.args[1] == "weather"

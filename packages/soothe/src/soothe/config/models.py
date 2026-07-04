@@ -1991,16 +1991,26 @@ class ProgressiveSkillsConfig(BaseModel):
     )
     intent_prefetch_enabled: bool = Field(
         default=True,
-        description="Auto-discover deferred skills from the first user message on a cold thread.",
+        description=(
+            "Auto-discover deferred skills and auto-invoke matched core/builtin skills "
+            "from the first user message on a cold thread."
+        ),
+    )
+    core_intent_auto_invoke_enabled: bool = Field(
+        default=True,
+        description=(
+            "When intent prefetch matches a core-tier skill, load its SKILL.md body "
+            "into SKILL_CONTEXT on turn 0 (no invoke_skill tool call required)."
+        ),
     )
     intent_prefetch_top_k: int = Field(
         default=2,
         ge=0,
         le=10,
-        description="Maximum deferred skills to discover on turn-0 intent prefetch.",
+        description="Maximum skills to match per tier on turn-0 intent prefetch.",
     )
     intent_prefetch_min_query_chars: int = Field(
-        default=12,
+        default=4,
         ge=0,
         description="Skip intent prefetch when the user message is shorter than this.",
     )

@@ -1,6 +1,7 @@
 ---
 name: github
 description: Interact with GitHub using the `gh` CLI for issues, PRs, CI runs, and advanced queries. Use when working with GitHub repositories, pull requests, issues, or CI/CD workflows.
+tags: github, pull request, pr, issue, ci, repository
 metadata: {"emoji":"🐙","requires":{"bins":["gh"]},"install":[{"id":"brew","kind":"brew","formula":"gh","bins":["gh"],"label":"Install GitHub CLI (brew)"},{"id":"apt","kind":"apt","package":"gh","bins":["gh"],"label":"Install GitHub CLI (apt)"}]}
 ---
 

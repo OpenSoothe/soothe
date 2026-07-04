@@ -72,6 +72,40 @@ def merge_search_results(
     return out
 
 
+async def prefetch_skills_from_goal(
+    goal: str,
+    entries: Sequence[SkillIndexEntry],
+    *,
+    discovered: set[str],
+    limit: int,
+    registry: ProgressiveSkillRegistry,
+    config: object,
+    catalog_by_name: dict[str, SkillIndexEntry],
+) -> list[SkillIndexEntry]:
+    """Match skills from a user goal (name/tag corpus match + substring + optional semantic)."""
+    corpus_matches = registry.match_deferred_in_corpus(
+        goal,
+        entries,
+        discovered=discovered,
+        limit=limit,
+    )
+    discovered_with_corpus = discovered | {entry.name for entry in corpus_matches}
+    searched = await search_deferred_skills(
+        goal,
+        entries,
+        discovered=discovered_with_corpus,
+        limit=limit,
+        registry=registry,
+        config=config,
+        catalog_by_name=catalog_by_name,
+    )
+    return merge_search_results(
+        corpus_matches,
+        [(0.0, entry) for entry in searched],
+        limit=limit,
+    )
+
+
 async def prefetch_deferred_skills(
     goal: str,
     deferred: Sequence[SkillIndexEntry],
@@ -83,29 +117,14 @@ async def prefetch_deferred_skills(
     catalog_by_name: dict[str, SkillIndexEntry],
 ) -> list[SkillIndexEntry]:
     """Discover deferred skills from a user goal (corpus name match + optional semantic)."""
-    ps = _progressive_skills_settings(config)
-
-    corpus_matches = registry.match_deferred_in_corpus(
+    return await prefetch_skills_from_goal(
         goal,
         deferred,
         discovered=discovered,
         limit=limit,
-    )
-    if len(corpus_matches) >= limit or not ps.semantic_search_enabled:
-        return corpus_matches
-
-    discovered_with_corpus = discovered | {entry.name for entry in corpus_matches}
-    semantic_only = await search_deferred_skills(
-        goal,
-        deferred,
-        discovered=discovered_with_corpus,
-        limit=limit,
         registry=registry,
         config=config,
         catalog_by_name=catalog_by_name,
-    )
-    return merge_search_results(
-        corpus_matches, [(0.0, entry) for entry in semantic_only], limit=limit
     )
 
 

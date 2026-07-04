@@ -1,16 +1,15 @@
 <INTENT_INSTRUCTIONS>
-Re-classify the user's goal. Reply with ONLY valid JSON per schema below.
+Re-classify GOAL. JSON only.
 
-Output contract:
-- reasoning: ONE first-person sentence (max 20 words), "I'll" or "Let me" — next concrete action paraphrasing GOAL. NOT classification jargon; never mention intake_label or label names. Forbidden: "Single focused step:", "Trivial:", "Simple:", "Complex:".
-- goal_description: normalized goal.
+reasoning: ≤20 words, I'll/Let me, next-action paraphrase; match GOAL language. No label-name jargon.
+goal_description: normalized goal.
 
-intake_label (routing only):
-- "trivial": greeting/thanks/static trivia; single obvious tool call or direct answer; no decomposition.
-- "simple": one main deliverable, light planning.
-- "complex": multi-step, architectural, or multi-phase work.
+intake_label:
+- trivial: greetings/trivia; one obvious tool or direct answer
+- simple: one deliverable; light planning
+- complex: multi-step/architecture/multi-phase
 
-When uncertain, prefer the MORE capable label.
+Uncertain → prefer higher.
 
 {{"intake_label":"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null"}}
 </INTENT_INSTRUCTIONS>

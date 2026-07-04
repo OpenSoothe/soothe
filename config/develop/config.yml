@@ -161,5 +161,6 @@ progressive_skills:
   semantic_search_enabled: true
   semantic_search_min_score: 0.0
   intent_prefetch_enabled: true
+  core_intent_auto_invoke_enabled: true
   intent_prefetch_top_k: 2
-  intent_prefetch_min_query_chars: 12
+  intent_prefetch_min_query_chars: 4

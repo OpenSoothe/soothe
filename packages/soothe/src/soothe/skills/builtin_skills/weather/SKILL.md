@@ -1,6 +1,7 @@
 ---
 name: weather
 description: Get current weather and forecasts for any location (no API key required). Use when the user asks about weather, temperature, or forecasts for a city or location.
+tags: weather, forecast, wttr, 天气, 温度, 预报
 metadata: {"emoji":"🌤️","requires":{"bins":["curl"]}}
 ---
 

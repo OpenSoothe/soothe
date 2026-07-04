@@ -1,6 +1,7 @@
 ---
 name: skill-creator
 description: Create or update AgentSkills for Soothe. Use when designing, structuring, or packaging skills with scripts, references, and assets.
+tags: skill creator, agentskill, skill authoring, SKILL.md
 ---
 
 # Skill Creator

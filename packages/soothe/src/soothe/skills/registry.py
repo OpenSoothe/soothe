@@ -116,6 +116,18 @@ class ProgressiveSkillRegistry:
                 out.append(entry)
         return out
 
+    def _entry_haystack(self, entry: SkillIndexEntry) -> str:
+        """Searchable text for substring and tag matching."""
+        when = entry.when_to_use or ""
+        return f"{entry.name} {entry.description} {entry.tags} {when}".lower()
+
+    def _tag_tokens(self, entry: SkillIndexEntry) -> list[str]:
+        tokens: list[str] = []
+        if entry.tags:
+            tokens.extend(part.strip().lower() for part in entry.tags.split(",") if part.strip())
+        tokens.append(entry.name.lower())
+        return tokens
+
     def search_deferred(
         self,
         query: str,
@@ -124,17 +136,25 @@ class ProgressiveSkillRegistry:
         discovered: set[str],
         limit: int = 10,
     ) -> list[SkillIndexEntry]:
-        """Substring search over deferred skills not yet discovered."""
+        """Substring search over skills not yet discovered."""
         q = query.strip().lower()
         if not q:
             return []
         scored: list[tuple[int, SkillIndexEntry]] = []
+        seen: set[str] = set()
         for entry in deferred:
-            if entry.name in discovered:
+            if entry.name in discovered or entry.name in seen:
                 continue
-            hay = f"{entry.name} {entry.description} {entry.tags}".lower()
+            hay = self._entry_haystack(entry)
             if q in hay:
                 scored.append((hay.index(q), entry))
+                seen.add(entry.name)
+                continue
+            for tag in self._tag_tokens(entry):
+                if len(tag) >= 2 and tag in q:
+                    scored.append((q.index(tag), entry))
+                    seen.add(entry.name)
+                    break
         scored.sort(key=lambda item: (item[0], item[1].name.lower()))
         return [entry for _, entry in scored[:limit]]
 
@@ -146,17 +166,25 @@ class ProgressiveSkillRegistry:
         discovered: set[str],
         limit: int = 10,
     ) -> list[SkillIndexEntry]:
-        """Match deferred skills whose names appear in ``text`` (turn-0 intent prefetch)."""
+        """Match skills whose names or tags appear in ``text`` (turn-0 intent prefetch)."""
         corpus = text.strip().lower()
         if not corpus:
             return []
         scored: list[tuple[int, SkillIndexEntry]] = []
+        seen: set[str] = set()
         for entry in deferred:
-            if entry.name in discovered:
+            if entry.name in discovered or entry.name in seen:
                 continue
             name = entry.name.lower()
             if name in corpus:
                 scored.append((corpus.index(name), entry))
+                seen.add(entry.name)
+                continue
+            for tag in self._tag_tokens(entry):
+                if len(tag) >= 2 and tag in corpus:
+                    scored.append((corpus.index(tag), entry))
+                    seen.add(entry.name)
+                    break
         scored.sort(key=lambda item: (item[0], item[1].name.lower()))
         return [entry for _, entry in scored[:limit]]
 
