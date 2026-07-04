@@ -28,22 +28,31 @@ The first match wins. This lets CI pin a config via env var while letting local 
 
 ## Minimal Working Config
 
+**Zero-config (no file):**
+
+```bash
+export OPENAI_API_KEY=sk-...
+soothed start && soothe "Analyze this codebase"
+```
+
+**Minimal YAML** (multi-model routing or non-env secrets):
+
 ```yaml
 providers:
   - name: openai
     api_key: ${OPENAI_API_KEY}
     models: [gpt-4o-mini]
 
-router:
-  default: openai:gpt-4o-mini
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+    embedding_dims: 1536
+
+active_router_profile: default
 ```
 
-Set the key and run:
-
-```bash
-export OPENAI_API_KEY=sk-...
-soothe "Analyze this codebase"
-```
+Top-level `router:` was removed — use `router_profiles` + `active_router_profile`. Env-only model changes: `SOOTHE_ROUTER_PROFILES` (JSON) or `SOOTHE_ACTIVE_ROUTER_PROFILE`; see [Environment Variables](environment-variables.md).
 
 A template with every option documented ships at `config/config.template.yml` — copy it rather than writing from scratch.
 

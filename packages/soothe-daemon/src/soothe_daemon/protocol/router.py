@@ -1953,6 +1953,12 @@ class MessageRouter:
         request_id = msg.get("request_id")
         is_ephemeral = bool(msg.get("is_ephemeral", False))
 
+        from soothe.foundation.workspace.resolution import translate_client_path_to_container
+
+        mount = d._config.workspace_mount
+        host_root = mount.host_root if mount and mount.is_configured else None
+        container_root = mount.container_root if mount and mount.is_configured else None
+
         # Generate new loop_id
         loop_id = str(uuid7())
 
@@ -1967,12 +1973,40 @@ class MessageRouter:
                 logger.warning(
                     "[loop_new] Rejecting invalid client workspace %r: %s", raw_workspace, e
                 )
-            else:
+            elif resolved.exists():
                 client_workspace = str(resolved)
                 logger.info(
                     "[loop_new] Loop %s using client workspace: %s",
                     loop_id,
                     client_workspace,
+                )
+            elif host_root is not None:
+                # RFC-621: host paths are not present literally in the container;
+                # accept when mappable under workspace_mount.host_root.
+                try:
+                    translate_client_path_to_container(
+                        resolved,
+                        host_root=host_root,
+                        container_root=container_root,
+                    )
+                except ValueError as e:
+                    logger.info(
+                        "[loop_new] Loop %s ignoring client workspace (not under host_root): %s",
+                        loop_id,
+                        e,
+                    )
+                else:
+                    client_workspace = str(resolved)
+                    logger.info(
+                        "[loop_new] Loop %s using mapped client workspace: %s",
+                        loop_id,
+                        client_workspace,
+                    )
+            else:
+                logger.info(
+                    "[loop_new] Loop %s ignoring client workspace (not on daemon host): %s",
+                    loop_id,
+                    resolved,
                 )
 
         # Extract user identity for workspace isolation
@@ -1988,40 +2022,21 @@ class MessageRouter:
             client_workspace_id = raw_client_ws_id.strip()
 
         try:
-            resolved_workspace = resolve_loop_workspace(
-                loop_id=loop_id,
-                client_workspace=client_workspace,
-                user_id=user,
-                client_workspace_id=client_workspace_id,
-            )
-        except ValueError as e:
-            logger.warning(
-                "[loop_new] Loop %s workspace resolution failed (%s); using daemon workspace",
-                loop_id,
-                e,
-            )
-            from soothe.foundation.workspace import resolve_daemon_workspace
-
-            resolved_workspace = resolve_daemon_workspace()
-
-        # RFC-621: translate client path to container path when workspace_mount configured.
-        # Only translate when client_workspace was provided — daemon-fallback workspaces
-        # (temp or $SOOTHE_HOME) are container-local and don't need translation.
-        from soothe.foundation.workspace.resolution import translate_client_path_to_container
-
-        mount = d._config.workspace_mount
-        host_root = mount.host_root if mount and mount.is_configured else None
-        container_root = mount.container_root if mount and mount.is_configured else None
-        effective_workspace = resolved_workspace
-
-        if client_workspace is not None and host_root is not None:
-            try:
+            if client_workspace is not None and host_root is not None:
                 effective_workspace = translate_client_path_to_container(
-                    resolved_workspace,
+                    client_workspace,
                     host_root=host_root,
                     container_root=container_root,
                 )
-            except ValueError as e:
+            else:
+                effective_workspace = resolve_loop_workspace(
+                    loop_id=loop_id,
+                    client_workspace=client_workspace,
+                    user_id=user,
+                    client_workspace_id=client_workspace_id,
+                )
+        except ValueError as e:
+            if client_workspace is not None and host_root is not None:
                 logger.warning("[loop_new] Loop %s workspace mount error: %s", loop_id, e)
                 await d._send_client_message(
                     client_id,
@@ -2032,6 +2047,14 @@ class MessageRouter:
                     ),
                 )
                 return
+            logger.warning(
+                "[loop_new] Loop %s workspace resolution failed (%s); using daemon workspace",
+                loop_id,
+                e,
+            )
+            from soothe.foundation.workspace import resolve_daemon_workspace
+
+            effective_workspace = resolve_daemon_workspace()
 
         # Create loop directory (still needed for goals/ and working_memory/ subdirs)
         loop_dir = PersistenceDirectoryManager.get_loop_directory(loop_id)

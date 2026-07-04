@@ -112,7 +112,13 @@ def resolve_loop_workspace(
     """
     client_ws = str(client_workspace).strip() if client_workspace else None
     if client_ws:
-        return validate_client_workspace(client_ws)
+        path = validate_client_workspace(client_ws)
+        if path.exists():
+            return path
+        logger.warning(
+            "Client workspace not present on daemon host (%s); using persisted layout",
+            path,
+        )
 
     return resolve_persisted_loop_workspace(
         loop_id=loop_id,

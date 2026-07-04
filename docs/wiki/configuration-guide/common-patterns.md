@@ -19,16 +19,29 @@ export OPENAI_API_KEY=sk-...
 soothed start && soothe
 ```
 
-Soothe bootstraps an OpenAI provider from the environment when `providers` is empty. Vector stores default to embedded `sqlite_vec`. Copy `config/config.template.yml` only when you need multi-provider routing, Postgres, Langfuse, or other Tier-B overrides.
+Soothe bootstraps an OpenAI provider from the environment when `providers` is empty. Default routing uses the built-in profile (`openai:gpt-4o-mini`). Vector stores default to embedded `sqlite_vec`.
+
+Change the default model without YAML:
+
+```bash
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:gpt-4o"},"embedding_dims":1536}]'
+```
+
+(`SOOTHE_ROUTER_DEFAULT` does not work — `router` is derived from profiles.) Copy `config/config.template.yml` when you need multi-provider routing, Postgres, Langfuse, or other overrides.
 
 ## Minimal to Development
 
 The jump from "it runs" to "it's pleasant to develop with" is small: add a second model for reasoning, bump verbosity, and bound the loop so a runaway agent doesn't burn tokens.
 
 ```yaml
-router:
-  default: openai:gpt-4o-mini
-  think: openai:gpt-4o        # reasoning tasks use the bigger model
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+      think: openai:gpt-4o      # reasoning tasks use the bigger model
+    embedding_dims: 1536
+
+active_router_profile: default
 
 agent:
   loop:

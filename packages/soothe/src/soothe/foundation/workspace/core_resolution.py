@@ -61,25 +61,27 @@ def _resolve_loop(
     from soothe.foundation.workspace.resolution import resolve_daemon_workspace
 
     client_ws = str(client_workspace).strip() if client_workspace else None
-    if client_ws:
-        from soothe.foundation.workspace.resolution import validate_client_workspace
-
-        path = validate_client_workspace(client_ws)
-        return ResolvedWorkspace(path=str(path), source="client_workspace")
-
     try:
         path = resolve_loop_workspace(
             loop_id=loop_id,
-            client_workspace=None,
+            client_workspace=client_ws,
             user_id=user_id,
             client_workspace_id=client_workspace_id,
             soothe_home=soothe_home,
             create=create,
         )
-        return ResolvedWorkspace(path=str(path), source="persisted")
     except ValueError:
         path = resolve_daemon_workspace()
         return ResolvedWorkspace(path=str(path), source="daemon_fallback")
+
+    if client_ws:
+        from pathlib import Path
+
+        if Path(client_ws).expanduser().resolve().exists():
+            return ResolvedWorkspace(path=str(path), source="client_workspace")
+        return ResolvedWorkspace(path=str(path), source="persisted")
+
+    return ResolvedWorkspace(path=str(path), source="persisted")
 
 
 def _resolve_stream(

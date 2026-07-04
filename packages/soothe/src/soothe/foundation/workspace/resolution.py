@@ -123,9 +123,9 @@ def validate_client_workspace(workspace: str | Path) -> Path:
         msg = f"Invalid client workspace: {workspace} is a system directory. Please run from a project directory."
         raise ValueError(msg)
 
-    # Warn if workspace doesn't exist
+    # Path may be absent on a remote/container daemon — callers decide whether to use it.
     if not path.exists():
-        logger.warning("Client workspace does not exist: %s", path)
+        logger.debug("Client workspace does not exist: %s", path)
 
     return path
 

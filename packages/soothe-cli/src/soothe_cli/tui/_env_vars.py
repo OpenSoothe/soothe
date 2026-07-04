@@ -61,3 +61,31 @@ TUI_REFRESH_INTERVAL_MS = "SOOTHE_CLI_TUI_REFRESH_INTERVAL_MS"
 Set to throttle frequent refreshes during streaming, reducing UI lag.
 Lower values = more responsive but more CPU load; higher values = smoother.
 """
+
+WORKSPACE = "SOOTHE_CLI_WORKSPACE"
+"""Explicit project directory sent to the daemon on ``loop_new`` (defaults to cwd)."""
+
+OMIT_WORKSPACE = "SOOTHE_CLI_OMIT_WORKSPACE"
+"""Optional: when ``1``/``true``/``yes``, omit ``workspace`` on ``loop_new`` (default: send cwd)."""
+
+
+def resolve_cli_loop_workspace() -> str | None:
+    """Return the workspace path to send on ``loop_new``, or ``None`` to omit it.
+
+    By default sends ``cwd``. The daemon ignores host paths that are not present
+    on the daemon filesystem (falls back to persisted layout) unless
+    ``workspace_mount`` is configured (RFC-621). ``SOOTHE_CLI_OMIT_WORKSPACE`` is
+    optional — use it only to skip sending ``workspace`` on the wire.
+    """
+    import os
+
+    omit = os.environ.get(OMIT_WORKSPACE, "").strip().lower()
+    if omit in ("1", "true", "yes", "on"):
+        return None
+
+    explicit = os.environ.get(WORKSPACE, "").strip()
+    if explicit.lower() in ("none", "-", "omit"):
+        return None
+    if explicit:
+        return explicit
+    return os.getcwd()

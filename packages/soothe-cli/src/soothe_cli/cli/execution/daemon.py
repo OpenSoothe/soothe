@@ -27,7 +27,7 @@ from soothe_cli.cli.execution.daemon_errors import (
 )
 from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
 from soothe_cli.runtime import EventProcessor
-from soothe_cli.runtime.presentation.engine import PresentationEngine
+from soothe_cli.tui._env_vars import resolve_cli_loop_workspace
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 
 logger = logging.getLogger(__name__)
@@ -151,7 +151,7 @@ async def _run_headless_session_once(
 
     try:
         await connect_websocket_with_retries(client)
-        cli_ws = os.environ.get("SOOTHE_CLI_WORKSPACE", "").strip() or os.getcwd()
+        cli_ws = resolve_cli_loop_workspace()
         # IG-441: three first-class modes (batch / adaptive / streaming).
         # Default is ``adaptive`` for headless runs as well — it gives smooth
         # progress on long synthesis while keeping wire traffic bounded.

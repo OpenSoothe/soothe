@@ -136,6 +136,79 @@ async def test_loop_new_persists_is_ephemeral(
 
 
 @pytest.mark.asyncio
+async def test_loop_new_omits_client_workspace_when_not_on_daemon_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Host paths that do not exist inside the daemon are ignored (remote Docker CLI)."""
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+
+    missing = tmp_path / "missing-on-daemon"
+    assert not missing.exists()
+
+    from soothe.config import SootheConfig
+
+    config = SootheConfig()
+    daemon = _make_daemon_with_pm(config)
+    router = MessageRouter(daemon)
+
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "workspace": str(missing), "request_id": "rid-missing"},
+        )
+
+        response = daemon.sent[-1]
+        loop_id = response["result"]["loop_id"]
+        metadata = await _read_metadata(loop_id, config)
+        assert metadata.get("client_workspace") is None
+        assert metadata.get("current_workspace")
+    finally:
+        await daemon.close()
+
+
+@pytest.mark.asyncio
+async def test_loop_new_maps_client_workspace_under_host_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RFC-621: host paths under ``workspace_mount.host_root`` map without existing literally."""
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+
+    host_root = tmp_path / "host"
+    container_root = tmp_path / "container"
+    host_project = host_root / "myapp"
+    container_project = container_root / "myapp"
+    assert not host_project.exists()
+    container_project.mkdir(parents=True)
+
+    from soothe.config import SootheConfig
+    from soothe.config.models import WorkspaceMountConfig
+
+    config = SootheConfig(
+        workspace_mount=WorkspaceMountConfig(
+            host_root=str(host_root),
+            container_root=str(container_root),
+        ),
+    )
+    daemon = _make_daemon_with_pm(config)
+    daemon._config = config
+    router = MessageRouter(daemon)
+
+    try:
+        await router._handle_loop_new(
+            client_id="client-1",
+            msg={"type": "loop_new", "workspace": str(host_project), "request_id": "rid-map"},
+        )
+
+        response = daemon.sent[-1]
+        loop_id = response["result"]["loop_id"]
+        metadata = await _read_metadata(loop_id, config)
+        assert metadata.get("client_workspace") == str(host_project.resolve())
+        assert metadata.get("current_workspace") == str(container_project.resolve())
+    finally:
+        await daemon.close()
+
+
+@pytest.mark.asyncio
 async def test_loop_new_omits_client_workspace_when_invalid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
