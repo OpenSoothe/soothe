@@ -432,10 +432,10 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
     assert subagent_card is not None, "SubAgent card should be created for task delegation"
 
     text = str(subagent_card._step_task_activity_content())
-    assert "ListFiles(" in text
-    assert "mirasurf/soothe" in text
+    # Preview shows the latest tool only; earlier list_files is summarized.
     assert "Glob(" in text
     assert "**/*.py" in text
+    assert "+1 more tool" in text
 
 
 @pytest.mark.asyncio

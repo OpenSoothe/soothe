@@ -11,10 +11,14 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Any
 
+from soothe.foundation.autopilot.engine.schedule_timezone import (
+    normalize_schedule_datetime,
+    resolve_schedule_timezone,
+)
 from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
@@ -44,6 +48,7 @@ class ScheduleSpec:
 
     kind: str  # "once", "delay", "at", "every", "cron"
     value: str  # e.g., "2h", "2026-04-04T09:00", "1h", "0 9 * * *"
+    timezone: str | None = None  # "local", "UTC", or IANA name; None => UTC
 
     def next_after(self, after: datetime) -> datetime | None:
         """Calculate next run time after the given time.
@@ -52,34 +57,35 @@ class ScheduleSpec:
             after: Reference time.
 
         Returns:
-            Next scheduled time, or None if one-shot already past.
+            Next scheduled time in UTC, or None if one-shot already past.
         """
+        after_utc = _as_utc(after)
+        schedule_tz = resolve_schedule_timezone(self.timezone)
+
         if self.kind == "once":
-            t = self._parse_datetime(self.value)
-            return t if t > after else None
+            t = self._parse_datetime(self.value, schedule_tz)
+            return t if t > after_utc else None
         if self.kind == "delay":
             delta = _parse_duration(self.value)
-            return after + delta
+            return after_utc + delta
         if self.kind == "at":
-            t = self._parse_datetime(self.value)
-            return t if t > after else None
+            t = self._parse_datetime(self.value, schedule_tz)
+            return t if t > after_utc else None
         if self.kind == "every":
             delta = _parse_duration(self.value)
-            if after.tzinfo is None:
-                after = after.replace(tzinfo=UTC)
-            elapsed = after.timestamp() % delta.total_seconds()
-            return after + timedelta(seconds=delta.total_seconds() - elapsed)
+            elapsed = after_utc.timestamp() % delta.total_seconds()
+            return after_utc + timedelta(seconds=delta.total_seconds() - elapsed)
         if self.kind == "cron":
-            return _next_cron(self.value, after)
+            return _next_cron(self.value, after_utc, schedule_tz)
         return None
 
     @staticmethod
-    def _parse_datetime(value: str) -> datetime:
-        """Parse ISO 8601 datetime string."""
+    def _parse_datetime(value: str, schedule_tz: tzinfo) -> datetime:
+        """Parse ISO 8601 datetime string in the configured schedule timezone."""
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return dt
+            dt = dt.replace(tzinfo=schedule_tz)
+        return normalize_schedule_datetime(dt, schedule_tz)
 
 
 class SchedulerService:
@@ -331,18 +337,19 @@ _CRON_FIELDS = {
 }
 
 
-def _next_cron(expr: str, after: datetime) -> datetime | None:
-    """Calculate the next time matching a cron expression.
+def _next_cron(expr: str, after: datetime, schedule_tz: tzinfo) -> datetime | None:
+    """Calculate the next UTC time matching a cron expression in ``schedule_tz``.
 
     Supports: specific values, wildcards (``*``), ranges (``1-5``),
     steps (``*/5``), and lists (``1,3,5``).
 
     Args:
         expr: Cron expression (5 fields).
-        after: Time to search after.
+        after: Reference instant (UTC-aware).
+        schedule_tz: Timezone used to interpret cron wall-clock fields.
 
     Returns:
-        Next matching datetime.
+        Next matching datetime in UTC.
     """
     parts = expr.strip().split()
     cron_field_count = 5  # standard 5-field cron: min hour dom month dow
@@ -358,14 +365,21 @@ def _next_cron(expr: str, after: datetime) -> datetime | None:
             return None
         constraints[name] = values
 
-    # Brute-force search from next minute (max ~1 year ahead)
-    candidate = after.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    local_after = _as_utc(after).astimezone(schedule_tz)
+    candidate = local_after.replace(second=0, microsecond=0) + timedelta(minutes=1)
     for _ in range(525960):  # ~1 year in minutes
         if _matches_constraints(candidate, constraints):
-            return candidate
+            return normalize_schedule_datetime(candidate, schedule_tz)
         candidate += timedelta(minutes=1)
     logger.warning("No cron match found within 1 year for: %s", expr)
     return None
+
+
+def _as_utc(dt: datetime) -> datetime:
+    """Return an aware UTC datetime."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def _matches_constraints(dt: datetime, constraints: dict[str, set[int]]) -> bool:

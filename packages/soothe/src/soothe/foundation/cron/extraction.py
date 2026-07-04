@@ -9,11 +9,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
+from soothe.foundation.autopilot.engine.schedule_timezone import (
+    resolve_schedule_timezone,
+    schedule_timezone_label,
+)
 from soothe.foundation.cron.models import ExtractionResult, ScheduleKind
 
 if TYPE_CHECKING:
@@ -65,13 +69,15 @@ Analyze the request and extract:
    - For "delay": Duration string like "2h", "30m", "1d", "1h30m"
    - For "at" or "once": ISO datetime (YYYY-MM-DDTHH:MM:SS)
    - For "every": Duration string like "1h", "1d", "1w"
-   - For "cron": 5-field cron expression (minute hour day month weekday)
+   - For "cron": 5-field cron expression (minute hour day month weekday) in the configured local timezone
 4. **end_condition**: Optional limit (e.g., "until 2026-06-30", "for 2 weeks")
 5. **confidence**: How confident are you in this extraction (0.0-1.0)
 
-Current date: {current_date}
-Current time: {current_time}
+Schedule timezone: {schedule_timezone}
+Current local date: {current_date}
+Current local time: {current_time}
 
+Interpret times like "3am", "9am weekdays", and "tomorrow at noon" in {schedule_timezone}.
 Return valid JSON matching the schema. Be precise with datetime calculations.
 """
 
@@ -138,9 +144,13 @@ class CronExtractionService:
         Raises:
             ExtractionError: If extraction fails or confidence below threshold.
         """
-        now = datetime.now(tz=UTC)
+        tz_name = self._config.cron.timezone
+        tz_label = schedule_timezone_label(tz_name)
+        # Anchor prompt clock to configured schedule timezone (defaults to system local).
+        now = datetime.now(tz=resolve_schedule_timezone(tz_name))
         prompt = EXTRACTION_PROMPT_TEMPLATE.format(
             natural_language=natural_language,
+            schedule_timezone=tz_label,
             current_date=now.strftime("%Y-%m-%d"),
             current_time=now.strftime("%H:%M:%S"),
         )
