@@ -130,6 +130,18 @@ Key rules:
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
 
+SKILL_CONTEXT_ACTIVE_GUIDE = (
+    "<SKILL_CONTEXT_GUIDE>\n"
+    "One or more skills are pre-loaded in <SKILL_CONTEXT> below. Follow their "
+    "instructions on this hop before any other discovery path.\n"
+    "Use run_command or run_python exactly as the skill documents. Do NOT call "
+    "search_tools, search_skills, task, tacitus, or browser_use for work the "
+    "loaded skill already covers.\n"
+    "For simple lookups, one compact command is usually enough — avoid a second "
+    "full JSON fetch unless the user asked for detailed data.\n"
+    "</SKILL_CONTEXT_GUIDE>"
+)
+
 # Cache-stable directive about user-facing prose language. Lives in the system
 # prompt so the per-turn user envelope stays small and the directive is recorded
 # once in the prefix.

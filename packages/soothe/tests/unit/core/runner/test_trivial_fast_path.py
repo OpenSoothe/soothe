@@ -102,6 +102,59 @@ async def test_run_trivial_uses_loop_id_as_main_thread_and_persists() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_trivial_passes_routing_classification_to_core_agent() -> None:
+    from soothe.foundation.sloop.intention.models import (
+        IntakeLabel,
+        IntentClassification,
+        TaskComplexity,
+    )
+
+    runner = _TrivialRunner(config=MagicMock(), loop_id="loop-main-2")
+    runner._ensure_checkpointer_initialized = AsyncMock()
+    runner._schedule_trivial_persistence = MagicMock()
+
+    captured_input: dict = {}
+
+    async def _fake_astream(input_arg, **_kwargs):
+        captured_input["arg"] = input_arg
+        chunk = ((), "messages", (AIMessage(content="29°C"), {}))
+        yield chunk
+
+    core_agent = MagicMock()
+    core_agent.astream = _fake_astream
+    core_agent.aget_state = AsyncMock(return_value=None)
+    runner._materialized_core_agent = MagicMock(return_value=core_agent)
+
+    classification = IntentClassification(
+        intake_label=IntakeLabel.TRIVIAL,
+        task_complexity=TaskComplexity.MINIMAL,
+        goal_description="北京今天的天气",
+    )
+
+    with patch(
+        "soothe.utils.observability.langfuse.SootheLangfuse",
+    ) as mock_lf:
+        mock_lf.return_value.traced_llm.return_value = {"configurable": {}}
+        with patch(
+            "soothe.runner._runner_strange_loop._forward_messages_chunk",
+            return_value=True,
+        ):
+            _ = [
+                c
+                async for c in runner._run_trivial(
+                    "北京今天的天气",
+                    "client-thread",
+                    classification=classification,
+                    loop_id="loop-main-2",
+                )
+            ]
+
+    graph_input = captured_input["arg"]
+    assert isinstance(graph_input, dict)
+    assert graph_input["routing_classification"].task_complexity == TaskComplexity.MINIMAL
+
+
+@pytest.mark.asyncio
 async def test_run_trivial_yields_before_persistence_completes() -> None:
     """Trivial response must reach the client before ledger finalize runs."""
     runner = _TrivialRunner(config=MagicMock(), loop_id="loop-trivial-1")

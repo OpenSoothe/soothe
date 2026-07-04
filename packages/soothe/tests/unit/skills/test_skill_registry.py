@@ -123,6 +123,60 @@ class TestSearchDeferred:
         )
         assert [entry.name for entry in matches] == ["weather"]
 
+    def test_match_corpus_clawhub_spaced_name(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        clawhub = SkillIndexEntry(
+            name="clawhub",
+            description="Search ClawHub registry",
+            tags="clawhub, claw hub, skill registry",
+            source="builtin",
+            path="/tmp",
+            mtime=0.0,
+        )
+        matches = reg.match_deferred_in_corpus(
+            "is there skill of drawio on claw hub",
+            [clawhub],
+            discovered=set(),
+            limit=5,
+        )
+        assert [entry.name for entry in matches] == ["clawhub"]
+
+    def test_match_corpus_skill_creator_hyphen(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        entry = SkillIndexEntry(
+            name="skill-creator",
+            description="Create skills",
+            tags="skill creator, create skill",
+            source="builtin",
+            path="/tmp",
+            mtime=0.0,
+        )
+        matches = reg.match_deferred_in_corpus(
+            "help me create a skill for testing",
+            [entry],
+            discovered=set(),
+            limit=5,
+        )
+        assert [entry.name for entry in matches] == ["skill-creator"]
+
+    def test_search_deferred_claw_hub_in_query(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        clawhub = SkillIndexEntry(
+            name="clawhub",
+            description="ClawHub registry",
+            tags="clawhub, claw hub",
+            source="builtin",
+            path="/tmp",
+            mtime=0.0,
+        )
+        matches = reg.search_deferred(
+            "drawio on claw hub",
+            [clawhub],
+            discovered=set(),
+            limit=5,
+        )
+        assert [entry.name for entry in matches] == ["clawhub"]
+
 
 class TestDiscover:
     def test_idempotent(self) -> None:
@@ -210,6 +264,15 @@ class TestMarkMethods:
         reg.mark_invoked(state, "a", "body content")
         assert state["invoked"] == {"a"}
         assert state["invoked_bodies"] == {"a": "body content"}
+        assert state["just_invoked"] == {"a"}
+
+    def test_mark_preloaded(self) -> None:
+        reg = ProgressiveSkillRegistry()
+        state = ProgressiveSkillRegistry.init_activation_state()
+        reg.mark_preloaded(state, "weather", "wttr.in body")
+        assert state["invoked"] == {"weather"}
+        assert state["invoked_bodies"] == {"weather": "wttr.in body"}
+        assert state["just_invoked"] == set()
 
     def test_cache_body(self) -> None:
         reg = ProgressiveSkillRegistry()

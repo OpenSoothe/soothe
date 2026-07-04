@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import pathspec
 
+from soothe.skills.corpus_match import earliest_corpus_match
 from soothe.skills.index import SkillIndexEntry
 
 DiscoverVia = Literal["path", "search", "explicit"]
@@ -151,8 +152,9 @@ class ProgressiveSkillRegistry:
                 seen.add(entry.name)
                 continue
             for tag in self._tag_tokens(entry):
-                if len(tag) >= 2 and tag in q:
-                    scored.append((q.index(tag), entry))
+                pos = earliest_corpus_match(q, tag, skill_name=entry.name)
+                if pos is not None:
+                    scored.append((pos, entry))
                     seen.add(entry.name)
                     break
         scored.sort(key=lambda item: (item[0], item[1].name.lower()))
@@ -175,14 +177,15 @@ class ProgressiveSkillRegistry:
         for entry in deferred:
             if entry.name in discovered or entry.name in seen:
                 continue
-            name = entry.name.lower()
-            if name in corpus:
-                scored.append((corpus.index(name), entry))
+            pos = earliest_corpus_match(corpus, entry.name, skill_name=entry.name)
+            if pos is not None:
+                scored.append((pos, entry))
                 seen.add(entry.name)
                 continue
             for tag in self._tag_tokens(entry):
-                if len(tag) >= 2 and tag in corpus:
-                    scored.append((corpus.index(tag), entry))
+                pos = earliest_corpus_match(corpus, tag, skill_name=entry.name)
+                if pos is not None:
+                    scored.append((pos, entry))
                     seen.add(entry.name)
                     break
         scored.sort(key=lambda item: (item[0], item[1].name.lower()))
@@ -275,6 +278,13 @@ class ProgressiveSkillRegistry:
         activation_state.setdefault("invoked", set()).add(name)
         activation_state.setdefault("invoked_bodies", {})[name] = body
         activation_state.setdefault("just_invoked", set()).add(name)
+
+    def mark_preloaded(
+        self, activation_state: dict[str, Any], name: str, body: str
+    ) -> None:
+        """Mark a skill invoked for turn-0 preload (body available in SKILL_CONTEXT immediately)."""
+        activation_state.setdefault("invoked", set()).add(name)
+        activation_state.setdefault("invoked_bodies", {})[name] = body
 
     def cache_body(self, activation_state: dict[str, Any], name: str, body: str) -> None:
         activation_state.setdefault("invoked_bodies", {})[name] = body

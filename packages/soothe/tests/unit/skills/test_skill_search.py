@@ -13,6 +13,7 @@ from soothe.skills.index import SkillIndexEntry
 from soothe.skills.registry import ProgressiveSkillRegistry
 from soothe.skills.search import (
     merge_search_results,
+    prefetch_core_skills_from_corpus,
     search_deferred_skills,
 )
 from soothe.subagents.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
@@ -85,6 +86,107 @@ class TestSemanticSearch:
 
         names = [entry.name for entry in matches]
         assert "vector-only" in names
+
+    @pytest.mark.asyncio
+    async def test_semantic_hits_outside_search_corpus_are_ignored(self) -> None:
+        registry = ProgressiveSkillRegistry()
+        core_weather = SkillIndexEntry(
+            name="weather",
+            description="Get current weather and forecasts",
+            tags="weather, 天气, forecast",
+            source="builtin",
+            path="/tmp/weather",
+            mtime=0.0,
+        )
+        deferred_only = _entry("platonic-coding")
+        config = SootheConfig()
+        config.progressive_skills.semantic_search_enabled = True
+        config.progressive_skills.semantic_search_min_score = 0.0
+
+        record = SkillRecord(
+            id="platonic-coding",
+            name="platonic-coding",
+            description="spec-driven development lifecycle",
+            path="/tmp/platonic-coding",
+            tags=["workflow"],
+        )
+        bundle = SkillBundle(
+            query="北京今天的天气",
+            results=[SkillSearchResult(record=record, score=0.92)],
+        )
+        mock_retriever = AsyncMock()
+        mock_retriever.retrieve.return_value = bundle
+
+        catalog = {core_weather.name: core_weather, deferred_only.name: deferred_only}
+        with patch(
+            "soothe.subagents.skillify.runtime.get_skillify_retriever",
+            return_value=mock_retriever,
+        ):
+            matches = await search_deferred_skills(
+                "北京今天的天气",
+                [core_weather],
+                discovered=set(),
+                limit=2,
+                registry=registry,
+                config=config,
+                catalog_by_name=catalog,
+            )
+
+        assert [entry.name for entry in matches] == ["weather"]
+
+    def test_prefetch_core_corpus_excludes_semantic_only_hits(self) -> None:
+        registry = ProgressiveSkillRegistry()
+        weather = SkillIndexEntry(
+            name="weather",
+            description="Get current weather and forecasts",
+            tags="weather, 天气, forecast",
+            source="builtin",
+            path="/tmp/weather",
+            mtime=0.0,
+        )
+        github = SkillIndexEntry(
+            name="github",
+            description="GitHub CLI",
+            tags="github, pull request",
+            source="builtin",
+            path="/tmp/github",
+            mtime=0.0,
+        )
+        matches = prefetch_core_skills_from_corpus(
+            "北京今天的天气",
+            [weather, github],
+            discovered=set(),
+            limit=2,
+            registry=registry,
+        )
+        assert [entry.name for entry in matches] == ["weather"]
+
+    def test_prefetch_core_clawhub_from_spaced_query(self) -> None:
+        registry = ProgressiveSkillRegistry()
+        clawhub = SkillIndexEntry(
+            name="clawhub",
+            description="Search ClawHub registry",
+            tags="clawhub, claw hub, skill registry",
+            source="builtin",
+            path="/tmp/clawhub",
+            mtime=0.0,
+        )
+        weather = SkillIndexEntry(
+            name="weather",
+            description="Get current weather and forecasts",
+            tags="weather, 天气, forecast",
+            source="builtin",
+            path="/tmp/weather",
+            mtime=0.0,
+        )
+        matches = prefetch_core_skills_from_corpus(
+            "is there skill of drawio on claw hub",
+            [weather, clawhub],
+            discovered=set(),
+            limit=2,
+            registry=registry,
+        )
+        assert [entry.name for entry in matches] == ["clawhub"]
 
     @pytest.mark.asyncio
     async def test_skips_semantic_when_disabled(self) -> None:
@@ -188,3 +290,4 @@ class TestIntentPrefetch:
         assert activation["intent_prefetched"] is True
         mock_invoke.assert_called_once()
         assert mock_invoke.call_args.args[1] == "weather"
+        assert mock_invoke.call_args.kwargs.get("preload") is True

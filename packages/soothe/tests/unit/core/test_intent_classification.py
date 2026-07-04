@@ -142,6 +142,13 @@ class TestIntakeClassifier:
         assert result.intent_type == "agentic"
         assert result.intake_label == IntakeLabel.TRIVIAL
 
+    async def test_weather_query_skips_llm_via_heuristic(self) -> None:
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
+        with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
+            result = await classifier.classify_intake("北京今天的天气")
+        mock_llm.assert_not_called()
+        assert result.intake_label == IntakeLabel.TRIVIAL
+
     async def test_complex_intake_classification(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_llm_result = IntentClassification(

@@ -18,8 +18,8 @@ from soothe.skills.index import SkillIndexEntry
 from soothe.skills.registry import ProgressiveSkillRegistry, resolve_core_skill_names
 from soothe.skills.search import (
     latest_human_text,
+    prefetch_core_skills_from_corpus,
     prefetch_deferred_skills,
-    prefetch_skills_from_goal,
     search_deferred_skills,
 )
 
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 SEARCH_SKILLS_TOOL = "search_skills"
 INVOKE_SKILL_TOOL = "invoke_skill"
+SEARCH_TOOLS_TOOL = "search_tools"
 
 FILE_OP_TOOLS: frozenset[str] = frozenset(
     {
@@ -89,6 +90,13 @@ class SkillActivationMiddleware(AgentMiddleware):
 
         tool_call = getattr(request, "tool_call", None) or {}
         tool_name = str(tool_call.get("name", ""))
+        state_raw = getattr(request, "state", None) or {}
+        state = state_raw if isinstance(state_raw, dict) else {}
+
+        if tool_name in (SEARCH_TOOLS_TOOL, SEARCH_SKILLS_TOOL) and self._has_preloaded_skill_context(
+            state
+        ):
+            return self._redirect_discovery_when_skill_context_loaded(request, tool_name)
 
         if tool_name == SEARCH_SKILLS_TOOL:
             return await self._handle_search_skills(request)
@@ -227,14 +235,12 @@ class SkillActivationMiddleware(AgentMiddleware):
             )
 
         if ps.core_intent_auto_invoke_enabled and ps.intent_prefetch_top_k > 0:
-            core_matches = await prefetch_skills_from_goal(
+            core_matches = prefetch_core_skills_from_corpus(
                 goal,
                 core_entries,
                 discovered=skip_names,
                 limit=ps.intent_prefetch_top_k,
                 registry=self._registry,
-                config=self._config,
-                catalog_by_name=catalog_by_name,
             )
             if core_matches:
                 workspace_raw = state.get("workspace")
@@ -262,6 +268,7 @@ class SkillActivationMiddleware(AgentMiddleware):
                 activation_state,
                 entry.name,
                 workspace=workspace,
+                preload=True,
             )
             if resolved:
                 loaded.append(resolved)
@@ -273,6 +280,7 @@ class SkillActivationMiddleware(AgentMiddleware):
         name: str,
         *,
         workspace: str | None,
+        preload: bool = False,
     ) -> str | None:
         """Read SKILL.md and mark a skill invoked. Returns resolved name or None."""
         from soothe.skills.catalog import (
@@ -290,8 +298,38 @@ class SkillActivationMiddleware(AgentMiddleware):
         resolved_name = str(meta.get("name") or name)
         body = build_skill_context_text(meta, markdown)
         self._registry.discover(activation_state, [resolved_name], via="explicit")
-        self._registry.mark_invoked(activation_state, resolved_name, body)
+        if preload:
+            self._registry.mark_preloaded(activation_state, resolved_name, body)
+        else:
+            self._registry.mark_invoked(activation_state, resolved_name, body)
         return resolved_name
+
+    @staticmethod
+    def _has_preloaded_skill_context(state: dict[str, Any]) -> bool:
+        """True when turn-0 preload or invoke loaded skill bodies into the prompt."""
+        activation = state.get("skill_activation")
+        if not isinstance(activation, dict):
+            return False
+        bodies = activation.get("invoked_bodies") or {}
+        return bool(bodies)
+
+    def _redirect_discovery_when_skill_context_loaded(
+        self,
+        request: ToolCallRequest,
+        tool_name: str,
+    ) -> Command[Any]:
+        """Short-circuit deferred discovery tools when SKILL_CONTEXT is already active."""
+        tool_call = getattr(request, "tool_call", None) or {}
+        state_raw = getattr(request, "state", None) or {}
+        activation_state = self._activation(state_raw if isinstance(state_raw, dict) else {})
+        tool_call_id = str(tool_call.get("id", "") or tool_call.get("tool_call_id", ""))
+        content = (
+            "Skill instructions are already loaded in SKILL_CONTEXT for this thread. "
+            "Follow them directly (e.g. run_command or run_python). "
+            f"{tool_name} only discovers deferred tools/skills and cannot replace pre-loaded skill guidance."
+        )
+        message = ToolMessage(content=content, tool_call_id=tool_call_id, name=tool_name)
+        return self._command_with_activation(message, activation_state)
 
     async def _handle_search_skills(self, request: ToolCallRequest) -> Command[Any]:
         tool_call = getattr(request, "tool_call", None) or {}

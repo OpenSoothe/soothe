@@ -72,6 +72,27 @@ def merge_search_results(
     return out
 
 
+def prefetch_core_skills_from_corpus(
+    goal: str,
+    core_entries: Sequence[SkillIndexEntry],
+    *,
+    discovered: set[str],
+    limit: int,
+    registry: ProgressiveSkillRegistry,
+) -> list[SkillIndexEntry]:
+    """Match core skills by name/tags in the goal text only (no semantic search).
+
+    Used for turn-0 core auto-invoke so unrelated builtin skills are not pulled
+    in via Skillify semantic fill when ``intent_prefetch_top_k`` > 1.
+    """
+    return registry.match_deferred_in_corpus(
+        goal,
+        core_entries,
+        discovered=discovered,
+        limit=limit,
+    )
+
+
 async def prefetch_skills_from_goal(
     goal: str,
     entries: Sequence[SkillIndexEntry],
@@ -142,6 +163,7 @@ async def search_deferred_skills(
     from soothe.config import SootheConfig
 
     ps = _progressive_skills_settings(config)
+    allowed_names = {entry.name for entry in deferred}
 
     substring = registry.search_deferred(
         query,
@@ -183,6 +205,8 @@ async def search_deferred_skills(
     min_score = float(ps.semantic_search_min_score)
     for result in bundle.results:
         name = result.record.name
+        if name not in allowed_names:
+            continue
         if name in discovered:
             continue
         if result.score < min_score:

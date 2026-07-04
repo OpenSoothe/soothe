@@ -20,6 +20,7 @@ from soothe.utils.llm.invoke_policy import (
 )
 from soothe.utils.llm.structured import invoke_structured_chat
 
+from .intake_heuristics import classify_intake_heuristic
 from .intake_messages import build_intake_human_message, build_intake_system_message
 from .models import (
     IntakeClassificationLLMResult,
@@ -101,6 +102,15 @@ class IntentClassifier:
         """
         if not self._fast_model:
             return self._fallback(query)
+
+        heuristic = classify_intake_heuristic(query)
+        if heuristic is not None:
+            logger.debug(
+                "Intake classified (heuristic): intake_label=%s complexity=%s",
+                heuristic.intake_label,
+                heuristic.task_complexity,
+            )
+            return heuristic
 
         result: IntentClassification | None = None
         last_error: Exception | None = None
