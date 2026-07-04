@@ -11,6 +11,7 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, Too
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from soothe.skills.registry import merge_skill_activation
 from soothe.toolkits.progressive.registry import merge_tool_activation
 from soothe.utils.text_preview import preview_first
 
@@ -126,6 +127,8 @@ class _SystemPromptState(TypedDict):
         returns ``None`` and WORKSPACE_RULES / AGENT_INSTRUCTIONS / the
         <WORKSPACE> block all disappear from the execute-step system prompt.
       - Four MCP keys for cross-call MCP state.
+      - ``skill_activation`` so turn-0 prefetch and invoke_skill bodies survive
+        LangGraph state merges and reach ``modify_request`` / tool middleware.
 
     The ``messages`` key MUST use ``Annotated[..., add_messages]`` to preserve
     the reducer from the base ``AgentState``.  A plain ``list`` annotation
@@ -141,6 +144,7 @@ class _SystemPromptState(TypedDict):
     disabled_mcp_servers: NotRequired[set[str]]
     cached_mcp_resources: NotRequired[dict[str, str]]
     tool_activation: NotRequired[Annotated[dict[str, Any], merge_tool_activation]]
+    skill_activation: NotRequired[Annotated[dict[str, Any], merge_skill_activation]]
 
 
 class SystemPromptMiddleware(AgentMiddleware):

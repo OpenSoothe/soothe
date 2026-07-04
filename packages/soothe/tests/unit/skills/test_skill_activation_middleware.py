@@ -83,6 +83,35 @@ class TestAwrapToolCall:
         assert "SKILL_CONTEXT" in message.content
 
     @pytest.mark.asyncio
+    async def test_search_skills_redirect_when_skill_context_loaded(self, middleware) -> None:
+        request = MagicMock()
+        request.tool_call = {
+            "name": "search_skills",
+            "args": {"query": "drawio"},
+            "id": "ss1",
+        }
+        request.state = {
+            "skill_activation": {
+                **ProgressiveSkillRegistry.init_activation_state(),
+                "invoked": {"clawhub"},
+                "invoked_bodies": {"clawhub": "npx clawhub search drawio"},
+            }
+        }
+        handler = AsyncMock()
+
+        result = await middleware.awrap_tool_call(request, handler)
+
+        handler.assert_not_awaited()
+        assert isinstance(result, Command)
+        message = result.update["messages"][0]
+        assert message.name == "search_skills"
+        assert "SKILL_CONTEXT" in message.content
+
+    @pytest.mark.asyncio
+    async def test_middleware_declares_skill_activation_state_schema(self, middleware) -> None:
+        assert middleware.state_schema.__annotations__["skill_activation"]
+
+    @pytest.mark.asyncio
     async def test_passes_through_file_op_without_paths(self, middleware) -> None:
         request = MagicMock()
         request.tool_call = {"name": "read_file", "args": {}, "id": "2"}

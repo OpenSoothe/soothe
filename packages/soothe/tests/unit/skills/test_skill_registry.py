@@ -7,6 +7,7 @@ from soothe.skills.registry import (
     DEFAULT_CORE_SKILL_NAMES,
     ProgressiveSkillRegistry,
     is_core_skill,
+    merge_skill_activation,
 )
 
 
@@ -197,6 +198,26 @@ class TestInitActivationState:
         assert "invoked_bodies" in state
         assert isinstance(state["sent"], set)
         assert isinstance(state["activated"], set)
+
+
+class TestMergeSkillActivation:
+    def test_unions_sets_and_merges_bodies(self) -> None:
+        left = {
+            **ProgressiveSkillRegistry.init_activation_state(),
+            "invoked": {"clawhub"},
+            "invoked_bodies": {"clawhub": "left body"},
+        }
+        right = {
+            **ProgressiveSkillRegistry.init_activation_state(),
+            "activated": {"find-skills"},
+            "invoked_bodies": {"weather": "right body"},
+            "intent_prefetched": True,
+        }
+        merged = merge_skill_activation(left, right)
+        assert merged["invoked"] == {"clawhub"}
+        assert merged["activated"] == {"find-skills"}
+        assert merged["invoked_bodies"] == {"clawhub": "left body", "weather": "right body"}
+        assert merged["intent_prefetched"] is True
 
 
 class TestMatchPaths:

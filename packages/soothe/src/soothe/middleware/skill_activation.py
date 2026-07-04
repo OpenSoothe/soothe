@@ -6,16 +6,20 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, NotRequired
 
-from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
+from langchain.agents.middleware.types import AgentMiddleware, AgentState, ToolCallRequest
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from soothe.config import SootheConfig
 from soothe.skills.events import InternalSkillActivatedEvent
 from soothe.skills.index import SkillIndexEntry
-from soothe.skills.registry import ProgressiveSkillRegistry, resolve_core_skill_names
+from soothe.skills.registry import (
+    ProgressiveSkillRegistry,
+    merge_skill_activation,
+    resolve_core_skill_names,
+)
 from soothe.skills.search import (
     latest_human_text,
     prefetch_core_skills_from_corpus,
@@ -45,8 +49,16 @@ FILE_OP_TOOLS: frozenset[str] = frozenset(
 _PATH_KEYS: tuple[str, ...] = ("file_path", "path", "filepath", "file")
 
 
+class SkillActivationState(AgentState[Any]):
+    """Graph state channel for progressive skill disclosure (RFC-105)."""
+
+    skill_activation: NotRequired[Annotated[dict[str, Any], merge_skill_activation]]
+
+
 class SkillActivationMiddleware(AgentMiddleware):
     """Path activation, search_skills discovery, and invoke_skill body load."""
+
+    state_schema = SkillActivationState
 
     def __init__(
         self,
@@ -93,9 +105,10 @@ class SkillActivationMiddleware(AgentMiddleware):
         state_raw = getattr(request, "state", None) or {}
         state = state_raw if isinstance(state_raw, dict) else {}
 
-        if tool_name in (SEARCH_TOOLS_TOOL, SEARCH_SKILLS_TOOL) and self._has_preloaded_skill_context(
-            state
-        ):
+        if tool_name in (
+            SEARCH_TOOLS_TOOL,
+            SEARCH_SKILLS_TOOL,
+        ) and self._has_preloaded_skill_context(state):
             return self._redirect_discovery_when_skill_context_loaded(request, tool_name)
 
         if tool_name == SEARCH_SKILLS_TOOL:
@@ -214,26 +227,7 @@ class SkillActivationMiddleware(AgentMiddleware):
 
         catalog_by_name = {entry.name: entry for entry in all_entries}
 
-        matches = await prefetch_deferred_skills(
-            goal,
-            deferred,
-            discovered=skip_names,
-            limit=ps.intent_prefetch_top_k,
-            registry=self._registry,
-            config=self._config,
-            catalog_by_name=catalog_by_name,
-        )
-        if matches:
-            self._registry.discover(
-                activation_state,
-                [entry.name for entry in matches],
-                via="search",
-            )
-            logger.debug(
-                "[Skill] intent prefetch discovered deferred %s",
-                [entry.name for entry in matches],
-            )
-
+        core_matches: list[SkillIndexEntry] = []
         if ps.core_intent_auto_invoke_enabled and ps.intent_prefetch_top_k > 0:
             core_matches = prefetch_core_skills_from_corpus(
                 goal,
@@ -252,6 +246,27 @@ class SkillActivationMiddleware(AgentMiddleware):
                 )
                 if loaded:
                     logger.debug("[Skill] core intent auto-invoked %s", loaded)
+
+        if not core_matches:
+            matches = await prefetch_deferred_skills(
+                goal,
+                deferred,
+                discovered=skip_names,
+                limit=ps.intent_prefetch_top_k,
+                registry=self._registry,
+                config=self._config,
+                catalog_by_name=catalog_by_name,
+            )
+            if matches:
+                self._registry.discover(
+                    activation_state,
+                    [entry.name for entry in matches],
+                    via="search",
+                )
+                logger.debug(
+                    "[Skill] intent prefetch discovered deferred %s",
+                    [entry.name for entry in matches],
+                )
         return True
 
     def _auto_invoke_core_skills(

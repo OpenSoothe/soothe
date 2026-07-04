@@ -24,7 +24,9 @@ class TestClassifyIntakeHeuristic:
         assert result.intake_label == IntakeLabel.TRIVIAL
 
     def test_complex_refactor_not_heuristic(self) -> None:
-        assert classify_intake_heuristic("refactor the persistence layer for weather module") is None
+        assert (
+            classify_intake_heuristic("refactor the persistence layer for weather module") is None
+        )
 
     def test_long_weather_plan_not_heuristic(self) -> None:
         query = "天气 " * 40
