@@ -3012,7 +3012,6 @@ async def execute_task_textual(
                             block_type = block.get("type")
 
                             if block_type == "text":
-                                ev_stats.text_chunks += 1
                                 if suppress_main_agent_assistant_text:
                                     continue
                                 task_scope_txt = (
@@ -3075,6 +3074,12 @@ async def execute_task_textual(
 
                                 # Get or create assistant message for this namespace
                                 current_msg = assistant_message_by_namespace.get(ns_key)
+                                if not (
+                                    phase_loop == "trivial"
+                                    and is_main_agent
+                                    and current_msg is not None
+                                ):
+                                    ev_stats.text_chunks += 1
                                 if current_msg is None:
                                     if adapter._set_spinner:
                                         await adapter._set_spinner(SPINNER_LABEL_WRITING)

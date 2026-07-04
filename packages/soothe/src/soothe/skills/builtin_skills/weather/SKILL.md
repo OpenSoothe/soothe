@@ -1,7 +1,7 @@
 ---
 name: weather
 description: Get current weather and forecasts for any location (no API key required). Use when the user asks about weather, temperature, or forecasts for a city or location.
-tags: weather, forecast, wttr, 天气, 温度, 预报
+tags: weather, forecast, wttr, wttr.in, 天气, 温度, 预报, 气象
 metadata: {"emoji":"🌤️","requires":{"bins":["curl"]}}
 ---
 
@@ -35,6 +35,7 @@ Tips:
 - Airport codes: `wttr.in/JFK`
 - Units: `?m` (metric) `?u` (USCS)
 - Today only: `?1` · Current only: `?0`
+- For a simple "what's the weather" question, one compact `?format=3` (or `%l:+%c+%t`) call is enough; skip full JSON/`?T` unless the user wants detail.
 - PNG: `curl -s "wttr.in/Berlin.png" -o /tmp/weather.png`
 
 ## Open-Meteo (fallback, JSON)

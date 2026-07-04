@@ -593,6 +593,12 @@ class SystemPromptMiddleware(AgentMiddleware):
         avail_block, skill_ctx_blocks = self._compose_skills_block(state)
         if avail_block:
             static_sections.append(avail_block)
+        if skill_ctx_blocks:
+            from soothe.foundation.sloop.prompts.system_templates import (
+                SKILL_CONTEXT_ACTIVE_GUIDE,
+            )
+
+            semi_static_sections.append(SKILL_CONTEXT_ACTIVE_GUIDE)
         semi_static_sections.extend(skill_ctx_blocks)
 
         # RFC-412: MCP deferred tool listing

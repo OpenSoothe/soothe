@@ -135,11 +135,19 @@ class PhasesMixin:
         )
         stream_config.setdefault("configurable", {}).update(configurable)
 
+        from langchain_core.messages import HumanMessage
+
+        graph_input: dict[str, Any] = {"messages": [HumanMessage(content=goal_text)]}
+        if classification is not None and hasattr(classification, "to_routing_classification"):
+            graph_input["routing_classification"] = classification.to_routing_classification()
+        if workspace:
+            graph_input["workspace"] = workspace
+
         core_agent = self._materialized_core_agent()
         final_response = ""
         try:
             async for chunk in core_agent.astream(
-                goal_text,
+                graph_input,
                 config=stream_config,
                 stream_mode=["messages", "custom"],
                 subgraphs=True,

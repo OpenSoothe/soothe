@@ -499,6 +499,49 @@ class TestComposeSkillsBlockJustInvokedExclusion:
         assert len(blocks2) == 1
         assert "weather" in blocks2[0]
 
+    def test_skill_context_blocks_include_preloaded_auto_invoke(self) -> None:
+        """Turn-0 auto-invoked skills must appear in SKILL_CONTEXT on hop 0."""
+        activation = {
+            "sent": set(),
+            "activated": {"weather"},
+            "invoked": {"weather"},
+            "invoked_bodies": {"weather": "curl wttr.in/Beijing"},
+            "just_invoked": set(),
+        }
+        invoked = activation.get("invoked", set())
+        just_invoked = activation.get("just_invoked", set())
+        bodies = activation.get("invoked_bodies", {})
+
+        skill_context_blocks = []
+        for name in sorted(invoked - just_invoked):
+            body = bodies.get(name)
+            if body:
+                skill_context_blocks.append(
+                    f'<SKILL_CONTEXT name="{name}">\n{body}\n</SKILL_CONTEXT>'
+                )
+
+        assert len(skill_context_blocks) == 1
+        assert "wttr.in" in skill_context_blocks[0]
+
+    def test_compose_includes_skill_context_guide_when_preloaded(self) -> None:
+        from soothe.middleware.system_prompt import SystemPromptMiddleware
+
+        config = SootheConfig()
+        middleware = SystemPromptMiddleware(config=config)
+        state = {
+            "skill_activation": {
+                "sent": set(),
+                "activated": {"weather"},
+                "invoked": {"weather"},
+                "invoked_bodies": {"weather": "curl wttr.in/Beijing"},
+                "just_invoked": set(),
+            }
+        }
+        prompt = middleware._get_prompt_for_complexity("medium", state)
+        assert "<SKILL_CONTEXT_GUIDE>" in prompt
+        assert '<SKILL_CONTEXT name="weather">' in prompt
+        assert "search_tools" in prompt
+
 
 class TestWorkspaceInjection:
     """`_should_inject_workspace` is unconditional on `state['workspace']`.
