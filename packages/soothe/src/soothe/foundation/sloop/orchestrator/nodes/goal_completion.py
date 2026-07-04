@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import logging
 import time
@@ -82,6 +83,40 @@ def _append_goal_completion_ledger_pair(
     _record_ledger_message(context_engine, ai_msg, "goal_completion")
 
 
+def _schedule_goal_completion_tail_persistence(
+    *,
+    context_engine: Any | None,
+    state_manager: Any,
+    goal_record: Any,
+    full_output: str | None,
+    loop_state: LoopState,
+) -> None:
+    """Persist CE + checkpoint tail state without blocking the completed wire event."""
+
+    async def _persist() -> None:
+        if context_engine is not None:
+            try:
+                await context_engine.save()
+            except Exception:
+                logger.debug(
+                    "Background CE save failed at goal completion",
+                    exc_info=True,
+                )
+        try:
+            await state_manager.finalize_goal(
+                goal_record,
+                full_output,
+                loop_state=loop_state,
+            )
+        except Exception:
+            logger.debug(
+                "Background checkpoint finalize failed at goal completion",
+                exc_info=True,
+            )
+
+    asyncio.create_task(_persist())
+
+
 async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed).
 
@@ -153,11 +188,10 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         strange_loop.config.agent.loop.final_response,
     )
 
-    # RFC-624 Phase 4: Finalize goal lifecycle + persist CE state
+    # RFC-624 Phase 4: in-memory goal finalization only; disk persist runs after ``completed``.
     if ctx.ce is not None:
         try:
             await ctx.ce.finalize_goal(ctx.ce_goal_id, status="completed")
-            await ctx.ce.save()
         except Exception:
             logger.warning("[goal_completion] CE goal finalization failed", exc_info=True)
 
@@ -235,14 +269,6 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         }
     )
 
-    await state_manager.finalize_goal(goal_record, updated_result.full_output, loop_state=state)
-    logger.info(
-        "Goal completed: iterations=%d duration=%dms action=%s",
-        state.iteration,
-        state.total_duration_ms,
-        action.value,
-    )
-
     from soothe.foundation.sloop.state.resume_topic import schedule_resume_topic_generation
 
     schedule_resume_topic_generation(
@@ -267,6 +293,21 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
             "step_results_count": len(pre_clear_step_results),
             "skip_goal_completion_wire_duplicate": skip_goal_completion_wire_duplicate,
         },
+    )
+
+    logger.info(
+        "Goal completed: iterations=%d duration=%dms action=%s",
+        state.iteration,
+        state.total_duration_ms,
+        action.value,
+    )
+
+    _schedule_goal_completion_tail_persistence(
+        context_engine=ctx.ce,
+        state_manager=state_manager,
+        goal_record=goal_record,
+        full_output=updated_result.full_output,
+        loop_state=state,
     )
     # IG-475: Force garbage collection after goal completion to reclaim
     # LLM streaming objects (langchain message buffers, tokenizer caches, etc.)
