@@ -133,8 +133,6 @@ _AUTOPilot_COMMANDS = {
     "cancel_goal": "autopilot_cancel_goal",
     "wake": "autopilot_wake",
     "dream": "autopilot_dream",
-    "approve": "autopilot_approve",
-    "reject": "autopilot_reject",
     "resume": "autopilot_resume",
     "list_jobs": "autopilot_list_jobs",
     "get_job": "autopilot_get_job",
@@ -283,14 +281,6 @@ class WsCommandClient:
     async def autopilot_dream(self) -> dict[str, Any]:
         """Force dreaming mode."""
         return await self._send_command("autopilot_dream")
-
-    async def autopilot_approve(self, confirmation_id: str) -> dict[str, Any]:
-        """Approve a confirmation."""
-        return await self._send_command("autopilot_approve", {"confirmation_id": confirmation_id})
-
-    async def autopilot_reject(self, confirmation_id: str) -> dict[str, Any]:
-        """Reject a confirmation."""
-        return await self._send_command("autopilot_reject", {"confirmation_id": confirmation_id})
 
     async def autopilot_resume(self, goal_id: str) -> dict[str, Any]:
         """Resume a suspended/blocked goal."""
@@ -522,14 +512,6 @@ class SyncWsCommandClient:
     def autopilot_dream(self) -> dict[str, Any]:
         """Force dreaming mode (sync)."""
         return self._run_async(self._client.autopilot_dream())
-
-    def autopilot_approve(self, confirmation_id: str) -> dict[str, Any]:
-        """Approve a confirmation (sync)."""
-        return self._run_async(self._client.autopilot_approve(confirmation_id))
-
-    def autopilot_reject(self, confirmation_id: str) -> dict[str, Any]:
-        """Reject a confirmation (sync)."""
-        return self._run_async(self._client.autopilot_reject(confirmation_id))
 
     def autopilot_resume(self, goal_id: str) -> dict[str, Any]:
         """Resume a suspended/blocked goal (sync)."""

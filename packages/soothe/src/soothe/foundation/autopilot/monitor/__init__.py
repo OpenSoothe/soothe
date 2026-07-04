@@ -20,7 +20,6 @@ from soothe.foundation.autopilot.monitor.models import (
     GoalIntakeResult,
     GoalPlacement,
     MergeSuggestion,
-    ModeSwitchResult,
 )
 from soothe.foundation.autopilot.monitor.monitor import AutopilotMonitor
 
@@ -38,5 +37,4 @@ __all__ = [
     "GoalIntakeResult",
     "GoalPlacement",
     "MergeSuggestion",
-    "ModeSwitchResult",
 ]

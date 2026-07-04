@@ -87,58 +87,6 @@ class BackoffDecision(BaseModel):
     evidence_summary: str = Field(description="Summary of why current goal path failed")
 
 
-# RFC-200 §14-22: DAG execution status for backoff and reflection
-class GoalSubDAGStatus(BaseModel):
-    """Canonical DAG execution status for backoff and reflection.
-
-    RFC-200 §14-22: Tracks goal execution states and backoff boundaries.
-    Used by AutopilotMonitor for DAG state management.
-
-    Args:
-        execution_states: Per-goal execution state.
-        backoff_points: Goal IDs selected as backoff boundaries.
-        evidence_annotations: Per-goal evidence mapping.
-    """
-
-    execution_states: dict[
-        str, Literal["pending", "running", "success", "failed", "backoff_pending"]
-    ] = Field(description="Per-goal execution state")
-    backoff_points: list[str] = Field(
-        default_factory=list, description="Goal IDs selected as backoff boundaries"
-    )
-    evidence_annotations: dict[str, EvidenceBundle] = Field(
-        default_factory=dict, description="Per-goal evidence mapping"
-    )
-
-
-# RFC-217 §95-172: Context construction options for thread selection
-class ContextConstructionOptions(BaseModel):
-    """Options for goal context construction.
-
-    RFC-217 §95-172: Thread selection and similarity filtering configuration.
-    Used by ThreadRelationshipModule and GoalContextManager.
-
-    Args:
-        include_same_goal_threads: Include multiple threads for same goal_id.
-        include_similar_goals: Include threads with semantically similar goals.
-        thread_selection_strategy: Strategy for selecting relevant threads.
-        similarity_threshold: Embedding similarity threshold for goal matching.
-    """
-
-    include_same_goal_threads: bool = Field(
-        default=True, description="Include multiple threads for same goal_id"
-    )
-    include_similar_goals: bool = Field(
-        default=True, description="Include threads with semantically similar goals"
-    )
-    thread_selection_strategy: Literal["latest", "all", "best_performing"] = Field(
-        default="latest", description="Strategy for selecting relevant threads"
-    )
-    similarity_threshold: float = Field(
-        default=0.7, description="Embedding similarity threshold for goal matching", ge=0.0, le=1.0
-    )
-
-
 # ---------------------------------------------------------------------------
 # RFC-222 (revised): GoalDispatchContext* — bounded summary types that flow
 # between the daemon's AutopilotService and subprocess StrangeLoop workers.

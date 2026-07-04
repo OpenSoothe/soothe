@@ -22,7 +22,7 @@ providers:
     api_key: "${DASHSCOPE_API_KEY}"
     models:
       - qwen-max              # Premium reasoning model
-      - multimodal-embedding-v1  # Embedding model
+      - text-embedding-v4     # Text embedding model (OpenAI-compat endpoint)
 
   # Coding-Plan - Alibaba's coding-focused endpoint
   # Models: GLM, DeepSeek, Qwen coding variants
@@ -47,7 +47,7 @@ router_profiles:
       fast: "coding-plan:kimi-k2.5"
       think: "coding-plan:glm-5"
       image: "coding-plan:kimi-k2.5"
-      embedding: "dashscope:multimodal-embedding-v1"
+      embedding: "dashscope:text-embedding-v4"
     embedding_dims: 1024
 
 active_router_profile: production

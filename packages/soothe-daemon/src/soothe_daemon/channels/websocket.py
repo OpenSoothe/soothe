@@ -795,20 +795,6 @@ class WebSocketChannel(Channel):
                 raise RuntimeError("Goal not found")
             return {"status": "cancelled", "goal_id": cancelled.id, "new_status": cancelled.status}
 
-        if action == "approve":
-            confirmation_id = payload.get("confirmation_id")
-            approved = await service.approve_confirmation(confirmation_id)
-            if approved:
-                return {"status": "approved", "goal_id": confirmation_id}
-            raise RuntimeError("Confirmation not found")
-
-        if action == "reject":
-            confirmation_id = payload.get("confirmation_id")
-            rejected = await service.reject_confirmation(confirmation_id)
-            if rejected:
-                return {"status": "rejected", "goal_id": confirmation_id}
-            raise RuntimeError("Confirmation not found")
-
         if action == "resume":
             goal_id = payload.get("goal_id")
             goal_engine = service._ce

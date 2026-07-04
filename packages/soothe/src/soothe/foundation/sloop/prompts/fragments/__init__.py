@@ -69,7 +69,6 @@ SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
     "classifiers/scenario_classifier_system.xml", strip=True
 )
 SCENARIO_CLASSIFIER_USER_FRAGMENT = _read("classifiers/scenario_classifier_user.xml", strip=True)
-CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT = _read("classifiers/criticality_assessment.xml")
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +80,6 @@ STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("planning/structured_plan_parse.xm
 
 __all__ = [
     "ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT",
-    "CRITICALITY_ASSESSMENT_PROMPT_FRAGMENT",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
     "LOOP_CONTINUATION_GUIDE_FRAGMENT",

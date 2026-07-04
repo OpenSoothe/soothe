@@ -333,36 +333,6 @@ def cancel_goal(
     typer.echo(f"Cancel result: {result.get('status', result)}")
 
 
-@app.command("approve")
-def approve_goal(
-    goal_id: str = typer.Argument(
-        ..., help="Confirmation ID to approve (use 'inbox' to list pending)."
-    ),
-) -> None:
-    """Approve a MUST-confirmation goal."""
-    client = _require_daemon_ws()
-    try:
-        result = client.autopilot_approve(goal_id)
-    except RuntimeError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
-    typer.echo(f"Confirmation approved: {result.get('goal_id', goal_id)}")
-
-
-@app.command("reject")
-def reject_goal(
-    goal_id: str = typer.Argument(..., help="Confirmation ID to reject."),
-) -> None:
-    """Reject a proposed goal."""
-    client = _require_daemon_ws()
-    try:
-        result = client.autopilot_reject(goal_id)
-    except RuntimeError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
-    typer.echo(f"Confirmation rejected: {result.get('goal_id', goal_id)}")
-
-
 @app.command("resume")
 def resume_goal(
     goal_id: str = typer.Argument(..., help="Goal ID to resume."),

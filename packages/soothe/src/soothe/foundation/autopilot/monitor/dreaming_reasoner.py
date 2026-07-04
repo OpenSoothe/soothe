@@ -403,7 +403,13 @@ class DreamingDistillationReasoner:
         else:
             json_text = response_text.strip()
 
-        return json.loads(json_text)
+        # Tolerant parse: LLMs sometimes emit trailing prose or concatenated
+        # JSON objects after the first valid object (causes "Extra data").
+        # raw_decode() parses the leading JSON object and returns the end
+        # index; we ignore any trailing content.
+        decoder = json.JSONDecoder()
+        obj, _end = decoder.raw_decode(json_text)
+        return obj
 
     def _parse_episodic_response(self, response_text: str) -> EpisodicDistillationResponse:
         """Parse LLM episodic response.

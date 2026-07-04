@@ -22,7 +22,7 @@ providers:
       - qwen3.6-plus
       - kimi-k2.5
       - MiniMax-M2.5
-      - multimodal-embedding-v1
+      - text-embedding-v4  # DashScope OpenAI-compatible text embedding (replaces multimodal-embedding-v1, which 404s in compat mode)
 
   - name: coding-plan
     provider_type: openai

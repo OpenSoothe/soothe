@@ -178,7 +178,10 @@ class GoalBackoffReasoner:
         else:
             json_text = response_text.strip()
 
-        decision_data = json.loads(json_text)
+        # Tolerant parse: LLMs sometimes emit trailing prose or concatenated
+        # JSON objects after the first valid object (causes "Extra data").
+        decoder = json.JSONDecoder()
+        decision_data, _end = decoder.raw_decode(json_text)
 
         # Create BackoffDecision
         decision = BackoffDecision(

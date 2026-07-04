@@ -22,7 +22,6 @@ from soothe.foundation.autopilot.monitor.models import (
     DreamingScope,
     GoalIntakeResult,
     GoalPlacement,
-    ModeSwitchResult,
 )
 from soothe.foundation.context.engine import ContextEngine
 
@@ -289,29 +288,3 @@ class AutopilotMonitor:
         # TODO: LLM integration per RFC-625 spec
         logger.info("Distilling mode %s with %d goals", mode, len(context.goals))
         return None
-
-    # ── Mode Switch ────────────────────────────────────────────────────────────────
-
-    async def toggle_autopilot(self, loop_id: str, enable: bool) -> ModeSwitchResult:
-        """Toggle autopilot mode on/off."""
-        if enable:
-            # Analyze existing linear chain for restructuring
-            goals = self._ce.get_goals_by_status("pending")
-            if len(goals) > 1:
-                logger.info("Analyzing linear chain for restructuring")
-            await self._bus.emit("autopilot_mode_switched", {"loop_id": loop_id, "enabled": True})
-            return ModeSwitchResult(loop_id=loop_id, enabled=True)
-        else:
-            # Flatten pending goals to linear chain
-            pending = self._ce.get_goals_by_status("pending")
-            active = self._ce.get_goals_by_status("active")
-
-            sorted_pending = sorted(pending, key=lambda g: g.created_at)
-            prev_id = active[0].id if active else None
-
-            for goal in sorted_pending:
-                await self._ce.update_dependencies(goal.id, depends_on=[prev_id] if prev_id else [])
-                prev_id = goal.id
-
-            await self._bus.emit("autopilot_mode_switched", {"loop_id": loop_id, "enabled": False})
-            return ModeSwitchResult(loop_id=loop_id, enabled=False)
