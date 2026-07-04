@@ -145,3 +145,48 @@ async def test_second_hop_binds_promoted_tools(config: SootheConfig) -> None:
 
 def test_state_schema_declares_tool_activation() -> None:
     assert "tool_activation" in ProgressiveToolMiddleware.state_schema.__annotations__
+
+
+@pytest.mark.asyncio
+async def test_default_core_binds_skill_discovery_tools() -> None:
+    """Core tier must include search_skills/invoke_skill so AVAILABLE_SKILLS is usable."""
+    cfg = SootheConfig()
+    cfg.progressive_tools.enabled = True
+    middleware = ProgressiveToolMiddleware(config=cfg)
+    tools = [
+        _tool("run_command"),
+        _tool("search_tools"),
+        _tool("search_skills"),
+        _tool("invoke_skill"),
+        _tool("wizsearch_search"),
+    ]
+    middleware.set_tool_catalog(tools)
+
+    class _Req:
+        def __init__(self) -> None:
+            self.state: dict[str, object] = {}
+            self.tools = list(tools)
+
+        def override(self, **kwargs: object) -> _Req:
+            out = _Req()
+            out.state = self.state
+            out.tools = list(kwargs.get("tools", self.tools))  # type: ignore[arg-type]
+            return out
+
+    request = _Req()
+    captured: dict[str, object] = {}
+
+    async def handler(req: object) -> MagicMock:
+        captured["tools"] = getattr(req, "tools", None)
+        return MagicMock()
+
+    await middleware.awrap_model_call(request, handler)  # type: ignore[arg-type]
+
+    bound = captured.get("tools")
+    assert isinstance(bound, list)
+    assert {t.name for t in bound} == {
+        "run_command",
+        "search_tools",
+        "search_skills",
+        "invoke_skill",
+    }

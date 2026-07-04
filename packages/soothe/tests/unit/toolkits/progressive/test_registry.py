@@ -18,7 +18,8 @@ def _desc(name: str) -> ToolDescriptor:
 def test_default_core_includes_surgical_file_ops() -> None:
     assert {"apply_diff", "file_info"}.issubset(DEFAULT_CORE_TOOL_NAMES)
     assert {"run_background", "kill_process"}.issubset(DEFAULT_CORE_TOOL_NAMES)
-    assert len(DEFAULT_CORE_TOOL_NAMES) == 20
+    assert {"search_skills", "invoke_skill"}.issubset(DEFAULT_CORE_TOOL_NAMES)
+    assert len(DEFAULT_CORE_TOOL_NAMES) == 22
 
 
 def test_partition_core_and_deferred() -> None:

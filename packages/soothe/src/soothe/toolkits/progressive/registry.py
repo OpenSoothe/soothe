@@ -34,6 +34,8 @@ DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "current_datetime",
         # progressive discovery
         "search_tools",
+        "search_skills",
+        "invoke_skill",
     }
 )
 
