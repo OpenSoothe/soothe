@@ -149,7 +149,9 @@ logger = logging.getLogger(__name__)
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
 # Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
-_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "trivial", "plan_direct", "autonomous_goal"})
+# ``trivial`` is intentionally excluded: the fast path streams many AIMessageChunks
+# and must use the normal append_content path (one card per namespace).
+_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "plan_direct", "autonomous_goal"})
 
 
 class TextualUIAdapter:

@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SEARCH_TOOL_NAME = "search_tools"
+_SEARCH_SKILLS_TOOL_NAME = "search_skills"
+_INVOKE_SKILL_TOOL_NAME = "invoke_skill"
 
 # Set by SystemPromptMiddleware when <AVAILABLE_TOOLS> marks entries as sent.
 _tool_activation_update: contextvars.ContextVar[dict[str, set[str]] | None] = (
@@ -75,6 +77,13 @@ class ProgressiveToolMiddleware(AgentMiddleware):
                 core = list(DEFAULT_CORE_TOOL_NAMES)
             elif _SEARCH_TOOL_NAME not in core:
                 core.append(_SEARCH_TOOL_NAME)
+        if config.progressive_skills.search_skills_enabled:
+            if core is None:
+                core = list(DEFAULT_CORE_TOOL_NAMES)
+            else:
+                for name in (_SEARCH_SKILLS_TOOL_NAME, _INVOKE_SKILL_TOOL_NAME):
+                    if name not in core:
+                        core.append(name)
         self._registry = ProgressiveToolRegistry(core_tools=core)
         self._catalog: list[ToolDescriptor] = []
         self._full_tools: list[Any] = []
