@@ -260,6 +260,8 @@ services:
         host_ip: ${LANGFUSE_WEB_BIND_IP:-0.0.0.0}
     environment:
       <<: *langfuse_app_env
+      # Override Docker's HOSTNAME (container ID) so Next.js binds to 0.0.0.0 instead of a specific network IP
+      HOSTNAME: "0.0.0.0"
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-langfuse_local_nextauth_secret_min32chars}
       LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-soothe-local-org}
       LANGFUSE_INIT_ORG_NAME: Soothe Local

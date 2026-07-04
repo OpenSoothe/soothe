@@ -72,6 +72,7 @@ class LoadingWidget(Static):
         *,
         turn_start_mono: float | None = None,
         show_interrupt_hint: bool = False,
+        hint_extra: str | None = None,
     ) -> None:
         """Initialize loading widget.
 
@@ -80,12 +81,16 @@ class LoadingWidget(Static):
             turn_start_monotonic: Start of the current query/turn (``time.monotonic()``). When
                 omitted, the first mount time is used so elapsed still advances monotonically.
             show_interrupt_hint: When ``True``, append an esc-to-interrupt hint (off by default).
+            hint_extra: Optional hint segment before elapsed time (e.g. ``attempt 2/3``).
         """
         super().__init__()
         self._status = status
         self._spinner = Spinner()
         self._turn_start_mono: float | None = turn_start_mono
         self._show_interrupt_hint = show_interrupt_hint
+        self._hint_extra = hint_extra
+        self._resume_status: str | None = None
+        self._resume_hint_extra: str | None = None
         self._animation_timer: Timer | None = None
         self._paused = False
         self._paused_total_elapsed: int = 0
@@ -97,9 +102,14 @@ class LoadingWidget(Static):
 
     def _format_hint_line(self, elapsed_secs: float, *, include_interrupt: bool = False) -> str:
         duration = format_duration(elapsed_secs)
+        segments: list[str] = []
+        if self._hint_extra:
+            segments.append(self._hint_extra)
+        segments.append(duration)
+        body = " · ".join(segments)
         if include_interrupt:
-            return f"({duration} · esc to interrupt)"
-        return f"({duration})"
+            return f"({body} · esc to interrupt)"
+        return f"({body})"
 
     def _elapsed_seconds(self) -> float:
         if self._turn_start_mono is None:
@@ -197,10 +207,17 @@ class LoadingWidget(Static):
         if self.is_mounted:
             self._refresh_line()
 
-    def activate_status(self, status: str, *, show_interrupt_hint: bool | None = None) -> None:
+    def activate_status(
+        self,
+        status: str,
+        *,
+        show_interrupt_hint: bool | None = None,
+        hint_extra: str | None = None,
+    ) -> None:
         """Resume animation (if paused) and set status text."""
         self._paused = False
         self._status = status
+        self._hint_extra = hint_extra
         if show_interrupt_hint is not None:
             self._show_interrupt_hint = show_interrupt_hint
         if self.is_mounted:
@@ -213,24 +230,32 @@ class LoadingWidget(Static):
         if self._turn_start_mono is None:
             self._turn_start_mono = turn_start
 
-    def pause(self, status: str = "Awaiting decision") -> None:
+    def pause(self, status: str = "Input") -> None:
         """Pause the animation and update status.
 
         Args:
             status: Status to show while paused
         """
+        if not self._paused:
+            self._resume_status = self._status
+            self._resume_hint_extra = self._hint_extra
         self._paused = True
         now = monotonic()
         if self._turn_start_mono is not None:
             self._paused_total_elapsed = int(now - self._turn_start_mono)
         self._status = status
+        self._hint_extra = None
         if self.is_mounted:
             self._refresh_line()
 
     def resume(self) -> None:
-        """Resume the animation."""
+        """Resume the animation, restoring the label active before pause."""
         self._paused = False
-        self._status = "Thinking"
+        if self._resume_status is not None:
+            self._status = self._resume_status
+            self._hint_extra = self._resume_hint_extra
+            self._resume_status = None
+            self._resume_hint_extra = None
         if self.is_mounted:
             self._ensure_animation_timer()
             self._last_rendered_elapsed = int(self._elapsed_seconds())

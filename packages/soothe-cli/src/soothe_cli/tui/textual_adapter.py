@@ -95,6 +95,9 @@ from soothe_cli.runtime.state.session_stats import (
     SpinnerStatus,
     TurnEventStats,
     TurnLatencyStats,
+    build_goal_completed_log_event,
+    build_turn_finished_log_event,
+    format_cli_log_event,
     format_token_count,
 )
 from soothe_cli.runtime.state.step_router import StepTaskRouter
@@ -114,6 +117,18 @@ from soothe_cli.tui.file_change_notify import (
 from soothe_cli.tui.hooks import dispatch_hook
 from soothe_cli.tui.input import MediaTracker, parse_file_mentions
 from soothe_cli.tui.media_utils import create_multimodal_content
+from soothe_cli.tui.spinner_labels import (
+    SPINNER_LABEL_EXECUTING,
+    SPINNER_LABEL_INPUT,
+    SPINNER_LABEL_OFFLOADING,
+    SPINNER_LABEL_RETRYING,
+    SPINNER_LABEL_SYNTHESIZING,
+    SPINNER_LABEL_THINKING,
+    SPINNER_LABEL_TOOLS,
+    SPINNER_LABEL_WRITING,
+    map_plan_phase_spinner_label,
+    retry_spinner_hint,
+)
 from soothe_cli.tui.widgets.messages import (
     AppMessage,
     AssistantMessage,
@@ -133,15 +148,6 @@ logger = logging.getLogger(__name__)
 # IG-504: LLM retry event type for step card status display
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
-# Thinking-row spinner labels (turn-level; step cards carry finer detail).
-SPINNER_LABEL_THINKING = "Thinking"
-SPINNER_LABEL_INTERPRETING = "Interpreting goal"
-SPINNER_LABEL_EXECUTING = "Executing step"
-SPINNER_LABEL_RUNNING_TOOLS = "Running tools"
-SPINNER_LABEL_AWAITING_ANSWER = "Awaiting your answer"
-SPINNER_LABEL_WAITING_AGENT_READY = "Waiting for agent to be ready"
-SPINNER_LABEL_CONNECTING_DAEMON = "Connecting to daemon"
-
 # Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
 _INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "plan_direct", "autonomous_goal"})
 
@@ -157,7 +163,7 @@ class TextualUIAdapter:
         self,
         mount_message: Callable[..., Awaitable[None]],
         update_status: Callable[[str], None],
-        set_spinner: Callable[[SpinnerStatus], Awaitable[None]] | None = None,
+        set_spinner: Callable[..., Awaitable[None]] | None = None,
         pause_spinner: Callable[[str], Awaitable[None]] | None = None,
         resume_spinner: Callable[[], Awaitable[None]] | None = None,
         set_active_message: Callable[[str | None], None] | None = None,
@@ -1830,13 +1836,6 @@ def _adapter_has_pending_tools(adapter: TextualUIAdapter) -> bool:
     return bool(adapter._tool_to_step)
 
 
-def _format_retry_spinner_label(attempt: int, max_attempts: int) -> str:
-    """Build thinking-row label for planner/execute LLM retries without a step card."""
-    if attempt > 0 and max_attempts > 0:
-        return f"Retrying ({attempt}/{max_attempts})"
-    return "Retrying"
-
-
 async def _maybe_set_running_tools_spinner(
     adapter: TextualUIAdapter,
     *,
@@ -1848,7 +1847,7 @@ async def _maybe_set_running_tools_spinner(
     if clarification_pending or not adapter._set_spinner:
         return
     if _adapter_has_pending_tools(adapter):
-        await adapter._set_spinner(SPINNER_LABEL_RUNNING_TOOLS)
+        await adapter._set_spinner(SPINNER_LABEL_TOOLS)
 
 
 async def _maybe_set_thinking_spinner(
@@ -2319,37 +2318,72 @@ async def _flush_assistant_text_ns(
 # ---------------------------------------------------------------------------
 
 
-def _log_turn_event_stats(
+def _snapshot_turn_event_stats(
     ev_stats: TurnEventStats,
-    turn_stats: SessionStats,
     daemon_session: Any,  # noqa: ANN401
-) -> None:
-    """Merge daemon-side counters and emit a structured event-stats log line."""
+) -> TurnEventStats:
+    """Return turn + daemon transport counters without mutating ``ev_stats``."""
+    snapshot = TurnEventStats()
+    snapshot.merge(ev_stats)
     if daemon_session is not None:
-        ev_stats.merge(daemon_session.turn_event_stats)
-    turn_stats.event_stats = ev_stats
+        snapshot.merge(daemon_session.turn_event_stats)
+    return snapshot
+
+
+def _warn_inbound_dropped(ev_stats: TurnEventStats) -> None:
     if ev_stats.inbound_dropped > 0:
         logger.warning(
             "Stream degraded during turn: %d inbound frame(s) dropped "
             "(response may be incomplete; try /resume or re-run)",
             ev_stats.inbound_dropped,
         )
+
+
+def _log_goal_completed_event_stats(
+    ev_stats: TurnEventStats,
+    turn_stats: SessionStats,
+    daemon_session: Any,  # noqa: ANN401
+    *,
+    status: str,
+    goal_progress: str,
+    total_steps: int,
+    elapsed_seconds: float,
+) -> None:
+    """Emit a structured goal-completion summary to ``cli.log``."""
+    snapshot = _snapshot_turn_event_stats(ev_stats, daemon_session)
+    _warn_inbound_dropped(snapshot)
     logger.info(
-        "Turn event stats: %s (%.1fs wall)",
-        ev_stats.summary_line(),
-        turn_stats.wall_time_seconds,
+        "%s",
+        format_cli_log_event(
+            build_goal_completed_log_event(
+                snapshot,
+                status=status,
+                goal_progress=goal_progress,
+                total_steps=total_steps,
+                elapsed_seconds=elapsed_seconds,
+            )
+        ),
     )
-    if ev_stats.latency is not None:
-        if ev_stats.latency.time_to_first_chunk_ms is not None:
-            logger.info(
-                "Turn latency: time_to_first_chunk=%.0fms",
-                ev_stats.latency.time_to_first_chunk_ms,
+
+
+def _log_turn_event_stats(
+    ev_stats: TurnEventStats,
+    turn_stats: SessionStats,
+    daemon_session: Any,  # noqa: ANN401
+) -> None:
+    """Merge daemon-side counters and emit final turn summary to ``cli.log``."""
+    snapshot = _snapshot_turn_event_stats(ev_stats, daemon_session)
+    turn_stats.event_stats = snapshot
+    _warn_inbound_dropped(snapshot)
+    logger.info(
+        "%s",
+        format_cli_log_event(
+            build_turn_finished_log_event(
+                snapshot,
+                wall_seconds=turn_stats.wall_time_seconds,
             )
-        if ev_stats.latency.synthesis_visible_ms is not None:
-            logger.info(
-                "Turn latency: synthesis_visible=%.0fms",
-                ev_stats.latency.synthesis_visible_ms,
-            )
+        ),
+    )
 
 
 def _should_show_clarification_prompt(
@@ -2483,6 +2517,7 @@ async def execute_task_textual(
     ev_stats = TurnEventStats()
     ev_stats.latency = TurnLatencyStats(turn_start_monotonic=time.monotonic())
     start_time = time.monotonic()
+    goal_completed_logged = False
 
     # Warn if token display callbacks are only partially wired — all three
     # should be set together to avoid inconsistent status-bar behavior.
@@ -2597,6 +2632,7 @@ async def execute_task_textual(
             nonlocal last_active_tool_call_id
             nonlocal summarization_in_progress
             nonlocal clarification_pending
+            nonlocal goal_completed_logged
             nonlocal goal_loop_start_monotonic
             nonlocal captured_input_tokens
             if prepared is None or prepared.skip:
@@ -2653,7 +2689,7 @@ async def execute_task_textual(
                             if not summarization_in_progress:
                                 summarization_in_progress = True
                                 if adapter._set_spinner:
-                                    await adapter._set_spinner("Offloading")
+                                    await adapter._set_spinner(SPINNER_LABEL_OFFLOADING)
                             continue
 
                         # Regular (non-summarization) chunks resumed — summarization
@@ -2856,7 +2892,7 @@ async def execute_task_textual(
 
                                 if stream_msg is None:
                                     if adapter._set_spinner:
-                                        await adapter._set_spinner("Synthesizing")
+                                        await adapter._set_spinner(SPINNER_LABEL_SYNTHESIZING)
                                     msg_id = f"asst-{uuid.uuid4().hex[:8]}"
                                     if adapter._set_active_message:
                                         adapter._set_active_message(msg_id)
@@ -3039,7 +3075,7 @@ async def execute_task_textual(
                                 current_msg = assistant_message_by_namespace.get(ns_key)
                                 if current_msg is None:
                                     if adapter._set_spinner:
-                                        await adapter._set_spinner("Writing")
+                                        await adapter._set_spinner(SPINNER_LABEL_WRITING)
                                     msg_id = f"asst-{uuid.uuid4().hex[:8]}"
                                     # Mark active BEFORE mounting so pruning
                                     # (triggered by mount) won't remove it
@@ -3407,17 +3443,29 @@ async def execute_task_textual(
                                 continue
 
                             if event_type == STRANGE_LOOP_COMPLETED:
-                                if not ns_key and adapter._goal_tree_message is not None:
-                                    adapter._goal_tree_message.set_loop_finished(
-                                        status=str(data.get("status", "done")),
-                                        goal_progress=str(data.get("goal_progress", "")),
-                                        completion_summary=str(
-                                            data.get("completion_summary", "")
-                                            or data.get("evidence_summary", "")
-                                            or ""
-                                        ),
-                                        total_steps=int(data.get("total_steps", 0) or 0),
-                                    )
+                                if not ns_key:
+                                    if adapter._goal_tree_message is not None:
+                                        adapter._goal_tree_message.set_loop_finished(
+                                            status=str(data.get("status", "done")),
+                                            goal_progress=str(data.get("goal_progress", "")),
+                                            completion_summary=str(
+                                                data.get("completion_summary", "")
+                                                or data.get("evidence_summary", "")
+                                                or ""
+                                            ),
+                                            total_steps=int(data.get("total_steps", 0) or 0),
+                                        )
+                                    if not goal_completed_logged:
+                                        _log_goal_completed_event_stats(
+                                            ev_stats,
+                                            turn_stats,
+                                            daemon_session,
+                                            status=str(data.get("status", "done")),
+                                            goal_progress=str(data.get("goal_progress", "")),
+                                            total_steps=int(data.get("total_steps", 0) or 0),
+                                            elapsed_seconds=time.monotonic() - start_time,
+                                        )
+                                        goal_completed_logged = True
                                 continue
 
                             if event_type in (
@@ -3473,9 +3521,7 @@ async def execute_task_textual(
                                                 ] = input_widget
                                                 await adapter._mount_message(input_widget)
                                         if adapter._pause_spinner:
-                                            await adapter._pause_spinner(
-                                                SPINNER_LABEL_AWAITING_ANSWER
-                                            )
+                                            await adapter._pause_spinner(SPINNER_LABEL_INPUT)
                                 continue
 
                             if event_type == LOOP_CLARIFICATION_ANSWERED:
@@ -3714,6 +3760,11 @@ async def execute_task_textual(
                                             adapter._last_completed_main_step_execute_prose = (
                                                 widget.last_completed_execute_prose
                                             )
+                                    if adapter._set_spinner and not clarification_pending:
+                                        await _maybe_set_thinking_spinner(
+                                            adapter,
+                                            clarification_pending=clarification_pending,
+                                        )
                                     continue
 
                             # IG-504: Handle LLM retry events for step card status display
@@ -3736,14 +3787,18 @@ async def execute_task_textual(
                                     widget.set_retry_status(attempt, max_attempts, error_type)
                                 elif adapter._set_spinner and not clarification_pending:
                                     await adapter._set_spinner(
-                                        _format_retry_spinner_label(attempt, max_attempts)
+                                        SPINNER_LABEL_RETRYING,
+                                        hint_extra=retry_spinner_hint(
+                                            attempt=attempt,
+                                            max_attempts=max_attempts,
+                                        ),
                                     )
                                 continue
 
                             if event_type == STRANGE_LOOP_PLAN_PHASE:
                                 label = str(data.get("label", "")).strip()
                                 if label and adapter._set_spinner:
-                                    await adapter._set_spinner(label)
+                                    await adapter._set_spinner(map_plan_phase_spinner_label(label))
                                 elif label:
                                     adapter._update_status(label)
                                 continue

@@ -8,14 +8,16 @@ config, no widget imports) so that `app.py` can import `SessionStats` and
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 SpinnerStatus = str | None
 """Spinner line label, or `None` to hide.
 
-Common values include ``Thinking``, ``Offloading``, ``Writing`` (assistant streaming),
-``Tools`` (tool execution), and ``Synthesizing`` (goal-completion stream).
+Common single-word values include ``Thinking``, ``Planning``, ``Executing``,
+``Tools``, ``Offloading``, ``Writing``, and ``Synthesizing``.
 """
 
 
@@ -242,48 +244,91 @@ class TurnEventStats:
                 self.latency = TurnLatencyStats()
             self.latency.merge(other.latency)
 
-    def summary_line(self) -> str:
-        """Return a one-line summary suitable for structured logging.
+    @staticmethod
+    def _nonzero_fields(**fields: int) -> dict[str, int]:
+        return {key: value for key, value in fields.items() if value}
 
-        Returns:
-            Compact string like ``847 total (612 msg, 89 upd, 146 custom; …)``.
-        """
-        parts = [f"{self.total} total"]
-        mode_parts = []
-        if self.messages:
-            mode_parts.append(f"{self.messages} msg")
-        if self.updates:
-            mode_parts.append(f"{self.updates} upd")
-        if self.custom:
-            mode_parts.append(f"{self.custom} custom")
-        if mode_parts:
-            parts.append(f"({', '.join(mode_parts)})")
+    def to_log_dict(self) -> dict[str, Any]:
+        """Return structured event counters for ``cli.log`` JSON lines."""
+        payload: dict[str, Any] = {"total": self.total}
 
-        detail_parts = []
-        if self.tool_calls:
-            detail_parts.append(f"{self.tool_calls} tools")
-        if self.tool_results:
-            detail_parts.append(f"{self.tool_results} results")
-        if self.text_chunks:
-            detail_parts.append(f"{self.text_chunks} text")
-        if self.skipped:
-            detail_parts.append(f"{self.skipped} skipped")
-        if self.filtered_early:
-            detail_parts.append(f"{self.filtered_early} filtered-early")
-        if self.heartbeats_dropped:
-            detail_parts.append(f"{self.heartbeats_dropped} hb-drop")
-        if self.post_idle_drained:
-            detail_parts.append(f"{self.post_idle_drained} post-idle")
-        if self.inbound_dropped:
-            detail_parts.append(f"{self.inbound_dropped} inbound-drop")
-        if self.latency is not None and self.latency.time_to_first_chunk_ms is not None:
-            detail_parts.append(f"ttfc={self.latency.time_to_first_chunk_ms:.0f}ms")
-        if self.latency is not None and self.latency.synthesis_visible_ms is not None:
-            detail_parts.append(f"synth={self.latency.synthesis_visible_ms:.0f}ms")
-        if detail_parts:
-            parts.append("; ".join(detail_parts))
+        modes = self._nonzero_fields(
+            messages=self.messages,
+            updates=self.updates,
+            custom=self.custom,
+        )
+        if modes:
+            payload["modes"] = modes
 
-        return " ".join(parts)
+        activity = self._nonzero_fields(
+            tool_calls=self.tool_calls,
+            tool_results=self.tool_results,
+            text_chunks=self.text_chunks,
+        )
+        if activity:
+            payload["activity"] = activity
+
+        degradation = self._nonzero_fields(
+            skipped=self.skipped,
+            filtered_early=self.filtered_early,
+            heartbeats_dropped=self.heartbeats_dropped,
+            post_idle_drained=self.post_idle_drained,
+            inbound_dropped=self.inbound_dropped,
+        )
+        if degradation:
+            payload["degradation"] = degradation
+
+        if self.latency is not None:
+            latency: dict[str, int] = {}
+            if self.latency.time_to_first_chunk_ms is not None:
+                latency["ttfc_ms"] = round(self.latency.time_to_first_chunk_ms)
+            if self.latency.synthesis_visible_ms is not None:
+                latency["synthesis_ms"] = round(self.latency.synthesis_visible_ms)
+            if latency:
+                payload["latency"] = latency
+
+        return payload
+
+
+def build_goal_completed_log_event(
+    ev_stats: TurnEventStats,
+    *,
+    status: str,
+    goal_progress: str,
+    total_steps: int,
+    elapsed_seconds: float,
+) -> dict[str, Any]:
+    """Build a structured goal-completion record for ``cli.log``."""
+    event: dict[str, Any] = {
+        "event": "goal_completed",
+        "elapsed_s": round(elapsed_seconds, 1),
+        "events": ev_stats.to_log_dict(),
+    }
+    if status.strip():
+        event["status"] = status.strip()
+    if goal_progress.strip():
+        event["progress"] = goal_progress.strip()
+    if total_steps > 0:
+        event["steps"] = total_steps
+    return event
+
+
+def build_turn_finished_log_event(
+    ev_stats: TurnEventStats,
+    *,
+    wall_seconds: float,
+) -> dict[str, Any]:
+    """Build a structured turn-finished record for ``cli.log``."""
+    return {
+        "event": "turn_finished",
+        "wall_s": round(wall_seconds, 1),
+        "events": ev_stats.to_log_dict(),
+    }
+
+
+def format_cli_log_event(payload: dict[str, Any]) -> str:
+    """Serialize a structured CLI log event as compact JSON."""
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
 
 def format_token_count(count: int) -> str:

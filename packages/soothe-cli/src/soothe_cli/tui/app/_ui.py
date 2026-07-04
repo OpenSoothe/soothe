@@ -16,6 +16,7 @@ from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
 
 from soothe_cli.runtime.state.session_stats import SpinnerStatus
+from soothe_cli.tui.spinner_labels import SPINNER_LABEL_INPUT
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.messages import AssistantMessage
 
@@ -302,12 +303,14 @@ class _UIMixin:
         status: SpinnerStatus,
         *,
         show_interrupt_hint: bool = False,
+        hint_extra: str | None = None,
     ) -> None:
         """Show, update, or hide the loading spinner.
 
         Args:
             status: The spinner status to display, or `None` to hide.
             show_interrupt_hint: When ``True``, append an esc-to-interrupt hint on the row.
+            hint_extra: Optional hint segment before elapsed time (e.g. ``attempt 2/3``).
         """
         if status is None:
             # Hide
@@ -332,6 +335,7 @@ class _UIMixin:
                 status,
                 turn_start_mono=turn_mono,
                 show_interrupt_hint=show_interrupt_hint,
+                hint_extra=hint_extra,
             )
             await thinking_status.mount(self._loading_widget)
         else:
@@ -344,11 +348,15 @@ class _UIMixin:
                     await self._loading_widget.remove()
                 await thinking_status.mount(self._loading_widget)
             # Update existing (also clears a clarification pause)
-            self._loading_widget.activate_status(status, show_interrupt_hint=show_interrupt_hint)
+            self._loading_widget.activate_status(
+                status,
+                show_interrupt_hint=show_interrupt_hint,
+                hint_extra=hint_extra,
+            )
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
 
-    async def _pause_spinner(self, status: str = "Awaiting your answer") -> None:
+    async def _pause_spinner(self, status: str = SPINNER_LABEL_INPUT) -> None:
         """Pause the thinking-row spinner while blocked on user input."""
         if self._loading_widget is None:
             await self._set_spinner(status)
