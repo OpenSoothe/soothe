@@ -35,6 +35,7 @@ dev = [
     "textual-dev>=1.8.0",
     "langfuse>=3.0.0,<4.0.0",
     "pyinstaller>=6.20.0",
+    "vulture>=2.14",
 ]
 
 [tool.pytest.ini_options]
@@ -55,3 +56,36 @@ per-file-ignores = { "examples/core_agent/*.py" = ["N999"] }
 
 [tool.ruff.format]
 docstring-code-format = true
+
+# Dead-code analysis (make vulture, verify_finally)
+[tool.vulture]
+paths = [
+    "packages/soothe/src",
+    "packages/soothe-daemon/src",
+    "packages/soothe-cli/src",
+    "packages/soothe-sdk/src",
+    "packages/soothe-plugins/src",
+    "scripts/vulture_whitelist.py",
+]
+exclude = ["*/.backups/*", "*/tests/*", "*/__pycache__/*"]
+min_confidence = 90
+ignore_names = [
+    "exc_tb",
+    "exc_val",
+    "exc_type",
+    "__getattr__",
+    "__aenter__",
+    "__aexit__",
+    "__enter__",
+    "__exit__",
+]
+ignore_decorators = [
+    "@app.command",
+    "@app.callback",
+    "@pytest.fixture",
+    "@field_validator",
+    "@model_validator",
+    "@computed_field",
+    "@validator",
+    "@root_validator",
+]

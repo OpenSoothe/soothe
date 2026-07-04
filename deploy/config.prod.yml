@@ -22,7 +22,7 @@ providers:
       - glm-5.2                  # Zhipu AI GLM model
       - kimi-k2.5                # Moonshot AI model
       - MiniMax-M2.5             # Alternative reasoning
-      - multimodal-embedding-v1  # Embedding model
+      - text-embedding-v4  # Text embedding model (OpenAI-compat endpoint)
 
 # =============================================================================
 # Model Router
@@ -34,8 +34,8 @@ router_profiles:
       fast: "dashscope:kimi-k2.5"
       think: "dashscope:glm-5.2"
       image: "dashscope:kimi-k2.5"
-      embedding: "dashscope:multimodal-embedding-v1"
-    embedding_dims: 1024
+      embedding: "dashscope:text-embedding-v4"
+    embedding_dims: 1536
 
 active_router_profile: production
 

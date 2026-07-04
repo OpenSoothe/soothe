@@ -71,7 +71,7 @@ def __getattr__(name: str) -> Any:
         from soothe.foundation.core.agent._builder import create_soothe_agent
 
         return create_soothe_agent
-    if name in ("StrangeLoop", "Sloop"):
+    if name == "StrangeLoop":
         from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
 
         return StrangeLoop

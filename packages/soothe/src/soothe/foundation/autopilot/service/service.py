@@ -149,7 +149,6 @@ class AutopilotService:
         self._workspace_reservation = workspace_reservation
         self._consensus_model = consensus_model
         self._goal_persist_store = goal_persist_store
-        self._scheduler: Any = None  # SchedulerService | None
         self._context_store: Any = None
         self._context_projector: Any = None
         self._dispatch_tasks: dict[str, asyncio.Task] = {}  # goal_id → consumer task
@@ -521,23 +520,20 @@ class AutopilotService:
 
         while self._running:
             try:
-                # 1. Check scheduled tasks (if enabled)
-                await self._check_scheduled_tasks()
-
-                # 2. Schedule ready goals
+                # 1. Schedule ready goals
                 await self._schedule_ready_goals()
 
-                # 3. Monitor active loops
+                # 2. Monitor active loops
                 await self._monitor_loop_health()
 
-                # 4. Release idle loops past timeout
+                # 3. Release idle loops past timeout
                 await self._release_idle_loops()
 
-                # 5. Check for dreaming transition
+                # 4. Check for dreaming transition
                 if self._ce.is_dag_complete():
                     await self._enter_dreaming_mode()
 
-                # 6. Sleep for next tick
+                # 5. Sleep for next tick
                 await asyncio.sleep(
                     self._config.dreaming_poll_interval if self._dreaming else poll_interval
                 )
@@ -548,32 +544,6 @@ class AutopilotService:
             except Exception:
                 logger.exception("Scheduling loop error")
                 await asyncio.sleep(poll_interval)
-
-    async def _check_scheduled_tasks(self) -> None:
-        """Check scheduled tasks and create goals for due tasks."""
-        if not self._config.scheduler_enabled:
-            return
-
-        scheduler = self._get_or_init_scheduler()
-        if scheduler is None:
-            return
-
-        due = scheduler.get_due_tasks()
-        for task in due:
-            scheduler.mark_running(task.id)
-            try:
-                await self.submit_task(task.description, priority=task.priority)
-                if task.schedule.kind in ("every", "cron"):
-                    scheduler.schedule_next(task.id)
-                else:
-                    scheduler.mark_completed(task.id)
-            except Exception:
-                logger.warning(
-                    "Failed to create goal from scheduled task %s",
-                    task.id,
-                    exc_info=True,
-                )
-                scheduler.cancel_task(task.id)
 
     async def _schedule_ready_goals(self) -> None:
         """Schedule all ready goals via WorkerPool dispatch (RFC-222 Phase C+)."""
@@ -796,9 +766,7 @@ class AutopilotService:
                         source="layer2_execute",
                     )
                     try:
-                        await self._ce.fail_goal(
-                            goal_id, evidence=evidence, allow_retry=outcome == "needs_replan"
-                        )
+                        await self._ce.fail_goal(goal_id, evidence=evidence)
                     except Exception:
                         logger.exception("fail_goal raised for goal %s", goal_id)
 
@@ -822,7 +790,6 @@ class AutopilotService:
                         narrative="Worker exited without emitting GoalCompletionChunk",
                         source="layer2_execute",
                     ),
-                    allow_retry=False,
                 )
             except Exception:
                 logger.debug("fail_goal raised on missing completion", exc_info=True)
@@ -960,7 +927,6 @@ class AutopilotService:
                         ),
                         source="layer3_reflect",
                     ),
-                    allow_retry=False,
                 )
             except Exception:
                 logger.debug(
@@ -1019,53 +985,6 @@ class AutopilotService:
             return
         await self._enter_dreaming_mode()
 
-    async def approve_confirmation(self, confirmation_id: str) -> bool:
-        """Approve a pending MUST-confirmation and create the goal."""
-        import json
-
-        from soothe.config import SOOTHE_HOME
-
-        path = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
-        if not path.exists():
-            return False
-        try:
-            confirmations = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
-            return False
-
-        for item in confirmations:
-            if item.get("id") != confirmation_id:
-                continue
-            description = str(item.get("description") or "").strip()
-            if not description:
-                return False
-            priority = int(item.get("priority", 50))
-            await self.submit_task(description, priority=priority)
-            remaining = [c for c in confirmations if c.get("id") != confirmation_id]
-            path.write_text(json.dumps(remaining, indent=2))
-            return True
-        return False
-
-    async def reject_confirmation(self, confirmation_id: str) -> bool:
-        """Reject a pending MUST-confirmation without creating a goal."""
-        import json
-
-        from soothe.config import SOOTHE_HOME
-
-        path = SOOTHE_HOME / "autopilot" / "pending_confirmations.json"
-        if not path.exists():
-            return False
-        try:
-            confirmations = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
-            return False
-
-        remaining = [c for c in confirmations if c.get("id") != confirmation_id]
-        if len(remaining) == len(confirmations):
-            return False
-        path.write_text(json.dumps(remaining, indent=2))
-        return True
-
     _GOALS_SNAPSHOT_KEY = "autopilot:goals:snapshot"
 
     async def _persist_goals(self) -> None:
@@ -1100,20 +1019,6 @@ class AutopilotService:
                 len(recovered),
                 ", ".join(recovered),
             )
-
-    def _get_or_init_scheduler(self) -> Any:
-        """Lazily construct SchedulerService bound to SOOTHE_HOME."""
-        if self._scheduler is not None:
-            return self._scheduler
-        if not self._config.scheduler_enabled:
-            return None
-
-        from soothe.config import SOOTHE_HOME
-        from soothe.foundation.autopilot.engine.scheduled_tasks import SchedulerService
-
-        persist_path = SOOTHE_HOME / "autopilot" / "scheduled_tasks.json"
-        self._scheduler = SchedulerService(persist_path=persist_path)
-        return self._scheduler
 
     def status(self) -> dict[str, Any]:
         """Get AutopilotService status.

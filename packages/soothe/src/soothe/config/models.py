@@ -640,8 +640,6 @@ class AutopilotConfig(BaseModel):
         dreaming_enabled: Enter dreaming mode when all goals complete.
         dreaming_consolidation_interval: Seconds between memory consolidation during dreaming.
         dreaming_health_check_interval: Seconds between health checks during dreaming.
-        scheduler_enabled: Whether scheduler service is active.
-        max_scheduled_tasks: Maximum pending scheduled tasks.
         webhooks: Webhook URLs by event type (e.g., on_goal_completed).
     """
 
@@ -705,9 +703,6 @@ class AutopilotConfig(BaseModel):
     )
     """Configuration for each dreaming distillation mode."""
 
-    # === Scheduler ===
-    scheduler_enabled: bool = True
-    max_scheduled_tasks: int = Field(default=100, ge=1, le=1000)
     webhooks: dict[str, str | None] = Field(default_factory=dict)
 
     # === Loop pool (RFC-222) ===
@@ -1667,21 +1662,6 @@ class ThreadLoggingConfig(BaseModel):
     max_size_mb: int = 100
 
 
-class PreviewDefaults(BaseModel):
-    """Default settings for the unified text preview utility.
-
-    Args:
-        chars: Default character limit for char-based previews.
-        lines: Default line limit for line-based previews.
-    """
-
-    chars: int = Field(default=200, ge=50, le=1000)
-    """Default character limit for char-based previews."""
-
-    lines: int = Field(default=5, ge=1, le=20)
-    """Default line limit for line-based previews."""
-
-
 class LangfuseIntegrationConfig(BaseModel):
     """Langfuse OpenTelemetry + LangChain callback integration (install ``langfuse`` package).
 
@@ -1835,24 +1815,6 @@ class ObservabilityConfig(BaseModel):
     )
 
 
-class SemanticRiskConfig(BaseModel):
-    """Semantic risk assessment for goal criticality (IG-433)."""
-
-    enabled: bool = True
-    cache_enabled: bool = True
-    cache_similarity_threshold: float = Field(default=0.9, ge=0.5, le=1.0)
-    confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
-    """Minimum confidence for LLM assessment; below this uses keyword fallback."""
-
-
-class SemanticRelationshipsConfig(BaseModel):
-    """Embedding-based goal relationship detection (IG-433)."""
-
-    enabled: bool = True
-    auto_apply_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
-    flag_threshold: float = Field(default=0.70, ge=0.0, le=1.0)
-
-
 class FailureIntentConfig(BaseModel):
     """Failure intent classification for reflection (IG-433)."""
 
@@ -1869,10 +1831,6 @@ class StructuredPlanConfig(BaseModel):
 class OptimizationConfig(BaseModel):
     """Keyword/heuristic optimization settings (IG-433)."""
 
-    semantic_risk: SemanticRiskConfig = Field(default_factory=SemanticRiskConfig)
-    semantic_relationships: SemanticRelationshipsConfig = Field(
-        default_factory=SemanticRelationshipsConfig
-    )
     failure_intent: FailureIntentConfig = Field(default_factory=FailureIntentConfig)
     structured_plan: StructuredPlanConfig = Field(default_factory=StructuredPlanConfig)
 

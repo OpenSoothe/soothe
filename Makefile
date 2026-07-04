@@ -17,7 +17,7 @@
 # Docker Compose env file (all commands use deploy/.env)
 DOCKER_ENV_FILE := --env-file deploy/.env
 .PHONY: reset-the-world
-.PHONY: format format-check lint lint-src lint-fix
+.PHONY: format format-check lint lint-src lint-fix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
 .PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
 .PHONY: sdk-publish-test cli-publish-test soothe-publish-test daemon-publish-test publish-test
@@ -69,6 +69,8 @@ help:
 	@echo "  make lint             - Lint all packages (src + tests)"
 	@echo "  make lint-src         - Lint only src/ (lighter check)"
 	@echo "  make lint-fix         - Auto-fix linting issues"
+	@echo "  make vulture          - Dead-code analysis (vulture, min 90% confidence)"
+	@echo "  make vulture-whitelist - Regenerate scripts/vulture_whitelist.py"
 	@echo "  make test             - Run all tests"
 	@echo "  make test-unit        - Run unit tests"
 	@echo "  make test-integration - Run integration tests"
@@ -262,6 +264,28 @@ lint-fix: sync
 		uv run ruff format $$dir && uv run ruff check --fix $$dir; \
 	done
 	@echo "Done"
+
+vulture: sync
+	@echo "Running vulture dead-code analysis..."
+	@.venv/bin/vulture
+	@echo "OK — no new high-confidence dead code"
+
+vulture-whitelist: sync
+	@echo "Regenerating scripts/vulture_whitelist.py (review diff before commit)..."
+	@{ \
+		echo '"""Vulture whitelist — known false positives and tracked dead-code debt.'; \
+		echo ''; \
+		echo 'Regenerate (then review diff) with::'; \
+		echo ''; \
+		echo '    make vulture-whitelist'; \
+		echo ''; \
+		echo 'Each entry suppresses a specific high-confidence finding until the code is'; \
+		echo 'fixed or removed.'; \
+		echo '"""'; \
+		echo ''; \
+		.venv/bin/vulture --make-whitelist; \
+	} > scripts/vulture_whitelist.py
+	@echo "Wrote scripts/vulture_whitelist.py"
 
 # ============================================================================
 # Tests

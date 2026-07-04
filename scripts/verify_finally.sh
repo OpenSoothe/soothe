@@ -10,7 +10,8 @@
 #    - soothe (in-proc core) must NOT depend on soothe-daemon (one-way dep)
 # 3. Code formatting check (ruff format, parallel per package)
 # 4. Linting (ruff check, parallel per package)
-# 5. Unit tests (all packages, parallel execution)
+# 5. Dead-code analysis (vulture, min 90% confidence)
+# 6. Unit tests (all packages, parallel execution)
 #
 # Exit codes:
 #   0 - All checks passed
@@ -63,6 +64,7 @@ WORKSPACE_SYNCED=false
 # Workspace venv binaries (avoid per-package `uv run` startup overhead).
 VENV_PYTHON="${WORKSPACE_ROOT}/.venv/bin/python"
 VENV_RUFF="${WORKSPACE_ROOT}/.venv/bin/ruff"
+VENV_VULTURE="${WORKSPACE_ROOT}/.venv/bin/vulture"
 
 # Report tests taking longer than this (seconds), or with no pytest output (hang).
 SLOW_TEST_THRESHOLD_SEC=60
@@ -650,6 +652,35 @@ check_asyncapi_drift() {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# DEAD-CODE ANALYSIS (VULTURE)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+check_vulture() {
+  print_section "vulture"
+
+  cd "$WORKSPACE_ROOT"
+
+  if [ ! -x "$VENV_VULTURE" ]; then
+    print_fail "vulture not installed (run 'make sync')"
+    return 1
+  fi
+
+  local output
+  local exit_code
+  output=$("$VENV_VULTURE" 2>&1) && exit_code=0 || exit_code=$?
+  if [ $exit_code -eq 0 ]; then
+    print_ok "no high-confidence dead code (≥90%)"
+  else
+    print_fail "dead code detected"
+    record_failure_log "Vulture" "$output"
+    print_note "fix findings or whitelist with 'make vulture-whitelist' (review diff)"
+    return 1
+  fi
+
+  return 0
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # UNIT TESTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -866,6 +897,7 @@ if $SKIP_TESTS; then
   # Quick mode: run checks sequentially (simpler output)
   check_formatting || true
   check_linting || true
+  check_vulture || true
   check_asyncapi_drift || true
 else
   # Full mode: parallelize independent checks
@@ -886,6 +918,11 @@ else
   ) >"$tmpdir/lint.out" 2>&1 &
   pids+=($!)
   (
+    check_vulture
+    echo $? >"$tmpdir/vulture.exit"
+  ) >"$tmpdir/vulture.out" 2>&1 &
+  pids+=($!)
+  (
     check_asyncapi_drift
     echo $? >"$tmpdir/asyncapi.exit"
   ) >"$tmpdir/asyncapi.out" 2>&1 &
@@ -899,10 +936,11 @@ else
   # Replay outputs in order
   cat "$tmpdir/format.out" 2>/dev/null || true
   cat "$tmpdir/lint.out" 2>/dev/null || true
+  cat "$tmpdir/vulture.out" 2>/dev/null || true
   cat "$tmpdir/asyncapi.out" 2>/dev/null || true
 
   # Propagate failures to OVERALL_STATUS (subshell modifications don't reach parent)
-  for check in format lint asyncapi; do
+  for check in format lint vulture asyncapi; do
     if [ -f "$tmpdir/${check}.exit" ]; then
       exit_code=$(cat "$tmpdir/${check}.exit")
       if [ "$exit_code" -ne 0 ]; then

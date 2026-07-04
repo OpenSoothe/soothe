@@ -19,7 +19,6 @@ from langchain_core.messages import (
 
 from soothe.foundation.context.ledger import LedgerManager
 from soothe.foundation.context.models import (
-    TERMINAL_STATES,
     EpisodeSummary,
     EvidenceEntry,
     GoalNode,
@@ -309,15 +308,13 @@ class ContextEngine:
         error: str | None = None,
         *,
         evidence: Any | None = None,
-        allow_retry: bool = True,
     ) -> None:
-        """Transition goal to failed (non-terminal if retries remain).
+        """Transition goal to failed.
 
         Args:
             goal_id: Goal to fail.
             error: Error message string.
             evidence: Optional evidence bundle for structured failure info.
-            allow_retry: If False, skip retry logic and go straight to failed.
         """
         error_msg = error or (evidence.narrative if evidence else "unknown error")
         self._dag.fail_goal(goal_id, error_msg)
@@ -484,10 +481,6 @@ class ContextEngine:
         self._episodic_memory.extend(episodes)
         logger.info("Recorded %d episodic memory entries", len(episodes))
 
-    def get_episodic_memory(self, limit: int = 10) -> list[EpisodeSummary]:
-        """Retrieve recent episodic memories."""
-        return self._episodic_memory[-limit:]
-
     # ── Scheduler methods (RFC-222, RFC-625) ────────────────────────────────
 
     def peek_ready_goals(self, limit: int = 1) -> list[GoalNode]:
@@ -611,29 +604,6 @@ class ContextEngine:
         logger.info("Reactivated goal %s (was %s)", goal_id, old)
         self._fire("goal_unblocked", goal_id)
         return goal
-
-    async def check_reactivated_goals(self) -> list[GoalNode]:
-        """Auto-reactivate goals whose dependencies are now resolved.
-
-        Returns:
-            List of reactivated goals.
-        """
-        reactivated: list[GoalNode] = []
-        for goal in self._dag.goals.values():
-            if goal.status not in ("suspended", "blocked"):
-                continue
-            deps_met = all(
-                (dep := self._dag.goals.get(dep_id)) is not None and dep.status in TERMINAL_STATES
-                for dep_id in goal.depends_on
-            )
-            if deps_met:
-                goal.status = "pending"
-                goal.send_back_count = 0
-                goal.updated_at = datetime.now(UTC)
-                reactivated.append(goal)
-                logger.info("Auto-reactivated goal %s (dependencies resolved)", goal.id)
-                self._fire("goal_unblocked", goal.id)
-        return reactivated
 
     # ── RFC-204 Group C directives ──────────────────────────────────────────
 

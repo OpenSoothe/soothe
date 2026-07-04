@@ -99,8 +99,6 @@ agent:
         enabled: true
         max_episodes: 10
         min_success_rate: 0.8
-    scheduler_enabled: true
-    max_scheduled_tasks: 100
     webhooks: {}
     max_loops: 4
     loop_idle_timeout: 300
@@ -564,18 +562,9 @@ update:
 # ============================================================
 # OPTIMIZATION
 # ============================================================
-# OptimizationConfig — semantic risk/relationships, failure intent, structured plan (IG-433).
+# OptimizationConfig — failure intent classification and structured plan parsing (IG-433).
 
 optimization:
-  semantic_risk:
-    enabled: true
-    cache_enabled: true
-    cache_similarity_threshold: 0.9
-    confidence_threshold: 0.5
-  semantic_relationships:
-    enabled: true
-    auto_apply_threshold: 0.85
-    flag_threshold: 0.7
   failure_intent:
     enabled: true
     llm_confidence_threshold: 0.7
