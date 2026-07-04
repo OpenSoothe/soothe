@@ -50,47 +50,6 @@ async def _fetch_status(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
         await client.close()
 
 
-async def _fetch_ready_state(ws_url: str, timeout: float = 5.0) -> dict[str, Any] | None:
-    """Fetch daemon readiness state via WebSocket connection_init/ack handshake.
-
-    Sends ``connection_init`` and waits for ``connection_ack`` which carries
-    the daemon's ``readiness_state``.
-
-    Args:
-        ws_url: WebSocket URL.
-        timeout: Timeout for handshake.
-
-    Returns:
-        ``connection_ack`` result dict (containing ``readiness_state``) or None.
-    """
-    import websockets
-
-    init_msg = json.dumps(
-        {
-            "proto": "1",
-            "type": "connection_init",
-            "params": {
-                "client_version": "0.5.0",
-                "accept_proto": ["1"],
-                "capabilities": ["streaming"],
-            },
-        }
-    )
-
-    try:
-        async with asyncio.timeout(timeout):
-            async with websockets.connect(ws_url) as ws:
-                await ws.send(init_msg)
-                for _ in range(3):
-                    msg = await ws.recv()
-                    data = json.loads(msg)
-                    if data.get("type") == "connection_ack":
-                        return data.get("result", data)
-    except Exception:
-        pass
-    return None
-
-
 def _render_unified_status_table(
     config: Any,
     ws_url: str,
@@ -156,10 +115,6 @@ def daemon_status(
         bool,
         typer.Option("--json", help="Output as JSON."),
     ] = False,
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Show detailed status."),
-    ] = False,
 ) -> None:
     """Check daemon status from client side.
 
@@ -168,7 +123,6 @@ def daemon_status(
     Examples:
         soothe status daemon
         soothe status daemon --json
-        soothe status daemon -v
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -217,11 +171,6 @@ def daemon_status(
             )
         sys.exit(1)
 
-    # Get readiness state for verbose mode
-    ready_state = None
-    if verbose:
-        ready_state = asyncio.run(_fetch_ready_state(ws_url, timeout=5.0))
-
     if json_output:
         output = {
             "status": "running",
@@ -232,10 +181,10 @@ def daemon_status(
             "daemon_pid": status.get("daemon_pid"),
             "daemon_version": status.get("daemon_version"),
             "core_version": status.get("core_version"),
+            "readiness_state": status.get("readiness_state", "unknown"),
         }
-        if ready_state:
-            output["readiness_state"] = ready_state.get("state", "unknown")
-            output["readiness_message"] = ready_state.get("message")
+        if status.get("readiness_message"):
+            output["readiness_message"] = status.get("readiness_message")
         console.print_json(json.dumps(output))
         return
 
@@ -246,6 +195,15 @@ def daemon_status(
     daemon_pid = status.get("daemon_pid")
     daemon_version = status.get("daemon_version")
     core_version = status.get("core_version")
+    # Use readiness_state from daemon_status RPC (already includes state + message)
+    readiness_state_from_status = (
+        {
+            "state": status.get("readiness_state", "unknown"),
+            "message": status.get("readiness_message"),
+        }
+        if status.get("readiness_state")
+        else None
+    )
 
     table = _render_unified_status_table(
         config,
@@ -254,7 +212,7 @@ def daemon_status(
         port_live,
         active_threads,
         daemon_pid,
-        ready_state,
+        readiness_state_from_status,
         daemon_live=True,
         daemon_version=daemon_version,
         core_version=core_version,
@@ -349,6 +307,9 @@ def status_main(
                 output["daemon"]["daemon_pid"] = status.get("daemon_pid")
                 output["daemon"]["daemon_version"] = status.get("daemon_version")
                 output["daemon"]["core_version"] = status.get("core_version")
+                output["daemon"]["readiness_state"] = status.get("readiness_state", "unknown")
+                if status.get("readiness_message"):
+                    output["daemon"]["readiness_message"] = status.get("readiness_message")
         console.print_json(json.dumps(output))
         return
 
@@ -378,6 +339,15 @@ def status_main(
     daemon_pid = status.get("daemon_pid")
     daemon_version = status.get("daemon_version")
     core_version = status.get("core_version")
+    # Use readiness_state from daemon_status RPC (already includes state + message)
+    readiness_state_from_status = (
+        {
+            "state": status.get("readiness_state", "unknown"),
+            "message": status.get("readiness_message"),
+        }
+        if status.get("readiness_state")
+        else None
+    )
 
     table = _render_unified_status_table(
         config,
@@ -386,6 +356,7 @@ def status_main(
         port_live,
         active_threads,
         daemon_pid,
+        readiness_state_from_status,
         daemon_live=True,
         daemon_version=daemon_version,
         core_version=core_version,

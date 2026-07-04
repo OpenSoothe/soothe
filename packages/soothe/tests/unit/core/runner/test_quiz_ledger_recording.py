@@ -17,6 +17,7 @@ class _QuizRunner(PhasesMixin):
     def __init__(self, *, config: MagicMock, loop_id: str) -> None:
         self._config = config
         self._client_loop_id_for_stream = loop_id
+        self._materialize_core_agent = AsyncMock(return_value=MagicMock())
 
 
 @pytest.mark.asyncio

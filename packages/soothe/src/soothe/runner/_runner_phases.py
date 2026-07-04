@@ -127,7 +127,7 @@ class PhasesMixin:
                     phase="quiz",
                     thread_id=thread_id,
                 )
-                await self._save_quiz_to_state(
+                self._schedule_quiz_persistence(
                     user_input,
                     piggybacked_answer.strip(),
                     thread_id,
@@ -152,7 +152,7 @@ class PhasesMixin:
                 thread_id=thread_id,
             )
             logger.debug("Quiz completed (no model fallback): %s", user_input[:50])
-            await self._save_quiz_to_state(
+            self._schedule_quiz_persistence(
                 user_input,
                 fallback_response,
                 thread_id,
@@ -207,7 +207,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 thread_id=thread_id,
             )
             logger.debug("Quiz completed (%s model): %s", model_label, user_input[:50])
-            await self._save_quiz_to_state(
+            self._schedule_quiz_persistence(
                 user_input, answer, thread_id, context_engine=context_engine
             )
         except Exception:
@@ -218,9 +218,32 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
                 phase="quiz",
                 thread_id=thread_id,
             )
-            await self._save_quiz_to_state(
+            self._schedule_quiz_persistence(
                 user_input, fallback_response, thread_id, context_engine=context_engine
             )
+
+    def _schedule_quiz_persistence(
+        self,
+        query: str,
+        response: str,
+        thread_id: str,
+        *,
+        context_engine: Any | None = None,
+    ) -> None:
+        """Persist quiz exchange without blocking the response stream."""
+
+        async def _persist() -> None:
+            try:
+                await self._save_quiz_to_state(
+                    query,
+                    response,
+                    thread_id,
+                    context_engine=context_engine,
+                )
+            except Exception:
+                logger.debug("Background quiz persistence failed", exc_info=True)
+
+        asyncio.create_task(_persist())
 
     async def _save_quiz_to_state(
         self,
@@ -231,6 +254,7 @@ Do not use tools or search. If the question needs live/real-time data (weather, 
         context_engine: Any | None = None,
     ) -> None:
         """Persist quiz (minimal-path) Human+AI pair to checkpointer and loop ledger."""
+        await self._materialize_core_agent()
         await self._save_quiz_to_checkpointer(query, response, thread_id)
         await self._save_quiz_to_ledger(query, response, thread_id, context_engine=context_engine)
 

@@ -142,6 +142,9 @@ SPINNER_LABEL_AWAITING_ANSWER = "Awaiting your answer"
 SPINNER_LABEL_WAITING_AGENT_READY = "Waiting for agent to be ready"
 SPINNER_LABEL_CONNECTING_DAEMON = "Connecting to daemon"
 
+# Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
+_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "plan_direct", "autonomous_goal"})
+
 
 class TextualUIAdapter:
     """Adapter for rendering agent output to Textual widgets.
@@ -1934,6 +1937,61 @@ def _read_mentioned_file(file_path: Any, max_embed_bytes: int) -> str:
     return f"\n### {file_path.name}\nPath: `{file_path}`\n```\n{content}\n```"
 
 
+async def _try_mount_instant_loop_assistant_phase(
+    adapter: TextualUIAdapter,
+    *,
+    message: Any,
+    blocks: list[Any],
+    ns_key: tuple[Any, ...],
+    is_main_agent: bool,
+    suppress_main_agent_assistant_text: bool,
+    pending_text_by_namespace: dict[tuple[Any, ...], str],
+    assistant_message_by_namespace: dict[tuple[Any, ...], Any],
+    router: Any,
+    ev_stats: Any,
+    clarification_pending: bool,
+) -> bool:
+    """Mount single-chunk loop-tagged assistant text; return True when handled."""
+    phase = assistant_output_phase(message)
+    if phase not in _INSTANT_LOOP_ASSISTANT_PHASES or not is_main_agent:
+        return False
+    if suppress_main_agent_assistant_text:
+        return True
+    text = "\n".join(
+        str(b.get("text", "")) for b in blocks if isinstance(b, dict) and b.get("type") == "text"
+    )
+    if not text.strip():
+        return True
+    ev_stats.text_chunks += 1
+    pending_text = pending_text_by_namespace.get(ns_key, "")
+    if pending_text:
+        await _flush_assistant_text_ns(
+            adapter,
+            pending_text,
+            ns_key,
+            assistant_message_by_namespace,
+            router=router,
+        )
+        pending_text_by_namespace[ns_key] = ""
+        assistant_message_by_namespace.pop(ns_key, None)
+    if assistant_message_by_namespace.get(ns_key) is not None:
+        return True
+    repaired = RendererBase.repair_concatenated_output(text)
+    output_widget = AssistantMessage(
+        repaired,
+        id=f"asst-{uuid.uuid4().hex[:8]}",
+        render_markdown=False,
+    )
+    await adapter._mount_message(output_widget)
+    await output_widget.write_initial_content()
+    if adapter._sync_message_content and output_widget.id:
+        adapter._sync_message_content(output_widget.id, repaired)
+    if adapter._set_active_message:
+        adapter._set_active_message(None)
+    await _maybe_set_thinking_spinner(adapter, clarification_pending=clarification_pending)
+    return True
+
+
 def _goal_completion_time_footer_if_needed(
     content: str,
     *,
@@ -2897,55 +2955,19 @@ async def execute_task_textual(
                             )
                             continue
 
-                        # Simple-bypass plan next_action (phase=plan_direct) is a single
-                        # user-facing line — show as plain assistant text, not markdown.
-                        if assistant_output_phase(message) == "plan_direct" and is_main_agent:
-                            if suppress_main_agent_assistant_text:
-                                continue
-                            text_plan_direct = "\n".join(
-                                str(b.get("text", ""))
-                                for b in blocks
-                                if isinstance(b, dict) and b.get("type") == "text"
-                            )
-                            if not text_plan_direct.strip():
-                                continue
-                            ev_stats.text_chunks += 1
-                            pending_text = pending_text_by_namespace.get(ns_key, "")
-                            if pending_text:
-                                await _flush_assistant_text_ns(
-                                    adapter,
-                                    pending_text,
-                                    ns_key,
-                                    assistant_message_by_namespace,
-                                    router=router,
-                                )
-                                pending_text_by_namespace[ns_key] = ""
-                                assistant_message_by_namespace.pop(ns_key, None)
-                            if assistant_message_by_namespace.get(ns_key) is not None:
-                                continue
-                            repaired_plan_direct = RendererBase.repair_concatenated_output(
-                                text_plan_direct
-                            )
-                            output_widget = AssistantMessage(
-                                repaired_plan_direct,
-                                id=f"asst-{uuid.uuid4().hex[:8]}",
-                                render_markdown=False,
-                            )
-                            await adapter._mount_message(output_widget)
-                            await output_widget.write_initial_content()
-                            if adapter._sync_message_content and output_widget.id:
-                                adapter._sync_message_content(
-                                    output_widget.id,
-                                    repaired_plan_direct,
-                                )
-                            # Do not register in assistant_message_by_namespace: that slot is
-                            # for in-flight streaming and batch goal_completion treats any
-                            # existing entry as "already shown" and skips the final card.
-                            if adapter._set_active_message:
-                                adapter._set_active_message(None)
-                            await _maybe_set_thinking_spinner(
-                                adapter, clarification_pending=clarification_pending
-                            )
+                        if await _try_mount_instant_loop_assistant_phase(
+                            adapter,
+                            message=message,
+                            blocks=blocks,
+                            ns_key=ns_key,
+                            is_main_agent=is_main_agent,
+                            suppress_main_agent_assistant_text=suppress_main_agent_assistant_text,
+                            pending_text_by_namespace=pending_text_by_namespace,
+                            assistant_message_by_namespace=assistant_message_by_namespace,
+                            router=router,
+                            ev_stats=ev_stats,
+                            clarification_pending=clarification_pending,
+                        ):
                             continue
 
                         for block in blocks:
@@ -3000,7 +3022,7 @@ async def execute_task_textual(
                                 # Main graph: skip standalone AssistantMessage cards for
                                 # intermediate AIMessage streams (execute_wave, unphased, etc.).
                                 # ``goal_completion`` is handled above. Other RFC-614 user-output
-                                # phases (quiz, autonomous_goal) still use cards.
+                                # phases (quiz, plan_direct, autonomous_goal) use instant mount.
                                 if (
                                     is_main_agent
                                     and assistant_output_phase(message)

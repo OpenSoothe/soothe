@@ -511,7 +511,6 @@ class StrangeLoopMixin:
                         event_data.get("context_engine") if isinstance(event_data, dict) else None
                     )
                     if intent_type == "quiz":
-                        await self._materialize_core_agent()
                         async for chunk in self._run_quiz(
                             user_input,
                             tid,
@@ -742,23 +741,33 @@ class StrangeLoopMixin:
                         final_result.goal_progress,
                     )
 
-                    # Empty-loop reclamation: one AI counter bump per completed goal,
-                    # so loops that produced any AI output are immune to empty-loop GC.
-                    try:
-                        from soothe.foundation.sloop.state.persistence import (
-                            StrangeLoopCheckpointPersistenceManager,
-                        )
-
-                        _pm = StrangeLoopCheckpointPersistenceManager(config=self._config)
-                        try:
-                            await _pm.increment_loop_message_count(strange_loop_id, ai=1)
-                        finally:
-                            await _pm.close()
-                    except Exception:
-                        logger.warning(
-                            "Failed to increment ai_message_count for loop %s",
-                            strange_loop_id,
-                            exc_info=True,
-                        )
+                    _schedule_increment_loop_ai_message_count(
+                        self._config,
+                        strange_loop_id,
+                    )
         finally:
             heartbeat_handle.stop()
+
+
+def _schedule_increment_loop_ai_message_count(config: Any, loop_id: str) -> None:
+    """Bump loop AI message counter without blocking stream completion."""
+
+    async def _increment() -> None:
+        try:
+            from soothe.foundation.sloop.state.persistence import (
+                StrangeLoopCheckpointPersistenceManager,
+            )
+
+            pm = StrangeLoopCheckpointPersistenceManager(config=config)
+            try:
+                await pm.increment_loop_message_count(loop_id, ai=1)
+            finally:
+                await pm.close()
+        except Exception:
+            logger.warning(
+                "Failed to increment ai_message_count for loop %s",
+                loop_id,
+                exc_info=True,
+            )
+
+    asyncio.create_task(_increment())
