@@ -53,6 +53,7 @@ vector_stores:
   - name: pgvector
     provider_type: pgvector
     dsn: "postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors"
+    pool_size: 8  # Raised 5→8 (RQD-8c67efb2): 3 concurrent skillify retrievers + checkpointer/sloop contention caused E3c PoolTimeout under burst. 8 gives 5-conn headroom over observed 3-worker peak.
 
 vector_store_router:
   default: "pgvector:soothe_default"
