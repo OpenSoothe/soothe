@@ -1973,41 +1973,42 @@ class MessageRouter:
                 logger.warning(
                     "[loop_new] Rejecting invalid client workspace %r: %s", raw_workspace, e
                 )
-            elif resolved.exists():
-                client_workspace = str(resolved)
-                logger.info(
-                    "[loop_new] Loop %s using client workspace: %s",
-                    loop_id,
-                    client_workspace,
-                )
-            elif host_root is not None:
-                # RFC-621: host paths are not present literally in the container;
-                # accept when mappable under workspace_mount.host_root.
-                try:
-                    translate_client_path_to_container(
-                        resolved,
-                        host_root=host_root,
-                        container_root=container_root,
-                    )
-                except ValueError as e:
-                    logger.info(
-                        "[loop_new] Loop %s ignoring client workspace (not under host_root): %s",
-                        loop_id,
-                        e,
-                    )
-                else:
+            else:
+                if resolved.exists():
                     client_workspace = str(resolved)
                     logger.info(
-                        "[loop_new] Loop %s using mapped client workspace: %s",
+                        "[loop_new] Loop %s using client workspace: %s",
                         loop_id,
                         client_workspace,
                     )
-            else:
-                logger.info(
-                    "[loop_new] Loop %s ignoring client workspace (not on daemon host): %s",
-                    loop_id,
-                    resolved,
-                )
+                elif host_root is not None:
+                    # RFC-621: host paths are not present literally in the container;
+                    # accept when mappable under workspace_mount.host_root.
+                    try:
+                        translate_client_path_to_container(
+                            resolved,
+                            host_root=host_root,
+                            container_root=container_root,
+                        )
+                    except ValueError as e:
+                        logger.info(
+                            "[loop_new] Loop %s ignoring client workspace (not under host_root): %s",
+                            loop_id,
+                            e,
+                        )
+                    else:
+                        client_workspace = str(resolved)
+                        logger.info(
+                            "[loop_new] Loop %s using mapped client workspace: %s",
+                            loop_id,
+                            client_workspace,
+                        )
+                else:
+                    logger.info(
+                        "[loop_new] Loop %s ignoring client workspace (not on daemon host): %s",
+                        loop_id,
+                        resolved,
+                    )
 
         # Extract user identity for workspace isolation
         user: str | None = None

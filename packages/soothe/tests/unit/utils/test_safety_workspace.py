@@ -74,9 +74,12 @@ class TestValidateClientWorkspace:
         """Should log when workspace doesn't exist (debug — callers may fall back)."""
         import logging
 
+        from soothe.foundation.workspace.resolution import logger as ws_logger
+
         nonexistent = tmp_path / "nonexistent"
 
-        with caplog.at_level(logging.DEBUG):
+        # Set level on the actual logger (not just caplog) to ensure debug messages are emitted
+        with caplog.at_level(logging.DEBUG, logger=ws_logger.name):
             result = validate_client_workspace(nonexistent)
         assert result == nonexistent.resolve()
         assert "does not exist" in caplog.text

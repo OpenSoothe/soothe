@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import signal
 from typing import Any
 
@@ -27,6 +26,7 @@ from soothe_cli.cli.execution.daemon_errors import (
 )
 from soothe_cli.cli.execution.headless_renderer import HeadlessCliRenderer
 from soothe_cli.runtime import EventProcessor
+from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.tui._env_vars import resolve_cli_loop_workspace
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 
