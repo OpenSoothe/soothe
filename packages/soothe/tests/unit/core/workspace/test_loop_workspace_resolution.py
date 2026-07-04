@@ -53,6 +53,17 @@ def test_resolve_loop_workspace_uses_client_path_directly(tmp_path: Path) -> Non
     assert ws == project.resolve()
 
 
+def test_resolve_loop_workspace_falls_back_when_client_path_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path))
+    missing = tmp_path / "host-only-path"
+    loop_id = "loop-missing-ws"
+    ws = resolve_loop_workspace(loop_id=loop_id, client_workspace=str(missing))
+    expected_name = compute_scoped_workspace_dir_name(None, loop_id)
+    assert ws == tmp_path / "data" / "workspaces" / "anonymous" / expected_name
+
+
 def test_resolve_loop_workspace_persisted_with_user_and_workspace_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

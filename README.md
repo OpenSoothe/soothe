@@ -41,45 +41,92 @@ Five design choices make Soothe more than another agent loop.
 | ✅ | **Multi-Goal Orchestration** — Interdependent long-horizon workflows |
 | ⏳ | **Benchmark Reproduction** — [Compiler experiment](https://github.com/anthropics/claudes-c-compiler) |  
 
-## Getting Started
+## Quick Start
 
-Choose one of these two ways to run Soothe:
+1. **Install the CLI** (Python 3.11+):
 
-### 1) Recommended: Docker deployment (`deploy/`)
+   ```bash
+   pip install -U soothe-cli
+   ```
 
-Fastest path for daily use.
+2. **Start the daemon** (Docker, env-only — no config file):
+
+   Image: `registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest`
+
+   **OpenAI** (default model `gpt-4o-mini` via zero-config):
+
+   ```bash
+   docker run --rm -d --name soothed \
+     -p 8765:8765 \
+     -e OPENAI_API_KEY=sk-... \
+     -v soothe-data:/var/lib/soothe \
+     registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+   ```
+
+   **DashScope** (`qwen3.7-plus` via `SOOTHE_ROUTER_PROFILES`; mount host workspace for file tools):
+
+   ```bash
+   export DASHSCOPE_API_KEY=sk-...
+   export HOST_WS=/Users/you/Workspace
+   export CONTAINER_WS=/var/lib/soothe/workspaces
+   export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
+   export SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}"
+
+   docker run --rm -d --name soothed \
+     -p 8765:8765 \
+     -e DASHSCOPE_API_KEY \
+     -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
+     -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
+     -e SOOTHE_ROUTER_PROFILES \
+     -e SOOTHE_WORKSPACE_MOUNT \
+     -v soothe-data:/var/lib/soothe \
+     -v "$HOST_WS:$CONTAINER_WS" \
+     registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+
+   cd /Users/you/Workspace/soothe && soothe
+   ```
+
+   DashScope uses the OpenAI-compatible endpoint; zero-config names the provider `openai`, so router targets are `openai:qwen3.7-plus` (not `dashscope:…`). Chat-only without a workspace mount: omit the `HOST_WS` / `CONTAINER_WS` / `SOOTHE_WORKSPACE_MOUNT` exports and the workspace `-v` — the CLI can still send `cwd`; the daemon ignores host paths that are missing in the container.
+
+   **Local (pip)** instead of Docker:
+
+   ```bash
+   pip install -U 'soothe[all]' soothe-daemon
+   export OPENAI_API_KEY=sk-...
+   soothed start
+   ```
+
+   More env vars and Compose setups: [Configuration guide](docs/wiki/configuration-guide/environment-variables.md).
+
+3. **Verify** the daemon:
+
+   ```bash
+   curl -sf http://127.0.0.1:8765/healthz
+   ```
+
+4. **Run a prompt:**
+
+   ```bash
+   soothe -p "Research top 5 Python web frameworks"
+   # or interactive TUI:
+   soothe
+   ```
+
+### Production deployment
+
+Full stack (PostgreSQL + pgvector + config templates): [`deploy/`](deploy/README.md).
 
 ```bash
-cd deploy
-# Configure env + keys (see deploy/README.md)
-docker compose up -d
+cd deploy && cp env-example .env && vim .env && docker compose up -d
 ```
 
-Then use:
-
-```bash
-soothe
-# or
-soothe -p "Research top 5 Python web frameworks"
-```
-
-### 2) Alternative: Install from pip
-
-**Requirements:** Python 3.11+.
-
-```bash
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
-export OPENAI_API_KEY="sk-..."  # zero-config: no YAML file required
-soothed start
-soothe
-```
-
-Optional: copy `config/config.template.yml` to `~/.soothe/config/config.yml` for multi-provider or deployment overrides.
+Optional: copy `config/config.template.yml` to `~/.soothe/config/config.yml` for multi-provider routing and deployment overrides.
 
 ## Documentation
 
 | Resource | Description |
 |----------|-------------|
+| [Configuration guide](docs/wiki/configuration-guide/) | YAML, env vars, zero-config |
 | [User Guide](docs/user_guide.md) | End-user usage guide |
 | [RFCs](docs/specs/) | Architecture specs |
 | [CLAUDE.md](CLAUDE.md) | AI agent dev guide |

@@ -24,6 +24,23 @@ def test_loop_precedence_with_client_workspace(tmp_path: Path) -> None:
     assert Path(result.path) == project.resolve()
 
 
+def test_loop_precedence_missing_client_path_uses_persisted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import soothe.config as cfg
+
+    monkeypatch.setattr(cfg, "SOOTHE_HOME", str(tmp_path))
+    missing = tmp_path / "missing-host-path"
+    result = resolve_workspace(
+        WorkspacePrecedence.LOOP,
+        loop_id="loop-1",
+        client_workspace=str(missing),
+        soothe_home=tmp_path,
+    )
+    assert result.source == "persisted"
+    assert "data/workspaces/anonymous/ws_" in result.path
+
+
 def test_loop_precedence_persisted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import soothe.config as cfg
 

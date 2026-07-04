@@ -482,6 +482,7 @@ class _StartupMixin:
         )
 
         from soothe_cli.runtime.transport.session import TuiDaemonSession
+        from soothe_cli.tui._env_vars import resolve_cli_loop_workspace
         from soothe_cli.tui.textual_adapter import SPINNER_LABEL_CONNECTING_DAEMON
 
         ws_url = websocket_url_from_config(self._daemon_config)
@@ -511,7 +512,7 @@ class _StartupMixin:
 
         session = TuiDaemonSession(
             self._daemon_config,
-            workspace=self._cwd,
+            workspace=resolve_cli_loop_workspace(),
             post_idle_drain_deadline=0.3,
         )
         status_event = await session.connect(resume_loop_id=self._lc_loop_id)

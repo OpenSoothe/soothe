@@ -71,9 +71,12 @@ class TestValidateClientWorkspace:
             validate_client_workspace("/home")
 
     def test_warn_nonexistent_directory(self, tmp_path: Path, caplog) -> None:
-        """Should warn when workspace doesn't exist."""
+        """Should log when workspace doesn't exist (debug — callers may fall back)."""
+        import logging
+
         nonexistent = tmp_path / "nonexistent"
 
-        result = validate_client_workspace(nonexistent)
+        with caplog.at_level(logging.DEBUG):
+            result = validate_client_workspace(nonexistent)
         assert result == nonexistent.resolve()
         assert "does not exist" in caplog.text

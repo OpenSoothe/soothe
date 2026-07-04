@@ -4,7 +4,7 @@ A condensed quick-reference for the Soothe YAML schema. This is a map, not an en
 
 ## How the Schema Is Organized
 
-The top-level `SootheConfig` (in `config/settings.py`) is a Pydantic `BaseSettings` model with `env_prefix="SOOTHE_"`.
+The top-level `SootheConfig` (in `config/settings.py`) is a Pydantic `BaseSettings` model with `env_prefix="SOOTHE_"`. Top-level fields and JSON-encoded list/object fields accept env overrides; nested dotted paths (e.g. `SOOTHE_ROUTER_DEFAULT`) do not — see [Environment Variables](environment-variables.md).
 
 **Zero-config:** with no YAML file, set `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) and run. Soothe synthesizes a provider and uses built-in router/vector-store defaults. Explicit YAML `providers` always wins.
 
@@ -30,8 +30,9 @@ The full set of sections:
 | Section | Source model | What it controls |
 |---------|--------------|------------------|
 | `providers` | `ModelProviderConfig` | LLM/embedding API endpoints and keys |
-| `router` | `ModelRouter` | Role → `provider:model` mapping |
-| `embedding_dims` | int | Must match embedding model output |
+| `router_profiles` / `active_router_profile` | `RouterProfile` | Named presets; resolved into `router` + `embedding_dims` at load |
+| `router` | `ModelRouter` | **Derived** (not in YAML) — role → `provider:model` mapping |
+| `embedding_dims` | int | **Derived** from active profile; must match embedding model |
 | `agent` | `AgentConfig` | Identity, loop, autonomous mode, protocols |
 | `subagents` | `SubagentConfig` (dict) | explore / plan / tacitus / browser_use |
 | `tools` | `ToolsConfig` | Tool group enable/disable + config |
@@ -61,6 +62,8 @@ Each entry is a `ModelProviderConfig` with `name` (referenced by the router), `p
 See [Provider Setup](provider-setup.md) for selection criteria.
 
 ## Router
+
+Define routing in **`router_profiles`** and select with **`active_router_profile`**. At load, Soothe copies the active profile into derived fields `router` and `embedding_dims`.
 
 `ModelRouter` maps six roles to `"provider_name:model_name"` strings: `default`, `think`, `fast`, `image`, `ocr`, `embedding`. Unset roles inherit `default`. Agent code never names a model directly — it requests a role and the router resolves it.
 
