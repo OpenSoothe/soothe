@@ -11,11 +11,19 @@ from langchain_core.messages import AIMessage
 from soothe.middleware.llm_rate_limit import (
     EnhancedTimeoutError,
     LLMRateLimitMiddleware,
+    LLMRateLimitRegistry,
     _extract_rate_limit_info,
     _extract_retry_after_seconds,
     _is_api_rate_limit_error,
+    calc_rate_limit_backoff,
+    effective_llm_call_timeout,
 )
 from soothe.utils.llm.structured import StructuredOutputError
+
+
+@pytest.fixture(autouse=True)
+def _reset_llm_rate_limit_registry() -> None:
+    LLMRateLimitRegistry.reset_for_tests()
 
 
 @pytest.fixture
@@ -236,27 +244,26 @@ async def test_thread_budget_cleanup_on_success(
 def test_calculate_retry_timeout_escalation(
     middleware_with_retry: LLMRateLimitMiddleware,
 ) -> None:
-    """Test _calculate_retry_timeout escalates correctly."""
-    # Attempt 0: base timeout
-    timeout_0 = middleware_with_retry._calculate_retry_timeout(
-        base_timeout=60,
-        attempt=0,
-    )
-    assert timeout_0 == 60  # No escalation on initial attempt
+    """Test timeout escalation uses policy config."""
+    config = middleware_with_retry._policy_config
 
-    # Attempt 1: 2x escalation
-    timeout_1 = middleware_with_retry._calculate_retry_timeout(
-        base_timeout=60,
-        attempt=1,
-    )
-    assert timeout_1 == 120  # 60 * 2 = 120
+    timeout_0 = effective_llm_call_timeout(config, timeout_attempts=0, rate_limit_attempts=0)
+    assert timeout_0 == 60
 
-    # Attempt 2: 4x escalation
-    timeout_2 = middleware_with_retry._calculate_retry_timeout(
-        base_timeout=60,
-        attempt=2,
+    timeout_1 = effective_llm_call_timeout(config, timeout_attempts=1, rate_limit_attempts=0)
+    assert timeout_1 == 120
+
+    timeout_2 = effective_llm_call_timeout(config, timeout_attempts=2, rate_limit_attempts=0)
+    assert timeout_2 == 240
+
+
+def test_effective_timeout_uses_shorter_cap_after_429(
+    middleware_with_retry: LLMRateLimitMiddleware,
+) -> None:
+    config = middleware_with_retry._policy_config
+    assert effective_llm_call_timeout(config, timeout_attempts=0, rate_limit_attempts=1) == (
+        config.rate_limit_retry_timeout_seconds
     )
-    assert timeout_2 == 240  # 60 * 4 = 240
 
 
 def test_executor_error_classification_enhanced_timeout() -> None:
@@ -808,69 +815,36 @@ async def test_429_and_timeout_retry_separate_counters(
 
 def test_calculate_rate_limit_backoff_exponential() -> None:
     """Test exponential backoff calculation."""
-    middleware = LLMRateLimitMiddleware(
-        requests_per_minute=120,
-        max_concurrent_requests_per_thread=10,
-        call_timeout_seconds=60,
-        call_timeout_max_seconds=240,
-        retry_on_rate_limit=True,
-        max_rate_limit_retries=3,
-        rate_limit_backoff_base=2.0,
-        rate_limit_backoff_max=60.0,
-        respect_retry_after_header=True,
+    backoff_0 = calc_rate_limit_backoff(
+        0, None, base=2.0, backoff_max=60.0, respect_retry_after=True
     )
-
-    # Attempt 0: 2.0 * 2^0 = 2.0
-    backoff_0 = middleware._calculate_rate_limit_backoff(attempt=0, exc=None)
     assert backoff_0 == 2.0
 
-    # Attempt 1: 2.0 * 2^1 = 4.0
-    backoff_1 = middleware._calculate_rate_limit_backoff(attempt=1, exc=None)
+    backoff_1 = calc_rate_limit_backoff(
+        1, None, base=2.0, backoff_max=60.0, respect_retry_after=True
+    )
     assert backoff_1 == 4.0
 
-    # Attempt 2: 2.0 * 2^2 = 8.0
-    backoff_2 = middleware._calculate_rate_limit_backoff(attempt=2, exc=None)
+    backoff_2 = calc_rate_limit_backoff(
+        2, None, base=2.0, backoff_max=60.0, respect_retry_after=True
+    )
     assert backoff_2 == 8.0
 
 
 def test_calculate_rate_limit_backoff_respects_retry_after() -> None:
     """Test retry-after header overrides exponential backoff."""
-    middleware = LLMRateLimitMiddleware(
-        requests_per_minute=120,
-        max_concurrent_requests_per_thread=10,
-        call_timeout_seconds=60,
-        call_timeout_max_seconds=240,
-        retry_on_rate_limit=True,
-        max_rate_limit_retries=3,
-        rate_limit_backoff_base=2.0,
-        rate_limit_backoff_max=60.0,
-        respect_retry_after_header=True,
-    )
     exc = MockRateLimitErrorWithRetryAfterError(retry_after=15.0)
 
-    # Should use retry-after value instead of exponential
-    backoff = middleware._calculate_rate_limit_backoff(attempt=0, exc=exc)
+    backoff = calc_rate_limit_backoff(0, exc, base=2.0, backoff_max=60.0, respect_retry_after=True)
     assert backoff == 15.0
 
 
 def test_calculate_rate_limit_backoff_retry_after_capped() -> None:
     """Test retry-after value is capped at backoff_max."""
-    middleware = LLMRateLimitMiddleware(
-        requests_per_minute=120,
-        max_concurrent_requests_per_thread=10,
-        call_timeout_seconds=60,
-        call_timeout_max_seconds=240,
-        retry_on_rate_limit=True,
-        max_rate_limit_retries=3,
-        rate_limit_backoff_base=2.0,
-        rate_limit_backoff_max=60.0,
-        respect_retry_after_header=True,
-    )
-    # retry_after > backoff_max (60.0)
     exc = MockRateLimitErrorWithRetryAfterError(retry_after=120.0)
 
-    backoff = middleware._calculate_rate_limit_backoff(attempt=0, exc=exc)
-    assert backoff == 60.0  # Capped at backoff_max
+    backoff = calc_rate_limit_backoff(0, exc, base=2.0, backoff_max=60.0, respect_retry_after=True)
+    assert backoff == 60.0
 
 
 # ==============================================================================

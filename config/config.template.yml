@@ -245,6 +245,7 @@ agent:
       rate_limit_backoff_base: 2.0
       rate_limit_backoff_max: 60.0
       respect_retry_after_header: true
+      rate_limit_retry_timeout_seconds: 120
     loop_orchestrator_evidence_validate: true
   # Protocol backends — planner, policy, durability, MemU (ProtocolsConfig)
   protocols:

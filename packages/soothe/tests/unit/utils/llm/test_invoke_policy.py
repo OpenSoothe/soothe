@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from soothe.config.models import LLMRateLimitConfig
-from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+from soothe.middleware.llm_rate_limit import EnhancedTimeoutError, LLMRateLimitRegistry
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
 from soothe.utils.llm.structured import StructuredOutputError
+
+
+@pytest.fixture(autouse=True)
+def _reset_llm_rate_limit_registry() -> None:
+    LLMRateLimitRegistry.reset_for_tests()
 
 
 class MockRateLimitError(Exception):
@@ -92,6 +99,48 @@ async def test_invoke_policy_retries_429_then_succeeds() -> None:
 
     assert result == "done"
     assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_invoke_policy_429_retry_uses_shorter_timeout() -> None:
+    """After 429, retries should use rate_limit_retry_timeout_seconds not call_timeout."""
+    calls = 0
+    captured_timeouts: list[int | float] = []
+    real_wait_for = asyncio.wait_for
+
+    async def rate_limited_then_ok() -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise MockRateLimitError()
+        return "done"
+
+    async def tracking_wait_for(awaitable: Any, *, timeout: int | float) -> Any:
+        captured_timeouts.append(timeout)
+        return await real_wait_for(awaitable, timeout=timeout)
+
+    config = LLMRateLimitConfig(
+        call_timeout_seconds=600,
+        rate_limit_retry_timeout_seconds=45,
+        retry_on_rate_limit=True,
+        max_rate_limit_retries=2,
+        rate_limit_backoff_base=1.0,
+        respect_retry_after_header=False,
+    )
+
+    with (
+        patch("asyncio.sleep", new_callable=AsyncMock),
+        patch("soothe.middleware.llm_rate_limit.asyncio.wait_for", side_effect=tracking_wait_for),
+    ):
+        result = await await_with_llm_call_policy(
+            rate_limited_then_ok,
+            config=config,
+            thread_id="loop-1",
+        )
+
+    assert result == "done"
+    assert calls == 2
+    assert captured_timeouts == [600, 45]
 
 
 @pytest.mark.asyncio
