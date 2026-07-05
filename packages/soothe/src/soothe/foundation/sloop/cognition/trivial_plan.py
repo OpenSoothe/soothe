@@ -1,12 +1,9 @@
 """Trivial-branch plan builder (RFC-630 §11).
 
 For the ``trivial`` intake label, ``init_or_resume`` injects a minimal
-1-step plan so the loop skips ``plan_generate`` entirely. The step action is
-the goal itself — no ``"I will complete this goal directly:"`` prefix and no
-synthetic reasoning prose. The ``## Result`` evidence contract is retained
-from ``simple_bypass`` (functional, not cosmetic): it forces the assistant to
-restate concrete data so ``plan_assess`` recognizes completion on the next
-iteration.
+1-step plan so the loop skips ``plan_assess`` and ``plan_generate``. Execute
+runs on a step thread branch; ``terminal_after_execute`` routes to
+``goal_completion`` (ledger_direct) without a second assess wave.
 """
 
 from __future__ import annotations
@@ -32,6 +29,8 @@ def build_trivial_plan(goal: str) -> PlanResult:
         assessment_reasoning="",
         plan_reasoning="",
         plan_action="new",
+        require_goal_completion=False,
+        terminal_after_execute=True,
         decision=AgentDecision(
             type="execute_steps",
             execution_mode="parallel",

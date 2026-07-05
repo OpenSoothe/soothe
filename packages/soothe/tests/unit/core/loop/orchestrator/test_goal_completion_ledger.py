@@ -308,6 +308,123 @@ async def test_ledger_direct_appends_goal_completion_ledger_pair() -> None:
 
 
 @pytest.mark.asyncio
+async def test_empty_ledger_direct_falls_back_to_synthesis() -> None:
+    """When ledger_direct has no execute AI text, goal completion synthesizes instead."""
+    ce = _make_ce()
+    loop_state = LoopState(goal="world cup stage", thread_id="thr-1")
+    goal = GoalNode(description="world cup stage")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+    plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
+
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        strange_loop=strange_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+        ce=ce,
+        goal=goal,
+    )
+
+    async def fake_gen(self, _goal: str, _state: LoopState):  # noqa: ARG002
+        yield ((), "messages", (AIMessage(content="Synthesized World Cup update."), {}))
+
+    with patch.object(SynthesisGenerator, "generate_synthesis", fake_gen):
+        await node_goal_completion(ctx, {})
+
+    gc_ai = next(
+        m
+        for m in loop_state.loop_messages
+        if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopAIMessage)
+    )
+    assert gc_ai.content == "Synthesized World Cup update."
+    stream_events = [c.args[0] for c in ctx.emit.await_args_list if c.args[0] == "stream_event"]
+    assert stream_events
+
+
+@pytest.mark.asyncio
+async def test_trivial_intake_ledger_direct_uses_user_submission_as_human() -> None:
+    """Trivial goals record the original user line as goal_completion human ledger."""
+    from types import SimpleNamespace
+
+    from soothe.foundation.sloop.intention.models import IntakeLabel
+
+    ce = _make_ce()
+    loop_state = LoopState(goal="what time is it", thread_id="loop-1")
+    loop_state.goal_user_submission = "what time is it"
+    loop_state.intent = SimpleNamespace(intake_label=IntakeLabel.TRIVIAL)
+    goal = GoalNode(description="what time is it")
+    ce._dag.add_goal(goal)
+    loop_state.bind_ce(ce, goal.id)
+    ce.ledger.record_message(
+        LoopAIMessage(
+            content="It is 3 PM.",
+            thread_id="loop-1__step_01",
+            iteration=0,
+            phase="execute_step",
+        ),
+        phase="execute_step",
+    )
+    plan_result = PlanResult(
+        status="done",
+        goal_progress="complete",
+        require_goal_completion=False,
+        terminal_after_execute=True,
+    )
+    pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
+
+    strange_loop = Mock()
+    strange_loop.loop_planner = Mock()
+    strange_loop.loop_planner._model = Mock()
+    strange_loop.core_agent = Mock()
+    strange_loop.config.agent.loop.final_response = "adaptive"
+
+    sm = Mock()
+    sm.record_iteration = AsyncMock()
+    sm.finalize_goal = AsyncMock()
+
+    ctx = _ctx(
+        loop_state=loop_state,
+        plan_manager=pm,
+        strange_loop=strange_loop,
+        state_manager=sm,
+        plan_result=plan_result,
+        ce=ce,
+        goal=goal,
+    )
+
+    await node_goal_completion(ctx, {})
+
+    lm = loop_state.loop_messages
+    gc_human = next(
+        m
+        for m in lm
+        if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopHumanMessage)
+    )
+    gc_ai = next(
+        m
+        for m in lm
+        if getattr(m, "phase", None) == "goal_completion" and isinstance(m, LoopAIMessage)
+    )
+    assert gc_human.content == "what time is it"
+    assert gc_ai.content == "It is 3 PM."
+
+
+@pytest.mark.asyncio
 async def test_summary_completion_sets_skip_replay_false() -> None:
     ce = _make_ce()
     loop_state = LoopState(goal="g", thread_id="thr-1")

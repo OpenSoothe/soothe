@@ -78,7 +78,7 @@ class MockModelRequest(ModelRequest[dict]):
 
 
 def test_simple_query_gets_minimal_prompt():
-    """Minimal task complexity (e.g. quiz path) should receive minimal system prompt (RFC-214)."""
+    """Minimal task complexity (e.g. chitchat intake) should receive minimal system prompt (RFC-214)."""
     config = SootheConfig()
     middleware = SystemPromptMiddleware(config=config)
 

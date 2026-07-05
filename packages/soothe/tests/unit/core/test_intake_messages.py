@@ -181,31 +181,30 @@ class TestIntakePriorGoalProjection:
         projected = project_last_goal_completion_for_intake(ledger, None)
         assert projected == []
 
-    def test_falls_back_to_trivial_pair_when_no_goal_completion(self) -> None:
+    def test_goal_completion_unit_projects_for_intake(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
         ledger = [
-            LoopHumanMessage(content="what time is it?", phase="trivial"),
-            LoopAIMessage(content="It is 3 PM.", phase="trivial"),
+            LoopHumanMessage(content="what time is it?", phase="goal_completion"),
+            LoopAIMessage(content="It is 3 PM.", phase="goal_completion"),
         ]
         projected = project_last_goal_completion_for_intake(ledger, None)
         assert len(projected) == 2
         assert projected[-1].content == "It is 3 PM."
 
-    def test_falls_back_to_legacy_quiz_pair_when_no_goal_completion(self) -> None:
+    def test_no_legacy_phase_fallback_when_no_goal_completion(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
         ledger = [
-            LoopHumanMessage(content="what is python?", phase="quiz"),
-            LoopAIMessage(content="A programming language.", phase="quiz"),
+            LoopHumanMessage(content="what time is it?", phase="execute_step"),
+            LoopAIMessage(content="It is 3 PM.", phase="execute_step"),
         ]
         projected = project_last_goal_completion_for_intake(ledger, None)
-        assert len(projected) == 2
-        assert projected[-1].content == "A programming language."
+        assert projected == []
 
     def test_empty_ledger_projects_nothing(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (

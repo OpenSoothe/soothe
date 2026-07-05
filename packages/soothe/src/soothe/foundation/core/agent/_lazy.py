@@ -1,7 +1,7 @@
 """Lazy CoreAgent wrapper (IG-506).
 
 Defers ``create_soothe_agent`` graph compilation until the first Layer-1
-execution access (execute stream, quiz checkpointer, or explicit materialize).
+execution access (execute stream, checkpointer, or explicit materialize).
 """
 
 from __future__ import annotations

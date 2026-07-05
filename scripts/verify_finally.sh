@@ -185,89 +185,6 @@ _format_duration() {
   fi
 }
 
-# Stream pytest output: print fail/error/skip/slow immediately.
-# $2 failures file (pkg|test_id|reason), $3 slow file (pkg|test_id|sec|kind),
-# $4 activity timestamp file, $5 context file (last completed test id).
-_parse_pytest_lines() {
-  local pkg="$1"
-  local failures_file="$2"
-  local slow_file="$3"
-  local activity_file="$4"
-  local context_file="$5"
-  local summary_line=""
-  local last_ts
-  local collecting=true
-
-  last_ts=$(_now_seconds)
-  echo "$last_ts" >"$activity_file"
-  echo "collecting" >"$context_file"
-
-  while IFS= read -r line; do
-    echo "$(_now_seconds)" >"$activity_file"
-
-    if [[ "$line" =~ collected[[:space:]]+[0-9]+[[:space:]]+items ]]; then
-      collecting=false
-      last_ts=$(_now_seconds)
-      echo "after collection" >"$context_file"
-      continue
-    fi
-
-    if [[ "$line" =~ ^tests/([^[:space:]]+)[[:space:]]+(PASSED|FAILED|ERROR|SKIPPED) ]]; then
-      local test_id="tests/${BASH_REMATCH[1]}"
-      local status="${BASH_REMATCH[2]}"
-      local short_id="${test_id#tests/unit/}"
-      local now elapsed
-
-      now=$(_now_seconds)
-      elapsed=$((now - last_ts))
-      if [ "$collecting" = false ] && [ "$elapsed" -ge "$SLOW_TEST_THRESHOLD_SEC" ]; then
-        if ! grep -Fq "${pkg}|${test_id}|" "$slow_file" 2>/dev/null; then
-          echo -e "  ${YELLOW}⏱${NC} ${short_id} ($(_format_duration "$elapsed"))"
-          printf '%s|%s|%s|slow\n' "$pkg" "$test_id" "$elapsed" >>"$slow_file"
-        fi
-      fi
-      last_ts="$now"
-      echo "$test_id" >"$context_file"
-
-      case "$status" in
-      PASSED) ;;
-      FAILED)
-        echo -e "  ${RED}✗${NC} ${short_id}"
-        printf '%s|%s|\n' "$pkg" "$test_id" >>"$failures_file"
-        ;;
-      ERROR)
-        echo -e "  ${RED}!${NC} ${short_id} (error)"
-        printf '%s|%s|\n' "$pkg" "$test_id" >>"$failures_file"
-        ;;
-      SKIPPED)
-        echo -e "  ${YELLOW}○${NC} ${short_id} (skipped)"
-        ;;
-      esac
-    elif [[ "$line" =~ ^FAILED[[:space:]]+(tests/[^[:space:]]+)[[:space:]]-[[:space:]]*(.+)$ ]]; then
-      local test_id="${BASH_REMATCH[1]}"
-      local reason="${BASH_REMATCH[2]}"
-      if [ -f "$failures_file" ]; then
-        local tmp
-        tmp=$(mktemp)
-        while IFS='|' read -r row_pkg row_test row_reason; do
-          if [ "$row_pkg" = "$pkg" ] && [ "$row_test" = "$test_id" ] && [ -z "$row_reason" ]; then
-            printf '%s|%s|%s\n' "$row_pkg" "$row_test" "$reason"
-          else
-            printf '%s|%s|%s\n' "$row_pkg" "$row_test" "$row_reason"
-          fi
-        done <"$failures_file" >"$tmp"
-        mv "$tmp" "$failures_file"
-      fi
-    elif [[ "$line" =~ ^=+[[:space:]]+([0-9]+[[:space:]].*)[[:space:]]=+$ ]]; then
-      summary_line="${BASH_REMATCH[1]}"
-    fi
-  done
-
-  if [ -n "$summary_line" ]; then
-    echo -e "  ${DIM}${summary_line}${NC}"
-  fi
-}
-
 _collect_slow_file() {
   local slow_file="$1"
   if [ ! -s "$slow_file" ]; then
@@ -462,31 +379,16 @@ _lint_check_pkg() {
   fi
 }
 
-_collect_durations_from_log() {
+# Run pytest for one package with real-time output streaming.
+# Args: pkg failures_file slow_file
+_run_pkg_tests_streaming() {
   local pkg="$1"
-  local log_file="$2"
-  local line sec_int test_id
-
-  while IFS= read -r line; do
-    if [[ "$line" =~ ^([0-9.]+)s[[:space:]]+(call|setup|teardown)[[:space:]]+(.+)$ ]]; then
-      sec_int=${BASH_REMATCH[1]%%.*}
-      test_id="${BASH_REMATCH[3]}"
-      if [ "$sec_int" -ge "$SLOW_TEST_THRESHOLD_SEC" ]; then
-        SLOW_TEST_ENTRIES+=("${pkg}|${test_id}|${sec_int}|slow")
-      fi
-    fi
-  done < <(grep -E "^[0-9.]+s (call|setup|teardown)" "$log_file" 2>/dev/null || true)
-}
-
-# Run pytest for one package. Args: pkg result_dir
-_run_pkg_tests() {
-  local pkg="$1"
-  local result_dir="$2"
+  local failures_file="$2"
+  local slow_file="$3"
   cd "$WORKSPACE_ROOT/packages/$pkg"
-  local exit_code=0
+
   # Use pytest-xdist for packages with mostly sync tests (sdk, cli).
   # soothe and soothe-daemon have many async fixtures that don't work well with xdist.
-  # Falls back to sequential if xdist not installed.
   local xdist_opts=""
   if "$VENV_PYTHON" -c "import xdist" 2>/dev/null; then
     case "$pkg" in
@@ -499,12 +401,133 @@ _run_pkg_tests() {
       ;;
     esac
   fi
-  "$VENV_PYTHON" -m pytest tests/unit/ \
+
+  local passed_count=0
+  local failed_count=0
+  local error_count=0
+  local skipped_count=0
+  local last_ts
+  last_ts=$(_now_seconds)
+  local collecting=true
+  local pkg_exit_code=0
+
+  # Run pytest and stream output line-by-line
+  while IFS= read -r line; do
+    # Show progress during collection phase
+    if $collecting; then
+      if [[ "$line" =~ ^(scheduling|created:|collecting) ]]; then
+        echo -e "    ${DIM}...${NC} ${line}"
+      fi
+    fi
+
+    if [[ "$line" =~ collected[[:space:]]+[0-9]+[[:space:]]+items ]]; then
+      collecting=false
+      last_ts=$(_now_seconds)
+      continue
+    fi
+
+    # Handle both sequential and xdist output formats:
+    # Sequential (from package dir): "tests/unit/test_file.py::test_func PASSED"
+    # xdist (from package dir): "[gw0] [  5%] PASSED tests/unit/test_file.py::test_func"
+    # Note: pytest outputs "tests/unit/" paths when run from package directory
+    local test_id="" status="" short_id=""
+
+    if [[ "$line" =~ ^(tests/[^[:space:]]+)[[:space:]]+(PASSED|FAILED|ERROR|SKIPPED) ]]; then
+      # Sequential format: tests/unit/test_file.py::test_func PASSED [100%]
+      test_id="${BASH_REMATCH[1]}"
+      status="${BASH_REMATCH[2]}"
+      short_id="${test_id#tests/unit/}"
+    elif [[ "$line" =~ ^\[gw[0-9]+\]\ \[[[:space:]]*[0-9]+%\]\ (PASSED|FAILED|ERROR|SKIPPED)\ (tests/[^[:space:]]+) ]]; then
+      # xdist format from package dir: [gw0] [  5%] PASSED tests/unit/test_file.py::test_func
+      status="${BASH_REMATCH[1]}"
+      test_id="${BASH_REMATCH[2]}"
+      short_id="${test_id#tests/unit/}"
+    fi
+
+    if [ -n "$test_id" ] && [ -n "$status" ]; then
+      local now elapsed
+      now=$(_now_seconds)
+      elapsed=$((now - last_ts))
+      if [ "$collecting" = false ] && [ "$elapsed" -ge "$SLOW_TEST_THRESHOLD_SEC" ]; then
+        if ! grep -Fq "${pkg}|${test_id}|" "$slow_file" 2>/dev/null; then
+          echo -e "    ${YELLOW}⏱${NC} ${short_id} ($(_format_duration "$elapsed"))"
+          printf '%s|%s|%s|slow\n' "$pkg" "$test_id" "$elapsed" >>"$slow_file"
+        fi
+      fi
+      last_ts="$now"
+
+      case "$status" in
+      PASSED)
+        passed_count=$((passed_count + 1))
+        echo -e "    ${DIM}✓${NC} ${short_id}"
+        ;;
+      FAILED)
+        failed_count=$((failed_count + 1))
+        echo -e "    ${RED}✗${NC} ${short_id}"
+        printf '%s|%s|\n' "$pkg" "$test_id" >>"$failures_file"
+        ;;
+      ERROR)
+        error_count=$((error_count + 1))
+        echo -e "    ${RED}!${NC} ${short_id} (error)"
+        printf '%s|%s|\n' "$pkg" "$test_id" >>"$failures_file"
+        ;;
+      SKIPPED)
+        skipped_count=$((skipped_count + 1))
+        echo -e "    ${YELLOW}○${NC} ${short_id} (skipped)"
+        ;;
+      esac
+    elif [[ "$line" =~ ^FAILED[[:space:]]+(tests/[^[:space:]]+)[[:space:]]-[[:space:]]*(.+)$ ]]; then
+      local test_id="${BASH_REMATCH[1]}"
+      local reason="${BASH_REMATCH[2]}"
+      # Update the failures file with the reason
+      if [ -f "$failures_file" ]; then
+        local tmp
+        tmp=$(mktemp)
+        while IFS='|' read -r row_pkg row_test row_reason; do
+          if [ "$row_pkg" = "$pkg" ] && [ "$row_test" = "$test_id" ] && [ -z "$row_reason" ]; then
+            printf '%s|%s|%s\n' "$row_pkg" "$row_test" "$reason"
+          else
+            printf '%s|%s|%s\n' "$row_pkg" "$row_test" "$row_reason"
+          fi
+        done <"$failures_file" >"$tmp"
+        mv "$tmp" "$failures_file"
+      fi
+    fi
+  done < <(PYTHONUNBUFFERED=1 "$VENV_PYTHON" -u -m pytest tests/unit/ \
     $xdist_opts \
-    -v --tb=line --no-header --disable-warnings --durations=15 \
-    >"$result_dir/${pkg}.log" 2>&1 || exit_code=$?
-  echo "$exit_code" >"$result_dir/${pkg}.exit"
+    -v --tb=line --no-header --disable-warnings --durations=15 2>&1)
+  pkg_exit_code=$?
+
+  # Print per-package summary line
+  if [ "$passed_count" -gt 0 ] || [ "$failed_count" -gt 0 ] || [ "$error_count" -gt 0 ] || [ "$skipped_count" -gt 0 ]; then
+    local summary_parts=""
+    if [ "$passed_count" -gt 0 ]; then
+      summary_parts+="${GREEN}${passed_count} passed${NC}"
+    fi
+    if [ "$failed_count" -gt 0 ]; then
+      if [ -n "$summary_parts" ]; then summary_parts+=", "; fi
+      summary_parts+="${RED}${failed_count} failed${NC}"
+    fi
+    if [ "$error_count" -gt 0 ]; then
+      if [ -n "$summary_parts" ]; then summary_parts+=", "; fi
+      summary_parts+="${RED}${error_count} errors${NC}"
+    fi
+    if [ "$skipped_count" -gt 0 ]; then
+      if [ -n "$summary_parts" ]; then summary_parts+=", "; fi
+      summary_parts+="${YELLOW}${skipped_count} skipped${NC}"
+    fi
+    echo -e "  ${DIM}── ${summary_parts}${NC}"
+  fi
+
+  # Package result indicator
+  if [ "$pkg_exit_code" -eq 0 ]; then
+    echo -e "  ${GREEN}✓${NC} ${pkg} — all tests passed"
+  else
+    echo -e "  ${RED}✗${NC} ${pkg} — tests failed"
+  fi
+
   cd "$WORKSPACE_ROOT"
+  return $pkg_exit_code
 }
 
 check_formatting() {
@@ -701,66 +724,47 @@ run_tests() {
   fi
 
   local tests_failed=false
-  local test_details=""
-  local result_dir
-  result_dir=$(mktemp -d)
-  local test_pids=()
-  local test_pkgs=()
+  local failures_file slow_file
 
+  # Create shared files for tracking failures and slow tests
+  failures_file=$(mktemp)
+  slow_file=$(mktemp)
+
+  # Run tests sequentially package-by-package with real-time output
   for pkg in "${ALL_PACKAGES[@]}"; do
     if [ ! -d "$WORKSPACE_ROOT/packages/$pkg/tests/unit" ]; then
       continue
     fi
-    test_pkgs+=("$pkg")
-    _run_pkg_tests "$pkg" "$result_dir" &
-    test_pids+=($!)
-  done
 
-  for pid in "${test_pids[@]}"; do
-    wait "$pid" || true
-  done
+    # Display package header
+    echo -e ""
+    echo -e "  ${BOLD}${CYAN}${pkg}${NC}"
+    echo -e "  ${DIM}running tests...${NC}"
 
-  for pkg in "${test_pkgs[@]}"; do
-    local log_file="$result_dir/${pkg}.log"
-    local exit_code
-    exit_code=$(cat "$result_dir/${pkg}.exit")
+    # Run tests for this package with streaming output
+    local pkg_exit_code=0
+    _run_pkg_tests_streaming "$pkg" "$failures_file" "$slow_file" || pkg_exit_code=$?
 
-    echo -e "  ${CYAN}${pkg}${NC}"
-
-    local failures_file slow_file activity_file context_file
-    failures_file=$(mktemp)
-    slow_file=$(mktemp)
-    activity_file=$(mktemp)
-    context_file=$(mktemp)
-
-    _parse_pytest_lines "$pkg" "$failures_file" "$slow_file" "$activity_file" "$context_file" \
-      <"$log_file"
-    _collect_durations_from_log "$pkg" "$log_file"
-
-    if [ -s "$failures_file" ]; then
-      _collect_failures_file "$failures_file"
-    fi
-    if [ -s "$slow_file" ]; then
-      _collect_slow_file "$slow_file"
-    fi
-
-    if [ "$exit_code" -eq 0 ]; then
-      print_ok "${pkg}"
-    else
-      print_fail "${pkg}"
+    if [ "$pkg_exit_code" -ne 0 ]; then
       tests_failed=true
-      test_details+="\n[$pkg]\n"
-      test_details+=$(grep -E "^FAILED|^ERROR" "$log_file" || true)
-      test_details+="\n"
+      OVERALL_STATUS=1
+      FAILED_CHECKS+=("${pkg} tests")
     fi
 
-    rm -f "$failures_file" "$slow_file" "$activity_file" "$context_file"
+    echo ""
   done
 
-  rm -rf "$result_dir"
+  # Collect all failures and slow tests for final summary
+  if [ -s "$failures_file" ]; then
+    _collect_failures_file "$failures_file"
+  fi
+  if [ -s "$slow_file" ]; then
+    _collect_slow_file "$slow_file"
+  fi
+
+  rm -f "$failures_file" "$slow_file"
 
   if $tests_failed; then
-    record_failure_log "Tests" "$test_details"
     return 1
   fi
 
@@ -776,7 +780,7 @@ print_slow_tests_summary() {
     return 0
   fi
 
-  echo -e "${BOLD}Slow / hanging tests (≥$(_format_duration "$SLOW_TEST_THRESHOLD_SEC"), ${#SLOW_TEST_ENTRIES[@]}):${NC}"
+  echo -e "${BOLD}${YELLOW}Slow tests (≥$(_format_duration "$SLOW_TEST_THRESHOLD_SEC"), ${#SLOW_TEST_ENTRIES[@]}):${NC}"
   local current_pkg=""
   for entry in "${SLOW_TEST_ENTRIES[@]}"; do
     IFS='|' read -r pkg test_id elapsed kind <<<"$entry"
@@ -805,7 +809,7 @@ print_failed_tests_summary() {
     return 0
   fi
 
-  echo -e "${BOLD}Failed tests (${#FAILED_TEST_ENTRIES[@]}):${NC}"
+  echo -e "${BOLD}${RED}Failed tests (${#FAILED_TEST_ENTRIES[@]}):${NC}"
   local current_pkg=""
   for entry in "${FAILED_TEST_ENTRIES[@]}"; do
     IFS='|' read -r pkg test_id reason <<<"$entry"
@@ -814,9 +818,11 @@ print_failed_tests_summary() {
       current_pkg="$pkg"
     fi
     local short_id="${test_id#tests/unit/}"
-    echo -e "    ${RED}✗${NC} ${short_id}"
     if [ -n "$reason" ]; then
+      echo -e "    ${RED}✗${NC} ${short_id}"
       echo -e "      ${DIM}${reason}${NC}"
+    else
+      echo -e "    ${RED}✗${NC} ${short_id}"
     fi
   done
   echo ""

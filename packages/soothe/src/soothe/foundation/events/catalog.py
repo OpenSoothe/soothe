@@ -427,7 +427,7 @@ class IntentClassifiedEvent(ProtocolEvent):
 
     Emitted after intent-classify determines an agentic intent,
     providing reasoning for why the query requires tool execution
-    rather than a direct quiz-style response.
+    rather than a direct chitchat-style response.
     """
 
     type: Literal["soothe.cognition.intent.classified"] = "soothe.cognition.intent.classified"

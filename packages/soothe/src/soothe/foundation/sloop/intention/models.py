@@ -22,8 +22,8 @@ class IntakeLabel(StrEnum):
 
     - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
-    - ``trivial``: trivia, single obvious tool call, or direct answer; no
-      planning LLM (CoreAgent fast-path on loop main thread).
+    - ``trivial``: trivia, single obvious tool call, or direct answer; pseudo
+      1-step plan via execute (no plan_assess/plan_generate).
     - ``simple``: single focused step, lightweight plan.
     - ``complex``: multi-step / multi-phase, full plan.
     """
@@ -38,7 +38,7 @@ class TaskComplexity(StrEnum):
     """Unified task complexity levels for routing decisions.
 
     Used by both IntentClassification and RoutingClassification.
-    - minimal: No tools needed (trivial fast-path)
+    - minimal: No tools needed (chitchat intake)
     - simple: Single focused step
     - medium: Multi-step with moderate tool use
     - complex: Architecture, migration, deep multi-phase work
@@ -58,7 +58,7 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
     signal without a redundant LLM field.
 
     Args:
-        intake_label: 3-class intake label from the classifier.
+        intake_label: 4-class intake label from the classifier.
 
     Returns:
         Task complexity for ``RoutingClassification`` and system prompt tiers.
@@ -96,7 +96,7 @@ class IntentClassification(BaseModel):
 
     4-class LLM intake classification:
     - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
-    - ``trivial``: direct CoreAgent on loop main thread (trivia, single obvious tool call).
+    - ``trivial``: direct execute via pseudo 1-step plan (no plan_assess/generate).
     - ``simple``/``complex``: agentic goals of increasing effort; the runner /
       StrangeLoop derive loop continuation structurally from the checkpoint.
 

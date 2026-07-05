@@ -8,8 +8,8 @@ handled by the ``trivial`` intake label via ``build_trivial_plan`` in
 Only the ``## Result`` evidence contract survives: it flows into the step's
 user message ``expected_output``, which the LLM treats as the step's completion
 contract. The ``## Result`` requirement forces the final assistant message to
-restate the answer in plain text so ``plan_assess`` sees concrete evidence in
-the ledger rather than only narration about tool calls.
+restate the answer in plain text so goal completion can surface concrete evidence
+from the ledger rather than only narration about tool calls.
 """
 
 from __future__ import annotations

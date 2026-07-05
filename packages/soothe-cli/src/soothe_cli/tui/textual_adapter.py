@@ -83,10 +83,10 @@ from soothe_cli.runtime.policy.essential_events import (
 )
 from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.runtime.presentation.engine import PresentationEngine
-from soothe_cli.runtime.presentation.explore_task_display import (
-    format_explore_task_json_blob_for_display,
-)
 from soothe_cli.runtime.presentation.renderer_base import RendererBase
+from soothe_cli.runtime.presentation.subagent_task_display import (
+    format_subagent_task_assistant_for_display,
+)
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOpTracker,
@@ -153,9 +153,7 @@ logger = logging.getLogger(__name__)
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
 # Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
-# ``trivial`` is intentionally excluded: the fast path streams many AIMessageChunks
-# and must use the normal append_content path (one card per namespace).
-_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "chitchat", "plan_direct", "autonomous_goal"})
+_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"chitchat", "plan_direct", "autonomous_goal"})
 
 
 def _retain_assistant_ns_on_chunk_last(
@@ -167,10 +165,7 @@ def _retain_assistant_ns_on_chunk_last(
 ) -> bool:
     """Return True when ``chunk_position=last`` must not release the namespace card.
 
-    Loop-tagged assistant streams (``phase=trivial``, etc.) append deltas onto one
-    ``AssistantMessage``. Premature namespace pops (e.g. per-segment ``last`` markers
-    on the wire) otherwise paint one card per token. When the main agent already
-    has an open card, keep the namespace through ``last`` markers as well.
+    Loop-tagged assistant streams append deltas onto one ``AssistantMessage``.
     """
     if is_main_agent and ns_key in assistant_message_by_namespace:
         return True
@@ -877,6 +872,130 @@ def _finalize_subagent_cards_for_step(
         adapter._subagent_cards_by_key.pop(key, None)
 
 
+def _ensure_subagent_card_for_task_scope(
+    adapter: TextualUIAdapter,
+    task_scope: TaskScope,
+) -> Any | None:
+    """Return the SubAgent card for ``task_scope``, creating it when needed."""
+    card = _lookup_subagent_card_for_task_scope(adapter, task_scope)
+    if card is not None:
+        return card
+    step_id = task_scope_step_id(task_scope)
+    step_w = adapter._current_step_messages.get(step_id)
+    if step_w is None:
+        return None
+    task_tcid = str(task_scope[0] or "").strip()
+    task_args: dict[str, Any] = {}
+    subagent_type = str(task_scope[1] or "").strip()
+    for row in getattr(step_w, "_rows", []) or []:
+        tcid = str(getattr(row, "tool_call_id", "") or "").strip()
+        if tcid == task_tcid or getattr(row, "is_task_row", False):
+            task_args = dict(getattr(row, "args", None) or {})
+            if task_args or tcid == task_tcid:
+                break
+    if not task_args and subagent_type:
+        task_args = {"subagent_type": subagent_type}
+    _ensure_subagent_card_for_task_row(adapter, step_w, task_tcid, task_args)
+    return _lookup_subagent_card_for_task_scope(adapter, task_scope)
+
+
+def _wire_step_row_id(step_id: str, task_idx: int, tool_name: str, seq: int) -> str:
+    """Unified subgraph id for a synthetic subagent progress row."""
+    wire_frag = str(step_id).strip().replace("-", "_")
+    slug = str(tool_name or "step").strip().lower().replace(" ", "_") or "step"
+    return f"{wire_frag}:t{task_idx}:{slug}:{seq}"
+
+
+def _ingest_wire_step_on_subagent_card(
+    adapter: TextualUIAdapter,
+    subagent_card: Any,
+    *,
+    step_id: str,
+    task_idx: int,
+    tool_name: str,
+    args: dict[str, Any],
+    phase: str,
+    duration_ms: int,
+) -> None:
+    """Register one curated wire step as a tool-like row on the SubAgent card."""
+    seq = int(getattr(subagent_card, "_wire_step_seq", 0) or 0)
+    subagent_card._wire_step_seq = seq + 1  # type: ignore[attr-defined]
+    row_id = _wire_step_row_id(step_id, task_idx, tool_name, seq)
+    _ingest_tool_on_subagent_card(
+        adapter,
+        subagent_card,
+        display_key=row_id,
+        tool_name=tool_name,
+        args=dict(args or {}),
+    )
+    if phase == "running":
+        subagent_card.set_tool_running(row_id)
+    elif phase in ("error", "rejected", "failed"):
+        subagent_card.set_tool_error(row_id, "Failed", duration_ms=duration_ms)
+    else:
+        subagent_card.set_tool_success(row_id, "", duration_ms=duration_ms)
+
+
+def _subagent_wire_step_params(
+    event_type: str,
+    data: dict[str, Any],
+) -> tuple[str, dict[str, Any], str, int] | None:
+    """Map curated subagent wire events to SubAgent card row fields."""
+    et = str(event_type or "").strip()
+    if et.endswith(".gather.summary"):
+        query = str(data.get("query_preview", "") or "").strip()
+        rc = int(data.get("result_count", 0) or 0)
+        st = int(data.get("sources_touched", 0) or 0)
+        preview = query
+        if rc or st:
+            tail = f"{rc} hits, {st} sources"
+            preview = f"{query} → {tail}" if query else tail
+        return "WebSearch", {"query": preview or query}, "success", 0
+    if et.endswith(".step.completed"):
+        tool_name = str(data.get("tool_name", "") or "").strip() or "Step"
+        args_preview = str(data.get("args_preview", "") or "").strip()
+        status = str(data.get("status", "done") or "done").strip().lower()
+        phase = "success" if status in ("done", "success", "complete") else "running"
+        if status in ("error", "failed"):
+            phase = "error"
+        duration_ms = int(data.get("duration_ms", 0) or 0)
+        args = {"preview": args_preview} if args_preview else {}
+        return tool_name, args, phase, duration_ms
+    return None
+
+
+def _apply_subagent_wire_step_event(
+    adapter: TextualUIAdapter,
+    *,
+    event_type: str,
+    data: dict[str, Any],
+    task_scope: TaskScope,
+) -> bool:
+    """Render ``*.step.completed`` / ``*.gather.summary`` on the SubAgent (TASK) card."""
+    params = _subagent_wire_step_params(event_type, data)
+    if params is None:
+        return False
+    tool_name, args, phase, duration_ms = params
+    step_id = task_scope_step_id(task_scope)
+    if not step_id:
+        return True
+    task_idx = task_scope_task_idx(task_scope, step_id)
+    subagent_card = _ensure_subagent_card_for_task_scope(adapter, task_scope)
+    if subagent_card is None:
+        return True
+    _ingest_wire_step_on_subagent_card(
+        adapter,
+        subagent_card,
+        step_id=step_id,
+        task_idx=task_idx,
+        tool_name=tool_name,
+        args=args,
+        phase=phase,
+        duration_ms=duration_ms,
+    )
+    return True
+
+
 def _apply_subagent_wire_lifecycle_event(
     adapter: TextualUIAdapter,
     *,
@@ -1492,12 +1611,8 @@ def _expand_nonstandard_tool_blocks(blocks: list[dict[str, Any]]) -> list[dict[s
 
 def _tui_main_assistant_body_for_dedupe(raw: str) -> str:
     """Normalize assistant text the same way as :func:`_flush_assistant_text_ns` input."""
-    from soothe_cli.runtime.presentation.explore_task_display import (
-        format_explore_task_json_blob_for_display,
-    )
-
-    return format_explore_task_json_blob_for_display(
-        RendererBase.repair_concatenated_output(raw or "")
+    return format_subagent_task_assistant_for_display(
+        RendererBase.repair_concatenated_output(raw or ""),
     ).strip()
 
 
@@ -2325,20 +2440,19 @@ async def _flush_assistant_text_ns(
     If no message exists yet, creates one with the full content.
     """
     repaired_text = RendererBase.repair_concatenated_output(text)
-    repaired_text = format_explore_task_json_blob_for_display(repaired_text)
+    ts_card = router.resolve_task_scope(ns_key) if router is not None and ns_key else None
+    subagent_type = str(ts_card[1] or "").strip() if ts_card else ""
+    repaired_text = format_subagent_task_assistant_for_display(
+        repaired_text,
+        subagent_type=subagent_type or None,
+    )
     if not repaired_text.strip():
         return
 
-    ts_card = router.resolve_task_scope(ns_key) if router is not None and ns_key else None
     if ts_card and ts_card[0]:
-        parent_tool = router.resolve_parent(
-            ts_card,
-            step_cards=adapter._current_step_messages,
-            tool_display_by_call_id=adapter._tool_display_by_call_id,
-        )
-        if parent_tool is not None:
-            body = repaired_text.strip()
-            parent_tool.append_subagent_activity(body, task_tool_call_id=ts_card[0])
+        subagent_card = _ensure_subagent_card_for_task_scope(adapter, ts_card)
+        if subagent_card is not None:
+            subagent_card.append_subagent_activity(repaired_text.strip())
             return
         # Suppress standalone AssistantMessage for all subagent tasks —
         # only goal_completion surfaces the final result.
@@ -3119,7 +3233,7 @@ async def execute_task_textual(
                                 # Main graph: skip standalone AssistantMessage cards for
                                 # intermediate AIMessage streams (execute_wave, unphased, etc.).
                                 # ``goal_completion`` is handled above. Other RFC-614 user-output
-                                # phases (quiz, plan_direct, autonomous_goal) use instant mount.
+                                # phases (chitchat, plan_direct, autonomous_goal) use instant mount.
                                 if (
                                     is_main_agent
                                     and assistant_output_phase(message)
@@ -3134,12 +3248,7 @@ async def execute_task_textual(
 
                                 # Get or create assistant message for this namespace
                                 current_msg = assistant_message_by_namespace.get(ns_key)
-                                if not (
-                                    phase_loop == "trivial"
-                                    and is_main_agent
-                                    and current_msg is not None
-                                ):
-                                    ev_stats.text_chunks += 1
+                                ev_stats.text_chunks += 1
                                 if current_msg is None:
                                     if adapter._set_spinner:
                                         await adapter._set_spinner(SPINNER_LABEL_WRITING)
@@ -3972,6 +4081,13 @@ async def execute_task_textual(
                                 and event_type.startswith("soothe.subagent.")
                                 and is_allowlisted_subagent_event_type(event_type)
                             ):
+                                if _apply_subagent_wire_step_event(
+                                    adapter,
+                                    event_type=event_type,
+                                    data=data,
+                                    task_scope=task_scope,
+                                ):
+                                    continue
                                 _apply_subagent_wire_lifecycle_event(
                                     adapter,
                                     event_type=event_type,

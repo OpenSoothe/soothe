@@ -19,6 +19,7 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
     StepResult,
 )
+from soothe.foundation.sloop.utils.messages import LoopAIMessage
 
 
 def mock_loop_state(**kwargs) -> LoopState:
@@ -452,10 +453,44 @@ def test_strategy_ledger_direct_simple() -> None:
     adapter.record_step_outcomes(
         [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
     )
-    state = mock_loop_state()
+    state = mock_loop_state(
+        loop_messages=[
+            LoopAIMessage(
+                content="The answer is 42.",
+                thread_id="t",
+                phase="execute_step",
+            )
+        ]
+    )
     assert (
         adapter.determine_completion_strategy(state, pr, "adaptive")
         == CompletionStrategy.LEDGER_DIRECT
+    )
+
+
+def test_strategy_simple_empty_ledger_synthesizes() -> None:
+    adapter = _make_adapter()
+    d = AgentDecision(
+        type="execute_steps",
+        steps=[StepAction(id="01", description="Step 1")],
+        execution_mode="parallel",
+    )
+    pr = PlanResult(
+        status="done",
+        goal_progress="complete",
+        plan_action="new",
+        decision=d,
+        require_goal_completion=False,
+        next_action="",
+    )
+    adapter.ingest_plan(pr, "KFA", 0)
+    adapter.record_step_outcomes(
+        [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
+    )
+    state = mock_loop_state(loop_messages=[])
+    assert (
+        adapter.determine_completion_strategy(state, pr, "adaptive")
+        == CompletionStrategy.SYNTHESIZE
     )
 
 

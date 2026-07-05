@@ -152,7 +152,7 @@ class SystemPromptMiddleware(AgentMiddleware):
 
     Uses task_complexity from RoutingClassification (determined by fast LLM)
     to select appropriate prompt verbosity:
-    - minimal: Minimal prompt for greetings and quick questions (quiz path)
+    - minimal: Minimal prompt for greetings and quick questions (chitchat intake)
     - simple: Compact execution prompt for small tasks
     - medium: Standard prompt with guidelines
     - complex: Full prompt with all context

@@ -439,6 +439,49 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
 
 
 @pytest.mark.asyncio
+async def test_subagent_wire_step_event_adds_task_card_rows() -> None:
+    from soothe_cli.tui.textual_adapter import _apply_subagent_wire_step_event
+
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    step = CognitionStepMessage("ZCH-01", "World Cup", id="stp-wire-step")
+    adapter._current_step_messages["ZCH-01"] = step
+    router = StepTaskRouter()
+    router.on_step_started("ZCH-01")
+    await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "ZCH_01:s:task:0",
+            "name": "task",
+            "args": {
+                "subagent_type": "tacitus",
+                "description": "World Cup status",
+            },
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+    scope: tuple[str, str, str] = ("ZCH_01:s:task:0", "tacitus", "ZCH-01")
+
+    handled = _apply_subagent_wire_step_event(
+        adapter,
+        event_type="soothe.subagent.tacitus.step.completed",
+        data={"tool_name": "PlanSearches", "args_preview": "4 queries", "status": "done"},
+        task_scope=scope,
+    )
+    assert handled is True
+    subagent_card = adapter._subagent_cards_by_key["ZCH-01:t0"]
+    text = str(subagent_card._step_task_activity_content())
+    assert "PlanSearches(4 queries)" in text
+    step_text = str(step._step_task_activity_content())
+    assert "PlanSearches" not in step_text
+
+
+@pytest.mark.asyncio
 async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> None:
     """Explore completed wire event must finalize SubAgent card (RFC-628, IG-513)."""
     from soothe_cli.tui.textual_adapter import _apply_subagent_wire_lifecycle_event

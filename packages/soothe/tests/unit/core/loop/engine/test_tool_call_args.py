@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk
 
 from soothe.foundation.sloop.engine.tool_call_args import (
     ToolCallArgsCollector,
+    enrich_wire_updates_with_collector,
     format_args_for_log,
 )
 
@@ -53,3 +54,18 @@ def test_record_ai_pair_maps_index_only_chunk_to_unified_id() -> None:
         "old_string": "a",
         "new_string": "b",
     }
+
+
+def test_enrich_wire_updates_hydrates_from_collector() -> None:
+    collector = ToolCallArgsCollector()
+    collector.by_id["EMV_01:s:wizsearch_search:0"] = {"query": "world cup teams"}
+    updates = [
+        {
+            "type": "soothe.stream.tool_call.update",
+            "tool_call_id": "EMV_01:s:wizsearch_search:0",
+            "name": "wizsearch_search",
+            "args": {},
+        }
+    ]
+    enriched = enrich_wire_updates_with_collector(updates, collector)
+    assert enriched[0]["args"] == {"query": "world cup teams"}

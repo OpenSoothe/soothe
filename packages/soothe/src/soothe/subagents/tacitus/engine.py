@@ -26,6 +26,7 @@ from .events import (
     TacitusGatherSummaryEvent,
     TacitusProgressEvent,
     TacitusStartedEvent,
+    TacitusStepCompletedEvent,
 )
 from .json_util import (
     compact_search_query,
@@ -72,6 +73,25 @@ def _emit_progress(
             total_loops=total_loops,
             sources_completed=sources_completed,
             total_sources=total_sources,
+        ).to_dict(),
+        logger,
+    )
+
+
+def _emit_step_completed(
+    tool_name: str,
+    args_preview: str,
+    *,
+    status: str = "done",
+    duration_ms: int = 0,
+) -> None:
+    """Emit a curated step row for TUI/CLI (metadata-only, no LLM JSON)."""
+    emit_subagent_wire_event(
+        TacitusStepCompletedEvent(
+            tool_name=tool_name,
+            args_preview=args_preview,
+            status=status,
+            duration_ms=duration_ms,
         ).to_dict(),
         logger,
     )
@@ -514,6 +534,10 @@ def build_tacitus_engine(
             len(sub_questions),
             profile.max_sub_questions,
         )
+        _emit_step_completed(
+            "AnalyzeTopic",
+            f"{len(sub_questions)} sub-questions",
+        )
         return {
             "_sub_questions": sub_questions,
             "search_summaries": [],
@@ -577,6 +601,10 @@ def build_tacitus_engine(
             "[Tacitus] generated %d queries (cap %d)",
             len(queries),
             profile.max_initial_queries,
+        )
+        _emit_step_completed(
+            "PlanSearches",
+            f"{len(queries)} queries",
         )
         return {"_queries": queries}
 
@@ -842,6 +870,8 @@ def build_tacitus_engine(
             is_sufficient,
             len(follow_ups),
         )
+        reflect_preview = "sufficient" if is_sufficient else f"{len(follow_ups)} follow-ups"
+        _emit_step_completed("Reflect", reflect_preview)
 
         return {
             "loop_count": loop_count + 1,
@@ -928,6 +958,11 @@ def build_tacitus_engine(
             len(refs),
         )
         completion_summary = tacitus_answer_summary_for_display(answer)
+        _emit_step_completed(
+            "Synthesize",
+            f"{num_sources} sources",
+            duration_ms=elapsed_ms,
+        )
         emit_subagent_wire_event(
             TacitusCompletedEvent(
                 duration_ms=elapsed_ms,

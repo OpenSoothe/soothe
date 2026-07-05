@@ -47,10 +47,13 @@ class TestAbeforeAgent:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_skips_intent_prefetch_for_minimal_routing(self) -> None:
+    async def test_runs_intent_prefetch_for_minimal_routing(self) -> None:
         config = MagicMock()
         config.progressive_skills.intent_prefetch_enabled = True
         config.progressive_skills.intent_prefetch_top_k = 2
+        config.progressive_skills.intent_prefetch_min_query_chars = 1
+        config.progressive_skills.core_intent_auto_invoke_enabled = False
+        config.progressive_skills.core_skills = []
         middleware = SkillActivationMiddleware(
             registry=ProgressiveSkillRegistry(),
             catalog_provider=lambda: [],
@@ -64,15 +67,10 @@ class TestAbeforeAgent:
             "soothe.middleware.skill_activation.prefetch_deferred_skills",
             new=AsyncMock(),
         ) as deferred_mock:
-            with patch(
-                "soothe.middleware.skill_activation.prefetch_core_skills_from_corpus",
-                return_value=[],
-            ) as core_mock:
-                result = await middleware.abefore_agent(state, MagicMock())
+            result = await middleware.abefore_agent(state, MagicMock())
 
         assert result is not None
-        deferred_mock.assert_not_awaited()
-        core_mock.assert_not_called()
+        deferred_mock.assert_awaited_once()
         activation = result["skill_activation"]
         assert activation["intent_prefetched"] is True
 

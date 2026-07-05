@@ -21,6 +21,15 @@ def test_summarize_explore_completed_findings() -> None:
     assert "2000ms" in line
 
 
+def test_summarize_tacitus_step_completed() -> None:
+    line = summarize_subagent_wire_activity(
+        "soothe.subagent.tacitus.step.completed",
+        {"tool_name": "PlanSearches", "args_preview": "4 queries"},
+    )
+    assert "PlanSearches" in line
+    assert "4 queries" in line
+
+
 def test_summarize_tacitus_gather_by_suffix() -> None:
     line = summarize_subagent_wire_activity(
         "soothe.subagent.tacitus.gather.summary",

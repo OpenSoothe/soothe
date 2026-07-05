@@ -358,8 +358,26 @@ class TestDetermineCompletionStrategy:
                 chain_depth=1,
                 last_wave_hit_subagent_cap=False,
                 last_execute_wave_parallel_multi_step=False,
+                ledger_text="Final answer from execute step.",
             )
             == "ledger_direct"
+        )
+
+    def test_simple_empty_ledger_synthesizes(self) -> None:
+        assert (
+            determine_completion_strategy(
+                plan_result_require_goal_completion=False,
+                plan_wave_count=1,
+                has_dag_dependencies=False,
+                failed_steps=0,
+                total_steps=1,
+                completed_steps=1,
+                chain_depth=1,
+                last_wave_hit_subagent_cap=False,
+                last_execute_wave_parallel_multi_step=False,
+                ledger_text="",
+            )
+            == "synthesize"
         )
 
     def test_complex_requires_synthesize(self) -> None:
@@ -692,16 +710,25 @@ class TestStepPlanManagerAdapter:
         assert adapter.determine_goal_completion_needs(False, state, "llm_only") is False
 
     def test_determine_completion_strategy_delegates(self) -> None:
+        from soothe.foundation.sloop.utils.messages import LoopAIMessage
+
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")
         ce._dag.add_goal(goal)
 
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
         plan_result = _make_plan_result(require_goal_completion=False)
-        state = _make_mock_state()
+        state = _make_mock_state(
+            loop_messages=[
+                LoopAIMessage(
+                    content="Execute answer.",
+                    thread_id="test-thread",
+                    phase="execute_step",
+                )
+            ]
+        )
 
         strategy = adapter.determine_completion_strategy(state, plan_result, "adaptive")
-        # With simple execution + no goal completion required → ledger_direct
         assert strategy.value == "ledger_direct"
 
     def test_format_completion_dag_report_delegates(self) -> None:

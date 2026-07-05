@@ -220,7 +220,7 @@ def determine_completion_strategy(
     if final_response_mode == "always_synthesize":
         return "synthesize"
 
-    # 2. Planner says no synthesis needed
+    # 2. Planner says no synthesis needed (trivial / simple single-wave paths)
     if not plan_result_require_goal_completion:
         if is_simple_execution(
             plan_wave_count=plan_wave_count,
@@ -228,7 +228,12 @@ def determine_completion_strategy(
             failed_steps=failed_steps,
             total_steps=total_steps,
         ):
-            return "ledger_direct"
+            if (ledger_text or "").strip():
+                return "ledger_direct"
+            logger.info(
+                "Completion: simple execution but empty ledger → synthesize",
+            )
+            return "synthesize"
         return "synthesize"
 
     # 3. DAG complexity vetoes

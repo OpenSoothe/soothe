@@ -56,11 +56,11 @@ def route_by_intent(state: dict[str, Any]) -> str:
 
     Continuation is checked first from the structural ``is_continuation`` flag
     set by ``init_or_resume`` (derived from checkpoint state, not the LLM
-    label) — continuation turns always go to ``plan_assess``. Then matches the
-    3-class intake label:
+    label) — continuation turns always go to ``plan_assess``. Then matches intake
+    label (after chitchat ``fast_path`` → END):
 
-    - ``trivial`` → END when ``intent_route`` is ``fast_path`` (runner
-                    CoreAgent on loop main thread); otherwise ``resolve_decision``
+    - ``trivial`` → ``resolve_decision`` (pseudo 1-step plan from init_or_resume;
+                    skips plan_assess/plan_generate; terminal_after_execute → goal_completion)
     - ``simple``  → ``plan_generate`` (skip bounded_evidence_gather + plan_assess)
     - ``complex`` → ``bounded_evidence_gather`` (full existing spine, IG-476 intact)
 
@@ -72,12 +72,12 @@ def route_by_intent(state: dict[str, Any]) -> str:
         return "plan_assess"
 
     if state.get("intent_route") == "fast_path":
-        logger.info("[routing] route_by_intent → END (trivial fast-path)")
+        logger.info("[routing] route_by_intent → END (chitchat fast-path)")
         return END
 
     label = state.get("intake_label")
-    if label in (IntakeLabel.CHITCHAT, IntakeLabel.TRIVIAL):
-        logger.info("[routing] route_by_intent → resolve_decision (%s)", label)
+    if label == IntakeLabel.TRIVIAL:
+        logger.info("[routing] route_by_intent → resolve_decision (trivial pseudo-plan)")
         return "resolve_decision"
     if label == IntakeLabel.SIMPLE:
         logger.info("[routing] route_by_intent → plan_generate (simple)")

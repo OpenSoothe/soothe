@@ -1472,9 +1472,7 @@ class LLMPlanner:
                 require_goal_completion=assessment.require_goal_completion,
             )
 
-        # RFC-630: the legacy simple-query bypass (prefixed 1-step plan) is
-        # removed. The ``trivial`` intake label now handles single-step goals
-        # via ``build_trivial_plan`` in init_or_resume (no plan_generate call);
+        # RFC-630: trivial intake uses ``build_trivial_plan`` in init_or_resume;
         # the ``simple`` label uses ``generate_lightweight``. Neither produces
         # the "I will complete this goal directly:" prefix.
 
@@ -1744,12 +1742,9 @@ class LLMPlanner:
                         full_output=last_ledger_ai_content(state) or None,
                     )
                 else:
-                    # RFC-630: the legacy simple-query bypass (prefixed 1-step
-                    # plan) is removed. Single-step goals are handled by the
-                    # ``trivial`` intake label via ``build_trivial_plan`` in
+                    # RFC-630: trivial intake uses ``build_trivial_plan`` in
                     # init_or_resume; the ``simple`` label uses
-                    # ``generate_lightweight``. Neither produces the
-                    # "I will complete this goal directly:" prefix.
+                    # ``generate_lightweight``.
                     # Build DAG context for progressive planning (IG-400)
                     dag_context = None
                     if plan_manager is not None:

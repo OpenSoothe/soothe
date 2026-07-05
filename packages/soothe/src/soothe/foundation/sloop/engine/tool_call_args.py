@@ -322,8 +322,42 @@ class ToolCallArgsCollector:
         return tool_call_update_event(tool_call_id=tcid, name=tname, args=args)
 
 
+def enrich_wire_updates_with_collector(
+    updates: list[dict[str, Any]],
+    collector: ToolCallArgsCollector,
+) -> list[dict[str, Any]]:
+    """Merge collector kwargs into wire updates that were emitted without args.
+
+    Unified main-step rows may ship a placeholder ``args={}`` before streaming
+    finishes or before ``ToolMessage`` promotion; hydrate from the collector when
+    kwargs were recorded from AI chunks or the invocation registry.
+    """
+    from soothe_sdk.ux.stream_tool_wire import tool_call_update_event
+
+    enriched: list[dict[str, Any]] = []
+    for upd in updates:
+        if not isinstance(upd, dict):
+            continue
+        tcid = str(upd.get("tool_call_id") or "").strip()
+        name = str(upd.get("name") or "").strip() or "tool"
+        args = dict(upd.get("args") or {})
+        if not _stream_update_has_displayable_args(args):
+            looked = collector.lookup(tcid)
+            if looked:
+                args = dict(looked)
+        enriched.append(
+            tool_call_update_event(
+                tool_call_id=tcid,
+                name=name,
+                args=args,
+            )
+        )
+    return enriched
+
+
 __all__ = [
     "ToolCallArgsCollector",
+    "enrich_wire_updates_with_collector",
     "format_args_for_log",
     "filter_redundant_stream_tool_updates",
     "wire_updates_from_ai_message",

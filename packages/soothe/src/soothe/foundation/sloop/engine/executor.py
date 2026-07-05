@@ -92,6 +92,7 @@ from soothe.foundation.sloop.engine.thread_selection import (
 )
 from soothe.foundation.sloop.engine.tool_call_args import (
     ToolCallArgsCollector,
+    enrich_wire_updates_with_collector,
     filter_redundant_stream_tool_updates,
     format_args_for_log,
     wire_updates_from_ai_message,
@@ -2001,9 +2002,114 @@ class Executor:
                 return True
             return False
 
+        def _aggregate_tool_message(msg: ToolMessage) -> bool:
+            """Record one main-graph tool result (root or execute namespace).
+
+            Returns:
+                True when the Act stream must stop (budget/cap).
+            """
+            nonlocal tool_call_count
+
+            messages.append(msg)
+            tool_call_count += 1
+            tool_call_id = msg.tool_call_id
+            tool_name = msg.name or "unknown"
+
+            content = msg.content
+            msg_status = getattr(msg, "status", None)
+
+            if _maybe_cap_subagent_tasks(msg):
+                return True
+            text_out = extract_text_from_message_content(content)
+            if text_out:
+                tool_output = (
+                    self._config.agent.loop.tool_output
+                    if self._config and hasattr(self._config, "agent")
+                    else None
+                )
+                if tool_output is not None:
+                    max_tool_output_chars = (
+                        int(tool_output.code_exec_max_output_chars)
+                        if get_outcome_type(tool_name) == "code_exec"
+                        else int(tool_output.tool_output_max_chars)
+                    )
+                else:
+                    max_tool_output_chars = (
+                        DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
+                        if get_outcome_type(tool_name) == "code_exec"
+                        else DEFAULT_TOOL_OUTPUT_CHARS
+                    )
+                if len(text_out) > max_tool_output_chars:
+                    truncated = preview(
+                        text_out,
+                        mode="chars",
+                        first=max_tool_output_chars // 2,
+                        last=max_tool_output_chars // 2,
+                    )
+                    chunks.append(truncated)
+                else:
+                    chunks.append(text_out)
+
+            tool_meta_cfg = None
+            if self._config and hasattr(self._config, "optimization"):
+                opt = self._config.optimization
+                if hasattr(opt, "tool_result_registry"):
+                    tool_meta_cfg = opt.tool_result_registry
+            outcome = generate_outcome_metadata(
+                tool_name,
+                content,
+                tool_call_id,
+                registry_config=tool_meta_cfg,
+                tool_status=msg_status,
+            )
+
+            outcomes.append(outcome)
+
+            if outcome.get("has_error"):
+                logger.warning(
+                    "[Tool#%d] %s returned error: %s",
+                    tool_call_count,
+                    tool_name,
+                    log_preview(str(outcome.get("error_preview", content))[:100], 80),
+                )
+
+            if tool_name == "task" and text_out.strip():
+                tc_id = tool_call_id or ""
+                if not (tc_id and tc_id in delegate_task_ids_seen):
+                    if tc_id:
+                        delegate_task_ids_seen.add(tc_id)
+                    clipped = text_out.strip()
+                    if len(clipped) > _DELEGATE_FINAL_PER_TASK_CAP:
+                        clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
+                    delegate_task_final_parts.append(clipped)
+
+            logged_args = tool_args.lookup(tool_call_id or "")
+            logger.debug(
+                "[Tool#%d] %s(%s) args=%s → %s, %dB",
+                tool_call_count,
+                tool_name,
+                tool_call_id,
+                format_args_for_log(logged_args),
+                outcome.get("type", "unknown"),
+                outcome.get("size_bytes", 0),
+            )
+
+            if budget is not None and budget.max_tool_calls_per_step > 0:
+                budget.tool_call_count = tool_call_count
+                if tool_call_count >= budget.max_tool_calls_per_step:
+                    budget.hit_tool_budget = True
+                    logger.warning(
+                        "Tool budget reached (count=%d, max=%d), stopping Act stream with partial results",
+                        tool_call_count,
+                        budget.max_tool_calls_per_step,
+                    )
+                    return True
+            return False
+
         async for chunk in stream:
             stream_chunk_count += 1
             stream_ns: tuple[str, ...] = ()
+            execute_ns_tool_stop = False
 
             # Handle tuple format (namespace, mode, data) - canonical format
             if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
@@ -2049,7 +2155,10 @@ class Executor:
                         if wire_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (wire_msg, data_chunk[1]))
                         tool_update_events = filter_redundant_stream_tool_updates(
-                            wire_updates_from_ai_message(enriched_msg)
+                            enrich_wire_updates_with_collector(
+                                wire_updates_from_ai_message(enriched_msg),
+                                tool_args,
+                            )
                         )
                         # IG-493: Collect namespaced AIMessages for ledger recording.
                         # iter_messages_for_act_aggregation filters out subgraph messages,
@@ -2067,150 +2176,58 @@ class Executor:
                         )
                         if modified_msg is not msg0:
                             emit_chunk = (_ns_chunk, mode_chunk, (modified_msg, data_chunk[1]))
+                        if _ns_chunk and is_step_level_execute_namespace_key(_ns_chunk):
+                            execute_ns_tool_stop = _aggregate_tool_message(modified_msg)
                 yield _StreamCollectChunk.wire_event(emit_chunk)
                 for tool_ev in tool_update_events:
                     yield _StreamCollectChunk.wire_event((_ns_chunk, "custom", tool_ev))
                 chunk = emit_chunk
 
-            stop_act_stream = False
-            for msg in iter_messages_for_act_aggregation(chunk):
-                if isinstance(msg, ToolMessage):
-                    messages.append(msg)
-                    tool_call_count += 1
-                    tool_call_id = msg.tool_call_id
-                    tool_name = msg.name or "unknown"
-
-                    content = msg.content
-                    msg_status = getattr(msg, "status", None)
-
-                    if _maybe_cap_subagent_tasks(msg):
-                        stop_act_stream = True
-                        break
-                    text_out = extract_text_from_message_content(content)
-                    if text_out:
-                        # Truncate large tool outputs in aggregated stream text; full payloads
-                        # remain in CoreAgent graph state (and LangGraph eviction when enabled).
-                        tool_output = (
-                            self._config.agent.loop.tool_output
-                            if self._config and hasattr(self._config, "agent")
-                            else None
-                        )
-                        if tool_output is not None:
-                            max_tool_output_chars = (
-                                int(tool_output.code_exec_max_output_chars)
-                                if get_outcome_type(tool_name) == "code_exec"
-                                else int(tool_output.tool_output_max_chars)
-                            )
-                        else:
-                            max_tool_output_chars = (
-                                DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
-                                if get_outcome_type(tool_name) == "code_exec"
-                                else DEFAULT_TOOL_OUTPUT_CHARS
-                            )
-                        if len(text_out) > max_tool_output_chars:
-                            truncated = preview(
-                                text_out,
-                                mode="chars",
-                                first=max_tool_output_chars // 2,
-                                last=max_tool_output_chars // 2,
-                            )
-                            chunks.append(truncated)
-                        else:
-                            chunks.append(text_out)
-
-                    tool_meta_cfg = None
-                    if self._config and hasattr(self._config, "optimization"):
-                        opt = self._config.optimization
-                        if hasattr(opt, "tool_result_registry"):
-                            tool_meta_cfg = opt.tool_result_registry
-                    outcome = generate_outcome_metadata(
-                        tool_name,
-                        content,
-                        tool_call_id,
-                        registry_config=tool_meta_cfg,
-                        tool_status=msg_status,
-                    )
-
-                    outcomes.append(outcome)
-
-                    if outcome.get("has_error"):
-                        logger.warning(
-                            "[Tool#%d] %s returned error: %s",
-                            tool_call_count,
-                            tool_name,
-                            log_preview(str(outcome.get("error_preview", content))[:100], 80),
-                        )
-
-                    if tool_name == "task" and text_out.strip():
-                        tc_id = tool_call_id or ""
-                        if not (tc_id and tc_id in delegate_task_ids_seen):
-                            if tc_id:
-                                delegate_task_ids_seen.add(tc_id)
-                            clipped = text_out.strip()
-                            if len(clipped) > _DELEGATE_FINAL_PER_TASK_CAP:
-                                clipped = clipped[:_DELEGATE_FINAL_PER_TASK_CAP]
-                            delegate_task_final_parts.append(clipped)
-
-                    logged_args = tool_args.lookup(tool_call_id or "")
-                    logger.debug(
-                        "[Tool#%d] %s(%s) args=%s → %s, %dB",
-                        tool_call_count,
-                        tool_name,
-                        tool_call_id,
-                        format_args_for_log(logged_args),
-                        outcome.get("type", "unknown"),
-                        outcome.get("size_bytes", 0),
-                    )
-
-                    if budget is not None and budget.max_tool_calls_per_step > 0:
-                        budget.tool_call_count = tool_call_count
-                        if tool_call_count >= budget.max_tool_calls_per_step:
-                            budget.hit_tool_budget = True
-                            logger.warning(
-                                "Tool budget reached (count=%d, max=%d), stopping Act stream with partial results",
-                                tool_call_count,
-                                budget.max_tool_calls_per_step,
-                            )
+            stop_act_stream = execute_ns_tool_stop
+            if not stop_act_stream:
+                for msg in iter_messages_for_act_aggregation(chunk):
+                    if isinstance(msg, ToolMessage):
+                        if _aggregate_tool_message(msg):
                             stop_act_stream = True
                             break
-                elif isinstance(msg, AIMessageChunk):
-                    if not step_id:
-                        task_idx = (
-                            subgraph_task_binder.task_idx_for_namespace(stream_ns)
-                            if stream_ns
-                            else None
-                        )
-                        # For subgraph AIMessageChunks without step_id context, args will be
-                        # captured via ToolMessage processing (promote_tool_message) which
-                        # ingests from invocation registry and maps provider IDs to unified IDs.
-                        tool_args.record_ai_pair(
-                            msg,
-                            msg,
-                            step_id="",
-                            task_idx=task_idx,
-                        )
-                    messages.append(msg)  # Collect chunks for assistant text extraction
-                    t = extract_text_from_message_content(msg.content)
-                    if t:
-                        chunks.append(t)
-                elif isinstance(msg, AIMessage):
-                    if not step_id:
-                        task_idx = (
-                            subgraph_task_binder.task_idx_for_namespace(stream_ns)
-                            if stream_ns
-                            else None
-                        )
-                        tool_args.record_ai_pair(
-                            msg,
-                            msg,
-                            step_id="",
-                            task_idx=task_idx,
-                        )
-                    messages.append(msg)
-                    t = extract_text_from_message_content(msg.content)
-                    if t:
-                        chunks.append(t)
-                        logger.debug("[AI Message] %s", log_preview(t, chars=150))
+                    elif isinstance(msg, AIMessageChunk):
+                        if not step_id:
+                            task_idx = (
+                                subgraph_task_binder.task_idx_for_namespace(stream_ns)
+                                if stream_ns
+                                else None
+                            )
+                            # For subgraph AIMessageChunks without step_id context, args will be
+                            # captured via ToolMessage processing (promote_tool_message) which
+                            # ingests from invocation registry and maps provider IDs to unified IDs.
+                            tool_args.record_ai_pair(
+                                msg,
+                                msg,
+                                step_id="",
+                                task_idx=task_idx,
+                            )
+                        messages.append(msg)  # Collect chunks for assistant text extraction
+                        t = extract_text_from_message_content(msg.content)
+                        if t:
+                            chunks.append(t)
+                    elif isinstance(msg, AIMessage):
+                        if not step_id:
+                            task_idx = (
+                                subgraph_task_binder.task_idx_for_namespace(stream_ns)
+                                if stream_ns
+                                else None
+                            )
+                            tool_args.record_ai_pair(
+                                msg,
+                                msg,
+                                step_id="",
+                                task_idx=task_idx,
+                            )
+                        messages.append(msg)
+                        t = extract_text_from_message_content(msg.content)
+                        if t:
+                            chunks.append(t)
+                            logger.debug("[AI Message] %s", log_preview(t, chars=150))
 
             subgraph_tool_updates: list[tuple[tuple[str, ...], dict[str, Any]]] = []
             for ns_tuple, tm in iter_namespaced_tool_messages(chunk):

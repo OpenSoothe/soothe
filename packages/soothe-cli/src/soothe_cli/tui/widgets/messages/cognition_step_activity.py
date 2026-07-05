@@ -537,8 +537,6 @@ class StepActivityTree:
 
         # Main-agent tool preview
         if main_preview:
-            if not first_block:
-                parts.append("\n")
             first_block = False
             append_tool_activity_lines(
                 parts,

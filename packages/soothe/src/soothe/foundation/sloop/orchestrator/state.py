@@ -29,7 +29,7 @@ class LoopGraphState(TypedDict, total=False):
     assess_route: AssessRoute | None
     evidence_gather_route: EvidenceGatherRoute | None
     # RFC-630: 4-class intake label set by init_or_resume, read by
-    # route_by_intent to dispatch to the quiz/trivial/simple/complex branches.
+    # route_by_intent to dispatch to chitchat/trivial/simple/complex branches.
     intake_label: IntakeLabel | None
     # RFC-630: structural continuation overlay set by init_or_resume from
     # checkpoint state (continue_loop_mode + prior completed goals). When True,

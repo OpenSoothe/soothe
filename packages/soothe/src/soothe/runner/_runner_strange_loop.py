@@ -399,7 +399,7 @@ class StrangeLoopMixin:
 
         # RFC-214: Prior conversation is now in loop_messages ledger, not separate excerpts
         # One load for unified classification (tail) - IG-128, IG-133
-        # IG-506: defer CoreAgent/checkpointer init until quiz or execute materialize.
+        # IG-506: defer CoreAgent/checkpointer init until execute materializes.
 
         # RFC-630: intake classification runs in the graph entry ``intent_classify`` node.
         # Loop continuation is derived structurally inside StrangeLoop from the checkpoint.
@@ -512,32 +512,17 @@ class StrangeLoopMixin:
                     ce_goal_id = (
                         event_data.get("ce_goal_id") if isinstance(event_data, dict) else None
                     )
-                    fast_path_kind = (
-                        event_data.get("fast_path_kind") if isinstance(event_data, dict) else None
-                    )
-                    if fast_path_kind == "chitchat":
-                        chitchat_response = ""
-                        if isinstance(event_data, dict):
-                            chitchat_response = str(
-                                event_data.get("chitchat_response")
-                                or getattr(classification, "chitchat_response", "")
-                                or ""
-                            )
-                        async for chunk in self._run_chitchat(
-                            user_input,
-                            tid,
-                            chitchat_response=chitchat_response,
-                            context_engine=fast_ce,
-                            ce_goal_id=ce_goal_id,
-                            loop_id=strange_loop_id,
-                        ):
-                            yield chunk
-                        return
-                    async for chunk in self._run_trivial(
+                    chitchat_response = ""
+                    if isinstance(event_data, dict):
+                        chitchat_response = str(
+                            event_data.get("chitchat_response")
+                            or getattr(classification, "chitchat_response", "")
+                            or ""
+                        )
+                    async for chunk in self._run_chitchat(
                         user_input,
                         tid,
-                        workspace=workspace,
-                        classification=classification,
+                        chitchat_response=chitchat_response,
                         context_engine=fast_ce,
                         ce_goal_id=ce_goal_id,
                         loop_id=strange_loop_id,

@@ -39,6 +39,19 @@ _GOAL_COMPLETION_LEDGER_HUMAN = (
 )
 
 
+def _goal_completion_ledger_human_content(state: LoopState) -> str:
+    """Human ledger line for goal completion: user submission for trivial, else synthesis prompt."""
+    from soothe.foundation.sloop.intention.models import IntakeLabel
+
+    intent = getattr(state, "intent", None)
+    intake_label = getattr(intent, "intake_label", None) if intent is not None else None
+    if intake_label == IntakeLabel.TRIVIAL:
+        submission = (getattr(state, "goal_user_submission", None) or state.goal or "").strip()
+        if submission:
+            return submission
+    return _GOAL_COMPLETION_LEDGER_HUMAN
+
+
 def _append_goal_completion_ledger_pair(
     *,
     state: LoopState,
@@ -67,7 +80,7 @@ def _append_goal_completion_ledger_pair(
     if not text:
         return
     human_msg = LoopHumanMessage(
-        content=_GOAL_COMPLETION_LEDGER_HUMAN,
+        content=_goal_completion_ledger_human_content(state),
         thread_id=state.thread_id,
         iteration=iteration_completed,
         goal_summary=(state.goal[:200] if state.goal else None),
@@ -324,8 +337,19 @@ async def node_goal_completion(
 
     if action == CompletionStrategy.LEDGER_DIRECT:
         final_output = last_ledger_ai_content(state)
-        logger.info("Goal completion: action=ledger_direct chars=%d", len(final_output or ""))
-    elif action == CompletionStrategy.SYNTHESIZE:
+        if not (final_output or "").strip():
+            logger.info(
+                "Goal completion: ledger_direct empty; falling back to synthesis",
+            )
+            action = CompletionStrategy.SYNTHESIZE
+            final_output = None
+        else:
+            logger.info(
+                "Goal completion: action=ledger_direct chars=%d",
+                len(final_output),
+            )
+
+    if action == CompletionStrategy.SYNTHESIZE:
         # RFC-624 Phase 4 Stage 2: No restore needed.
         # state.step_results property reads from CE DAG when bound.
         # Synthesis projection reads state.step_results which queries CE.
@@ -351,7 +375,8 @@ async def node_goal_completion(
         if not final_output:
             used_synthesis_fallback = True
             final_output = generate_user_fallback_summary(state, plan_result)
-    elif action == CompletionStrategy.SUMMARY:
+
+    if action == CompletionStrategy.SUMMARY:
         # RFC-624 Phase 4 Stage 2: No restore needed.
         # state.step_results property reads from CE DAG when bound.
         final_output = generate_user_fallback_summary(state, plan_result)

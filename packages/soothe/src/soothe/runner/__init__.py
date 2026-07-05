@@ -205,13 +205,6 @@ class SootheRunner(
         except Exception:
             logger.debug("Consensus model unavailable; consensus validation will suspend goals")
 
-        self._default_chat_model: Any | None = None
-        try:
-            self._default_chat_model = self._config.create_chat_model("default")
-            logger.debug("Default chat model initialized (role=default) for trivial fast-path")
-        except Exception:
-            logger.debug("Default chat model unavailable for trivial fast-path", exc_info=True)
-
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
         self._artifact_store: Any | None = (

@@ -9,6 +9,7 @@ import pytest
 
 from soothe.subagents.tacitus.events import (
     TacitusProgressEvent,
+    TacitusStepCompletedEvent,
 )
 from soothe.subagents.tacitus.protocol import TacitusConfig
 
@@ -187,6 +188,17 @@ class TestTacitusProgressEvent:
         assert data["type"] == "soothe.subagent.tacitus.progress"
         assert data["phase"] == "synthesize"
         assert data["loop_count"] == 2
+
+    def test_step_completed_event_to_dict(self):
+        event = TacitusStepCompletedEvent(
+            tool_name="AnalyzeTopic",
+            args_preview="3 sub-questions",
+            status="done",
+        )
+        data = event.to_dict()
+        assert data["type"] == "soothe.subagent.tacitus.step.completed"
+        assert data["tool_name"] == "AnalyzeTopic"
+        assert data["args_preview"] == "3 sub-questions"
 
 
 class TestLLMTimeoutHelpers:

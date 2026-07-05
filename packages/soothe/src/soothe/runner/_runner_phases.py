@@ -151,7 +151,7 @@ class PhasesMixin:
             main_thread_id,
             context_engine=context_engine,
         )
-        await self._finalize_fast_path_loop(
+        await self._finalize_chitchat_loop(
             loop_id or main_thread_id,
             response=response,
             context_engine=context_engine,
@@ -228,261 +228,7 @@ class PhasesMixin:
         except Exception:
             logger.debug("Failed to save chitchat to loop ledger", exc_info=True)
 
-    # -- trivial fast path (CoreAgent on loop main thread) -------------------
-
-    async def _run_trivial(
-        self,
-        user_input: str,
-        thread_id: str,
-        *,
-        workspace: str | None = None,
-        classification: Any | None = None,
-        context_engine: Any | None = None,
-        ce_goal_id: str | None = None,
-        loop_id: str | None = None,
-    ) -> AsyncGenerator[StreamChunk]:
-        """Fast path for trivial intake: CoreAgent on the loop main thread."""
-        from soothe.runner._runner_strange_loop import _forward_messages_chunk
-
-        goal_text = user_input
-        if classification is not None:
-            goal_description = getattr(classification, "goal_description", None)
-            if isinstance(goal_description, str) and goal_description.strip():
-                goal_text = goal_description.strip()
-
-        main_thread_id = (loop_id or self._client_loop_id_for_stream or thread_id or "").strip()
-        if not main_thread_id:
-            main_thread_id = thread_id
-
-        logger.info("Trivial: %s (main_thread=%s)", goal_text[:50], main_thread_id)
-
-        await self._materialize_core_agent()
-        await self._ensure_checkpointer_initialized()
-
-        configurable: dict[str, Any] = {"thread_id": main_thread_id}
-        if workspace:
-            configurable["workspace"] = workspace
-
-        from soothe.utils.observability.langfuse import SootheLangfuse
-
-        stream_config = SootheLangfuse(self._config).traced_llm(
-            purpose="trivial_execute",
-            component="runner.trivial",
-            phase="pre-stream",
-            session_id=main_thread_id,
-            run_name="soothe:trivial",
-        )
-        stream_config.setdefault("configurable", {}).update(configurable)
-
-        from langchain_core.messages import HumanMessage
-
-        graph_input: dict[str, Any] = {"messages": [HumanMessage(content=goal_text)]}
-        if classification is not None and hasattr(classification, "to_routing_classification"):
-            graph_input["routing_classification"] = classification.to_routing_classification()
-        if workspace:
-            graph_input["workspace"] = workspace
-
-        core_agent = self._materialized_core_agent()
-        final_response = ""
-        persist_response = ""
-        try:
-            async for chunk in core_agent.astream(
-                graph_input,
-                config=stream_config,
-                stream_mode=["messages", "custom"],
-                subgraphs=True,
-                durability="exit",
-            ):
-                from soothe.foundation.sloop.utils.messages import (
-                    tag_messages_stream_chunk_for_assistant_phase,
-                )
-
-                tagged = tag_messages_stream_chunk_for_assistant_phase(
-                    chunk,
-                    phase="trivial",
-                    thread_id=main_thread_id,
-                )
-                if _forward_messages_chunk(tagged):
-                    yield tagged
-                final_response = self._extract_fast_path_response_text(tagged, final_response)
-        except Exception:
-            logger.exception("Trivial CoreAgent stream failed")
-            if not final_response.strip():
-                final_response = "I couldn't complete that request. Please try again."
-                yield loop_assistant_messages_chunk(
-                    content=final_response,
-                    phase="trivial",
-                    thread_id=main_thread_id,
-                )
-            persist_response = final_response.strip() or goal_text
-        else:
-            if not final_response.strip():
-                final_response = await self._read_fast_path_response_from_state(
-                    core_agent,
-                    stream_config,
-                )
-            persist_response = final_response.strip() or goal_text
-        finally:
-            if persist_response.strip():
-                try:
-                    await self._save_trivial_to_state(
-                        user_input,
-                        persist_response,
-                        main_thread_id,
-                        context_engine=context_engine,
-                        ce_goal_id=ce_goal_id,
-                        loop_id=main_thread_id,
-                    )
-                except Exception:
-                    logger.warning(
-                        "Trivial persistence/finalize failed (loop=%s)",
-                        main_thread_id,
-                        exc_info=True,
-                    )
-
-    @staticmethod
-    def _extract_fast_path_response_text(chunk: object, prior: str) -> str:
-        """Accumulate assistant text from streamed ``messages`` chunks."""
-        from langchain_core.messages import AIMessage, AIMessageChunk
-
-        from soothe.foundation.sloop.utils.stream_normalize import (
-            extract_text_from_message_content,
-            parse_tuple_stream_chunk,
-        )
-
-        parsed = parse_tuple_stream_chunk(chunk)
-        if parsed is None:
-            return prior
-        _namespace, mode, data = parsed
-        if mode != "messages" or not isinstance(data, (tuple, list)) or len(data) < 1:
-            return prior
-        msg = data[0]
-        if isinstance(msg, (AIMessage, AIMessageChunk)):
-            text = extract_text_from_message_content(msg.content)
-            if text.strip():
-                return text.strip()
-        return prior
-
-    async def _read_fast_path_response_from_state(
-        self,
-        core_agent: Any,
-        stream_config: dict[str, Any],
-    ) -> str:
-        """Best-effort final assistant text from CoreAgent checkpoint state."""
-        from langchain_core.messages import AIMessage
-
-        from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
-
-        try:
-            snapshot = await core_agent.aget_state(config=stream_config)
-        except Exception:
-            logger.debug("Fast path aget_state failed", exc_info=True)
-            return ""
-        if not snapshot or not getattr(snapshot, "values", None):
-            return ""
-        messages = snapshot.values.get("messages") or []
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage):
-                text = extract_text_from_message_content(msg.content)
-                if text.strip():
-                    return text.strip()
-        return ""
-
-    async def _save_trivial_to_state(
-        self,
-        query: str,
-        response: str,
-        main_thread_id: str,
-        *,
-        context_engine: Any | None = None,
-        ce_goal_id: str | None = None,
-        loop_id: str | None = None,
-    ) -> None:
-        """Persist trivial Human+AI pair to ledger and finalize loop checkpoint."""
-        await self._save_trivial_to_ledger(
-            query,
-            response,
-            main_thread_id,
-            context_engine=context_engine,
-        )
-        await self._finalize_fast_path_loop(
-            loop_id or main_thread_id,
-            response=response,
-            context_engine=context_engine,
-            ce_goal_id=ce_goal_id,
-        )
-
-    async def _save_trivial_to_ledger(
-        self,
-        query: str,
-        response: str,
-        main_thread_id: str,
-        *,
-        context_engine: Any | None = None,
-    ) -> None:
-        """Persist trivial Human+AI pair to the loop ContextEngine ledger."""
-        from soothe.config import SOOTHE_HOME
-        from soothe.foundation.context.engine import ContextEngine
-        from soothe.foundation.context.persistence.factory import (
-            resolve_context_engine_persistence,
-        )
-        from soothe.foundation.sloop.utils.messages import (
-            LoopAIMessage,
-            LoopHumanMessage,
-            _record_ledger_message,
-        )
-
-        answer = (response or "").strip()
-        if not answer:
-            return
-
-        if context_engine is not None:
-            try:
-                human = LoopHumanMessage(
-                    content=query,
-                    thread_id=main_thread_id,
-                    phase="trivial",
-                )
-                ai = LoopAIMessage(
-                    content=answer,
-                    thread_id=main_thread_id,
-                    phase="trivial",
-                )
-                _record_ledger_message(context_engine, human, "trivial")
-                _record_ledger_message(context_engine, ai, "trivial")
-                await context_engine.save()
-                logger.debug(
-                    "Trivial exchange saved to active loop ledger (loop=%s)",
-                    main_thread_id,
-                )
-                return
-            except Exception:
-                logger.debug("Failed to save trivial to active loop ledger", exc_info=True)
-
-        loop_id = (main_thread_id or "").strip()
-        if not loop_id:
-            return
-
-        try:
-            ce_config = self._config.agent.loop.context_engine
-            persistence = resolve_context_engine_persistence(self._config, loop_id)
-            soothe_home = Path(self._config.home) if hasattr(self._config, "home") else SOOTHE_HOME
-            ce = ContextEngine(
-                persistence=persistence,
-                projection_config=ce_config.to_projection_config(),
-                soothe_home=soothe_home,
-            )
-            await ce.load()
-            human = LoopHumanMessage(content=query, thread_id=main_thread_id, phase="trivial")
-            ai = LoopAIMessage(content=answer, thread_id=main_thread_id, phase="trivial")
-            _record_ledger_message(ce, human, "trivial")
-            _record_ledger_message(ce, ai, "trivial")
-            await ce.save()
-            logger.debug("Trivial exchange saved to loop ledger for loop %s", loop_id)
-        except Exception:
-            logger.debug("Failed to save trivial to loop ledger", exc_info=True)
-
-    async def _finalize_fast_path_loop(
+    async def _finalize_chitchat_loop(
         self,
         loop_id: str,
         *,
@@ -499,7 +245,7 @@ class PhasesMixin:
             try:
                 await context_engine.finalize_goal(ce_goal_id, status="completed")
             except Exception:
-                logger.debug("CE finalize_goal failed for trivial fast path", exc_info=True)
+                logger.debug("CE finalize_goal failed for chitchat fast path", exc_info=True)
 
         try:
             from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
@@ -523,7 +269,7 @@ class PhasesMixin:
                 await sm.close()
         except Exception:
             logger.warning(
-                "StrangeLoop finalize failed for fast path (loop=%s)",
+                "StrangeLoop finalize failed for chitchat (loop=%s)",
                 loop_id,
                 exc_info=True,
             )

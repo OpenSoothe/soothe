@@ -2122,7 +2122,7 @@ class AgentRuntimeConfig(BaseModel):
 
     lazy_core_agent: bool = Field(
         default=True,
-        description="Defer CoreAgent graph compile until first execute/quiz access",
+        description="Defer CoreAgent graph compile until first execute access",
     )
     general_purpose_subagent: bool = Field(
         default=False,

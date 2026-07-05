@@ -22,9 +22,7 @@ from typing import Any
 LOOP_ASSISTANT_OUTPUT_PHASES: frozenset[str] = frozenset(
     {
         "goal_completion",
-        "quiz",
         "chitchat",
-        "trivial",
         "autonomous_goal",
         "direct_model",
         "text_completion",

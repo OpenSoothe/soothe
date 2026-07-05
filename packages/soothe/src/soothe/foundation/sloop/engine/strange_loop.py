@@ -160,7 +160,7 @@ class StrangeLoop:
                 derived from the checkpoint.
             shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
                 - new_goal: Normal goal execution flow
-                - quiz: Handled via graph fast-path and runner quiz response
+                - chitchat: Handled via graph fast-path and runner chitchat response
             routing_classification: ``RoutingClassification`` for CoreAgent middleware (IG-383).
             clarification_policy: Optional ``ClarificationPolicy`` (RFC-622) used by
                 the loop graph's ``await_clarification`` node. When ``None``, clarification
