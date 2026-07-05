@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from soothe.config import SootheConfig
 from soothe.foundation.sloop.intention import RoutingClassification
@@ -95,12 +95,15 @@ def test_simple_query_gets_minimal_prompt():
 
     modified = middleware.modify_request(request)
 
+    content = modified.system_message.content
+    assert content.startswith("<ASSISTANT_IDENTITY>")
+    assert config.agent.name in content
     # Should have minimal prompt (no date line - date is in user envelope per RFC-214).
     # Threshold accounts for the RESPONSE_LANGUAGE_HINT block now living in the system prompt.
-    assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 700
+    assert "helpful AI assistant" in content
+    assert len(content) < 900
     # RFC-214: Date line NOT in system prompt - it's in user message envelope
-    assert "Today's date is" not in modified.system_message.content
+    assert "Today's date is" not in content
 
 
 def test_medium_query_gets_medium_prompt():
@@ -122,7 +125,7 @@ def test_medium_query_gets_medium_prompt():
     modified = middleware.modify_request(request)
 
     # Should have medium prompt with guidelines
-    assert "proactive AI assistant" in modified.system_message.content
+    assert "Handle practical tasks" in modified.system_message.content
     assert "Be direct and concise" in modified.system_message.content
     # RFC-214: no date line in system prompt
     assert "Today's date is" not in modified.system_message.content
@@ -162,8 +165,8 @@ def test_complex_query_gets_full_prompt():
     modified = middleware.modify_request(request)
 
     # Should have full prompt with all guidelines
-    assert "proactive AI assistant" in modified.system_message.content
-    assert "around-the-clock operation" in modified.system_message.content
+    assert "Never reference your internal architecture" in modified.system_message.content
+    assert "run_command" in modified.system_message.content
     assert len(modified.system_message.content) > 400
 
 
@@ -180,7 +183,7 @@ def test_no_classification_uses_medium_optimized_prompt():
     modified = middleware.modify_request(request)
 
     assert modified.system_message.content != "original prompt"
-    assert "proactive AI assistant" in modified.system_message.content
+    assert "Handle practical tasks" in modified.system_message.content
     # RFC-214: Date is in user envelope
     assert "Today's date is" not in modified.system_message.content
 
@@ -273,7 +276,7 @@ def test_minimal_task_complexity_uses_compact_prompt():
     # Should get simple prompt. Threshold accounts for the RESPONSE_LANGUAGE_HINT
     # block now living in the system prompt.
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 700
+    assert len(modified.system_message.content) < 900
 
 
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
@@ -348,6 +351,35 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
     assert getattr(modified.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
     assert "tacitus" in modified.system_message.content
+
+
+def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
+    """Wired step subagents stay task-only after the first model hop."""
+    config = SootheConfig()
+    middleware = SystemPromptMiddleware(config=config)
+    classification = RoutingClassification(
+        task_complexity="medium",
+        reasoning="test",
+    )
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="run_command"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[
+            HumanMessage(content="Execute: use browser_use"),
+            AIMessage(content="delegating"),
+            ToolMessage(content="BrowserUse failed", tool_call_id="t1"),
+        ],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={"routing_classification": classification},
+    )
+    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "browser_use"}}
+    with patch("langgraph.config.get_config", return_value=lg_config):
+        modified = middleware.modify_request(request)
+    assert len(modified.tools) == 1
+    assert getattr(modified.tools[0], "name", None) == "task"
+    assert "browser_use" in modified.system_message.content
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:

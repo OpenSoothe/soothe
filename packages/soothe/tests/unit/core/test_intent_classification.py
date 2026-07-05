@@ -125,6 +125,7 @@ class TestIntakeClassificationPrompts:
         from soothe.foundation.sloop.intention.intake_messages import build_intake_system_message
 
         system = build_intake_system_message("TestBot")
+        assert system.startswith("<ASSISTANT_IDENTITY>")
         assert "TestBot" in system
 
     def test_primary_prompt_omits_task_complexity(self) -> None:
@@ -192,6 +193,20 @@ class TestIntakeClassifier:
             result = await classifier.classify_intake(long_query)
         mock_llm.assert_awaited()
         assert result.intake_label == IntakeLabel.TRIVIAL
+
+    async def test_identity_query_overrides_llm_to_chitchat(self) -> None:
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
+        mock_llm_result = IntentClassification(
+            intake_label=IntakeLabel.TRIVIAL,
+            task_complexity=TaskComplexity.MINIMAL,
+        )
+        with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
+            mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "trivial"})
+            result = await classifier.classify_intake("who are u")
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert result.chitchat_response == (
+            "I'm Soothe, your AI assistant. How can I help you today?"
+        )
 
     async def test_fallback_defaults_to_complex(self) -> None:
         classifier = IntentClassifier(model=None, assistant_name="TestBot")

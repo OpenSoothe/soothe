@@ -16,19 +16,19 @@ def test_prompt_templates_exist():
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
     )
+    from soothe.foundation.sloop.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
 
     # All templates should be non-empty strings
     assert isinstance(_SIMPLE_SYSTEM_PROMPT, str)
     assert len(_SIMPLE_SYSTEM_PROMPT) > 0
-    assert "{assistant_name}" in _SIMPLE_SYSTEM_PROMPT
 
     assert isinstance(_MEDIUM_SYSTEM_PROMPT, str)
     assert len(_MEDIUM_SYSTEM_PROMPT) > 0
-    assert "{assistant_name}" in _MEDIUM_SYSTEM_PROMPT
 
     assert isinstance(_DEFAULT_SYSTEM_PROMPT, str)
     assert len(_DEFAULT_SYSTEM_PROMPT) > 0
-    assert "{assistant_name}" in _DEFAULT_SYSTEM_PROMPT
+
+    assert "{assistant_name}" in ASSISTANT_IDENTITY_FRAGMENT
 
 
 def test_middleware_can_be_imported():
@@ -57,11 +57,17 @@ def test_token_reduction_estimates():
         config.agent.system_prompt,
         config.agent.name,
     )
+    from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
+
+    identity = build_assistant_identity_block(config.agent.name)
+    simple_with_identity = f"{identity}\n\n{simple_prompt}"
+    medium_with_identity = f"{identity}\n\n{medium_prompt}"
+    complex_with_identity = f"{identity}\n\n{complex_prompt}"
 
     # Rough token count (words * 1.3 is a common approximation)
-    simple_tokens = len(simple_prompt.split()) * 1.3
-    medium_tokens = len(medium_prompt.split()) * 1.3
-    complex_tokens = len(complex_prompt.split()) * 1.3
+    simple_tokens = len(simple_with_identity.split()) * 1.3
+    medium_tokens = len(medium_with_identity.split()) * 1.3
+    complex_tokens = len(complex_with_identity.split()) * 1.3
 
     # Simple should be ~80% reduction
     simple_reduction = (complex_tokens - simple_tokens) / complex_tokens

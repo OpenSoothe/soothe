@@ -366,7 +366,7 @@ subagents:
     runtime_dir: ''
   browser_use:
     enabled: true
-    model: null
+    model_role: default
     transport: local
     url: null
     config: {}

@@ -9,6 +9,7 @@ from soothe.foundation.sloop.intention.models import (
     IntentClassification,
     derive_task_complexity_from_intake,
 )
+from soothe.foundation.sloop.prompts.identity import build_identity_reply, is_identity_query
 
 _COMPLEX_MARKERS = re.compile(
     r"(迁移|重构|refactor|architect|architecture|implement a|build a|design a|"
@@ -39,7 +40,11 @@ _CASUAL_GREETING_MARKERS = re.compile(
 )
 
 
-def classify_intake_heuristic(query: str) -> IntentClassification | None:
+def classify_intake_heuristic(
+    query: str,
+    *,
+    assistant_name: str = "Soothe",
+) -> IntentClassification | None:
     """Return an intake classification for obvious single-tool or chitchat lookups.
 
     Skips the intake LLM for short, unambiguous requests (weather, greetings)
@@ -54,6 +59,9 @@ def classify_intake_heuristic(query: str) -> IntentClassification | None:
 
     if _CASUAL_GREETING_MARKERS.match(text):
         return _chitchat(text, _casual_greeting_response(text))
+
+    if is_identity_query(text):
+        return _chitchat(text, build_identity_reply(assistant_name, text))
 
     if len(text) > 100 or _COMPLEX_MARKERS.search(text):
         return None

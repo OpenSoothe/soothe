@@ -109,3 +109,23 @@ async def test_run_chitchat_awaits_persistence_before_finishing() -> None:
         save_release.set()
         with pytest.raises(StopAsyncIteration):
             await drain_task
+
+
+@pytest.mark.asyncio
+async def test_run_chitchat_defer_persistence_skips_save_in_generator() -> None:
+    runner = _ChitchatRunner(config=MagicMock(), loop_id="loop-chitchat-4")
+    runner._save_chitchat_to_state = AsyncMock()
+
+    chunks = [
+        c
+        async for c in runner._run_chitchat(
+            "hello",
+            "thread-1",
+            chitchat_response="Hey!",
+            loop_id="loop-chitchat-4",
+            defer_persistence=True,
+        )
+    ]
+
+    assert len(chunks) == 1
+    runner._save_chitchat_to_state.assert_not_awaited()

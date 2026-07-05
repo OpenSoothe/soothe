@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from soothe.config import SootheConfig
 from soothe.subagents.browser_use import create_browser_use_subagent
 from soothe.subagents.browser_use.config_model import BrowserUseSubagentConfig
 
@@ -24,6 +25,7 @@ def test_browser_use_subagent_uses_configured_runtime_dir() -> None:
         # Create browser_use subagent
         subagent = create_browser_use_subagent(
             config=browser_config,
+            soothe_config=SootheConfig(),
         )
 
         # Verify subagent was created successfully
@@ -48,7 +50,10 @@ def test_browser_use_subagent_environment_variables() -> None:
             )
 
             # Create subagent which should set env vars during execution
-            subagent = create_browser_use_subagent(config=browser_config)
+            subagent = create_browser_use_subagent(
+                config=browser_config,
+                soothe_config=SootheConfig(),
+            )
 
             # Note: Environment variables are set during graph execution,
             # not during creation. This test verifies the subagent can be
@@ -78,7 +83,7 @@ def test_browser_use_subagent_default_directories() -> None:
                         )
 
                         # Create subagent with defaults
-                        subagent = create_browser_use_subagent()
+                        subagent = create_browser_use_subagent(soothe_config=SootheConfig())
 
                         # Verify subagent was created
                         assert subagent is not None
@@ -95,7 +100,10 @@ def test_browser_use_subagent_config_from_soothe_config() -> None:
     )
 
     # Create subagent using config
-    subagent = create_browser_use_subagent(config=browser_config)
+    subagent = create_browser_use_subagent(
+        config=browser_config,
+        soothe_config=SootheConfig(),
+    )
 
     assert subagent is not None
     assert subagent["name"] == "browser_use"
@@ -109,7 +117,10 @@ def test_browser_use_subagent_cleanup_flag() -> None:
             runtime_dir=tmpdir,
             cleanup_on_exit=True,
         )
-        subagent_with_cleanup = create_browser_use_subagent(config=config_with_cleanup)
+        subagent_with_cleanup = create_browser_use_subagent(
+            config=config_with_cleanup,
+            soothe_config=SootheConfig(),
+        )
         assert subagent_with_cleanup is not None
 
         # Test with cleanup disabled
@@ -117,5 +128,8 @@ def test_browser_use_subagent_cleanup_flag() -> None:
             runtime_dir=tmpdir,
             cleanup_on_exit=False,
         )
-        subagent_no_cleanup = create_browser_use_subagent(config=config_no_cleanup)
+        subagent_no_cleanup = create_browser_use_subagent(
+            config=config_no_cleanup,
+            soothe_config=SootheConfig(),
+        )
         assert subagent_no_cleanup is not None

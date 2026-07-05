@@ -45,6 +45,16 @@ def test_route_by_intent_chitchat_fast_path() -> None:
     assert route_by_intent(state) == END
 
 
+def test_route_by_intent_chitchat_fast_path_wins_over_continuation() -> None:
+    """Chitchat fast-path must bypass continuation overlay (RFC-630)."""
+    state = {
+        "is_continuation": True,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "fast_path",
+    }
+    assert route_by_intent(state) == END
+
+
 def test_route_by_intent_simple() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.SIMPLE}
     assert route_by_intent(state) == "plan_generate"
@@ -62,6 +72,54 @@ def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
 
 
 # -- Group 4: trivial pseudo-plan (in-graph execute) ------------------------
+
+
+@pytest.mark.asyncio
+async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> None:
+    """Chitchat must bypass StrangeLoop even when the loop has prior goals."""
+    from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, event_data: object) -> None:
+        emitted.append((event_type, event_data))
+
+    intent = IntentClassification(
+        intake_label=IntakeLabel.CHITCHAT,
+        goal_description="where are u from",
+        chitchat_response="I'm Soothe, a cloud-based AI assistant.",
+        task_complexity=TaskComplexity.MINIMAL,
+    )
+    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    loop_state = SimpleNamespace(
+        intent=intent,
+        goal="where are u from",
+        thread_id="loop-main",
+    )
+    prior_goal = SimpleNamespace(
+        id="goal-0",
+        status="completed",
+        description="who are u",
+        action_history=[],
+        steps=SimpleNamespace(nodes={}),
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        scratch=scratch,
+        ce=SimpleNamespace(get_all_goals=lambda: [prior_goal]),
+        ce_goal_id="goal-1",
+        checkpoint=SimpleNamespace(goal_history=[SimpleNamespace(), SimpleNamespace()]),
+        continue_loop_mode=True,
+        recovery_valid_resume=False,
+        emit=_emit,
+    )
+
+    result = await node_init_or_resume(ctx, {})
+
+    assert result["intent_route"] == "fast_path"
+    assert result["is_continuation"] is True
+    assert any(t == "intent_fast_path" for t, _ in emitted)
+    assert scratch.plan_result is None
 
 
 @pytest.mark.asyncio

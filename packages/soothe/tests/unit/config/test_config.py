@@ -101,6 +101,7 @@ class TestSootheConfig:
         for name in ("planner", "tacitus", "skillify"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
         assert cfg.subagents["browser_use"].enabled is True
+        assert cfg.subagents["browser_use"].model_role == "default"
 
     def test_assistant_name_default(self) -> None:
         cfg = SootheConfig()
@@ -117,13 +118,14 @@ class TestSootheConfig:
     def test_resolve_system_prompt_default(self) -> None:
         cfg = SootheConfig()
         prompt = cfg.resolve_system_prompt()
+        assert prompt.startswith("<ASSISTANT_IDENTITY>")
         assert "Soothe" in prompt
-        assert "continuous" in prompt
-        assert "around-the-clock" in prompt
+        assert "Do not claim to be Claude" in prompt
 
     def test_resolve_system_prompt_custom_name(self) -> None:
         cfg = SootheConfig(agent={"name": "MyBot"})
         prompt = cfg.resolve_system_prompt()
+        assert prompt.startswith("<ASSISTANT_IDENTITY>")
         assert "MyBot" in prompt
         assert "Soothe" not in prompt
 

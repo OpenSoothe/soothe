@@ -66,10 +66,10 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     is_continuation = _is_continuation(ctx)
 
     # RFC-630 chitchat fast-path: runner emits piggybacked response directly.
+    # Chitchat always bypasses StrangeLoop — even on loop continuation turns
+    # (e.g. a second "who are you" in the same session).
     if (
         intake_label == IntakeLabel.CHITCHAT
-        and not is_continuation
-        and not getattr(ctx, "continue_loop_mode", False)
         and not is_continue_keyword(ctx.loop_state.goal)
         and (getattr(intent, "chitchat_response", None) or "").strip()
     ):
