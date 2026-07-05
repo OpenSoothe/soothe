@@ -64,6 +64,7 @@ __all__ = [
     "DaemonStatusParams",
     "DaemonShutdownParams",
     "ConfigGetParams",
+    "ConfigReloadParams",
     # Skills & models params
     "SkillsListParams",
     "ModelsListParams",
@@ -477,6 +478,10 @@ class ConfigGetParams(ParamsBase):
     """
 
     section: str | None = None
+
+
+class ConfigReloadParams(EmptyParams):
+    """Params for ``method=config_reload`` — no required fields."""
 
 
 # ---------------------------------------------------------------------------

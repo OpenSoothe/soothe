@@ -43,6 +43,9 @@ POLICY_DENIED = "soothe.internal.policy.denied"
 # Daemon
 DAEMON_HEARTBEAT = "soothe.internal.daemon.heartbeat"
 
+# Config hot-reload
+CONFIG_RELOADED = "soothe.system.config.reloaded"
+
 # Plugin lifecycle
 PLUGIN_LOADED = "soothe.internal.plugin.loaded"
 PLUGIN_FAILED = "soothe.internal.plugin.failed"
@@ -162,6 +165,7 @@ __all__ = [
     "BRANCH_RETRY_STARTED",
     "CHECKPOINT_ANCHOR_CREATED",
     "CHECKPOINT_SAVED",
+    "CONFIG_RELOADED",
     "DAEMON_HEARTBEAT",
     "ERROR",
     "GOAL_BATCH_STARTED",

@@ -1389,6 +1389,47 @@ class MessageRouter:
         result: dict[str, Any] = {section: section_data}
         await self._send_response(client_id, request_id, result)
 
+    async def _handle_config_reload(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle config_reload RPC request.
+
+        Triggers immediate reload of watched config files.
+
+        Args:
+            client_id: Client connection identifier.
+            msg: Request message with optional request_id.
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+
+        # Check if config reload is enabled
+        if not getattr(d, "_config_reload_enabled", False):
+            await self._send_response(
+                client_id,
+                request_id,
+                {
+                    "success": False,
+                    "error": "config_reload_not_enabled",
+                    "message": "Config hot-reload is not enabled on this daemon",
+                },
+            )
+            return
+
+        # Trigger reload
+        try:
+            d.reload_config_now()
+            await self._send_response(
+                client_id,
+                request_id,
+                {"success": True, "message": "Config reload triggered"},
+            )
+        except Exception as e:
+            logger.error("Config reload failed: %s", e)
+            await self._send_response(
+                client_id,
+                request_id,
+                {"success": False, "error": str(e)},
+            )
+
     # ---------------------------------------------------------------------------
     # Loop RPC Helpers (IG-246: Self-healing metadata sync)
     # ---------------------------------------------------------------------------

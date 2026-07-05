@@ -232,13 +232,6 @@ class _StartupMixin:
         # Model cache prewarm runs from ``on_soothe_app_daemon_ready`` once the
         # session exists — post-paint is too early (``_daemon_session`` is still None).
 
-        # Resume sessions always load prior conversation, even when a startup
-        # prompt is queued — otherwise the user sees their new turn on an
-        # empty transcript. History load is scheduled first so it runs before
-        # the initial prompt's response begins streaming.
-        if not self._connecting and self._lc_loop_id and self._runtime_backend_ready():
-            self.call_after_refresh(lambda: asyncio.create_task(self._load_loop_history()))
-
         # Auto-submit initial prompt or skill if provided via -m / --skill.
         # When connecting, defer until the ready message handler fires.
         if not self._connecting:

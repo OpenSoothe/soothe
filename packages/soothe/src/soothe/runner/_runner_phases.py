@@ -145,6 +145,7 @@ class PhasesMixin:
 
         core_agent = self._materialized_core_agent()
         final_response = ""
+        persist_response = ""
         try:
             async for chunk in core_agent.astream(
                 graph_input,
@@ -174,21 +175,31 @@ class PhasesMixin:
                     phase="trivial",
                     thread_id=main_thread_id,
                 )
-
-        if not final_response.strip():
-            final_response = await self._read_fast_path_response_from_state(
-                core_agent,
-                stream_config,
-            )
-
-        self._schedule_trivial_persistence(
-            user_input,
-            final_response.strip() or goal_text,
-            main_thread_id,
-            context_engine=context_engine,
-            ce_goal_id=ce_goal_id,
-            loop_id=main_thread_id,
-        )
+            persist_response = final_response.strip() or goal_text
+        else:
+            if not final_response.strip():
+                final_response = await self._read_fast_path_response_from_state(
+                    core_agent,
+                    stream_config,
+                )
+            persist_response = final_response.strip() or goal_text
+        finally:
+            if persist_response.strip():
+                try:
+                    await self._save_trivial_to_state(
+                        user_input,
+                        persist_response,
+                        main_thread_id,
+                        context_engine=context_engine,
+                        ce_goal_id=ce_goal_id,
+                        loop_id=main_thread_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Trivial persistence/finalize failed (loop=%s)",
+                        main_thread_id,
+                        exc_info=True,
+                    )
 
     @staticmethod
     def _extract_fast_path_response_text(chunk: object, prior: str) -> str:
@@ -237,33 +248,6 @@ class PhasesMixin:
                 if text.strip():
                     return text.strip()
         return ""
-
-    def _schedule_trivial_persistence(
-        self,
-        query: str,
-        response: str,
-        main_thread_id: str,
-        *,
-        context_engine: Any | None = None,
-        ce_goal_id: str | None = None,
-        loop_id: str | None = None,
-    ) -> None:
-        """Persist trivial exchange and finalize loop checkpoint without blocking stream."""
-
-        async def _persist() -> None:
-            try:
-                await self._save_trivial_to_state(
-                    query,
-                    response,
-                    main_thread_id,
-                    context_engine=context_engine,
-                    ce_goal_id=ce_goal_id,
-                    loop_id=loop_id or main_thread_id,
-                )
-            except Exception:
-                logger.debug("Background trivial persistence failed", exc_info=True)
-
-        asyncio.create_task(_persist())
 
     async def _save_trivial_to_state(
         self,
@@ -399,7 +383,11 @@ class PhasesMixin:
             finally:
                 await sm.close()
         except Exception:
-            logger.debug("StrangeLoop finalize failed for fast path", exc_info=True)
+            logger.warning(
+                "StrangeLoop finalize failed for fast path (loop=%s)",
+                loop_id,
+                exc_info=True,
+            )
 
     # -- LangGraph stream with interrupt auto-resume -------------------------
 

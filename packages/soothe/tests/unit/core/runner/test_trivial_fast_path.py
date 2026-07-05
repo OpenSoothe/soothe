@@ -63,7 +63,7 @@ async def test_save_trivial_to_ledger_records_human_ai_pair(tmp_path: Path) -> N
 async def test_run_trivial_uses_loop_id_as_main_thread_and_persists() -> None:
     runner = _TrivialRunner(config=MagicMock(), loop_id="loop-main-1")
     runner._ensure_checkpointer_initialized = AsyncMock()
-    runner._schedule_trivial_persistence = MagicMock()
+    runner._save_trivial_to_state = AsyncMock()
 
     async def _fake_astream(*_args, **_kwargs):
         chunk = (
@@ -96,8 +96,8 @@ async def test_run_trivial_uses_loop_id_as_main_thread_and_persists() -> None:
             ]
 
     assert chunks
-    runner._schedule_trivial_persistence.assert_called_once()
-    call = runner._schedule_trivial_persistence.call_args
+    runner._save_trivial_to_state.assert_awaited_once()
+    call = runner._save_trivial_to_state.call_args
     assert call.args[2] == "loop-main-1"
 
 
@@ -111,7 +111,7 @@ async def test_run_trivial_passes_routing_classification_to_core_agent() -> None
 
     runner = _TrivialRunner(config=MagicMock(), loop_id="loop-main-2")
     runner._ensure_checkpointer_initialized = AsyncMock()
-    runner._schedule_trivial_persistence = MagicMock()
+    runner._save_trivial_to_state = AsyncMock()
 
     captured_input: dict = {}
 
@@ -155,8 +155,8 @@ async def test_run_trivial_passes_routing_classification_to_core_agent() -> None
 
 
 @pytest.mark.asyncio
-async def test_run_trivial_yields_before_persistence_completes() -> None:
-    """Trivial response must reach the client before ledger finalize runs."""
+async def test_run_trivial_awaits_persistence_before_finishing() -> None:
+    """Stream chunks reach the client before ledger finalize, which blocks generator exit."""
     runner = _TrivialRunner(config=MagicMock(), loop_id="loop-trivial-1")
     runner._ensure_checkpointer_initialized = AsyncMock()
 
@@ -197,9 +197,9 @@ async def test_run_trivial_yields_before_persistence_completes() -> None:
         assert getattr(msg, "phase", "") == "trivial"
         assert not save_started.is_set()
 
-        with pytest.raises(StopAsyncIteration):
-            await anext(gen)
-
+        drain_task = asyncio.create_task(anext(gen))
         await asyncio.wait_for(save_started.wait(), timeout=1.0)
+
         save_release.set()
-        await asyncio.sleep(0)
+        with pytest.raises(StopAsyncIteration):
+            await drain_task
