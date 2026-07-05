@@ -35,6 +35,19 @@ class TestEarliestCorpusMatch:
     def test_no_false_positive_short_compact(self) -> None:
         assert earliest_corpus_match("hi", "gh", skill_name="github") is None
 
+    def test_short_tags_require_word_boundaries(self) -> None:
+        continuation = (
+            "execution task:\n"
+            "address the follow-up request: what subagents do you have. "
+            "use the prior goal's projected completion report as authoritative background."
+        )
+        assert earliest_corpus_match(continuation, "pr", skill_name="github") is None
+        assert earliest_corpus_match(continuation, "ci", skill_name="github") is None
+        assert earliest_corpus_match("make a decision soon", "ci", skill_name="github") is None
+        assert (
+            earliest_corpus_match("list open pr on git hub", "pr", skill_name="github") is not None
+        )
+
     def test_match_variants_include_builtin_aliases(self) -> None:
         variants = match_variants_for_token("clawhub", skill_name="clawhub")
         assert "claw hub" in variants
@@ -70,3 +83,30 @@ class TestBuiltinSkillCorpusPrefetch:
                 limit=1,
             )
             assert [entry.name for entry in matches] == [name], goal
+
+    def test_github_not_matched_by_continuation_boilerplate(self) -> None:
+        from soothe.skills.index import SkillIndex
+        from soothe.skills.registry import (
+            DEFAULT_CORE_SKILL_NAMES,
+            ProgressiveSkillRegistry,
+        )
+
+        idx = SkillIndex()
+        entries = idx.rebuild_if_stale()
+        reg = ProgressiveSkillRegistry()
+        core, _ = reg.partition_core_deferred(entries, DEFAULT_CORE_SKILL_NAMES)
+        github = next(entry for entry in core if entry.name == "github")
+        continuation = (
+            "EXECUTION TASK:\n"
+            "Address the follow-up request: what subagents do you have. "
+            "Use the prior goal's projected completion report as authoritative background. "
+            "Do not re-run prior goal execute steps or redo finished analysis; "
+            "build on what was already concluded and produce concrete output for this request."
+        )
+        matches = reg.match_deferred_in_corpus(
+            continuation,
+            [github],
+            discovered=set(),
+            limit=1,
+        )
+        assert matches == []

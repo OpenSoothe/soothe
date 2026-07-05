@@ -41,6 +41,10 @@ BUILTIN_SKILL_ALIASES: dict[str, frozenset[str]] = {
 }
 
 _COMPACT_RE = re.compile(r"[\s\-_]+")
+# Tags this length or shorter require token boundaries (avoids ``pr`` in ``prior``).
+_SHORT_BOUNDARY_MAX_LEN = 3
+_BOUNDARY_BEFORE = r"(?<![a-z0-9])"
+_BOUNDARY_AFTER = r"(?![a-z0-9])"
 
 
 def _compact(text: str) -> str:
@@ -51,6 +55,10 @@ def _compact(text: str) -> str:
 def _direct_substring_index(corpus: str, variant: str) -> int | None:
     if len(variant) < 2:
         return None
+    if len(variant) <= _SHORT_BOUNDARY_MAX_LEN:
+        pattern = rf"{_BOUNDARY_BEFORE}{re.escape(variant)}{_BOUNDARY_AFTER}"
+        match = re.search(pattern, corpus)
+        return match.start() if match else None
     pos = corpus.find(variant)
     return pos if pos >= 0 else None
 
