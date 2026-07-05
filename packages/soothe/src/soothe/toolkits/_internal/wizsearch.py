@@ -11,15 +11,19 @@ import json
 import logging
 import os
 import re
+import time
 from collections.abc import Awaitable
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 from urllib.parse import urlparse
 
-from soothe.utils.text_preview import preview_first
+from soothe.utils.text_preview import log_preview, preview_first
 from soothe.utils.url_validation import validate_url
 
 logger = logging.getLogger(__name__)
+
+_LOG_QUERY_CHARS = 120
+_LOG_URL_CHARS = 160
 
 T = TypeVar("T")
 
@@ -48,6 +52,102 @@ def _require_wizsearch() -> None:
     if not _check_wizsearch_available():
         msg = "wizsearch package is not installed. Install/upgrade soothe (includes research dependencies): `pip install -U soothe`."
         raise ImportError(msg)
+
+
+def _wizsearch_library_version() -> str:
+    """Return installed wizsearch package version when importable."""
+    try:
+        import importlib.metadata as importlib_metadata
+
+        return importlib_metadata.version("wizsearch")
+    except Exception:
+        return "unknown"
+
+
+def _log_wizsearch_search_start(
+    *,
+    query: str,
+    engines: list[str],
+    max_results_per_engine: int,
+    timeout_seconds: int,
+    debug_mode: bool,
+) -> None:
+    """Log search invocation parameters before calling the wizsearch library."""
+    logger.info(
+        "[Wizsearch] search start query=%r engines=%s max_results=%d timeout=%ds "
+        "debug=%s library=%s",
+        log_preview(query, chars=_LOG_QUERY_CHARS),
+        engines,
+        max_results_per_engine,
+        timeout_seconds,
+        debug_mode,
+        _wizsearch_library_version(),
+    )
+
+
+def _log_wizsearch_search_done(
+    *,
+    query: str,
+    engines: list[str],
+    elapsed_ms: int,
+    source_count: int,
+    response_time: float | None,
+    engine_status: dict[str, Any] | None,
+) -> None:
+    """Log search completion metrics after wizsearch returns."""
+    time_str = f"{response_time:.1f}s" if response_time is not None else "unknown"
+    logger.info(
+        "[Wizsearch] search done query=%r engines=%s elapsed_ms=%d sources=%d "
+        "library_response_time=%s",
+        log_preview(query, chars=_LOG_QUERY_CHARS),
+        engines,
+        elapsed_ms,
+        source_count,
+        time_str,
+    )
+    if engine_status:
+        for engine_name, status in engine_status.items():
+            logger.info("[Wizsearch] engine %s: %s", engine_name, status)
+
+
+def _log_wizsearch_crawl_start(
+    *,
+    url: str,
+    content_format: str,
+    only_text: bool,
+) -> None:
+    """Log crawl invocation parameters before calling PageCrawler."""
+    logger.info(
+        "[Wizsearch] crawl start url=%r format=%s only_text=%s library=%s",
+        log_preview(url, chars=_LOG_URL_CHARS),
+        content_format,
+        only_text,
+        _wizsearch_library_version(),
+    )
+
+
+def _log_wizsearch_crawl_done(
+    *,
+    url: str,
+    elapsed_ms: int,
+    content_length: int,
+    error: str | None = None,
+) -> None:
+    """Log crawl completion metrics."""
+    if error:
+        logger.warning(
+            "[Wizsearch] crawl done url=%r elapsed_ms=%d status=error message=%s",
+            log_preview(url, chars=_LOG_URL_CHARS),
+            elapsed_ms,
+            log_preview(error, chars=200),
+        )
+        return
+    logger.info(
+        "[Wizsearch] crawl done url=%r elapsed_ms=%d content_chars=%d",
+        log_preview(url, chars=_LOG_URL_CHARS),
+        elapsed_ms,
+        content_length,
+    )
 
 
 def _to_serializable_sources(result: object) -> list[dict[str, object]]:
@@ -139,6 +239,7 @@ def _run_coro(coro: Awaitable[T]) -> T:
         return asyncio.run(coro)
     if loop.is_running():
         msg = "Cannot run synchronous tool method inside an active asyncio event loop. Use async invocation instead."
+        logger.error("[Wizsearch] sync tool invoked inside running event loop")
         raise RuntimeError(msg)
     return loop.run_until_complete(coro)
 
@@ -299,24 +400,56 @@ async def perform_wizsearch_search(
     )
     if all_misconfigured:
         issues = "; ".join(f"{w['engine']}: {w['issue']}" for w in validation_warnings)
-        logger.warning("All search engines unavailable (%s), skipping search", issues)
+        logger.warning(
+            "[Wizsearch] search skipped query=%r engines=%s reason=all_misconfigured (%s)",
+            log_preview(query, chars=_LOG_QUERY_CHARS),
+            default_engines,
+            issues,
+        )
         return f'No search engines available for "{query}" ({issues})'
 
+    _log_wizsearch_search_start(
+        query=query,
+        engines=default_engines,
+        max_results_per_engine=max_results_per_engine,
+        timeout_seconds=timeout_seconds,
+        debug_mode=debug_mode,
+    )
+    started = time.perf_counter()
     try:
         with capture_subagent_output("wizsearch", suppress=not debug_mode):
             searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
             result = await searcher.search(query=query)
 
+            sources = _to_serializable_sources(result)
+            engine_status: dict[str, Any] | None = None
             if hasattr(result, "metadata") and result.metadata:
-                engine_status = result.metadata.get("engine_status", {})
-                for engine_name, status in engine_status.items():
-                    logger.debug("Engine %s: %s", engine_name, status)
+                raw_status = result.metadata.get("engine_status", {})
+                if isinstance(raw_status, dict):
+                    engine_status = raw_status
 
-            _ = _to_serializable_sources(result)  # Keep for potential future use
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            response_time = getattr(result, "response_time", None)
+            _log_wizsearch_search_done(
+                query=query,
+                engines=default_engines,
+                elapsed_ms=elapsed_ms,
+                source_count=len(sources),
+                response_time=float(response_time) if response_time is not None else None,
+                engine_status=engine_status,
+            )
+
             _save_raw_results(query, result)
             return _build_result_payload(result)
     except Exception as exc:
-        logger.warning("Search failed with engines %s: %s", default_engines, exc)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        logger.warning(
+            "[Wizsearch] search failed query=%r engines=%s elapsed_ms=%d error=%s",
+            log_preview(query, chars=_LOG_QUERY_CHARS),
+            default_engines,
+            elapsed_ms,
+            exc,
+        )
 
         return f'Search failed for "{query}": {exc}'
 
@@ -352,9 +485,17 @@ async def perform_wizsearch_crawl(
     if selected_format not in {"markdown", "html", "text"}:
         selected_format = "markdown"
 
+    _log_wizsearch_crawl_start(
+        url=url,
+        content_format=selected_format,
+        only_text=only_text,
+    )
+    started = time.perf_counter()
+
     validated_url, error = validate_url(url)
     if error:
-        logger.warning("Invalid URL: %s", error)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        _log_wizsearch_crawl_done(url=url, elapsed_ms=elapsed_ms, content_length=0, error=error)
         return {
             "url": url,
             "content_format": selected_format,
@@ -374,25 +515,55 @@ async def perform_wizsearch_crawl(
             )
             content = await crawler.crawl()
 
-        payload = {
+        content_text = content or ""
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        _log_wizsearch_crawl_done(
+            url=validated_url,
+            elapsed_ms=elapsed_ms,
+            content_length=len(content_text),
+        )
+        return {
             "url": validated_url,
             "content_format": selected_format,
             "only_text": only_text,
             "headless": True,
-            "content": content or "",
-            "content_length": len(content or ""),
+            "content": content_text,
+            "content_length": len(content_text),
         }
     except Exception as exc:
-        logger.exception("Crawl failed for %s", validated_url)
-
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
         error_str = str(exc).lower()
         if "timeout" in error_str:
-            logger.warning("Crawl timed out - consider increasing timeout or checking network")
+            logger.warning(
+                "[Wizsearch] crawl timed out url=%r elapsed_ms=%d",
+                log_preview(validated_url, chars=_LOG_URL_CHARS),
+                elapsed_ms,
+            )
         elif "connection" in error_str:
-            logger.warning("Connection failed - check URL accessibility and proxy settings")
+            logger.warning(
+                "[Wizsearch] crawl connection failed url=%r elapsed_ms=%d",
+                log_preview(validated_url, chars=_LOG_URL_CHARS),
+                elapsed_ms,
+            )
         elif "javascript" in error_str or "render" in error_str:
-            logger.warning("JavaScript rendering issue - page may require JS execution")
+            logger.warning(
+                "[Wizsearch] crawl render issue url=%r elapsed_ms=%d",
+                log_preview(validated_url, chars=_LOG_URL_CHARS),
+                elapsed_ms,
+            )
+        else:
+            logger.exception(
+                "[Wizsearch] crawl failed url=%r elapsed_ms=%d",
+                log_preview(validated_url, chars=_LOG_URL_CHARS),
+                elapsed_ms,
+            )
 
+        _log_wizsearch_crawl_done(
+            url=validated_url,
+            elapsed_ms=elapsed_ms,
+            content_length=0,
+            error=str(exc),
+        )
         return {
             "url": validated_url,
             "content_format": selected_format,
@@ -402,5 +573,3 @@ async def perform_wizsearch_crawl(
             "content_length": 0,
             "error": str(exc),
         }
-    else:
-        return payload

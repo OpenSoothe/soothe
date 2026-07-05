@@ -571,6 +571,11 @@ async def test_goal_completion_emits_finalize_phase_status() -> None:
     goal = GoalNode(description="g")
     ce._dag.add_goal(goal)
     loop_state.bind_ce(ce, goal.id)
+    # Add ledger content for LEDGER_DIRECT to work without synthesis fallback
+    ce.ledger.record_message(
+        LoopAIMessage(content="done answer", thread_id="thr-phase", phase="execute_step"),
+        phase="execute_step",
+    )
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
     pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
@@ -580,6 +585,7 @@ async def test_goal_completion_emits_finalize_phase_status() -> None:
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
     strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop._fast_llm = None  # Prevent synthesis LLM calls
 
     sm = Mock()
     sm.record_iteration = AsyncMock()

@@ -5,8 +5,7 @@ Single source of truth for color values used in Python code (Rich markup,
 Textual CSS variables: built-in variables
 (`$primary`, `$background`, `$text-muted`, `$error-muted`, etc.) are set via
 `register_theme()` in `SootheApp.__init__`, while the few app-specific
-variables (`$mode-bash`, `$mode-command`, `$skill`, `$skill-hover`, `$tool`,
-`$tool-hover`, `$cognition`, `$cognition-hover`) are backed by these constants via
+variables (`$mode-bash`, `$mode-command`, `$cognition`) are backed by these constants via
 `App.get_theme_variable_defaults()`.
 
 Code that needs custom CSS variable values should call
@@ -85,29 +84,19 @@ LC_PANEL = "#25283B"
 """Panel — differentiated section background (above surface)."""
 
 LC_SKILL = "#A78BFA"
-"""Skill invocation accent — border and header text."""
-
-LC_SKILL_HOVER = "#C4B5FD"
-"""Skill invocation hover — lighter variant for interactive feedback."""
+"""Skill invocation accent — card dot and header text."""
 
 LC_TOOL = LC_AMBER
-"""Tool call accent — border and header text."""
-
-LC_TOOL_HOVER = "#FFCB91"
-"""Tool call hover — lighter variant for interactive feedback."""
-
-LC_COGNITION = "#56B6C2"
-"""Agent loop step / cognition progress accent (distinct from tool amber)."""
+"""Tool call accent — card dot and header text."""
 
 
 # ---------------------------------------------------------------------------
-# Unified Card Palette — Grayscale system for Goal/Plan/Step/Task cards (IG-468)
+# Unified card palette — grayscale system for Goal/Plan/Step/Task cards
 #
 # Design principles:
 # - Consistent visual style across all four card types
-# - Restrained grayscale as primary palette
-# - Header/status colors are prominent; activity colors are subdued
-# - Left border color matches activity color for visual harmony
+# - Restrained grayscale for secondary activity text
+# - Stateful ``⏺`` dot prefixes for card headers; ``⎿`` gutter for body lines
 # ---------------------------------------------------------------------------
 
 # Grayscale base colors (neutral, non-distracting)
@@ -143,35 +132,29 @@ GRAY_900 = "#111827"
 
 # Card semantic colors — unified across Goal/Plan/Step/Task
 CARD_BORDER_DARK = GRAY_600
-"""Card left border in dark theme — medium gray for subtle presence."""
+"""Subtle divider color in dark theme (markdown rules, table borders)."""
 
 CARD_BORDER_LIGHT = GRAY_300
-"""Card left border in light theme — soft gray for subtle presence."""
-
-CARD_BORDER_HOVER_DARK = GRAY_400
-"""Card border hover in dark theme — lighter on interaction."""
-
-CARD_BORDER_HOVER_LIGHT = GRAY_400
-"""Card border hover in light theme — darker on interaction."""
+"""Subtle divider color in light theme (markdown rules, table borders)."""
 
 CARD_ACTIVITY_DARK = GRAY_500
-"""Activity text in dark theme — subdued gray (matches border)."""
+"""Secondary activity text in dark theme — subdued gray."""
 
 CARD_ACTIVITY_LIGHT = GRAY_500
-"""Activity text in light theme — subdued gray (matches border)."""
+"""Secondary activity text in light theme — subdued gray."""
 
 CARD_ACTIVITY_MUTED_DARK = GRAY_600
-"""Secondary activity text in dark theme — darker gray."""
+"""Tertiary activity text in dark theme — darker gray."""
 
 CARD_ACTIVITY_MUTED_LIGHT = GRAY_400
-"""Secondary activity text in light theme — lighter gray."""
+"""Tertiary activity text in light theme — lighter gray."""
 
 # Header colors — prominent but not overwhelming
 CARD_HEADER_DARK = "#7AA2F7"
-"""Card header prefix (📍🚀❇️) in dark theme — soft blue."""
+"""Markdown heading accent in dark theme — soft blue."""
 
 CARD_HEADER_LIGHT = "#2E5EAA"
-"""Card header prefix in light theme — deeper blue."""
+"""Markdown heading accent in light theme — deeper blue."""
 
 # Status colors — prominent for visibility
 CARD_SUCCESS_DARK = "#9ECE6A"
@@ -235,14 +218,8 @@ LC_LIGHT_PANEL = "#E0E1E6"
 LC_LIGHT_SKILL = "#7C3AED"
 """Skill invocation accent (darkened for light bg contrast)."""
 
-LC_LIGHT_SKILL_HOVER = "#6D28D9"
-"""Skill invocation hover (darkened for light bg contrast)."""
-
 LC_LIGHT_TOOL = LC_LIGHT_AMBER
 """Tool call accent (darkened for light bg contrast)."""
-
-LC_LIGHT_TOOL_HOVER = "#78350F"
-"""Tool call hover (darkened for light bg contrast)."""
 
 
 # ---------------------------------------------------------------------------
@@ -366,22 +343,13 @@ class ThemeColors:
     """Command mode indicator — borders, prompts, and message prefixes."""
 
     skill: str
-    """Skill invocation accent — border and header text."""
-
-    skill_hover: str
-    """Skill invocation hover — contrasting variant for interactive feedback."""
+    """Skill invocation accent — card dot and header text."""
 
     tool: str
-    """Tool call accent — border and header text."""
-
-    tool_hover: str
-    """Tool call hover — contrasting variant for interactive feedback."""
+    """Tool call accent — card dot and header text."""
 
     cognition: str
     """Agent loop step / cognition progress accent."""
-
-    cognition_hover: str
-    """Cognition progress hover — contrasting variant for interactive feedback."""
 
     foreground: str
     """Primary body text."""
@@ -392,21 +360,18 @@ class ThemeColors:
     surface: str
     """Elevated card / panel background."""
 
-    # Unified card colors for Goal/Plan/Step/Task (IG-468)
+    # Unified card colors for Goal/Plan/Step/Task
     card_border: str
-    """Card left border — unified gray across all card types."""
-
-    card_border_hover: str
-    """Card border hover state — slightly lighter/darker on interaction."""
+    """Subtle divider color — markdown rules and table borders."""
 
     card_header: str
-    """Card header prefix color (📍🚀❇️) — prominent but restrained."""
+    """Markdown heading accent — prominent but restrained."""
 
     card_activity: str
-    """Activity text color — subdued gray, matches border for harmony."""
+    """Secondary activity text — subdued gray."""
 
     card_activity_muted: str
-    """Secondary activity text — more subdued than card_activity."""
+    """Tertiary activity text — more subdued than card_activity."""
 
     card_success: str
     """Success state color — prominent green for visibility."""
@@ -464,17 +429,12 @@ DARK_COLORS = ThemeColors(
     mode_bash=LC_PINK,
     mode_command=LC_PURPLE,
     skill=LC_SKILL,
-    skill_hover=LC_SKILL_HOVER,
     tool=LC_TOOL,
-    tool_hover=LC_TOOL_HOVER,
-    cognition=CARD_BORDER_DARK,  # Unified: border matches activity
-    cognition_hover=CARD_BORDER_HOVER_DARK,
+    cognition=CARD_BORDER_DARK,
     foreground=LC_BODY,
     background=LC_DARK,
     surface=LC_CARD,
-    # Unified card colors for Goal/Plan/Step/Task (IG-468)
     card_border=CARD_BORDER_DARK,
-    card_border_hover=CARD_BORDER_HOVER_DARK,
     card_header=CARD_HEADER_DARK,
     card_activity=CARD_ACTIVITY_DARK,
     card_activity_muted=CARD_ACTIVITY_MUTED_DARK,
@@ -495,17 +455,12 @@ LIGHT_COLORS = ThemeColors(
     mode_bash=LC_LIGHT_PINK,
     mode_command=LC_LIGHT_PURPLE,
     skill=LC_LIGHT_SKILL,
-    skill_hover=LC_LIGHT_SKILL_HOVER,
     tool=LC_LIGHT_TOOL,
-    tool_hover=LC_LIGHT_TOOL_HOVER,
-    cognition=CARD_BORDER_LIGHT,  # Unified: border matches activity
-    cognition_hover=CARD_BORDER_HOVER_LIGHT,
+    cognition=CARD_BORDER_LIGHT,
     foreground=LC_LIGHT_BODY,
     background=LC_LIGHT_BG,
     surface=LC_LIGHT_SURFACE,
-    # Unified card colors for Goal/Plan/Step/Task (IG-468)
     card_border=CARD_BORDER_LIGHT,
-    card_border_hover=CARD_BORDER_HOVER_LIGHT,
     card_header=CARD_HEADER_LIGHT,
     card_activity=CARD_ACTIVITY_LIGHT,
     card_activity_muted=CARD_ACTIVITY_MUTED_LIGHT,
@@ -850,20 +805,7 @@ def get_css_variable_defaults(
     return {
         "mode-bash": c.mode_bash,
         "mode-command": c.mode_command,
-        "skill": c.skill,
-        "skill-hover": c.skill_hover,
-        "tool": c.tool,
-        "tool-hover": c.tool_hover,
         "cognition": c.cognition,
-        "cognition-hover": c.cognition_hover,
-        # Unified card colors for Goal/Plan/Step/Task (IG-468)
-        "card-border": c.card_border,
-        "card-border-hover": c.card_border_hover,
-        "card-header": c.card_header,
-        "card-activity": c.card_activity,
-        "card-activity-muted": c.card_activity_muted,
-        "card-success": c.card_success,
-        "card-error": c.card_error,
     }
 
 
@@ -933,20 +875,12 @@ def _colors_from_textual_theme(app: object) -> ThemeColors:
         mode_command=_hex_or(ct.secondary, base.mode_command),
         # No Textual equivalent — always use base palette.
         skill=base.skill,
-        skill_hover=base.skill_hover,
-        # Derived from Textual's warning color (shared amber hue).
         tool=_hex_or(ct.warning, base.tool),
-        # No Textual equivalent — always base palette (may diverge from
-        # tool in custom themes that override warning).
-        tool_hover=base.tool_hover,
         cognition=base.cognition,
-        cognition_hover=base.cognition_hover,
         foreground=_hex_or(ct.foreground, base.foreground),
         background=_hex_or(ct.background, base.background),
         surface=_hex_or(ct.surface, base.surface),
-        # Unified card colors for Goal/Plan/Step/Task (IG-468)
         card_border=base.card_border,
-        card_border_hover=base.card_border_hover,
         card_header=base.card_header,
         card_activity=base.card_activity,
         card_activity_muted=base.card_activity_muted,

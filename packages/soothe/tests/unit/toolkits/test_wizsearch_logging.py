@@ -1,0 +1,71 @@
+"""Unit tests for wizsearch lifecycle logging."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from soothe.toolkits._internal import wizsearch as wiz_internal
+
+
+@pytest.mark.asyncio
+async def test_perform_wizsearch_search_logs_start_and_done(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Search logs lifecycle lines when wizsearch returns results."""
+    caplog.set_level("INFO", logger="soothe.toolkits._internal.wizsearch")
+
+    mock_result = MagicMock()
+    mock_result.query = "world cup teams"
+    mock_result.answer = None
+    mock_result.response_time = 2.5
+    mock_result.metadata = {
+        "engine_status": {"tavily": {"engine": "tavily", "status": "success", "result_count": 2}}
+    }
+    mock_result.sources = [
+        MagicMock(title="A", url="https://a.example", content="snippet a"),
+        MagicMock(title="B", url="https://b.example", content="snippet b"),
+    ]
+
+    with (
+        patch.object(wiz_internal, "_check_wizsearch_available", return_value=True),
+        patch.object(wiz_internal, "_maybe_apply_tavily_key"),
+        patch("wizsearch.WizSearch") as mock_cls,
+        patch("wizsearch.WizSearchConfig"),
+        patch("soothe.utils.output_capture.capture_subagent_output"),
+    ):
+        mock_cls.return_value.search = AsyncMock(return_value=mock_result)
+        await wiz_internal.perform_wizsearch_search(
+            query="world cup teams",
+            engines=["tavily"],
+            max_results_per_engine=5,
+            timeout_seconds=30,
+        )
+
+    messages = [r.message for r in caplog.records]
+    assert any("[Wizsearch] search start" in m for m in messages)
+    assert any("[Wizsearch] search done" in m for m in messages)
+    assert any("[Wizsearch] engine tavily:" in m for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_perform_wizsearch_search_logs_failure(caplog: pytest.LogCaptureFixture) -> None:
+    """Search logs failure with elapsed time when wizsearch raises."""
+    caplog.set_level("WARNING", logger="soothe.toolkits._internal.wizsearch")
+
+    with (
+        patch.object(wiz_internal, "_check_wizsearch_available", return_value=True),
+        patch.object(wiz_internal, "_maybe_apply_tavily_key"),
+        patch("wizsearch.WizSearch") as mock_cls,
+        patch("wizsearch.WizSearchConfig"),
+        patch("soothe.utils.output_capture.capture_subagent_output"),
+    ):
+        mock_cls.return_value.search = AsyncMock(side_effect=RuntimeError("network down"))
+        result = await wiz_internal.perform_wizsearch_search(
+            query="timeout query",
+            engines=["tavily"],
+        )
+
+    assert "Search failed" in result
+    assert any("[Wizsearch] search failed" in r.message for r in caplog.records)

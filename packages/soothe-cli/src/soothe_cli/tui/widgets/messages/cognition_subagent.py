@@ -2,7 +2,7 @@
 
 Subagent cards appear immediately after their parent step card, showing
 tool activity for delegated tasks. They subclass CognitionStepMessage
-with a simplified lifecycle and 🎯 header glyph.
+with a simplified lifecycle and SubAgent-specific header text.
 """
 
 from __future__ import annotations
@@ -58,7 +58,11 @@ def create_subagent_card(
 
     # Replace header method with SubAgent version
     card._step_header_content = lambda: _assemble_card_header(
-        card, "🎯 ", f"{card._subagent_type}({description})"
+        card,
+        f"{card._subagent_type}({description})",
+        status=getattr(card, "_status", "running"),
+        spinner_position=getattr(card, "_spinner_position", 0),
+        animate_running=getattr(card, "_status", "") == "running",
     )
 
     def sync_status_to_step(step_widget: Any, success: bool) -> None:

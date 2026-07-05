@@ -12,9 +12,10 @@ from textual.reactive import var
 from textual.widgets import Static
 
 from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.markdown_theme import build_markdown
 from soothe_cli.tui.preview_limits import SKILL_CARD_PREVIEW_CHARS, SKILL_CARD_PREVIEW_LINES
+from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -91,10 +92,9 @@ class SkillMessage(Vertical):
     DEFAULT_CSS = """
     SkillMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $skill;
     }
 
     SkillMessage .skill-header {
@@ -103,33 +103,29 @@ class SkillMessage(Vertical):
 
     SkillMessage .skill-description {
         color: $text-muted;
-        margin-left: 3;
+        margin-left: 2;
     }
 
     SkillMessage .skill-args {
-        margin-left: 3;
+        margin-left: 2;
         margin-top: 0;
     }
 
     SkillMessage #skill-md {
-        margin-left: 3;
+        margin-left: 2;
         margin-top: 0;
         padding: 0;
         display: none;
     }
 
     SkillMessage .skill-hint {
-        margin-left: 3;
+        margin-left: 2;
         color: $text-muted;
         background: transparent;
     }
 
     SkillMessage.-expanded #skill-md {
         display: block;
-    }
-
-    SkillMessage:hover {
-        border-left: wide $skill-hover;
     }
     """
 
@@ -181,9 +177,11 @@ class SkillMessage(Vertical):
         colors = theme.get_theme_colors()
         source_tag = f" [{self._source}]" if self._source else ""
         yield _SkillToggle(
-            Content.styled(
+            _assemble_card_header(
+                self,
                 f"/ skill:{self._skill_name}{source_tag}",
-                f"bold {colors.skill}",
+                status="success",
+                accent=colors.skill,
             ),
             classes="skill-header",
         )
@@ -211,10 +209,6 @@ class SkillMessage(Vertical):
         or `_deferred_expanded` assignment, because either may set
         `_expanded` which fires `watch__expanded` synchronously.
         """
-        if is_ascii_mode():
-            colors = theme.get_theme_colors(self)
-            self.styles.border_left = ("ascii", colors.skill)
-
         self._md_widget = self.query_one("#skill-md", Static)
         self._hint_widget = self.query_one("#skill-hint", _SkillToggle)
         if self._description:

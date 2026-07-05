@@ -57,6 +57,11 @@ FAILED_CHECKS=()
 FAILED_LOGS=()
 FAILED_TEST_ENTRIES=()
 SLOW_TEST_ENTRIES=()
+CHECK_OUTCOMES=()
+WARNINGS=()
+
+# When set (parallel quality checks), subshells append outcomes/logs here for the parent summary.
+VERIFY_RESULTS_DIR=""
 
 # Set true after setup_workspace() syncs; skips redundant dry-run in dependency checks.
 WORKSPACE_SYNCED=false
@@ -124,8 +129,7 @@ print_ok() {
 
 print_fail() {
   echo -e "  ${RED}✗${NC} $1"
-  FAILED_CHECKS+=("$1")
-  OVERALL_STATUS=1
+  mark_check_failed "$1"
 }
 
 # Record detailed failure output for end-of-run summary
@@ -133,11 +137,111 @@ print_fail() {
 record_failure_log() {
   local category="$1"
   local details="$2"
-  FAILED_LOGS+=("${BOLD}${category}:${NC}\n${details}")
+  if [ -n "${VERIFY_RESULTS_DIR:-}" ]; then
+    {
+      echo "@@CATEGORY@@${category}"
+      echo "$details"
+    } >>"${VERIFY_RESULTS_DIR}/failure_logs.txt"
+  else
+    FAILED_LOGS+=("${BOLD}${category}:${NC}\n${details}")
+  fi
+}
+
+mark_check_failed() {
+  local name="$1"
+  FAILED_CHECKS+=("$name")
+  OVERALL_STATUS=1
+}
+
+record_check_outcome() {
+  local section="$1"
+  local label="$2"
+  local status="$3"
+  if [ -n "${VERIFY_RESULTS_DIR:-}" ]; then
+    printf '%s|%s|%s\n' "$section" "$label" "$status" >>"${VERIFY_RESULTS_DIR}/outcomes.log"
+  else
+    CHECK_OUTCOMES+=("${section}|${label}|${status}")
+  fi
+}
+
+record_warning() {
+  local message="$1"
+  WARNINGS+=("$message")
+  if [ -n "${VERIFY_RESULTS_DIR:-}" ]; then
+    printf '%s\n' "$message" >>"${VERIFY_RESULTS_DIR}/warnings.log"
+  fi
+}
+
+_load_recorded_outcomes() {
+  local outcomes_file="$1"
+  if [ ! -f "$outcomes_file" ]; then
+    return 0
+  fi
+  while IFS='|' read -r section label status; do
+    [ -n "$section" ] || continue
+    CHECK_OUTCOMES+=("${section}|${label}|${status}")
+  done <"$outcomes_file"
+}
+
+_load_recorded_warnings() {
+  local warnings_file="$1"
+  if [ ! -f "$warnings_file" ]; then
+    return 0
+  fi
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    WARNINGS+=("$line")
+  done <"$warnings_file"
+}
+
+_load_recorded_failure_logs() {
+  local logs_file="$1"
+  if [ ! -f "$logs_file" ]; then
+    return 0
+  fi
+  local category="" details=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [[ "$line" == @@CATEGORY@@* ]]; then
+      if [ -n "$category" ]; then
+        FAILED_LOGS+=("${BOLD}${category}:${NC}\n${details}")
+      fi
+      category="${line#@@CATEGORY@@}"
+      details=""
+    else
+      if [ -n "$details" ]; then
+        details+=$'\n'
+      fi
+      details+="$line"
+    fi
+  done <"$logs_file"
+  if [ -n "$category" ]; then
+    FAILED_LOGS+=("${BOLD}${category}:${NC}\n${details}")
+  fi
+}
+
+_collect_parallel_check_result() {
+  local tmpdir="$1"
+  local check="$2"
+  local display_name="$3"
+  local exit_file="${tmpdir}/${check}.exit"
+
+  if [ ! -f "$exit_file" ]; then
+    return 0
+  fi
+
+  local exit_code
+  exit_code=$(cat "$exit_file")
+  if [ "$exit_code" -eq 0 ]; then
+    return 0
+  fi
+
+  mark_check_failed "$display_name"
+  return 1
 }
 
 print_warn() {
   echo -e "  ${YELLOW}!${NC} $1"
+  record_warning "$1"
 }
 
 print_note() {
@@ -220,10 +324,12 @@ validate_package_dependencies() {
   violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe-cli/src --include='*.py' 2>/dev/null | head -10 || true)
   if [ -n "$violations" ]; then
     print_fail "cli must not import soothe_daemon"
+    record_check_outcome "dependencies" "cli → daemon boundary" "fail"
     record_failure_log "Dependency: CLI -> daemon" "$violations"
     return 1
   else
     print_ok "cli → daemon boundary"
+    record_check_outcome "dependencies" "cli → daemon boundary" "pass"
   fi
 
   # Rule 2: soothe-sdk MUST NOT import any other package
@@ -231,10 +337,12 @@ validate_package_dependencies() {
   violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
   if [ -n "$violations" ]; then
     print_fail "sdk must be independent"
+    record_check_outcome "dependencies" "sdk independence" "fail"
     record_failure_log "Dependency: SDK independence" "$violations"
     return 1
   else
     print_ok "sdk independence"
+    record_check_outcome "dependencies" "sdk independence" "pass"
   fi
 
   # Rule 3: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
@@ -242,6 +350,7 @@ validate_package_dependencies() {
   violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' 2>/dev/null | head -10 || true)
   if [ -n "$violations" ]; then
     print_fail "soothe must not import soothe_daemon"
+    record_check_outcome "dependencies" "soothe ↛ soothe-daemon (imports)" "fail"
     record_failure_log "Dependency: soothe -> daemon" "$violations"
     return 1
   fi
@@ -252,24 +361,29 @@ validate_package_dependencies() {
   soothe_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe/pyproject.toml 2>/dev/null || true)
   if echo "$soothe_deps" | grep -qE '"soothe-daemon'; then
     print_fail "soothe pyproject.toml lists soothe-daemon in core deps"
+    record_check_outcome "dependencies" "soothe ↛ soothe-daemon (pyproject)" "fail"
     record_failure_log "Dependency: soothe pyproject.toml" "$(echo "$soothe_deps" | grep -nE '"soothe-daemon')"
     return 1
   fi
   print_ok "soothe ↛ soothe-daemon"
+  record_check_outcome "dependencies" "soothe ↛ soothe-daemon" "pass"
 
   # Rule 4: soothe-daemon MUST NOT depend on soothe-cli in core dependencies
   # Optimized: read file once, grep from variable
   daemon_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe-daemon/pyproject.toml 2>/dev/null || true)
   if echo "$daemon_deps" | grep -qE '"soothe-cli'; then
     print_fail "soothe-daemon pyproject.toml lists soothe-cli in core deps"
+    record_check_outcome "dependencies" "daemon ↛ soothe-cli (pyproject)" "fail"
     record_failure_log "Dependency: daemon pyproject.toml" "$(echo "$daemon_deps" | grep -nE '"soothe-cli')"
     return 1
   fi
   print_ok "daemon ↛ soothe-cli (runtime)"
+  record_check_outcome "dependencies" "daemon ↛ soothe-cli (runtime)" "pass"
 
   # Rule 5: Workspace integrity - all packages must be in sync
   if $WORKSPACE_SYNCED; then
     print_ok "workspace in sync"
+    record_check_outcome "dependencies" "workspace in sync" "pass"
   elif ! command -v uv >/dev/null 2>&1; then
     print_warn "uv not found, skipping workspace sync check"
   else
@@ -277,18 +391,25 @@ validate_package_dependencies() {
     sync_output=$(uv sync --all-packages --all-extras --dry-run 2>&1) || true
     if echo "$sync_output" | grep -qE "error|would update|would install"; then
       print_fail "workspace out of sync (run 'make sync')"
+      record_check_outcome "dependencies" "workspace in sync" "fail"
       record_failure_log "Workspace sync" "$(echo "$sync_output" | head -20)"
       return 1
     else
       print_ok "workspace in sync"
+      record_check_outcome "dependencies" "workspace in sync" "pass"
     fi
   fi
 
   if [ -f "$WORKSPACE_ROOT/scripts/check_module_import_boundaries.sh" ]; then
-    if bash "$WORKSPACE_ROOT/scripts/check_module_import_boundaries.sh" >/dev/null 2>&1; then
+    local boundary_output
+    if boundary_output=$(bash "$WORKSPACE_ROOT/scripts/check_module_import_boundaries.sh" 2>&1); then
       print_ok "import boundaries"
+      record_check_outcome "dependencies" "import boundaries" "pass"
     else
-      print_warn "import boundary checks failed (see script output)"
+      print_fail "import boundaries"
+      record_failure_log "Import boundaries" "$boundary_output"
+      record_check_outcome "dependencies" "import boundaries" "fail"
+      return 1
     fi
   fi
 
@@ -316,13 +437,16 @@ setup_workspace() {
     exit 1
   fi
   print_ok "uv sync"
+  record_check_outcome "workspace" "uv sync" "pass"
 
   if ! _verify_critical_deps >/dev/null 2>&1; then
     print_fail "critical deps missing after sync (broken mirror?)"
     print_note "try: make sync"
+    record_check_outcome "workspace" "critical deps" "fail"
     exit 1
   fi
   print_ok "critical deps (psycopg_pool, jsonschema, langfuse)"
+  record_check_outcome "workspace" "critical deps" "pass"
   WORKSPACE_SYNCED=true
 }
 
@@ -411,8 +535,14 @@ _run_pkg_tests_streaming() {
   local collecting=true
   local pkg_exit_code=0
 
-  # Run pytest and stream output line-by-line
-  while IFS= read -r line; do
+  # Run pytest and stream output line-by-line.
+  # Process substitution creates a subshell; $! captures its PID for exit code retrieval.
+  exec 3< <(PYTHONUNBUFFERED=1 "$VENV_PYTHON" -u -m pytest tests/unit/ \
+    $xdist_opts \
+    -v --tb=line --no-header --disable-warnings --durations=15 2>&1)
+  local pytest_pid=$!
+
+  while IFS= read -r -u 3 line; do
     # Show progress during collection phase
     if $collecting; then
       if [[ "$line" =~ ^(scheduling|created:|collecting) ]]; then
@@ -493,10 +623,16 @@ _run_pkg_tests_streaming() {
         mv "$tmp" "$failures_file"
       fi
     fi
-  done < <(PYTHONUNBUFFERED=1 "$VENV_PYTHON" -u -m pytest tests/unit/ \
-    $xdist_opts \
-    -v --tb=line --no-header --disable-warnings --durations=15 2>&1)
-  pkg_exit_code=$?
+  done
+  exec 3<&-
+
+  # Process-substitution PIDs are not reliably waitable in bash; use parsed counts.
+  wait $pytest_pid 2>/dev/null || true
+  if [ "$failed_count" -gt 0 ] || [ "$error_count" -gt 0 ]; then
+    pkg_exit_code=1
+  elif [ "$passed_count" -eq 0 ] && [ "$skipped_count" -eq 0 ]; then
+    pkg_exit_code=1
+  fi
 
   # Print per-package summary line
   if [ "$passed_count" -gt 0 ] || [ "$failed_count" -gt 0 ] || [ "$error_count" -gt 0 ] || [ "$skipped_count" -gt 0 ]; then
@@ -560,19 +696,17 @@ check_formatting() {
     wait "$pid" || true
   done
 
-  for pid in "${pids[@]}"; do
-    wait "$pid" || true
-  done
-
   # Combined loop: collect exit codes and details in one pass
   for pkg in "${ALL_PACKAGES[@]}"; do
     local exit_code
     exit_code=$(cat "$tmpdir/${pkg}.exit")
     if [ "$exit_code" -eq 0 ]; then
       print_ok "$pkg"
+      record_check_outcome "format" "$pkg" "pass"
     else
-      print_fail "$pkg"
+      print_fail "format: $pkg"
       format_failed=true
+      record_check_outcome "format" "$pkg" "fail"
       if [ -f "$tmpdir/details.${pkg}" ]; then
         format_details+=$(cat "$tmpdir/details.${pkg}")
       fi
@@ -627,9 +761,11 @@ check_linting() {
     exit_code=$(cat "$tmpdir/${pkg}.exit")
     if [ "$exit_code" -eq 0 ]; then
       print_ok "$pkg"
+      record_check_outcome "lint" "$pkg" "pass"
     else
-      print_fail "$pkg"
+      print_fail "lint: $pkg"
       lint_failed=true
+      record_check_outcome "lint" "$pkg" "fail"
       if [ -f "$tmpdir/details.${pkg}" ]; then
         lint_details+=$(cat "$tmpdir/details.${pkg}")
       fi
@@ -665,9 +801,11 @@ check_asyncapi_drift() {
   output=$("$VENV_PYTHON" scripts/check_asyncapi_drift.py --strict 2>&1) && exit_code=0 || exit_code=$?
   if [ $exit_code -eq 0 ]; then
     print_ok "spec ↔ pydantic in sync"
+    record_check_outcome "asyncapi" "spec drift" "pass"
   else
-    print_fail "spec drift detected"
+    print_fail "asyncapi: spec drift detected"
     record_failure_log "AsyncAPI drift" "$output"
+    record_check_outcome "asyncapi" "spec drift" "fail"
     return 1
   fi
 
@@ -693,9 +831,11 @@ check_vulture() {
   output=$("$VENV_VULTURE" 2>&1) && exit_code=0 || exit_code=$?
   if [ $exit_code -eq 0 ]; then
     print_ok "no high-confidence dead code (≥90%)"
+    record_check_outcome "vulture" "dead code scan" "pass"
   else
-    print_fail "dead code detected"
+    print_fail "vulture: dead code detected"
     record_failure_log "Vulture" "$output"
+    record_check_outcome "vulture" "dead code scan" "fail"
     print_note "fix findings or whitelist with 'make vulture-whitelist' (review diff)"
     return 1
   fi
@@ -711,6 +851,7 @@ run_tests() {
   if $SKIP_TESTS; then
     print_section "tests"
     print_note "skipped (--quick)"
+    record_check_outcome "tests" "unit tests" "skip"
     return 0
   fi
 
@@ -747,8 +888,10 @@ run_tests() {
 
     if [ "$pkg_exit_code" -ne 0 ]; then
       tests_failed=true
-      OVERALL_STATUS=1
-      FAILED_CHECKS+=("${pkg} tests")
+      mark_check_failed "${pkg} tests"
+      record_check_outcome "tests" "$pkg" "fail"
+    else
+      record_check_outcome "tests" "$pkg" "pass"
     fi
 
     echo ""
@@ -828,13 +971,159 @@ print_failed_tests_summary() {
   echo ""
 }
 
+print_results_overview() {
+  echo -e "${BOLD}Results overview:${NC}"
+
+  if [ ${#CHECK_OUTCOMES[@]} -eq 0 ]; then
+    print_note "No structured outcomes recorded."
+    echo ""
+    return 0
+  fi
+
+  local -a section_order=(workspace dependencies format lint vulture asyncapi tests)
+  local section label status entry printed_any pkg
+
+  for section in "${section_order[@]}"; do
+    printed_any=false
+    case "$section" in
+    format | lint | tests)
+      for pkg in "${ALL_PACKAGES[@]}"; do
+        for entry in "${CHECK_OUTCOMES[@]}"; do
+          IFS='|' read -r s label status <<<"$entry"
+          if [ "$s" = "$section" ] && [ "$label" = "$pkg" ]; then
+            if ! $printed_any; then
+              echo -e "  ${BOLD}${section}${NC}"
+              printed_any=true
+            fi
+            case "$status" in
+            pass) echo -e "    ${GREEN}✓${NC} ${label}" ;;
+            fail) echo -e "    ${RED}✗${NC} ${label}" ;;
+            warn) echo -e "    ${YELLOW}!${NC} ${label}" ;;
+            skip) echo -e "    ${YELLOW}○${NC} ${label} (skipped)" ;;
+            *) echo -e "    ${DIM}?${NC} ${label} (${status})" ;;
+            esac
+            break
+          fi
+        done
+      done
+      # Non-package entries (e.g. tests skipped marker)
+      for entry in "${CHECK_OUTCOMES[@]}"; do
+        IFS='|' read -r s label status <<<"$entry"
+        if [ "$s" != "$section" ]; then
+          continue
+        fi
+        local known=false
+        for pkg in "${ALL_PACKAGES[@]}"; do
+          if [ "$label" = "$pkg" ]; then
+            known=true
+            break
+          fi
+        done
+        if $known; then
+          continue
+        fi
+        if ! $printed_any; then
+          echo -e "  ${BOLD}${section}${NC}"
+          printed_any=true
+        fi
+        case "$status" in
+        pass) echo -e "    ${GREEN}✓${NC} ${label}" ;;
+        fail) echo -e "    ${RED}✗${NC} ${label}" ;;
+        warn) echo -e "    ${YELLOW}!${NC} ${label}" ;;
+        skip) echo -e "    ${YELLOW}○${NC} ${label} (skipped)" ;;
+        *) echo -e "    ${DIM}?${NC} ${label} (${status})" ;;
+        esac
+      done
+      ;;
+    *)
+      for entry in "${CHECK_OUTCOMES[@]}"; do
+        IFS='|' read -r s label status <<<"$entry"
+        if [ "$s" != "$section" ]; then
+          continue
+        fi
+        if ! $printed_any; then
+          echo -e "  ${BOLD}${section}${NC}"
+          printed_any=true
+        fi
+        case "$status" in
+        pass) echo -e "    ${GREEN}✓${NC} ${label}" ;;
+        fail) echo -e "    ${RED}✗${NC} ${label}" ;;
+        warn) echo -e "    ${YELLOW}!${NC} ${label}" ;;
+        skip) echo -e "    ${YELLOW}○${NC} ${label} (skipped)" ;;
+        *) echo -e "    ${DIM}?${NC} ${label} (${status})" ;;
+        esac
+      done
+      ;;
+    esac
+    if $printed_any; then
+      echo ""
+    fi
+  done
+}
+
+print_warnings_summary() {
+  if [ ${#WARNINGS[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo -e "${BOLD}${YELLOW}Warnings (${#WARNINGS[@]}):${NC}"
+  for warning in "${WARNINGS[@]}"; do
+    echo -e "  ${YELLOW}!${NC} ${warning}"
+  done
+  echo ""
+}
+
+print_failed_checks_summary() {
+  if [ ${#FAILED_CHECKS[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  # Deduplicate while preserving order.
+  local -a unique_checks=()
+  local check seen
+  for check in "${FAILED_CHECKS[@]}"; do
+    seen=false
+    for existing in "${unique_checks[@]}"; do
+      if [ "$existing" = "$check" ]; then
+        seen=true
+        break
+      fi
+    done
+    if ! $seen; then
+      unique_checks+=("$check")
+    fi
+  done
+
+  echo -e "${BOLD}${RED}Failed checks (${#unique_checks[@]}):${NC}"
+  for check in "${unique_checks[@]}"; do
+    echo -e "  ${RED}✗${NC} ${check}"
+  done
+  echo ""
+}
+
+print_failure_details_summary() {
+  if [ ${#FAILED_LOGS[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo -e "${BOLD}Failure details:${NC}"
+  for log in "${FAILED_LOGS[@]}"; do
+    echo -e "$log"
+    echo ""
+  done
+}
+
 print_final_summary() {
   echo ""
   echo -e "${BOLD}══════════════════════════════════════════════════════${NC}"
 
   if [ $OVERALL_STATUS -eq 0 ]; then
     echo -e "${GREEN}${BOLD}All checks passed${NC} — ready to commit."
+    echo ""
+    print_results_overview
+    print_warnings_summary
     print_slow_tests_summary
+    echo -e "${BOLD}══════════════════════════════════════════════════════${NC}"
     echo ""
     return 0
   fi
@@ -842,26 +1131,15 @@ print_final_summary() {
   echo -e "${RED}${BOLD}Verification failed${NC}"
   echo ""
 
-  if [ ${#FAILED_CHECKS[@]} -gt 0 ]; then
-    echo -e "${BOLD}Failed checks (${#FAILED_CHECKS[@]}):${NC}"
-    for check in "${FAILED_CHECKS[@]}"; do
-      echo -e "  ${RED}✗${NC} $check"
-    done
-    echo ""
-  fi
-
+  print_results_overview
+  print_failed_checks_summary
   print_failed_tests_summary
+  print_warnings_summary
   print_slow_tests_summary
-
-  if [ ${#FAILED_LOGS[@]} -gt 0 ]; then
-    echo -e "${BOLD}Details:${NC}"
-    for log in "${FAILED_LOGS[@]}"; do
-      echo -e "$log"
-      echo ""
-    done
-  fi
+  print_failure_details_summary
 
   print_note "Fix the issues above and re-run ./scripts/verify_finally.sh"
+  echo -e "${BOLD}══════════════════════════════════════════════════════${NC}"
   echo ""
 }
 
@@ -907,9 +1185,8 @@ if $SKIP_TESTS; then
   check_asyncapi_drift || true
 else
   # Full mode: parallelize independent checks
-  # Run each check in a subshell that writes exit status to a file.
-  # Parent shell collects statuses after wait to update OVERALL_STATUS.
   tmpdir=$(mktemp -d)
+  VERIFY_RESULTS_DIR="$tmpdir"
   pids=()
 
   # Launch parallel checks with exit-status capture
@@ -934,27 +1211,26 @@ else
   ) >"$tmpdir/asyncapi.out" 2>&1 &
   pids+=($!)
 
-  # Wait for all checks
   for pid in "${pids[@]}"; do
     wait "$pid" || true
   done
 
-  # Replay outputs in order
+  # Replay section output in stable order
   cat "$tmpdir/format.out" 2>/dev/null || true
   cat "$tmpdir/lint.out" 2>/dev/null || true
   cat "$tmpdir/vulture.out" 2>/dev/null || true
   cat "$tmpdir/asyncapi.out" 2>/dev/null || true
 
-  # Propagate failures to OVERALL_STATUS (subshell modifications don't reach parent)
-  for check in format lint vulture asyncapi; do
-    if [ -f "$tmpdir/${check}.exit" ]; then
-      exit_code=$(cat "$tmpdir/${check}.exit")
-      if [ "$exit_code" -ne 0 ]; then
-        OVERALL_STATUS=1
-      fi
-    fi
-  done
+  _load_recorded_outcomes "$tmpdir/outcomes.log"
+  _load_recorded_warnings "$tmpdir/warnings.log"
+  _load_recorded_failure_logs "$tmpdir/failure_logs.txt"
 
+  _collect_parallel_check_result "$tmpdir" "format" "format"
+  _collect_parallel_check_result "$tmpdir" "lint" "lint"
+  _collect_parallel_check_result "$tmpdir" "vulture" "vulture"
+  _collect_parallel_check_result "$tmpdir" "asyncapi" "asyncapi"
+
+  VERIFY_RESULTS_DIR=""
   rm -rf "$tmpdir"
 fi
 

@@ -11,7 +11,7 @@ from textual.widgets import Static
 
 from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:
@@ -60,7 +60,8 @@ class CognitionGoalTreeMessage(Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
     Title line matches ``CognitionStepMessage`` / ``CognitionReasonMessage``:
-    ``{prefix} 📍 …`` with optional ``· iter<=N`` when ``max_iterations`` is set.
+    stateful ``⏺`` dot plus goal text, with optional ``· iter<=N`` when
+    ``max_iterations`` is set.
     """
 
     ALLOW_SELECT = True
@@ -68,10 +69,9 @@ class CognitionGoalTreeMessage(Vertical):
     DEFAULT_CSS = """
     CognitionGoalTreeMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $cognition;
     }
 
     CognitionGoalTreeMessage .cognition-goal-tree-header {
@@ -90,10 +90,6 @@ class CognitionGoalTreeMessage(Vertical):
         height: auto;
         margin: 0;
         color: $foreground;
-    }
-
-    CognitionGoalTreeMessage:hover {
-        border-left: wide $cognition-hover;
     }
     """
 
@@ -130,6 +126,23 @@ class CognitionGoalTreeMessage(Vertical):
             return t
         return t[: max_len - 1].rstrip() + "…"
 
+    def _goal_tree_status(self) -> str:
+        """Aggregate lifecycle status for the goal header dot."""
+        if self._footer_tone == "error":
+            return "error"
+        if self._footer_tone == "success" and self._footer_visible:
+            return "success"
+        phases = [st.phase for st in self._steps.values()]
+        if any(p == "running" for p in phases):
+            return "running"
+        if any(p == "error" for p in phases):
+            return "error"
+        if phases and all(p in ("done", "success") for p in phases):
+            return "success"
+        if any(p == "queued" for p in phases):
+            return "queued"
+        return "pending"
+
     def _goal_header_content(self) -> Content:
         g = self._clip(self._goal_text, _MAX_GOAL_HEADER)
         body = g
@@ -138,7 +151,14 @@ class CognitionGoalTreeMessage(Vertical):
         mode = self._execution_mode.strip().lower()
         if mode:
             body = f"{body} · {mode}"
-        return _assemble_card_header(self, "📍 ", body)
+        status = self._goal_tree_status()
+        return _assemble_card_header(
+            self,
+            body,
+            status=status,
+            spinner_position=self._spinner_position,
+            animate_running=status == "running",
+        )
 
     def _goal_footer_styled_content(self) -> Content:
         """Footer content for loop finished / interrupted (parity with step/tool status lines)."""
@@ -231,6 +251,11 @@ class CognitionGoalTreeMessage(Vertical):
         if self._steps_static is None:
             return
         self._steps_static.update(self._assemble_steps_content())
+        try:
+            hdr = self.query_one("#cognition-goal-tree-header", Static)
+            hdr.update(self._goal_header_content())
+        except Exception:
+            pass
 
     def plan_quick_view_content(self) -> Content:
         """Full goal tree snapshot for the sticky plan quick-view overlay."""
@@ -262,9 +287,6 @@ class CognitionGoalTreeMessage(Vertical):
     def on_mount(self) -> None:
         """Wire step aggregate; sync static children from in-memory state."""
         self._steps_static = self.query_one("#cognition-goal-tree-steps", Static)
-        if is_ascii_mode():
-            colors = theme.get_theme_colors(self)
-            self.styles.border = ("ascii", colors.primary)
         self._sync_goal_tree_widgets()
 
     def _sync_goal_tree_widgets(self) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
 from soothe.foundation.sloop.intention.models import RoutingClassification, TaskComplexity
@@ -60,7 +61,7 @@ class TestAbeforeAgent:
             config=config,
         )
         state = {
-            "messages": [{"role": "user", "content": "how are u"}],
+            "messages": [HumanMessage(content="how are u")],
             "routing_classification": RoutingClassification(task_complexity=TaskComplexity.MINIMAL),
         }
         with patch(

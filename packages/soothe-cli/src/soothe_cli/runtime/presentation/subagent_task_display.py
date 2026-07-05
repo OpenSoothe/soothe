@@ -12,7 +12,6 @@ from typing import Any
 
 from soothe_cli.runtime.presentation.explore_task_display import (
     format_explore_task_json_blob_for_display,
-    iter_concatenated_json_objects,
 )
 
 

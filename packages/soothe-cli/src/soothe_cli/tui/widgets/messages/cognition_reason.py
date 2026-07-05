@@ -8,8 +8,6 @@ from textual.containers import Vertical
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.tui import theme
-from soothe_cli.tui.config import is_ascii_mode
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:
@@ -19,7 +17,7 @@ if TYPE_CHECKING:
 class CognitionReasonMessage(Vertical):
     """Single card for plan assessment and plan reasoning.
 
-    Header uses the same cognition-colored label plus foreground body as ``CognitionStepMessage``.
+    Header uses the same stateful dot prefix plus foreground body as ``CognitionStepMessage``.
     """
 
     ALLOW_SELECT = True
@@ -27,10 +25,9 @@ class CognitionReasonMessage(Vertical):
     DEFAULT_CSS = """
     CognitionReasonMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $cognition;
     }
 
     CognitionReasonMessage .cognition-plan-header {
@@ -41,12 +38,8 @@ class CognitionReasonMessage(Vertical):
 
     CognitionReasonMessage .plan-section-line {
         height: auto;
-        margin-left: 3;
+        margin-left: 2;
         color: $text-muted;
-    }
-
-    CognitionReasonMessage:hover {
-        border-left: wide $cognition-hover;
     }
     """
 
@@ -92,13 +85,7 @@ class CognitionReasonMessage(Vertical):
             body = parts[0]
         else:
             body = ""
-        return _assemble_card_header(self, "", body)
+        return _assemble_card_header(self, body, status=self._status)
 
     def compose(self) -> ComposeResult:
         yield Static(self._plan_header_content(), classes="cognition-plan-header")
-
-    def on_mount(self) -> None:
-        """Use ASCII border variant when configured."""
-        if is_ascii_mode():
-            colors = theme.get_theme_colors(self)
-            self.styles.border = ("ascii", colors.primary)

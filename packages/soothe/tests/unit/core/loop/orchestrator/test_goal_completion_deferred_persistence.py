@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -13,7 +13,6 @@ from soothe.foundation.context.models import GoalNode
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.context.planning import StepPlanManagerAdapter
 from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
 from soothe.foundation.sloop.orchestrator.nodes.goal_completion import node_goal_completion
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -68,7 +67,7 @@ async def test_completed_emits_before_finalize_goal_persistence() -> None:
     strange_loop.loop_planner = Mock()
     strange_loop.core_agent = Mock()
     strange_loop.config.agent.loop.final_response = "adaptive"
-    strange_loop._fast_llm = None
+    strange_loop._fast_llm = None  # Prevent synthesis LLM calls
 
     finalize_started = asyncio.Event()
     finalize_release = asyncio.Event()
@@ -82,8 +81,10 @@ async def test_completed_emits_before_finalize_goal_persistence() -> None:
     sm.record_iteration = AsyncMock()
     sm.finalize_goal = AsyncMock(side_effect=_slow_finalize)
 
-    loop_state.loop_messages.append(
-        type("Msg", (), {"content": "done already", "phase": "execute_step"})()
+    # Add ledger content so LEDGER_DIRECT doesn't fall back to synthesis
+    ce.ledger.record_message(
+        LoopAIMessage(content="done already", thread_id="thr-1", phase="execute_step"),
+        phase="execute_step",
     )
 
     ctx = _ctx(
@@ -96,12 +97,7 @@ async def test_completed_emits_before_finalize_goal_persistence() -> None:
         goal=goal,
     )
 
-    with patch.object(
-        SynthesisGenerator,
-        "generate_synthesis",
-        AsyncMock(),
-    ):
-        await node_goal_completion(ctx, {})
+    await node_goal_completion(ctx, {})
 
     completed_idx = next(
         i for i, c in enumerate(ctx.emit.await_args_list) if c.args and c.args[0] == "completed"
@@ -127,6 +123,11 @@ async def test_terminal_bootstrap_skips_duplicate_record_iteration() -> None:
     goal = GoalNode(description="continue task")
     ce._dag.add_goal(goal)
     loop_state.bind_ce(ce, goal.id)
+    # Add ledger content so LEDGER_DIRECT doesn't fall back to synthesis
+    ce.ledger.record_message(
+        LoopAIMessage(content="bootstrap answer", thread_id="thr-1", phase="execute"),
+        phase="execute",
+    )
 
     plan_result = PlanResult(
         status="done",
@@ -139,16 +140,12 @@ async def test_terminal_bootstrap_skips_duplicate_record_iteration() -> None:
 
     strange_loop = Mock()
     strange_loop.config.agent.loop.final_response = "adaptive"
-    strange_loop._fast_llm = None
+    strange_loop._fast_llm = None  # Prevent synthesis LLM calls
 
     sm = Mock()
     sm.loop_id = "loop-terminal-bootstrap"
     sm.record_iteration = AsyncMock()
     sm.finalize_goal = AsyncMock()
-
-    loop_state.loop_messages.append(
-        LoopAIMessage(content="bootstrap answer", thread_id="thr-1", phase="execute")
-    )
 
     ctx = _ctx(
         loop_state=loop_state,

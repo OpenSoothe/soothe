@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from textual.containers import Vertical
+from textual.containers import Horizontal, Vertical
 from textual.events import Click
 from textual.selection import Selection
 from textual.strip import Strip
 from textual.widgets import Static
 
-from soothe_cli.tui.config import is_ascii_mode
 from soothe_cli.tui.markdown_theme import build_markdown
+from soothe_cli.tui.widgets.messages._helpers import (
+    _RUNNING_SPINNER_INTERVAL_SECONDS,
+    _card_dot_prefix_content,
+)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -110,7 +113,7 @@ class _SelectableMarkdownBody(Static):
 
 
 class AssistantMessage(Vertical):
-    """Assistant reply card: markdown or plain text body (no title row).
+    """Assistant reply card: markdown or plain text body with inline status dot.
 
     When ``render_markdown`` is enabled (default), model output is rendered as
     Markdown via the configured markdown theme preset inside a single
@@ -125,20 +128,28 @@ class AssistantMessage(Vertical):
     DEFAULT_CSS = """
     AssistantMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $cognition;
+    }
+
+    AssistantMessage .assistant-row {
+        height: auto;
+        width: 1fr;
+    }
+
+    AssistantMessage .assistant-dot {
+        width: auto;
+        height: auto;
+        padding: 0;
+        margin: 0;
     }
 
     AssistantMessage .assistant-body {
         padding: 0;
         margin: 0;
+        width: 1fr;
         height: auto;
-    }
-
-    AssistantMessage:hover {
-        border-left: wide $cognition-hover;
     }
     """
 
@@ -166,8 +177,11 @@ class AssistantMessage(Vertical):
         super().__init__(**kwargs)
         self._content = content
         self._body: Static | None = None
+        self._dot: Static | None = None
         self._streaming_active: bool = False
         self._render_ansi = render_ansi
+        self._dot_spinner_position: int = 0
+        self._dot_animation_timer: Timer | None = None
 
         # Batching buffer for streaming content
         self._pending_buffer: str = ""
@@ -192,16 +206,54 @@ class AssistantMessage(Vertical):
                 self._render_markdown = render_markdown
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
-        """Compose the assistant body as a single Static widget."""
-        yield _SelectableMarkdownBody(
-            "", markup=False, classes="assistant-body", id="assistant-body"
+        """Compose inline dot prefix and body on one row."""
+        with Horizontal(classes="assistant-row"):
+            yield Static("", classes="assistant-dot", id="assistant-dot")
+            yield _SelectableMarkdownBody(
+                "", markup=False, classes="assistant-body", id="assistant-body"
+            )
+
+    def _assistant_card_status(self) -> str:
+        return "running" if self._streaming_active else "success"
+
+    def _refresh_assistant_dot(self) -> None:
+        if self._dot is None:
+            return
+        self._dot.update(
+            _card_dot_prefix_content(
+                self,
+                self._assistant_card_status(),
+                spinner_position=self._dot_spinner_position,
+                animate_running=self._streaming_active,
+            )
         )
 
+    def _start_dot_animation(self) -> None:
+        if self._dot_animation_timer is not None or not getattr(self, "is_mounted", False):
+            return
+        self._dot_animation_timer = self.set_interval(
+            _RUNNING_SPINNER_INTERVAL_SECONDS,
+            self._tick_dot_animation,
+        )
+
+    def _stop_dot_animation(self) -> None:
+        if self._dot_animation_timer is not None:
+            self._dot_animation_timer.stop()
+            self._dot_animation_timer = None
+
+    def _tick_dot_animation(self) -> None:
+        if not self._streaming_active:
+            return
+        self._dot_spinner_position += 1
+        self._refresh_assistant_dot()
+
     def on_mount(self) -> None:
-        """Wire child widget reference."""
-        if is_ascii_mode():
-            self.add_class("-ascii")
+        """Wire child widget references."""
+        self._dot = self.query_one("#assistant-dot", Static)
         self._body = self.query_one("#assistant-body", Static)
+        self._refresh_assistant_dot()
+        if self._streaming_active:
+            self._start_dot_animation()
 
     def _render_to_body(self) -> None:
         """Render current content into the body Static widget."""
@@ -242,7 +294,11 @@ class AssistantMessage(Vertical):
         # Accumulate content
         self._content += text
         self._pending_buffer += text
+        was_streaming = self._streaming_active
         self._streaming_active = True
+        if not was_streaming:
+            self._refresh_assistant_dot()
+            self._start_dot_animation()
 
         # Schedule batched flush if not already scheduled
         if self._flush_timer is None:
@@ -268,7 +324,9 @@ class AssistantMessage(Vertical):
             await self._flush_pending_content()
 
         self._streaming_active = False
+        self._stop_dot_animation()
         self._render_to_body()
+        self._refresh_assistant_dot()
 
     async def set_content(self, content: str) -> None:
         """Set the full message content (stops any active stream)."""

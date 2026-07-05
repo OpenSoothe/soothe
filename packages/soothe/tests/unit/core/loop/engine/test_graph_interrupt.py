@@ -2,10 +2,63 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncIterator
+
+import pytest
+
 from soothe.foundation.sloop.engine.graph_interrupt import (
+    _STREAM_HEARTBEAT_SENTINEL,
+    GraphStreamChunkReader,
     build_auto_resume_payload,
     is_ask_user_interrupt,
 )
+
+
+async def _chunks_with_slow_second(
+    first: str = "first", second: str = "second"
+) -> AsyncIterator[str]:
+    yield first
+    await asyncio.sleep(1.0)
+    yield second
+
+
+@pytest.mark.asyncio
+async def test_graph_stream_chunk_reader_survives_heartbeat() -> None:
+    """IG-549: heartbeat sentinels must not close the underlying async iterator."""
+    reader = GraphStreamChunkReader(
+        _chunks_with_slow_second(),
+        heartbeat_interval=0.3,
+    )
+
+    assert await reader.read_next() == "first"
+
+    heartbeat = await reader.read_next()
+    assert heartbeat is _STREAM_HEARTBEAT_SENTINEL
+
+    assert await reader.read_next() == "second"
+
+    with pytest.raises(StopAsyncIteration):
+        await reader.read_next()
+
+
+async def _slow_single_chunk(value: str = "only", delay: float = 5.0) -> AsyncIterator[str]:
+    await asyncio.sleep(delay)
+    yield value
+
+
+@pytest.mark.asyncio
+async def test_graph_stream_chunk_reader_cancel_closes_pending_read() -> None:
+    reader = GraphStreamChunkReader(
+        _slow_single_chunk(),
+        heartbeat_interval=0.3,
+    )
+    heartbeat = await reader.read_next()
+    assert heartbeat is _STREAM_HEARTBEAT_SENTINEL
+    await reader.cancel()
+
+    with pytest.raises(StopAsyncIteration):
+        await reader.read_next()
 
 
 def test_auto_resume_tool_interrupt_payload() -> None:

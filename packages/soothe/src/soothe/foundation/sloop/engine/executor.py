@@ -56,7 +56,7 @@ from soothe.foundation.sloop.engine.continuation_context import (
 from soothe.foundation.sloop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
     _STREAM_HEARTBEAT_SENTINEL,
-    await_next_graph_stream_chunk,
+    GraphStreamChunkReader,
     build_auto_resume_payload,
     is_ask_user_interrupt,
 )
@@ -610,13 +610,11 @@ class Executor:
             )
             # IG-506: LLM timeout handled by LLMRateLimitMiddleware, not chunk timeout.
             # IG-549: Heartbeat interval keeps stream alive during long tool execution.
+            chunk_reader = GraphStreamChunkReader(chunk_iter, step_id=step_id)
             try:
                 while True:
                     try:
-                        chunk = await await_next_graph_stream_chunk(
-                            chunk_iter,
-                            step_id=step_id,
-                        )
+                        chunk = await chunk_reader.read_next()
                     except StopAsyncIteration:
                         break
                     except asyncio.CancelledError:
@@ -637,6 +635,8 @@ class Executor:
                     yield chunk
             except asyncio.CancelledError:
                 raise
+            finally:
+                await chunk_reader.cancel()
 
             fetch = await self._fetch_pending_interrupts_from_state(
                 graph_config,

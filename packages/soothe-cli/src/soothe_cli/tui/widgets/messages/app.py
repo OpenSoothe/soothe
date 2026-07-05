@@ -11,6 +11,7 @@ from textual.widgets import Static
 from soothe_cli.tui import theme
 from soothe_cli.tui.widgets._links import open_style_link
 from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
+from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 
 class AppMessage(Static):
@@ -28,7 +29,7 @@ class AppMessage(Static):
     DEFAULT_CSS = """
     AppMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         color: $text-muted;
         text-style: italic;
@@ -62,11 +63,10 @@ class SummarizationMessage(AppMessage):
     DEFAULT_CSS = """
     SummarizationMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         color: $primary;
         background: $surface;
-        border-left: wide $primary;
         text-style: bold;
     }
     """
@@ -94,7 +94,16 @@ class SummarizationMessage(AppMessage):
         """
         colors = theme.get_theme_colors(self)
         if self._raw_message is None:
-            return Content.styled("Conversation summarized", f"bold {colors.primary}")
-        if isinstance(self._raw_message, Content):
-            return self._raw_message
-        return Content.styled(self._raw_message, f"bold {colors.primary}")
+            body = "Conversation summarized"
+        elif isinstance(self._raw_message, Content):
+            body = self._raw_message.plain
+        else:
+            body = str(self._raw_message)
+        return Content.assemble(
+            _assemble_card_header(
+                self,
+                body,
+                status="success",
+                accent=colors.primary,
+            ),
+        )

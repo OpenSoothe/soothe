@@ -181,9 +181,14 @@ async def test_flush_does_not_replace_streamed_markdown_with_repaired_text() -> 
     assert msg._content == repaired
 
 
-def test_assistant_message_has_left_border() -> None:
-    """AssistantMessage card draws a grey vertical left border like other AI cards."""
-    assert "border-left: wide $cognition" in AssistantMessage.DEFAULT_CSS
+def test_assistant_message_uses_inline_card_dot_row() -> None:
+    """AssistantMessage keeps the status dot on the same row as report body text."""
+    css = AssistantMessage.DEFAULT_CSS
+    assert "border-left" not in css
+    assert ".assistant-row" in css
+    assert ".assistant-dot" in css
+    assert ".assistant-body" in css
+    assert "margin: 0 0 0 2" not in css
 
 
 def test_selectable_markdown_body_render_line_annotates_offset_meta() -> None:

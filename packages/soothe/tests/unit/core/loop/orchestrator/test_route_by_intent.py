@@ -9,6 +9,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from langgraph.graph import END
 
 from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.foundation.sloop.intention.models import IntakeLabel

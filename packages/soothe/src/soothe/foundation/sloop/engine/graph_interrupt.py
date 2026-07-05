@@ -60,6 +60,98 @@ class DispatchTimeoutError(Exception):
         )
 
 
+class GraphStreamChunkReader:
+    """Persistent async-iterator reader for CoreAgent graph streams.
+
+    Keeps a single pending ``__anext__()`` task alive across IG-549 heartbeat
+    sentinels so long-running tool/subagent execution is not aborted when the
+    client receives keep-alive events.
+    """
+
+    def __init__(
+        self,
+        chunk_iter: AsyncIterator[Any],
+        *,
+        dispatch_timeout: float | None = None,
+        step_id: str | None = None,
+        heartbeat_interval: float | None = None,
+    ) -> None:
+        self._chunk_iter = chunk_iter
+        self._dispatch_timeout = dispatch_timeout
+        self._step_id = step_id
+        self._heartbeat_interval = heartbeat_interval or _STREAM_HEARTBEAT_INTERVAL_S
+        self._pending: asyncio.Task[Any] | None = None
+        self._watchdog_start = time.perf_counter()
+        self._heartbeat_start = time.perf_counter()
+
+    def _ensure_pending(self) -> asyncio.Task[Any]:
+        if self._pending is None:
+            self._pending = asyncio.create_task(self._chunk_iter.__anext__())
+        return self._pending
+
+    async def _cancel_pending(self) -> None:
+        pending = self._pending
+        self._pending = None
+        if pending is None or pending.done():
+            return
+        pending.cancel()
+        try:
+            await pending
+        except (asyncio.CancelledError, StopAsyncIteration):
+            pass
+
+    async def read_next(self) -> Any:
+        """Return the next chunk, a heartbeat sentinel, or raise ``StopAsyncIteration``."""
+        anext_task = self._ensure_pending()
+        try:
+            while not anext_task.done():
+                await asyncio.wait({anext_task}, timeout=_STREAM_POLL_INTERVAL_S)
+                if anext_task.done():
+                    break
+
+                current_task = asyncio.current_task()
+                if current_task and current_task.cancelling():
+                    logger.info("CoreAgent stream: cancellation request, stopping graph read")
+                    await self._cancel_pending()
+                    raise asyncio.CancelledError
+
+                heartbeat_elapsed = time.perf_counter() - self._heartbeat_start
+                if heartbeat_elapsed >= self._heartbeat_interval:
+                    logger.debug(
+                        "CoreAgent stream heartbeat: no chunks for %.1fs%s, emitting sentinel",
+                        heartbeat_elapsed,
+                        f" (step={self._step_id})" if self._step_id else "",
+                    )
+                    self._heartbeat_start = time.perf_counter()
+                    return _STREAM_HEARTBEAT_SENTINEL
+
+                if self._dispatch_timeout and self._dispatch_timeout > 0:
+                    elapsed = time.perf_counter() - self._watchdog_start
+                    if elapsed >= self._dispatch_timeout:
+                        logger.warning(
+                            "CoreAgent stream dispatch watchdog: no chunks for %.1fs%s, "
+                            "cancelling stream read",
+                            elapsed,
+                            f" (step={self._step_id})" if self._step_id else "",
+                        )
+                        await self._cancel_pending()
+                        raise DispatchTimeoutError(self._dispatch_timeout, step_id=self._step_id)
+
+            try:
+                return anext_task.result()
+            finally:
+                self._pending = None
+                self._watchdog_start = time.perf_counter()
+                self._heartbeat_start = time.perf_counter()
+        except StopAsyncIteration:
+            self._pending = None
+            raise
+
+    async def cancel(self) -> None:
+        """Cancel any pending ``__anext__()`` and close the stream read."""
+        await self._cancel_pending()
+
+
 async def await_next_graph_stream_chunk(
     chunk_iter: AsyncIterator[Any],
     *,
@@ -68,6 +160,10 @@ async def await_next_graph_stream_chunk(
     heartbeat_interval: float | None = None,
 ) -> Any:
     """Wait for the next graph chunk with cooperative cancellation and watchdog.
+
+    Prefer :class:`GraphStreamChunkReader` when consuming multiple chunks from
+    the same iterator — this helper creates a one-shot reader and must not be
+    called repeatedly across heartbeat sentinels on the same ``chunk_iter``.
 
     Behavior:
     - Cooperative cancellation: polls every ``_STREAM_POLL_INTERVAL_S`` and
@@ -110,63 +206,16 @@ async def await_next_graph_stream_chunk(
         The poll interval (0.5s) is for cooperative cancellation checks only.
         The watchdog deadline is separate and tracks wall-clock inactivity.
     """
-    anext_task = asyncio.create_task(chunk_iter.__anext__())
-    watchdog_start = time.perf_counter()
-    heartbeat_start = time.perf_counter()
-    effective_heartbeat = heartbeat_interval or _STREAM_HEARTBEAT_INTERVAL_S
+    reader = GraphStreamChunkReader(
+        chunk_iter,
+        dispatch_timeout=dispatch_timeout,
+        step_id=step_id,
+        heartbeat_interval=heartbeat_interval,
+    )
     try:
-        while not anext_task.done():
-            await asyncio.wait({anext_task}, timeout=_STREAM_POLL_INTERVAL_S)
-            if anext_task.done():
-                break
-
-            # Cooperative cancellation check
-            current_task = asyncio.current_task()
-            if current_task and current_task.cancelling():
-                logger.info("CoreAgent stream: cancellation request, stopping graph read")
-                anext_task.cancel()
-                try:
-                    await anext_task
-                except asyncio.CancelledError:
-                    pass
-                raise asyncio.CancelledError
-
-            # IG-549: Heartbeat sentinel for long-running tool execution
-            heartbeat_elapsed = time.perf_counter() - heartbeat_start
-            if heartbeat_elapsed >= effective_heartbeat:
-                logger.debug(
-                    "CoreAgent stream heartbeat: no chunks for %.1fs%s, emitting sentinel",
-                    heartbeat_elapsed,
-                    f" (step={step_id})" if step_id else "",
-                )
-                heartbeat_start = time.perf_counter()  # Reset heartbeat timer
-                return _STREAM_HEARTBEAT_SENTINEL
-
-            # Dispatch watchdog: check for inactivity stall
-            if dispatch_timeout and dispatch_timeout > 0:
-                elapsed = time.perf_counter() - watchdog_start
-                if elapsed >= dispatch_timeout:
-                    logger.warning(
-                        "CoreAgent stream dispatch watchdog: no chunks for %.1fs%s, "
-                        "cancelling stream read",
-                        elapsed,
-                        f" (step={step_id})" if step_id else "",
-                    )
-                    anext_task.cancel()
-                    try:
-                        await anext_task
-                    except (asyncio.CancelledError, StopAsyncIteration):
-                        pass
-                    raise DispatchTimeoutError(dispatch_timeout, step_id=step_id)
-
-        return anext_task.result()
+        return await reader.read_next()
     finally:
-        if not anext_task.done():
-            anext_task.cancel()
-            try:
-                await anext_task
-            except (asyncio.CancelledError, StopAsyncIteration):
-                pass
+        await reader.cancel()
 
 
 # IG-549: Sentinel object returned when heartbeat interval elapses without a chunk.
@@ -203,6 +252,7 @@ __all__ = [
     "_MAX_INTERRUPT_ITERATIONS",
     "_STREAM_HEARTBEAT_INTERVAL_S",
     "_STREAM_HEARTBEAT_SENTINEL",
+    "GraphStreamChunkReader",
     "await_next_graph_stream_chunk",
     "build_auto_resume_payload",
     "DispatchTimeoutError",
