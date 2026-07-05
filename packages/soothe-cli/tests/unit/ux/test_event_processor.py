@@ -291,8 +291,8 @@ class TestEventProcessorOutputEventRouting:
         assert progress_calls[0][1][0] == "soothe.cognition.strange_loop.completed"
         assert assistant_calls == []
 
-    def test_quiz_phase_messages_routes_to_assistant_text(self) -> None:
-        """Quiz piggyback text uses ``messages`` + ``phase`` (IG-317)."""
+    def test_chitchat_phase_messages_routes_to_assistant_text(self) -> None:
+        """Chitchat piggyback text uses ``messages`` + ``phase`` (IG-317)."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer)
 
@@ -300,8 +300,8 @@ class TestEventProcessorOutputEventRouting:
             _stream_messages_event(
                 {
                     "type": "ai",
-                    "content": "Hello from quiz",
-                    "phase": "quiz",
+                    "content": "Hello from chitchat",
+                    "phase": "chitchat",
                     "thread_id": "tid",
                 },
             )
@@ -310,7 +310,7 @@ class TestEventProcessorOutputEventRouting:
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         progress_calls = [c for c in renderer.calls if c[0] == "on_progress_event"]
         assert len(assistant_calls) == 1
-        assert assistant_calls[0][1][0] == "Hello from quiz"
+        assert assistant_calls[0][1][0] == "Hello from chitchat"
         assert progress_calls == []
 
     def test_batch_mode_emits_goal_completion_final_message(self) -> None:
@@ -842,8 +842,8 @@ class TestEventProcessorHeadlessSubgraph:
         assistant_calls = [c for c in renderer.calls if c[0] == "on_assistant_text"]
         assert assistant_calls == []
 
-    def test_headless_emits_phased_quiz_main_graph(self) -> None:
-        """Direct replies tag ``phase=quiz`` (runner); headless still shows them."""
+    def test_headless_emits_phased_chitchat_main_graph(self) -> None:
+        """Direct replies tag ``phase=chitchat`` (runner); headless still shows them."""
         renderer = MockRenderer()
         processor = EventProcessor(renderer, headless_output=True)
 
@@ -857,7 +857,7 @@ class TestEventProcessorHeadlessSubgraph:
                         "type": "ai",
                         "id": "main-answer",
                         "content": "Hello — how can I help?",
-                        "phase": "quiz",
+                        "phase": "chitchat",
                     },
                     {},
                 ],

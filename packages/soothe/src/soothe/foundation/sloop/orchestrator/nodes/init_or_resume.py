@@ -4,8 +4,8 @@ Hydrates intent/routing from intake classified in the graph entry node.
 Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
 node emits the classified intake for event streaming, surfaces the 3-class
 ``intake_label`` and a structural ``is_continuation`` flag onto the graph
-state for ``route_by_intent``. Trivial labels terminate the graph early; the
-runner handles CoreAgent invocation on the loop main thread.
+state for ``route_by_intent``. Trivial labels inject a pseudo single-step plan
+and route through resolve_decision → execute → goal_completion.
 """
 
 from __future__ import annotations
@@ -77,7 +77,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         await ctx.emit(
             "intent_fast_path",
             {
-                "fast_path_kind": "chitchat",
                 "intent_type": "agentic",
                 "classification": intent,
                 "chitchat_response": intent.chitchat_response,
@@ -96,29 +95,24 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "resume_synth": None,
         }
 
-    # RFC-630 trivial fast-path: runner invokes CoreAgent on the loop main thread
-    # (loop_id), bypassing plan_generate / resolve_decision / execute graph nodes.
-    # Continuation turns still need plan_assess and must not fast-path here.
+    # RFC-630 trivial branch: pseudo 1-step plan (goal_description), skip
+    # plan_assess/plan_generate, execute on a step thread branch, then
+    # goal_completion via terminal_after_execute (ledger_direct).
     if (
         intake_label == IntakeLabel.TRIVIAL
         and not is_continuation
         and not getattr(ctx, "continue_loop_mode", False)
         and not is_continue_keyword(ctx.loop_state.goal)
     ):
-        logger.info("[Intent] Fast path in graph: trivial")
-        await ctx.emit(
-            "intent_fast_path",
-            {
-                "fast_path_kind": "trivial",
-                "intent_type": "agentic",
-                "classification": intent,
-                "context_engine": getattr(ctx, "ce", None),
-                "ce_goal_id": getattr(ctx, "ce_goal_id", None),
-                "thread_id": ctx.loop_state.thread_id,
-            },
-        )
+        from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
+
+        goal_text = (getattr(intent, "goal_description", None) or ctx.loop_state.goal or "").strip()
+        if not goal_text:
+            goal_text = ctx.loop_state.goal
+        ctx.scratch.plan_result = build_trivial_plan(goal_text)
+        logger.info("[Intent] Trivial branch: pseudo plan injected (goal=%s)", goal_text[:50])
         return {
-            "intent_route": "fast_path",
+            "intent_route": "continue_loop",
             "intake_label": intake_label,
             "is_continuation": is_continuation,
             "plan_route": None,

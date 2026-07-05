@@ -30,23 +30,18 @@ def test_route_by_intent_continuation_overlay_wins() -> None:
     assert route_by_intent(state) == "plan_assess"
 
 
-def test_route_by_intent_trivial_fast_path() -> None:
-    state = {
-        "is_continuation": False,
-        "intent_route": "fast_path",
-        "intake_label": IntakeLabel.TRIVIAL,
-    }
-    assert route_by_intent(state) == "__end__"
-
-
-def test_route_by_intent_chitchat() -> None:
-    state = {"is_continuation": False, "intake_label": IntakeLabel.CHITCHAT}
-    assert route_by_intent(state) == "resolve_decision"
-
-
 def test_route_by_intent_trivial() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.TRIVIAL}
     assert route_by_intent(state) == "resolve_decision"
+
+
+def test_route_by_intent_chitchat_fast_path() -> None:
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "fast_path",
+    }
+    assert route_by_intent(state) == END
 
 
 def test_route_by_intent_simple() -> None:
@@ -65,12 +60,12 @@ def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
     assert route_by_intent(state) == "bounded_evidence_gather"
 
 
-# -- Group 4: trivial fast-path (runner CoreAgent) ------------------------
+# -- Group 4: trivial pseudo-plan (in-graph execute) ------------------------
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_trivial_emits_fast_path() -> None:
-    """The trivial label terminates the graph; runner invokes CoreAgent directly."""
+async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
+    """The trivial label injects a 1-step plan and continues through execute."""
     from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 
     emitted: list[tuple[str, object]] = []
@@ -81,7 +76,7 @@ async def test_init_or_resume_trivial_emits_fast_path() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.TRIVIAL,
         goal_description="list files in this directory",
-        task_complexity=TaskComplexity.SIMPLE,
+        task_complexity=TaskComplexity.MINIMAL,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
     loop_state = SimpleNamespace(
@@ -102,12 +97,13 @@ async def test_init_or_resume_trivial_emits_fast_path() -> None:
     result = await node_init_or_resume(ctx, {})
 
     assert result["intake_label"] == IntakeLabel.TRIVIAL
-    assert result["intent_route"] == "fast_path"
-    assert scratch.plan_result is None
-    assert any(t == "intent_fast_path" for t, _ in emitted)
-    payload = next(data for t, data in emitted if t == "intent_fast_path")
-    assert isinstance(payload, dict)
-    assert payload.get("fast_path_kind") == "trivial"
+    assert result["intent_route"] == "continue_loop"
+    assert not any(t == "intent_fast_path" for t, _ in emitted)
+    assert scratch.plan_result is not None
+    assert scratch.plan_result.terminal_after_execute is True
+    assert scratch.plan_result.decision is not None
+    assert len(scratch.plan_result.decision.steps) == 1
+    assert scratch.plan_result.decision.steps[0].description == "list files in this directory"
 
 
 @pytest.mark.asyncio
@@ -210,5 +206,7 @@ def test_trivial_plan_has_no_synthetic_reasoning_prefix() -> None:
     assert plan.plan_reasoning == ""
     assert plan.decision is not None
     assert plan.decision.reasoning == ""
+    assert plan.terminal_after_execute is True
+    assert plan.require_goal_completion is False
     # The ## Result evidence contract is retained.
     assert "## Result" in plan.decision.steps[0].expected_output

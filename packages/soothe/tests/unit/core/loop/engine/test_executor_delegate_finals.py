@@ -612,6 +612,59 @@ async def test_stream_and_collect_emits_late_tool_call_update_on_tool_message() 
 
 
 @pytest.mark.asyncio
+async def test_stream_and_collect_counts_execute_namespace_tool_message() -> None:
+    """Execute-namespace ToolMessages must count toward main_tool_count (RFC-628)."""
+    from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
+    ai = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "functions.wizsearch_search:0",
+                "name": "wizsearch_search",
+                "args": {"query": "world cup teams"},
+            }
+        ],
+    )
+    tool_msg = ToolMessage(
+        content="search results here",
+        tool_call_id="functions.wizsearch_search:0",
+        name="wizsearch_search",
+    )
+    execute_ns = ("execute:00019ed6-dfca-2758-204b-dae1a999a6ca",)
+
+    async def fake_stream():
+        yield (execute_ns, "messages", (ai, {}))
+        yield (execute_ns, "messages", (tool_msg, {}))
+
+    executor = Executor(MagicMock())
+    custom_payloads: list[dict] = []
+    final = None
+    async for chunk in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="EMV-b4a35046",
+    ):
+        event = chunk.event
+        if isinstance(event, tuple) and len(event) == 3 and event[1] == "custom":  # noqa: PLR2004
+            data = event[2]
+            if isinstance(data, dict):
+                custom_payloads.append(data)
+        if chunk.output is not None:
+            final = chunk
+
+    assert final is not None
+    assert final.main_tool_count == 1
+    assert "search results here" in (final.output or "")
+    assert any(
+        p.get("type") == STREAM_TOOL_CALL_UPDATE
+        and p.get("tool_call_id") == "EMV_b4a35046:s:wizsearch_search:0"
+        and p.get("args", {}).get("query") == "world cup teams"
+        for p in custom_payloads
+    )
+
+
+@pytest.mark.asyncio
 async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

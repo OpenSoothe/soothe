@@ -14,9 +14,14 @@ from soothe_sdk.ux.loop_stream import (
 )
 
 
-def test_trivial_phase_in_allowlist() -> None:
+def test_chitchat_phase_in_allowlist() -> None:
     assert "chitchat" in LOOP_ASSISTANT_OUTPUT_PHASES
-    assert "trivial" in LOOP_ASSISTANT_OUTPUT_PHASES
+    assert "goal_completion" in LOOP_ASSISTANT_OUTPUT_PHASES
+
+
+def test_legacy_trivial_quiz_phases_removed() -> None:
+    assert "trivial" not in LOOP_ASSISTANT_OUTPUT_PHASES
+    assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
 def test_direct_model_phase_in_allowlist() -> None:

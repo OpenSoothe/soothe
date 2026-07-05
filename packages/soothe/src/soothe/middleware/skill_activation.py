@@ -13,7 +13,6 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.intention.models import TaskComplexity
 from soothe.skills.events import InternalSkillActivatedEvent
 from soothe.skills.index import SkillIndexEntry
 from soothe.skills.registry import (
@@ -48,21 +47,6 @@ FILE_OP_TOOLS: frozenset[str] = frozenset(
     }
 )
 _PATH_KEYS: tuple[str, ...] = ("file_path", "path", "filepath", "file")
-
-
-def _should_skip_intent_prefetch(state: dict[str, Any]) -> bool:
-    """Skip Skillify prefetch on trivial/quiz fast paths (no tools needed)."""
-    routing = state.get("routing_classification")
-    if routing is None:
-        return False
-    if isinstance(routing, dict):
-        complexity = routing.get("task_complexity")
-    else:
-        complexity = getattr(routing, "task_complexity", None)
-    if complexity is None:
-        return False
-    normalized = str(getattr(complexity, "value", complexity))
-    return normalized == TaskComplexity.MINIMAL.value
 
 
 class SkillActivationState(AgentState[Any]):
@@ -221,10 +205,6 @@ class SkillActivationMiddleware(AgentMiddleware):
             return False
         if activation_state.get("intent_prefetched"):
             return False
-
-        if _should_skip_intent_prefetch(state):
-            activation_state["intent_prefetched"] = True
-            return True
 
         activation_state["intent_prefetched"] = True
         if ps.intent_prefetch_top_k <= 0:

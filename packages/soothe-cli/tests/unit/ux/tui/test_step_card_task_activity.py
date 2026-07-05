@@ -30,7 +30,8 @@ def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
     text = _plain(card._step_task_activity_content())
     assert "Tacitus(scan both trees)" in text
     assert "ListFiles" in text
-    lines = [ln for ln in text.split("\n") if ln.strip()]
+    assert "\n\n" not in text
+    lines = text.split("\n")
     list_idx = next(i for i, ln in enumerate(lines) if "ListFiles" in ln)
     assert list_idx > 0
     assert "scan both" in lines[list_idx - 1]

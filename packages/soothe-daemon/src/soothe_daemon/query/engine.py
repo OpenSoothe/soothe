@@ -749,7 +749,7 @@ class QueryEngine:
         full_response: list[str] = []
         full_response_chars: int = 0  # Track total characters for bounded accumulation
         # Set to True once a phase-tagged loop assistant chunk (plan_direct,
-        # goal_completion, autonomous_goal, direct_model, quiz) has been
+        # goal_completion, autonomous_goal, direct_model, chitchat) has been
         # persisted by ThreadLogger._log_message_event. When true, the legacy
         # ``log_assistant_response("".join(full_response))`` row at end-of-
         # stream is suppressed — the per-phase rows already cover the user-

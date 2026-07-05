@@ -12,6 +12,7 @@ from soothe.foundation.events import register_event
 
 SUBAGENT_TACITUS_STARTED = "soothe.subagent.tacitus.started"
 SUBAGENT_TACITUS_PROGRESS = "soothe.subagent.tacitus.progress"
+SUBAGENT_TACITUS_STEP_COMPLETED = "soothe.subagent.tacitus.step.completed"
 SUBAGENT_TACITUS_GATHER_SUMMARY = "soothe.subagent.tacitus.gather.summary"
 SUBAGENT_TACITUS_COMPLETED = "soothe.subagent.tacitus.completed"
 
@@ -36,6 +37,18 @@ class TacitusProgressEvent(SootheEvent):
     sources_completed: int = 0
     total_sources: int = 0
     message: str = ""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class TacitusStepCompletedEvent(SootheEvent):
+    """One Tacitus phase completed — metadata for TUI step rows (RFC-403 / browser_use pattern)."""
+
+    type: Literal["soothe.subagent.tacitus.step.completed"] = SUBAGENT_TACITUS_STEP_COMPLETED  # type: ignore[assignment]
+    tool_name: str = ""
+    args_preview: str = ""
+    status: str = "done"
+    duration_ms: int = 0
 
     model_config = ConfigDict(extra="allow")
 
@@ -73,6 +86,11 @@ register_event(
     summary_template="{phase}: {message}",
 )
 register_event(
+    TacitusStepCompletedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{tool_name}: {args_preview}",
+)
+register_event(
     TacitusGatherSummaryEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Gather: {result_count} hits ({sources_touched} sources)",
@@ -88,8 +106,10 @@ __all__ = [
     "SUBAGENT_TACITUS_GATHER_SUMMARY",
     "SUBAGENT_TACITUS_PROGRESS",
     "SUBAGENT_TACITUS_STARTED",
+    "SUBAGENT_TACITUS_STEP_COMPLETED",
     "TacitusCompletedEvent",
     "TacitusGatherSummaryEvent",
     "TacitusProgressEvent",
     "TacitusStartedEvent",
+    "TacitusStepCompletedEvent",
 ]

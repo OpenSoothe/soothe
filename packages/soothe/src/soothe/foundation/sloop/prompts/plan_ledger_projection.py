@@ -372,8 +372,7 @@ def project_last_goal_completion_for_intake(
 
     Uses the same ``goal_completion`` resolution as execute Slice A. The synthesis
     human envelope is rewritten to a short label so the classifier focuses on the
-    terminal AI report. Falls back to the last ``quiz`` pair only when no completion
-    row exists (legacy quiz-only threads).
+    terminal AI report.
 
     Args:
         loop_messages: Full RFC-214 ledger loaded from CE persistence.
@@ -399,18 +398,7 @@ def project_last_goal_completion_for_intake(
         )
         return projected
 
-    tail = _extract_last_phase_pair(loop_messages, "trivial")
-    if not tail:
-        tail = _extract_last_phase_pair(loop_messages, "quiz")
-    if not tail:
-        return []
-    projected = project_loop_messages_for_plan(tail, ledger_cfg)
-    logger.debug(
-        "Intake prior-goal projection: phase=trivial in=%d out=%d",
-        len(tail),
-        len(projected),
-    )
-    return projected
+    return []
 
 
 def _current_goal_has_execute_ledger(state: LoopState) -> bool:

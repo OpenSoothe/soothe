@@ -51,7 +51,6 @@ def test_materialize_text_only_chunk_does_not_backfill_stale_tool_calls() -> Non
         [{"type": "text", "text": "Shanghai"}],
         AIMessageChunk(
             content="Shanghai",
-            phase="trivial",
             tool_calls=[
                 {
                     "name": "web_search",
@@ -64,7 +63,7 @@ def test_materialize_text_only_chunk_does_not_backfill_stale_tool_calls() -> Non
         streaming_overlay=None,
     )
     assert merged == [{"type": "text", "text": "Shanghai"}]
-    blocks = _tui_effective_ai_blocks(AIMessageChunk(content="Let", phase="trivial"), ns_key=())
+    blocks = _tui_effective_ai_blocks(AIMessageChunk(content="Let"), ns_key=())
     assert blocks == [{"type": "text", "text": "Let"}]
 
 

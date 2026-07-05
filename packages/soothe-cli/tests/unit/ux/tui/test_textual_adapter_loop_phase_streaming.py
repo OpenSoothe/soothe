@@ -1,4 +1,4 @@
-"""Regression: trivial fast-path streams many chunks; must not use instant mount."""
+"""Regression: loop assistant phases excluded from instant mount stream correctly."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessageChunk
+from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES
 
 from soothe_cli.tui.textual_adapter import (
     _INSTANT_LOOP_ASSISTANT_PHASES,
@@ -14,52 +15,35 @@ from soothe_cli.tui.textual_adapter import (
 )
 
 
-def test_trivial_phase_excluded_from_instant_mount_set() -> None:
-    """Trivial intake streams AIMessageChunks; instant mount creates one card per chunk."""
+def test_removed_legacy_phases_not_in_instant_or_allowlist() -> None:
     assert "trivial" not in _INSTANT_LOOP_ASSISTANT_PHASES
+    assert "quiz" not in _INSTANT_LOOP_ASSISTANT_PHASES
+    assert "trivial" not in LOOP_ASSISTANT_OUTPUT_PHASES
+    assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
-def test_retain_assistant_ns_on_chunk_last_for_loop_phases() -> None:
+def test_retain_assistant_ns_on_chunk_last_for_goal_completion_phase() -> None:
     assert (
         _retain_assistant_ns_on_chunk_last(
-            AIMessageChunk(content="x", phase="trivial"),
+            AIMessageChunk(content="x", phase="goal_completion"),
             ns_key=(),
             assistant_message_by_namespace={},
             is_main_agent=True,
         )
         is True
-    )
-    ns = {(): object()}
-    assert (
-        _retain_assistant_ns_on_chunk_last(
-            AIMessageChunk(content="x"),
-            ns_key=(),
-            assistant_message_by_namespace=ns,
-            is_main_agent=True,
-        )
-        is True
-    )
-    assert (
-        _retain_assistant_ns_on_chunk_last(
-            AIMessageChunk(content="x"),
-            ns_key=(),
-            assistant_message_by_namespace={},
-            is_main_agent=True,
-        )
-        is False
     )
 
 
 @pytest.mark.asyncio
-async def test_try_mount_instant_loop_assistant_phase_skips_trivial_stream() -> None:
-    """Streaming trivial chunks must fall through to append_content path."""
+async def test_try_mount_instant_loop_assistant_phase_skips_non_instant_phases() -> None:
+    """Streaming goal_completion chunks must fall through to append_content path."""
     adapter = MagicMock()
     adapter._mount_message = AsyncMock()
     adapter._set_active_message = MagicMock()
     adapter._set_spinner = AsyncMock()
 
-    message = AIMessageChunk(content="上", phase="trivial")
-    blocks = [{"type": "text", "text": "上"}]
+    message = AIMessageChunk(content="done", phase="goal_completion")
+    blocks = [{"type": "text", "text": "done"}]
     ev_stats = MagicMock()
 
     handled = await _try_mount_instant_loop_assistant_phase(
@@ -82,7 +66,7 @@ async def test_try_mount_instant_loop_assistant_phase_skips_trivial_stream() -> 
 
 @pytest.mark.asyncio
 async def test_instant_mount_appends_streaming_chunks_to_one_card() -> None:
-    """plan_direct / quiz streams must not mount a new card per chunk."""
+    """plan_direct streams must not mount a new card per chunk."""
     adapter = MagicMock()
     adapter._mount_message = AsyncMock()
     adapter._set_active_message = MagicMock()
