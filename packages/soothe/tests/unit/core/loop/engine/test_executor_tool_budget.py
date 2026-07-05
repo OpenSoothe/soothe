@@ -66,9 +66,26 @@ async def test_stream_stops_after_tool_budget_with_partial_outcomes() -> None:
     assert len(final.outcomes) == 2
 
 
-def test_default_max_tool_calls_per_step_is_99() -> None:
-    assert _DEFAULT_MAX_TOOL_CALLS_PER_STEP == 99
-    assert Executor._max_tool_calls_per_step() == 99
+def test_default_max_tool_calls_per_step_is_999() -> None:
+    assert _DEFAULT_MAX_TOOL_CALLS_PER_STEP == 999
+    assert (
+        Executor(
+            MagicMock(), max_parallel_steps=1, context_engine=_make_ce()
+        )._max_tool_calls_per_step()
+        == 999
+    )
+
+
+def test_max_tool_calls_per_step_reads_loop_config() -> None:
+    config = MagicMock()
+    config.agent.loop.max_tool_calls_per_step = 42
+    ex = Executor(
+        MagicMock(),
+        max_parallel_steps=1,
+        config=config,
+        context_engine=_make_ce(),
+    )
+    assert ex._max_tool_calls_per_step() == 42
 
 
 def _make_mock_agent(chunks: list) -> MagicMock:

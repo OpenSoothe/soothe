@@ -71,6 +71,20 @@ class PendingEdit:
     request: ToolCallRequest
 
 
+def _resolve_edit_future(
+    edit: PendingEdit,
+    result: ToolMessage | Command[Any],
+) -> None:
+    """Deliver a coalesced tool result unless the graph stream already resolved the waiter."""
+    if edit.result_future.done():
+        logger.debug(
+            "Coalesced edit result dropped for %s (future already resolved)",
+            edit.tool_call_id,
+        )
+        return
+    edit.result_future.set_result(result)
+
+
 @dataclass
 class StringReplacement:
     """A single string-replacement operation for the staging buffer.
@@ -456,13 +470,14 @@ class EditCoalescingMiddleware(AgentMiddleware):
             content = await self._read_file_for_batch(file_path)
         except Exception as e:
             for edit in edits:
-                edit.result_future.set_result(
+                _resolve_edit_future(
+                    edit,
                     ToolMessage(
                         content=f"Error: {e}",
                         tool_call_id=edit.tool_call_id,
                         name=edit.tool_name,
                         status="error",
-                    )
+                    ),
                 )
             return
 
@@ -471,7 +486,8 @@ class EditCoalescingMiddleware(AgentMiddleware):
         if conflict:
             conflicting_ids, ranges = conflict
             for edit in edits:
-                edit.result_future.set_result(
+                _resolve_edit_future(
+                    edit,
                     ToolMessage(
                         content=(
                             f"Error: Edit conflict in {file_path}. "
@@ -481,7 +497,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
                         tool_call_id=edit.tool_call_id,
                         name=edit.tool_name,
                         status="error",
-                    )
+                    ),
                 )
             return
 
@@ -511,7 +527,8 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
             # All edits succeed together
             for edit in edits:
-                edit.result_future.set_result(
+                _resolve_edit_future(
+                    edit,
                     ToolMessage(
                         content=(
                             f"String replacement applied to {file_path}. "
@@ -519,21 +536,21 @@ class EditCoalescingMiddleware(AgentMiddleware):
                         ),
                         tool_call_id=edit.tool_call_id,
                         name=edit.tool_name,
-                    )
+                    ),
                 )
 
         except Exception as e:
-            logger.exception("Batched string replacement failed for %s", file_path)
+            logger.warning("Batched string replacement failed for %s: %s", file_path, e)
             for edit in edits:
-                if not edit.result_future.done():
-                    edit.result_future.set_result(
-                        ToolMessage(
-                            content=f"Error: {e}",
-                            tool_call_id=edit.tool_call_id,
-                            name=edit.tool_name,
-                            status="error",
-                        )
-                    )
+                _resolve_edit_future(
+                    edit,
+                    ToolMessage(
+                        content=f"Error: {e}",
+                        tool_call_id=edit.tool_call_id,
+                        name=edit.tool_name,
+                        status="error",
+                    ),
+                )
 
     async def _read_file_for_batch(self, file_path: str) -> str:
         """Read file content for batch processing.
@@ -729,7 +746,8 @@ class EditCoalescingMiddleware(AgentMiddleware):
             # Reject conflicting edits
             for edit in edits:
                 if edit.tool_call_id in overlaps:
-                    edit.result_future.set_result(
+                    _resolve_edit_future(
+                        edit,
                         ToolMessage(
                             content=f"Error: Edit conflict in {file_path}. "
                             f"Overlapping line ranges detected. "
@@ -737,12 +755,13 @@ class EditCoalescingMiddleware(AgentMiddleware):
                             tool_call_id=edit.tool_call_id,
                             name=edit.tool_name,
                             status="error",
-                        )
+                        ),
                     )
                 else:
                     # Non-conflicting edits need re-processing
                     # For simplicity, reject entire batch on conflict
-                    edit.result_future.set_result(
+                    _resolve_edit_future(
+                        edit,
                         ToolMessage(
                             content=f"Error: Edit conflict in {file_path}. "
                             f"Another edit in this batch had overlapping ranges. "
@@ -750,7 +769,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
                             tool_call_id=edit.tool_call_id,
                             name=edit.tool_name,
                             status="error",
-                        )
+                        ),
                     )
             return
 
@@ -766,7 +785,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
                 # No workspace context, fall back to individual handlers
                 for edit in edits:
                     result = await edit.handler(edit.request)
-                    edit.result_future.set_result(result)
+                    _resolve_edit_future(edit, result)
                 return
 
             # Create backend for the current workspace
@@ -782,13 +801,14 @@ class EditCoalescingMiddleware(AgentMiddleware):
             if result.error:
                 # Batch failed - all edits get error
                 for edit in edits:
-                    edit.result_future.set_result(
+                    _resolve_edit_future(
+                        edit,
                         ToolMessage(
                             content=f"Error: {result.error}",
                             tool_call_id=edit.tool_call_id,
                             name=edit.tool_name,
                             status="error",
-                        )
+                        ),
                     )
             else:
                 # Batch succeeded
@@ -799,33 +819,36 @@ class EditCoalescingMiddleware(AgentMiddleware):
                 )
                 for edit in edits:
                     if result.failed_operations and edit.tool_call_id in result.failed_operations:
-                        edit.result_future.set_result(
+                        _resolve_edit_future(
+                            edit,
                             ToolMessage(
                                 content=f"Error: Operation failed for {file_path}",
                                 tool_call_id=edit.tool_call_id,
                                 name=edit.tool_name,
                                 status="error",
-                            )
+                            ),
                         )
                     else:
-                        edit.result_future.set_result(
+                        _resolve_edit_future(
+                            edit,
                             ToolMessage(
                                 content=success_msg,
                                 tool_call_id=edit.tool_call_id,
                                 name=edit.tool_name,
-                            )
+                            ),
                         )
 
         except Exception as e:
-            logger.exception("Batched edit failed for %s", file_path)
+            logger.warning("Batched edit failed for %s: %s", file_path, e)
             for edit in edits:
-                edit.result_future.set_result(
+                _resolve_edit_future(
+                    edit,
                     ToolMessage(
                         content=f"Error: {e}",
                         tool_call_id=edit.tool_call_id,
                         name=edit.tool_name,
                         status="error",
-                    )
+                    ),
                 )
 
     def _find_overlaps(self, operations: list[BatchedEditOperation]) -> set[str]:

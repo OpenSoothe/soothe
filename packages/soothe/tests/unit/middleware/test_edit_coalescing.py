@@ -22,6 +22,7 @@ from soothe.middleware.edit_coalescing import (
     EditCoalescingMiddleware,
     EditConflictError,
     PendingEdit,
+    _resolve_edit_future,
 )
 
 
@@ -505,3 +506,29 @@ class TestBatchedEditOperation:
 
         with pytest.raises(Exception):  # FrozenInstanceError
             op.content = "changed"
+
+
+def test_resolve_edit_future_skips_done_future() -> None:
+    """Budget-cap stream teardown must not raise when the graph already resolved the waiter."""
+    loop = asyncio.new_event_loop()
+    try:
+        future: asyncio.Future[ToolMessage] = loop.create_future()
+        future.set_result(
+            ToolMessage(content="already done", tool_call_id="call-1", name="edit_file")
+        )
+        edit = PendingEdit(
+            tool_call_id="call-1",
+            tool_name="edit_file",
+            file_path="/tmp/x.py",
+            args={},
+            result_future=future,
+            handler=MagicMock(),
+            request=MagicMock(),
+        )
+        _resolve_edit_future(
+            edit,
+            ToolMessage(content="late result", tool_call_id="call-1", name="edit_file"),
+        )
+        assert future.result().content == "already done"
+    finally:
+        loop.close()

@@ -13,14 +13,15 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
+from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
 from soothe.foundation.sloop.state.schemas import StepAction
 
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import StepResult
 
 
-# Per execute-step cap on root-graph tool results consumed from the Act stream.
-_DEFAULT_MAX_TOOL_CALLS_PER_STEP = 99
+# Re-export for executor tests and legacy imports.
+_DEFAULT_MAX_TOOL_CALLS_PER_STEP = DEFAULT_MAX_TOOL_CALLS_PER_STEP
 
 # ``task`` tool return text cap per invocation before joining (delegate finals).
 _DELEGATE_FINAL_PER_TASK_CAP = 80_000

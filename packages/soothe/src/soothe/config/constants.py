@@ -25,3 +25,6 @@ DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS = 100_000
 
 # Max chars for non-code_exec tool output in StrangeLoop execute-stream aggregation.
 DEFAULT_TOOL_OUTPUT_CHARS = 10_000
+
+# Per execute-step cap on root-graph tool results consumed from the Act stream.
+DEFAULT_MAX_TOOL_CALLS_PER_STEP = 999

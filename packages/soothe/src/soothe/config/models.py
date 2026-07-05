@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
@@ -1396,6 +1397,7 @@ class StrangeLoopConfig(BaseModel):
         enabled: Enable agent loop mode.
         max_iterations: Maximum agent loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
+        max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
         strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
             assistant text when appropriate, or use adaptive heuristics (IG-199).
@@ -1438,6 +1440,16 @@ class StrangeLoopConfig(BaseModel):
         description="Max completed subagent ``task`` tool results per Execute wave (0 = no limit)",
         ge=0,
         le=20,
+    )
+
+    max_tool_calls_per_step: int = Field(
+        default=DEFAULT_MAX_TOOL_CALLS_PER_STEP,
+        description=(
+            "Max tool results consumed per execute step from the CoreAgent Act stream "
+            "(0 = unlimited)"
+        ),
+        ge=0,
+        le=10_000,
     )
 
     strange_loop_output_contract_enabled: bool = Field(
