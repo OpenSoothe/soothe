@@ -24,6 +24,7 @@ from soothe_sdk.display.text_extract import (
     normalize_stream_message,
 )
 from soothe_sdk.display.transcript_types import MessageData
+from soothe_sdk.ux.loop_stream import is_goal_completion_stream_terminal
 from textual.content import Content
 
 from soothe_cli.tui.app._module_init import _LoopHistoryPayload
@@ -338,10 +339,11 @@ class _HistoryMixin:
 
                     if isinstance(message, (AIMessage, AIMessageChunk)):
                         extracted = extract_ai_text_for_display(message)
+                        is_terminal = is_goal_completion_stream_terminal(message)
                         if extracted:
                             # Deduplicate immediate replayed AI chunks after reconnect/resubscribe.
                             if last_ai_chunk_by_ns.get(ns_key) == extracted:
-                                if getattr(message, "chunk_position", None) == "last":
+                                if is_terminal:
                                     asst = assistant_cards_by_ns.get(ns_key)
                                     if asst is not None:
                                         await asst.stop_stream()
@@ -354,7 +356,7 @@ class _HistoryMixin:
                             await asst.append_content(extracted)
                             last_ai_chunk_by_ns[ns_key] = extracted
 
-                        if getattr(message, "chunk_position", None) == "last":
+                        if is_terminal:
                             asst = assistant_cards_by_ns.get(ns_key)
                             if asst is not None:
                                 await asst.stop_stream()

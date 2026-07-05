@@ -44,7 +44,11 @@ from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.langchain_wire import (
     messages_from_wire_dicts,
 )
-from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
+from soothe_sdk.ux.loop_stream import (
+    LOOP_ASSISTANT_OUTPUT_PHASES,
+    assistant_output_phase,
+    is_goal_completion_stream_terminal,
+)
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
@@ -284,6 +288,12 @@ class TextualUIAdapter:
         ``soothe.loop.clarification.answered`` or after a clarification answer
         turn is dispatched.
         """
+
+        self._execute_wave_total: int = 0
+        """Steps in the current execute batch (for thinking-row progress)."""
+
+        self._execute_wave_completed: int = 0
+        """Completed steps in the current execute batch."""
 
         self._clarification_input_by_step: dict[str, ClarificationInputMessage] = {}
         """Active inline ``ClarificationInputMessage`` widgets keyed by step id.
@@ -1503,7 +1513,7 @@ def _tui_goal_completion_matches_prior_main_visible_answer(
     Covers (1) ``execute_step`` prose on ``CognitionStepMessage``, (2) prose last flushed to a
     standalone ``AssistantMessage``, and (3) prose still in ``pending_text_by_namespace`` that
     was already streamed into an ``AssistantMessage`` via ``append_content`` but not yet
-    flushed (``goal_completion`` can arrive before ``chunk_position == last`` or end-of-turn
+    flushed (``goal_completion`` can arrive before the stream terminal frame or end-of-turn
     flush — common for direct daemon runs; ``/explore`` often interleaves flushes differently).
     """
     if ns_key != ():
@@ -1900,7 +1910,19 @@ async def _maybe_set_running_tools_spinner(
     if clarification_pending or not adapter._set_spinner:
         return
     if _adapter_has_pending_tools(adapter):
-        await adapter._set_spinner(SPINNER_LABEL_TOOLS)
+        await adapter._set_spinner(
+            SPINNER_LABEL_TOOLS,
+            hint_extra=_execute_progress_hint(adapter),
+        )
+
+
+def _execute_progress_hint(adapter: TextualUIAdapter) -> str | None:
+    """Return ``completed/total`` when a multi-step execute wave is active."""
+    total = int(getattr(adapter, "_execute_wave_total", 0) or 0)
+    if total <= 1:
+        return None
+    completed = min(int(getattr(adapter, "_execute_wave_completed", 0) or 0), total)
+    return f"{completed}/{total}"
 
 
 async def _maybe_set_thinking_spinner(
@@ -1914,7 +1936,10 @@ async def _maybe_set_thinking_spinner(
     if clarification_pending or not adapter._set_spinner:
         return
     if not _adapter_has_pending_tools(adapter):
-        await adapter._set_spinner(SPINNER_LABEL_THINKING)
+        await adapter._set_spinner(
+            SPINNER_LABEL_THINKING,
+            hint_extra=_execute_progress_hint(adapter),
+        )
 
 
 def _mark_step_tool_rows_running(adapter: TextualUIAdapter) -> None:
@@ -2590,6 +2615,8 @@ async def execute_task_textual(
     adapter._file_change_widgets.clear()
     router = adapter._step_router
     router.reset_turn()
+    adapter._execute_wave_total = 0
+    adapter._execute_wave_completed = 0
     ui_coalesce = TurnToolUiCoalescer()
     adapter._goal_completion_mounted_this_turn = False
     adapter._goal_tree_message = None
@@ -2910,7 +2937,8 @@ async def execute_task_textual(
                                 if isinstance(b, dict) and b.get("type") == "text"
                             )
                             is_gc_chunk = isinstance(message, AIMessageChunk)
-                            if text_gc == "" and is_gc_chunk:
+                            is_gc_terminal = is_goal_completion_stream_terminal(message)
+                            if text_gc == "" and is_gc_chunk and not is_gc_terminal:
                                 continue
 
                             output_text = text_gc
@@ -2918,9 +2946,9 @@ async def execute_task_textual(
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             existing_msg = assistant_message_by_namespace.get(ns_key)
                             stream_msg = goal_completion_stream_by_namespace.get(ns_key)
-                            is_synthesis_stream_chunk = is_gc_chunk
+                            in_gc_stream = is_gc_chunk or stream_msg is not None
 
-                            if is_synthesis_stream_chunk:
+                            if in_gc_stream:
                                 if pending_text:
                                     await _flush_assistant_text_ns(
                                         adapter,
@@ -2933,6 +2961,14 @@ async def execute_task_textual(
                                     assistant_message_by_namespace.pop(ns_key, None)
 
                                 if stream_msg is None:
+                                    if is_gc_terminal and not output_text:
+                                        await _sync_goal_completion_thinking_row_time(
+                                            adapter,
+                                            goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                            turn_start_monotonic=start_time,
+                                            clarification_pending=clarification_pending,
+                                        )
+                                        continue
                                     if adapter._set_spinner:
                                         await adapter._set_spinner(SPINNER_LABEL_SYNTHESIZING)
                                     msg_id = f"asst-{uuid.uuid4().hex[:8]}"
@@ -2942,8 +2978,9 @@ async def execute_task_textual(
                                     await adapter._mount_message(stream_msg)
                                     goal_completion_stream_by_namespace[ns_key] = stream_msg
 
-                                await stream_msg.append_content(output_text)
-                                if getattr(message, "chunk_position", None) == "last":
+                                if output_text:
+                                    await stream_msg.append_content(output_text)
+                                if is_gc_terminal or not is_gc_chunk:
                                     await _finalize_goal_completion_stream(
                                         adapter,
                                         stream_msg,
@@ -2954,19 +2991,6 @@ async def execute_task_textual(
                                         goal_loop_start_monotonic=goal_loop_start_monotonic,
                                         turn_start_monotonic=start_time,
                                     )
-                                continue
-
-                            if stream_msg is not None:
-                                await _finalize_goal_completion_stream(
-                                    adapter,
-                                    stream_msg,
-                                    ns_key=ns_key,
-                                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-                                    assistant_message_by_namespace=assistant_message_by_namespace,
-                                    extra_text=output_text,
-                                    goal_loop_start_monotonic=goal_loop_start_monotonic,
-                                    turn_start_monotonic=start_time,
-                                )
                                 continue
 
                             if existing_msg is not None:
@@ -3509,6 +3533,13 @@ async def execute_task_textual(
 
                             if event_type == STRANGE_LOOP_COMPLETED:
                                 if not ns_key:
+                                    await _flush_inflight_goal_completion_streams(
+                                        adapter,
+                                        goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+                                        assistant_message_by_namespace=assistant_message_by_namespace,
+                                        goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                        turn_start_monotonic=start_time,
+                                    )
                                     if adapter._goal_tree_message is not None:
                                         adapter._goal_tree_message.set_loop_finished(
                                             status=str(data.get("status", "done")),
@@ -3601,6 +3632,8 @@ async def execute_task_textual(
                                 if isinstance(raw_steps, list):
                                     execution_mode = str(data.get("execution_mode", "")).strip()
                                     adapter._last_plan_execution_mode = execution_mode or None
+                                    adapter._execute_wave_total = len(raw_steps)
+                                    adapter._execute_wave_completed = 0
                                     await sync_pending_step_cards_from_plan(
                                         adapter,
                                         steps=raw_steps,
@@ -3690,7 +3723,10 @@ async def execute_task_textual(
                                     adapter._step_by_namespace[ns_key] = step_widget
                                     router.on_step_started(step_id)
                                     if adapter._set_spinner and not clarification_pending:
-                                        await adapter._set_spinner(SPINNER_LABEL_EXECUTING)
+                                        await adapter._set_spinner(
+                                            SPINNER_LABEL_EXECUTING,
+                                            hint_extra=_execute_progress_hint(adapter),
+                                        )
                                     logger.debug(
                                         "[STEP_STARTED] step_card step_id=%s ns=%r",
                                         step_id,
@@ -3734,6 +3770,11 @@ async def execute_task_textual(
                                         adapter._tool_display_by_call_id,
                                     )
                                     router.on_step_completed(step_id)
+                                    if adapter._execute_wave_total > 0:
+                                        adapter._execute_wave_completed = min(
+                                            adapter._execute_wave_completed + 1,
+                                            adapter._execute_wave_total,
+                                        )
                                     pending_text = pending_text_by_namespace.get(ns_key, "")
                                     if pending_text:
                                         await _flush_assistant_text_ns(
@@ -3976,19 +4017,13 @@ async def execute_task_textual(
                         router=router,
                     )
                 )
-        for ns_key, stream_msg in list(goal_completion_stream_by_namespace.items()):
-            flush_tasks.append(
-                _finalize_goal_completion_stream(
-                    adapter,
-                    stream_msg,
-                    ns_key=ns_key,
-                    goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-                    assistant_message_by_namespace=assistant_message_by_namespace,
-                    extra_text="",
-                    goal_loop_start_monotonic=goal_loop_start_monotonic,
-                    turn_start_monotonic=start_time,
-                )
-            )
+        await _flush_inflight_goal_completion_streams(
+            adapter,
+            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+            assistant_message_by_namespace=assistant_message_by_namespace,
+            goal_loop_start_monotonic=goal_loop_start_monotonic,
+            turn_start_monotonic=start_time,
+        )
         if flush_tasks:
             await asyncio.gather(*flush_tasks)
         pending_text_by_namespace.clear()

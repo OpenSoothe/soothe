@@ -352,6 +352,7 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
     assert marker["phase"] == "goal_completion"
     assert marker["content"] == ""
     assert marker["chunk_position"] == "last"
+    assert marker.get("stream_terminal") is True
     assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
 
 

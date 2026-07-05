@@ -607,6 +607,18 @@ class TestPlanGeneration:
         )
         assert len(out.steps) == 3
 
+    def test_simple_intake_model_caps_steps_on_later_iterations(self) -> None:
+        from soothe.foundation.sloop.intention.models import IntakeLabel
+        from soothe.foundation.sloop.state.schemas import plan_generation_model_for_iteration
+
+        schema = plan_generation_model_for_iteration(1, intake_label=IntakeLabel.SIMPLE)
+        steps = [
+            PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
+            for i in range(3)
+        ]
+        with pytest.raises(ValidationError):
+            schema(type="execute_steps", execution_mode="parallel", steps=steps)
+
 
 class TestStepResult:
     """Tests for StepResult schema."""

@@ -67,7 +67,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     # plan_generate directly with a synthetic assessment. Use the cheaper
     # lightweight plan call (reduced context, same schema).
     intake_label = getattr(state.intent, "intake_label", None) if state.intent else None
-    if intake_label == IntakeLabel.SIMPLE and not state.step_results:
+    if intake_label == IntakeLabel.SIMPLE:
         logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
         plan_result = await strange_loop.plan_phase.generate_lightweight(
             goal=state.goal,
