@@ -14,7 +14,7 @@ Three goal_completion delivery modes (IG-441):
      buffers further chunks and emits intermediate ``AIMessageChunk`` blocks
      when either ``adaptive_block_chars`` of text or ``adaptive_block_interval_s``
      elapse since the last block. The final block at ``strange_loop.completed``
-     carries ``chunk_position="last"``. Each block reuses the same
+     carries ``chunk_position="last"`` and ``stream_terminal=true``. Each block reuses the same
      ``phase="goal_completion"`` tag so the TUI continues appending to the same
      ``AssistantMessage`` card (see IG-440 for chunk identity preservation).
 
@@ -41,7 +41,11 @@ from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
-from soothe_sdk.ux.loop_stream import assistant_output_phase
+from soothe_sdk.ux.loop_stream import (
+    GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
+    assistant_output_phase,
+    build_goal_completion_stream_terminal_message,
+)
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
     extract_tool_call_updates_from_wire_message,
@@ -713,8 +717,10 @@ class StreamDeliveryCoalescer:
         msg["phase"] = "goal_completion"
         if final:
             msg["chunk_position"] = "last"
+            msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
         else:
             msg.pop("chunk_position", None)
+            msg.pop(GOAL_COMPLETION_STREAM_TERMINAL_FIELD, None)
 
         wire = prepare_stream_data_for_wire((msg, template_meta))
         if final:
@@ -818,11 +824,7 @@ class StreamDeliveryCoalescer:
         if self._gc is None:
             return []
         namespace = self._gc.namespace
-        msg = dict(self._gc.template_msg or {})
-        msg.setdefault("type", "AIMessageChunk")
-        msg["phase"] = "goal_completion"
-        msg["content"] = ""
-        msg["chunk_position"] = "last"
+        msg = build_goal_completion_stream_terminal_message(self._gc.template_msg)
         meta = dict(self._gc.template_meta or {})
         wire = prepare_stream_data_for_wire((msg, meta))
         return [(namespace, "messages", wire)]
@@ -839,6 +841,7 @@ class StreamDeliveryCoalescer:
             "content": preview + f"\n\n---\n**Full output saved to:** `{file_path}`",
             "phase": "goal_completion",
             "chunk_position": "last",
+            GOAL_COMPLETION_STREAM_TERMINAL_FIELD: True,
             "file_output_path": file_path,
             "file_output_size": len(text),
         }

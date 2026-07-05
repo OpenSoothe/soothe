@@ -55,6 +55,7 @@ from soothe.foundation.sloop.engine.continuation_context import (
 )
 from soothe.foundation.sloop.engine.graph_interrupt import (
     _MAX_INTERRUPT_ITERATIONS,
+    _STREAM_HEARTBEAT_SENTINEL,
     await_next_graph_stream_chunk,
     build_auto_resume_payload,
     is_ask_user_interrupt,
@@ -575,6 +576,7 @@ class Executor:
         loop_state_view: LoopStateView | None = None,
         origin_node: ClarificationOrigin = "execute",
         resume_answer_payload: dict[str, Any] | None = None,
+        step_id: str | None = None,  # IG-549: for heartbeat correlation
     ) -> AsyncGenerator[Any, None]:
         """Run ``CoreAgent.astream`` with interrupt handling.
 
@@ -587,6 +589,9 @@ class Executor:
         - When ``resume_answer_payload`` is set, the first CoreAgent call
           uses it as the initial ``Command(resume=...)`` (re-entry after the
           policy answered a prior clarification).
+        - IG-549: Heartbeat sentinels are yielded during long waits to keep
+          the stream alive and prevent client disconnects during slow tool
+          execution (browser_use, long searches).
         """
         interrupt_iterations = 0
         current_input: dict[str, Any] | Command = (
@@ -603,15 +608,25 @@ class Executor:
                 durability="exit",
             )
             # IG-506: LLM timeout handled by LLMRateLimitMiddleware, not chunk timeout.
-            # await_next_graph_stream_chunk only does cooperative cancellation checks.
+            # IG-549: Heartbeat interval keeps stream alive during long tool execution.
             try:
                 while True:
                     try:
-                        chunk = await await_next_graph_stream_chunk(chunk_iter)
+                        chunk = await await_next_graph_stream_chunk(
+                            chunk_iter,
+                            step_id=step_id,
+                        )
                     except StopAsyncIteration:
                         break
                     except asyncio.CancelledError:
                         raise
+
+                    # IG-549: Handle heartbeat sentinel - yield empty tuple to signal alive
+                    if chunk is _STREAM_HEARTBEAT_SENTINEL:
+                        yield _StreamCollectChunk.wire_event(
+                            ((), "custom", {"type": "step_heartbeat", "step_id": step_id})
+                        )
+                        continue
 
                     if isinstance(chunk, tuple) and len(chunk) == _TUPLE_LEN:
                         _namespace, mode, data = chunk
@@ -1751,6 +1766,7 @@ class Executor:
                 loop_state_view=self._clarification_loop_state_view,
                 origin_node="execute",
                 resume_answer_payload=self._clarification_resume_answer_payload,
+                step_id=step.id,  # IG-549: for heartbeat correlation
             )
 
             # Stream events and collect outcome metadata (RFC-211)

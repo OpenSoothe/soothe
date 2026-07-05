@@ -846,23 +846,31 @@ def derive_plan_action(
     return "new"
 
 
-def plan_generation_model_for_iteration(iteration: int) -> type[PlanGeneration]:
-    """Structured-output schema for plan-generate, with a first-wave step cap when needed.
+def plan_generation_model_for_iteration(
+    iteration: int,
+    *,
+    intake_label: str | None = None,
+) -> type[PlanGeneration]:
+    """Structured-output schema for plan-generate, with a step cap when needed.
 
     Args:
         iteration: StrangeLoop iteration (0 = first plan-generate for a new goal).
+        intake_label: Optional intake label; ``simple`` keeps the first-wave cap on later
+            iterations so lightweight goals cannot explode into dozens of execute steps.
 
     Returns:
-        ``PlanGeneration`` for iteration > 0; a subclass capped at ``FIRST_WAVE_MAX_STEPS`` steps
-        when ``iteration == 0``.
+        ``PlanGeneration`` when uncapped; otherwise a subclass limited to ``FIRST_WAVE_MAX_STEPS``.
     """
-    if iteration != 0:
+    from soothe.foundation.sloop.intention.models import IntakeLabel
+
+    cap_steps = iteration == 0 or intake_label == IntakeLabel.SIMPLE
+    if not cap_steps:
         return PlanGeneration
 
-    class PlanGenerationFirstWave(PlanGeneration):
+    class PlanGenerationCapped(PlanGeneration):
         steps: list[PlanGenerateStep] = Field(default_factory=list, max_length=FIRST_WAVE_MAX_STEPS)
 
-    return PlanGenerationFirstWave
+    return PlanGenerationCapped
 
 
 class StepResult(BaseModel):

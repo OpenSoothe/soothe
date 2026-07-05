@@ -11,8 +11,13 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from soothe.config.models import LLMRateLimitConfig
+from soothe.foundation.sloop.cognition.plan_step_safety import (
+    filter_filler_plan_steps,
+    intake_label_from_state,
+    max_plan_steps_for_state,
+    simple_intake_should_force_done,
+)
 from soothe.foundation.sloop.state.schemas import (
-    FIRST_WAVE_MAX_STEPS,
     AgentDecision,
     LoopState,
     PlanGeneration,
@@ -957,6 +962,7 @@ class LLMPlanner:
         iteration: int,
         *,
         thread_id: str | None,
+        intake_label: Any | None = None,
     ) -> Any:
         """PlanGeneration call: generate execution plan when goal incomplete (RFC-604).
 
@@ -974,7 +980,12 @@ class LLMPlanner:
             PlanGeneration with top-level decision fields and first-person reasoning.
         """
         plan_result, _ = await self._generate_plan_with_response(
-            messages, assessment, goal, iteration, thread_id=thread_id
+            messages,
+            assessment,
+            goal,
+            iteration,
+            thread_id=thread_id,
+            intake_label=intake_label,
         )
         from soothe.foundation.sloop.cognition.plan_step_briefs import (
             populate_plan_generate_full_descriptions,
@@ -990,6 +1001,7 @@ class LLMPlanner:
         iteration: int,
         *,
         thread_id: str | None,
+        intake_label: Any | None = None,
     ) -> tuple[Any, Any]:
         """PlanGeneration call with raw response for ledger recording (RFC-214).
 
@@ -1006,7 +1018,7 @@ class LLMPlanner:
         Returns:
             Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
         """
-        plan_schema = plan_generation_model_for_iteration(iteration)
+        plan_schema = plan_generation_model_for_iteration(iteration, intake_label=intake_label)
 
         model = _plan_phase_chat_model(self._plan_generate_model)
 
@@ -1228,17 +1240,30 @@ class LLMPlanner:
             if normalized is not result.decision:
                 result = result.model_copy(update={"decision": normalized})
 
-            if state.iteration == 0 and len(result.decision.steps) > FIRST_WAVE_MAX_STEPS:
+            filtered_steps = filter_filler_plan_steps(result.decision.steps)
+            if len(filtered_steps) != len(result.decision.steps):
                 logger.warning(
-                    "[PlanGen] Truncated first-wave steps from %d to %d",
+                    "[PlanGen] Dropped %d filler step(s) from plan",
+                    len(result.decision.steps) - len(filtered_steps),
+                )
+                result = result.model_copy(
+                    update={
+                        "decision": result.decision.model_copy(update={"steps": filtered_steps}),
+                    }
+                )
+
+            max_steps = max_plan_steps_for_state(state)
+            if max_steps is not None and len(result.decision.steps) > max_steps:
+                logger.warning(
+                    "[PlanGen] Truncated plan steps from %d to %d",
                     len(result.decision.steps),
-                    FIRST_WAVE_MAX_STEPS,
+                    max_steps,
                 )
                 result = result.model_copy(
                     update={
                         "decision": result.decision.model_copy(
                             update={
-                                "steps": result.decision.steps[:FIRST_WAVE_MAX_STEPS],
+                                "steps": result.decision.steps[:max_steps],
                             }
                         ),
                     }
@@ -1358,6 +1383,18 @@ class LLMPlanner:
                 logger.warning("[Guard] Reject 'done' at iter=0 no execution")
                 assessment.status = "replan"
                 assessment.goal_progress = "none"
+        elif simple_intake_should_force_done(state, assessment):
+            logger.info(
+                "[Plan] simple intake: forcing done after sufficient evidence (steps=%d, hint=%s)",
+                len(state.step_results),
+                state.prior_progress.derived_progress_hint
+                if state.prior_progress is not None
+                else "n/a",
+            )
+            assessment.status = "done"
+            if assessment.goal_progress == "none":
+                assessment.goal_progress = "high"
+            assessment.require_goal_completion = True
         return assessment
 
     async def generate_from_assessment(
@@ -1475,6 +1512,7 @@ class LLMPlanner:
             goal,
             state.iteration,
             thread_id=state.thread_id,
+            intake_label=intake_label_from_state(state),
         )
 
         from soothe.foundation.sloop.cognition.plan_step_briefs import (
@@ -1742,6 +1780,7 @@ class LLMPlanner:
                         goal,
                         state.iteration,
                         thread_id=state.thread_id,
+                        intake_label=intake_label_from_state(state),
                     )
                     plan_gen_ms = (time.perf_counter() - t_plan) * 1000
                     llm_calls = 2

@@ -30,6 +30,8 @@ WORKER_MSG_TIMEOUT = "timeout"
 # Backpressure: block worker thread until a delivery slot is available.
 _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 5.0
 _GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 60.0
+# IG-549: Execute phase can run for minutes (browser_use, long searches); use longer timeout
+_EXECUTE_PHASE_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 30.0
 
 # IG-477: Limit in-flight chunk deliveries (blocks worker thread when full)
 # IG-535: Tuned for 32 concurrent loops - 100 slots per worker allows heavier per-loop streams
@@ -71,6 +73,25 @@ def _chunk_is_goal_completion(payload: Any) -> bool:
     return isinstance(msg, dict) and msg.get("phase") == "goal_completion"
 
 
+def _chunk_is_execute_phase(payload: Any) -> bool:
+    """Return True when a worker chunk carries execute phase content.
+
+    IG-549: Execute phase can run for minutes during tool execution (browser_use,
+    long searches). These chunks should use longer timeout to avoid being dropped.
+    """
+    if not isinstance(payload, tuple) or len(payload) < 3:
+        return False
+    data = payload[2]
+    if not isinstance(data, tuple) or not data:
+        return False
+    msg = data[0]
+    if not isinstance(msg, dict):
+        return False
+    phase = msg.get("phase", "")
+    # Execute phase includes: tool streaming, step execution, subagent wire events
+    return phase in ("execute", "tool_result", "stream_event") or phase.startswith("execute:")
+
+
 @dataclass(frozen=True)
 class ResponsePusher:
     """Push stream responses from a worker thread into the main asyncio.Queue.
@@ -103,17 +124,23 @@ class ResponsePusher:
         For CHUNK messages, blocks the worker thread until a delivery slot is
         available (semaphore acquire). This applies backpressure to LangGraph
         ``astream`` so memory cannot grow unbounded when the consumer is slow.
+
+        IG-549: Uses longer timeout for execute-phase and goal_completion chunks
+        since these can run for minutes during long tool execution (browser_use,
+        web searches).
         """
         if self._loop.is_closed():
             return
 
         acquired_slot = False
         if msg_type == WORKER_MSG_CHUNK:
-            acquire_timeout = (
-                _GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
-                if _chunk_is_goal_completion(payload)
-                else _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
-            )
+            # IG-549: Tiered timeout based on chunk phase
+            if _chunk_is_goal_completion(payload):
+                acquire_timeout = _GOAL_COMPLETION_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
+            elif _chunk_is_execute_phase(payload):
+                acquire_timeout = _EXECUTE_PHASE_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
+            else:
+                acquire_timeout = _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
             # Block worker thread until downstream catches up (backpressure).
             slots = self._pending_slots()
             if not slots.acquire(timeout=acquire_timeout):
@@ -197,4 +224,6 @@ __all__ = [
     "_DEFAULT_SLOTS_PER_WORKER",
     "_pending_slots_for",
     "_chunk_is_goal_completion",
+    "_chunk_is_execute_phase",
+    "_EXECUTE_PHASE_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS",
 ]

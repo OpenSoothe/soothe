@@ -16,6 +16,7 @@ from soothe_cli.tui.spinner_labels import (
 )
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
+    _execute_progress_hint,
     _maybe_set_running_tools_spinner,
     _maybe_set_thinking_spinner,
 )
@@ -59,7 +60,24 @@ async def test_maybe_set_thinking_spinner_skips_during_clarification() -> None:
 async def test_maybe_set_thinking_spinner_when_idle() -> None:
     adapter = TextualUIAdapter(MagicMock(), MagicMock(), set_spinner=AsyncMock())
     await _maybe_set_thinking_spinner(adapter)
-    adapter._set_spinner.assert_awaited_once_with(SPINNER_LABEL_THINKING)
+    adapter._set_spinner.assert_awaited_once_with(
+        SPINNER_LABEL_THINKING,
+        hint_extra=None,
+    )
+
+
+def test_execute_progress_hint_shows_completed_total() -> None:
+    adapter = TextualUIAdapter(MagicMock(), MagicMock())
+    adapter._execute_wave_total = 5
+    adapter._execute_wave_completed = 2
+    assert _execute_progress_hint(adapter) == "2/5"
+
+
+def test_execute_progress_hint_hidden_for_single_step() -> None:
+    adapter = TextualUIAdapter(MagicMock(), MagicMock())
+    adapter._execute_wave_total = 1
+    adapter._execute_wave_completed = 1
+    assert _execute_progress_hint(adapter) is None
 
 
 @pytest.mark.asyncio
@@ -67,7 +85,10 @@ async def test_maybe_set_running_tools_spinner_when_tools_pending() -> None:
     adapter = TextualUIAdapter(MagicMock(), MagicMock(), set_spinner=AsyncMock())
     adapter._tool_to_step["tc-1"] = MagicMock()
     await _maybe_set_running_tools_spinner(adapter)
-    adapter._set_spinner.assert_awaited_once_with(SPINNER_LABEL_TOOLS)
+    adapter._set_spinner.assert_awaited_once_with(
+        SPINNER_LABEL_TOOLS,
+        hint_extra=None,
+    )
 
 
 def test_loading_widget_activate_status_clears_pause() -> None:
