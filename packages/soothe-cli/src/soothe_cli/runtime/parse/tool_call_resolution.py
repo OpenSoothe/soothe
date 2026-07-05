@@ -152,7 +152,7 @@ def should_ingest_tool_for_step_stats(
     """Whether the TUI should register a tool row for step-card stats.
 
     Main execute-graph tools are tracked as soon as ``tool_call_id`` and ``tool_name``
-    are known; display does not wait for streamed args. Subgraph explore tools often
+    are known; display does not wait for streamed args. Subgraph tools often
     arrive with placeholder kwargs before real args.
     """
     from soothe_sdk.ux.task_namespace import is_step_level_task_tool_id
@@ -165,7 +165,7 @@ def should_ingest_tool_for_step_stats(
         return True
     if is_step_card_scope:
         return not is_step_level_task_tool_id(tcid)
-    # Subgraph explore tools often arrive with ``{"_subgraph_tool": true}`` before real args.
+    # Subgraph tools often arrive with ``{"_subgraph_tool": true}`` before real args.
     return is_task_level_subgraph_tool_call_id(tcid)
 
 

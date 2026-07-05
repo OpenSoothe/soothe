@@ -1,7 +1,7 @@
 """Format subagent Task-scope assistant blobs for CLI/TUI.
 
-Explore and Tacitus emit structured JSON in subgraph assistant streams. Clients
-show user-facing summaries only; internal planning JSON is suppressed.
+Tacitus emits structured JSON in subgraph assistant streams. Clients show
+user-facing summaries only; internal planning JSON is suppressed.
 """
 
 from __future__ import annotations
@@ -9,10 +9,6 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from typing import Any
-
-from soothe_cli.runtime.presentation.explore_task_display import (
-    format_explore_task_json_blob_for_display,
-)
 
 
 def _is_tacitus_internal_json_object(obj: dict[str, Any]) -> bool:
@@ -93,7 +89,7 @@ def format_subagent_task_assistant_for_display(
 
     Args:
         raw: Full assistant text from a subgraph namespace.
-        subagent_type: Built-in subagent id when known (``tacitus``, ``explore``, …).
+        subagent_type: Built-in subagent id when known (``tacitus``, …).
 
     Returns:
         Scrubbed one-line text, or ``""`` when only internal payloads remain.
@@ -108,7 +104,6 @@ def format_subagent_task_assistant_for_display(
         if internal_present:
             return ""
         text = _strip_concatenated_json_objects(text, predicate=_is_tacitus_internal_json_object)
-    text = format_explore_task_json_blob_for_display(text)
     return (text or "").strip()
 
 

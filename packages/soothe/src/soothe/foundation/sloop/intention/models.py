@@ -84,7 +84,7 @@ class RoutingClassification(BaseModel):
     )
     preferred_subagent: str | None = Field(
         default=None,
-        description="Preferred subagent name from slash routing or classifier (e.g. 'explore', 'research')",
+        description="Preferred subagent name from slash routing or classifier (e.g. 'tacitus', 'plan')",
     )
     routing_hint: str | None = Field(
         default=None, description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc."

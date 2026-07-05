@@ -235,7 +235,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
             subagent_state["messages"] = [HumanMessage(content=description)]
             # IG-340: Propagate workspace from config.configurable to subagent
             # state. The executor passes workspace in config (not graph state),
-            # so subagents like explore never see the thread workspace without
+            # so subagents never see the thread workspace without
             # this explicit injection.
             configurable = (runtime.config or {}).get("configurable", {})
             cfg_workspace = configurable.get("workspace")

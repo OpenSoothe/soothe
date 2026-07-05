@@ -40,8 +40,8 @@ dependencies, risks, and open questions.
 Rules:
 - Output the **full** plan in `plan_markdown` each round (not a diff), refined as you learn.
 - Set `finish_planning` true when the plan is actionable and stable enough to hand back.
-- Assume readonly repo recon happens on execute-step threads via file tools; do not delegate \
-explore-style subagents.
+- Assume readonly repo recon happens on execute-step threads via file tools; do not \
+delegate recon-style subagents.
 - If context is thin, still produce the best plan you can and list assumptions explicitly."""
 
 

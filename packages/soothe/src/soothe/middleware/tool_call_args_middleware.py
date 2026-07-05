@@ -25,7 +25,7 @@ class ToolCallArgsMiddleware(AgentMiddleware):
     """Middleware that records tool call args for display purposes.
 
     Captures kwargs from ToolCallRequest at invocation time so downstream
-    stream code can attach them to unified wire ids (explore subagent display).
+    stream code can attach them to unified wire ids (subagent display).
 
     This is a lightweight replacement for ToolConcurrencyMiddleware's
     registry functionality, without the ineffective semaphore (IG-519).

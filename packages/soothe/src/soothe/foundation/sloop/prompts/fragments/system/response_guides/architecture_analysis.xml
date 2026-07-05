@@ -4,4 +4,4 @@ Architecture analysis approach:
 - List 5-10 critical components with descriptions
 - Identify design patterns with concrete examples
 - Provide specific library names for dependencies
-- Large repos: disjoint readonly `task`/explore scopes, then synthesize
+- Large repos: disjoint readonly `task` scopes, then synthesize

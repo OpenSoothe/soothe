@@ -30,7 +30,7 @@ def create_subagent_card(
     Args:
         step_id: Parent step ID (same as parent step card, for row classification).
         description: Task description from tool args.
-        subagent_type: Subagent type name (e.g., "explore", "code-review").
+        subagent_type: Subagent type name (e.g., "tacitus", "browser_use").
         parent_step_id: ID of the parent step card.
         parent_task_key: Key to match the task row on the parent step.
         task_idx: Task index within the step (used for filtering subgraph rows).

@@ -527,7 +527,7 @@ class SystemPromptMiddleware(AgentMiddleware):
             if memories and "memory" in triggered:
                 static_sections.append(self._build_memory_section(memories))
 
-        # Subagent routing directive (explicit /research, /explore, /plan, or other routed subagent id)
+        # Subagent routing directive (explicit /research, /plan, or other routed subagent id)
         subagent_directive = state.get("_subagent_routing_directive") if state else None
         if subagent_directive:
             directive_section = (
