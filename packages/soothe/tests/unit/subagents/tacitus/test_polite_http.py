@@ -310,7 +310,21 @@ class TestPoliteHTTPClient:
 
     @pytest.mark.asyncio
     async def test_exhaust_retries(self):
-        client = PoliteHTTPClient(max_retries=2, base_delay=0.01)
+        from soothe.subagents.tacitus.polite_http import (
+            DomainRateLimiter,
+            RateLimit,
+            RateLimitConfig,
+        )
+
+        # Use a fast rate limiter to avoid 2s wait per retry
+        fast_config = RateLimitConfig(
+            limits={"example.com": RateLimit(rps=100.0, burst=10, concurrent=10)}
+        )
+        client = PoliteHTTPClient(
+            rate_limiter=DomainRateLimiter(fast_config),
+            max_retries=2,
+            base_delay=0.01,
+        )
         mock_request = AsyncMock(side_effect=TimeoutError("timeout"))
 
         with pytest.raises(asyncio.TimeoutError):
