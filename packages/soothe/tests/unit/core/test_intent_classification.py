@@ -205,7 +205,8 @@ class TestIntakeClassifier:
             result = await classifier.classify_intake("who are u")
         assert result.intake_label == IntakeLabel.CHITCHAT
         assert result.chitchat_response == (
-            "I'm Soothe, your AI assistant. How can I help you today?"
+            "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. "
+            "How can I help you today?"
         )
 
     async def test_fallback_defaults_to_complex(self) -> None:
