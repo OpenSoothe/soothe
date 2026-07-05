@@ -52,6 +52,7 @@ __all__ = [
     "DaemonStatusParams",
     "DaemonShutdownParams",
     "ConfigGetParams",
+    "ConfigReloadParams",
     # Skills & models
     "SkillsListParams",
     "ModelsListParams",
@@ -294,6 +295,10 @@ class ConfigGetParams(ParamsBase):
     section: str | None = None
 
 
+class ConfigReloadParams(EmptyParams):
+    """Params for method=config_reload, type=request (no required fields)."""
+
+
 # ---------------------------------------------------------------------------
 # Skills & models param models
 # ---------------------------------------------------------------------------
@@ -487,6 +492,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "daemon_status"): DaemonStatusParams,
     ("request", "daemon_shutdown"): DaemonShutdownParams,
     ("request", "config_get"): ConfigGetParams,
+    ("request", "config_reload"): ConfigReloadParams,
     ("request", "skills_list"): SkillsListParams,
     ("request", "invoke_skill"): InvokeSkillParams,
     ("request", "models_list"): ModelsListParams,

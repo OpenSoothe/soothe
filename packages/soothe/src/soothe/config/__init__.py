@@ -48,6 +48,16 @@ from soothe.config.models import (
     VectorStoreRouter,
     WebSearchConfig,
 )
+from soothe.config.reload import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_DAEMON_CONFIG_PATH,
+    ConfigReloadCallback,
+    ConfigReloadEvent,
+    ConfigWatcher,
+    get_config_watcher,
+    start_config_watcher,
+    stop_config_watcher,
+)
 from soothe.config.settings import SootheConfig
 from soothe.foundation.sloop.prompts import (
     _DEFAULT_SYSTEM_PROMPT,
@@ -57,6 +67,8 @@ from soothe.foundation.sloop.prompts import (
 )
 
 __all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_DAEMON_CONFIG_PATH",
     "DEFAULT_STRANGE_LOOP_MAX_ITERATIONS",
     "DEFAULT_EXECUTE_TIMEOUT",
     "SOOTHE_HOME",
@@ -66,8 +78,14 @@ __all__ = [
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
-    "StrangeLoopConfig",
     "AutopilotConfig",
+    "ConfigReloadCallback",
+    "ConfigReloadEvent",
+    "ConfigWatcher",
+    "get_config_watcher",
+    "start_config_watcher",
+    "stop_config_watcher",
+    "StrangeLoopConfig",
     "ComplexityThresholds",
     "ConsoleLoggingConfig",
     "DurabilityProtocolConfig",

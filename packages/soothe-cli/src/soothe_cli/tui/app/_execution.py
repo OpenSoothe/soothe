@@ -889,25 +889,42 @@ class _ExecutionMixin:
         self._inflight_turn_stats = turn_stats
         self._inflight_turn_start = time.monotonic()
         try:
-            await execute_task_textual(
-                user_input=message,
-                daemon_session=self._daemon_session,
-                assistant_id=self._assistant_id,
-                session_state=self._session_state,
-                adapter=self._ui_adapter,
-                image_tracker=self._image_tracker,
-                sandbox_type=self._sandbox_type,
-                workspace=self._cwd,
-                message_kwargs=message_kwargs,
-                context=CLIContext(
-                    model=self._model_override,
-                    model_params=self._model_params_override or {},
-                ),
-                turn_stats=turn_stats,
-                skip_daemon_send_turn=skip_daemon_send_turn,
-                clarification_mode=getattr(self, "_clarification_mode", None),
-                is_shutting_down=lambda: getattr(self, "_exit", False),
-            )
+            for attempt in (1, 2):
+                try:
+                    await execute_task_textual(
+                        user_input=message,
+                        daemon_session=self._daemon_session,
+                        assistant_id=self._assistant_id,
+                        session_state=self._session_state,
+                        adapter=self._ui_adapter,
+                        image_tracker=self._image_tracker,
+                        sandbox_type=self._sandbox_type,
+                        workspace=self._cwd,
+                        message_kwargs=message_kwargs,
+                        context=CLIContext(
+                            model=self._model_override,
+                            model_params=self._model_params_override or {},
+                        ),
+                        turn_stats=turn_stats,
+                        skip_daemon_send_turn=skip_daemon_send_turn,
+                        clarification_mode=getattr(self, "_clarification_mode", None),
+                        is_shutting_down=lambda: getattr(self, "_exit", False),
+                    )
+                    break
+                except Exception as e:
+                    if (
+                        attempt == 1
+                        and self._daemon_session is not None
+                        and is_daemon_connection_error(e)
+                    ):
+                        try:
+                            await self._daemon_session.ensure_connected()
+                            logger.info("Retrying turn after daemon reconnect")
+                            skip_daemon_send_turn = False
+                            continue
+                        except (ConnectionError, OSError, TimeoutError):
+                            pass
+                    raise
         except Exception as e:  # Resilient tool rendering
             logger.exception("Agent execution failed")
             if is_daemon_connection_error(e):

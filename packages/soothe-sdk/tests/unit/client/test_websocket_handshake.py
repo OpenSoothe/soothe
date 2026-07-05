@@ -276,6 +276,8 @@ async def test_heartbeat_timeout_closes_connection() -> None:
     # Start heartbeat with a very short timeout
     client._heartbeat_timeout_ms = 50
     client._start_heartbeat()
+    # Simulate no pong since the heartbeat task began (e.g. dead daemon).
+    client._last_pong_monotonic = time.monotonic() - 100
 
     # Wait a bit for the heartbeat loop to detect the timeout
     await asyncio.sleep(0.15)
@@ -289,6 +291,40 @@ async def test_heartbeat_timeout_closes_connection() -> None:
         hb_task.cancel()
         with contextlib_suppress():
             await hb_task
+
+
+@pytest.mark.asyncio
+async def test_connect_resets_stale_heartbeat_liveness(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reconnect must not inherit pre-death pong timestamps (daemon restart case)."""
+    import time
+
+    from websockets.asyncio.connection import State
+
+    client = WebSocketClient()
+    client._last_pong_monotonic = time.monotonic() - 120.0
+
+    mock_ws = MagicMock()
+    mock_ws.state = State.OPEN
+    mock_ws.close = AsyncMock()
+
+    async def _fake_connect(*_args, **_kwargs):
+        return mock_ws
+
+    monkeypatch.setattr(
+        "soothe_sdk.client.websocket.websockets.asyncio.client.connect",
+        _fake_connect,
+    )
+
+    await client.connect()
+
+    assert client._last_pong_monotonic > time.monotonic() - 5.0
+
+    hb_task = client._heartbeat_task
+    if hb_task is not None and not hb_task.done():
+        hb_task.cancel()
+        with contextlib_suppress():
+            await hb_task
+    await client.close()
 
 
 def contextlib_suppress():

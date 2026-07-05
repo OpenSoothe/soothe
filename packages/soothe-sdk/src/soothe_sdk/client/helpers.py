@@ -275,6 +275,27 @@ async def request_daemon_shutdown(client: WebSocketClient, timeout: float = 10.0
         raise RuntimeError(f"Shutdown failed: {e}") from e
 
 
+async def request_daemon_config_reload(
+    client: WebSocketClient, timeout: float = 5.0
+) -> dict[str, Any]:
+    """Request daemon config reload via RPC.
+
+    Args:
+        client: Connected WebSocketClient
+        timeout: Request timeout in seconds
+
+    Returns:
+        Response dict with success status and optional error message
+
+    Raises:
+        ConnectionError: If daemon not reachable
+        RuntimeError: If reload request fails
+    """
+    await _ensure_handshake(client, timeout=timeout)
+    response = await client.request("config_reload", {}, timeout=timeout)
+    return response
+
+
 async def fetch_skills_catalog(client: WebSocketClient, timeout: float = 15.0) -> list[dict]:
     """Fetch skills catalog via RPC.
 

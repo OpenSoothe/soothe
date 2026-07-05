@@ -76,64 +76,96 @@ class _MessagesMixin:
             )
             return
 
-        try:
-            # Fetch + convert, or reuse preloaded payload on loop switch.
-            payload = (
-                preloaded_payload
-                if preloaded_payload is not None
-                else await self._fetch_loop_history_data(history_loop_id)
-            )
-            if not payload.messages:
+        async with self._loop_history_load_lock:
+            if history_loop_id == self._loop_history_loaded_for:
+                logger.debug(
+                    "Skipping duplicate history load for loop %s",
+                    history_loop_id,
+                )
                 return
 
-            # Seed token cache from persisted state
-            if payload.context_tokens > 0:
-                self._on_tokens_update(payload.context_tokens)
-
-            # 3. Bulk load into store (sets visible window)
-            _archived, visible = self._message_store.bulk_load(payload.messages)
-
-            # 5. Cache container ref (single query)
             try:
-                messages_container = self.query_one("#messages", Container)
-            except NoMatches:
-                return
+                await self._clear_messages()
 
-            # 6-7. Create and mount only visible widgets (max WINDOW_SIZE)
-            from soothe_cli.tui.binding import message_to_widget
+                # Fetch + convert, or reuse preloaded payload on loop switch.
+                payload = (
+                    preloaded_payload
+                    if preloaded_payload is not None
+                    else await self._fetch_loop_history_data(history_loop_id)
+                )
+                if not payload.messages:
+                    return
 
-            widgets = [message_to_widget(msg_data) for msg_data in visible]
-            if widgets:
-                await messages_container.mount(*widgets)
+                # Seed token cache from persisted state
+                if payload.context_tokens > 0:
+                    self._on_tokens_update(payload.context_tokens)
 
-            # 8. Render assistant markdown progressively to avoid startup stalls
-            for widget, msg_data in zip(widgets, visible, strict=False):
-                if isinstance(widget, AssistantMessage) and msg_data.content:
-                    self._enqueue_hydrated_assistant_render(widget, msg_data.content)
+                # Bulk load into store (sets visible window; replaces prior data).
+                _archived, visible = self._message_store.bulk_load(
+                    payload.messages,
+                    replace=True,
+                )
 
-            # 9. Add footer immediately and resolve link asynchronously
-            loop_msg_widget = AppMessage(f"Resumed loop: {history_loop_id}")
-            await self._mount_message(loop_msg_widget)
-            self._schedule_loop_message_link(
-                loop_msg_widget,
-                prefix="Resumed loop",
-                loop_id=history_loop_id,
-            )
+                # Cache container ref (single query)
+                try:
+                    messages_container = self.query_one("#messages", Container)
+                except NoMatches:
+                    return
 
-            # 10. Scroll once to bottom after history loads
-            def scroll_to_end() -> None:
-                with suppress(NoMatches):
-                    chat = self.query_one("#chat", VerticalScroll)
-                    chat.scroll_end(animate=False, immediate=True)
+                # Create and mount only visible widgets (max WINDOW_SIZE).
+                from soothe_cli.tui.binding import message_to_widget
 
-            self.set_timer(0.1, scroll_to_end)
+                visible = self._dedupe_message_data_by_id(visible)
+                widgets = [message_to_widget(msg_data) for msg_data in visible]
+                if widgets:
+                    await messages_container.mount(*widgets)
 
-        except Exception as e:  # Resilient history loading
-            logger.exception(
-                "Failed to load conversation history for %s",
-                history_loop_id,
-            )
-            await self._mount_message(AppMessage(f"Could not load history: {e}"))
+                # Render assistant markdown progressively to avoid startup stalls
+                for widget, msg_data in zip(widgets, visible, strict=False):
+                    if isinstance(widget, AssistantMessage) and msg_data.content:
+                        self._enqueue_hydrated_assistant_render(widget, msg_data.content)
+
+                # Add footer immediately and resolve link asynchronously
+                loop_msg_widget = AppMessage(f"Resumed loop: {history_loop_id}")
+                await self._mount_message(loop_msg_widget)
+                self._schedule_loop_message_link(
+                    loop_msg_widget,
+                    prefix="Resumed loop",
+                    loop_id=history_loop_id,
+                )
+
+                # Scroll once to bottom after history loads
+                def scroll_to_end() -> None:
+                    with suppress(NoMatches):
+                        chat = self.query_one("#chat", VerticalScroll)
+                        chat.scroll_end(animate=False, immediate=True)
+
+                self.set_timer(0.1, scroll_to_end)
+                self._loop_history_loaded_for = history_loop_id
+
+            except Exception as e:  # Resilient history loading
+                logger.exception(
+                    "Failed to load conversation history for %s",
+                    history_loop_id,
+                )
+                await self._mount_message(AppMessage(f"Could not load history: {e}"))
+
+    @staticmethod
+    def _dedupe_message_data_by_id(messages: list[Any]) -> list[Any]:
+        """Return messages in order, keeping the last entry per ``MessageData.id``."""
+        seen: set[str] = set()
+        deduped_reversed: list[Any] = []
+        for msg in reversed(messages):
+            msg_id = getattr(msg, "id", None)
+            if not isinstance(msg_id, str) or not msg_id:
+                deduped_reversed.append(msg)
+                continue
+            if msg_id in seen:
+                continue
+            seen.add(msg_id)
+            deduped_reversed.append(msg)
+        deduped_reversed.reverse()
+        return deduped_reversed
 
     async def _mount_message(
         self,
@@ -274,6 +306,7 @@ class _MessagesMixin:
 
     async def _clear_messages(self) -> None:
         """Clear the messages area and message store."""
+        self._loop_history_loaded_for = None
         # Clear the message store first
         self._message_store.clear()
         self._deferred_assistant_renders.clear()

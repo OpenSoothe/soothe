@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from soothe.config import SootheConfig
+from soothe.config.reload import ConfigReloadEvent, ConfigWatcher
 from soothe.foundation.sloop.state.persistence.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
@@ -240,6 +241,11 @@ class SootheDaemon(DaemonHandlersMixin):
             self._auth_handler = AuthHandler(self._identity_service)
             logger.info("[Identity] Service enabled")
 
+        # Config hot-reload support (FMR-04)
+        self._config_lock = threading.RLock()  # Protects _config and _daemon_config swaps
+        self._config_watcher: ConfigWatcher | None = None
+        self._config_reload_enabled = False
+
     def _create_identity_service(self) -> Any:
         """Create IdentityService from daemon identity config (RFC-307).
 
@@ -299,6 +305,168 @@ class SootheDaemon(DaemonHandlersMixin):
             config=self._daemon_config.identity,
             thread_context=self._thread_registry,
         )
+
+    def _on_sighup_reload(self) -> None:
+        """Handle SIGHUP signal for config reload."""
+        logger.info("Received SIGHUP, triggering config reload")
+        self.reload_config_now()
+
+    # -- config hot-reload --------------------------------------------------
+
+    def _on_config_reload(self, event: ConfigReloadEvent) -> None:
+        """Handle config reload event from ConfigWatcher.
+
+        Atomically swaps config instances and emits event on the bus.
+
+        Args:
+            event: Config reload event with old/new config and error info.
+        """
+        if event.error is not None:
+            logger.error(
+                "Config reload failed for %s: %s",
+                event.config_type,
+                event.error,
+            )
+            self._emit_config_reload_event(event)
+            return
+
+        with self._config_lock:
+            if event.config_type == "agent":
+                self._config = event.new_config
+                logger.info("Agent config reloaded from %s", event.config_path)
+            elif event.config_type == "daemon":
+                self._daemon_config = event.new_config
+                logger.info("Daemon config reloaded from %s", event.config_path)
+            else:
+                logger.warning("Unknown config type reloaded: %s", event.config_type)
+                return
+
+        self._emit_config_reload_event(event)
+
+    def _emit_config_reload_event(self, event: ConfigReloadEvent) -> None:
+        """Emit config reload event on the event bus for client notification.
+
+        Args:
+            event: Config reload event to emit.
+        """
+        import asyncio
+
+        # Extract audit info if available
+        audit_entry = event.audit_entry
+        old_hash = audit_entry.old_config_hash if audit_entry else ""
+        new_hash = audit_entry.new_config_hash if audit_entry else ""
+        timestamp = audit_entry.timestamp if audit_entry else ""
+
+        payload = {
+            "type": "event",
+            "event_type": "config_reload",
+            "config_type": event.config_type,
+            "config_path": str(event.config_path),
+            "success": event.error is None,
+            "error": str(event.error) if event.error else None,
+            "old_config_hash": old_hash,
+            "new_config_hash": new_hash,
+            "timestamp": timestamp,
+        }
+
+        if self._event_bus is not None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_soon_threadsafe(
+                    lambda: asyncio.ensure_future(
+                        self._event_bus.publish("global", payload),
+                    )
+                )
+            except RuntimeError:
+                logger.debug("Could not emit config reload event: no running loop")
+
+    def enable_config_reload(
+        self,
+        agent_config_path: str | None = None,
+        daemon_config_path: str | None = None,
+        validate_before_reload: bool = True,
+    ) -> None:
+        """Enable hot-reload for agent and/or daemon config files.
+
+        Args:
+            agent_config_path: Path to agent config.yml (defaults to ~/.soothe/config/config.yml).
+            daemon_config_path: Path to daemon.yml (defaults to ~/.soothe/config/daemon.yml).
+            validate_before_reload: Whether to validate config before swapping (default True).
+                When True, the loaded config undergoes Pydantic validation before being swapped
+                into the active config. If validation fails, the swap is skipped and an error
+                is logged with ConfigReloadedEvent emitted with the error field.
+        """
+        from pathlib import Path
+
+        from pydantic import BaseModel, ValidationError
+        from soothe.config.reload import DEFAULT_CONFIG_PATH, DEFAULT_DAEMON_CONFIG_PATH
+
+        if self._config_watcher is not None:
+            logger.warning("Config reload already enabled")
+            return
+
+        agent_path = Path(agent_config_path or DEFAULT_CONFIG_PATH)
+        daemon_path = Path(daemon_config_path or DEFAULT_DAEMON_CONFIG_PATH)
+
+        self._config_watcher = ConfigWatcher(debounce_seconds=1.0)
+
+        # Create validators that perform Pydantic validation
+        def _validate_pydantic_config(config: BaseModel) -> bool:
+            """Validate a Pydantic config model before swap."""
+            try:
+                # Re-validate to catch any issues (loader already validates, but this is explicit)
+                config.model_validate(config.model_dump())
+                return True
+            except ValidationError as e:
+                logger.error("Config validation failed: %s", e)
+                return False
+
+        if agent_path.exists():
+            self._config_watcher.watch_config(
+                path=agent_path,
+                config_type="agent",
+                loader=lambda: SootheConfig.from_yaml_file(str(agent_path)),
+                callback=self._on_config_reload,
+                validator=_validate_pydantic_config if validate_before_reload else None,
+            )
+        else:
+            logger.debug("Agent config path does not exist, skipping watch: %s", agent_path)
+
+        if daemon_path.exists():
+            self._config_watcher.watch_config(
+                path=daemon_path,
+                config_type="daemon",
+                loader=lambda: SootheDaemonConfig.from_yaml_file(str(daemon_path)),
+                callback=self._on_config_reload,
+                validator=_validate_pydantic_config if validate_before_reload else None,
+            )
+        else:
+            logger.debug("Daemon config path does not exist, skipping watch: %s", daemon_path)
+
+        self._config_watcher.start()
+        self._config_reload_enabled = True
+        logger.info(
+            "Config hot-reload enabled (SIGHUP triggers reload, validation=%s)",
+            validate_before_reload,
+        )
+
+    def disable_config_reload(self) -> None:
+        """Disable hot-reload and stop the config watcher."""
+        if self._config_watcher is None:
+            return
+
+        self._config_watcher.stop()
+        self._config_watcher = None
+        self._config_reload_enabled = False
+        logger.info("Config hot-reload disabled")
+
+    def reload_config_now(self) -> None:
+        """Manually trigger immediate config reload (bypass debounce)."""
+        if self._config_watcher is None:
+            logger.warning("Config reload not enabled, cannot reload")
+            return
+
+        self._config_watcher.reload_now()
 
     async def _cancel_loop_for_session(self, loop_id: str) -> None:
         """Cancel in-flight work for a loop when a client disconnects (IG-408)."""
@@ -925,6 +1093,14 @@ class SootheDaemon(DaemonHandlersMixin):
                 signals.append(signal.SIGINT)
             for sig in signals:
                 loop.add_signal_handler(sig, self.request_stop)
+
+            # SIGHUP handler for config reload (FMR-04)
+            try:
+                loop.add_signal_handler(signal.SIGHUP, self._on_sighup_reload)
+                logger.debug("SIGHUP handler installed for config reload")
+            except (ValueError, OSError):
+                # SIGHUP not available on this platform (e.g., Windows)
+                logger.debug("SIGHUP not available on this platform")
         except RuntimeError:
             logger.debug("Cannot set signal handlers (not main thread)")
 
@@ -1315,6 +1491,11 @@ class SootheDaemon(DaemonHandlersMixin):
         # IG-475: Stop memory profiler if running
         if self._memory_profiler is not None:
             self._memory_profiler.stop()
+
+        # Stop config watcher if enabled (FMR-04)
+        if self._config_watcher is not None:
+            self._config_watcher.stop()
+            self._config_watcher = None
 
         # RFC-229: Stop CronService monitoring loop
         if self._cron_service is not None:

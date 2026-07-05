@@ -100,7 +100,12 @@ class MessageStore:
         self._index[message.id] = message
         self._visible_end = len(self._messages)
 
-    def bulk_load(self, messages: list[MessageData]) -> tuple[list[MessageData], list[MessageData]]:
+    def bulk_load(
+        self,
+        messages: list[MessageData],
+        *,
+        replace: bool = False,
+    ) -> tuple[list[MessageData], list[MessageData]]:
         """Load many messages at once, keeping only the tail visible.
 
         This is optimized for thread resumption: all messages are stored as
@@ -109,10 +114,14 @@ class MessageStore:
 
         Args:
             messages: Ordered list of message data to load.
+            replace: When ``True``, discard any prior store contents first.
+                Use for loop resume so repeated loads do not append duplicates.
 
         Returns:
             Tuple of (archived, visible) message lists.
         """
+        if replace:
+            self.clear()
         self._messages.extend(messages)
         for msg in messages:
             if msg.id in self._index:

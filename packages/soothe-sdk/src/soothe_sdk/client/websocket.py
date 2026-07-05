@@ -197,6 +197,12 @@ class WebSocketClient:
         if self._ws is not None:
             await self.close()
 
+        # Fresh transport — do not inherit liveness timestamps from a prior socket.
+        self._last_pong_monotonic = time.monotonic()
+        self._handshake_complete = False
+        self._negotiated_capabilities = set()
+        self._heartbeat_interval_ms = 0
+
         try:
             # Transport-level keepalive: daemon heartbeats are loop-scoped and only
             # while a query runs; without client pings, long idle TCP can be dropped.
@@ -419,6 +425,10 @@ class WebSocketClient:
             self._ws = None
             self._connected = False
             self._pending_events.clear()
+            self._handshake_complete = False
+            self._negotiated_capabilities = set()
+            self._heartbeat_interval_ms = 0
+            self._last_pong_monotonic = 0.0
 
     async def send(self, message: dict[str, Any]) -> None:
         """Send a message to the daemon.
@@ -1073,6 +1083,8 @@ class WebSocketClient:
         interval_s = self._heartbeat_interval_ms / 1000.0
         if interval_s <= 0:
             return
+        # Baseline liveness for this socket — ignore pre-reconnect pong timestamps.
+        self._last_pong_monotonic = time.monotonic()
         self._heartbeat_task = asyncio.create_task(
             self._heartbeat_loop(interval_s),
             name=f"soothe-ws-heartbeat-{self._client_id}",

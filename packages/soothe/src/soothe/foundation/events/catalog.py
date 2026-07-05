@@ -66,6 +66,8 @@ from .constants import (
     BRANCH_PRUNED,
     BRANCH_RETRY_STARTED,
     CHECKPOINT_SAVED,
+    # System - Config
+    CONFIG_RELOADED,
     # System - Daemon
     DAEMON_HEARTBEAT,
     GOAL_BATCH_STARTED,
@@ -202,6 +204,37 @@ class DaemonHeartbeatEvent(LifecycleEvent):
     thread_id: str = ""
     timestamp: str = ""  # ISO format timestamp
     state: str = "running"  # "running" | "idle"
+
+
+class ConfigReloadedEvent(SootheEvent):
+    """Event emitted when a configuration file is hot-reloaded.
+
+    Emitted by the daemon when config files are modified or when a SIGHUP signal
+    triggers a reload. Downstream subscribers can use this to react to config changes
+    without restarting the daemon.
+
+    Attributes:
+        config_type: Type of config that was reloaded ('agent' or 'daemon').
+        config_path: Path to the config file that was reloaded.
+        old_config: Previous config state (serialized to dict for wire safety).
+        new_config: New config state (serialized to dict for wire safety).
+        old_config_hash: SHA256 hash (truncated) of old config for comparison.
+        new_config_hash: SHA256 hash (truncated) of new config for comparison.
+        timestamp: ISO format timestamp when the reload occurred.
+        success: Whether the reload succeeded.
+        error: Error message if reload failed, None on success.
+    """
+
+    type: Literal["soothe.system.config.reloaded"] = "soothe.system.config.reloaded"
+    config_type: str  # 'agent' or 'daemon'
+    config_path: str = ""
+    old_config: dict[str, Any] = {}  # noqa: RUF012
+    new_config: dict[str, Any] = {}  # noqa: RUF012
+    old_config_hash: str = ""
+    new_config_hash: str = ""
+    timestamp: str = ""  # ISO format
+    success: bool = True
+    error: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -759,6 +792,13 @@ _reg(
     DaemonHeartbeatEvent,
     verbosity=VerbosityTier.INTERNAL,
     summary_template="Daemon heartbeat: state={state}",
+)
+_reg(
+    CONFIG_RELOADED,
+    ConfigReloadedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Config reloaded: {config_type}",
+    priority=EventPriority.HIGH,
 )
 
 # -- Strange Loop (RFC-0008) -------------------------------------------------

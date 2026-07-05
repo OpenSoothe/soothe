@@ -316,6 +316,17 @@ class _HistoryMixin:
 
         except asyncio.CancelledError:
             logger.info("Background event consumer cancelled")
+        except ConnectionError as exc:
+            logger.warning("Background event consumer lost daemon connection: %s", exc)
+            if self._daemon_session is not None:
+                try:
+                    await self._daemon_session.ensure_connected()
+                    logger.info("Daemon session reconnected after background consumer disconnect")
+                except Exception:
+                    logger.debug(
+                        "Background consumer reconnect failed",
+                        exc_info=True,
+                    )
         except Exception as exc:
             logger.warning("Background event consumer error: %s", exc)
         finally:

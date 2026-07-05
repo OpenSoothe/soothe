@@ -300,6 +300,12 @@ class SootheApp(
         self._message_store = MessageStore()
         """Message virtualization store."""
 
+        self._loop_history_load_lock = asyncio.Lock()
+        """Serialize resume history loads to prevent duplicate widget mounts."""
+
+        self._loop_history_loaded_for: str | None = None
+        """Loop id whose transcript was last painted by ``_load_loop_history``."""
+
         self._hydrate_scheduled = False
         """Whether a hydrate task has been queued via `call_later`."""
 
