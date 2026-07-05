@@ -383,7 +383,6 @@ class SootheApp(
                 yield WelcomeBanner(
                     loop_id=self._lc_loop_id,
                     mcp_tool_count=self._mcp_tool_count,
-                    workspace_path=self._cwd,
                     id="welcome-banner",
                 )
                 yield Container(id="messages")

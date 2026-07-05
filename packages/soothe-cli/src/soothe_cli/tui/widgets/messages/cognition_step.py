@@ -101,34 +101,18 @@ class CognitionStepMessage(Vertical):
         color: $foreground;
     }
 
-    CognitionStepMessage .step-status {
-        margin-left: 0;
-    }
-
-    CognitionStepMessage .step-status.pending {
-        color: $cognition;
-    }
-
-    CognitionStepMessage .step-status.queued {
-        color: $cognition;
-    }
-
     CognitionStepMessage .step-tools {
-        margin-left: 0;
-        margin-top: 0;
         height: auto;
         color: $text-muted;
     }
 
     CognitionStepMessage .step-subagent-notes {
-        margin-left: 0;
         margin-top: 0;
         color: $text-muted;
         height: auto;
     }
 
     CognitionStepMessage .step-detail {
-        margin-left: 0;
         margin-top: 0;
         color: $text-muted;
         height: auto;
@@ -578,7 +562,6 @@ class CognitionStepMessage(Vertical):
         icon = g.checkmark if success else g.error
         head_tone = colors.card_success if success else colors.card_error
         suffix_tone = colors.cognition
-        self._status_widget.remove_class("pending")
         parts: list[object] = [Content.styled(f"{gutter}{icon} {head}", head_tone)]
         if suffix:
             parts.append(Content.styled(suffix, suffix_tone))
@@ -1163,8 +1146,6 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        self._status_widget.remove_class("queued")
-        self._status_widget.add_class("pending")
         self._status_widget.update(
             StepCardStatusLine.footer_pending(
                 gutter=gutter,
@@ -1188,8 +1169,6 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         g = get_glyphs()
         gutter = f"{g.output_prefix} "
-        self._status_widget.remove_class("pending")
-        self._status_widget.add_class("queued")
         self._status_widget.update(
             StepCardStatusLine.footer_queued(
                 gutter=gutter,
@@ -1216,8 +1195,6 @@ class CognitionStepMessage(Vertical):
         if self._start_time is None:
             self._start_time = time()
         if self._status_widget:
-            self._status_widget.remove_class("pending")
-            self._status_widget.remove_class("queued")
             self._status_widget.display = True
         if self._animation_timer is None and getattr(self, "is_mounted", False):
             self._animation_timer = self.set_interval(
@@ -1427,8 +1404,6 @@ class CognitionStepMessage(Vertical):
             g = get_glyphs()
             gutter = f"{g.output_prefix} "
             line = f"{gutter}{g.circle_empty} Awaiting your answer..."
-            self._status_widget.remove_class("queued")
-            self._status_widget.add_class("pending")
             self._status_widget.update(Content.styled(line, colors.warning))
             self._status_widget.display = True
         if self._detail_widget is not None:
@@ -1455,8 +1430,6 @@ class CognitionStepMessage(Vertical):
         except Exception:  # noqa: BLE001  # Unmounted widget (tests / no Textual app)
             colors = theme.DARK_COLORS
         if self._status_widget:
-            self._status_widget.remove_class("pending")
-            self._status_widget.add_class("error")
             if message.strip():
                 self._status_widget.update(Content.styled(message, colors.error))
                 self._status_widget.display = True

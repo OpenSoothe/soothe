@@ -52,6 +52,7 @@ EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", st
 # ---------------------------------------------------------------------------
 
 DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT = _read("system/prompts/default_system_body.xml")
+ASSISTANT_IDENTITY_FRAGMENT = _read("system/prompts/assistant_identity.xml", strip=True)
 SIMPLE_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/simple_system.xml")
 MEDIUM_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/medium_system.xml")
 
@@ -79,6 +80,7 @@ STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("planning/structured_plan_parse.xm
 
 __all__ = [
     "ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT",
+    "ASSISTANT_IDENTITY_FRAGMENT",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
     "LOOP_CONTINUATION_GUIDE_FRAGMENT",

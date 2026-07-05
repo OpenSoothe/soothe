@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from textual.color import Color as TColor
@@ -15,12 +14,7 @@ if TYPE_CHECKING:
 
 from soothe_cli.tui import theme
 from soothe_cli.tui._version import __version__
-from soothe_cli.tui.config import (
-    _get_editable_install_path,
-    _is_editable_install,
-    get_banner,
-    get_glyphs,
-)
+from soothe_cli.tui.config import _is_editable_install, get_banner, get_glyphs
 from soothe_cli.tui.tips import pick_session_tip
 from soothe_cli.tui.widgets._links import open_style_link
 
@@ -37,8 +31,8 @@ class WelcomeBanner(Static):
     DEFAULT_CSS = """
     WelcomeBanner {
         height: auto;
-        padding: 1;
-        margin-bottom: 1;
+        padding: 0;
+        margin-bottom: 0;
         background: transparent;
     }
     """
@@ -47,7 +41,6 @@ class WelcomeBanner(Static):
         self,
         loop_id: str | None = None,
         mcp_tool_count: int = 0,
-        workspace_path: str | None = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the welcome banner.
@@ -55,13 +48,11 @@ class WelcomeBanner(Static):
         Args:
             loop_id: Optional StrangeLoop id to display in the banner.
             mcp_tool_count: Number of MCP tools loaded at startup.
-            workspace_path: Session workspace path shown in the source row.
             **kwargs: Additional arguments passed to parent.
         """
         # Avoid collision with Widget._thread_id (Textual internal int)
         self._cli_loop_id: str | None = loop_id
         self._mcp_tool_count = mcp_tool_count
-        self._workspace_path = workspace_path
         self._failed = False
         self._failure_error: str = ""
         self._tip: str = pick_session_tip()
@@ -128,62 +119,67 @@ class WelcomeBanner(Static):
         colors = theme.get_theme_colors(self)
         ansi = self.app.theme == "textual-ansi"
 
-        banner = get_banner()
+        banner = get_banner().rstrip("\n")
         primary_style: str | TStyle = (
             "bold" if ansi else TStyle(foreground=TColor.parse(colors.primary), bold=True)
         )
+        parts.append((banner + "\n", primary_style))
 
-        if not ansi and _is_editable_install():
-            # Highlight local-install version tag with tool accent; art stays primary.
-            dev_style = TStyle(foreground=TColor.parse(colors.tool), bold=True)
-            version_tag = f"v{__version__} (local)"
-            idx = banner.rfind(version_tag)
-            if idx >= 0:
-                parts.extend(
-                    [
-                        (banner[:idx], primary_style),
-                        (version_tag, dev_style),
-                        (banner[idx + len(version_tag) :] + "\n", primary_style),
-                    ]
-                )
-            else:
-                parts.append((banner + "\n", primary_style))
-        else:
-            parts.append((banner + "\n", primary_style))
+        metadata = self._build_metadata_line(colors=colors, ansi=ansi)
+        if metadata is not None:
+            parts.append(metadata)
 
         # For ANSI theme, use "bold" (terminal foreground) instead of hex
         success_color: str = "bold green" if ansi else colors.success
-
-        editable_path = _get_editable_install_path()
-        source_path = resolve_source_display_path(
-            workspace_path=self._workspace_path,
-            editable_path=editable_path,
-        )
-        if source_path:
-            parts.extend([("Source: ", "dim"), (source_path, "dim"), "\n"])
-
-        if self._cli_loop_id:
-            parts.append((f"Loop: {self._cli_loop_id}\n", "dim"))
 
         if self._mcp_tool_count > 0:
             parts.append((f"{get_glyphs().checkmark} ", success_color))
             label = "MCP tool" if self._mcp_tool_count == 1 else "MCP tools"
             parts.append(f"Loaded {self._mcp_tool_count} {label}\n")
 
+        if self._failed:
+            parts.append(build_failure_footer(self._failure_error))
+        return Content.assemble(*parts)
+
+    def _build_metadata_line(self, *, colors: theme.ThemeColors, ansi: bool) -> Content | None:
+        """Build the single metadata row: loop id plus version or update notice."""
+        segments: list[str | tuple[str, str | TStyle]] = []
+        dim_style: str | TStyle = "dim"
+
+        if self._cli_loop_id:
+            segments.append((f"Loop: {self._cli_loop_id}", dim_style))
+
         if self._update_latest and not self._failed:
             from soothe_cli.tui.update_check import upgrade_command
 
             cmd = upgrade_command()
-            update_line = (
+            update_text = (
                 f"Update available: v{self._update_latest} (current: v{__version__}). "
-                f"Run: {cmd}  — or /auto-update\n"
+                f"Run: {cmd}  — or /auto-update"
             )
-            update_style = "yellow" if ansi else colors.warning
-            parts.append((update_line, update_style))
+            update_style: str | TStyle = "yellow" if ansi else colors.warning
+            if segments:
+                segments.append(("  ", dim_style))
+            segments.append((update_text, update_style))
+        elif not self._failed:
+            version_tag = f"v{__version__}"
+            if _is_editable_install():
+                version_tag += " (local)"
+            version_style: str | TStyle = (
+                "bold"
+                if ansi
+                else TStyle(foreground=TColor.parse(colors.tool), bold=True)
+                if _is_editable_install()
+                else dim_style
+            )
+            if segments:
+                segments.append(("  ", dim_style))
+            segments.append((version_tag, version_style))
 
-        if self._failed:
-            parts.append(build_failure_footer(self._failure_error))
-        return Content.assemble(*parts)
+        if not segments:
+            return None
+        segments.append("\n")
+        return Content.assemble(*segments)
 
 
 def build_failure_footer(error: str) -> Content:
@@ -201,32 +197,3 @@ def build_failure_footer(error: str) -> Content:
         (error, colors.error),
         ("\n", colors.error),
     )
-
-
-def resolve_source_display_path(
-    *, workspace_path: str | None, editable_path: str | None
-) -> str | None:
-    """Resolve the banner source row path.
-
-    Prefer the session workspace path so the welcome banner and status bar stay
-    consistent. Fall back to editable-install metadata for local-dev installs.
-    """
-    if workspace_path and workspace_path.strip():
-        return _format_path_for_display(workspace_path)
-    if editable_path and editable_path.strip():
-        return editable_path
-    return None
-
-
-def _format_path_for_display(path: str) -> str:
-    """Format a path with `~` contraction when under the user home."""
-    try:
-        resolved = Path(path).expanduser().resolve()
-        home = Path.home()
-        if resolved == home:
-            return "~"
-        if resolved.is_relative_to(home):
-            return "~/" + resolved.relative_to(home).as_posix()
-        return str(resolved)
-    except (RuntimeError, OSError, ValueError):
-        return path

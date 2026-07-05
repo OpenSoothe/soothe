@@ -152,17 +152,6 @@ def _card_dot_tone(
     return colors.muted
 
 
-def _card_dot_glyph(
-    status: str,
-    *,
-    spinner_position: int = 0,
-    animate_running: bool = False,
-) -> str:
-    """Return the prefix glyph for a card header (always ``⏺``; running flashes via tone)."""
-    del status, spinner_position, animate_running
-    return get_glyphs().tool_prefix
-
-
 def _card_dot_prefix_content(
     widget: object,
     status: str,
@@ -176,11 +165,7 @@ def _card_dot_prefix_content(
         colors = theme.get_theme_colors(widget)
     except Exception:  # noqa: BLE001
         colors = theme.DARK_COLORS
-    glyph = _card_dot_glyph(
-        status,
-        spinner_position=spinner_position,
-        animate_running=animate_running,
-    )
+    glyph = get_glyphs().tool_prefix
     tone = _card_dot_tone(
         status,
         colors,

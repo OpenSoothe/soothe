@@ -459,23 +459,20 @@ def newline_shortcut() -> str:
     return "Option+Enter" if sys.platform == "darwin" else "Ctrl+J"
 
 
-_UNICODE_BANNER = f"""
+_UNICODE_BANNER = """
 ███████╗ ██████╗  ██████╗ ████████╗██╗  ██╗███████╗
 ██╔════╝██╔═══██╗██╔═══██╗╚══██╔══╝██║  ██║██╔════╝
 ███████╗██║   ██║██║   ██║   ██║   ███████║█████╗
 ╚════██║██║   ██║██║   ██║   ██║   ██╔══██║██╔══╝
 ███████║╚██████╔╝╚██████╔╝   ██║   ██║  ██║███████╗
 ╚══════╝ ╚═════╝  ╚═════╝    ╚═╝   ╚═╝  ╚═╝╚══════╝
-
-                                                  v{__version__}
 """
-_ASCII_BANNER = f"""
+_ASCII_BANNER = """
  _______  _______  _______  _______  _______
 /  ___  \\/  ___  \\/  ___  \\/  ___  \\/  ___  \
 | |   | || |   | || |   | || |   | || |   | |
 | |___| || |___| || |___| || |___| || |___| |
 \\_______/\\_______/\\_______/\\_______/\\_______/
-                                    v{__version__}
 """
 
 
@@ -484,18 +481,10 @@ def get_banner() -> str:
 
     Returns:
         The text art banner string (Unicode or ASCII based on charset mode).
-
-            Includes "(local)" suffix when installed in editable mode.
     """
     if _detect_charset_mode() == CharsetMode.ASCII:
-        banner = _ASCII_BANNER
-    else:
-        banner = _UNICODE_BANNER
-
-    if _is_editable_install():
-        banner = banner.replace(f"v{__version__}", f"v{__version__} (local)")
-
-    return banner
+        return _ASCII_BANNER
+    return _UNICODE_BANNER
 
 
 config: RunnableConfig = {

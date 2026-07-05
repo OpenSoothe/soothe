@@ -436,7 +436,7 @@ class SootheConfig(BaseSettings):
         builtin_subagents = {
             "planner": SubagentConfig(),
             "tacitus": SubagentConfig(),
-            "browser_use": SubagentConfig(enabled=True),
+            "browser_use": SubagentConfig(enabled=True, model_role="default"),
             "skillify": SubagentConfig(enabled=True),
         }
 
@@ -905,6 +905,7 @@ class SootheConfig(BaseSettings):
         Returns:
             The system prompt string.
         """
+        from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
         from soothe.foundation.sloop.prompts.system_templates import (
             format_complex_agent_system_prompt_core,
         )
@@ -913,12 +914,13 @@ class SootheConfig(BaseSettings):
         current_date = local_date_str()
         tz_label = local_timezone_label()
 
+        identity_block = build_assistant_identity_block(self.agent.name)
         base_prompt = format_complex_agent_system_prompt_core(
             self.agent.system_prompt,
             self.agent.name,
         )
 
-        return f"{base_prompt}\n\nToday's date is {current_date} ({tz_label})."
+        return f"{identity_block}\n\n{base_prompt}\n\nToday's date is {current_date} ({tz_label})."
 
     def propagate_env(self) -> None:
         """Set provider-specific env vars for downstream libraries.

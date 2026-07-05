@@ -37,6 +37,26 @@ class TestClassifyIntakeHeuristic:
         assert result.intake_label == IntakeLabel.CHITCHAT
         assert result.chitchat_response
 
+    def test_identity_query_is_chitchat(self) -> None:
+        result = classify_intake_heuristic("who are u", assistant_name="Soothe")
+        assert result is not None
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert result.chitchat_response == (
+            "I'm Soothe, your AI assistant. How can I help you today?"
+        )
+
+    def test_origin_query_is_chitchat(self) -> None:
+        result = classify_intake_heuristic("where are u from", assistant_name="Soothe")
+        assert result is not None
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert "cloud-based" in (result.chitchat_response or "")
+
+    def test_identity_query_chinese(self) -> None:
+        result = classify_intake_heuristic("你是谁", assistant_name="TestBot")
+        assert result is not None
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert "TestBot" in (result.chitchat_response or "")
+
     def test_complex_refactor_not_heuristic(self) -> None:
         assert (
             classify_intake_heuristic("refactor the persistence layer for weather module") is None

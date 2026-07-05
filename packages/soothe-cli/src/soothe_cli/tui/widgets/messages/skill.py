@@ -103,23 +103,19 @@ class SkillMessage(Vertical):
 
     SkillMessage .skill-description {
         color: $text-muted;
-        margin-left: 2;
     }
 
     SkillMessage .skill-args {
-        margin-left: 2;
         margin-top: 0;
     }
 
     SkillMessage #skill-md {
-        margin-left: 2;
         margin-top: 0;
         padding: 0;
         display: none;
     }
 
     SkillMessage .skill-hint {
-        margin-left: 2;
         color: $text-muted;
         background: transparent;
     }

@@ -35,12 +35,6 @@ class CognitionReasonMessage(Vertical):
         margin: 0;
         color: $foreground;
     }
-
-    CognitionReasonMessage .plan-section-line {
-        height: auto;
-        margin-left: 2;
-        color: $text-muted;
-    }
     """
 
     def __init__(

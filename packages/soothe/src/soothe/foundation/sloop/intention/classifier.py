@@ -103,7 +103,7 @@ class IntentClassifier:
         if not self._fast_model:
             return self._fallback(query)
 
-        heuristic = classify_intake_heuristic(query)
+        heuristic = classify_intake_heuristic(query, assistant_name=self._assistant_name)
         if heuristic is not None:
             logger.debug(
                 "Intake classified (heuristic): intake_label=%s complexity=%s",
@@ -145,6 +145,7 @@ class IntentClassifier:
             return self._fallback(query, error_context=last_error)
 
         result = self._patch_missing_fields(result, query)
+        result = self._apply_identity_query_override(result, query)
 
         if last_human_content is not None and last_llm_dict is not None:
             await self._record_intake_ledger(
@@ -322,6 +323,24 @@ class IntentClassifier:
             intent.reasoning = "I'll use tools to work through this goal."
             logger.debug("Patched missing reasoning")
         return intent
+
+    def _apply_identity_query_override(
+        self,
+        intent: IntentClassification,
+        query: str,
+    ) -> IntentClassification:
+        """Force identity questions onto the chitchat fast path with a stable reply."""
+        from soothe.foundation.sloop.prompts.identity import build_identity_reply, is_identity_query
+
+        if not is_identity_query(query):
+            return intent
+
+        return IntentClassification(
+            intake_label=IntakeLabel.CHITCHAT,
+            goal_description=query,
+            chitchat_response=build_identity_reply(self._assistant_name, query),
+            task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
+        )
 
     def _build_invoke_config(
         self,

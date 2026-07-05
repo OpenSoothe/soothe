@@ -565,6 +565,8 @@ def resolve_subagents(
         elif name == "planner":
             # Built-in: always the router ``think`` role (ignore ``subagents.planner.model``).
             model_override = config.create_chat_model("think")
+        elif name == "browser_use":
+            model_override = None
         else:
             model_override = sub_cfg.model or default_model or config.resolve_model("default")
 

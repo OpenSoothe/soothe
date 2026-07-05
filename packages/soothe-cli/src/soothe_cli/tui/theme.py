@@ -360,7 +360,7 @@ class ThemeColors:
     surface: str
     """Elevated card / panel background."""
 
-    # Unified card colors for Goal/Plan/Step/Task
+    # Markdown and card-dot palette (dividers, list markers, header dots)
     card_border: str
     """Subtle divider color — markdown rules and table borders."""
 

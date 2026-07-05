@@ -6,16 +6,10 @@ from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.theme import DARK_COLORS
 from soothe_cli.tui.widgets.messages._helpers import (
     _assemble_card_header,
-    _card_dot_glyph,
     _card_dot_tone,
 )
-
-
-def test_card_dot_glyph_uses_tool_prefix_by_default() -> None:
-    g = get_glyphs()
-    assert _card_dot_glyph("pending") == g.tool_prefix
-    assert _card_dot_glyph("success") == g.tool_prefix
-    assert _card_dot_glyph("running", spinner_position=3, animate_running=True) == g.tool_prefix
+from soothe_cli.tui.widgets.messages.assistant import AssistantMessage
+from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
 
 
 def test_card_dot_tone_maps_lifecycle_phases() -> None:
@@ -40,3 +34,13 @@ def test_assemble_card_header_includes_dot_and_body() -> None:
     plain = content.plain
     assert plain.startswith(get_glyphs().tool_prefix)
     assert "Scan workspace" in plain
+
+
+def test_stream_cards_use_flush_horizontal_padding() -> None:
+    """Agent cards no longer reserve space for removed border-left rails."""
+    step_css = CognitionStepMessage.DEFAULT_CSS
+    assistant_css = AssistantMessage.DEFAULT_CSS
+    assert "padding: 0;" in step_css
+    assert "padding: 0;" in assistant_css
+    assert "border-left:" not in step_css
+    assert "border-left:" not in assistant_css

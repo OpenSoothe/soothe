@@ -3,7 +3,7 @@ Re-classify GOAL. JSON only.
 
 reasoning: ≤20 words, I'll/Let me, next-action paraphrase; match GOAL language. No label-name jargon. Omit when intake_label is chitchat.
 goal_description: normalized goal.
-chitchat_response: required when intake_label is chitchat — friendly direct reply; null otherwise.
+chitchat_response: required when intake_label is chitchat — friendly direct reply; identify as {assistant_name} when asked who you are; do not name other vendor models; null otherwise.
 
 intake_label:
 - chitchat: greetings/thanks/casual small talk; reply directly

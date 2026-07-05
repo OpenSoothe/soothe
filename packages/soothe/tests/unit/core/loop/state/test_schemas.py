@@ -21,6 +21,7 @@ from soothe.foundation.sloop.state.schemas import (
     apply_step_wire_subagents,
     assign_plan_step_ids,
     composite_step_id,
+    infer_explicit_wire_subagent_from_goal,
     max_goal_step_numeric_suffix,
     next_goal_local_step_id_start,
     plan_generate_steps_to_step_actions,
@@ -472,6 +473,10 @@ class TestPlanGeneration:
         ]
         wired = apply_step_wire_subagents(steps)
         assert wired[0].wire_subagent == "tacitus"
+
+    def test_infer_explicit_wire_subagent_from_goal(self) -> None:
+        assert infer_explicit_wire_subagent_from_goal("use browser_use for this") == "browser_use"
+        assert infer_explicit_wire_subagent_from_goal("list files") is None
 
     def test_resolve_wire_subagent_for_step_prefers_planner_hint(self) -> None:
         step = StepAction(

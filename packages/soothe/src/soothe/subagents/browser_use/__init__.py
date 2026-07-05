@@ -55,7 +55,6 @@ class BrowserUsePlugin:
             "elements, fill forms, extract content, and take screenshots. Use for "
             "web scraping, form automation, and browser-based testing."
         ),
-        model="openai:gpt-4o-mini",
         system_context="""<BROWSER_CONTEXT>
 <NAVIGATION_RULES>
 Always verify URLs before navigation to prevent security issues.
@@ -79,16 +78,16 @@ Capture screenshots at key navigation points for debugging.
     )
     async def create_browser_use(
         self,
-        model: Any,
-        config: Any,
-        context: Any,  # noqa: ARG002
+        model: Any = None,  # noqa: ARG002
+        config: Any = None,
+        context: Any = None,  # noqa: ARG002
         **kwargs: Any,
     ) -> dict[str, Any]:
         """Create browser_use automation subagent.
 
         Args:
-            model: Resolved model (BaseChatModel or string).
-            config: Soothe configuration.
+            model: Unused; kept for ``@subagent`` factory wrapper compatibility.
+            config: Soothe configuration (router + ``subagents.browser_use.model_role``).
             context: Plugin context.
             **kwargs: Additional browser config (headless, max_steps, etc.).
 
@@ -97,14 +96,12 @@ Capture screenshots at key navigation points for debugging.
         """
         from soothe.subagents.browser_use.config_model import BrowserUseSubagentConfig
 
-        # Get browser config from subagent config
         browser_config = None
         if hasattr(config, "subagents") and "browser_use" in config.subagents:
             subagent_config = config.subagents["browser_use"]
             if subagent_config.enabled and subagent_config.config:
                 browser_config = BrowserUseSubagentConfig(**subagent_config.config)
 
-        # Extract common parameters
         headless = kwargs.get("headless", True)
         browser_cfg = kwargs.get("config")
         if not isinstance(browser_cfg, BrowserUseSubagentConfig):
@@ -116,56 +113,45 @@ Capture screenshots at key navigation points for debugging.
         max_steps = kwargs.get("max_steps", browser_cfg.max_steps)
         use_vision = kwargs.get("use_vision", True)
 
-        # Create subagent using internal factory - it already returns CompiledSubAgent dict
         return _create_browser_use_subagent(
-            model=model,
             headless=headless,
             max_steps=max_steps,
             use_vision=use_vision,
             config=browser_config,
+            soothe_config=config,
         )
 
     def get_subagents(self) -> list[Any]:
-        """Get list of subagent factory functions.
-
-        Returns:
-            List containing the create_browser_use method.
-        """
+        """Get list of subagent factory functions."""
         return [self.create_browser_use]
 
 
 def create_browser_use_subagent(
-    model: Any = None,
     *,
     headless: bool = True,
     max_steps: int | None = None,
     use_vision: bool = True,
     config: Any = None,
-    **kwargs: Any,
+    soothe_config: Any,
 ) -> CompiledSubAgent:
     """Create a BrowserUse subagent (CompiledSubAgent with browser-use workflow).
 
     Args:
-        model: Model name string or langchain BaseChatModel for the browser-use
-            LLM. If a BaseChatModel instance is passed, the model name is
-            extracted automatically.
         headless: Run browser in headless mode.
         max_steps: Maximum browser agent steps. When ``None``, uses
             ``BrowserUseSubagentConfig.max_steps`` (default 10).
         use_vision: Enable vision/screenshot support.
         config: BrowserUse subagent configuration object with runtime directories,
             cleanup settings, and feature flags.
-        **kwargs: Additional config -- `base_url` and `api_key` are forwarded
-            to the browser-use LLM.
+        soothe_config: SootheConfig used to resolve ``subagents.browser_use.model_role``.
 
     Returns:
         `CompiledSubAgent` dict compatible with deepagents.
     """
     return _create_browser_use_subagent(
-        model=model,
         headless=headless,
         max_steps=max_steps,
         use_vision=use_vision,
         config=config,
-        **kwargs,
+        soothe_config=soothe_config,
     )

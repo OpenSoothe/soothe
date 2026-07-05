@@ -17,7 +17,7 @@
 # Docker Compose env file (all commands use deploy/.env)
 DOCKER_ENV_FILE := --env-file deploy/.env
 .PHONY: reset-the-world
-.PHONY: format format-check lint lint-src lint-fix vulture vulture-whitelist
+.PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
 .PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
 .PHONY: sdk-publish-test cli-publish-test soothe-publish-test daemon-publish-test publish-test
@@ -69,6 +69,7 @@ help:
 	@echo "  make lint             - Lint all packages (src + tests)"
 	@echo "  make lint-src         - Lint only src/ (lighter check)"
 	@echo "  make lint-fix         - Auto-fix linting issues"
+	@echo "  make autofix          - Run all auto-fixes (format + lint-fix)"
 	@echo "  make vulture          - Dead-code analysis (vulture, min 90% confidence)"
 	@echo "  make vulture-whitelist - Regenerate scripts/vulture_whitelist.py"
 	@echo "  make test             - Run all tests"
@@ -264,6 +265,9 @@ lint-fix: sync
 		uv run ruff format $$dir && uv run ruff check --fix $$dir; \
 	done
 	@echo "Done"
+
+autofix: format lint-fix
+	@echo "All auto-fixes applied"
 
 vulture: sync
 	@echo "Running vulture dead-code analysis..."

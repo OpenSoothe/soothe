@@ -27,10 +27,17 @@ logger = logging.getLogger(__name__)
 def _langfuse_goal_output_text(ctx: LoopRuntimeContext) -> str:
     """Best-effort final user-visible text for Langfuse trace output (IG-395)."""
     from soothe.foundation.sloop.engine.continuation_context import ledger_goal_completion_text
+    from soothe.foundation.sloop.intention.models import IntakeLabel
 
     completion = ledger_goal_completion_text(ctx.loop_state.loop_messages)
     if completion:
         return completion
+
+    intent = getattr(ctx.loop_state, "intent", None)
+    if intent is not None and getattr(intent, "intake_label", None) == IntakeLabel.CHITCHAT:
+        chitchat_response = (getattr(intent, "chitchat_response", None) or "").strip()
+        if chitchat_response:
+            return chitchat_response
     pp = ctx.loop_state.previous_plan
     if pp is not None:
         if pp.full_output and str(pp.full_output).strip():

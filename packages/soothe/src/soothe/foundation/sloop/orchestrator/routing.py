@@ -67,13 +67,13 @@ def route_by_intent(state: dict[str, Any]) -> str:
     Falls back to ``bounded_evidence_gather`` (complex) when the label is
     missing — the fail-safe path runs the full pipeline.
     """
-    if state.get("is_continuation"):
-        logger.info("[routing] route_by_intent → plan_assess (continuation overlay)")
-        return "plan_assess"
-
     if state.get("intent_route") == "fast_path":
         logger.info("[routing] route_by_intent → END (chitchat fast-path)")
         return END
+
+    if state.get("is_continuation"):
+        logger.info("[routing] route_by_intent → plan_assess (continuation overlay)")
+        return "plan_assess"
 
     label = state.get("intake_label")
     if label == IntakeLabel.TRIVIAL:

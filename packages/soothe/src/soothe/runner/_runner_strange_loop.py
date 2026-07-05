@@ -466,6 +466,7 @@ class StrangeLoopMixin:
         # `status="running"` row to `idle`.
         heartbeat_handle = _start_loop_heartbeat(self._config, strange_loop_id)
         increment_ai_message_count = False
+        pending_chitchat_persist: dict[str, object] | None = None
 
         try:
             async for event_type, event_data in loop_agent.run_with_progress(
@@ -519,6 +520,10 @@ class StrangeLoopMixin:
                             or getattr(classification, "chitchat_response", "")
                             or ""
                         )
+                    resolved_response = (chitchat_response or "").strip()
+                    if not resolved_response:
+                        resolved_response = "Hello! How can I help you today?"
+                    main_thread_id = (strange_loop_id or tid or "").strip() or tid
                     async for chunk in self._run_chitchat(
                         user_input,
                         tid,
@@ -526,9 +531,19 @@ class StrangeLoopMixin:
                         context_engine=fast_ce,
                         ce_goal_id=ce_goal_id,
                         loop_id=strange_loop_id,
+                        defer_persistence=True,
                     ):
                         yield chunk
-                    return
+                    pending_chitchat_persist = {
+                        "query": user_input,
+                        "response": resolved_response,
+                        "main_thread_id": main_thread_id,
+                        "context_engine": fast_ce,
+                        "ce_goal_id": ce_goal_id,
+                        "loop_id": strange_loop_id,
+                    }
+                    increment_ai_message_count = True
+                    continue
 
                 if event_type == "iteration_started":
                     # Internal event - not shown to user
@@ -752,6 +767,27 @@ class StrangeLoopMixin:
                     )
 
                     increment_ai_message_count = True
+
+            if pending_chitchat_persist is not None:
+                try:
+                    await self._save_chitchat_to_state(
+                        str(pending_chitchat_persist["query"]),
+                        str(pending_chitchat_persist["response"]),
+                        str(pending_chitchat_persist["main_thread_id"]),
+                        context_engine=pending_chitchat_persist.get("context_engine"),
+                        ce_goal_id=(
+                            str(pending_chitchat_persist["ce_goal_id"])
+                            if pending_chitchat_persist.get("ce_goal_id")
+                            else None
+                        ),
+                        loop_id=str(pending_chitchat_persist.get("loop_id") or strange_loop_id),
+                    )
+                except Exception:
+                    logger.warning(
+                        "Chitchat persistence/finalize failed after graph (loop=%s)",
+                        strange_loop_id,
+                        exc_info=True,
+                    )
         finally:
             if increment_ai_message_count:
                 await _increment_loop_ai_message_count(self._config, strange_loop_id)

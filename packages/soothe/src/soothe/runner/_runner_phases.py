@@ -100,8 +100,14 @@ class PhasesMixin:
         context_engine: Any | None = None,
         ce_goal_id: str | None = None,
         loop_id: str | None = None,
+        defer_persistence: bool = False,
     ) -> AsyncGenerator[StreamChunk]:
-        """Fast path for chitchat intake: emit piggybacked response directly."""
+        """Fast path for chitchat intake: emit piggybacked response directly.
+
+        When ``defer_persistence`` is true, only the wire response is emitted; the
+        caller must invoke ``_save_chitchat_to_state`` after the StrangeLoop graph
+        finishes so checkpoint finalize does not race ``run_with_progress`` teardown.
+        """
         main_thread_id = (loop_id or self._client_loop_id_for_stream or thread_id or "").strip()
         if not main_thread_id:
             main_thread_id = thread_id
@@ -117,6 +123,9 @@ class PhasesMixin:
             phase="chitchat",
             thread_id=main_thread_id,
         )
+
+        if defer_persistence:
+            return
 
         try:
             await self._save_chitchat_to_state(

@@ -1083,12 +1083,14 @@ print_failed_checks_summary() {
   local check seen
   for check in "${FAILED_CHECKS[@]}"; do
     seen=false
-    for existing in "${unique_checks[@]}"; do
-      if [ "$existing" = "$check" ]; then
-        seen=true
-        break
-      fi
-    done
+    if [ ${#unique_checks[@]} -gt 0 ]; then
+      for existing in "${unique_checks[@]}"; do
+        if [ "$existing" = "$check" ]; then
+          seen=true
+          break
+        fi
+      done
+    fi
     if ! $seen; then
       unique_checks+=("$check")
     fi

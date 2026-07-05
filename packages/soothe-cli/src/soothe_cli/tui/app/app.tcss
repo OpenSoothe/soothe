@@ -50,6 +50,8 @@ Screen {
 #messages {
     layout: stream;
     height: auto;
+    margin-top: 0;
+    padding-top: 0;
 }
 
 /* Bottom app container - holds thinking row, ChatInput, and status bar. */
@@ -88,10 +90,6 @@ Screen {
 /* Non-blocking filesystem change previews (write / edit / delete) */
 .file-change-preview {
     height: auto;
-    padding: 0;
-    margin: 0;
-    background: $surface-darken-1;
-    border: solid $secondary;
 }
 
 .file-change-preview-header {

@@ -161,7 +161,16 @@ class SubagentConfig(BaseModel):
     """Configuration for a single subagent."""
 
     enabled: bool = True
-    model: str | None = None
+    model: str | None = Field(
+        default=None,
+        description="Explicit provider:model override for subagents that support it. browser_use uses model_role instead.",
+    )
+    model_role: ModelRole | None = Field(
+        default=None,
+        description=(
+            "Router profile role for browser_use LLM selection. Defaults to ``default`` when unset."
+        ),
+    )
     transport: Literal["local", "acp", "a2a", "langgraph"] = "local"
     url: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)

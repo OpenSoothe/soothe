@@ -493,9 +493,11 @@ class SystemPromptMiddleware(AgentMiddleware):
         # Gated blocks (context/memory/directive/contract) and semi-static
         # sections follow. Workspace tail (when bound):
         #   ENVIRONMENT → WORKSPACE_RULES → WORKSPACE → AGENT_INSTRUCTIONS
+        from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
         from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
-        static_sections: list[str] = [base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
+        identity_block = build_assistant_identity_block(self._config.agent.name)
+        static_sections: list[str] = [identity_block, base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
 
         deferred_tools = state.get("_deferred_tools_for_listing") if state else None
         tools_block = self._compose_available_tools_block(state, deferred_tools=deferred_tools)
@@ -1022,7 +1024,9 @@ class SystemPromptMiddleware(AgentMiddleware):
         first_after_user = _last_message_is_human(msgs_for_hop)
         explicit_subagent = routing_hint == "subagent" and bool(preferred_subagent)
         step_subagent = _configurable_step_subagent()
-        step_enforce = step_subagent is not None and first_after_user
+        # Wired step subagents stay task-only for the whole execute step so the
+        # model cannot silently fall back to shell tools after an empty subagent run.
+        step_enforce = step_subagent is not None
         wire_enforce = explicit_subagent and first_after_user
 
         goal_synthesis = _configurable_goal_synthesis()

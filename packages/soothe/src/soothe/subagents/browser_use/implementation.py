@@ -40,22 +40,83 @@ from soothe.subagents.browser_use.events import (
 
 logger = logging.getLogger(__name__)
 
+_NO_EXTRACTED_CONTENT = "BrowserUse task completed (no extracted content.)"
 
-async def detect_existing_browser_intent(
-    prompt: str,
-    config: Any | None = None,
-    model_name: str | None = None,
-    base_url: str | None = None,
-    api_key: str | None = None,
-) -> bool:
+
+def _parse_model_spec(spec: str) -> tuple[str, str]:
+    """Split ``provider:model`` into components."""
+    provider_name, _, model_name = spec.partition(":")
+    if not model_name:
+        model_name = provider_name
+        provider_name = ""
+    return provider_name, model_name
+
+
+def browser_use_model_role(soothe_config: Any) -> str:
+    """Return configured router role for browser_use (default ``default``)."""
+    subagents = getattr(soothe_config, "subagents", None) or {}
+    sub_cfg = subagents.get("browser_use") if hasattr(subagents, "get") else None
+    role = getattr(sub_cfg, "model_role", None) if sub_cfg is not None else None
+    return role or "default"
+
+
+def _resolve_browser_llm_credentials(*, soothe_config: Any) -> tuple[str, str | None, str | None]:
+    """Resolve browser-use LLM model name and provider endpoint credentials."""
+    resolve = getattr(soothe_config, "resolve_model", None)
+    if not callable(resolve):
+        msg = "browser_use requires SootheConfig with resolve_model()"
+        raise ValueError(msg)
+
+    role = browser_use_model_role(soothe_config)
+    spec = resolve(role)
+    if not isinstance(spec, str) or not spec.strip():
+        msg = f"browser_use model_role={role!r} did not resolve to a model spec"
+        raise ValueError(msg)
+
+    provider_name, model_name = _parse_model_spec(spec.strip())
+    providers = getattr(soothe_config, "providers", None) or []
+    from soothe.utils.llm.registry import ProviderRegistry
+
+    registry = ProviderRegistry(providers)
+    _, kwargs = registry.get_provider_kwargs(provider_name)
+    return model_name, kwargs.get("base_url"), kwargs.get("api_key")
+
+
+def _browser_history_had_no_progress(history: Any) -> bool:
+    """Return True when the browser agent never navigated or acted."""
+    entries = getattr(history, "history", None) or []
+    if not entries:
+        return True
+    for entry in entries:
+        state = getattr(entry, "state", None)
+        if state is not None:
+            url = str(getattr(state, "url", "") or "")
+            if url and url not in {"about:blank", "chrome://newtab/", ""}:
+                return False
+        model_output = getattr(entry, "model_output", None)
+        if model_output is not None:
+            action = getattr(model_output, "action", None)
+            if action:
+                return False
+    return True
+
+
+def _format_browser_no_progress_error(*, model_name: str, steps: int) -> str:
+    return (
+        "BrowserUse failed: the browser agent ran "
+        f"{steps} step(s) without navigating away from a blank page or "
+        "extracting content. "
+        f"Model: {model_name}. "
+        "Check subagents.browser_use.model_role and provider API credentials."
+    )
+
+
+async def detect_existing_browser_intent(prompt: str, *, soothe_config: Any) -> bool:
     """Use LLM to detect if user wants to use existing browser instance.
 
     Args:
         prompt: User's task prompt.
-        config: Optional configuration object with ``create_chat_model`` (e.g. Soothe).
-        model_name: Model name for intent detection (fallback if no config).
-        base_url: Base URL for the LLM API (fallback if no config).
-        api_key: API key for the LLM (fallback if no config).
+        soothe_config: Soothe configuration for router-backed LLM calls.
 
     Returns:
         True if user wants existing browser, False otherwise.
@@ -78,26 +139,13 @@ Examples:
 - "Navigate to my company portal using my current session" → yes"""
 
     try:
-        # Use config if available (applies OpenAI-compat wrappers for custom endpoints)
-        if config:
-            model = config.create_chat_model("fast")
-        else:
-            from langchain.chat_models import init_chat_model
-
-            logger.warning("No config provided, OpenAI compatibility wrapper NOT applied")
-            model = init_chat_model(
-                model=model_name or "gpt-4o-mini",
-                model_provider="openai",
-                base_url=base_url,
-                api_key=api_key,
-                temperature=0.0,
-            )
+        role = browser_use_model_role(soothe_config)
+        model = soothe_config.create_chat_model(role)
 
         messages = [
             SystemMessage(content=detection_prompt),
             HumanMessage(content=prompt),
         ]
-        # Metadata for tracing (optional soothe middleware)
         metadata: dict[str, Any] = {}
         try:
             from soothe.middleware._utils import create_llm_call_metadata
@@ -124,13 +172,13 @@ Examples:
 
         response = await await_with_llm_call_policy(
             _invoke,
-            config=llm_rate_limit_config_from(config),
+            config=llm_rate_limit_config_from(soothe_config),
         )
         content = response.content.strip()
         result: bool = content.lower() == "yes"
     except Exception as e:
         logger.warning("LLM intent detection failed: %s", e)
-        return False  # Fallback to new instance
+        return False
     else:
         logger.info("Intent detection for '%s...': %s", preview_first(prompt, 50), result)
         return result
@@ -187,10 +235,8 @@ def _build_browser_use_graph(
     headless: bool = True,
     max_steps: int | None = None,
     use_vision: bool = True,
-    browser_model: str | None = None,
-    browser_base_url: str | None = None,
-    browser_api_key: str | None = None,
     config: BrowserUseSubagentConfig | None = None,
+    soothe_config: Any,
 ) -> Any:
     """Build and compile the browser_use LangGraph.
 
@@ -199,10 +245,8 @@ def _build_browser_use_graph(
         max_steps: Maximum steps for the browser agent. When ``None``, uses
             ``BrowserUseSubagentConfig.max_steps`` (default 10).
         use_vision: Enable vision/screenshot support.
-        browser_model: Model name for browser-use LLM (e.g. `qwen3.5-flash`).
-        browser_base_url: Base URL for the browser-use LLM.
-        browser_api_key: API key for the browser-use LLM.
         config: BrowserUse subagent configuration object.
+        soothe_config: SootheConfig for router-backed browser LLM resolution.
 
     Returns:
         Compiled LangGraph runnable.
@@ -211,7 +255,6 @@ def _build_browser_use_graph(
     resolved_max_steps = max_steps if max_steps is not None else browser_config.max_steps
 
     async def _run_browser_use_async(state: _BrowserUseState | dict[str, Any]) -> dict[str, Any]:
-        # Disable browser-use privacy-invasive features before importing
         if browser_config.disable_extensions:
             os.environ["BROWSER_USE_DISABLE_EXTENSIONS"] = "1"
 
@@ -222,15 +265,12 @@ def _build_browser_use_graph(
         if browser_config.disable_telemetry:
             os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
-        # Ask browser-use to avoid chatty console logging where supported.
         os.environ.setdefault("BROWSER_USE_LOGGING_LEVEL", "result")
 
-        # Increase browser-use event timeouts for slower systems / first launch.
         start_timeout = str(browser_config.browser_start_timeout)
         os.environ.setdefault("TIMEOUT_BrowserStartEvent", start_timeout)
         os.environ.setdefault("TIMEOUT_BrowserLaunchEvent", start_timeout)
 
-        # Configure browser runtime directories (using local implementations)
         import uuid
 
         browser_runtime_dir = browser_config.runtime_dir or str(get_browser_runtime_dir())
@@ -247,18 +287,16 @@ def _build_browser_use_graph(
         else:
             browser_user_data_dir = str(get_browser_user_data_dir())
 
-        # Set environment variables for browser-use
         os.environ["BROWSER_USE_CONFIG_DIR"] = browser_runtime_dir
         os.environ["BROWSER_USE_PROFILES_DIR"] = browser_user_data_dir
         os.environ["BROWSER_USE_EXTENSIONS_DIR"] = browser_extensions_dir
 
         _suppress_external_browser_loggers()
-
-        # Use simple output suppression context manager
         output_suppressor = _SuppressOutput()
 
         run_t0 = time.perf_counter()
-        result = "BrowserUse task completed (no extracted content.)"
+        result = _NO_EXTRACTED_CONTENT
+        run_success = True
 
         try:
             with output_suppressor:
@@ -273,27 +311,28 @@ def _build_browser_use_graph(
                     logger,
                 )
 
-                model_name = browser_model or "qwen3.5-flash"
-                if ":" in model_name:
-                    model_name = model_name.split(":", 1)[1]
+                model_name, llm_base_url, llm_api_key = _resolve_browser_llm_credentials(
+                    soothe_config=soothe_config,
+                )
 
                 logger.info(
                     "BrowserUse subagent: starting run task_len=%d chars headless=%s max_steps=%d "
-                    "use_vision=%s browser_use_model=%s",
+                    "use_vision=%s browser_use_model=%s model_role=%s base_url=%s",
                     len(task) if isinstance(task, str) else 0,
                     headless,
                     resolved_max_steps,
                     use_vision,
                     model_name,
+                    browser_use_model_role(soothe_config),
+                    preview_first(str(llm_base_url or ""), 80) or "(default)",
                 )
                 logger.info("BrowserUse subagent: task preview: %s", preview_first(str(task), 400))
 
-                # Configure LLM
                 llm_kwargs: dict[str, Any] = {"model": model_name}
-                if browser_base_url:
-                    llm_kwargs["base_url"] = browser_base_url
-                if browser_api_key:
-                    llm_kwargs["api_key"] = browser_api_key
+                if llm_base_url:
+                    llm_kwargs["base_url"] = llm_base_url
+                if llm_api_key:
+                    llm_kwargs["api_key"] = llm_api_key
 
                 from browser_use.llm import ChatOpenAI as BrowserChatOpenAI
 
@@ -303,12 +342,9 @@ def _build_browser_use_graph(
                 if browser_config.enable_existing_browser:
                     use_existing = await detect_existing_browser_intent(
                         task,
-                        model_name=model_name,
-                        base_url=browser_base_url,
-                        api_key=browser_api_key,
+                        soothe_config=soothe_config,
                     )
                     if use_existing:
-                        # Try to find existing browser via CDP (simplified)
                         cdp_url = os.environ.get("CHROME_CDP_URL")
                         if cdp_url:
                             logger.info("Using existing browser at %s", cdp_url)
@@ -388,7 +424,6 @@ def _build_browser_use_graph(
                     use_vision=use_vision,
                 )
 
-                # Start the browser session
                 logger.info("BrowserUse subagent: calling browser_session.start()")
                 sess_t0 = time.perf_counter()
                 await agent.browser_session.start()
@@ -397,7 +432,6 @@ def _build_browser_use_graph(
                     time.perf_counter() - sess_t0,
                 )
 
-                # Run step-by-step to emit progress events
                 for step_idx in range(resolved_max_steps):
                     try:
                         iter_t0 = time.perf_counter()
@@ -424,28 +458,44 @@ def _build_browser_use_graph(
                         raise
 
                 history = agent.history
-                result = (
-                    history.final_result() or "BrowserUse task completed (no extracted content.)"
-                )
+                steps_executed = len(history.history) if history.history else 0
+                extracted = history.final_result()
+                if extracted:
+                    result = str(extracted)
+                elif _browser_history_had_no_progress(history):
+                    result = _format_browser_no_progress_error(
+                        model_name=model_name,
+                        steps=steps_executed,
+                    )
+                    run_success = False
+                    logger.error(result)
+                else:
+                    result = _NO_EXTRACTED_CONTENT
+                    run_success = False
+                    logger.error(
+                        "BrowserUse finished without extracted content after %d step(s) (model=%s)",
+                        steps_executed,
+                        model_name,
+                    )
                 result_str = str(result)
                 completion_summary = browser_use_result_summary_for_display(result_str)
                 logger.info(
-                    "BrowserUse subagent: loop finished total_wall=%.1fs steps_executed=%d result_preview=%s",
+                    "BrowserUse subagent: loop finished total_wall=%.1fs steps_executed=%d success=%s result_preview=%s",
                     time.perf_counter() - run_t0,
-                    len(history.history) if history.history else 0,
+                    steps_executed,
+                    run_success,
                     preview_first(result_str, 300),
                 )
 
                 emit_subagent_wire_event(
                     BrowserUseCompletedEvent(
                         duration_ms=int((time.perf_counter() - run_t0) * 1000),
-                        success=True,
+                        success=run_success,
                         summary=completion_summary,
                     ).to_dict(),
                     logger,
                 )
 
-                # Stop the browser session
                 try:
                     logger.info("BrowserUse subagent: stopping browser_session")
                     await agent.browser_session.stop()
@@ -459,6 +509,7 @@ def _build_browser_use_graph(
             logger.exception("BrowserUse agent failed")
             error_msg = format_cli_error(e)
             result = error_msg
+            run_success = False
 
             emit_subagent_wire_event(
                 BrowserUseCompletedEvent(
@@ -488,64 +539,34 @@ def _build_browser_use_graph(
     return graph.compile()
 
 
-def _extract_model_name(model: Any) -> str | None:
-    """Extract a plain model name string from various model representations.
-
-    browser-use creates its own LLM internally; it needs a model name string,
-    not a langchain BaseChatModel instance.
-    """
-    if model is None:
-        return None
-    if isinstance(model, str):
-        return model
-    for attr in ("model_name", "model"):
-        val = getattr(model, attr, None)
-        if isinstance(val, str):
-            return val
-    return None
-
-
 def _create_browser_use_subagent(
-    model: Any = None,
     *,
     headless: bool = True,
     max_steps: int | None = None,
     use_vision: bool = True,
     config: BrowserUseSubagentConfig | None = None,
-    **kwargs: Any,
+    soothe_config: Any,
 ) -> CompiledSubAgent:
     """Create a BrowserUse subagent (CompiledSubAgent with browser-use workflow).
 
     Args:
-        model: Model name string or langchain BaseChatModel for the browser-use
-            LLM. If a BaseChatModel instance is passed, the model name is
-            extracted automatically.
         headless: Run browser in headless mode.
         max_steps: Maximum browser agent steps. When ``None``, uses
             ``BrowserUseSubagentConfig.max_steps`` (default 10).
         use_vision: Enable vision/screenshot support.
         config: BrowserUse subagent configuration object with runtime directories,
             cleanup settings, and feature flags.
-        **kwargs: Additional config -- `base_url` and `api_key` are forwarded
-            to the browser-use LLM.
+        soothe_config: SootheConfig used to resolve ``subagents.browser_use.model_role``.
 
     Returns:
         `CompiledSubAgent` dict compatible with deepagents.
     """
-    model_name = _extract_model_name(model)
-
-    # Get base_url and api_key from kwargs or fall back to environment
-    browser_base_url = kwargs.get("base_url") or os.environ.get("OPENAI_BASE_URL")
-    browser_api_key = kwargs.get("api_key") or os.environ.get("OPENAI_API_KEY")
-
     runnable = _build_browser_use_graph(
         headless=headless,
         max_steps=max_steps,
         use_vision=use_vision,
-        browser_model=model_name,
-        browser_base_url=browser_base_url,
-        browser_api_key=browser_api_key,
         config=config,
+        soothe_config=soothe_config,
     )
 
     return {

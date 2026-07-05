@@ -2,20 +2,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-_FRAGMENTS_DIR = Path(__file__).resolve().parent.parent / "prompts" / "fragments"
-
-
-def _read_fragment(relative: str) -> str:
-    return _FRAGMENTS_DIR.joinpath(relative).read_text(encoding="utf-8").strip()
+from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
 
 
 def build_intake_identity_message(assistant_name: str) -> str:
     """Build the assistant identity block for intake classification.
 
     Intake classification does not go through ``SystemPromptMiddleware``, so
-    identity must be set here explicitly.
+    identity must be set here explicitly using the same block as CoreAgent.
 
     Args:
         assistant_name: Configured assistant display name (e.g. ``Soothe``).
@@ -23,9 +17,7 @@ def build_intake_identity_message(assistant_name: str) -> str:
     Returns:
         System prompt text including assistant identity.
     """
-    identity_template = _read_fragment("system/prompts/simple_system.xml")
-    identity = identity_template.format(assistant_name=assistant_name).strip()
-    return (
-        f"{identity}\n\n"
-        "If asked who you are, use your assistant name; do not claim another vendor model."
-    )
+    return build_assistant_identity_block(assistant_name)
+
+
+__all__ = ["build_intake_identity_message"]

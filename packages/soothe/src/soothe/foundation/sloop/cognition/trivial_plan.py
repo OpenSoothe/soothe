@@ -9,7 +9,12 @@ runs on a step thread branch; ``terminal_after_execute`` routes to
 from __future__ import annotations
 
 from soothe.foundation.sloop.cognition.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
-from soothe.foundation.sloop.state.schemas import AgentDecision, PlanResult, StepAction
+from soothe.foundation.sloop.state.schemas import (
+    AgentDecision,
+    PlanResult,
+    StepAction,
+    infer_explicit_wire_subagent_from_goal,
+)
 
 
 def build_trivial_plan(goal: str) -> PlanResult:
@@ -23,6 +28,20 @@ def build_trivial_plan(goal: str) -> PlanResult:
         itself, no synthetic reasoning prose, and the ``## Result`` evidence
         contract as the step's ``expected_output``.
     """
+    wire_subagent = infer_explicit_wire_subagent_from_goal(goal)
+    step = StepAction(
+        description=goal,
+        expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
+        wire_subagent=wire_subagent,
+    )
+    if wire_subagent:
+        step = step.model_copy(
+            update={
+                "execution_hint": "subagent",
+                "subagent": wire_subagent,
+            }
+        )
+
     return PlanResult(
         status="continue",
         goal_progress="none",
@@ -35,12 +54,7 @@ def build_trivial_plan(goal: str) -> PlanResult:
             type="execute_steps",
             execution_mode="parallel",
             reasoning="",
-            steps=[
-                StepAction(
-                    description=goal,
-                    expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
-                )
-            ],
+            steps=[step],
         ),
         next_action=goal[:300],
     )
