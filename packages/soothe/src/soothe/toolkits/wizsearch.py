@@ -21,9 +21,13 @@ from soothe.toolkits._internal.wizsearch import (
     perform_wizsearch_crawl,
     perform_wizsearch_search,
 )
+from soothe.utils.text_preview import log_preview
 from soothe.utils.tool_error_handler import tool_error_handler
 
 logger = logging.getLogger(__name__)
+
+_LOG_QUERY_CHARS = 120
+_LOG_URL_CHARS = 160
 
 
 class WizsearchSearchTool(BaseTool):
@@ -92,6 +96,13 @@ class WizsearchSearchTool(BaseTool):
         """
         # Use limit if provided, otherwise fall back to max_results_per_engine or default
         effective_max = limit or max_results_per_engine or self.default_max_results_per_engine
+        logger.info(
+            "[Wizsearch] wizsearch_search invoke sync query=%r engines=%s max_results=%d timeout=%ds",
+            log_preview(query, chars=_LOG_QUERY_CHARS),
+            self.default_engines,
+            effective_max,
+            timeout_seconds or self.default_timeout,
+        )
         return _run_coro(
             perform_wizsearch_search(
                 query=query,
@@ -123,6 +134,13 @@ class WizsearchSearchTool(BaseTool):
         """
         # Use limit if provided, otherwise fall back to max_results_per_engine or default
         effective_max = limit or max_results_per_engine or self.default_max_results_per_engine
+        logger.info(
+            "[Wizsearch] wizsearch_search invoke async query=%r engines=%s max_results=%d timeout=%ds",
+            log_preview(query, chars=_LOG_QUERY_CHARS),
+            self.default_engines,
+            effective_max,
+            timeout_seconds or self.default_timeout,
+        )
         return await perform_wizsearch_search(
             query=query,
             max_results_per_engine=effective_max,
@@ -180,6 +198,12 @@ class WizsearchCrawlTool(BaseTool):
             Extracted text content.
         """
         # Wizsearch crawler returns structured dict
+        logger.info(
+            "[Wizsearch] wizsearch_crawl invoke sync url=%r format=%s only_text=%s",
+            log_preview(url, chars=_LOG_URL_CHARS),
+            content_format or self.default_content_format,
+            only_text,
+        )
         result = _run_coro(
             perform_wizsearch_crawl(
                 url=url,
@@ -217,6 +241,12 @@ class WizsearchCrawlTool(BaseTool):
             Extracted text content.
         """
         # Wizsearch crawler returns structured dict
+        logger.info(
+            "[Wizsearch] wizsearch_crawl invoke async url=%r format=%s only_text=%s",
+            log_preview(url, chars=_LOG_URL_CHARS),
+            content_format or self.default_content_format,
+            only_text,
+        )
         result = await perform_wizsearch_crawl(
             url=url,
             content_format=content_format or self.default_content_format,

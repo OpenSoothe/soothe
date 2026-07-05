@@ -25,7 +25,7 @@ Screen {
 /* Chat area - main scrollable messages area */
 #chat {
     height: 1fr;
-    padding: 0 2;
+    padding: 0 1;
     background: $background;
 }
 
@@ -88,7 +88,7 @@ Screen {
 /* Non-blocking filesystem change previews (write / edit / delete) */
 .file-change-preview {
     height: auto;
-    padding: 0 1;
+    padding: 0;
     margin: 0;
     background: $surface-darken-1;
     border: solid $secondary;

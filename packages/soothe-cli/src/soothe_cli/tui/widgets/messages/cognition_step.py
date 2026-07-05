@@ -19,7 +19,7 @@ from textual.widgets import Static
 
 from soothe_cli.runtime.presentation.duration_format import format_duration_ms
 from soothe_cli.tui import theme
-from soothe_cli.tui.config import get_glyphs, is_ascii_mode
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
 from soothe_cli.tui.tool_display import format_step_tool_activity_line
 from soothe_cli.tui.widgets.clipboard import (
@@ -80,7 +80,8 @@ class CognitionStepMessage(Vertical):
     manual whole-card collapse; cards do not auto-collapse.
 
     Pure rendering and classification live in ``cognition_step_activity.py``.
-    Tool rows use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
+    Card headers use a stateful ``⏺`` dot (see ``_assemble_card_header``); body
+    lines use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
     Prose / notes keep ``⎿ ○`` continuation lines.
     """
 
@@ -89,10 +90,9 @@ class CognitionStepMessage(Vertical):
     DEFAULT_CSS = """
     CognitionStepMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $cognition;
     }
 
     CognitionStepMessage .step-header {
@@ -139,10 +139,6 @@ class CognitionStepMessage(Vertical):
     CognitionStepMessage.-collapsed .step-subagent-notes,
     CognitionStepMessage.-collapsed .step-detail {
         display: none;
-    }
-
-    CognitionStepMessage:hover {
-        border-left: wide $cognition-hover;
     }
     """
 
@@ -254,8 +250,10 @@ class CognitionStepMessage(Vertical):
     def _step_header_content(self) -> Content:
         return _assemble_card_header(
             self,
-            "🚀 ",
             self._description,
+            status=self._status,
+            spinner_position=self._spinner_position,
+            animate_running=self._status == "running",
         )
 
     def compose(self) -> ComposeResult:
@@ -307,9 +305,6 @@ class CognitionStepMessage(Vertical):
             self._sync_step_card_surface()
 
     def on_mount(self) -> None:
-        if is_ascii_mode():
-            colors = theme.get_theme_colors(self)
-            self.styles.border = ("ascii", colors.primary)
         self._header_widget = self.query_one("#step-cognition-header", Static)
         self._status_widget = self.query_one("#step-cognition-status", Static)
         self._tools_widget = self.query_one("#step-cognition-tools", Static)
@@ -1211,6 +1206,7 @@ class CognitionStepMessage(Vertical):
         if self._status in ("running", "success", "error"):
             return
         self._status = "queued"
+        self._refresh_header_title()
         self._sync_step_card_surface()
 
     def _maybe_start_running_timer(self) -> None:
@@ -1245,6 +1241,7 @@ class CognitionStepMessage(Vertical):
         self._step_tool_list_user_expanded = False
         self._start_time = time()
         self._tools_body_collapsed = False
+        self._refresh_header_title()
         self._ensure_running_ui()
 
     def _stop_animation(self) -> None:
@@ -1275,6 +1272,7 @@ class CognitionStepMessage(Vertical):
             return
         frames = get_glyphs().spinner_frames
         self._spinner_position = (self._spinner_position + 1) % len(frames)
+        self._refresh_header_title()
         self._sync_step_card_surface()
 
     def set_complete(
@@ -1287,6 +1285,7 @@ class CognitionStepMessage(Vertical):
         """Finalize step with duration, tool count, and summary text."""
         self._stop_animation()
         self._status = "success" if success else "error"
+        self._refresh_header_title()
         self._last_success = success
         self._last_duration_ms = duration_ms
         self._last_tool_call_count = tool_call_count
@@ -1419,6 +1418,7 @@ class CognitionStepMessage(Vertical):
             return
         self._stop_animation()
         self._status = "pending"
+        self._refresh_header_title()
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001  # Unmounted widget (tests / no Textual app)
@@ -1441,6 +1441,7 @@ class CognitionStepMessage(Vertical):
         """Mark step as aborted (stream error / cancel) while still running."""
         self._stop_animation()
         self._status = "error"
+        self._refresh_header_title()
         self._execute_assistant_buffer = ""
         self._last_completed_execute_prose = ""
         self._interrupt_message = message

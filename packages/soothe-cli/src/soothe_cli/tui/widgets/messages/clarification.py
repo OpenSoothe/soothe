@@ -8,8 +8,12 @@ from typing import Any
 
 from textual import on
 from textual.containers import Vertical
+from textual.content import Content
 from textual.message import Message
 from textual.widgets import Input, Static
+
+from soothe_cli.tui import theme
+from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +33,9 @@ class ClarificationInputMessage(Vertical):
     DEFAULT_CSS = """
     ClarificationInputMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0 0 1 0;
         background: transparent;
-        border-left: wide $warning;
     }
 
     ClarificationInputMessage .clarification-title {
@@ -56,8 +59,7 @@ class ClarificationInputMessage(Vertical):
 
     /* Match the main ChatInput visual: solid primary border on a $surface
        fill, transparent inner padding so the cursor sits where the user
-       expects. Keeps the warning left-rail of the answer card while making
-       the editable region feel identical to the prompt at the bottom. */
+       expects. */
     ClarificationInputMessage Input {
         margin: 0;
         width: 1fr;
@@ -69,10 +71,6 @@ class ClarificationInputMessage(Vertical):
 
     ClarificationInputMessage Input:focus {
         border: solid $primary;
-    }
-
-    ClarificationInputMessage.is-submitted {
-        border-left: wide $success;
     }
 
     ClarificationInputMessage.is-submitted Input {
@@ -113,8 +111,26 @@ class ClarificationInputMessage(Vertical):
         self._answers: list[str] = []
         self._widget_id = widget_id or self.id or ""
 
+    def _title_content(self) -> Content:
+        if self._submitted:
+            return _assemble_card_header(self, "Awaiting your answer", status="success")
+        colors = theme.get_theme_colors(self)
+        return _assemble_card_header(
+            self,
+            "Awaiting your answer",
+            status="pending",
+            accent=colors.warning,
+        )
+
+    def _refresh_title(self) -> None:
+        try:
+            title = self.query_one(".clarification-title", Static)
+            title.update(self._title_content())
+        except Exception:  # noqa: BLE001
+            pass
+
     def compose(self) -> Any:
-        yield Static("Awaiting your answer", classes="clarification-title")
+        yield Static(self._title_content(), classes="clarification-title")
         for i, q in enumerate(self._questions):
             q_classes = "clarification-question"
             if i > 0:
@@ -197,6 +213,7 @@ class ClarificationInputMessage(Vertical):
         for inp in self._inputs:
             inp.disabled = True
         self.add_class("is-submitted")
+        self._refresh_title()
         self.post_message(
             self.Submitted(
                 step_id=self._step_id,

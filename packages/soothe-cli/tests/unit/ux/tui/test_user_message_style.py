@@ -14,7 +14,7 @@ def test_user_message_echoes_chat_input_surface_card() -> None:
 
 
 def test_user_message_mode_borders_use_full_box() -> None:
-    """Shell and command modes swap the full border color, not a left rail only."""
+    """Shell and command modes swap the full border color."""
     css = UserMessage.DEFAULT_CSS
     assert "UserMessage.-mode-shell" in css
     assert "border: solid $mode-bash" in css

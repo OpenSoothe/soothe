@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from textual.content import Content
 
 from soothe_cli.tui import theme
+from soothe_cli.tui.config import get_glyphs
 
 if TYPE_CHECKING:
     pass
@@ -126,17 +127,91 @@ def _is_widget_animation_visible(widget: object) -> bool:
         return False
 
 
-def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Content:
-    """Build a card title: cognition-colored label plus foreground body (no bold).
+def _card_dot_tone(
+    status: str,
+    colors: theme.ThemeColors,
+    *,
+    accent: str | None = None,
+    spinner_position: int = 0,
+    animate_running: bool = False,
+) -> str:
+    """Return a Textual style string for a card prefix dot from lifecycle status."""
+    phase = (status or "pending").strip().lower()
+    if phase in ("success", "done", "completed"):
+        return colors.card_success
+    if phase in ("error", "failed", "interrupted"):
+        return colors.card_error
+    if phase == "running":
+        if animate_running and spinner_position % 2:
+            return colors.card_activity_muted
+        return accent or colors.muted
+    if phase in ("queued", "pending", "continue", "replan"):
+        return colors.muted
+    if accent:
+        return accent
+    return colors.muted
 
-    Used for Goal, Plan, Step, and tool (including Task) headers so hierarchy
-    comes from color, not weight. Body uses ``foreground`` so titles stay
-    readable on dark backgrounds (parity with step tool rows).
+
+def _card_dot_glyph(
+    status: str,
+    *,
+    spinner_position: int = 0,
+    animate_running: bool = False,
+) -> str:
+    """Return the prefix glyph for a card header (always ``⏺``; running flashes via tone)."""
+    del status, spinner_position, animate_running
+    return get_glyphs().tool_prefix
+
+
+def _card_dot_prefix_content(
+    widget: object,
+    status: str,
+    *,
+    accent: str | None = None,
+    spinner_position: int = 0,
+    animate_running: bool = False,
+) -> Content:
+    """Build a stateful colored card prefix dot (Claude Code ``⏺`` style)."""
+    try:
+        colors = theme.get_theme_colors(widget)
+    except Exception:  # noqa: BLE001
+        colors = theme.DARK_COLORS
+    glyph = _card_dot_glyph(
+        status,
+        spinner_position=spinner_position,
+        animate_running=animate_running,
+    )
+    tone = _card_dot_tone(
+        status,
+        colors,
+        accent=accent,
+        spinner_position=spinner_position,
+        animate_running=animate_running,
+    )
+    return Content.styled(f"{glyph} ", tone)
+
+
+def _assemble_card_header(
+    widget: object,
+    body_part: str,
+    *,
+    status: str = "running",
+    accent: str | None = None,
+    spinner_position: int = 0,
+    animate_running: bool = False,
+) -> Content:
+    """Build a card title: stateful dot prefix plus foreground body (no bold).
+
+    Used for Goal, Plan, Step, and tool (including Task) headers. The dot color
+    reflects lifecycle status; body lines below use the ``⎿`` tree gutter.
 
     Args:
         widget: Mounted widget (or any object accepted by ``get_theme_colors``).
-        label_part: Left segment (e.g. ``⎿ 📍 ``).
-        body_part: Right segment (goal text, args, etc.).
+        body_part: Header text (goal, step description, etc.).
+        status: Card lifecycle phase for dot color/glyph.
+        accent: Optional override tone for the dot (e.g. skill/error accent).
+        spinner_position: Toggles gray flash while ``animate_running`` is true.
+        animate_running: Flash the dot gray while running (step/task/assistant cards).
 
     Returns:
         Assembled ``Content`` for a ``Static`` header.
@@ -146,7 +221,13 @@ def _assemble_card_header(widget: object, label_part: str, body_part: str) -> Co
     except Exception:  # noqa: BLE001
         colors = theme.DARK_COLORS
     return Content.assemble(
-        Content.styled(label_part, colors.cognition),
+        _card_dot_prefix_content(
+            widget,
+            status,
+            accent=accent,
+            spinner_position=spinner_position,
+            animate_running=animate_running,
+        ),
         Content.styled(body_part, colors.foreground),
     )
 

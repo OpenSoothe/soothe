@@ -42,11 +42,15 @@ def _make_mock_ce() -> Mock:
     mock_ce = Mock()
     mock_goal = Mock()
     mock_goal.id = "test-goal-id"
+    # Mock goal.steps.nodes for step_results property iteration
+    mock_goal.steps = Mock()
+    mock_goal.steps.nodes = {}
     mock_ce.load = AsyncMock(return_value=False)
     mock_ce.create_goal = AsyncMock(return_value=mock_goal)
     mock_ce.activate_goal = AsyncMock()
     mock_ce.save = AsyncMock()
     mock_ce.complete_goal = AsyncMock()
+    mock_ce.finalize_goal = AsyncMock()  # Called by goal_completion node
     mock_ce.get_all_goals = Mock(return_value=[])
     mock_ce.ledger = Mock()
     mock_ce.ledger.entries = Mock(return_value=[])
@@ -144,11 +148,18 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 @pytest.mark.asyncio
 async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected() -> None:
     """Ledger-direct goal completion should bypass synthesis when planner recommends it."""
+    from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
+
     calls = 0
 
     async def counting_astream(*args, **kwargs):  # noqa: ARG002
         nonlocal calls
         calls += 1
+        if False:
+            yield None
+
+    # Empty async generator for synthesis mock (never yields)
+    async def empty_gen(*args, **kwargs):  # noqa: ARG002
         if False:
             yield None
 
@@ -160,6 +171,13 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
+    # Add ledger content so LEDGER_DIRECT has content and doesn't fall back to synthesis
+    from soothe.foundation.sloop.utils.messages import LoopAIMessage
+
+    mock_ce.ledger.record_message = Mock()
+    mock_ce.ledger.entries = Mock(
+        return_value=[(LoopAIMessage(content="done content", phase="execute_step"), "execute_step")]
+    )
 
     with (
         patch(
@@ -174,8 +192,14 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
+        patch.object(
+            SynthesisGenerator,
+            "generate_synthesis",
+            side_effect=empty_gen,
+        ),
     ):
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
+        loop._fast_llm = None  # Prevent synthesis LLM calls
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 
@@ -196,6 +220,12 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 @pytest.mark.asyncio
 async def test_completed_payload_for_summary_path() -> None:
     """Summary path is used when ledger is empty and synthesis produces no text."""
+    from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
+
+    async def empty_gen(*args, **kwargs):  # noqa: ARG002
+        if False:
+            yield None
+
     mock_core = _make_mock_core_with_checkpointer()
     mock_core.astream = AsyncMock()
 
@@ -218,8 +248,14 @@ async def test_completed_payload_for_summary_path() -> None:
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
             return_value=mock_anchor_mgr,
         ),
+        patch.object(
+            SynthesisGenerator,
+            "generate_synthesis",
+            side_effect=empty_gen,
+        ),
     ):
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
+        loop._fast_llm = None  # Prevent synthesis LLM calls
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
 

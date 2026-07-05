@@ -241,7 +241,7 @@ def test_convert_loop_events_maps_cognition_events_to_specialized_cards() -> Non
 
     data = app._convert_loop_events_to_data(events)
 
-    # The goal-tree pin (📍) is intentionally suppressed on history replay.
+    # The goal-tree header is intentionally suppressed on history replay.
     assert [m.type for m in data] == [
         MessageType.COGNITION_REASON,
         MessageType.STEP_PROGRESS,
@@ -327,8 +327,8 @@ def test_collect_cognition_card_replay_dedupes_step_progress_pair() -> None:
     assert step_cards[0].step_summary == "Found 70k files"
 
 
-def test_collect_cognition_card_replay_drops_goal_tree_pin() -> None:
-    """Goal-tree pin (📍 goal · iter<=N) must not render on resume."""
+def test_collect_cognition_card_replay_drops_goal_tree_header() -> None:
+    """Goal-tree header (goal · iter<=N) must not render on resume."""
     events = [
         {
             "kind": "event",

@@ -361,8 +361,7 @@ class SootheApp(
 
         Most styling uses Textual's built-in variables (`$primary`,
         `$text-muted`, `$error-muted`, etc.).  This override injects the
-        app-specific variables (`$mode-bash`, `$mode-command`, `$skill`,
-        `$skill-hover`, `$tool`, `$tool-hover`, `$cognition`, `$cognition-hover`)
+        app-specific variables (`$mode-bash`, `$mode-command`, `$cognition`)
         that have no Textual equivalent.
 
         Returns:

@@ -8,7 +8,7 @@ from textual.content import Content
 from textual.widgets import Static
 
 from soothe_cli.tui import theme
-from soothe_cli.tui.config import is_ascii_mode
+from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 
 class ErrorMessage(Static):
@@ -20,14 +20,13 @@ class ErrorMessage(Static):
     DEFAULT_CSS = """
     ErrorMessage {
         height: auto;
-        padding: 1;
+        padding: 1 1 1 0;
         margin: 0 0 1 0;
         background: $error-muted;
         color: white;
-        border-left: wide $error;
     }
     """
-    """Tinted background + left border to visually separate errors from output."""
+    """Tinted background to visually separate errors from output."""
 
     def __init__(self, error: str, **kwargs: Any) -> None:
         """Initialize an error message.
@@ -48,12 +47,12 @@ class ErrorMessage(Static):
         """
         colors = theme.get_theme_colors(self)
         return Content.assemble(
+            _assemble_card_header(
+                self,
+                "",
+                status="error",
+                accent=colors.error,
+            ),
             Content.styled("Error: ", f"bold {colors.error}"),
             self._content,
         )
-
-    def on_mount(self) -> None:
-        """Set border style based on charset mode."""
-        if is_ascii_mode():
-            colors = theme.get_theme_colors(self)
-            self.styles.border_left = ("ascii", colors.error)

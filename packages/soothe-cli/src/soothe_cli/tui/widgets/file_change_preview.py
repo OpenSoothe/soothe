@@ -24,6 +24,7 @@ from soothe_cli.tui.preview_limits import (
 )
 from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
 from soothe_cli.tui.widgets.diff import DIFF_CODE_GAP, compose_diff_line_list
+from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -45,21 +46,35 @@ def _format_stats(additions: int, deletions: int) -> Content:
 
 
 def _compact_header(
+    widget: FileChangePreviewWidget,
     file_path: str,
     *,
     action_label: str = "",
     additions: int = 0,
     deletions: int = 0,
     extra: str = "",
+    finalized: bool = False,
 ) -> Static:
-    """Build a single-line header: action, path, optional suffix, and diff stats."""
-    parts: list[str | tuple[str, str] | Content] = []
+    """Build a single-line header: dot prefix, action, path, optional suffix, and diff stats."""
+    header_parts: list[str] = []
     if action_label:
-        parts.append(Content.from_markup("[bold]$label[/bold]  ", label=action_label))
-    path_markup = "[bold cyan]$path[/bold cyan]"
+        header_parts.append(f"{action_label}  ")
+    path_part = file_path
     if extra:
-        path_markup += "  [dim]$extra[/dim]"
-    parts.append(Content.from_markup(path_markup, path=file_path, extra=extra))
+        path_part = f"{path_part}  {extra}"
+    header_parts.append(path_part)
+    body = "".join(header_parts)
+    try:
+        colors = theme.get_theme_colors(widget)
+    except Exception:  # noqa: BLE001
+        colors = theme.DARK_COLORS
+    dot_header = _assemble_card_header(
+        widget,
+        body,
+        status="success" if finalized else "running",
+        accent=colors.tool,
+    )
+    parts: list[str | tuple[str, str] | Content] = [dot_header]
     stats = _format_stats(additions, deletions)
     if additions or deletions:
         parts.append("  ")
@@ -94,14 +109,13 @@ class FileChangePreviewWidget(Vertical):
     DEFAULT_CSS = """
     FileChangePreviewWidget {
         height: auto;
-        padding: 0 1;
+        padding: 0;
         margin: 0;
     }
 
     FileChangePreviewWidget.-collapsed {
         background: transparent;
         border: none;
-        border-left: tall $secondary;
     }
 
     FileChangePreviewWidget.-expanded {
@@ -198,11 +212,13 @@ class FileChangePreviewWidget(Vertical):
     ) -> ComposeResult:
         """Yield a single-line action + path + stats header."""
         yield _compact_header(
+            self,
             file_path,
             action_label=self._action_label,
             additions=additions,
             deletions=deletions,
             extra=extra,
+            finalized=self._finalized,
         )
 
     def _render_diff_lines_only(self, diff_lines: list[str]) -> ComposeResult:
