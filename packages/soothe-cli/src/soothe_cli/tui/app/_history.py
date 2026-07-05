@@ -119,52 +119,107 @@ class _HistoryMixin:
     # ------------------------------------------------------------------
 
     async def _fetch_loop_history_data(self, loop_id: str) -> _LoopHistoryPayload:
-        """Fetch conversation history from the daemon's bound card ledger.
+        """Fetch conversation history from goal snapshots + live card tail.
 
-        RFC-413: this is the only resume path. The daemon's
-        ``loop_cards_fetch`` RPC returns the cards plus the persisted
-        context-token count in one round-trip; the daemon eagerly
-        backfills the ledger for legacy loops on first access.
+        RFC-631: prefers ``loop_history_fetch``; falls back to ``loop_cards_fetch``.
 
         Args:
             loop_id: Loop id.
 
         Returns:
             Payload containing converted message data and the persisted
-            context-token count. Empty payload on error or when the daemon
-            session is unavailable; the caller mounts an "Could not load
-            history" message via the surrounding error path.
+            context-token count.
         """
         if self._daemon_session is None:
             return _LoopHistoryPayload([], 0)
 
+        from soothe_sdk.display.card_ledger import card_from_wire_dict, card_to_wire_dict
+        from soothe_sdk.display.snapshot_types import GoalDisplaySnapshot
+
+        context_tokens = 0
+        goal_dicts: tuple[dict[str, Any], ...] = ()
+        wire_cards: list[dict[str, Any]] = []
+
+        fetch_history = getattr(self._daemon_session, "fetch_loop_history", None)
+        if callable(fetch_history):
+            try:
+                response = await fetch_history(loop_id)
+            except Exception:
+                logger.warning("loop_history_fetch failed for %s", loop_id, exc_info=True)
+                response = None
+            if response is not None and getattr(response, "success", False):
+                context_tokens = int(getattr(response, "context_tokens", 0) or 0)
+                goals_raw = getattr(response, "goals", []) or []
+                goal_dicts = tuple(g for g in goals_raw if isinstance(g, dict))
+                for goal_raw in goal_dicts:
+                    goal = GoalDisplaySnapshot.from_wire_dict(goal_raw)
+                    wire_cards.extend(card_to_wire_dict(card) for card in goal.display_cards)
+                for card in getattr(response, "live_cards", []) or []:
+                    if isinstance(card, dict):
+                        wire_cards.append(card)
+
+        if not wire_cards:
+            try:
+                response = await self._daemon_session.fetch_loop_cards(loop_id)
+            except Exception:
+                logger.warning("loop_cards_fetch failed for %s", loop_id, exc_info=True)
+                return _LoopHistoryPayload([], 0)
+
+            if not getattr(response, "success", False):
+                return _LoopHistoryPayload([], 0)
+
+            wire_cards = list(getattr(response, "cards", []) or [])
+            context_tokens = int(getattr(response, "context_tokens", 0) or 0)
+
+        if not wire_cards:
+            return _LoopHistoryPayload([], context_tokens, goal_dicts)
+
         try:
-            response = await self._daemon_session.fetch_loop_cards(loop_id)
-        except Exception:
-            logger.warning("loop_cards_fetch failed for %s", loop_id, exc_info=True)
-            return _LoopHistoryPayload([], 0)
-
-        if not getattr(response, "success", False):
-            return _LoopHistoryPayload([], 0)
-
-        raw_cards = list(getattr(response, "cards", []) or [])
-        context_tokens = int(getattr(response, "context_tokens", 0) or 0)
-        if not raw_cards:
-            return _LoopHistoryPayload([], context_tokens)
-
-        try:
-            from soothe_sdk.display.card_ledger import card_from_wire_dict
-
-            data = [card_from_wire_dict(c) for c in raw_cards]
+            data = [card_from_wire_dict(c) for c in wire_cards]
         except Exception:
             logger.warning(
-                "Failed to deserialize loop_cards_fetch payload for %s",
+                "Failed to deserialize loop history payload for %s",
                 loop_id,
                 exc_info=True,
             )
-            return _LoopHistoryPayload([], context_tokens)
+            return _LoopHistoryPayload([], context_tokens, goal_dicts)
 
-        return _LoopHistoryPayload(data, context_tokens)
+        from soothe_sdk.display.card_binder import merge_consecutive_assistant_cards
+
+        data = merge_consecutive_assistant_cards(data)
+
+        return _LoopHistoryPayload(data, context_tokens, goal_dicts)
+
+    async def _show_goal_history(self) -> None:
+        """Render structured goal history from RFC-631 snapshots."""
+        loop_id = self._lc_loop_id or (self._session_state.loop_id if self._session_state else None)
+        if not loop_id:
+            await self._mount_message(AppMessage("No active loop."))
+            return
+
+        payload = await self._fetch_loop_history_data(loop_id)
+        goals = payload.goals
+        if not goals:
+            await self._mount_message(AppMessage("No completed goals recorded yet."))
+            return
+
+        lines: list[str] = []
+        for index, goal_raw in enumerate(goals, start=1):
+            if not isinstance(goal_raw, dict):
+                continue
+            goal_text = str(goal_raw.get("goal_text") or "").strip() or f"Goal {index}"
+            status = str(goal_raw.get("status") or "completed")
+            card_count = int(goal_raw.get("card_count") or 0)
+            completion = str(goal_raw.get("goal_completion") or "").strip()
+            if len(completion) > 120:
+                completion = completion[:117] + "..."
+            lines.append(f"Goal {index} [{status}] — {goal_text}")
+            lines.append(f"  cards: {card_count}")
+            if completion:
+                lines.append(f"  completion: {completion}")
+            lines.append("")
+
+        await self._mount_message(AppMessage("\n".join(lines).rstrip()))
 
     async def _upgrade_loop_message_link(
         self,
@@ -287,7 +342,9 @@ class _HistoryMixin:
                             # Deduplicate immediate replayed AI chunks after reconnect/resubscribe.
                             if last_ai_chunk_by_ns.get(ns_key) == extracted:
                                 if getattr(message, "chunk_position", None) == "last":
-                                    await _flush_assistant_ns(ns_key)
+                                    asst = assistant_cards_by_ns.get(ns_key)
+                                    if asst is not None:
+                                        await asst.stop_stream()
                                 continue
                             asst = assistant_cards_by_ns.get(ns_key)
                             if asst is None:
@@ -298,7 +355,9 @@ class _HistoryMixin:
                             last_ai_chunk_by_ns[ns_key] = extracted
 
                         if getattr(message, "chunk_position", None) == "last":
-                            await _flush_assistant_ns(ns_key)
+                            asst = assistant_cards_by_ns.get(ns_key)
+                            if asst is not None:
+                                await asst.stop_stream()
                             last_ai_chunk_by_ns.pop(ns_key, None)
                         continue
                     continue

@@ -6,6 +6,7 @@ Implements Plan → Execute loop using StrangeLoop (RFC-201).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -67,26 +68,20 @@ _LOOP_HEARTBEAT_INTERVAL_S = 30.0
 class _LoopHeartbeatHandle:
     """Manages a background task that ticks `updated_at` for a running loop."""
 
-    __slots__ = ("_task", "_pm")
+    __slots__ = ("_task",)
 
-    def __init__(self, task: asyncio.Task[None] | None, pm: Any) -> None:
+    def __init__(self, task: asyncio.Task[None] | None) -> None:
         self._task = task
-        self._pm = pm
 
-    def stop(self) -> None:
-        """Cancel the heartbeat task and close the persistence manager. Idempotent."""
-        task, pm = self._task, self._pm
+    async def stop(self) -> None:
+        """Cancel the heartbeat task and release persistence resources. Idempotent."""
+        task = self._task
         self._task = None
-        self._pm = None
-        if task is not None and not task.done():
-            task.cancel()
-        if pm is not None and hasattr(pm, "close"):
-            # Best-effort fire-and-forget close (avoids needing to await here).
-            try:
-                asyncio.create_task(pm.close())
-            except RuntimeError:
-                # No running loop (process tearing down); nothing to close.
-                pass
+        if task is None or task.done():
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
@@ -96,22 +91,26 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
     persistence manager. Failure to start the heartbeat is non-fatal — returns
     a handle whose ``stop()`` is a no-op so the calling site can stay simple.
     """
-    try:
-        from soothe.foundation.sloop.state.persistence import (
-            StrangeLoopCheckpointPersistenceManager,
-        )
-
-        pm = StrangeLoopCheckpointPersistenceManager(config=config)
-    except Exception:
-        logger.debug(
-            "Loop heartbeat unavailable for %s; persistence manager init failed",
-            loop_id,
-            exc_info=True,
-        )
-        return _LoopHeartbeatHandle(task=None, pm=None)
 
     async def _tick() -> None:
+        pm = None
         try:
+            from soothe.foundation.sloop.state.persistence.manager import (
+                StrangeLoopCheckpointPersistenceManager,
+            )
+
+            try:
+                pm = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(
+                    config
+                )
+            except Exception:
+                logger.debug(
+                    "Loop heartbeat unavailable for %s; persistence manager init failed",
+                    loop_id,
+                    exc_info=True,
+                )
+                while True:
+                    await asyncio.sleep(_LOOP_HEARTBEAT_INTERVAL_S)
             while True:
                 await asyncio.sleep(_LOOP_HEARTBEAT_INTERVAL_S)
                 try:
@@ -120,13 +119,16 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
                     logger.debug("Loop heartbeat tick failed for %s", loop_id, exc_info=True)
         except asyncio.CancelledError:
             raise
+        finally:
+            if pm is not None:
+                await pm.close()
 
     try:
-        task = asyncio.create_task(_tick())
+        task = asyncio.create_task(_tick(), name=f"loop-heartbeat:{loop_id}")
     except RuntimeError:
         # Not running inside an asyncio loop (rare in this code path).
-        return _LoopHeartbeatHandle(task=None, pm=pm)
-    return _LoopHeartbeatHandle(task=task, pm=pm)
+        return _LoopHeartbeatHandle(task=None)
+    return _LoopHeartbeatHandle(task=task)
 
 
 def _is_tool_stream_chunk(chunk: object) -> bool:
@@ -463,6 +465,7 @@ class StrangeLoopMixin:
         # trust the timestamp as a freshness signal and avoid demoting a live
         # `status="running"` row to `idle`.
         heartbeat_handle = _start_loop_heartbeat(self._config, strange_loop_id)
+        increment_ai_message_count = False
 
         try:
             async for event_type, event_data in loop_agent.run_with_progress(
@@ -509,6 +512,27 @@ class StrangeLoopMixin:
                     ce_goal_id = (
                         event_data.get("ce_goal_id") if isinstance(event_data, dict) else None
                     )
+                    fast_path_kind = (
+                        event_data.get("fast_path_kind") if isinstance(event_data, dict) else None
+                    )
+                    if fast_path_kind == "chitchat":
+                        chitchat_response = ""
+                        if isinstance(event_data, dict):
+                            chitchat_response = str(
+                                event_data.get("chitchat_response")
+                                or getattr(classification, "chitchat_response", "")
+                                or ""
+                            )
+                        async for chunk in self._run_chitchat(
+                            user_input,
+                            tid,
+                            chitchat_response=chitchat_response,
+                            context_engine=fast_ce,
+                            ce_goal_id=ce_goal_id,
+                            loop_id=strange_loop_id,
+                        ):
+                            yield chunk
+                        return
                     async for chunk in self._run_trivial(
                         user_input,
                         tid,
@@ -742,33 +766,28 @@ class StrangeLoopMixin:
                         final_result.goal_progress,
                     )
 
-                    _schedule_increment_loop_ai_message_count(
-                        self._config,
-                        strange_loop_id,
-                    )
+                    increment_ai_message_count = True
         finally:
-            heartbeat_handle.stop()
+            if increment_ai_message_count:
+                await _increment_loop_ai_message_count(self._config, strange_loop_id)
+            await heartbeat_handle.stop()
 
 
-def _schedule_increment_loop_ai_message_count(config: Any, loop_id: str) -> None:
-    """Bump loop AI message counter without blocking stream completion."""
+async def _increment_loop_ai_message_count(config: Any, loop_id: str) -> None:
+    """Bump loop AI message counter before the worker request finishes."""
+    try:
+        from soothe.foundation.sloop.state.persistence.manager import (
+            StrangeLoopCheckpointPersistenceManager,
+        )
 
-    async def _increment() -> None:
+        pm = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(config)
         try:
-            from soothe.foundation.sloop.state.persistence import (
-                StrangeLoopCheckpointPersistenceManager,
-            )
-
-            pm = StrangeLoopCheckpointPersistenceManager(config=config)
-            try:
-                await pm.increment_loop_message_count(loop_id, ai=1)
-            finally:
-                await pm.close()
-        except Exception:
-            logger.warning(
-                "Failed to increment ai_message_count for loop %s",
-                loop_id,
-                exc_info=True,
-            )
-
-    asyncio.create_task(_increment())
+            await pm.increment_loop_message_count(loop_id, ai=1)
+        finally:
+            await pm.close()
+    except Exception:
+        logger.warning(
+            "Failed to increment ai_message_count for loop %s",
+            loop_id,
+            exc_info=True,
+        )

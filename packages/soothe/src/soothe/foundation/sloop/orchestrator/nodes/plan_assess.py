@@ -335,7 +335,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         # RFC-624 Phase 4: persist CE state after plan ingestion
         if ctx.ce is not None:
             try:
-                await ctx.ce.save()
+                ctx.ce.defer_save()
             except Exception:
                 logger.warning("[plan_assess] CE save failed", exc_info=True)
         await ctx.emit(
@@ -387,7 +387,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         # RFC-624 Phase 4: persist CE state after plan ingestion
         if ctx.ce is not None:
             try:
-                await ctx.ce.save()
+                ctx.ce.defer_save()
             except Exception:
                 logger.warning("[plan_assess] CE save failed", exc_info=True)
         await ctx.emit(

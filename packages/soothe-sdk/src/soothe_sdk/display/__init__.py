@@ -41,6 +41,16 @@ from soothe_sdk.display.card_ledger import (
     cards_to_mutations,
     utc_now_iso,
 )
+from soothe_sdk.display.snapshot_collapser import (
+    build_goal_snapshot,
+    fold_display_cards,
+    split_cards_by_user_segments,
+)
+from soothe_sdk.display.snapshot_types import (
+    GOAL_DISPLAY_SNAPSHOT_SCHEMA_VERSION,
+    GoalDisplaySnapshot,
+    snapshot_from_dataclass_dict,
+)
 from soothe_sdk.display.transcript_types import (
     UPDATABLE_FIELDS,
     MessageData,
@@ -76,4 +86,11 @@ __all__ = [
     "card_to_wire_dict",
     "cards_to_mutations",
     "utc_now_iso",
+    # Goal display snapshots (RFC-631)
+    "GOAL_DISPLAY_SNAPSHOT_SCHEMA_VERSION",
+    "GoalDisplaySnapshot",
+    "build_goal_snapshot",
+    "fold_display_cards",
+    "snapshot_from_dataclass_dict",
+    "split_cards_by_user_segments",
 ]

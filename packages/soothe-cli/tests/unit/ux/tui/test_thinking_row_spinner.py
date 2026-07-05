@@ -101,6 +101,16 @@ def test_loading_widget_startup_mode_omits_interrupt_hint() -> None:
     assert widget._format_hint_line(12.0, include_interrupt=True) == "(12s · esc to interrupt)"
 
 
+def test_loading_widget_reset_turn_start_mono_reanchors_elapsed() -> None:
+    widget = LoadingWidget("Executing")
+    widget._turn_start_mono = 100.0
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr("soothe_cli.tui.widgets.loading.monotonic", lambda: 130.0)
+        widget.reset_turn_start_mono(120.0)
+        assert widget._turn_start_mono == 120.0
+        assert widget._elapsed_seconds() == 10.0
+
+
 def test_loading_widget_resume_restores_pre_pause_label() -> None:
     widget = LoadingWidget("Executing")
     widget.pause(SPINNER_LABEL_INPUT)

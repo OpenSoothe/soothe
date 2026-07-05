@@ -18,7 +18,13 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage
 from soothe_sdk.display import card_binder
 from soothe_sdk.display.card_ledger import cards_to_mutations
-from soothe_sdk.langchain_wire import messages_from_wire_dicts
+from soothe_sdk.display.snapshot_collapser import (
+    build_goal_snapshot,
+    fold_display_cards,
+    split_cards_by_user_segments,
+)
+from soothe_sdk.display.snapshot_types import GoalDisplaySnapshot
+from soothe_sdk.display.transcript_types import MessageData, MessageType
 
 from soothe_daemon.display.loop_card_ledger import LoopCardLedger
 from soothe_daemon.display.loop_history_probe import filter_derivable_log_events
@@ -413,7 +419,10 @@ class LoopCardManager:
 
     @staticmethod
     def _ingest_message_wire(state: _BindingBuffers, msg_wire: dict[str, Any]) -> bool:
-        from soothe_sdk.client.wire import flatten_enveloped_message_dict
+        from soothe_sdk.client.wire import (
+            flatten_enveloped_message_dict,
+            messages_from_wire_dicts,
+        )
 
         flat = flatten_enveloped_message_dict(msg_wire)
         chunk_pos = flat.get("chunk_position")
@@ -471,6 +480,172 @@ class LoopCardManager:
         if log_events:
             return card_binder.convert_loop_events_to_data(log_events)
         return []
+
+    async def freeze_goal_display(
+        self,
+        loop_id: str,
+        *,
+        goal_id: str | None = None,
+        goal_text: str,
+        goal_completion: str,
+        status: str = "completed",
+        started_at: str | None = None,
+        completed_at: str | None = None,
+        duration_ms: int = 0,
+        tokens_used: int = 0,
+    ) -> None:
+        """Fold the live ledger into an immutable goal snapshot (RFC-631)."""
+        from datetime import UTC, datetime
+
+        from soothe.backends.persistence.display_store import get_display_card_store
+
+        try:
+            state = self._buffers.get(loop_id)
+            if state is not None and (state.messages or state.log_events):
+                await self._flush_buffers_to_ledger(loop_id, state)
+            ledger = await self.ensure_for_loop(loop_id)
+            live_cards = ledger.snapshot()
+            segments = split_cards_by_user_segments(live_cards)
+            goal_cards = segments[-1] if segments else list(live_cards)
+            store = get_display_card_store()
+            now_iso = datetime.now(UTC).isoformat()
+            snapshot = build_goal_snapshot(
+                goal_id=goal_id or "",
+                goal_index=-1,
+                goal_text=goal_text,
+                status=status,
+                started_at=started_at or now_iso,
+                completed_at=completed_at or now_iso,
+                duration_ms=duration_ms,
+                tokens_used=tokens_used,
+                goal_completion=goal_completion,
+                live_cards=goal_cards,
+            )
+            goal_index, resolved_goal_id = await asyncio.to_thread(
+                store.insert_goal_snapshot_with_auto_index,
+                loop_id,
+                goal_id=goal_id,
+                snapshot=snapshot.to_wire_dict(),
+            )
+            await ledger.reset_for_next_goal()
+            if state is not None:
+                state.messages.clear()
+                state.log_events.clear()
+            logger.info(
+                "Froze goal display snapshot loop=%s goal_index=%d cards=%d",
+                loop_id[:16],
+                goal_index,
+                snapshot.card_count,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to freeze goal display snapshot for loop %s",
+                loop_id,
+                exc_info=True,
+            )
+
+    async def ensure_snapshots_migrated(self, loop_id: str) -> None:
+        """Lazy migration: synthesize goal snapshots from legacy card ledger."""
+        from soothe.backends.persistence.display_store import get_display_card_store
+
+        store = get_display_card_store()
+        if store.goal_snapshot_count(loop_id) > 0:
+            return
+        ledger = await self.ensure_for_loop(loop_id)
+        cards = ledger.snapshot()
+        if not cards:
+            return
+        segments = split_cards_by_user_segments(cards)
+        if not segments:
+            return
+        from datetime import UTC, datetime
+
+        now_iso = datetime.now(UTC).isoformat()
+        for goal_index, segment in enumerate(segments):
+            user_text = ""
+            for card in segment:
+                if card.type == MessageType.USER and card.content.strip():
+                    user_text = card.content.strip()
+                    break
+            assistant_text = ""
+            for card in reversed(segment):
+                if card.type == MessageType.ASSISTANT and card.content.strip():
+                    assistant_text = card.content.strip()
+                    break
+            goal_id = f"{loop_id}_goal_{goal_index}"
+            snapshot = build_goal_snapshot(
+                goal_id=goal_id,
+                goal_index=goal_index,
+                goal_text=user_text or f"Goal {goal_index + 1}",
+                status="completed",
+                started_at=now_iso,
+                completed_at=now_iso,
+                duration_ms=0,
+                tokens_used=0,
+                goal_completion=assistant_text,
+                live_cards=segment,
+            )
+            await asyncio.to_thread(
+                store.insert_goal_snapshot,
+                loop_id,
+                goal_index=goal_index,
+                goal_id=goal_id,
+                snapshot=snapshot.to_wire_dict(),
+            )
+        logger.info(
+            "Migrated %d legacy goal snapshots for loop %s",
+            len(segments),
+            loop_id[:16],
+        )
+
+    async def fetch_loop_history(
+        self,
+        loop_id: str,
+        *,
+        loop_status: str | None = None,
+    ) -> dict[str, Any]:
+        """Return frozen goal snapshots plus the live card tail."""
+        from soothe.backends.persistence.display_store import get_display_card_store
+        from soothe_sdk.display.card_ledger import card_to_wire_dict
+
+        await self.ensure_snapshots_migrated(loop_id)
+        store = get_display_card_store()
+        goals = [
+            GoalDisplaySnapshot.from_wire_dict(raw) for raw in store.list_goal_snapshots(loop_id)
+        ]
+        ledger = await self.ensure_for_loop(loop_id)
+        live_cards = fold_display_cards(ledger.snapshot())
+        live_goal_index: int | None = None
+        if live_cards and (loop_status or "").strip().lower() == "running":
+            live_goal_index = len(goals)
+        return {
+            "loop_id": loop_id,
+            "goals": [g.to_wire_dict() for g in goals],
+            "live_cards": [card_to_wire_dict(c) for c in live_cards],
+            "live_goal_index": live_goal_index,
+            "success": True,
+        }
+
+    async def flattened_display_cards(
+        self,
+        loop_id: str,
+        *,
+        loop_status: str | None = None,
+    ) -> list[Any]:
+        """Flatten snapshots + live tail for ``loop_cards_fetch`` compatibility."""
+        payload = await self.fetch_loop_history(loop_id, loop_status=loop_status)
+        from soothe_sdk.display.card_ledger import card_from_wire_dict
+
+        cards: list[Any] = []
+        for goal_raw in payload.get("goals") or []:
+            if not isinstance(goal_raw, dict):
+                continue
+            goal = GoalDisplaySnapshot.from_wire_dict(goal_raw)
+            cards.extend(goal.display_cards)
+        for raw in payload.get("live_cards") or []:
+            if isinstance(raw, dict):
+                cards.append(card_from_wire_dict(raw))
+        return cards
 
     async def replay_to_client(
         self,

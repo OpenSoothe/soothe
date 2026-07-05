@@ -318,7 +318,17 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-06-04
   - Supersedes: RFC-411 (history reconstruction model)
-  - Depends on: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client)
+  - Amended by: RFC-631 (live-only ledger scope)
+  - Depends on: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631
+  - Authors: xiaming (with Claude)
+
+- **RFC-631**: [Goal-Bound Display Snapshots](RFC-631-goal-display-snapshots.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-07-05
+  - Depends on: RFC-225, RFC-413, RFC-450, RFC-503
+  - Amends: RFC-413 (live-only card ledger), RFC-225 (display freeze at goal completion)
+  - Implemented by: IG-548
   - Authors: xiaming (with Claude)
 
 - **RFC-450**: [Unified Daemon Communication Protocol for WebSocket IPC](RFC-450-daemon-communication-protocol.md)
@@ -545,6 +555,14 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Supersedes: IG-518 `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection
   - Authors: Xiaming Chen
 
+- **RFC-631**: [Goal-Bound Display Snapshots](RFC-631-goal-display-snapshots.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-07-05
+  - Depends on: RFC-225, RFC-413, RFC-450, RFC-503
+  - Implemented by: IG-548
+  - Authors: xiaming (with Claude)
+
 ---
 
 ### Product & Applications (7xx)
@@ -714,6 +732,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-631**: Goal-Bound Display Snapshots (2026-07-05, Draft)
 - **RFC-630**: Start-Phase LLM Intake and Branch Routing (2026-06-30, Draft)
 - **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) (2026-06-30, Draft)
 - **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)

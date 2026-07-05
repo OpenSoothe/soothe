@@ -282,13 +282,27 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         updates = {k: v for k, v in fields.items() if k in _allowed}
         if not updates:
             return
-        if "is_ephemeral" in updates:
-            updates["is_ephemeral"] = 1 if updates["is_ephemeral"] else 0
-        if "thread_ids" in updates and isinstance(updates["thread_ids"], list):
-            updates["thread_ids"] = json.dumps(updates["thread_ids"])
-        updates.setdefault("updated_at", datetime.now(UTC).isoformat())
-        set_clause = ", ".join(f"{k} = ?" for k in updates)
-        params = list(updates.values()) + [loop_id]
+        # RFC-225: drop ``status`` from external metadata writes when the loop
+        # already has goals. StrangeLoop is the authoritative writer then.
+        local_updates = updates.copy()
+        if "status" in local_updates:
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM goal_records WHERE loop_id = ?",
+                (loop_id,),
+            )
+            row = cursor.fetchone()
+            goal_count = int(row[0]) if row else 0
+            if goal_count > 0:
+                local_updates.pop("status", None)
+                if not local_updates:
+                    return
+        if "is_ephemeral" in local_updates:
+            local_updates["is_ephemeral"] = 1 if local_updates["is_ephemeral"] else 0
+        if "thread_ids" in local_updates and isinstance(local_updates["thread_ids"], list):
+            local_updates["thread_ids"] = json.dumps(local_updates["thread_ids"])
+        local_updates.setdefault("updated_at", datetime.now(UTC).isoformat())
+        set_clause = ", ".join(f"{k} = ?" for k in local_updates)
+        params = list(local_updates.values()) + [loop_id]
         conn.execute(
             f"UPDATE agentloop_loops SET {set_clause} WHERE loop_id = ?",  # noqa: S608
             params,

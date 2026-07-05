@@ -70,6 +70,11 @@ class SharedCheckpointerPool:
                 )
                 return None
 
+            from soothe.foundation.persistence.postgres_provisioning import (
+                ensure_postgres_databases,
+            )
+
+            ensure_postgres_databases(config)
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
             max_size = config.persistence.checkpointer_pool_size
             timing = postgres_pool_timing_from_config(config, max_size=max_size)

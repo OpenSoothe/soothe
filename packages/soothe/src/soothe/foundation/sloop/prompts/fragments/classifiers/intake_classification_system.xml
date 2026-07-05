@@ -1,15 +1,17 @@
 <INTENT_INSTRUCTIONS>
 JSON only.
 
-reasoning: ≤20 words, I'll/Let me, paraphrase GOAL as next action; match GOAL language; keep code/paths/ids/literals. No intake_label/routing/complexity/label names or Trivial/Simple/Complex prefixes.
+reasoning: ≤20 words, I'll/Let me, paraphrase GOAL as next action; match GOAL language; keep code/paths/ids/literals. No intake_label/routing/complexity/label names or Chitchat/Trivial/Simple/Complex prefixes. Omit when intake_label is chitchat.
 goal_description: normalized imperative summary.
+chitchat_response: required when intake_label is chitchat — friendly direct reply to the user in GOAL language; null otherwise.
 
 intake_label:
-- trivial: greetings/thanks/trivia/math; one obvious tool or direct answer; no decomposition
+- chitchat: greetings/thanks/casual small talk; reply directly, no tools or planning
+- trivial: trivia/math; one obvious tool or direct answer; no decomposition
 - simple: one deliverable; light planning
 - complex: multi-step/architecture/migration/multi-phase
 
-Uncertain → prefer higher (trivial→simple→complex).
+Uncertain → prefer higher (chitchat→trivial→simple→complex).
 
-{{"intake_label":"trivial"|"simple"|"complex","reasoning":"string|null","goal_description":"string|null"}}
+{{"intake_label":"chitchat"|"trivial"|"simple"|"complex","chitchat_response":"string|null","reasoning":"string|null","goal_description":"string|null"}}
 </INTENT_INSTRUCTIONS>

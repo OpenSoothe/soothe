@@ -931,7 +931,8 @@ The `method` field (within request/notification/subscribe) carries the operation
 | `loop_messages` | `request` | Fetch persisted conversation/activity rows |
 | `loop_state_get` | `request` | Get checkpoint channel values |
 | `loop_state_update` | `request` | Apply partial checkpoint values |
-| `loop_cards_fetch` | `request` | Fetch display card ledger snapshot |
+| `loop_cards_fetch` | `request` | Fetch display card ledger snapshot (deprecated — use `loop_history_fetch`) |
+| `loop_history_fetch` | `request` | Fetch goal display snapshots + live card tail (RFC-631) |
 
 #### Subscription Methods
 

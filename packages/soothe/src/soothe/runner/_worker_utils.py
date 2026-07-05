@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_ORPHAN_TASK_CANCEL_TIMEOUT_SECONDS = 30.0
+
 
 def spawn_safe_config(config: SootheConfig | None) -> SootheConfig:
     """Return a copy of ``config`` safe for ``multiprocessing`` spawn pickling.
@@ -43,12 +45,20 @@ def spawn_safe_request(request: LoopRunRequest) -> LoopRunRequest:
     return replace(request, model_params=safe_params)
 
 
-def cancel_orphan_loop_tasks(loop: asyncio.AbstractEventLoop) -> None:
+def cancel_orphan_loop_tasks(
+    loop: asyncio.AbstractEventLoop,
+    *,
+    timeout_seconds: float = _DEFAULT_ORPHAN_TASK_CANCEL_TIMEOUT_SECONDS,
+) -> None:
     """Cancel asyncio tasks left behind after a worker request completes.
 
     Leaked background tasks (for example async checkpoint flush workers when
     ``StrangeLoopStateManager.close()`` did not run) can corrupt the worker
     event loop on the next ``run_until_complete`` call.
+
+    Args:
+        loop: Dedicated worker event loop.
+        timeout_seconds: Maximum time to wait for cancelled tasks to finish.
     """
     pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
     if not pending:
@@ -57,7 +67,24 @@ def cancel_orphan_loop_tasks(loop: asyncio.AbstractEventLoop) -> None:
     for task in pending:
         task.cancel()
 
-    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    async def _gather_pending() -> None:
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    try:
+        loop.run_until_complete(asyncio.wait_for(_gather_pending(), timeout=timeout_seconds))
+    except TimeoutError:
+        still_running = [task for task in pending if not task.done()]
+        if still_running:
+            task_names = [
+                task.get_name() if task.get_name() else repr(task) for task in still_running
+            ]
+            logger.warning(
+                "cancel_orphan_loop_tasks: %d task(s) still running after %.1fs: %s; "
+                "worker loop may retain leaked background work",
+                len(still_running),
+                timeout_seconds,
+                ", ".join(task_names),
+            )
 
 
 __all__ = ["cancel_orphan_loop_tasks", "spawn_safe_config", "spawn_safe_request"]

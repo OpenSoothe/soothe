@@ -720,6 +720,18 @@ def continue_loop(
     )
 
 
+@loop_app.command("resume")
+def resume_loop(
+    loop_id: Annotated[str | None, typer.Argument(help="Loop identifier to continue")] = None,
+    prompt: Annotated[
+        str | None,
+        typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
+    ] = None,
+) -> None:
+    """Alias for ``continue`` — resume execution on existing loop."""
+    continue_loop(loop_id, prompt)
+
+
 @loop_app.command("detach")
 def detach_loop(
     loop_id: Annotated[str, typer.Argument(help="Loop identifier to detach")],
@@ -873,6 +885,7 @@ __all__ = [
     "prune_loop_branches",
     "delete_loop",
     "continue_loop",
+    "resume_loop",
     "detach_loop",
     "attach_loop",
     "new_loop",

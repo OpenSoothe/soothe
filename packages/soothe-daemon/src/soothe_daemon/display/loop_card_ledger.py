@@ -118,6 +118,15 @@ class LoopCardLedger:
                 self._inner.apply(mutation)
             self._loaded = True
 
+    async def reset_for_next_goal(self) -> None:
+        """Clear live card segment after a goal snapshot freeze (RFC-631)."""
+        header = build_header_mutation(loop_id=self._loop_id, created_by=self._created_by)
+        async with self._lock:
+            await asyncio.to_thread(self._store.replace_mutations, self._loop_id, [header])
+            self._inner = InMemoryCardLedger(loop_id=self._loop_id)
+            self._inner.apply(header)
+            self._loaded = True
+
     def to_mutations_snapshot(self) -> list[CardMutation]:
         snapshot = self._inner.snapshot()
         return [

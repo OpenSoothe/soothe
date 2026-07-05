@@ -206,6 +206,12 @@ class LoopCardsFetchParams(ParamsBase):
     since: str | None = None
 
 
+class LoopHistoryFetchParams(ParamsBase):
+    """Params for method=loop_history_fetch, type=request (RFC-631)."""
+
+    loop_id: str = Field(..., min_length=1)
+
+
 class LoopDetachParams(ParamsBase):
     """Params for method=loop_detach (legacy flat type)."""
 
@@ -482,6 +488,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "loop_state_get"): LoopStateGetParams,
     ("request", "loop_state_update"): LoopStateUpdateParams,
     ("request", "loop_cards_fetch"): LoopCardsFetchParams,
+    ("request", "loop_history_fetch"): LoopHistoryFetchParams,
     ("request", "job_create"): JobCreateParams,
     ("request", "job_status"): JobStatusParams,
     ("request", "job_pause"): JobPauseParams,

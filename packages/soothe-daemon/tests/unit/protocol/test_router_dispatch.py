@@ -106,6 +106,7 @@ def test_handler_registry_covers_all_legacy_message_types() -> None:
         "loop_state_get",
         "loop_state_update",
         "loop_cards_fetch",
+        "loop_history_fetch",
         "skills_list",
         "invoke_skill",
         "models_list",

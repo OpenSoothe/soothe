@@ -505,6 +505,52 @@ async def test_fetch_loop_history_data_uses_ledger_rpc() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fetch_loop_history_data_prefers_loop_history_fetch() -> None:
+    """RFC-631: prefer goal snapshots + live tail over legacy card fetch."""
+    from soothe_sdk.display.card_ledger import card_to_wire_dict
+    from soothe_sdk.display.transcript_types import MessageData, MessageType
+
+    frozen = [
+        MessageData(type=MessageType.USER, content="goal 1", id="msg-u1"),
+        MessageData(type=MessageType.ASSISTANT, content="done 1", id="msg-a1"),
+    ]
+    live = [
+        MessageData(type=MessageType.USER, content="goal 2", id="msg-u2"),
+    ]
+    goal_dict = {
+        "goal_id": "loop_goal_0",
+        "goal_index": 0,
+        "goal_text": "goal 1",
+        "status": "completed",
+        "display_cards": [card_to_wire_dict(c) for c in frozen],
+        "card_count": 2,
+        "goal_completion": "done 1",
+    }
+
+    app = object.__new__(SootheApp)
+    daemon_session = SimpleNamespace()
+    daemon_session.fetch_loop_history = AsyncMock(
+        return_value=SimpleNamespace(
+            goals=[goal_dict],
+            live_cards=[card_to_wire_dict(c) for c in live],
+            live_goal_index=1,
+            context_tokens=128,
+            success=True,
+        )
+    )
+    daemon_session.fetch_loop_cards = AsyncMock(
+        side_effect=AssertionError("legacy fetch should not run")
+    )
+    app._daemon_session = daemon_session
+
+    payload = await app._fetch_loop_history_data("loop-631")
+
+    assert [m.content for m in payload.messages] == ["goal 1", "done 1", "goal 2"]
+    assert payload.context_tokens == 128
+    assert payload.goals == (goal_dict,)
+
+
+@pytest.mark.asyncio
 async def test_fetch_loop_history_data_returns_empty_on_rpc_error() -> None:
     """When the ledger RPC raises, render an empty payload instead of crashing."""
     app = object.__new__(SootheApp)

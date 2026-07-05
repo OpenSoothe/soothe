@@ -20,7 +20,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
 from soothe_sdk.display.message_processing import (
     extract_tool_args_dict,
@@ -99,6 +99,87 @@ def merge_visible_messages_with_cognition_cards(
     return [m for _, m in merged]
 
 
+def merge_consecutive_assistant_cards(cards: list[MessageData]) -> list[MessageData]:
+    """Collapse legacy streaming assistant fragments into one card per reply.
+
+    Live TUI streaming appends deltas to a single ``AssistantMessage`` widget.
+    The daemon card binder historically emitted one ``MessageData`` per chunk,
+    each with a fresh id — resume then paints dozens of one-line cards.
+
+    Only merges runs that look like stream debris (many tiny fragments), not
+    distinct assistant turns such as ``first answer`` followed by ``latest answer``.
+    """
+    if not cards:
+        return []
+
+    def _looks_like_complete_reply(text: str) -> bool:
+        stripped = text.strip()
+        return len(stripped) >= 40 and stripped[-1] in ".!?"
+
+    def _should_merge_run(run: list[MessageData]) -> bool:
+        if len(run) < 2:
+            return False
+        if len(run) >= 3:
+            return True
+        first, second = run[0].content, run[1].content
+        if _looks_like_complete_reply(first) and _looks_like_complete_reply(second):
+            return False
+        return True
+
+    merged: list[MessageData] = []
+    pending: list[MessageData] = []
+
+    def _flush_pending() -> None:
+        nonlocal pending
+        if not pending:
+            return
+        if _should_merge_run(pending):
+            combined = pending[0]
+            for card in pending[1:]:
+                combined.content = combined.content + card.content
+                if not card.is_streaming:
+                    combined.is_streaming = False
+            merged.append(combined)
+        else:
+            merged.extend(pending)
+        pending = []
+
+    for card in cards:
+        if card.type == MessageType.ASSISTANT:
+            pending.append(card)
+            continue
+        _flush_pending()
+        merged.append(card)
+    _flush_pending()
+    return merged
+
+
+def _append_assistant_text(
+    result: list[MessageData],
+    msg: AIMessage | AIMessageChunk,
+    text: str,
+) -> None:
+    """Append one assistant delta, merging stream chunks into one card."""
+    chunk_pos = getattr(msg, "chunk_position", None)
+    is_stream_chunk = isinstance(msg, AIMessageChunk) or chunk_pos is not None
+    if is_stream_chunk and result and result[-1].type == MessageType.ASSISTANT:
+        prior = result[-1]
+        prior.content = prior.content + text
+        if chunk_pos == "last":
+            prior.is_streaming = False
+        elif chunk_pos is not None:
+            prior.is_streaming = True
+        return
+    is_streaming = chunk_pos not in (None, "last")
+    result.append(
+        MessageData(
+            type=MessageType.ASSISTANT,
+            content=text,
+            is_streaming=is_streaming,
+        )
+    )
+
+
 def convert_messages_to_data(
     messages: list[Any],
     *,
@@ -147,10 +228,10 @@ def convert_messages_to_data(
             else:
                 result.append(MessageData(type=MessageType.USER, content=user_text))
 
-        elif isinstance(msg, AIMessage):
+        elif isinstance(msg, (AIMessage, AIMessageChunk)):
             text = extract_ai_text_for_display(msg)
             if text:
-                result.append(MessageData(type=MessageType.ASSISTANT, content=text))
+                _append_assistant_text(result, msg, text)
 
             # When cognition cards are present, tool activity is already represented
             # inside the matching STEP_PROGRESS card's stats footer. Emitting a
@@ -348,12 +429,8 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
             event_type = str(event_data.get("type") or "").strip()
             if event_type == "soothe.cognition.strange_loop.completed":
                 # Live UX consumes this event as a status transition (loop →
-                # "completed") not as a chat card; the final answer's own
-                # closing line (e.g. "Total time: 1m 8s") is the natural
-                # endpoint marker. Surfacing it as a ``MessageType.APP``
-                # widget rendered a redundant "Goal done · progress=complete"
-                # banner under the resumed transcript that has no live
-                # counterpart — drop it.
+                # "completed") not as a chat card; elapsed time belongs on the
+                # thinking row above the input box, not in the final answer body.
                 return None
             if event_type == "soothe.cognition.intent.classified":
                 reasoning = str(event_data.get("reasoning") or "").strip()
@@ -851,6 +928,7 @@ __all__ = [
     "convert_messages_to_data",
     "conversation_rows_to_langchain_messages",
     "is_loop_internal_checkpoint_message",
+    "merge_consecutive_assistant_cards",
     "merge_history_sources",
     "merge_step_progress",
     "merge_visible_messages_with_cognition_cards",

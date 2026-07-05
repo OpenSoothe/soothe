@@ -66,8 +66,10 @@ async def test_recover_stale_busy_worker_delivers_done_without_last_error() -> N
     msg_type, payload = await asyncio.wait_for(response_queue.get(), timeout=1.0)
     assert msg_type == "done"
     assert payload is None
+    ready_type, ready_payload = await asyncio.wait_for(response_queue.get(), timeout=1.0)
+    assert ready_type == "ready"
+    assert ready_payload is None
     pool._route_failure_for_dead_busy_worker.assert_not_awaited()
-    pool._mark_worker_idle_and_notify.assert_awaited_once_with(worker)
     assert "req-123" not in pool._pending_responses
     assert "loop-abc" not in pool._workers_by_loop_id
     pool._respawn_worker.assert_awaited_once()

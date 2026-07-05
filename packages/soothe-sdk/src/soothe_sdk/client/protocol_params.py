@@ -288,6 +288,16 @@ class LoopCardsFetchParams(ParamsBase):
     since: str | None = None
 
 
+class LoopHistoryFetchParams(ParamsBase):
+    """Params for ``method=loop_history_fetch`` (RFC-631).
+
+    Attributes:
+        loop_id: Loop identifier (required).
+    """
+
+    loop_id: str = Field(..., min_length=1)
+
+
 # ---------------------------------------------------------------------------
 # Subscription params (RFC-450 §9.2)
 # ---------------------------------------------------------------------------

@@ -39,6 +39,11 @@ def test_route_by_intent_trivial_fast_path() -> None:
     assert route_by_intent(state) == "__end__"
 
 
+def test_route_by_intent_chitchat() -> None:
+    state = {"is_continuation": False, "intake_label": IntakeLabel.CHITCHAT}
+    assert route_by_intent(state) == "resolve_decision"
+
+
 def test_route_by_intent_trivial() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.TRIVIAL}
     assert route_by_intent(state) == "resolve_decision"

@@ -89,6 +89,145 @@ class PhasesMixin:
     on the concrete class.
     """
 
+    # -- chitchat fast path (piggybacked intake response) ------------------
+
+    async def _run_chitchat(
+        self,
+        user_input: str,
+        thread_id: str,
+        *,
+        chitchat_response: str,
+        context_engine: Any | None = None,
+        ce_goal_id: str | None = None,
+        loop_id: str | None = None,
+    ) -> AsyncGenerator[StreamChunk]:
+        """Fast path for chitchat intake: emit piggybacked response directly."""
+        main_thread_id = (loop_id or self._client_loop_id_for_stream or thread_id or "").strip()
+        if not main_thread_id:
+            main_thread_id = thread_id
+
+        response = (chitchat_response or "").strip()
+        if not response:
+            response = "Hello! How can I help you today?"
+
+        logger.info("Chitchat: %s (main_thread=%s)", user_input[:50], main_thread_id)
+
+        yield loop_assistant_messages_chunk(
+            content=response,
+            phase="chitchat",
+            thread_id=main_thread_id,
+        )
+
+        try:
+            await self._save_chitchat_to_state(
+                user_input,
+                response,
+                main_thread_id,
+                context_engine=context_engine,
+                ce_goal_id=ce_goal_id,
+                loop_id=main_thread_id,
+            )
+        except Exception:
+            logger.warning(
+                "Chitchat persistence/finalize failed (loop=%s)",
+                main_thread_id,
+                exc_info=True,
+            )
+
+    async def _save_chitchat_to_state(
+        self,
+        query: str,
+        response: str,
+        main_thread_id: str,
+        *,
+        context_engine: Any | None = None,
+        ce_goal_id: str | None = None,
+        loop_id: str | None = None,
+    ) -> None:
+        """Persist chitchat Human+AI pair to ledger and finalize loop checkpoint."""
+        await self._save_chitchat_to_ledger(
+            query,
+            response,
+            main_thread_id,
+            context_engine=context_engine,
+        )
+        await self._finalize_fast_path_loop(
+            loop_id or main_thread_id,
+            response=response,
+            context_engine=context_engine,
+            ce_goal_id=ce_goal_id,
+        )
+
+    async def _save_chitchat_to_ledger(
+        self,
+        query: str,
+        response: str,
+        main_thread_id: str,
+        *,
+        context_engine: Any | None = None,
+    ) -> None:
+        """Persist chitchat Human+AI pair to the loop ContextEngine ledger."""
+        from soothe.config import SOOTHE_HOME
+        from soothe.foundation.context.engine import ContextEngine
+        from soothe.foundation.context.persistence.factory import (
+            resolve_context_engine_persistence,
+        )
+        from soothe.foundation.sloop.utils.messages import (
+            LoopAIMessage,
+            LoopHumanMessage,
+            _record_ledger_message,
+        )
+
+        answer = (response or "").strip()
+        if not answer:
+            return
+
+        if context_engine is not None:
+            try:
+                human = LoopHumanMessage(
+                    content=query,
+                    thread_id=main_thread_id,
+                    phase="chitchat",
+                )
+                ai = LoopAIMessage(
+                    content=answer,
+                    thread_id=main_thread_id,
+                    phase="chitchat",
+                )
+                _record_ledger_message(context_engine, human, "chitchat")
+                _record_ledger_message(context_engine, ai, "chitchat")
+                await context_engine.save()
+                logger.debug(
+                    "Chitchat exchange saved to active loop ledger (loop=%s)",
+                    main_thread_id,
+                )
+                return
+            except Exception:
+                logger.debug("Failed to save chitchat to active loop ledger", exc_info=True)
+
+        loop_id = (main_thread_id or "").strip()
+        if not loop_id:
+            return
+
+        try:
+            ce_config = self._config.agent.loop.context_engine
+            persistence = resolve_context_engine_persistence(self._config, loop_id)
+            soothe_home = Path(self._config.home) if hasattr(self._config, "home") else SOOTHE_HOME
+            ce = ContextEngine(
+                persistence=persistence,
+                projection_config=ce_config.to_projection_config(),
+                soothe_home=soothe_home,
+            )
+            await ce.load()
+            human = LoopHumanMessage(content=query, thread_id=main_thread_id, phase="chitchat")
+            ai = LoopAIMessage(content=answer, thread_id=main_thread_id, phase="chitchat")
+            _record_ledger_message(ce, human, "chitchat")
+            _record_ledger_message(ce, ai, "chitchat")
+            await ce.save()
+            logger.debug("Chitchat exchange saved to loop ledger for loop %s", loop_id)
+        except Exception:
+            logger.debug("Failed to save chitchat to loop ledger", exc_info=True)
+
     # -- trivial fast path (CoreAgent on loop main thread) -------------------
 
     async def _run_trivial(

@@ -106,7 +106,7 @@ class AsyncCancelOrchestrator:
         force_timeout = getattr(config, "cancel_force_kill_timeout_seconds", 10.0)
 
         runner = self._query_engine._active_runners.get(loop_id)
-        worker_id = self._get_worker_id_for_loop(loop_id)
+        worker_id = await self._get_worker_id_for_loop(loop_id)
 
         # Collect asyncio tasks to cancel
         tasks_to_cancel = self._collect_tasks_for_loop(loop_id)
@@ -136,7 +136,7 @@ class AsyncCancelOrchestrator:
                 await asyncio.sleep(wait_time)
 
                 # Check if worker is now idle (cancel succeeded)
-                if self._is_worker_idle(worker_id):
+                if await self._is_worker_idle(worker_id):
                     logger.info(
                         "Cancel succeeded for loop %s (attempt %d)",
                         loop_id[:16],
@@ -173,25 +173,27 @@ class AsyncCancelOrchestrator:
         # Cleanup bookkeeping
         self._query_engine._active_runners.pop(loop_id, None)
 
-    def _get_worker_id_for_loop(self, loop_id: str) -> str | None:
-        """Get worker_id handling the given loop_id from the runner pool."""
-        runner = self._daemon._runner
-        if runner is None:
+    async def _get_execution_pool(self) -> Any | None:
+        """Return the shared thread/process execution pool."""
+        factory = getattr(self._daemon, "_runner_factory", None)
+        if factory is None or not hasattr(factory, "get_shared_execution_pool"):
             return None
-        # Try pool_runner or thread_runner interface
-        if hasattr(runner, "get_worker_id_for_loop"):
-            return runner.get_worker_id_for_loop(loop_id)
+        return await factory.get_shared_execution_pool()
+
+    async def _get_worker_id_for_loop(self, loop_id: str) -> str | None:
+        """Get worker_id handling the given loop_id from the execution pool."""
+        pool = await self._get_execution_pool()
+        if pool is not None and hasattr(pool, "get_worker_id_for_loop"):
+            return pool.get_worker_id_for_loop(loop_id)
         return None
 
-    def _is_worker_idle(self, worker_id: str | None) -> bool:
+    async def _is_worker_idle(self, worker_id: str | None) -> bool:
         """Check if worker has returned to idle state."""
         if worker_id is None:
-            return True  # No worker means no active request
-        runner = self._daemon._runner
-        if runner is None:
-            return True
-        if hasattr(runner, "is_worker_idle"):
-            return runner.is_worker_idle(worker_id)
+            return False
+        pool = await self._get_execution_pool()
+        if pool is not None and hasattr(pool, "is_worker_idle"):
+            return pool.is_worker_idle(worker_id)
         return False
 
     async def _force_kill_worker(self, worker_id: str | None, loop_id: str, timeout: float) -> None:
@@ -200,16 +202,16 @@ class AsyncCancelOrchestrator:
             logger.warning("No worker_id for loop %s, cannot force kill", loop_id[:16])
             return
 
-        runner = self._daemon._runner
-        if runner is None:
+        pool = await self._get_execution_pool()
+        if pool is None:
             return
 
         runner_type = self._daemon._daemon_config.validate_runner_mode()
 
-        if runner_type == "worker_pool" and hasattr(runner, "force_kill_worker"):
-            await runner.force_kill_worker(worker_id, timeout)
-        elif runner_type == "thread_pool" and hasattr(runner, "force_cancel_worker"):
-            await runner.force_cancel_worker(worker_id, timeout)
+        if runner_type == "worker_pool" and hasattr(pool, "force_kill_worker"):
+            await pool.force_kill_worker(worker_id, timeout)
+        elif runner_type == "thread_pool" and hasattr(pool, "force_cancel_worker"):
+            await pool.force_cancel_worker(worker_id, timeout)
         else:
             logger.warning(
                 "Runner type %s does not support force kill for worker %s",
@@ -1119,6 +1121,21 @@ class QueryEngine:
                         effective_loop_id,
                         batch_timeout_s=drain_cfg.get("streaming_interval_ms", 100) / 1000.0,
                     )
+                    # RFC-631: freeze live card tail into a goal snapshot before idle.
+                    card_manager = getattr(d, "_card_manager", None)
+                    if card_manager is not None:
+                        try:
+                            await card_manager.freeze_goal_display(
+                                effective_loop_id,
+                                goal_text=effective_text,
+                                goal_completion="".join(full_response),
+                            )
+                        except Exception:
+                            logger.warning(
+                                "Goal display snapshot freeze failed for loop %s",
+                                effective_loop_id[:16],
+                                exc_info=True,
+                            )
                     # RFC-450 §9.4: Send complete message to terminate the subscription
                     # stream. Clients subscribed via loop_subscribe expect an explicit
                     # complete when the stream ends (goal finished, cancelled, etc.).

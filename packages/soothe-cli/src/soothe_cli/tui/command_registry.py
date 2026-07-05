@@ -91,6 +91,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="goals dag status context engine",
     ),
     SlashCommand(
+        name="/goals",
+        description="Show completed goal display history for the active loop",
+        bypass_tier=BypassTier.SIDE_EFFECT_FREE,
+        hidden_keywords="history snapshot resume",
+    ),
+    SlashCommand(
         name="/model",
         description="Switch or configure model (--model-params, --default)",
         bypass_tier=BypassTier.IMMEDIATE_UI,

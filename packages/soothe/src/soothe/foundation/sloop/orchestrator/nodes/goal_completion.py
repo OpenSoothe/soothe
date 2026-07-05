@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gc
 import logging
 import time
@@ -83,41 +84,137 @@ def _append_goal_completion_ledger_pair(
     _record_ledger_message(context_engine, ai_msg, "goal_completion")
 
 
-def _schedule_goal_completion_tail_persistence(
+_GOAL_COMPLETION_TAIL_PERSIST_TIMEOUT_SECONDS = 120.0
+
+
+async def _goal_completion_tail_persistence(
     *,
     context_engine: Any | None,
     state_manager: Any,
     goal_record: Any,
     full_output: str | None,
     loop_state: LoopState,
-) -> None:
-    """Persist CE + checkpoint tail state without blocking the completed wire event."""
-
-    async def _persist() -> None:
-        if context_engine is not None:
-            try:
-                await context_engine.save()
-            except Exception:
-                logger.debug(
-                    "Background CE save failed at goal completion",
-                    exc_info=True,
-                )
+    loop_id: str,
+) -> list[str]:
+    """Persist CE + checkpoint tail state after the ``completed`` wire event."""
+    failures: list[str] = []
+    if context_engine is not None:
         try:
-            await state_manager.finalize_goal(
-                goal_record,
-                full_output,
-                loop_state=loop_state,
-            )
-        except Exception:
-            logger.debug(
-                "Background checkpoint finalize failed at goal completion",
+            await context_engine.save()
+        except Exception as exc:
+            failures.append(f"ce_save:{type(exc).__name__}")
+            logger.warning(
+                "Goal-completion CE save failed for loop %s",
+                loop_id,
                 exc_info=True,
             )
+    try:
+        await state_manager.finalize_goal(
+            goal_record,
+            full_output,
+            loop_state=loop_state,
+        )
+    except Exception as exc:
+        failures.append(f"checkpoint_finalize:{type(exc).__name__}")
+        logger.warning(
+            "Goal-completion checkpoint finalize failed for loop %s",
+            loop_id,
+            exc_info=True,
+        )
+    return failures
 
-    asyncio.create_task(_persist())
+
+def _start_goal_completion_tail_persistence(
+    ctx: LoopRuntimeContext,
+    *,
+    goal_record: Any,
+    full_output: str | None,
+) -> None:
+    """Start tail persistence without blocking the ``completed`` wire event."""
+    loop_id = str(getattr(ctx.state_manager, "loop_id", "unknown"))
+
+    async def _run_tail() -> None:
+        failures = await _goal_completion_tail_persistence(
+            context_engine=ctx.ce,
+            state_manager=ctx.state_manager,
+            goal_record=goal_record,
+            full_output=full_output,
+            loop_state=ctx.loop_state,
+            loop_id=loop_id,
+        )
+        if failures:
+            logger.warning(
+                "Goal-completion tail persistence incomplete for loop %s (%s)",
+                loop_id,
+                ", ".join(failures),
+            )
+
+    prior = ctx.tail_persistence_task
+    if prior is not None and not prior.done():
+
+        async def _run_chained() -> None:
+            logger.info(
+                "Chaining goal-completion tail persistence for loop %s",
+                loop_id,
+            )
+            try:
+                await asyncio.shield(prior)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.debug(
+                    "Prior goal-completion tail persistence failed for loop %s",
+                    loop_id,
+                    exc_info=True,
+                )
+            await _run_tail()
+
+        ctx.tail_persistence_task = asyncio.create_task(
+            _run_chained(),
+            name=f"goal-tail-persist-{loop_id[:12]}",
+        )
+        return
+
+    ctx.tail_persistence_task = asyncio.create_task(
+        _run_tail(),
+        name=f"goal-tail-persist-{loop_id[:12]}",
+    )
 
 
-async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
+async def await_goal_completion_tail_persistence(
+    ctx: LoopRuntimeContext | None,
+    *,
+    timeout_seconds: float = _GOAL_COMPLETION_TAIL_PERSIST_TIMEOUT_SECONDS,
+) -> None:
+    """Drain tail persistence before ``StrangeLoopStateManager.close()``."""
+    if ctx is None:
+        return
+    task = ctx.tail_persistence_task
+    if task is None or task.done():
+        return
+
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning(
+            "Goal-completion tail persistence timed out after %.0fs for loop %s; cancelling",
+            timeout_seconds,
+            ctx.state_manager.loop_id,
+        )
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    except Exception:
+        logger.debug(
+            "Goal-completion tail persistence failed for loop %s",
+            ctx.state_manager.loop_id,
+            exc_info=True,
+        )
+
+
+async def node_goal_completion(
+    ctx: LoopRuntimeContext, graph_state: dict[str, Any]
+) -> dict[str, Any]:
     """Finalize goal when planner reports ``done`` (record iteration, synthesis, emit completed).
 
     IG-475: Clear all pending execution state to prevent task leakage into next query.
@@ -144,9 +241,18 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     perf_start = ctx.scratch.iteration_perf_start or time.perf_counter()
 
     state.previous_plan = plan_result
-    iteration_completed = state.iteration
-    state.iteration += 1
-    state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)
+    # RFC-226 terminal bootstrap: record_iteration already checkpointed this cycle.
+    iteration_already_recorded = graph_state.get("after_record_route") == "goal_completion"
+    if iteration_already_recorded:
+        iteration_completed = max(state.iteration - 1, 0)
+        logger.debug(
+            "[goal_completion] Skipping duplicate iteration checkpoint (terminal bootstrap, iter=%d)",
+            iteration_completed,
+        )
+    else:
+        iteration_completed = state.iteration
+        state.iteration += 1
+        state.total_duration_ms += int((time.perf_counter() - perf_start) * 1000)
 
     # RFC-624 Phase 4 Stage 2: No longer snapshot/restore step_results.
     # When CE is bound, state.step_results property reads from CE DAG,
@@ -164,15 +270,16 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         iteration_completed,
     )
 
-    await state_manager.record_iteration(
-        goal_record=goal_record,
-        iteration=iteration_completed,
-        plan_result=plan_result,
-        decision=None,  # IG-475: Explicitly None - no pending decision
-        step_results=[],  # IG-475: Empty - no pending steps (state cleared)
-        state=state,
-        working_memory=None,  # IG-475: Working memory cleared
-    )
+    if not iteration_already_recorded:
+        await state_manager.record_iteration(
+            goal_record=goal_record,
+            iteration=iteration_completed,
+            plan_result=plan_result,
+            decision=None,  # IG-475: Explicitly None - no pending decision
+            step_results=[],  # IG-475: Empty - no pending steps (state cleared)
+            state=state,
+            working_memory=None,  # IG-475: Working memory cleared
+        )
 
     synthesis_gen = SynthesisGenerator(
         strange_loop.goal_synthesis_model(),
@@ -302,12 +409,10 @@ async def node_goal_completion(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         action.value,
     )
 
-    _schedule_goal_completion_tail_persistence(
-        context_engine=ctx.ce,
-        state_manager=state_manager,
+    _start_goal_completion_tail_persistence(
+        ctx,
         goal_record=goal_record,
         full_output=updated_result.full_output,
-        loop_state=state,
     )
     # IG-475: Force garbage collection after goal completion to reclaim
     # LLM streaming objects (langchain message buffers, tokenizer caches, etc.)

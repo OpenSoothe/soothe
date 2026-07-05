@@ -242,6 +242,7 @@ class StrangeLoop:
         # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
         anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
 
+        runtime_ctx: LoopRuntimeContext | None = None
         try:
             # RFC-217: Goal context config for CE-backed goal context injection
             from soothe.config.models import GoalContextConfig
@@ -596,6 +597,7 @@ class StrangeLoop:
                 ce_goal_id=ce_goal.id,
                 goal_trace=active_goal_trace,
             )
+            runtime_ctx = ctx
 
             async def pump_graph() -> None:
                 try:
@@ -667,6 +669,13 @@ class StrangeLoop:
                     await pump_task
 
         finally:
+            from soothe.foundation.sloop.orchestrator.nodes.goal_completion import (
+                await_goal_completion_tail_persistence,
+            )
+
+            # Drain checkpoint finalize before closing pools so a background save cannot
+            # restart the async flush worker and block the thread-pool worker cleanup.
+            await await_goal_completion_tail_persistence(runtime_ctx)
             # Always stop async checkpoint worker even when setup fails before graph start.
             await state_manager.close()
             await anchor_manager.close()

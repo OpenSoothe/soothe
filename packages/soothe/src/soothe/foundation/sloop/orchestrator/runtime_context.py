@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -66,6 +67,8 @@ class LoopRuntimeContext:
     ce_goal_id: str | None = None  # Active goal ID in CE
     # Shared Langfuse trace for graph entry intent-classify + strange-loop-graph (IG-540).
     goal_trace: GoalLoopTrace | None = None
+    # Background checkpoint finalize started at goal completion; drained before close().
+    tail_persistence_task: asyncio.Task[None] | None = None
 
     @property
     def core_agent(self) -> CoreAgent:

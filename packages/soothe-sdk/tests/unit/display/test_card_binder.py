@@ -26,6 +26,70 @@ def test_convert_messages_to_data_user_assistant_pair() -> None:
     assert data[1].content == "hi there"
 
 
+def test_convert_messages_to_data_merges_assistant_stream_chunks() -> None:
+    """Streaming AIMessage chunks must bind to one assistant card (RFC-631 resume)."""
+    from langchain_core.messages import AIMessageChunk
+
+    messages = [
+        HumanMessage(content="how are u"),
+        AIMessageChunk(content="Hello"),
+        AIMessageChunk(content="!"),
+        AIMessageChunk(content=" there"),
+    ]
+    data = card_binder.convert_messages_to_data(messages)
+    assert [m.type for m in data] == [MessageType.USER, MessageType.ASSISTANT]
+    assert data[1].content == "Hello! there"
+
+
+def test_merge_consecutive_assistant_cards_repairs_legacy_ledger() -> None:
+    cards = [
+        MessageData(type=MessageType.USER, content="how are u", id="msg-u1"),
+        MessageData(type=MessageType.ASSISTANT, content="Hello", id="msg-a1"),
+        MessageData(type=MessageType.ASSISTANT, content="!", id="msg-a2"),
+        MessageData(type=MessageType.ASSISTANT, content=" there", id="msg-a3"),
+    ]
+    merged = card_binder.merge_consecutive_assistant_cards(cards)
+    assert len(merged) == 2
+    assert merged[1].content == "Hello! there"
+
+
+def test_merge_consecutive_assistant_cards_keeps_distinct_replies() -> None:
+    cards = [
+        MessageData(
+            type=MessageType.ASSISTANT,
+            content="This is the first complete answer to your question.",
+            id="msg-a1",
+        ),
+        MessageData(
+            type=MessageType.ASSISTANT,
+            content="This is the latest complete answer to your question.",
+            id="msg-a2",
+        ),
+    ]
+    merged = card_binder.merge_consecutive_assistant_cards(cards)
+    assert len(merged) == 2
+    assert merged[0].content == "This is the first complete answer to your question."
+    assert merged[1].content == "This is the latest complete answer to your question."
+
+
+def test_merge_consecutive_assistant_cards_merges_long_leading_fragment() -> None:
+    """Resume repair: one long chunk plus tiny tail fragments → one card."""
+    cards = [
+        MessageData(type=MessageType.USER, content="weather", id="msg-u1"),
+        MessageData(
+            type=MessageType.ASSISTANT,
+            content="I'll check the current weather in Shanghai for you.Sh",
+            id="msg-a1",
+        ),
+        MessageData(type=MessageType.ASSISTANT, content="anghai is", id="msg-a2"),
+        MessageData(type=MessageType.ASSISTANT, content=" at **30°C**", id="msg-a3"),
+    ]
+    merged = card_binder.merge_consecutive_assistant_cards(cards)
+    assert len(merged) == 2
+    assert "Shanghai" in merged[1].content
+    assert merged[1].content.endswith("30°C**")
+
+
 def test_convert_messages_to_data_matches_tool_call_to_result() -> None:
     messages = [
         AIMessage(

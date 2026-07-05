@@ -100,7 +100,7 @@ def run_impl(
             result = get_last_app_result()
             if result is not None and result.loop_id:
                 typer.echo(
-                    f"💡 To continue this loop: soothe loop continue {result.loop_id}",
+                    f"💡 To continue this loop: soothe loop resume {result.loop_id}",
                     err=True,
                 )
 
@@ -113,7 +113,7 @@ def run_impl(
             result = get_last_app_result()
             if result is not None and result.loop_id:
                 typer.echo(
-                    f"💡 To continue this loop: soothe loop continue {result.loop_id}",
+                    f"💡 To continue this loop: soothe loop resume {result.loop_id}",
                     err=True,
                 )
         sys.exit(130)

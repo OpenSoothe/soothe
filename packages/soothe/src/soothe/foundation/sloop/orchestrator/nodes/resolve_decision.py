@@ -83,7 +83,7 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
     # RFC-624 Phase 4: persist CE state after plan ingestion
     if ctx.ce is not None:
         try:
-            await ctx.ce.save()
+            ctx.ce.defer_save()
         except Exception:
             logger.warning("[resolve_decision] CE save failed", exc_info=True)
 

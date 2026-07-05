@@ -724,6 +724,25 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
             },
         )
 
+    async def _handle_loop_history_fetch(client_id, msg):
+        loop_id = msg.get("loop_id")
+        cards = daemon._loop_cards.get(loop_id, [])
+        await daemon._send_client_message(
+            client_id,
+            {
+                "proto": "1",
+                "type": "response",
+                "result": {
+                    "loop_id": loop_id,
+                    "goals": [],
+                    "live_cards": cards,
+                    "live_goal_index": 0 if cards else None,
+                    "success": True,
+                },
+                "id": msg.get("request_id") or msg.get("id"),
+            },
+        )
+
     async def _handle_skills_list(client_id, msg):
         await daemon._send_client_message(
             client_id,
@@ -936,6 +955,7 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
     router._handle_loop_state_get = _handle_loop_state_get  # type: ignore[method-assign]
     router._handle_loop_state_update = _handle_loop_state_update  # type: ignore[method-assign]
     router._handle_loop_cards_fetch = _handle_loop_cards_fetch  # type: ignore[method-assign]
+    router._handle_loop_history_fetch = _handle_loop_history_fetch  # type: ignore[method-assign]
     router._handle_skills_list = _handle_skills_list  # type: ignore[method-assign]
     router._handle_invoke_skill = _handle_invoke_skill  # type: ignore[method-assign]
     router._handle_models_list = _handle_models_list  # type: ignore[method-assign]
@@ -1321,6 +1341,21 @@ async def test_rpc_loop_cards_fetch(mock_server: _MockDaemonServer) -> None:
         result = await client.request("loop_cards_fetch", {"loop_id": "test"}, timeout=5.0)
         assert result["loop_id"] == "test"
         assert "cards" in result
+    finally:
+        if client.is_connected:
+            await client.close()
+
+
+@pytest.mark.asyncio
+async def test_rpc_loop_history_fetch(mock_server: _MockDaemonServer) -> None:
+    """loop_history_fetch returns goal snapshots and live card tail."""
+    client = await _connect_and_handshake(mock_server)
+    try:
+        result = await client.request("loop_history_fetch", {"loop_id": "test"}, timeout=5.0)
+        assert result["loop_id"] == "test"
+        assert result["success"] is True
+        assert "goals" in result
+        assert "live_cards" in result
     finally:
         if client.is_connected:
             await client.close()

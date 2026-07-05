@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langgraph.types import Command
 
+from soothe.foundation.sloop.intention.models import RoutingClassification, TaskComplexity
 from soothe.middleware.skill_activation import FILE_OP_TOOLS, SkillActivationMiddleware
 from soothe.skills.registry import ProgressiveSkillRegistry
 
@@ -44,6 +45,36 @@ class TestAbeforeAgent:
         runtime = MagicMock()
         result = await middleware.abefore_agent(state, runtime)
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_skips_intent_prefetch_for_minimal_routing(self) -> None:
+        config = MagicMock()
+        config.progressive_skills.intent_prefetch_enabled = True
+        config.progressive_skills.intent_prefetch_top_k = 2
+        middleware = SkillActivationMiddleware(
+            registry=ProgressiveSkillRegistry(),
+            catalog_provider=lambda: [],
+            config=config,
+        )
+        state = {
+            "messages": [{"role": "user", "content": "how are u"}],
+            "routing_classification": RoutingClassification(task_complexity=TaskComplexity.MINIMAL),
+        }
+        with patch(
+            "soothe.middleware.skill_activation.prefetch_deferred_skills",
+            new=AsyncMock(),
+        ) as deferred_mock:
+            with patch(
+                "soothe.middleware.skill_activation.prefetch_core_skills_from_corpus",
+                return_value=[],
+            ) as core_mock:
+                result = await middleware.abefore_agent(state, MagicMock())
+
+        assert result is not None
+        deferred_mock.assert_not_awaited()
+        core_mock.assert_not_called()
+        activation = result["skill_activation"]
+        assert activation["intent_prefetched"] is True
 
 
 class TestAwrapToolCall:

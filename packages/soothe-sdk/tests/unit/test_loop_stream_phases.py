@@ -9,6 +9,7 @@ from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_ou
 
 
 def test_trivial_phase_in_allowlist() -> None:
+    assert "chitchat" in LOOP_ASSISTANT_OUTPUT_PHASES
     assert "trivial" in LOOP_ASSISTANT_OUTPUT_PHASES
 
 

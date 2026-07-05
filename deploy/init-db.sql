@@ -27,5 +27,8 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'langfuse')\gexec
 \c soothe_vectors
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- Note: soothe_checkpoints StrangeLoop tables are created/upgraded automatically on
--- pool open from packages/soothe/.../persistence/sql/soothe_checkpoints/*.sql
+-- Note: Soothe auto-provisions soothe_* databases on daemon/worker startup when
+-- postgres_base_dsn is configured. This script remains optional for Docker first-boot
+-- convenience (especially langfuse) and offline admin setups.
+-- soothe_checkpoints tables are created/upgraded on pool open from
+-- packages/soothe/.../persistence/sql/soothe_checkpoints/*.sql

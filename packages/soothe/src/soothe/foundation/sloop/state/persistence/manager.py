@@ -44,8 +44,12 @@ class StrangeLoopCheckpointPersistenceManager:
 
         # Initialize backend instance
         self._uses_shared_sqlite = False
+        self._uses_shared_postgres = False
         if backend_type == "postgresql":
             try:
+                from soothe.foundation.persistence.postgres_pool_lifecycle import (
+                    postgres_pool_timing_from_config,
+                )
                 from soothe.foundation.sloop.state.persistence.postgres_backend import (
                     PostgreSQLPersistenceBackend,
                 )
@@ -55,12 +59,59 @@ class StrangeLoopCheckpointPersistenceManager:
                     "`psycopg`. Install soothe with postgres extras."
                 ) from exc
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-            self._backend = PostgreSQLPersistenceBackend(dsn=dsn, pool_size=10)
+            pool_timing = postgres_pool_timing_from_config(config, max_size=10)
+            self._backend = PostgreSQLPersistenceBackend(
+                dsn=dsn,
+                pool_size=10,
+                pool_timing=pool_timing,
+            )
         else:
             self._backend = acquire_shared_sqlite_backend_sync()
             self._uses_shared_sqlite = True
 
         logger.debug("StrangeLoop persistence manager initialized: backend=%s", backend_type)
+
+    @classmethod
+    async def for_shared_checkpoint_pool(
+        cls,
+        config: SootheConfig,
+    ) -> StrangeLoopCheckpointPersistenceManager:
+        """Build a manager backed by the process-wide checkpoint pool.
+
+        Ephemeral callers (heartbeat ticks, deferred counters, resume topic)
+        must use this instead of constructing an owned ``AsyncConnectionPool``
+        per call.
+        """
+        if config.persistence.default_backend != "postgresql":
+            return cls(config=config)
+
+        from soothe.foundation.sloop.state.persistence.postgres_backend import (
+            PostgreSQLPersistenceBackend,
+        )
+        from soothe.foundation.sloop.state.persistence.shared_pool import (
+            SharedPostgreSQLPool,
+        )
+
+        shared = await SharedPostgreSQLPool.get_shared_instance(config)
+        if shared is None:
+            return cls(config=config)
+
+        pool = shared.get_pool()
+        if pool is None:
+            msg = "Shared checkpoint pool not initialized"
+            raise RuntimeError(msg)
+
+        dsn = config.resolve_postgres_dsn_for_database("checkpoints")
+        manager = cls.__new__(cls)
+        manager._uses_shared_sqlite = False
+        manager._uses_shared_postgres = True
+        manager._backend = PostgreSQLPersistenceBackend(
+            dsn=dsn,
+            pool_size=0,
+            shared_pool=shared,
+        )
+        manager._backend._pool = pool
+        return manager
 
     async def register_loop(
         self,
@@ -563,6 +614,10 @@ class StrangeLoopCheckpointPersistenceManager:
         if self._uses_shared_sqlite:
             await release_shared_sqlite_backend()
             logger.debug("Released shared SQLite persistence backend reference")
+            return
+        if self._uses_shared_postgres:
+            self._backend = None
+            logger.debug("Released shared PostgreSQL persistence backend reference")
             return
         if hasattr(self._backend, "close"):
             await self._backend.close()

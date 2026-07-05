@@ -1,10 +1,10 @@
 """Intent classification Pydantic models (RFC-225, RFC-630).
 
-Intent classification produces a 3-class intake label (RFC-630) —
-``trivial`` | ``simple`` | ``complex`` — that drives ``route_by_intent``
-branch routing. Whether an agentic query continues an in-flight loop is
-derived structurally inside ``StrangeLoop`` from the loaded checkpoint, not
-classified here.
+Intent classification produces a 4-class intake label (RFC-630) —
+``chitchat`` | ``trivial`` | ``simple`` | ``complex`` — that drives
+``route_by_intent`` branch routing. Whether an agentic query continues an
+in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
+checkpoint, not classified here.
 """
 
 from __future__ import annotations
@@ -15,17 +15,20 @@ from pydantic import BaseModel, Field
 
 
 class IntakeLabel(StrEnum):
-    """3-class intake label for branch routing (RFC-630).
+    """4-class intake label for branch routing (RFC-630).
 
     Continuation is NOT a label — it is a structural overlay from the
     checkpoint (RFC-225). The intake LLM never decides continuation.
 
-    - ``trivial``: greeting/thanks/trivia, single obvious tool call, or direct
-      answer; no planning LLM (CoreAgent fast-path on loop main thread).
+    - ``chitchat``: small talk (greetings, thanks, casual banter); the intake
+      LLM piggybacks ``chitchat_response`` and the runner emits it directly.
+    - ``trivial``: trivia, single obvious tool call, or direct answer; no
+      planning LLM (CoreAgent fast-path on loop main thread).
     - ``simple``: single focused step, lightweight plan.
     - ``complex``: multi-step / multi-phase, full plan.
     """
 
+    CHITCHAT = "chitchat"
     TRIVIAL = "trivial"
     SIMPLE = "simple"
     COMPLEX = "complex"
@@ -60,7 +63,7 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
     Returns:
         Task complexity for ``RoutingClassification`` and system prompt tiers.
     """
-    if intake_label == IntakeLabel.TRIVIAL:
+    if intake_label in (IntakeLabel.CHITCHAT, IntakeLabel.TRIVIAL):
         return TaskComplexity.MINIMAL
     if intake_label == IntakeLabel.SIMPLE:
         return TaskComplexity.SIMPLE
@@ -91,23 +94,24 @@ class RoutingClassification(BaseModel):
 class IntentClassification(BaseModel):
     """Primary intent classification model (RFC-225, IG-518, RFC-630).
 
-    3-class LLM intake classification:
-    - ``trivial``: direct CoreAgent on loop main thread (greetings, thanks,
-      trivia, single obvious tool call).
+    4-class LLM intake classification:
+    - ``chitchat``: small talk; ``chitchat_response`` is emitted directly to the client.
+    - ``trivial``: direct CoreAgent on loop main thread (trivia, single obvious tool call).
     - ``simple``/``complex``: agentic goals of increasing effort; the runner /
       StrangeLoop derive loop continuation structurally from the checkpoint.
 
     ``intake_label`` drives ``route_by_intent``.
 
     Args:
-        intake_label: 3-class intake label for branch routing (RFC-630).
+        intake_label: 4-class intake label for branch routing (RFC-630).
         reasoning: Brief reasoning for classification (IG-518).
         goal_description: Normalized goal description.
+        chitchat_response: Direct reply for ``chitchat`` intake only.
         task_complexity: Routing complexity level (derived from ``intake_label``).
     """
 
     intake_label: IntakeLabel = Field(
-        description="3-class intake label for branch routing: trivial, simple, or complex"
+        description="4-class intake label for branch routing: chitchat, trivial, simple, or complex"
     )
     reasoning: str | None = Field(
         default=None,
@@ -116,6 +120,10 @@ class IntentClassification(BaseModel):
     goal_description: str | None = Field(
         default=None,
         description="Normalized goal description for display and GoalEngine",
+    )
+    chitchat_response: str | None = Field(
+        default=None,
+        description="Direct friendly reply when intake_label is chitchat",
     )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity derived from intake_label"
@@ -130,16 +138,19 @@ class IntentClassification(BaseModel):
 
 
 class IntakeClassificationLLMResult(BaseModel):
-    """Structured output from the 3-class intake LLM (RFC-630).
+    """Structured output from the 4-class intake LLM (RFC-630).
 
-    The LLM picks one of ``trivial``/``simple``/``complex``; the label drives
-    ``route_by_intent``. Non-trivial labels carry brief ``reasoning`` for client
-    visibility (IG-518). Loop continuation is derived structurally, not classified.
+    The LLM picks one of ``chitchat``/``trivial``/``simple``/``complex``; the
+    label drives ``route_by_intent``. ``chitchat`` carries ``chitchat_response``
+    for direct client emission. Other non-trivial labels carry brief
+    ``reasoning`` for client visibility (IG-518). Loop continuation is derived
+    structurally, not classified.
     """
 
     intake_label: IntakeLabel = Field(
-        description="Primary intake: trivial (greeting/thanks/trivia/single obvious action, "
-        "no planning LLM), simple (single focused step, lightweight plan), "
+        description="Primary intake: chitchat (greetings/thanks/casual small talk with "
+        "direct reply), trivial (trivia/single obvious action, no planning LLM), "
+        "simple (single focused step, lightweight plan), "
         "complex (multi-step/multi-phase, full plan)"
     )
     reasoning: str | None = Field(
@@ -151,6 +162,10 @@ class IntakeClassificationLLMResult(BaseModel):
         default=None,
         description="Normalized goal description for display and GoalEngine",
     )
+    chitchat_response: str | None = Field(
+        default=None,
+        description="Required when intake_label is chitchat: friendly direct reply to the user",
+    )
 
     def to_intent_classification(self) -> IntentClassification:
         """Convert LLM result to runtime IntentClassification."""
@@ -159,6 +174,7 @@ class IntakeClassificationLLMResult(BaseModel):
             intake_label=self.intake_label,
             reasoning=self.reasoning,
             goal_description=self.goal_description,
+            chitchat_response=self.chitchat_response,
             task_complexity=task_complexity,
         )
 

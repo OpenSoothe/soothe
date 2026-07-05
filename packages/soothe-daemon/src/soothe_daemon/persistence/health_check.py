@@ -137,7 +137,10 @@ def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
         message="PostgreSQL configured but all database connections failed",
         details={
             "databases": connection_results,
-            "remediation": "Check postgres_base_dsn and ensure all databases are created",
+            "remediation": (
+                "Check postgres_base_dsn connectivity and CREATEDB privileges; "
+                "Soothe auto-provisions configured databases on startup"
+            ),
         },
     )
 

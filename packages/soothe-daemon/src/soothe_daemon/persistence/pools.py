@@ -27,7 +27,16 @@ async def preopen_shared_postgres_pools(
     daemon_config: DaemonConfig,
 ) -> None:
     """Pre-open shared StrangeLoop and checkpointer pools in thread_pool mode."""
-    if not uses_postgresql_persistence(config) or not daemon_config.thread_pool.enabled:
+    if not uses_postgresql_persistence(config):
+        return
+
+    from soothe.foundation.persistence.postgres_provisioning import (
+        ensure_postgres_databases_async,
+    )
+
+    await ensure_postgres_databases_async(config)
+
+    if not daemon_config.thread_pool.enabled:
         return
 
     from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool

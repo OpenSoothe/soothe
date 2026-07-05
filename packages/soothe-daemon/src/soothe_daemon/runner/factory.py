@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from soothe.protocols.runner import LoopRunnerProtocol
 
@@ -73,6 +73,22 @@ class LoopRunnerFactory:
                     "Ray is required for distributed mode. Install with: pip install ray"
                 ) from exc
             logger.info("LoopRunnerFactory: distributed mode (Ray actor per loop)")
+
+    async def get_shared_execution_pool(self) -> Any | None:
+        """Return the shared thread/process pool, if this factory uses one."""
+        if self._mode == "thread_pool":
+            from soothe_daemon.runner.thread_runner import ThreadPool
+
+            return await ThreadPool.get_shared_instance(
+                self._agent_config,
+                self._daemon_config,
+                identity_runtime=self._identity_runtime,
+            )
+        if self._mode == "worker_pool":
+            from soothe_daemon.runner.pool_runner import WorkerPool
+
+            return await WorkerPool.get_shared_instance(self._agent_config, self._daemon_config)
+        return None
 
     async def initialize_pool(self) -> None:
         """Pre-warm worker pool if enabled.

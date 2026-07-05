@@ -456,6 +456,11 @@ def materialize_ai_blocks_with_resolved_tools(
     append + backfill + merge passes).
     """
     tool_only = [b for b in expanded_blocks if isinstance(b, dict) and is_toolish_display_block(b)]
+    is_text_only_chunk = (
+        bool(expanded_blocks)
+        and not tool_only
+        and all(isinstance(b, dict) and b.get("type") == "text" for b in expanded_blocks)
+    )
     resolved = resolve_tool_invocations_for_display(
         message,
         tool_only,
@@ -491,6 +496,11 @@ def materialize_ai_blocks_with_resolved_tools(
 
     for r in resolved:
         if r.tool_call_id not in seen_tool_ids:
+            # Plain text stream deltas must not inherit stale ``tool_calls`` from
+            # the LangChain message object — that appended phantom tool blocks and
+            # forced a flush+pop between every text token (weather-style trivial).
+            if is_text_only_chunk:
+                continue
             out.append(
                 {
                     "type": "tool_call",
