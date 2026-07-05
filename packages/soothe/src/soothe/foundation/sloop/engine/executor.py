@@ -331,9 +331,10 @@ class Executor:
             return 0
         return max(0, int(self._config.agent.loop.max_subagent_tasks_per_wave))
 
-    @staticmethod
-    def _max_tool_calls_per_step() -> int:
-        return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
+    def _max_tool_calls_per_step(self) -> int:
+        if self._config is None:
+            return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
+        return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
 
     @staticmethod
     async def _maybe_aclose_act_stream(stream: Any, *, reason: str) -> None:
