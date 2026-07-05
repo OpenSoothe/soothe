@@ -23,9 +23,9 @@ def route_after_evidence_gather(state: dict[str, Any]) -> str:
     """
     route = state.get("evidence_gather_route")
     if route == "plan_generate_skip_assess":
-        logger.debug("[routing] route_after_evidence_gather → plan_generate (fresh-loop skip)")
+        logger.info("[routing] route_after_evidence_gather → plan_generate (fresh-loop skip)")
         return "plan_generate"
-    logger.debug("[routing] route_after_evidence_gather → plan_assess")
+    logger.info("[routing] route_after_evidence_gather → plan_assess")
     return "plan_assess"
 
 
@@ -41,12 +41,13 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
     pending = state.get("pending_clarification")
     answer = state.get("pending_clarification_answer")
     result = bool(pending) and not answer
-    logger.debug(
-        "[routing] _pending_clarification: pending=%s, answer=%s, result=%s",
-        bool(pending),
-        answer,
-        result,
-    )
+    if result:
+        logger.debug(
+            "[routing] _pending_clarification: pending=%s, answer=%s, result=%s",
+            bool(pending),
+            answer,
+            result,
+        )
     return result
 
 
@@ -67,21 +68,21 @@ def route_by_intent(state: dict[str, Any]) -> str:
     missing — the fail-safe path runs the full pipeline.
     """
     if state.get("is_continuation"):
-        logger.debug("[routing] route_by_intent → plan_assess (continuation overlay)")
+        logger.info("[routing] route_by_intent → plan_assess (continuation overlay)")
         return "plan_assess"
 
     if state.get("intent_route") == "fast_path":
-        logger.debug("[routing] route_by_intent → END (trivial fast-path)")
+        logger.info("[routing] route_by_intent → END (trivial fast-path)")
         return END
 
     label = state.get("intake_label")
     if label == IntakeLabel.TRIVIAL:
-        logger.debug("[routing] route_by_intent → resolve_decision (trivial)")
+        logger.info("[routing] route_by_intent → resolve_decision (trivial)")
         return "resolve_decision"
     if label == IntakeLabel.SIMPLE:
-        logger.debug("[routing] route_by_intent → plan_generate (simple)")
+        logger.info("[routing] route_by_intent → plan_generate (simple)")
         return "plan_generate"
-    logger.debug("[routing] route_by_intent → bounded_evidence_gather (complex/default)")
+    logger.info("[routing] route_by_intent → bounded_evidence_gather (complex/default)")
     return "bounded_evidence_gather"
 
 
@@ -148,7 +149,7 @@ def route_after_execute(state: dict[str, Any]) -> str:
     if state.get("resume_synth"):
         logger.info("[routing] route_after_execute → iteration_gate (resume synth)")
         return "iteration_gate"
-    logger.debug("[routing] route_after_execute → record_iteration")
+    logger.info("[routing] route_after_execute → record_iteration")
     return "record_iteration"
 
 

@@ -531,7 +531,7 @@ class LLMRateLimitRegistry:
                     rpm_limit=thread_rpm,
                     semaphore_max=self._concurrent_limit_per_thread,
                 )
-                logger.info(
+                logger.debug(
                     "Thread budget created: thread_id=%s rpm=%d/%d active_threads=%d",
                     thread_id,
                     thread_rpm,
@@ -609,7 +609,7 @@ async def run_llm_call_with_policy(
             timeout_attempts=timeout_attempts,
             rate_limit_attempts=rate_limit_attempts,
         )
-        call_log.info(
+        call_log.debug(
             "%s call starting (timeout=%ds timeout_try=%d/%d rate_limit_try=%d/%d "
             "budget_key=%s thread_id=%s)",
             log_prefix,

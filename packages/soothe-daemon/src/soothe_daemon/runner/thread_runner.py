@@ -930,6 +930,16 @@ class ThreadPool:
         worker.mark_idle()
         await self._notify_worker_slot_available()
 
+    def _worker_pool_counts(self) -> tuple[int, int]:
+        """Return (idle, busy) live worker counts for dispatch diagnostics."""
+        idle = sum(
+            1
+            for w in self._workers.values()
+            if w.status == WorkerThreadStatus.IDLE and w.is_alive()
+        )
+        busy = sum(1 for w in self._workers.values() if w.status == WorkerThreadStatus.BUSY)
+        return idle, busy
+
     async def _try_acquire_idle_worker(self) -> WorkerThreadState | None:
         """Return an idle live worker, scale up, or respawn a dead slot."""
         for w in self._workers.values():
@@ -976,6 +986,8 @@ class ThreadPool:
             worker: WorkerThreadState
             response_queue: asyncio.Queue
             handoff_retries = 0
+            dispatch_wait_logged = False
+            dispatch_wait_started: float | None = None
             while True:
                 while True:
                     worker = await self._try_acquire_idle_worker()
@@ -983,6 +995,33 @@ class ThreadPool:
                         break
                     if not self._running:
                         raise RuntimeError("ThreadPool is shutting down")
+                    now = asyncio.get_running_loop().time()
+                    if dispatch_wait_started is None:
+                        dispatch_wait_started = now
+                        idle, busy = self._worker_pool_counts()
+                        logger.warning(
+                            "ThreadPool: waiting for idle worker loop=%s request_id=%s "
+                            "idle=%d busy=%d waiters=%d",
+                            request.loop_id,
+                            request_id,
+                            idle,
+                            busy,
+                            self._waiting_for_worker_slot + 1,
+                        )
+                        dispatch_wait_logged = True
+                    elif dispatch_wait_logged and now - dispatch_wait_started >= 30.0:
+                        idle, busy = self._worker_pool_counts()
+                        logger.warning(
+                            "ThreadPool: still waiting for idle worker loop=%s request_id=%s "
+                            "idle=%d busy=%d waiters=%d elapsed=%.0fs",
+                            request.loop_id,
+                            request_id,
+                            idle,
+                            busy,
+                            self._waiting_for_worker_slot + 1,
+                            now - dispatch_wait_started,
+                        )
+                        dispatch_wait_started = now
                     async with cond:
                         self._waiting_for_worker_slot += 1
                         try:
@@ -998,6 +1037,12 @@ class ThreadPool:
                 main_loop = self._main_loop or asyncio.get_running_loop()
                 pusher = ResponsePusher(main_loop, response_queue, worker_id=worker.worker_id)
                 worker.request_queue.put(("request", request_id, request, pusher))
+                logger.info(
+                    "ThreadPool: dispatched loop=%s request_id=%s worker=%s",
+                    request.loop_id,
+                    request_id,
+                    worker.worker_id,
+                )
                 if worker.is_alive():
                     break
 

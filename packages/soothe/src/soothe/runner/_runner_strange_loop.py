@@ -523,10 +523,10 @@ class StrangeLoopMixin:
 
                 if event_type == "iteration_started":
                     # Internal event - not shown to user
-                    logger.debug("[Loop] Iteration %d started", event_data["iteration"])
+                    logger.info("[Loop] Iteration %d started", event_data["iteration"])
 
                 elif event_type == "plan_decision":
-                    logger.debug(
+                    logger.info(
                         "[Loop] Plan: %d steps (%s mode, cumulative: %d total, %d done)",
                         len(event_data.get("steps", [])),
                         event_data.get("execution_mode", ""),
@@ -681,7 +681,7 @@ class StrangeLoopMixin:
                 elif event_type == "iteration_completed":
                     # Internal - used for debugging only
                     # progress is a descriptive string (none/low/medium/high/complete), not numeric
-                    logger.debug(
+                    logger.info(
                         "[Loop] Iteration %d completed (status=%s, progress=%s)",
                         event_data["iteration"],
                         event_data["status"],

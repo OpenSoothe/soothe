@@ -212,12 +212,13 @@ class ProgressiveToolMiddleware(AgentMiddleware):
 
         if len(bound) < len(tools):
             promoted_count = len(activation.get("promoted", set()))
-            logger.debug(
-                "[ProgressiveTools] Bound %d/%d tools (core+promoted=%d)",
-                len(bound),
-                len(tools),
-                promoted_count,
-            )
+            if promoted_count > 0:
+                logger.debug(
+                    "[ProgressiveTools] Bound %d/%d tools (core+promoted=%d)",
+                    len(bound),
+                    len(tools),
+                    promoted_count,
+                )
             request = request.override(tools=bound)
 
         return await handler(request)

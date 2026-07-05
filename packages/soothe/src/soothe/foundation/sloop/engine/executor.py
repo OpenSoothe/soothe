@@ -2254,7 +2254,7 @@ class Executor:
                         tool_args.by_id[unified_tcid] = dict(raw_args)
                 messages.append(rewritten_tm)
                 is_execute_ns = is_step_level_execute_namespace_key(ns_tuple)
-                logger.info(
+                logger.debug(
                     "[%s] ns=%s name=%s id=%s -> unified=%s preview=%s",
                     "ExecuteTool" if is_execute_ns else "SubagentTool",
                     "/".join(ns_tuple) if ns_tuple else "()",

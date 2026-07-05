@@ -46,7 +46,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
                 dsn=dsn,
                 namespace="durability",
             )
-            logger.info("Using PostgreSQL durability backend (metadata database)")
+            logger.debug("Using PostgreSQL durability backend (metadata database)")
             return PostgreSQLDurability(persist_store=persist_store)
         except Exception as e:
             logger.error(
