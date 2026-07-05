@@ -350,7 +350,7 @@ class StrangeLoopStateManager:
 
             if checkpoint:
                 self._checkpoint = checkpoint
-                logger.info(
+                logger.debug(
                     "Loaded loop %s checkpoint from PostgreSQL (status %s, %d goals, %d threads)",
                     self.loop_id,
                     checkpoint.status,

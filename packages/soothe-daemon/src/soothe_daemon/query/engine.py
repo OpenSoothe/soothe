@@ -856,6 +856,11 @@ class QueryEngine:
                 run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)
                 self._active_runners[_runner_key] = loop_runner
+                logger.info(
+                    "Query stream dispatching loop=%s checkpoint=%s",
+                    effective_loop_id or "?",
+                    thread_id[:16] if thread_id else "?",
+                )
 
                 async def _stream_chunks() -> Any:
                     async for item in loop_runner.run(run_request):

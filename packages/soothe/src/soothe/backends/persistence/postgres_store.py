@@ -147,7 +147,7 @@ class PostgreSQLPersistStore:
             try:
                 await pool.open()
                 await self._create_table(pool)
-                logger.info(
+                logger.debug(
                     "[Store] PostgreSQL initialized (namespace=%s, pool=%d)",
                     self._namespace,
                     self._pool_size,

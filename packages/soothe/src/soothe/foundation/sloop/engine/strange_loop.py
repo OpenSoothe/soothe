@@ -344,7 +344,7 @@ class StrangeLoop:
                 # via ce.load() which restores prior DAG + ledger state.
                 await state_manager.save(checkpoint)
                 iteration = 0
-                logger.debug(
+                logger.info(
                     "continued loop %s: new goal id=%s idx=%d",
                     state_manager.loop_id,
                     goal_record.goal_id,

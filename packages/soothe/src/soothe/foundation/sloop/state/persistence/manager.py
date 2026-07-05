@@ -60,7 +60,7 @@ class StrangeLoopCheckpointPersistenceManager:
             self._backend = acquire_shared_sqlite_backend_sync()
             self._uses_shared_sqlite = True
 
-        logger.info("StrangeLoop persistence manager initialized: backend=%s", backend_type)
+        logger.debug("StrangeLoop persistence manager initialized: backend=%s", backend_type)
 
     async def register_loop(
         self,

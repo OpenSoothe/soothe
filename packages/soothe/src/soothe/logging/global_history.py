@@ -115,7 +115,7 @@ class GlobalInputHistory:
 
         # Deduplication check against recent cache
         if self._dedup_check(stripped):
-            logger.debug("Skipping duplicate input: %s", stripped[:50])
+            logger.warning("Skipping duplicate input: %s", stripped[:50])
             return
 
         # Create entry
