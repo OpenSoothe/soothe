@@ -15,7 +15,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypeVar
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
@@ -23,6 +23,8 @@ from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from soothe.utils.token_counting import estimate_content_chars
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 # IG-499: Helper functions for 429 error detection and retry-after extraction
@@ -410,6 +412,358 @@ class ThreadBudget:
         }
 
 
+def resolve_llm_budget_key(thread_id: str | None) -> str:
+    """Resolve the shared RPM budget key for middleware and direct LLM paths."""
+    if thread_id:
+        return thread_id
+    try:
+        from soothe.logging.context import get_thread_id
+
+        ctx = get_thread_id()
+        if ctx:
+            return ctx
+    except ImportError:
+        pass
+    return "direct"
+
+
+def effective_llm_call_timeout(
+    config: Any,
+    *,
+    timeout_attempts: int,
+    rate_limit_attempts: int,
+) -> int:
+    """Compute per-attempt timeout; 429 retries use a shorter cap."""
+    from soothe.config.models import LLMRateLimitConfig
+
+    if not isinstance(config, LLMRateLimitConfig):
+        return int(getattr(config, "call_timeout_seconds", 600))
+    if rate_limit_attempts > 0:
+        return config.rate_limit_retry_timeout_seconds
+    escalated = int(
+        config.call_timeout_seconds * (config.timeout_retry_multiplier**timeout_attempts)
+    )
+    return min(escalated, config.call_timeout_max_seconds)
+
+
+def calc_rate_limit_backoff(
+    attempt: int,
+    exc: Exception | None,
+    *,
+    base: float,
+    backoff_max: float,
+    respect_retry_after: bool,
+) -> float:
+    """Exponential backoff for 429 retries, honoring retry-after when configured."""
+    if respect_retry_after and exc is not None:
+        retry_after = _extract_retry_after_seconds(exc)
+        if retry_after is not None:
+            return min(retry_after, backoff_max)
+    return min(base * (2**attempt), backoff_max)
+
+
+def _emit_llm_retry_event(
+    *,
+    attempt: int,
+    max_attempts: int,
+    error_type: str,
+    thread_id: str | None,
+    log: logging.Logger,
+) -> None:
+    """Emit retry attempt event for TUI step status display."""
+    try:
+        from soothe.foundation.events.catalog import LLMRetryAttemptEvent
+        from soothe.utils.progress import emit_progress
+
+        event = LLMRetryAttemptEvent(
+            attempt=attempt,
+            max_attempts=max_attempts,
+            error_type=error_type,
+            thread_id=thread_id,
+        )
+        emit_progress(event.to_dict(), log)
+    except Exception:
+        log.debug("Failed to emit LLM retry event", exc_info=True)
+
+
+class LLMRateLimitRegistry:
+    """Process-wide RPM/concurrency coordinator for middleware and direct LLM calls."""
+
+    _shared: LLMRateLimitRegistry | None = None
+
+    def __init__(self) -> None:
+        self._rpm_limit_global = 60
+        self._concurrent_limit_per_thread = 8
+        self._thread_budgets: dict[str, ThreadBudget] = {}
+        self._budget_lock = asyncio.Lock()
+
+    @classmethod
+    def shared(cls) -> LLMRateLimitRegistry:
+        if cls._shared is None:
+            cls._shared = cls()
+        return cls._shared
+
+    @classmethod
+    def reset_for_tests(cls) -> None:
+        """Clear singleton state between tests."""
+        cls._shared = None
+
+    @property
+    def thread_budgets(self) -> dict[str, ThreadBudget]:
+        return self._thread_budgets
+
+    @property
+    def rpm_limit_global(self) -> int:
+        return self._rpm_limit_global
+
+    def update_limits(self, *, requests_per_minute: int, concurrent_limit_per_thread: int) -> None:
+        """Refresh global limits when middleware is constructed."""
+        self._rpm_limit_global = requests_per_minute
+        self._concurrent_limit_per_thread = concurrent_limit_per_thread
+
+    async def get_budget(self, thread_id: str) -> ThreadBudget:
+        """Get or create a fair-share RPM budget for ``thread_id``."""
+        async with self._budget_lock:
+            if thread_id not in self._thread_budgets:
+                active_threads = len(self._thread_budgets)
+                thread_rpm = max(self._rpm_limit_global // (active_threads + 1), 10)
+                self._thread_budgets[thread_id] = ThreadBudget(
+                    rpm_limit=thread_rpm,
+                    semaphore_max=self._concurrent_limit_per_thread,
+                )
+                logger.info(
+                    "Thread budget created: thread_id=%s rpm=%d/%d active_threads=%d",
+                    thread_id,
+                    thread_rpm,
+                    self._rpm_limit_global,
+                    active_threads + 1,
+                )
+            return self._thread_budgets[thread_id]
+
+    async def redistribute_budgets(self) -> None:
+        async with self._budget_lock:
+            active_threads = len(self._thread_budgets)
+            if active_threads <= 0:
+                return
+            thread_rpm = max(self._rpm_limit_global // active_threads, 10)
+            for budget in self._thread_budgets.values():
+                budget.rpm_limit = thread_rpm
+            logger.info(
+                "Budgets redistributed: rpm_per_thread=%d active_threads=%d",
+                thread_rpm,
+                active_threads,
+            )
+
+    def cleanup_thread_budget(self, thread_id: str) -> None:
+        if thread_id in self._thread_budgets:
+            del self._thread_budgets[thread_id]
+            logger.info("Thread budget removed: thread_id=%s", thread_id)
+            asyncio.create_task(self.redistribute_budgets())
+
+    def adjust_rpm_limit(self, new_limit: int, reason: str) -> None:
+        new_limit = max(5, min(new_limit, 10_000))
+        old_limit = self._rpm_limit_global
+        if new_limit == old_limit:
+            return
+        self._rpm_limit_global = new_limit
+        logger.warning(
+            "RPM limit adjusted: %d → %d (reason: %s) active_threads=%d",
+            old_limit,
+            new_limit,
+            reason,
+            len(self._thread_budgets),
+        )
+        asyncio.create_task(self.redistribute_budgets())
+
+
+async def run_llm_call_with_policy(
+    call: Callable[[], Awaitable[T]],
+    *,
+    config: Any,
+    budget_key: str,
+    thread_id: str | None = None,
+    prompt_chars: int = 0,
+    log_prefix: str = "LLM",
+    log: logging.Logger | None = None,
+) -> T:
+    """Run an LLM call with shared RPM limits, timeouts, and 429/timeout retry."""
+    from soothe.config.models import LLMRateLimitConfig
+
+    if not isinstance(config, LLMRateLimitConfig):
+        msg = "run_llm_call_with_policy requires LLMRateLimitConfig"
+        raise TypeError(msg)
+
+    call_log = log or logger
+    registry = LLMRateLimitRegistry.shared()
+    budget = await registry.get_budget(budget_key)
+    telemetry_id = thread_id or budget_key
+
+    timeout_attempts = 0
+    rate_limit_attempts = 0
+    max_timeout_attempts = config.max_timeout_retries + 1 if config.retry_on_timeout else 1
+    max_rate_limit_attempts = config.max_rate_limit_retries + 1 if config.retry_on_rate_limit else 1
+
+    while True:
+        eff_timeout = effective_llm_call_timeout(
+            config,
+            timeout_attempts=timeout_attempts,
+            rate_limit_attempts=rate_limit_attempts,
+        )
+        call_log.info(
+            "%s call starting (timeout=%ds timeout_try=%d/%d rate_limit_try=%d/%d "
+            "budget_key=%s thread_id=%s)",
+            log_prefix,
+            eff_timeout,
+            timeout_attempts + 1,
+            max_timeout_attempts,
+            rate_limit_attempts + 1,
+            max_rate_limit_attempts,
+            budget_key,
+            telemetry_id,
+        )
+
+        retry_sleep: float | None = None
+        retry_error_type: str | None = None
+        retry_attempt = 0
+        retry_max = 0
+
+        async with budget.semaphore:
+            await budget.wait_for_rpm_slot()
+            try:
+                result = await asyncio.wait_for(call(), timeout=eff_timeout)
+                budget.record_request()
+                return result
+
+            except TimeoutError:
+                timeout_attempts += 1
+                if timeout_attempts >= 2:
+                    proactive_limit = int(registry.rpm_limit_global * 0.8)
+                    registry.adjust_rpm_limit(
+                        proactive_limit,
+                        reason=(
+                            f"consecutive timeouts ({timeout_attempts}) suggesting provider overload"
+                        ),
+                    )
+                if timeout_attempts < max_timeout_attempts:
+                    retry_sleep = 1.0 * timeout_attempts
+                    retry_error_type = "timeout"
+                    retry_attempt = timeout_attempts
+                    retry_max = max_timeout_attempts
+                else:
+                    call_log.error(
+                        "%s exceeded timeout after %d attempts (%ds final, thread_id=%s)",
+                        log_prefix,
+                        max_timeout_attempts,
+                        eff_timeout,
+                        telemetry_id,
+                    )
+                    raise EnhancedTimeoutError(
+                        timeout_seconds=eff_timeout,
+                        retries=max_timeout_attempts - 1,
+                        prompt_chars=prompt_chars,
+                        thread_id=telemetry_id or budget_key,
+                    ) from None
+
+            except asyncio.CancelledError:
+                raise
+
+            except Exception as exc:
+                if _is_api_rate_limit_error(exc):
+                    rate_limit_info = _extract_rate_limit_info(exc)
+                    call_log.warning(
+                        "%s rate limited: retry_after=%ss rpm_hint=%s provider=%s (thread_id=%s)",
+                        log_prefix,
+                        rate_limit_info["retry_after_seconds"] or "none",
+                        rate_limit_info["rpm_limit_hint"] or "none",
+                        rate_limit_info["provider_name"] or "unknown",
+                        telemetry_id,
+                    )
+                    if rate_limit_info["rpm_limit_hint"] is not None:
+                        registry.adjust_rpm_limit(
+                            rate_limit_info["rpm_limit_hint"],
+                            reason=f"429 from {rate_limit_info['provider_name'] or 'provider'}",
+                        )
+                    rate_limit_attempts += 1
+                    if rate_limit_attempts < max_rate_limit_attempts:
+                        retry_sleep = calc_rate_limit_backoff(
+                            rate_limit_attempts - 1,
+                            exc,
+                            base=config.rate_limit_backoff_base,
+                            backoff_max=config.rate_limit_backoff_max,
+                            respect_retry_after=config.respect_retry_after_header,
+                        )
+                        retry_error_type = "rate_limit"
+                        retry_attempt = rate_limit_attempts
+                        retry_max = max_rate_limit_attempts
+                    else:
+                        call_log.error(
+                            "%s rate limited (429) after %d retries (thread_id=%s)",
+                            log_prefix,
+                            max_rate_limit_attempts,
+                            telemetry_id,
+                        )
+                        raise
+
+                elif _is_transient_connection_error(exc):
+                    connection_attempts = 0
+                    max_connection_attempts = 3
+                    while connection_attempts < max_connection_attempts:
+                        connection_attempts += 1
+                        conn_backoff = 2.0 * connection_attempts
+                        call_log.warning(
+                            "%s connection error (attempt %d/%d) - retrying in %.1fs "
+                            "(thread_id=%s): %s",
+                            log_prefix,
+                            connection_attempts,
+                            max_connection_attempts,
+                            conn_backoff,
+                            telemetry_id,
+                            str(exc)[:100],
+                        )
+                        await asyncio.sleep(conn_backoff)
+                        try:
+                            result = await asyncio.wait_for(call(), timeout=eff_timeout)
+                            budget.record_request()
+                            return result
+                        except Exception as retry_exc:
+                            if not _is_transient_connection_error(retry_exc):
+                                raise
+                            exc = retry_exc
+                            continue
+                    call_log.error(
+                        "%s connection error after %d retries (thread_id=%s): %s",
+                        log_prefix,
+                        max_connection_attempts,
+                        telemetry_id,
+                        str(exc)[:100],
+                    )
+                    raise
+
+                else:
+                    raise
+
+        if retry_sleep is not None and retry_error_type is not None:
+            retry_label = "timeout" if retry_error_type == "timeout" else "429"
+            call_log.warning(
+                "%s %s (attempt %d/%d) - retrying in %.1fs (thread_id=%s)",
+                log_prefix,
+                retry_label,
+                retry_attempt,
+                retry_max,
+                retry_sleep,
+                telemetry_id,
+            )
+            _emit_llm_retry_event(
+                attempt=retry_attempt,
+                max_attempts=retry_max,
+                error_type=retry_error_type,
+                thread_id=telemetry_id,
+                log=call_log,
+            )
+            await asyncio.sleep(retry_sleep)
+            continue
+
+
 class LLMRateLimitMiddleware(AgentMiddleware):
     """Rate limiting for LLM API calls using thread-local budgets (IG-258 Phase 2).
 
@@ -476,6 +830,7 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         rate_limit_backoff_base: float = 2.0,  # IG-499
         rate_limit_backoff_max: float = 60.0,  # IG-499
         respect_retry_after_header: bool = True,  # IG-499
+        rate_limit_retry_timeout_seconds: int = 120,
     ) -> None:
         """Initialize rate limiter with thread-local budgets and retry (Phase 2, IG-295, IG-499).
 
@@ -492,38 +847,43 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             rate_limit_backoff_base: Exponential backoff base in seconds (IG-499, default 2.0).
             rate_limit_backoff_max: Maximum backoff wait in seconds (IG-499, default 60.0).
             respect_retry_after_header: Use retry-after header when present (IG-499, default True).
+            rate_limit_retry_timeout_seconds: Shorter timeout for post-429 retries (default 120s).
         """
         super().__init__()
-        self._rpm_limit_global = requests_per_minute
+        from soothe.config.models import LLMRateLimitConfig
+
         self._concurrent_limit_per_thread = max_concurrent_requests_per_thread
-        self._call_timeout = call_timeout_seconds
-        self._call_timeout_max = max(call_timeout_max_seconds, call_timeout_seconds)
-
-        # Retry configuration (IG-295)
-        self._retry_on_timeout = retry_on_timeout
-        self._max_timeout_retries = max_timeout_retries
-        self._timeout_retry_multiplier = timeout_retry_multiplier
-
-        # IG-499: Rate limit retry configuration
-        self._retry_on_rate_limit = retry_on_rate_limit
-        self._max_rate_limit_retries = max_rate_limit_retries
-        self._rate_limit_backoff_base = rate_limit_backoff_base
-        self._rate_limit_backoff_max = rate_limit_backoff_max
-        self._respect_retry_after_header = respect_retry_after_header
-
-        # Thread-local budgets (Phase 2)
-        self._thread_budgets: dict[str, ThreadBudget] = {}
-        self._budget_lock = asyncio.Lock()  # Only for budget allocation
+        self._policy_config = LLMRateLimitConfig(
+            enabled=True,
+            rpm_limit=requests_per_minute,
+            concurrent_limit=max_concurrent_requests_per_thread,
+            call_timeout_seconds=call_timeout_seconds,
+            call_timeout_max_seconds=max(call_timeout_max_seconds, call_timeout_seconds),
+            retry_on_timeout=retry_on_timeout,
+            max_timeout_retries=max_timeout_retries,
+            timeout_retry_multiplier=timeout_retry_multiplier,
+            retry_on_rate_limit=retry_on_rate_limit,
+            max_rate_limit_retries=max_rate_limit_retries,
+            rate_limit_backoff_base=rate_limit_backoff_base,
+            rate_limit_backoff_max=rate_limit_backoff_max,
+            respect_retry_after_header=respect_retry_after_header,
+            rate_limit_retry_timeout_seconds=rate_limit_retry_timeout_seconds,
+        )
+        LLMRateLimitRegistry.shared().update_limits(
+            requests_per_minute=requests_per_minute,
+            concurrent_limit_per_thread=max_concurrent_requests_per_thread,
+        )
 
         logger.info(
             "LLM rate limiter initialized (thread-local): global_rpm=%d, "
             "per_thread_concurrent=%d, timeout=%ds timeout_cap=%ds "
             "retry_timeout=%s max_timeout_retries=%d retry_multiplier=%.1f "
-            "retry_429=%s max_429_retries=%d backoff_base=%.1fs backoff_max=%.1fs retry_after_header=%s",
+            "retry_429=%s max_429_retries=%d backoff_base=%.1fs backoff_max=%.1fs "
+            "retry_after_header=%s rate_limit_retry_timeout=%ds",
             requests_per_minute,
             max_concurrent_requests_per_thread,
             call_timeout_seconds,
-            self._call_timeout_max,
+            self._policy_config.call_timeout_max_seconds,
             retry_on_timeout,
             max_timeout_retries,
             timeout_retry_multiplier,
@@ -532,7 +892,16 @@ class LLMRateLimitMiddleware(AgentMiddleware):
             rate_limit_backoff_base,
             rate_limit_backoff_max,
             respect_retry_after_header,
+            rate_limit_retry_timeout_seconds,
         )
+
+    @property
+    def _thread_budgets(self) -> dict[str, ThreadBudget]:
+        return LLMRateLimitRegistry.shared().thread_budgets
+
+    @property
+    def _rpm_limit_global(self) -> int:
+        return LLMRateLimitRegistry.shared().rpm_limit_global
 
     @staticmethod
     def _thread_id_from_request(request: ModelRequest[Any]) -> str:
@@ -555,148 +924,23 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         thread_id: str | None,
         logger: logging.Logger,
     ) -> None:
-        """IG-504: Emit retry attempt event for TUI step status display.
-
-        Args:
-            attempt: Current attempt number (1-indexed after failure).
-            max_attempts: Maximum attempts allowed.
-            error_type: "timeout" or "rate_limit".
-            thread_id: Thread ID for context.
-            logger: Logger for fallback if emit fails.
-        """
-        try:
-            from soothe.foundation.events.catalog import LLMRetryAttemptEvent
-            from soothe.utils.progress import emit_progress
-
-            event = LLMRetryAttemptEvent(
-                attempt=attempt,
-                max_attempts=max_attempts,
-                error_type=error_type,
-                thread_id=thread_id,
-            )
-            emit_progress(event.to_dict(), logger)
-        except Exception:
-            logger.debug("Failed to emit LLM retry event", exc_info=True)
-
-    async def _get_thread_budget(self, thread_id: str) -> ThreadBudget:
-        """Get or create thread-local budget with fair distribution (Phase 2).
-
-        Fair distribution: global RPM / active threads
-        Each thread gets independent budget, preventing cross-thread blocking.
-
-        Args:
-            thread_id: Thread identifier for budget allocation.
-
-        Returns:
-            ThreadBudget with fair share of global RPM limit.
-        """
-        async with self._budget_lock:
-            if thread_id not in self._thread_budgets:
-                # Fair distribution: global RPM / active threads
-                active_threads = len(self._thread_budgets)
-                thread_rpm = max(self._rpm_limit_global // (active_threads + 1), 10)  # Min 10 RPM
-
-                self._thread_budgets[thread_id] = ThreadBudget(
-                    rpm_limit=thread_rpm,
-                    semaphore_max=self._concurrent_limit_per_thread,
-                )
-
-                logger.info(
-                    "Thread budget created: thread_id=%s rpm=%d/%d active_threads=%d",
-                    thread_id,
-                    thread_rpm,
-                    self._rpm_limit_global,
-                    active_threads + 1,
-                )
-
-            return self._thread_budgets[thread_id]
-
-    def _calculate_retry_timeout(
-        self,
-        base_timeout: int,
-        attempt: int,
-    ) -> int:
-        """Calculate timeout with escalation on retry (IG-295).
-
-        Args:
-            base_timeout: Initial timeout base.
-            attempt: Retry attempt number (0-indexed).
-
-        Returns:
-            Escalated timeout in seconds, capped at max_seconds.
-        """
-        escalated = int(base_timeout * (self._timeout_retry_multiplier**attempt))
-        return min(escalated, self._call_timeout_max)
-
-    async def _redistribute_budgets(self) -> None:
-        """Redistribute RPM budgets when threads exit (Phase 2).
-
-        Called when thread budget is cleaned up to redistribute
-        freed RPM budget to remaining active threads.
-        """
-        async with self._budget_lock:
-            active_threads = len(self._thread_budgets)
-            if active_threads > 0:
-                thread_rpm = max(self._rpm_limit_global // active_threads, 10)
-
-                for thread_id, budget in self._thread_budgets.items():
-                    budget.rpm_limit = thread_rpm
-
-                logger.info(
-                    "Budgets redistributed: rpm_per_thread=%d active_threads=%d",
-                    thread_rpm,
-                    active_threads,
-                )
-
-    def cleanup_thread_budget(self, thread_id: str) -> None:
-        """Cleanup thread budget when thread ends (Phase 2).
-
-        Args:
-            thread_id: Thread identifier to cleanup.
-        """
-        if thread_id in self._thread_budgets:
-            del self._thread_budgets[thread_id]
-            logger.info("Thread budget removed: thread_id=%s", thread_id)
-
-            # Schedule redistribution (async)
-            asyncio.create_task(self._redistribute_budgets())
-
-    # IG-501: Runtime RPM adjustment based on provider feedback
-
-    def adjust_rpm_limit(self, new_limit: int, reason: str) -> None:
-        """Dynamically adjust global RPM limit based on provider feedback.
-
-        Logs the change, validates bounds, and redistributes budgets across
-        active threads immediately.
-
-        Args:
-            new_limit: New RPM limit to apply (validated: min 5, max 10000).
-            reason: Reason for adjustment (e.g., "429 from dashscope").
-
-        Note:
-            This is a runtime adjustment only; does not modify config files.
-        """
-        # Validate bounds
-        new_limit = max(5, min(new_limit, 10000))
-
-        old_limit = self._rpm_limit_global
-        if new_limit == old_limit:
-            return  # No change needed
-
-        self._rpm_limit_global = new_limit
-
-        # Log the adjustment
-        active_threads = len(self._thread_budgets)
-        logger.warning(
-            "RPM limit adjusted: %d → %d (reason: %s) active_threads=%d",
-            old_limit,
-            new_limit,
-            reason,
-            active_threads,
+        """IG-504: Emit retry attempt event for TUI step status display."""
+        _emit_llm_retry_event(
+            attempt=attempt,
+            max_attempts=max_attempts,
+            error_type=error_type,
+            thread_id=thread_id,
+            log=logger,
         )
 
-        # Redistribute to thread budgets
-        asyncio.create_task(self._redistribute_budgets())
+    async def _get_thread_budget(self, thread_id: str) -> ThreadBudget:
+        return await LLMRateLimitRegistry.shared().get_budget(thread_id)
+
+    def cleanup_thread_budget(self, thread_id: str) -> None:
+        LLMRateLimitRegistry.shared().cleanup_thread_budget(thread_id)
+
+    def adjust_rpm_limit(self, new_limit: int, reason: str) -> None:
+        LLMRateLimitRegistry.shared().adjust_rpm_limit(new_limit, reason)
 
     def wrap_model_call(
         self,
@@ -704,256 +948,40 @@ class LLMRateLimitMiddleware(AgentMiddleware):
         handler: Callable[[ModelRequest[Any]], ModelResponse[Any]],
     ) -> ModelResponse[Any]:
         """Synchronous wrapper (not used for async LLM calls)."""
-        # LangChain LLM calls are async, so this should not be called
-        # But we implement it for completeness
         logger.warning("Unexpected synchronous LLM call in async middleware")
         return handler(request)
-
-    def _calculate_rate_limit_backoff(self, attempt: int, exc: Exception | None = None) -> float:
-        """Calculate backoff delay for 429 rate limit retry (IG-499).
-
-        Prefers retry-after header from API when available and enabled.
-        Falls back to exponential backoff: base * 2^attempt.
-
-        Args:
-            attempt: Retry attempt number (0-indexed).
-            exc: Exception containing response with retry-after header (optional).
-
-        Returns:
-            Backoff delay in seconds, capped at backoff_max.
-        """
-        # Prefer retry-after header if available and enabled
-        if self._respect_retry_after_header and exc is not None:
-            retry_after = _extract_retry_after_seconds(exc)
-            if retry_after is not None:
-                return min(retry_after, self._rate_limit_backoff_max)
-
-        # Exponential backoff: base * 2^attempt
-        backoff = self._rate_limit_backoff_base * (2**attempt)
-        return min(backoff, self._rate_limit_backoff_max)
 
     async def awrap_model_call(
         self,
         request: ModelRequest[Any],
         handler: Callable[[ModelRequest[Any]], Awaitable[ModelResponse[Any]]],
     ) -> ModelResponse[Any]:
-        """Async wrapper with thread-local rate limiting and retry (Phase 2, IG-295, IG-499).
+        """Async wrapper delegating to the shared LLM retry runner."""
+        budget_key = self._thread_id_from_request(request)
 
-        Phase 2 improvements:
-        - Thread-local budget isolation (no cross-thread blocking)
-        - Per-thread semaphore (no starvation from slow calls)
-        - Fair RPM distribution across active threads
+        async def _invoke() -> ModelResponse[Any]:
+            return await handler(request)
 
-        IG-295 improvements:
-        - Retry with timeout escalation on TimeoutError
-        - Enhanced timeout error with metadata
-        - Graceful degradation (RFC-000 Principle #10)
-
-        IG-499 improvements:
-        - Retry on HTTP 429 rate limit errors with exponential backoff
-        - Respect retry-after header from API when present
-        - Separate retry counters for timeout vs rate limit errors
-
-        Args:
-            request: Model request with messages and parameters.
-            handler: Next handler in middleware chain (actual LLM call).
-
-        Returns:
-            Model response from LLM.
-
-        Raises:
-            EnhancedTimeoutError: When timeout retries exhausted.
-            Exception: Original 429 error when rate limit retries exhausted.
-        """
-        thread_id = self._thread_id_from_request(request)
-
-        # IG-499: Separate retry counters for different error types
-        timeout_attempts = 0
-        rate_limit_attempts = 0
-        max_timeout_attempts = self._max_timeout_retries + 1 if self._retry_on_timeout else 1
-        max_rate_limit_attempts = (
-            self._max_rate_limit_retries + 1 if self._retry_on_rate_limit else 1
+        return await run_llm_call_with_policy(
+            _invoke,
+            config=self._policy_config,
+            budget_key=budget_key,
+            thread_id=budget_key,
+            prompt_chars=estimate_model_request_prompt_chars(request),
+            log_prefix="LLM call",
+            log=logger,
         )
 
-        # Phase 2: Thread-local rate limiting
-        budget = await self._get_thread_budget(thread_id)
-
-        # Use thread-local semaphore (no cross-thread contention)
-        async with budget.semaphore:
-            # Thread-local RPM check (only blocks this thread)
-            await budget.wait_for_rpm_slot()
-
-            # IG-499: Combined retry loop handling both timeout and 429 errors
-            while True:
-                # Calculate timeout with escalation based on timeout attempts
-                eff_timeout = self._calculate_retry_timeout(
-                    base_timeout=self._call_timeout,
-                    attempt=timeout_attempts,
-                )
-
-                try:
-                    response = await asyncio.wait_for(handler(request), timeout=eff_timeout)
-                    budget.record_request()
-                    return response
-
-                except TimeoutError:
-                    # IG-295: Timeout retry handling
-                    timeout_attempts += 1
-
-                    # IG-501: Proactive throttling after consecutive timeouts
-                    # (suggests provider overload, reduce RPM before hitting 429)
-                    if timeout_attempts >= 2:
-                        proactive_limit = int(self._rpm_limit_global * 0.8)  # Reduce by 20%
-                        self.adjust_rpm_limit(
-                            proactive_limit,
-                            reason=f"consecutive timeouts ({timeout_attempts}) suggesting provider overload",
-                        )
-
-                    if timeout_attempts < max_timeout_attempts:
-                        backoff = 1.0 * timeout_attempts
-                        logger.debug(
-                            "LLM call timeout (attempt %d/%d, %ds) - retrying with backoff=%.1fs (thread_id=%s)",
-                            timeout_attempts,
-                            max_timeout_attempts,
-                            eff_timeout,
-                            backoff,
-                            thread_id,
-                        )
-                        # IG-504: Emit retry event for TUI display
-                        self._emit_retry_event(
-                            attempt=timeout_attempts,
-                            max_attempts=max_timeout_attempts,
-                            error_type="timeout",
-                            thread_id=thread_id,
-                            logger=logger,
-                        )
-                        await asyncio.sleep(backoff)
-                        continue
-                    else:
-                        # Final timeout attempt failed
-                        logger.error(
-                            "LLM call exceeded timeout after %d retries (%ds final timeout, thread_id=%s)",
-                            max_timeout_attempts,
-                            eff_timeout,
-                            thread_id,
-                        )
-                        raise EnhancedTimeoutError(
-                            timeout_seconds=eff_timeout,
-                            retries=max_timeout_attempts - 1,
-                            prompt_chars=estimate_model_request_prompt_chars(request),
-                            thread_id=thread_id,
-                        )
-
-                except Exception as exc:
-                    # IG-499: Check for 429 rate limit error
-                    if _is_api_rate_limit_error(exc):
-                        # IG-501: Extract full rate limit info from provider response
-                        rate_limit_info = _extract_rate_limit_info(exc)
-
-                        # Log detection
-                        logger.warning(
-                            "Rate limit detected: retry_after=%ss rpm_hint=%s provider=%s (thread_id=%s)",
-                            rate_limit_info["retry_after_seconds"] or "none",
-                            rate_limit_info["rpm_limit_hint"] or "none",
-                            rate_limit_info["provider_name"] or "unknown",
-                            thread_id,
-                        )
-
-                        # IG-501: Adjust global RPM if provider gave us a hint
-                        if rate_limit_info["rpm_limit_hint"] is not None:
-                            self.adjust_rpm_limit(
-                                rate_limit_info["rpm_limit_hint"],
-                                reason=f"429 from {rate_limit_info['provider_name'] or 'provider'}",
-                            )
-
-                        if rate_limit_attempts < max_rate_limit_attempts - 1:
-                            rate_limit_attempts += 1
-                            backoff = self._calculate_rate_limit_backoff(
-                                attempt=rate_limit_attempts - 1,
-                                exc=exc,
-                            )
-                            logger.warning(
-                                "LLM call rate limited (429) (attempt %d/%d) - retrying with backoff=%.1fs (thread_id=%s)",
-                                rate_limit_attempts,
-                                max_rate_limit_attempts,
-                                backoff,
-                                thread_id,
-                            )
-                            # IG-504: Emit retry event for TUI display
-                            self._emit_retry_event(
-                                attempt=rate_limit_attempts,
-                                max_attempts=max_rate_limit_attempts,
-                                error_type="rate_limit",
-                                thread_id=thread_id,
-                                logger=logger,
-                            )
-                            await asyncio.sleep(backoff)
-                            continue
-                        else:
-                            # Final rate limit attempt failed
-                            logger.error(
-                                "LLM call rate limited (429) after %d retries (thread_id=%s)",
-                                max_rate_limit_attempts,
-                                thread_id,
-                            )
-                            raise
-
-                    # IG-503: Check for transient connection error
-                    elif _is_transient_connection_error(exc):
-                        connection_attempts = 0
-                        max_connection_attempts = 3
-                        while connection_attempts < max_connection_attempts:
-                            connection_attempts += 1
-                            backoff = 2.0 * connection_attempts  # Linear backoff: 2s, 4s, 6s
-                            logger.warning(
-                                "LLM connection error (attempt %d/%d) - retrying with backoff=%.1fs (thread_id=%s): %s",
-                                connection_attempts,
-                                max_connection_attempts,
-                                backoff,
-                                thread_id,
-                                str(exc)[:100],
-                            )
-                            await asyncio.sleep(backoff)
-                            try:
-                                response = await asyncio.wait_for(
-                                    handler(request), timeout=eff_timeout
-                                )
-                                budget.record_request()
-                                return response
-                            except Exception as retry_exc:
-                                if not _is_transient_connection_error(retry_exc):
-                                    raise  # Non-transient, propagate
-                                exc = retry_exc
-                                continue
-
-                        # All connection retries exhausted
-                        logger.error(
-                            "LLM connection error after %d retries (thread_id=%s): %s",
-                            max_connection_attempts,
-                            thread_id,
-                            str(exc)[:100],
-                        )
-                        raise
-
-                    else:
-                        # Non-rate-limit, non-timeout, non-connection error: propagate immediately
-                        raise
-
     def get_stats(self) -> dict[str, Any]:
-        """Get rate limiting statistics.
-
-        Returns:
-            Dictionary with thread-local statistics.
-        """
-        # Phase 2: Thread-local statistics
-        thread_stats = {}
-        for thread_id, budget in self._thread_budgets.items():
-            thread_stats[thread_id] = budget.get_stats()
-
+        """Get rate limiting statistics."""
+        registry = LLMRateLimitRegistry.shared()
+        thread_stats = {
+            thread_id: budget.get_stats() for thread_id, budget in registry.thread_budgets.items()
+        }
         return {
             "mode": "thread_local",
-            "global_rpm_limit": self._rpm_limit_global,
+            "global_rpm_limit": registry.rpm_limit_global,
             "per_thread_concurrent_limit": self._concurrent_limit_per_thread,
-            "active_threads": len(self._thread_budgets),
+            "active_threads": len(registry.thread_budgets),
             "thread_budgets": thread_stats,
         }

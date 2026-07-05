@@ -971,6 +971,7 @@ class LLMRateLimitConfig(BaseModel):
         rate_limit_backoff_base: Exponential backoff base in seconds (IG-499).
         rate_limit_backoff_max: Maximum backoff wait in seconds (IG-499).
         respect_retry_after_header: Use retry-after header from API when present (IG-499).
+        rate_limit_retry_timeout_seconds: Per-attempt timeout after a 429 (shorter than normal calls).
     """
 
     enabled: bool = Field(
@@ -1013,6 +1014,12 @@ class LLMRateLimitConfig(BaseModel):
     respect_retry_after_header: bool = Field(
         default=True,
         description="Use retry-after header from API when present",
+    )
+    rate_limit_retry_timeout_seconds: int = Field(
+        default=120,
+        ge=10,
+        le=600,
+        description="Per-attempt timeout for LLM calls after HTTP 429 (seconds)",
     )
 
 

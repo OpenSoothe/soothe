@@ -101,6 +101,8 @@ agent:
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96
+    llm_rate_limit:
+      rate_limit_retry_timeout_seconds: 120
 
 # ============================================================
 # PERSISTENCE
