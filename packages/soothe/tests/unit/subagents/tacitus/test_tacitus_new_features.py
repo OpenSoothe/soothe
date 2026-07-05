@@ -213,6 +213,7 @@ class TestLLMTimeoutHelpers:
     @pytest.mark.asyncio
     async def test_invoke_llm_with_timeout_raises_on_slow_response(self):
         """LLM invocation should raise TimeoutError on slow response."""
+        from soothe.config.models import LLMRateLimitConfig
         from soothe.subagents.tacitus.engine import _invoke_llm_with_timeout
 
         async def slow_response(*_args, **_kwargs):
@@ -222,12 +223,20 @@ class TestLLMTimeoutHelpers:
         mock_model = MagicMock()
         mock_model.ainvoke = slow_response
 
+        # Use a config with retries disabled to avoid ~55s delay from retry sleeps
+        mock_config = MagicMock()
+        mock_config.agent.loop.llm_rate_limit = LLMRateLimitConfig(
+            retry_on_timeout=False,
+            max_timeout_retries=0,
+        )
+
         with pytest.raises(TimeoutError):
             await _invoke_llm_with_timeout(
                 mock_model,
                 [{"role": "user", "content": "test"}],
                 timeout_sec=0.01,  # Very short timeout
                 node_name="test",
+                soothe_config=mock_config,
             )
 
 
