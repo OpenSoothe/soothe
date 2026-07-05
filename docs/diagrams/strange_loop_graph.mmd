@@ -1,5 +1,5 @@
 ---
-title: StrangeLoop LangGraph (RFC-220)
+title: StrangeLoop LangGraph (RFC-220 / RFC-630)
 config:
   flowchart:
     curve: linear
@@ -14,6 +14,7 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
+	intent_classify(intent_classify)
 	init_or_resume(init_or_resume)
 	iteration_gate(iteration_gate)
 	iteration_start(iteration_start)
@@ -27,7 +28,7 @@ graph TD;
 	record_iteration(record_iteration)
 	await_clarification(await_clarification)
 	__end__([<p>__end__</p>]):::last
-	__start__ --> init_or_resume;
+	__start__ --> intent_classify;
 	await_clarification -.-> __end__;
 	await_clarification -.-> execute;
 	await_clarification -.-> plan_assess;
@@ -44,6 +45,7 @@ graph TD;
 	init_or_resume -.-> plan_assess;
 	init_or_resume -.-> plan_generate;
 	init_or_resume -.-> resolve_decision;
+	intent_classify --> init_or_resume;
 	iteration_gate -.-> __end__;
 	iteration_gate -.-> iteration_start;
 	iteration_start --> bounded_evidence_gather;

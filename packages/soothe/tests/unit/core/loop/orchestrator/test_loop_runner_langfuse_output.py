@@ -43,7 +43,11 @@ def test_langfuse_goal_output_text_ignores_execute_ledger_without_goal_completio
 
 
 def test_langfuse_goal_output_text_uses_chitchat_intent_response() -> None:
-    from soothe.foundation.sloop.intention.models import IntakeLabel, IntentClassification
+    from soothe.foundation.sloop.intention.models import (
+        IntakeLabel,
+        IntentClassification,
+        TaskComplexity,
+    )
 
     ctx = MagicMock()
     ctx.loop_state.loop_messages = []
@@ -51,5 +55,6 @@ def test_langfuse_goal_output_text_uses_chitchat_intent_response() -> None:
     ctx.loop_state.intent = IntentClassification(
         intake_label=IntakeLabel.CHITCHAT,
         chitchat_response="Hi! I'm Soothe.",
+        task_complexity=TaskComplexity.MINIMAL,
     )
     assert _langfuse_goal_output_text(ctx) == "Hi! I'm Soothe."

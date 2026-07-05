@@ -26,6 +26,9 @@ from pathlib import Path
 # Ensure soothe package is importable
 sys.path.insert(0, str(Path(__file__).parent.parent / "packages/soothe/src"))
 
+# Pre-import to break orchestrator ↔ engine circular import on cold start.
+import soothe.config  # noqa: F401
+import soothe.foundation.sloop.engine.strange_loop  # noqa: F401
 from soothe.config import SootheConfig
 from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -125,7 +128,7 @@ def save_mermaid_file(mermaid: str, output_path: Path) -> None:
 
     # Add title
     clean_mermaid = f"""---
-title: StrangeLoop LangGraph (RFC-220)
+title: StrangeLoop LangGraph (RFC-220 / RFC-630)
 config:
   flowchart:
     curve: linear
@@ -231,17 +234,58 @@ def main() -> None:
         print(f"ASCII generation failed: {e}")
     print("-" * 60)
 
-    # Save node and edge summary
+    # Save node and edge summary with routing design notes
     summary_path = output_dir / "strange_loop_graph_nodes.md"
-    summary = "# StrangeLoop LangGraph Node Summary\n\n"
-    summary += "## Nodes\n\n"
+    summary = """# StrangeLoop LangGraph Design
+
+Auto-generated topology from ``build_strange_loop_graph()`` (RFC-220, RFC-630).
+Regenerate: ``python scripts/visualize_strange_loop_graph.py``
+
+## Graph entry
+
+Every goal turn runs:
+
+1. ``intent_classify`` — intake LLM (or heuristic) → ``IntakeLabel`` + optional ``chitchat_response``
+2. ``init_or_resume`` — surface label on graph state; inject trivial pseudo-plan; emit chitchat fast-path event
+3. ``route_by_intent`` — branch dispatch (conditional edge from ``init_or_resume``)
+
+## ``route_by_intent`` priority (RFC-630)
+
+Evaluated in order; first match wins:
+
+| Priority | Condition | Target | Notes |
+|----------|-----------|--------|-------|
+| 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
+| 2 | ``is_continuation`` | ``plan_assess`` | Structural continuation overlay (RFC-225/RFC-226); derived from checkpoint, not intake LLM |
+| 3 | ``intake_label == trivial`` | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
+| 4 | ``intake_label == simple`` | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
+| 5 | default / ``complex`` | ``bounded_evidence_gather`` | Full spine; fresh-loop skip (IG-476) intact |
+
+### Chitchat fast-path (``init_or_resume``)
+
+When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is not an explicit continue keyword):
+
+- Sets ``intent_route = fast_path`` and emits ``intent_fast_path`` to the runner
+- Runner streams the piggybacked reply directly — **no** ``plan_assess``, ``plan_generate``, or ``execute``
+- Applies on **first and subsequent goals** in the same loop (continuation does not override chitchat)
+
+## Nodes
+
+"""
     for node in graph.nodes:
-        # Nodes can be Node objects or strings
         if hasattr(node, "id"):
             summary += f"- `{node.id}`: {node.name or node.id}\n"
         else:
             summary += f"- `{node}`\n"
-    summary += "\n## Edges\n\n"
+    summary += "\n## Conditional edges\n\n"
+    summary += "Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are conditional.\n\n"
+    summary += "### From ``init_or_resume`` (`route_by_intent`)\n\n"
+    summary += "- → ``__end__`` — chitchat fast-path\n"
+    summary += "- → ``plan_assess`` — continuation overlay\n"
+    summary += "- → ``resolve_decision`` — trivial pseudo-plan\n"
+    summary += "- → ``plan_generate`` — simple branch\n"
+    summary += "- → ``bounded_evidence_gather`` — complex / default\n\n"
+    summary += "### All edges\n\n"
     for edge in graph.edges:
         source = edge.source if hasattr(edge, "source") else str(edge)
         target = edge.target if hasattr(edge, "target") else ""

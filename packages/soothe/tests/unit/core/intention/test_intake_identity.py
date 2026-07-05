@@ -15,6 +15,7 @@ def test_build_intake_identity_message_includes_self_identify_rule() -> None:
     text = build_intake_identity_message("TestBot")
     assert "TestBot" in text
     assert "Do not claim to be Claude" in text
+    assert "Dr. Xiaming Chen" in text
 
 
 def test_intake_llm_result_has_no_quiz_response_field() -> None:
