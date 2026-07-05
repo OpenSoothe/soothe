@@ -2475,13 +2475,7 @@ class MessageRouter:
         )
 
     async def _handle_loop_cards_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Return the bound display-card snapshot for a loop (RFC-413).
-
-        The card ledger is derived lazily from the loop's checkpoint + activity
-        log on first access; this RPC waits for eager backfill if needed so the
-        client receives a complete snapshot. Typical cost is ~50 ms for an
-        active loop's cached ledger, ~1–3 s for a pre-413 loop's first read.
-        """
+        """Return flattened display cards (RFC-413 compat wrapper over RFC-631)."""
         d = self._daemon
         request_id = msg.get("request_id")
         loop_id = msg.get("loop_id")
@@ -2509,14 +2503,24 @@ class MessageRouter:
             )
             return
 
-        from soothe_sdk.display.card_ledger import card_to_wire_dict
-
         try:
             loop_id_str = str(loop_id)
-            ledger = await card_manager.ensure_for_loop(loop_id_str)
-            snapshot = ledger.snapshot()
-            wire_cards = [card_to_wire_dict(card) for card in snapshot]
-            latest_seq = ledger.next_seq() - 1 if ledger.card_count() > 0 else 0
+            loop_meta = await d._persistence_manager.get_loop_metadata(loop_id_str)
+            loop_status = str((loop_meta or {}).get("status") or "")
+            payload = await card_manager.fetch_loop_history(
+                loop_id_str,
+                loop_status=loop_status,
+            )
+            wire_cards: list[dict[str, Any]] = []
+            for goal_raw in payload.get("goals") or []:
+                if isinstance(goal_raw, dict):
+                    for card in goal_raw.get("display_cards") or []:
+                        if isinstance(card, dict):
+                            wire_cards.append(card)
+            for card in payload.get("live_cards") or []:
+                if isinstance(card, dict):
+                    wire_cards.append(card)
+            latest_seq = len(wire_cards)
             context_tokens = await self._read_loop_context_tokens(loop_id_str)
         except Exception as exc:
             await d._send_client_message(
@@ -2539,6 +2543,58 @@ class MessageRouter:
                 "context_tokens": context_tokens,
             },
         )
+
+    async def _handle_loop_history_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Return goal display snapshots plus live card tail (RFC-631)."""
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "loop_id required",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        card_manager = getattr(d, "_card_manager", None)
+        if card_manager is None:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.CARD_MANAGER_UNAVAILABLE,
+                    "Daemon card manager not initialized",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        try:
+            loop_id_str = str(loop_id)
+            loop_meta = await d._persistence_manager.get_loop_metadata(loop_id_str)
+            loop_status = str((loop_meta or {}).get("status") or "")
+            payload = await card_manager.fetch_loop_history(
+                loop_id_str,
+                loop_status=loop_status,
+            )
+            context_tokens = await self._read_loop_context_tokens(loop_id_str)
+            payload["context_tokens"] = context_tokens
+        except Exception as exc:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.CARDS_FETCH_FAILED,
+                    str(exc),
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        await self._send_response(client_id, request_id, payload)
 
     async def _read_loop_context_tokens(self, loop_id: str) -> int:
         """Best-effort read of ``_context_tokens`` from the loop's checkpoint.

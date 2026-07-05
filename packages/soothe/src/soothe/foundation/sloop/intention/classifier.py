@@ -225,11 +225,18 @@ class IntentClassifier:
             raise ValueError("LLM returned None - structured output parsing failed")
 
         if result_dict.get("intake_label") not in (
+            IntakeLabel.CHITCHAT,
             IntakeLabel.TRIVIAL,
             IntakeLabel.SIMPLE,
             IntakeLabel.COMPLEX,
         ):
             raise ValueError(f"Invalid intake_label from LLM: {result_dict.get('intake_label')!r}")
+
+        if (
+            result_dict.get("intake_label") == IntakeLabel.CHITCHAT
+            and not (result_dict.get("chitchat_response") or "").strip()
+        ):
+            raise ValueError("chitchat intake requires chitchat_response")
 
         llm_result = IntakeClassificationLLMResult(**result_dict)
         return llm_result.to_intent_classification(), human_content, result_dict
@@ -306,6 +313,11 @@ class IntentClassifier:
         if not intent.goal_description:
             intent.goal_description = query
             logger.debug("Patched missing goal_description")
+        if intent.intake_label == IntakeLabel.CHITCHAT:
+            if not (intent.chitchat_response or "").strip():
+                intent.chitchat_response = "Hello! How can I help you today?"
+                logger.debug("Patched missing chitchat_response")
+            return intent
         if not intent.reasoning:
             intent.reasoning = "I'll use tools to work through this goal."
             logger.debug("Patched missing reasoning")

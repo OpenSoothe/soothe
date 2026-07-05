@@ -6,16 +6,19 @@
 **Kind**: Architecture Design
 **Created**: 2026-06-04
 **Authors**: xiaming (with Claude)
-**Depends on**: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client)
+**Dependencies**: RFC-225 (Goal Record Enrichment), RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631 (Goal Display Snapshots)
 **Supersedes**: RFC-411 (history reconstruction model)
+**Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope)
 
 ---
 
 ## 1. Abstract
 
-This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them as append-only JSONL under `~/.soothe/data/loops/<loop_id>/cards.jsonl`. Clients become passive renderers consuming a stable `card.*` wire schema.
+This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them in SQLite (`display.db`). Clients become passive renderers consuming a stable `card.*` wire schema.
 
 The design eliminates the live/replay drift class by construction: live rendering and historical resume both flow through the same binding logic. It supersedes the checkpoint-tree reconstruction model in RFC-411 with a forward-write ledger that is recorded as the loop runs.
+
+**RFC-631 amendment (2026-07-05):** The card ledger is scoped to the **active goal's live tail** only. Completed goals are recovered from immutable **goal display snapshots** (see RFC-631). Resume clients SHOULD use `loop_history_fetch` (snapshots + live tail) rather than replaying the full mutation history.
 
 ---
 
@@ -24,12 +27,12 @@ The design eliminates the live/replay drift class by construction: live renderin
 ### 2.1 Scope
 
 * `CardBinder`: daemon-resident, single source of card-construction rules.
-* `DisplayCardLedger`: in-memory + append-only JSONL store of bound card mutations, scoped per loop.
+* `DisplayCardLedger`: in-memory + SQLite-backed store of bound card mutations for the **active goal's live tail** (RFC-631).
 * `card.*` wire frames: `card.created`, `card.updated`, `card.finalized`, `card.replay_begin`, `card.replay_end`.
 * Catalogue of card kinds (user message, assistant text, step, cognition plan/reason, subagent, error, system notice).
-* Storage layout under `~/.soothe/data/loops/<loop_id>/`.
-* Resume / reattach flow for TUI startup, TUI `/loops` switch, and `loop attach` / `loop_subscribe` RPC.
-* Phased migration from today's two-store (checkpoint + thread log) renderer.
+* Storage in `display.db` (`display_card_mutations` table).
+* Live streaming and reattach replay of the **current goal tail** only.
+* Resume of completed goals via RFC-631 goal display snapshots (`loop_history_fetch`).
 
 ### 2.2 Non-Goals
 
@@ -124,15 +127,18 @@ ThreadLogger     ──┘   (single                │                     (TUI
 
 ### 5.2 `DisplayCardLedger`
 
-**Purpose**: persist and replay card mutations per loop.
+**Purpose**: persist and replay card mutations for the **active goal's live tail**.
 
 **Capabilities**:
-* Owns the in-memory dict `card_id → CardState` for an active loop.
-* Owns the append-only file `~/.soothe/data/loops/<loop_id>/cards.jsonl`.
-* Assigns a monotonic `seq` to every mutation.
+* Owns the in-memory dict `card_id → CardState` for the current goal segment.
+* Persists mutations in `display.db` (`display_card_mutations` table).
+* Assigns a monotonic `seq` to every mutation within the active goal segment.
 * `apply(mutation)` — update memory + append a record.
 * `snapshot() -> list[CardState]` — current visible cards in insertion order.
-* `replay_to(sink, *, after_seq: int | None = None)` — push card frames to a client, optionally resuming from a sequence number.
+* `reset_for_next_goal()` — clear segment after RFC-631 freeze (see IG-548).
+* `replay_to(sink, *, after_seq: int | None = None)` — push live-tail card frames to a client on reattach.
+
+**Note (RFC-631):** Completed goals are **not** recovered by replaying the full mutation log. On goal idle, the daemon folds the segment into a `GoalDisplaySnapshot` and resets this ledger. Historical resume uses `loop_history_fetch`.
 
 **Interfaces**:
 * Provides: card frame stream for the wire layer.
@@ -190,25 +196,30 @@ Throughout, `CardBinder` runs in a dedicated asyncio task fed by a bounded queue
 
 ### 6.2 Resume / Reattach
 
-1. Client connects (TUI startup, `/loops` switch, or `loop_subscribe` RPC).
-2. Daemon ensures the loop's `DisplayCardLedger` is hydrated:
-   * If `cards.jsonl` exists: open it; fold mutations into in-memory state.
-   * Else (pre-existing loop): backfill via `CardBinder` reading checkpoint + thread-scoped `conversation.jsonl`. Persist as new `cards.jsonl`. One-time cost per legacy loop.
-3. Daemon sends `card.replay_begin`.
-4. Daemon iterates the ledger and sends one `card.created` per current card state (compacted form — latest state per `card_id`, not the full mutation history).
-5. Daemon sends `card.replay_end`.
-6. Live `card.*` frames stream from the next mutation onward.
+**Completed goals (RFC-631):**
 
-If the client passed `after_seq=N` (reconnect with prior state), step 4 skips cards with `seq <= N`.
+1. Client calls `loop_history_fetch(loop_id)`.
+2. Daemon returns ordered `GoalDisplaySnapshot[]` + `live_cards` for the active goal (if any).
+3. Client flattens `display_cards`, dedupes by id, mounts visible window.
+
+**Live tail on reattach (this RFC):**
+
+1. Client connects (`loop_subscribe` / TUI startup).
+2. Daemon sends `card.replay_begin` → replays **live tail only** (current goal segment) → `card.replay_end`.
+3. Live `card.*` frames stream for the in-flight goal.
+
+Legacy full-ledger replay via `loop_cards_fetch` is deprecated; see RFC-631 migration path.
+
+**Pre-existing loops without snapshots:** lazy migration synthesizes goal snapshots on first `loop_history_fetch`; live ledger backfill rules unchanged until P2 (IG-548).
 
 ### 6.3 `/loops` Switch Inside an Active TUI
 
-1. User selects a different loop from `/loops` modal.
-2. TUI clears its renderer state for the current loop.
-3. TUI calls `loop_subscribe` for the new `loop_id`.
-4. Daemon flow §6.2 fires; full transcript hydrates.
+1. User selects a different loop from `/resume` modal.
+2. TUI clears renderer state for the current loop.
+3. TUI calls `switch_loop` / `loop_subscribe` for the new `loop_id`.
+4. TUI awaits `loop_history_fetch` and paints frozen goal snapshots + live tail (RFC-631).
 
-This replaces the current `_resume_loop_via_daemon()` that wipes the screen and listens for new events only.
+This replaces fetching the full card mutation history on every switch.
 
 ---
 

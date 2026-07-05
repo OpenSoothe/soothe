@@ -145,6 +145,7 @@ class StrangeLoopStateManager:
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
         self._worker_started = False
         self._worker_lock = asyncio.Lock()
+        self._closed = False
 
     async def _ensure_backend_initialized(self) -> None:
         """Lazy backend initialization (IG-055: PostgreSQL or SQLite).
@@ -448,12 +449,22 @@ class StrangeLoopStateManager:
                 self._checkpoint = checkpoint
 
                 # Auto-repair: Detect and fix orphaned running goals
-                if checkpoint.status == "idle" and checkpoint.current_goal_index == -1:
-                    # Check if goal_history has running goals
-                    running_goals = [g for g in checkpoint.goal_history if g.status == "running"]
+                from soothe.foundation.sloop.state.status_vocabulary import (
+                    is_goal_index_in_flight,
+                    suggest_loop_checkpoint_status,
+                )
+
+                suggested_status = suggest_loop_checkpoint_status(
+                    loop_status=checkpoint.status,
+                    goal_index_statuses=[g.status for g in checkpoint.goal_history],
+                )
+                if checkpoint.status == "idle" and suggested_status == "running":
+                    running_goals = [
+                        g for g in checkpoint.goal_history if is_goal_index_in_flight(g.status)
+                    ]
                     if running_goals:
                         logger.warning(
-                            "Found orphaned running goals in loop %s (index=-1 but %d running goals)",
+                            "Found orphaned in-flight goals in loop %s while loop status idle (%d goals)",
                             checkpoint.loop_id,
                             len(running_goals),
                         )
@@ -531,6 +542,10 @@ class StrangeLoopStateManager:
         self._checkpoint = checkpoint
         self._last_save_checkpoint = checkpoint
 
+        if self._closed:
+            await self._do_save_checkpoint(checkpoint)
+            return
+
         if self._async_write_enabled:
             # RFC-803 Phase 6: Async mode - enqueue for background write
             if not self._worker_started:
@@ -576,7 +591,7 @@ class StrangeLoopStateManager:
         RFC-803 Phase 6: Fire-and-forget async write infrastructure.
         """
         async with self._worker_lock:
-            if self._worker_started:
+            if self._closed or self._worker_started:
                 return
 
             worker_loop = asyncio.get_running_loop()
@@ -929,6 +944,7 @@ class StrangeLoopStateManager:
         checkpoint.current_goal_index = -1  # IG-055: Reset index after goal completion
 
         await self.save(checkpoint)
+        await self.force_flush()
 
         logger.info(
             "Finalized goal %s on thread %s (loop %s)",
@@ -1168,6 +1184,7 @@ class StrangeLoopStateManager:
         Must be called after StrangeLoop completes to release database connections.
         For shared pool mode, only clears references (pool closed at daemon shutdown).
         """
+        self._closed = True
         # RFC-803 Phase 6: Force final checkpoint write, then stop worker
         await self.force_flush()
         await self._stop_flush_worker()

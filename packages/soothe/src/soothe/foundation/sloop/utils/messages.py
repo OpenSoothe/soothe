@@ -135,6 +135,7 @@ class LoopHumanMessage(HumanMessage):
             "execute_step",  # Single step execution
             "goal_completion",  # Goal completion phase
             "quiz",  # Legacy ledger phase (pre-trivial-only fast path)
+            "chitchat",  # Chitchat intake fast-path (piggybacked response)
             "trivial",  # Trivial intake fast-path (CoreAgent on loop main thread)
         ]
         | None

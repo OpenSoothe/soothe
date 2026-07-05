@@ -7,6 +7,7 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
+from typing import Any
 
 from soothe_sdk.display.card_ledger import CardMutation
 
@@ -27,6 +28,17 @@ CREATE TABLE IF NOT EXISTS display_card_mutations (
 );
 CREATE INDEX IF NOT EXISTS idx_display_cards_loop
     ON display_card_mutations(loop_id, seq);
+CREATE TABLE IF NOT EXISTS goal_display_snapshots (
+    loop_id TEXT NOT NULL,
+    goal_index INTEGER NOT NULL,
+    goal_id TEXT NOT NULL,
+    frozen_at TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    card_count INTEGER NOT NULL,
+    PRIMARY KEY (loop_id, goal_index)
+);
+CREATE INDEX IF NOT EXISTS idx_goal_snapshots_loop
+    ON goal_display_snapshots(loop_id, goal_index);
 """
 
 
@@ -141,12 +153,144 @@ class DisplayCardStore:
             conn.commit()
 
     def delete_loop(self, loop_id: str) -> None:
-        """Delete all card mutations for a loop."""
+        """Delete all card mutations and goal snapshots for a loop."""
         conn = self._connection()
         with self._lock:
             conn.execute(
                 "DELETE FROM display_card_mutations WHERE loop_id = ?",
                 (loop_id,),
+            )
+            conn.execute(
+                "DELETE FROM goal_display_snapshots WHERE loop_id = ?",
+                (loop_id,),
+            )
+            conn.commit()
+
+    def list_goal_snapshots(self, loop_id: str) -> list[dict[str, Any]]:
+        """Load goal display snapshots ordered by ``goal_index``."""
+        conn = self._connection()
+        cursor = conn.execute(
+            """
+            SELECT snapshot_json
+            FROM goal_display_snapshots
+            WHERE loop_id = ?
+            ORDER BY goal_index ASC
+            """,
+            (loop_id,),
+        )
+        out: list[dict[str, Any]] = []
+        for row in cursor.fetchall():
+            try:
+                data = json.loads(row[0])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(data, dict):
+                out.append(data)
+        return out
+
+    def goal_snapshot_count(self, loop_id: str) -> int:
+        """Return number of stored goal snapshots for a loop."""
+        conn = self._connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM goal_display_snapshots WHERE loop_id = ?",
+            (loop_id,),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def allocate_goal_snapshot_index(self, loop_id: str) -> int:
+        """Return the next goal snapshot index without inserting (non-atomic alone)."""
+        conn = self._connection()
+        with self._lock:
+            row = conn.execute(
+                """
+                SELECT COALESCE(MAX(goal_index), -1) + 1
+                FROM goal_display_snapshots
+                WHERE loop_id = ?
+                """,
+                (loop_id,),
+            ).fetchone()
+            return int(row[0]) if row else 0
+
+    def insert_goal_snapshot_with_auto_index(
+        self,
+        loop_id: str,
+        *,
+        goal_id: str | None,
+        snapshot: dict[str, Any],
+    ) -> tuple[int, str]:
+        """Reserve ``goal_index`` and insert the snapshot in one critical section."""
+        conn = self._connection()
+        with self._lock:
+            row = conn.execute(
+                """
+                SELECT COALESCE(MAX(goal_index), -1) + 1
+                FROM goal_display_snapshots
+                WHERE loop_id = ?
+                """,
+                (loop_id,),
+            ).fetchone()
+            goal_index = int(row[0]) if row else 0
+            resolved_goal_id = goal_id or f"{loop_id}_goal_{goal_index}"
+            snapshot_body = dict(snapshot)
+            snapshot_body["goal_index"] = goal_index
+            snapshot_body["goal_id"] = resolved_goal_id
+            card_count = int(snapshot_body.get("card_count") or 0)
+            frozen_at = str(
+                snapshot_body.get("completed_at") or snapshot_body.get("started_at") or ""
+            )
+            if not frozen_at:
+                from datetime import UTC, datetime
+
+                frozen_at = datetime.now(UTC).isoformat()
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO goal_display_snapshots
+                (loop_id, goal_index, goal_id, frozen_at, snapshot_json, card_count)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    loop_id,
+                    goal_index,
+                    resolved_goal_id,
+                    frozen_at,
+                    json.dumps(snapshot_body, default=str),
+                    card_count,
+                ),
+            )
+            conn.commit()
+            return goal_index, resolved_goal_id
+
+    def insert_goal_snapshot(
+        self,
+        loop_id: str,
+        *,
+        goal_index: int,
+        goal_id: str,
+        snapshot: dict[str, Any],
+    ) -> None:
+        """Insert one immutable goal snapshot (ignore duplicate goal_index)."""
+        conn = self._connection()
+        card_count = int(snapshot.get("card_count") or 0)
+        frozen_at = str(snapshot.get("completed_at") or snapshot.get("started_at") or "")
+        if not frozen_at:
+            from datetime import UTC, datetime
+
+            frozen_at = datetime.now(UTC).isoformat()
+        with self._lock:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO goal_display_snapshots
+                (loop_id, goal_index, goal_id, frozen_at, snapshot_json, card_count)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    loop_id,
+                    goal_index,
+                    goal_id,
+                    frozen_at,
+                    json.dumps(snapshot, default=str),
+                    card_count,
+                ),
             )
             conn.commit()
 

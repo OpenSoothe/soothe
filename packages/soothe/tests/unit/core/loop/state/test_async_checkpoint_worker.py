@@ -62,11 +62,38 @@ def test_cancel_orphan_loop_tasks_clears_leaked_worker() -> None:
 
     try:
         loop.run_until_complete(asyncio.sleep(0))
-        task = loop.create_task(leaked_worker())
+        task = loop.create_task(leaked_worker(), name="leaked-checkpoint-flush")
         loop.run_until_complete(asyncio.sleep(0))
         assert not task.done()
 
-        cancel_orphan_loop_tasks(loop)
+        cancel_orphan_loop_tasks(loop, timeout_seconds=5.0)
         assert task.done()
+    finally:
+        loop.close()
+
+
+def test_cancel_orphan_loop_tasks_logs_task_names_on_timeout(caplog) -> None:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def stubborn_after_cancel() -> None:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            await asyncio.Event().wait()
+
+    try:
+        loop.run_until_complete(asyncio.sleep(0))
+        loop.create_task(stubborn_after_cancel(), name="stuck-increment")
+        loop.run_until_complete(asyncio.sleep(0))
+
+        with patch(
+            "soothe.runner._worker_utils.asyncio.wait_for",
+            side_effect=TimeoutError,
+        ):
+            with caplog.at_level("WARNING", logger="soothe.runner._worker_utils"):
+                cancel_orphan_loop_tasks(loop, timeout_seconds=0.01)
+
+        assert "stuck-increment" in caplog.text
     finally:
         loop.close()

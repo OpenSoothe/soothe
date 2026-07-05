@@ -59,6 +59,7 @@ channels:
           - $ref: '#/components/messages/loopStateGetRequest'
           - $ref: '#/components/messages/loopStateUpdateRequest'
           - $ref: '#/components/messages/loopCardsFetchRequest'
+          - $ref: '#/components/messages/loopHistoryFetchRequest'
           # Job RPC requests
           - $ref: '#/components/messages/jobCreateRequest'
           - $ref: '#/components/messages/jobStatusRequest'
@@ -76,6 +77,7 @@ channels:
           - $ref: '#/components/messages/daemonStatusRequest'
           - $ref: '#/components/messages/daemonShutdownRequest'
           - $ref: '#/components/messages/configGetRequest'
+          - $ref: '#/components/messages/configReloadRequest'
           # Skills & models requests
           - $ref: '#/components/messages/skillsListRequest'
           - $ref: '#/components/messages/modelsListRequest'
@@ -381,6 +383,19 @@ components:
         since:
           type: string
           description: Fetch cards after this sequence
+
+    loopHistoryFetchParams:
+      type: object
+      required: [loop_id]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
+
+    configReloadParams:
+      type: object
+      description: No required fields
 
     # Job RPC params (RFC-450 §9.2)
     jobCreateParams:
@@ -925,6 +940,24 @@ components:
               id:
                 type: string
 
+    loopHistoryFetchRequest:
+      title: Fetch goal display snapshots and live card tail
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_history_fetch
+              params:
+                $ref: '#/components/schemas/loopHistoryFetchParams'
+              id:
+                type: string
+
     # Job RPC request messages
     jobCreateRequest:
       title: Create autopilot job
@@ -1177,6 +1210,24 @@ components:
                 const: config_get
               params:
                 $ref: '#/components/schemas/configGetParams'
+              id:
+                type: string
+
+    configReloadRequest:
+      title: Trigger config hot-reload
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: config_reload
+              params:
+                $ref: '#/components/schemas/configReloadParams'
               id:
                 type: string
 

@@ -91,6 +91,7 @@ class TestParamsRegistryCompleteness:
         "loop_state_get",
         "loop_state_update",
         "loop_cards_fetch",
+        "loop_history_fetch",
         "skills_list",
         "invoke_skill",
         "models_list",
@@ -123,6 +124,7 @@ class TestParamsRegistryCompleteness:
         ("request", "loop_state_get"),
         ("request", "loop_state_update"),
         ("request", "loop_cards_fetch"),
+        ("request", "loop_history_fetch"),
         ("request", "loop_detach"),
         ("subscribe", "loop_events"),
         ("subscribe", "autopilot_events"),
@@ -339,6 +341,12 @@ class TestLoopParams:
     def test_loop_cards_fetch_defaults(self) -> None:
         p = LoopCardsFetchParams.model_validate({"loop_id": "abc"})
         assert p.since is None
+
+    def test_loop_history_fetch_valid(self) -> None:
+        from soothe_daemon.protocol.schemas import LoopHistoryFetchParams
+
+        p = LoopHistoryFetchParams.model_validate({"loop_id": "abc"})
+        assert p.loop_id == "abc"
 
 
 # ---------------------------------------------------------------------------

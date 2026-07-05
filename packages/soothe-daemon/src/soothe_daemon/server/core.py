@@ -507,6 +507,19 @@ class SootheDaemon(DaemonHandlersMixin):
 
             apply_env_overrides(self._daemon_config)
 
+            if self._config.persistence.postgres_base_dsn:
+                from soothe.foundation.persistence.postgres_provisioning import (
+                    ensure_postgres_databases_async,
+                )
+
+                try:
+                    await ensure_postgres_databases_async(self._config)
+                except Exception:
+                    self._readiness_state = "error"
+                    self._readiness_message = "PostgreSQL database provisioning failed"
+                    logger.exception("PostgreSQL database provisioning failed at daemon startup")
+                    raise
+
             # RFC-221: keep a utility SootheRunner for non-streaming ops
             # (create_persisted_thread, touch_thread_activity_timestamp, etc.).
             # Streaming is handled per-loop by LoopRunnerFactory — this instance

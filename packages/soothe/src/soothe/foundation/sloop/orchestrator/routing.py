@@ -76,8 +76,8 @@ def route_by_intent(state: dict[str, Any]) -> str:
         return END
 
     label = state.get("intake_label")
-    if label == IntakeLabel.TRIVIAL:
-        logger.info("[routing] route_by_intent → resolve_decision (trivial)")
+    if label in (IntakeLabel.CHITCHAT, IntakeLabel.TRIVIAL):
+        logger.info("[routing] route_by_intent → resolve_decision (%s)", label)
         return "resolve_decision"
     if label == IntakeLabel.SIMPLE:
         logger.info("[routing] route_by_intent → plan_generate (simple)")

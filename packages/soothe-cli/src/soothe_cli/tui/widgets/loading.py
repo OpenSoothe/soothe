@@ -230,6 +230,13 @@ class LoadingWidget(Static):
         if self._turn_start_mono is None:
             self._turn_start_mono = turn_start
 
+    def reset_turn_start_mono(self, turn_start: float) -> None:
+        """Re-anchor elapsed time (e.g. when a goal loop starts)."""
+        self._turn_start_mono = turn_start
+        if self.is_mounted:
+            self._last_rendered_elapsed = int(self._elapsed_seconds())
+            self._refresh_line()
+
     def pause(self, status: str = "Input") -> None:
         """Pause the animation and update status.
 

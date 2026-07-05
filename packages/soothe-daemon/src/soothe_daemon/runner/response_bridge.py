@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Message types workers emit (threading/mp queue convention uses 3-tuples with request_id).
 WORKER_MSG_CHUNK = "chunk"
 WORKER_MSG_DONE = "done"
+WORKER_MSG_READY = "ready"
 WORKER_MSG_ERROR = "error"
 WORKER_MSG_CANCELLED = "cancelled"
 WORKER_MSG_TIMEOUT = "timeout"
@@ -174,6 +175,8 @@ class ResponsePusher:
             self._schedule_queue_put((WORKER_MSG_CHUNK, payload), release_slot=release_slot)
         elif msg_type == WORKER_MSG_DONE:
             self._schedule_queue_put((WORKER_MSG_DONE, None))
+        elif msg_type == WORKER_MSG_READY:
+            self._schedule_queue_put((WORKER_MSG_READY, None))
         elif msg_type == WORKER_MSG_ERROR:
             self._schedule_queue_put((WORKER_MSG_ERROR, payload))
         else:
@@ -187,6 +190,7 @@ __all__ = [
     "WORKER_MSG_CANCELLED",
     "WORKER_MSG_CHUNK",
     "WORKER_MSG_DONE",
+    "WORKER_MSG_READY",
     "WORKER_MSG_ERROR",
     "WORKER_MSG_TIMEOUT",
     "_QUEUE_PUT_TIMEOUT_SECONDS",

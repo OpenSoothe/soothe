@@ -113,6 +113,7 @@ class ContextEngine:
         self._projection = ProjectionEngine(projection_config)
         self._persistence = persistence
         self._callbacks: dict[str, list[Callable]] = {}
+        self._save_dirty = False
 
         # Planning submodule (RFC-624 Phase 3c)
         from soothe.foundation.context.planning import (
@@ -377,8 +378,8 @@ class ContextEngine:
     def increment_iteration(self, goal_id: str) -> int:
         """Increment the iteration count for a goal (RFC-624 Phase 4 Step 4).
 
-        Called by iteration_start node after plan-assess completes each
-        iteration cycle. Returns the new iteration value.
+        Called by ``record_iteration`` after each iteration checkpoint is persisted.
+        Returns the new iteration value.
 
         Args:
             goal_id: Goal whose iteration to increment.
@@ -937,8 +938,17 @@ class ContextEngine:
 
     # ── Persistence ──────────────────────────────────────────────
 
+    def defer_save(self) -> None:
+        """Mark CE state dirty without writing to disk (coalesce until ``save``)."""
+        self._save_dirty = True
+
     async def save(self) -> None:
         """Persist current DAG and ledger state with full message fidelity."""
+        await self._persist_now()
+        self._save_dirty = False
+
+    async def _persist_now(self) -> None:
+        """Write DAG and ledger to the persistence backend."""
         try:
             await self._persistence.save_dag(self._dag)
             ledger_data: list[dict[str, Any]] = []

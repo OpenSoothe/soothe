@@ -18,10 +18,24 @@ class TestClassifyIntakeHeuristic:
         assert result is not None
         assert result.intake_label == IntakeLabel.TRIVIAL
 
-    def test_greeting_is_trivial(self) -> None:
+    def test_greeting_is_chitchat(self) -> None:
         result = classify_intake_heuristic("你好")
         assert result is not None
-        assert result.intake_label == IntakeLabel.TRIVIAL
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert result.chitchat_response
+
+    def test_casual_how_are_you_is_chitchat(self) -> None:
+        result = classify_intake_heuristic("how are u")
+        assert result is not None
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert result.goal_description == "how are u"
+        assert result.chitchat_response
+
+    def test_whats_up_is_chitchat(self) -> None:
+        result = classify_intake_heuristic("what's up")
+        assert result is not None
+        assert result.intake_label == IntakeLabel.CHITCHAT
+        assert result.chitchat_response
 
     def test_complex_refactor_not_heuristic(self) -> None:
         assert (

@@ -239,7 +239,7 @@ async def _persist_planner_ask_step_outcome(
             await ctx.ce.complete_step(ctx.ce_goal_id, result.step_id, execution)
         else:
             await ctx.ce.fail_step(ctx.ce_goal_id, result.step_id, execution)
-        await ctx.ce.save()
+        ctx.ce.defer_save()
     except Exception:
         logger.warning(
             "[execute] CE step feedback failed for planner ask step %s",
@@ -577,7 +577,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
     if ctx.ce is not None and ctx.ce_goal_id:
         try:
             ctx.ce.set_previous_plan(ctx.ce_goal_id, plan_result)
-            await ctx.ce.save()
+            ctx.ce.defer_save()
         except Exception:
             logger.debug("[execute] CE set_previous_plan/save failed", exc_info=True)
 

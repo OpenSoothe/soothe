@@ -39,30 +39,47 @@ def extract_user_text_for_display(message: Any) -> str | None:
 
 def extract_ai_text_for_display(message: Any) -> str:
     """Extract assistant-visible text from AI message payloads."""
+    from langchain_core.messages import AIMessageChunk
+
+    preserve_whitespace = isinstance(message, AIMessageChunk)
+
     try:
         if hasattr(message, "text"):
             # LangChain TextAccessor: use property/str(), not .text() (deprecated).
-            extracted = str(message.text or "").strip()
-            if extracted:
-                return extracted
+            extracted = str(message.text or "")
+            if preserve_whitespace:
+                if extracted:
+                    return extracted
+            elif extracted.strip():
+                return extracted.strip()
     except Exception:
         pass
 
     content = getattr(message, "content", "")
     if isinstance(content, str):
-        return content.strip()
+        return content if preserve_whitespace else content.strip()
 
     if isinstance(content, list):
         parts: list[str] = []
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
-                block_text = str(block.get("text", "")).strip()
-                if block_text:
-                    parts.append(block_text)
+                block_text = str(block.get("text", ""))
+                if preserve_whitespace:
+                    if block_text:
+                        parts.append(block_text)
+                else:
+                    block_text = block_text.strip()
+                    if block_text:
+                        parts.append(block_text)
             elif isinstance(block, str):
-                block_text = block.strip()
-                if block_text:
-                    parts.append(block_text)
-        return "".join(parts).strip()
+                if preserve_whitespace:
+                    if block:
+                        parts.append(block)
+                else:
+                    block_text = block.strip()
+                    if block_text:
+                        parts.append(block_text)
+        joined = "".join(parts)
+        return joined if preserve_whitespace else joined.strip()
 
     return ""

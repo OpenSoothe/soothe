@@ -102,6 +102,20 @@ async def test_response_pusher_done_message() -> None:
 
 
 @pytest.mark.asyncio
+async def test_response_pusher_ready_message() -> None:
+    loop = asyncio.get_running_loop()
+    out: asyncio.Queue[tuple[str, object]] = asyncio.Queue()
+    pusher = ResponsePusher(loop, out)
+
+    pusher.push_from_worker("ready")
+    await asyncio.sleep(0.05)
+
+    msg_type, payload = await out.get()
+    assert msg_type == "ready"
+    assert payload is None
+
+
+@pytest.mark.asyncio
 async def test_response_pusher_done_waits_when_queue_full() -> None:
     """Terminal ``done`` must not be dropped when the asyncio queue is full."""
     loop = asyncio.get_running_loop()

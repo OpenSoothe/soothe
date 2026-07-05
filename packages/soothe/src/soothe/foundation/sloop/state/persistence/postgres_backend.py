@@ -17,7 +17,6 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from soothe.foundation.sloop.state.persistence.base_backend import StrangeLoopPersistenceBackend
@@ -49,6 +48,8 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         dsn: str,
         pool_size: int = 10,
         shared_pool: SharedPostgreSQLPool | None = None,
+        *,
+        pool_timing: dict[str, Any] | None = None,
     ) -> None:
         """Initialize PostgreSQL backend with DSN and pool configuration.
 
@@ -58,6 +59,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             dsn: PostgreSQL DSN for soothe_checkpoints database.
             pool_size: Connection pool size (default: 10). Use 0 for shared pool mode.
             shared_pool: Shared pool instance for reset capability (IG-406).
+            pool_timing: Optional psycopg pool options (timeout, max_idle, max_lifetime).
         """
         self.dsn = dsn
         self.pool_size = pool_size
@@ -66,6 +68,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         # IG-406: pool_size=0 = externally injected shared pool; never close it here.
         self._owns_pool = pool_size != 0
         self._shared_pool = shared_pool
+        self._pool_timing = pool_timing
 
     async def _ensure_pool(self) -> AsyncConnectionPool:
         """Lazy connection pool initialization with schema setup.
@@ -99,18 +102,21 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                 return self._pool
 
             # psycopg defaults min_size=4; cap min_size to max_size (e.g. reader_pool_size=2).
-            min_size = min(4, self.pool_size)
-            pool = AsyncConnectionPool(
-                self.dsn,
-                min_size=min_size,
-                max_size=self.pool_size,
-                kwargs={
+            from soothe.foundation.persistence.postgres_pool_lifecycle import apply_row_factory
+
+            pool_kwargs: dict[str, Any] = {
+                "max_size": self.pool_size,
+                "open": False,
+            }
+            if self._pool_timing:
+                pool_kwargs.update(self._pool_timing)
+            else:
+                pool_kwargs["min_size"] = min(4, self.pool_size)
+                pool_kwargs["kwargs"] = {
                     "autocommit": True,
                     "prepare_threshold": 0,
-                    "row_factory": dict_row,
-                },
-                open=False,
-            )
+                }
+            pool = AsyncConnectionPool(self.dsn, **apply_row_factory(pool_kwargs))
 
             # Open pool and initialize schema
             await pool.open()

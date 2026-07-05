@@ -494,6 +494,10 @@ class _ExecutionMixin:
         elif cmd == "/help":
             await self._show_help_screen()
 
+        elif cmd == "/goals":
+            await self._mount_message(UserMessage(command))
+            await self._show_goal_history()
+
         elif cmd in {"/changelog", "/docs", "/feedback"}:
             await self._open_url_command(command, cmd)
         elif cmd == "/version":

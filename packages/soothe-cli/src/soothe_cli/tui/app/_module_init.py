@@ -302,6 +302,9 @@ class _LoopHistoryPayload:
     context_tokens: int
     """Persisted `_context_tokens` from the checkpoint (0 if absent)."""
 
+    goals: tuple[dict[str, Any], ...] = ()
+    """Goal display snapshots from ``loop_history_fetch`` (RFC-631)."""
+
 
 def _new_loop_id() -> str:
     """Deferred-import wrapper around `sessions.generate_loop_id`.

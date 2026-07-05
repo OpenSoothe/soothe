@@ -304,6 +304,8 @@ class _UIMixin:
         *,
         show_interrupt_hint: bool = False,
         hint_extra: str | None = None,
+        turn_start_mono: float | None = None,
+        reset_turn_start_only: bool = False,
     ) -> None:
         """Show, update, or hide the loading spinner.
 
@@ -311,7 +313,15 @@ class _UIMixin:
             status: The spinner status to display, or `None` to hide.
             show_interrupt_hint: When ``True``, append an esc-to-interrupt hint on the row.
             hint_extra: Optional hint segment before elapsed time (e.g. ``attempt 2/3``).
+            turn_start_mono: Optional monotonic anchor for elapsed time on the thinking row.
+            reset_turn_start_only: When ``True``, only re-anchor elapsed time without changing
+                the visible status or hiding the row.
         """
+        if reset_turn_start_only:
+            if turn_start_mono is not None and self._loading_widget is not None:
+                self._loading_widget.reset_turn_start_mono(turn_start_mono)
+            return
+
         if status is None:
             # Hide
             if self._loading_widget:
@@ -330,7 +340,12 @@ class _UIMixin:
 
         if self._loading_widget is None:
             # Create new
-            turn_mono = self._inflight_turn_start if self._agent_running else connect_start_mono
+            if turn_start_mono is not None:
+                turn_mono = turn_start_mono
+            elif self._agent_running:
+                turn_mono = self._inflight_turn_start
+            else:
+                turn_mono = connect_start_mono
             self._loading_widget = LoadingWidget(
                 status,
                 turn_start_mono=turn_mono,
@@ -339,7 +354,9 @@ class _UIMixin:
             )
             await thinking_status.mount(self._loading_widget)
         else:
-            if self._agent_running:
+            if turn_start_mono is not None:
+                self._loading_widget.reset_turn_start_mono(turn_start_mono)
+            elif self._agent_running:
                 self._loading_widget.set_turn_start_mono(self._inflight_turn_start)
             elif connect_start_mono is not None:
                 self._loading_widget.set_turn_start_mono(connect_start_mono)

@@ -327,5 +327,42 @@ async def test_ensure_for_loop_without_runner_still_opens_ledger(isolated_displa
     assert isolated_display_db.list_mutations("loop_no_runner")
 
 
+@pytest.mark.asyncio
+async def test_freeze_goal_display_snapshots_current_user_segment_only(
+    isolated_display_db,
+) -> None:
+    """RFC-631: freeze must not bleed prior goal cards into the new snapshot."""
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await _seed_messages(
+        manager,
+        "loop_freeze",
+        [
+            HumanMessage(content="how are u"),
+            AIMessage(content="Hey there!"),
+            HumanMessage(content="shanghai weather"),
+            AIMessage(content="It is rainy."),
+        ],
+    )
+    await manager.freeze_goal_display(
+        "loop_freeze",
+        goal_id="goal_1",
+        goal_text="shanghai weather",
+        goal_completion="It is rainy.",
+    )
+    snapshots = isolated_display_db.list_goal_snapshots("loop_freeze")
+    assert len(snapshots) == 1
+    assistant_text = " ".join(
+        c.get("content", "")
+        for c in snapshots[0].get("display_cards", [])
+        if c.get("type") == "assistant"
+    )
+    assert "Hey there!" not in assistant_text
+    assert "rainy" in assistant_text
+    state = manager._buffers.get("loop_freeze")  # noqa: SLF001
+    assert state is not None
+    assert state.messages == []
+    assert state.log_events == []
+
+
 if __name__ == "__main__":  # pragma: no cover - convenience
     sys.exit(pytest.main([__file__, "-v"]))

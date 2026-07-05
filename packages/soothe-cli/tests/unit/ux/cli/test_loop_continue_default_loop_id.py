@@ -81,3 +81,25 @@ def test_loop_continue_with_explicit_loop_id_launches_tui(monkeypatch) -> None:
     result = CliRunner().invoke(app, ["loop", "continue", "ggqfpkrumdbx"])
     assert result.exit_code == 0
     assert captured["resume_loop_id"] == "ggqfpkrumdbx"
+
+
+def test_loop_resume_is_alias_of_continue(monkeypatch) -> None:
+    """Resume subcommand delegates to continue with the same arguments."""
+    monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd.load_config", lambda: {})
+    monkeypatch.setattr(
+        "soothe_cli.cli.commands.loop_cmd.websocket_url_from_config",
+        lambda _cfg: "ws://test",
+    )
+    monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd._require_daemon", lambda _ws_url: None)
+
+    captured = {}
+
+    def fake_run_impl(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr("soothe_cli.cli.commands.run_cmd.run_impl", fake_run_impl)
+
+    result = CliRunner().invoke(app, ["loop", "resume", "loop_abc123", "--prompt", "hello"])
+    assert result.exit_code == 0
+    assert captured["resume_loop_id"] == "loop_abc123"
+    assert captured["prompt"] == "hello"

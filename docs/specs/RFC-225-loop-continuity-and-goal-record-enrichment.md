@@ -260,6 +260,25 @@ evidence_summary                    ►   evidence_summary
 
 `current_plan` retains only the latest revision; prior revisions are observable via the event stream and are not retained in the checkpoint.
 
+### 6.5 Display Snapshot Freeze (RFC-631)
+
+On the same goal-completion transition as §6.4, the daemon MUST freeze a **goal display snapshot** for readonly history recovery:
+
+```
+GoalExecutionRecord (persisted)     ──►  GoalDisplaySnapshot (display.db)
+─────────────────────────────────       ─────────────────────────────────
+goal_id, goal_text, status, …           identity + execution sections (mirror)
+goal_completion                         goal_completion + collapsed display_cards[]
+```
+
+* **Trigger:** checkpoint `running → idle` after the active `GoalExecutionRecord` is finalized.
+* **Source:** live card ledger segment for the goal, collapsed by `SnapshotCollapser` (RFC-631).
+* **Storage:** `goal_display_snapshots` table in `display.db` — not in the checkpoint payload.
+* **Failure:** snapshot write failure MUST NOT block goal completion; log and continue.
+* **Read path:** clients resume completed goals via `loop_history_fetch`, not full card mutation replay.
+
+The checkpoint remains the execution authority; the snapshot is the presentation authority for completed goals.
+
 ---
 
 ## 7. Naming Decisions

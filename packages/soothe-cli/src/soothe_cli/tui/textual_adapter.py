@@ -151,7 +151,27 @@ LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 # Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
 # ``trivial`` is intentionally excluded: the fast path streams many AIMessageChunks
 # and must use the normal append_content path (one card per namespace).
-_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "plan_direct", "autonomous_goal"})
+_INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"quiz", "chitchat", "plan_direct", "autonomous_goal"})
+
+
+def _retain_assistant_ns_on_chunk_last(
+    message: Any,
+    *,
+    ns_key: tuple[Any, ...],
+    assistant_message_by_namespace: dict[tuple[Any, ...], Any],
+    is_main_agent: bool,
+) -> bool:
+    """Return True when ``chunk_position=last`` must not release the namespace card.
+
+    Loop-tagged assistant streams (``phase=trivial``, etc.) append deltas onto one
+    ``AssistantMessage``. Premature namespace pops (e.g. per-segment ``last`` markers
+    on the wire) otherwise paint one card per token. When the main agent already
+    has an open card, keep the namespace through ``last`` markers as well.
+    """
+    if is_main_agent and ns_key in assistant_message_by_namespace:
+        return True
+    phase = assistant_output_phase(message)
+    return phase is not None and phase in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
 class TextualUIAdapter:
@@ -1747,7 +1767,38 @@ async def apply_tool_call_wire_update(
 
 logger = logging.getLogger(__name__)
 
-_GOAL_COMPLETION_TIME_MARKER = "**Total time:**"
+
+def _goal_loop_elapsed_start(
+    *,
+    goal_loop_start_monotonic: float | None,
+    turn_start_monotonic: float | None,
+) -> float | None:
+    """Return the monotonic anchor for goal-loop elapsed time."""
+    if goal_loop_start_monotonic is not None:
+        return goal_loop_start_monotonic
+    return turn_start_monotonic
+
+
+async def _sync_goal_completion_thinking_row_time(
+    adapter: TextualUIAdapter,
+    *,
+    goal_loop_start_monotonic: float | None,
+    turn_start_monotonic: float | None,
+    clarification_pending: bool | None = None,
+) -> None:
+    """Show goal-loop elapsed time on the thinking row above the input box."""
+    if clarification_pending is None:
+        clarification_pending = bool(getattr(adapter, "_clarification_pending", False))
+    if clarification_pending or not adapter._set_spinner:
+        return
+    start = _goal_loop_elapsed_start(
+        goal_loop_start_monotonic=goal_loop_start_monotonic,
+        turn_start_monotonic=turn_start_monotonic,
+    )
+    if _adapter_has_pending_tools(adapter):
+        await adapter._set_spinner(SPINNER_LABEL_TOOLS, turn_start_mono=start)
+        return
+    await adapter._set_spinner(SPINNER_LABEL_THINKING, turn_start_mono=start)
 
 
 def _loop_id_for_remote_state(config: RunnableConfig, daemon_session: Any) -> str:
@@ -1975,40 +2026,32 @@ async def _try_mount_instant_loop_assistant_phase(
         )
         pending_text_by_namespace[ns_key] = ""
         assistant_message_by_namespace.pop(ns_key, None)
-    if assistant_message_by_namespace.get(ns_key) is not None:
+    current_msg = assistant_message_by_namespace.get(ns_key)
+    if current_msg is not None:
+        if text:
+            await current_msg.append_content(text)
+            if adapter._sync_message_content and current_msg.id:
+                adapter._sync_message_content(current_msg.id, current_msg._content)
+        if adapter._set_active_message:
+            adapter._set_active_message(None)
+        await _maybe_set_thinking_spinner(adapter, clarification_pending=clarification_pending)
         return True
+
     repaired = RendererBase.repair_concatenated_output(text)
     output_widget = AssistantMessage(
-        repaired,
         id=f"asst-{uuid.uuid4().hex[:8]}",
         render_markdown=False,
     )
     await adapter._mount_message(output_widget)
-    await output_widget.write_initial_content()
+    assistant_message_by_namespace[ns_key] = output_widget
+    if repaired:
+        await output_widget.append_content(repaired)
     if adapter._sync_message_content and output_widget.id:
-        adapter._sync_message_content(output_widget.id, repaired)
+        adapter._sync_message_content(output_widget.id, output_widget._content)
     if adapter._set_active_message:
         adapter._set_active_message(None)
     await _maybe_set_thinking_spinner(adapter, clarification_pending=clarification_pending)
     return True
-
-
-def _goal_completion_time_footer_if_needed(
-    content: str,
-    *,
-    goal_loop_start_monotonic: float | None,
-    turn_start_monotonic: float | None,
-) -> str | None:
-    """Build a markdown footer with total elapsed time for goal completion cards."""
-    if _GOAL_COMPLETION_TIME_MARKER in (content or ""):
-        return None
-    start = (
-        goal_loop_start_monotonic if goal_loop_start_monotonic is not None else turn_start_monotonic
-    )
-    if start is None:
-        return None
-    elapsed = max(0.0, time.monotonic() - start)
-    return f"\n\n---\n\n{_GOAL_COMPLETION_TIME_MARKER} {format_duration(elapsed)}"
 
 
 async def _finalize_goal_completion_stream(
@@ -2025,13 +2068,6 @@ async def _finalize_goal_completion_stream(
     """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
         await stream_msg.append_content(extra_text)
-    footer = _goal_completion_time_footer_if_needed(
-        getattr(stream_msg, "_content", "") or "",
-        goal_loop_start_monotonic=goal_loop_start_monotonic,
-        turn_start_monotonic=turn_start_monotonic,
-    )
-    if footer:
-        await stream_msg.append_content(footer)
     await stream_msg.stop_stream()
     if adapter._sync_message_content and stream_msg.id:
         adapter._sync_message_content(stream_msg.id, stream_msg._content)
@@ -2040,7 +2076,11 @@ async def _finalize_goal_completion_stream(
     adapter._goal_completion_mounted_this_turn = True
     if adapter._set_active_message:
         adapter._set_active_message(None)
-    await _maybe_set_thinking_spinner(adapter)
+    await _sync_goal_completion_thinking_row_time(
+        adapter,
+        goal_loop_start_monotonic=goal_loop_start_monotonic,
+        turn_start_monotonic=turn_start_monotonic,
+    )
 
 
 async def _flush_inflight_goal_completion_streams(
@@ -2965,13 +3005,6 @@ async def execute_task_textual(
                                 assistant_message_by_namespace.pop(ns_key, None)
 
                             repaired_output = RendererBase.repair_concatenated_output(output_text)
-                            footer = _goal_completion_time_footer_if_needed(
-                                repaired_output,
-                                goal_loop_start_monotonic=goal_loop_start_monotonic,
-                                turn_start_monotonic=start_time,
-                            )
-                            if footer:
-                                repaired_output += footer
                             output_widget = AssistantMessage(
                                 repaired_output,
                                 id=f"asst-{uuid.uuid4().hex[:8]}",
@@ -2988,8 +3021,11 @@ async def execute_task_textual(
 
                             if adapter._set_active_message:
                                 adapter._set_active_message(None)
-                            await _maybe_set_thinking_spinner(
-                                adapter, clarification_pending=clarification_pending
+                            await _sync_goal_completion_thinking_row_time(
+                                adapter,
+                                goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                turn_start_monotonic=start_time,
+                                clarification_pending=clarification_pending,
                             )
                             continue
 
@@ -3227,7 +3263,18 @@ async def execute_task_textual(
                                 if tool_args_meaningful(parsed_args):
                                     args_still_streaming = False
 
-                                # Flush pending text before tool call
+                                args_meaningful = tool_args_meaningful(parsed_args)
+                                ingest_for_stats = should_ingest_tool_for_step_stats(
+                                    is_step_card_scope=is_step_scope,
+                                    tool_name=str(buffer_name or ""),
+                                    tool_call_id=str(lookup_id or ""),
+                                    args_meaningful=args_meaningful,
+                                )
+
+                                if args_still_streaming and not ingest_for_stats:
+                                    continue
+
+                                # Flush pending text before a meaningful tool call.
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -3239,17 +3286,6 @@ async def execute_task_textual(
                                     )
                                     pending_text_by_namespace[ns_key] = ""
                                     assistant_message_by_namespace.pop(ns_key, None)
-
-                                args_meaningful = tool_args_meaningful(parsed_args)
-                                ingest_for_stats = should_ingest_tool_for_step_stats(
-                                    is_step_card_scope=is_step_scope,
-                                    tool_name=str(buffer_name or ""),
-                                    tool_call_id=str(lookup_id or ""),
-                                    args_meaningful=args_meaningful,
-                                )
-
-                                if args_still_streaming and not ingest_for_stats:
-                                    continue
 
                                 if lookup_id and buffer_name and ingest_for_stats:
                                     if buffer_name in FILE_CHANGE_TOOLS and args_meaningful:
@@ -3371,6 +3407,12 @@ async def execute_task_textual(
 
                         if getattr(message, "chunk_position", None) == "last":
                             pending_text = pending_text_by_namespace.get(ns_key, "")
+                            retain_ns = _retain_assistant_ns_on_chunk_last(
+                                message,
+                                ns_key=ns_key,
+                                assistant_message_by_namespace=assistant_message_by_namespace,
+                                is_main_agent=is_main_agent,
+                            )
                             if pending_text:
                                 await _flush_assistant_text_ns(
                                     adapter,
@@ -3380,6 +3422,16 @@ async def execute_task_textual(
                                     router=router,
                                 )
                                 pending_text_by_namespace[ns_key] = ""
+                            elif retain_ns:
+                                current_msg = assistant_message_by_namespace.get(ns_key)
+                                if current_msg is not None:
+                                    await current_msg.stop_stream()
+                                    if adapter._sync_message_content and current_msg.id:
+                                        adapter._sync_message_content(
+                                            current_msg.id,
+                                            current_msg._content,
+                                        )
+                            if not retain_ns:
                                 assistant_message_by_namespace.pop(ns_key, None)
 
                     elif current_stream_mode == "custom":
@@ -3426,6 +3478,12 @@ async def execute_task_textual(
                             if event_type == STRANGE_LOOP_STARTED:
                                 if not ns_key:
                                     goal_loop_start_monotonic = time.monotonic()
+                                    if adapter._set_spinner:
+                                        await adapter._set_spinner(
+                                            SPINNER_LABEL_THINKING,
+                                            turn_start_mono=goal_loop_start_monotonic,
+                                            reset_turn_start_only=True,
+                                        )
                                     ui_coalesce.execute_wave_active = True
                                     adapter._last_completed_main_step_execute_prose = ""
                                     adapter._last_main_flushed_assistant_prose = ""

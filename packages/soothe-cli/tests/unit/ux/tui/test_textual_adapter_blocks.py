@@ -45,6 +45,29 @@ def test_materialize_applies_streaming_overlay() -> None:
     assert merged[0]["args"] == {"path": "/README.md"}
 
 
+def test_materialize_text_only_chunk_does_not_backfill_stale_tool_calls() -> None:
+    """Text stream deltas must not pick up ``tool_calls`` left on the message object."""
+    merged = materialize_ai_blocks_with_resolved_tools(
+        [{"type": "text", "text": "Shanghai"}],
+        AIMessageChunk(
+            content="Shanghai",
+            phase="trivial",
+            tool_calls=[
+                {
+                    "name": "web_search",
+                    "id": "call-weather",
+                    "args": {"query": "weather"},
+                    "type": "tool_call",
+                }
+            ],
+        ),
+        streaming_overlay=None,
+    )
+    assert merged == [{"type": "text", "text": "Shanghai"}]
+    blocks = _tui_effective_ai_blocks(AIMessageChunk(content="Let", phase="trivial"), ns_key=())
+    assert blocks == [{"type": "text", "text": "Let"}]
+
+
 def test_string_content_fallback_when_no_content_blocks_root() -> None:
     """Daemon-style AIMessage with only ``content`` must yield a text block."""
     msg = AIMessage(content="Hello from daemon wire format")

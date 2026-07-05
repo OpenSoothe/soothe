@@ -39,6 +39,9 @@ class TestIntentClassificationModel:
 class TestDeriveTaskComplexityFromIntake:
     """``task_complexity`` is derived from ``intake_label``, not LLM output."""
 
+    def test_chitchat_maps_to_minimal(self) -> None:
+        assert derive_task_complexity_from_intake(IntakeLabel.CHITCHAT) == TaskComplexity.MINIMAL
+
     def test_trivial_maps_to_minimal(self) -> None:
         assert derive_task_complexity_from_intake(IntakeLabel.TRIVIAL) == TaskComplexity.MINIMAL
 
@@ -51,6 +54,17 @@ class TestDeriveTaskComplexityFromIntake:
 
 class TestIntakeClassificationLLMResult:
     """Test the 3-class intake schema and its resolution (RFC-630)."""
+
+    def test_chitchat_resolves_with_response(self) -> None:
+        llm_result = IntakeClassificationLLMResult(
+            intake_label=IntakeLabel.CHITCHAT,
+            chitchat_response="I'm doing well! How can I help?",
+            goal_description="how are you",
+        )
+        intent = llm_result.to_intent_classification()
+        assert intent.intake_label == IntakeLabel.CHITCHAT
+        assert intent.task_complexity == TaskComplexity.MINIMAL
+        assert intent.chitchat_response == "I'm doing well! How can I help?"
 
     def test_trivial_resolves_to_agentic_trivial(self) -> None:
         llm_result = IntakeClassificationLLMResult(
@@ -86,14 +100,17 @@ class TestIntakeClassificationLLMResult:
 class TestIntakeClassificationPrompts:
     """Prompt content guards for 3-class intake classification (RFC-630)."""
 
-    def test_primary_prompt_has_three_labels(self) -> None:
-        for label in ("trivial", "simple", "complex"):
+    def test_primary_prompt_has_four_labels(self) -> None:
+        for label in ("chitchat", "trivial", "simple", "complex"):
             assert label in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
         assert "quiz" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
-    def test_retry_prompt_has_three_labels(self) -> None:
-        for label in ("trivial", "simple", "complex"):
+    def test_retry_prompt_has_four_labels(self) -> None:
+        for label in ("chitchat", "trivial", "simple", "complex"):
             assert label in INTAKE_CLASSIFICATION_RETRY_SYSTEM_PROMPT
+
+    def test_primary_prompt_includes_chitchat_response(self) -> None:
+        assert "chitchat_response" in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
 
     def test_primary_prompt_omits_quiz_response(self) -> None:
         assert "quiz_response" not in INTAKE_CLASSIFICATION_SYSTEM_PROMPT
@@ -133,7 +150,7 @@ class TestIntakeClassifier:
         )
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "trivial"})
-            result = await classifier.classify_intake("你好")
+            result = await classifier.classify_intake("summarize readme")
         assert result.intake_label == IntakeLabel.TRIVIAL
 
     async def test_weather_query_skips_llm_via_heuristic(self) -> None:

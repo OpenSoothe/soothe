@@ -57,8 +57,12 @@ class WorkerThreadStatus(StrEnum):
 
     IDLE = "idle"
     BUSY = "busy"
+    CLEANING_UP = "cleaning_up"
     SHUTTING_DOWN = "shutting_down"
     DEAD = "dead"
+
+
+_TERMINAL_RESPONSE_TYPES = frozenset({"done", "error", "timeout", "cancelled"})
 
 
 @dataclass
@@ -302,7 +306,10 @@ def _thread_worker_body(
             finally:
                 if runner is not None:
                     try:
-                        await runner.cleanup()
+                        if reuse_runner:
+                            runner.prepare_for_request()
+                        else:
+                            await runner.cleanup()
                     except asyncio.CancelledError:
                         logger.debug(
                             "Thread worker %s: runner cleanup cancelled loop=%s request_id=%s",
@@ -354,6 +361,7 @@ def _thread_worker_body(
                 )
         finally:
             cancel_orphan_loop_tasks(loop)
+            _emit("ready")
 
     try:
         while not stop_event.is_set() and requests_completed < max_requests:
@@ -687,24 +695,16 @@ class ThreadPool:
     ) -> None:
         """Consume stream after the client left; release worker when complete."""
         chunks_discarded = 0
+        saw_terminal = False
         try:
             while True:
                 msg_type, payload = await response_queue.get()
                 if msg_type == "chunk":
                     chunks_discarded += 1
                     continue
-                if msg_type == "done":
-                    worker.requests_completed += 1
-                    logger.info(
-                        "ThreadPool: client disconnected; finished worker %s request %s "
-                        "(%d chunk(s) not delivered)",
-                        worker.worker_id,
-                        request_id,
-                        chunks_discarded,
-                    )
-                    return
-                if msg_type in ("error", "timeout", "cancelled"):
-                    worker.requests_completed += 1
+                if msg_type in _TERMINAL_RESPONSE_TYPES:
+                    saw_terminal = True
+                    worker.status = WorkerThreadStatus.CLEANING_UP
                     logger.info(
                         "ThreadPool: client disconnected; worker %s request %s ended with "
                         "%s after %d undelivered chunk(s)",
@@ -713,9 +713,13 @@ class ThreadPool:
                         msg_type,
                         chunks_discarded,
                     )
+                    continue
+                if msg_type == "ready":
                     return
                 break
         finally:
+            if saw_terminal:
+                worker.requests_completed += 1
             await self._mark_worker_idle_and_notify(worker)
             self._workers_by_loop_id.pop(loop_id, None)
             self._pending_responses.pop(request_id, None)
@@ -762,6 +766,7 @@ class ThreadPool:
         worker.dead_failure_routed = True
         try:
             await aio_q.put(("done", None))
+            await aio_q.put(("ready", None))
             logger.warning(
                 "ThreadPool: worker %s died with stale busy state; delivered recovery "
                 "done (loop_id=%s, request_id=%s)",
@@ -806,6 +811,7 @@ class ThreadPool:
         )
         try:
             await aio_q.put(("error", err))
+            await aio_q.put(("ready", None))
         except Exception:
             worker.dead_failure_routed = False
             logger.exception(
@@ -930,6 +936,42 @@ class ThreadPool:
         worker.mark_idle()
         await self._notify_worker_slot_available()
 
+    async def _await_worker_ready(self, response_queue: asyncio.Queue[Any]) -> None:
+        """Block until the worker finishes post-run cleanup."""
+        while True:
+            msg_type, _payload = await response_queue.get()
+            if msg_type == "ready":
+                return
+            if msg_type == "chunk":
+                logger.debug("ThreadPool: discarding stray chunk while awaiting worker ready")
+                continue
+            logger.warning(
+                "ThreadPool: unexpected %s while awaiting worker ready",
+                msg_type,
+            )
+
+    async def _finish_request_after_terminal(
+        self,
+        worker: WorkerThreadState,
+        loop_id: str,
+        request_id: str,
+        response_queue: asyncio.Queue[Any],
+        *,
+        start_time: datetime,
+    ) -> None:
+        """Release worker only after cleanup completes (``ready`` signal)."""
+        worker.status = WorkerThreadStatus.CLEANING_UP
+        await self._await_worker_ready(response_queue)
+        await self._mark_worker_idle_and_notify(worker)
+        self._workers_by_loop_id.pop(loop_id, None)
+        self._pending_responses.pop(request_id, None)
+        self._metrics_requests_total += 1
+        latency_ms = (datetime.now() - start_time).total_seconds() * 1000
+        self._metrics_latencies.append(latency_ms)
+        if len(self._metrics_latencies) > 100:
+            self._metrics_latencies = self._metrics_latencies[-100:]
+        worker.requests_completed += 1
+
     def _worker_pool_counts(self) -> tuple[int, int]:
         """Return (idle, busy) live worker counts for dispatch diagnostics."""
         idle = sum(
@@ -937,7 +979,11 @@ class ThreadPool:
             for w in self._workers.values()
             if w.status == WorkerThreadStatus.IDLE and w.is_alive()
         )
-        busy = sum(1 for w in self._workers.values() if w.status == WorkerThreadStatus.BUSY)
+        busy = sum(
+            1
+            for w in self._workers.values()
+            if w.status in (WorkerThreadStatus.BUSY, WorkerThreadStatus.CLEANING_UP)
+        )
         return idle, busy
 
     async def _try_acquire_idle_worker(self) -> WorkerThreadState | None:
@@ -1062,39 +1108,45 @@ class ThreadPool:
                 await self._handle_dead_worker(worker)
 
         start_time = datetime.now()
-        completed = False
+        stream_complete = False
+        error_payload: BaseException | None = None
 
         try:
             while True:
                 msg_type, payload = await response_queue.get()
 
-                if msg_type == "done":
-                    completed = True
-                    await self._mark_worker_idle_and_notify(worker)
-                    self._workers_by_loop_id.pop(request.loop_id, None)
-                    self._pending_responses.pop(request_id, None)
-                    self._metrics_requests_total += 1
-                    latency_ms = (datetime.now() - start_time).total_seconds() * 1000
-                    self._metrics_latencies.append(latency_ms)
-                    # Bound to prevent memory leak - keep only last 100 entries
-                    if len(self._metrics_latencies) > 100:
-                        self._metrics_latencies = self._metrics_latencies[-100:]
-                    worker.requests_completed += 1
-                    return
-                if msg_type == "error":
-                    completed = True
-                    await self._mark_worker_idle_and_notify(worker)
-                    self._workers_by_loop_id.pop(request.loop_id, None)
-                    self._pending_responses.pop(request_id, None)
-                    raise payload
+                if msg_type in _TERMINAL_RESPONSE_TYPES:
+                    stream_complete = True
+                    if msg_type == "error":
+                        error_payload = (
+                            payload
+                            if isinstance(payload, BaseException)
+                            else RuntimeError(str(payload))
+                        )
+                    elif msg_type in ("timeout", "cancelled") and isinstance(
+                        payload, BaseException
+                    ):
+                        error_payload = payload
+                    break
 
                 yield payload
         except asyncio.CancelledError:
             logger.info("ThreadPool request %s cancelled by client disconnect", request_id)
             raise
         finally:
-            if not completed:
+            if stream_complete:
+                await self._finish_request_after_terminal(
+                    worker,
+                    request.loop_id,
+                    request_id,
+                    response_queue,
+                    start_time=start_time,
+                )
+            else:
                 self._schedule_abandon_drain(worker, request.loop_id, request_id, response_queue)
+
+        if error_payload is not None:
+            raise error_payload
 
     async def cancel_request(self, loop_id: str) -> None:
         """Signal cooperative cancellation to worker handling this loop_id."""

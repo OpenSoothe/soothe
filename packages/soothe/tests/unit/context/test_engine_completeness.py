@@ -351,3 +351,29 @@ class TestLosslessPersistence:
         assert entries[0][0].content == "old ai msg"
         assert isinstance(entries[1][0], HumanMessage)
         assert entries[1][0].content == "old human msg"
+
+
+class TestDeferredSaveCoalescing:
+    @pytest.mark.asyncio
+    async def test_defer_save_batches_until_flush(self) -> None:
+        ce = _ce()
+        goal = await ce.create_goal("Batch goal")
+        await ce.add_step(goal.id, StepNode(id="s1", description="Step 1"))
+
+        save_dag_calls = 0
+        original_save_dag = ce._persistence.save_dag
+
+        async def counting_save_dag(dag):  # type: ignore[no-untyped-def]
+            nonlocal save_dag_calls
+            save_dag_calls += 1
+            return await original_save_dag(dag)
+
+        ce._persistence.save_dag = counting_save_dag  # type: ignore[method-assign]
+
+        ce.defer_save()
+        ce.defer_save()
+        assert save_dag_calls == 0
+
+        await ce.save()
+        assert save_dag_calls == 1
+        assert ce._save_dirty is False

@@ -38,7 +38,7 @@ async def _load_existing_resume_topic(config: SootheConfig, loop_id: str) -> str
         StrangeLoopCheckpointPersistenceManager,
     )
 
-    manager = StrangeLoopCheckpointPersistenceManager(config=config)
+    manager = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(config)
     try:
         metadata = await manager.get_loop_metadata(loop_id)
     finally:
@@ -201,7 +201,7 @@ async def persist_resume_topic_once(
         StrangeLoopCheckpointPersistenceManager,
     )
 
-    manager = StrangeLoopCheckpointPersistenceManager(config=config)
+    manager = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(config)
     try:
         return await manager.set_resume_topic_once(loop_id, topic.strip())
     finally:

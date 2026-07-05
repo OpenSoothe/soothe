@@ -211,12 +211,17 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
         "download skills", loop_id="loop-u", autonomous=True, max_iterations=42
     )
 
-    # IG-054: run_query now creates background task, wait for it to complete
-    if daemon._active_threads:
-        tasks = list(daemon._active_threads.values())
-        for task in tasks:
-            if task and not task.done():
-                await task
+    # IG-054: run_query now creates background task, wait for it to complete.
+    # The task may complete so quickly that _active_threads is empty when we check,
+    # but the finally block (which broadcasts idle) needs event loop ticks to run.
+    # Yield multiple times to ensure the finally block completes.
+    for _ in range(3):
+        if daemon._active_threads:
+            tasks = list(daemon._active_threads.values())
+            for task in tasks:
+                if task and not task.done():
+                    await task
+        await asyncio.sleep(0.01)
 
     assert daemon._runner.calls  # type: ignore[attr-defined]
     call = daemon._runner.calls[0]  # type: ignore[attr-defined]

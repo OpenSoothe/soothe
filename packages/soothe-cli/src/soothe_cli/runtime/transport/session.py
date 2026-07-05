@@ -552,6 +552,70 @@ class TuiDaemonSession:
             success=True,
         )
 
+    async def fetch_loop_history(self, loop_id: str) -> SimpleNamespace:
+        """Fetch goal display snapshots plus live card tail (RFC-631).
+
+        Args:
+            loop_id: StrangeLoop id.
+
+        Returns:
+            ``SimpleNamespace`` with ``goals``, ``live_cards``, ``live_goal_index``,
+            ``context_tokens``, and ``success``.
+        """
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return SimpleNamespace(
+                goals=[],
+                live_cards=[],
+                live_goal_index=None,
+                context_tokens=0,
+                success=False,
+            )
+
+        async with self._rpc_lock:
+            await self._ensure_rpc_connected()
+            try:
+                resp = await self._rpc_client.request(
+                    "loop_history_fetch",
+                    {"loop_id": lid},
+                    timeout=30.0,
+                )
+            except Exception:
+                logger.warning(
+                    "loop_history_fetch failed for loop %s",
+                    lid[:16],
+                    exc_info=True,
+                )
+                return SimpleNamespace(
+                    goals=[],
+                    live_cards=[],
+                    live_goal_index=None,
+                    context_tokens=0,
+                    success=False,
+                )
+
+        goals_raw = resp.get("goals")
+        goals = list(goals_raw) if isinstance(goals_raw, list) else []
+        live_raw = resp.get("live_cards")
+        live_cards = list(live_raw) if isinstance(live_raw, list) else []
+        live_goal_index = resp.get("live_goal_index")
+        if live_goal_index is not None and not isinstance(live_goal_index, int):
+            live_goal_index = None
+        context_tokens_raw = resp.get("context_tokens")
+        context_tokens = (
+            context_tokens_raw
+            if isinstance(context_tokens_raw, int) and context_tokens_raw >= 0
+            else 0
+        )
+        success = bool(resp.get("success", True))
+        return SimpleNamespace(
+            goals=goals,
+            live_cards=live_cards,
+            live_goal_index=live_goal_index,
+            context_tokens=context_tokens,
+            success=success,
+        )
+
     async def aget_loop_state(self, loop_id: str) -> Any:
         """Load StrangeLoop state channels from the daemon (``loop_state_get`` RPC).
 

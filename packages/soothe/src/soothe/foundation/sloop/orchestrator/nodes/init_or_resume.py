@@ -65,6 +65,37 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     intake_label: IntakeLabel | None = getattr(intent, "intake_label", None)
     is_continuation = _is_continuation(ctx)
 
+    # RFC-630 chitchat fast-path: runner emits piggybacked response directly.
+    if (
+        intake_label == IntakeLabel.CHITCHAT
+        and not is_continuation
+        and not getattr(ctx, "continue_loop_mode", False)
+        and not is_continue_keyword(ctx.loop_state.goal)
+        and (getattr(intent, "chitchat_response", None) or "").strip()
+    ):
+        logger.info("[Intent] Fast path in graph: chitchat")
+        await ctx.emit(
+            "intent_fast_path",
+            {
+                "fast_path_kind": "chitchat",
+                "intent_type": "agentic",
+                "classification": intent,
+                "chitchat_response": intent.chitchat_response,
+                "context_engine": getattr(ctx, "ce", None),
+                "ce_goal_id": getattr(ctx, "ce_goal_id", None),
+                "thread_id": ctx.loop_state.thread_id,
+            },
+        )
+        return {
+            "intent_route": "fast_path",
+            "intake_label": intake_label,
+            "is_continuation": is_continuation,
+            "plan_route": None,
+            "assess_route": None,
+            "last_outcome": None,
+            "resume_synth": None,
+        }
+
     # RFC-630 trivial fast-path: runner invokes CoreAgent on the loop main thread
     # (loop_id), bypassing plan_generate / resolve_decision / execute graph nodes.
     # Continuation turns still need plan_assess and must not fast-path here.

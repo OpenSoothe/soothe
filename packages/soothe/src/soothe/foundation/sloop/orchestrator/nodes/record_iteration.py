@@ -61,6 +61,8 @@ async def node_record_iteration(ctx: LoopRuntimeContext, _state: dict[str, Any])
                 else:
                     await ctx.ce.fail_step(ctx.ce_goal_id, r.step_id, execution)
             await ctx.ce.save()
+            if ctx.ce_goal_id:
+                ctx.ce.increment_iteration(ctx.ce_goal_id)
         except Exception:
             logger.warning("[record_iteration] CE step feedback failed", exc_info=True)
 

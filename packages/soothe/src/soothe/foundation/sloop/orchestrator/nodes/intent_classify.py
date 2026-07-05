@@ -7,7 +7,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage
 
-from soothe.foundation.sloop.intention.models import build_loop_routing_classification
+from soothe.foundation.sloop.intention.models import IntakeLabel, build_loop_routing_classification
 
 from ..runtime_context import LoopRuntimeContext
 
@@ -79,7 +79,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         query[:50],
     )
 
-    if intent.reasoning:
+    if intent.reasoning and intent.intake_label != IntakeLabel.CHITCHAT:
         await ctx.emit(
             "intent_classified_reasoning",
             {
