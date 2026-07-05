@@ -291,7 +291,6 @@ class IntentClassifier:
         reason = type(error_context).__name__ if error_context else "classification_disabled"
         logger.debug("Intake fallback to complex (%s)", reason)
         return IntentClassification(
-            intent_type="agentic",
             intake_label=IntakeLabel.COMPLEX,
             reasoning="Let me run the full agent loop to work through this goal.",
             goal_description=query,

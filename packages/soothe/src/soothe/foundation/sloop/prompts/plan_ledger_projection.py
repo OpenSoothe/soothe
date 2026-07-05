@@ -413,10 +413,6 @@ def project_last_goal_completion_for_intake(
     return projected
 
 
-# Backward-compatible alias.
-project_prior_goal_completion_for_intake = project_last_goal_completion_for_intake
-
-
 def _current_goal_has_execute_ledger(state: LoopState) -> bool:
     """True when the active plan already has execute_step rows in the orchestration ledger."""
     decision = state.current_decision

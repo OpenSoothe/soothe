@@ -239,27 +239,18 @@ class EditCoalescingMiddleware(AgentMiddleware):
     def __init__(
         self,
         *,
-        detection_window_ms: int | None = None,
         config: EditCoalescingConfig | None = None,
         lock_registry: FileEditLockRegistry | None = None,
     ) -> None:
         """Initialize edit coalescing middleware.
 
         Args:
-            detection_window_ms: Detection window in milliseconds. If provided,
-                overrides the config value. Deprecated in favor of ``config``.
             config: Configuration object. If None, a default
-                ``EditCoalescingConfig`` is used (or constructed from
-                ``detection_window_ms`` if that is provided).
+                ``EditCoalescingConfig`` is used.
             lock_registry: External ``FileEditLockRegistry`` for serializing
                 per-file batch dispatch. If None, a new registry is created.
         """
-        if config is not None:
-            self._config = config
-        elif detection_window_ms is not None:
-            self._config = EditCoalescingConfig(detection_window_ms=detection_window_ms)
-        else:
-            self._config = EditCoalescingConfig()
+        self._config = config or EditCoalescingConfig()
 
         self._detection_window_ms = self._config.detection_window_ms
         self._pending_edits: dict[str, list[PendingEdit]] = {}

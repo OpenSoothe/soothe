@@ -74,7 +74,6 @@ async def test_init_or_resume_trivial_emits_fast_path() -> None:
         emitted.append((event_type, event_data))
 
     intent = IntentClassification(
-        intent_type="agentic",
         intake_label=IntakeLabel.TRIVIAL,
         goal_description="list files in this directory",
         task_complexity=TaskComplexity.SIMPLE,
@@ -112,7 +111,6 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
     from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 
     intent = IntentClassification(
-        intent_type="agentic",
         intake_label=IntakeLabel.TRIVIAL,
         goal_description="continue",
         task_complexity=TaskComplexity.SIMPLE,
@@ -149,7 +147,6 @@ async def test_init_or_resume_simple_synthesizes_assessment() -> None:
     from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 
     intent = IntentClassification(
-        intent_type="agentic",
         intake_label=IntakeLabel.SIMPLE,
         goal_description="summarize RFC-220 topology",
         task_complexity=TaskComplexity.SIMPLE,
@@ -177,7 +174,6 @@ async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
     from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 
     intent = IntentClassification(
-        intent_type="agentic",
         intake_label=IntakeLabel.COMPLEX,
         goal_description="refactor persistence layer",
         task_complexity=TaskComplexity.COMPLEX,

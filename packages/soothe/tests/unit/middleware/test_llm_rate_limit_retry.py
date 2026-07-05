@@ -41,7 +41,6 @@ def middleware_with_retry() -> LLMRateLimitMiddleware:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_timeout=True,
         max_timeout_retries=2,
         timeout_retry_multiplier=2.0,
@@ -56,7 +55,6 @@ def middleware_no_retry() -> LLMRateLimitMiddleware:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_timeout=False,
     )
 
@@ -400,42 +398,6 @@ def test_error_format_worker_subprocess_lost() -> None:
 
 
 @pytest.mark.asyncio
-async def test_global_mode_retry(
-    middleware_no_retry: LLMRateLimitMiddleware,
-    mock_request: ModelRequest,
-) -> None:
-    """Test retry works in global (legacy) mode too."""
-    # Create middleware with global mode + retry
-    middleware_global = LLMRateLimitMiddleware(
-        requests_per_minute=120,
-        max_concurrent_requests_per_thread=10,
-        call_timeout_seconds=60,
-        call_timeout_max_seconds=240,
-        thread_local=False,  # Global mode
-        retry_on_timeout=True,
-        max_timeout_retries=2,
-    )
-
-    call_count = 0
-
-    async def timeout_handler(req: ModelRequest) -> ModelResponse:
-        nonlocal call_count
-        call_count += 1
-        raise TimeoutError(f"Attempt {call_count}")
-
-    async def mock_wait_for(coro, timeout):
-        return await coro
-
-    with patch("asyncio.wait_for", side_effect=mock_wait_for):
-        with patch("asyncio.sleep"):
-            with pytest.raises(EnhancedTimeoutError):
-                await middleware_global.awrap_model_call(mock_request, timeout_handler)
-
-            # Should retry in global mode too
-            assert call_count == 3  # 1 initial + 2 retries
-
-
-@pytest.mark.asyncio
 async def test_backoff_between_retries(
     middleware_with_retry: LLMRateLimitMiddleware,
     mock_request: ModelRequest,
@@ -540,7 +502,6 @@ def middleware_with_429_retry() -> LLMRateLimitMiddleware:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_timeout=True,
         max_timeout_retries=2,
         timeout_retry_multiplier=2.0,
@@ -561,7 +522,6 @@ def middleware_no_429_retry() -> LLMRateLimitMiddleware:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_timeout=False,
         # IG-499: Disable 429 retry
         retry_on_rate_limit=False,
@@ -775,7 +735,6 @@ async def test_429_backoff_capped_at_max(
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_rate_limit=True,
         max_rate_limit_retries=5,
         rate_limit_backoff_base=10.0,
@@ -854,7 +813,6 @@ def test_calculate_rate_limit_backoff_exponential() -> None:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_rate_limit=True,
         max_rate_limit_retries=3,
         rate_limit_backoff_base=2.0,
@@ -882,7 +840,6 @@ def test_calculate_rate_limit_backoff_respects_retry_after() -> None:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_rate_limit=True,
         max_rate_limit_retries=3,
         rate_limit_backoff_base=2.0,
@@ -903,7 +860,6 @@ def test_calculate_rate_limit_backoff_retry_after_capped() -> None:
         max_concurrent_requests_per_thread=10,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_rate_limit=True,
         max_rate_limit_retries=3,
         rate_limit_backoff_base=2.0,
@@ -1023,7 +979,6 @@ async def test_adjust_rpm_limit_bounds() -> None:
         requests_per_minute=60,
         max_concurrent_requests_per_thread=8,
         call_timeout_seconds=150,
-        thread_local=True,
     )
 
     # Test lower bound
@@ -1042,7 +997,6 @@ async def test_adjust_rpm_limit_no_change() -> None:
         requests_per_minute=60,
         max_concurrent_requests_per_thread=8,
         call_timeout_seconds=150,
-        thread_local=True,
     )
 
     # Should not log/change if same value
@@ -1060,7 +1014,6 @@ async def test_consecutive_timeout_proactive_throttling(
         max_concurrent_requests_per_thread=8,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_timeout=True,
         max_timeout_retries=3,  # 4 attempts total (0,1,2,3)
         timeout_retry_multiplier=2.0,
@@ -1095,7 +1048,6 @@ async def test_429_error_adjusts_rpm_with_hint(mock_request: ModelRequest) -> No
         max_concurrent_requests_per_thread=8,
         call_timeout_seconds=60,
         call_timeout_max_seconds=240,
-        thread_local=True,
         retry_on_rate_limit=True,
         max_rate_limit_retries=3,
     )

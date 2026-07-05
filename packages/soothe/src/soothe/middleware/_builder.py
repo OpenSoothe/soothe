@@ -231,7 +231,6 @@ def build_soothe_middleware_stack(
                 max_concurrent_requests_per_thread=llm_rl.concurrent_limit,
                 call_timeout_seconds=llm_rl.call_timeout_seconds,
                 call_timeout_max_seconds=llm_rl.call_timeout_max_seconds,
-                thread_local=True,
                 retry_on_timeout=llm_rl.retry_on_timeout,
                 max_timeout_retries=llm_rl.max_timeout_retries,
                 timeout_retry_multiplier=llm_rl.timeout_retry_multiplier,

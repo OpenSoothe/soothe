@@ -97,21 +97,15 @@ class IntentClassification(BaseModel):
     - ``simple``/``complex``: agentic goals of increasing effort; the runner /
       StrangeLoop derive loop continuation structurally from the checkpoint.
 
-    ``intake_label`` drives ``route_by_intent``. ``intent_type`` is always
-    ``agentic`` for wire compatibility with ``IntentClassifiedEvent``.
+    ``intake_label`` drives ``route_by_intent``.
 
     Args:
-        intent_type: Always ``agentic`` (legacy wire field).
         intake_label: 3-class intake label for branch routing (RFC-630).
         reasoning: Brief reasoning for classification (IG-518).
         goal_description: Normalized goal description.
         task_complexity: Routing complexity level (derived from ``intake_label``).
     """
 
-    intent_type: str = Field(
-        default="agentic",
-        description="Wire compatibility field; always agentic after RFC-630 3-class intake",
-    )
     intake_label: IntakeLabel = Field(
         description="3-class intake label for branch routing: trivial, simple, or complex"
     )
@@ -162,7 +156,6 @@ class IntakeClassificationLLMResult(BaseModel):
         """Convert LLM result to runtime IntentClassification."""
         task_complexity = derive_task_complexity_from_intake(self.intake_label)
         return IntentClassification(
-            intent_type="agentic",
             intake_label=self.intake_label,
             reasoning=self.reasoning,
             goal_description=self.goal_description,

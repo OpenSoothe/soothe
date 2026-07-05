@@ -74,13 +74,12 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     )
 
     logger.info(
-        "[Intent] Graph classified intake: intent_type=%s intake=%s - %s",
-        intent.intent_type,
+        "[Intent] Graph classified intake: intake=%s - %s",
         intent.intake_label,
         query[:50],
     )
 
-    if intent.intent_type == "agentic" and intent.reasoning:
+    if intent.reasoning:
         await ctx.emit(
             "intent_classified_reasoning",
             {
