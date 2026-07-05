@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -74,3 +75,59 @@ def test_main_middleware_stack_mounts_tool_call_args_recording() -> None:
 
     stack = build_soothe_middleware_stack(SootheConfig(), policy=None)
     assert any(type(m).__name__ == "ToolCallArgsMiddleware" for m in stack)
+
+
+def test_tool_call_args_middleware_wraps_edit_coalescing() -> None:
+    """ToolCallArgs must be outer so coalesced edit_file calls still record kwargs."""
+    from soothe.config import SootheConfig
+    from soothe.middleware._builder import build_soothe_middleware_stack
+
+    names = [type(m).__name__ for m in build_soothe_middleware_stack(SootheConfig(), policy=None)]
+    args_idx = names.index("ToolCallArgsMiddleware")
+    coalesce_idx = names.index("EditCoalescingMiddleware")
+    assert args_idx < coalesce_idx
+
+
+@pytest.mark.asyncio
+async def test_outer_tool_call_args_records_before_coalescing_intercepts_edit_file() -> None:
+    """Regression: edit_file cards need args even when coalescing never calls the tool handler."""
+    from soothe.middleware.edit_coalescing import EditCoalescingConfig, EditCoalescingMiddleware
+
+    init_tool_call_args_registry()
+    coalescing = EditCoalescingMiddleware(
+        config=EditCoalescingConfig(detection_window_ms=60_000),
+    )
+    args_middleware = ToolCallArgsMiddleware()
+    request = ToolCallRequest(
+        tool_call={
+            "name": "edit_file",
+            "args": {
+                "file_path": "/tmp/example.py",
+                "old_string": "foo",
+                "new_string": "bar",
+            },
+            "id": "functions.edit_file:9",
+        },
+        tool=None,
+        state={"messages": []},
+        runtime=MagicMock(),
+    )
+    inner_handler = AsyncMock(
+        return_value=ToolMessage(content="should not run", tool_call_id="functions.edit_file:9")
+    )
+
+    async def coalescing_handler(req: ToolCallRequest) -> ToolMessage:
+        return await coalescing.awrap_tool_call(req, inner_handler)
+
+    # Do not await coalescing's future; intercept queues the edit and waits on the window.
+    record_task = asyncio.create_task(args_middleware.awrap_tool_call(request, coalescing_handler))
+    await asyncio.sleep(0)
+    record_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await record_task
+
+    recorded = get_recorded_tool_call_args("functions.edit_file:9")
+    assert recorded.get("file_path") == "/tmp/example.py"
+    assert recorded.get("old_string") == "foo"
+    assert recorded.get("new_string") == "bar"
+    inner_handler.assert_not_awaited()

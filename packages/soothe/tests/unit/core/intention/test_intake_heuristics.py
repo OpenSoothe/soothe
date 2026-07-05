@@ -42,8 +42,7 @@ class TestClassifyIntakeHeuristic:
         assert result is not None
         assert result.intake_label == IntakeLabel.CHITCHAT
         assert result.chitchat_response == (
-            "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. "
-            "How can I help you today?"
+            "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. How can I help you today?"
         )
 
     def test_origin_query_is_chitchat(self) -> None:

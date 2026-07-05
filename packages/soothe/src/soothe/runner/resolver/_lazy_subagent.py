@@ -12,18 +12,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _BUILTIN_DESCRIPTIONS: dict[str, str] = {
-    "explore": (
-        "Targeted filesystem search agent. Uses iterative LLM-orchestrated "
-        "search with configurable thoroughness (quick/medium/thorough). "
-        "Use when goal mentions 'find', 'locate', 'search for', or requires "
-        "navigating filesystem toward a specific target."
-    ),
     "plan": (
-        "Planning delegate with agentic loops: iteratively runs multiple readonly explore "
-        "passes per round (and multiple collection rounds) to gather workspace evidence, then "
-        "iteratively refines a full markdown execution plan before returning one report. "
-        "Use when the main thread needs structured recon-plus-plan without doing every explore "
-        "and rewrite itself."
+        "Planning delegate with agentic loops: iteratively runs multiple readonly "
+        "recon passes per round (and multiple collection rounds) to gather workspace "
+        "evidence, then iteratively refines a full markdown execution plan before "
+        "returning one report. Use when the main thread needs structured recon-plus-plan "
+        "without doing every recon and rewrite itself."
     ),
     "tacitus": ("Public-domain research subagent for web, academic, and URL sources."),
 }

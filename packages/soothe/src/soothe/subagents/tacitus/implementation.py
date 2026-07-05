@@ -109,7 +109,7 @@ def create_tacitus_subagent(
         "description": (
             "Tacitus: deep public-domain research across web search, academic "
             "papers, and public URLs. Use for thorough investigation and cross-validation. "
-            "Do not use for local codebase or file exploration (use explore)."
+            "Do not use for local codebase or file exploration."
         ),
         "runnable": runnable,
     }

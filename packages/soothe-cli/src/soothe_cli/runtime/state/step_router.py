@@ -445,7 +445,7 @@ class StepTaskRouter:
     ) -> bool:
         """Register one subgraph tool row on an already-resolved parent step card."""
         if _is_task_metadata_subgraph_tool(item):
-            # Inner explore ``task`` chunks are not user-facing tool stats; ingesting
+            # Inner subagent ``task`` chunks are not user-facing tool stats; ingesting
             # them used to rewrite the main ``{step}:s:task:…`` delegation row args.
             return True
         display = str(item.display_key or "").strip()

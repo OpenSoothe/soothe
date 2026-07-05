@@ -22,8 +22,7 @@ def test_is_identity_query_rejects_task() -> None:
 
 def test_build_identity_reply_english() -> None:
     assert build_identity_reply("Soothe", "who are u") == (
-        "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. "
-        "How can I help you today?"
+        "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. How can I help you today?"
     )
 
 

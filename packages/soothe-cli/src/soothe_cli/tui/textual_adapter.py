@@ -1629,7 +1629,7 @@ def _tui_goal_completion_matches_prior_main_visible_answer(
     standalone ``AssistantMessage``, and (3) prose still in ``pending_text_by_namespace`` that
     was already streamed into an ``AssistantMessage`` via ``append_content`` but not yet
     flushed (``goal_completion`` can arrive before the stream terminal frame or end-of-turn
-    flush — common for direct daemon runs; ``/explore`` often interleaves flushes differently).
+    flush — common for direct daemon runs; subagent routing often interleaves flushes differently).
     """
     if ns_key != ():
         return False

@@ -21,6 +21,6 @@ def test_tacitus_prose_without_json_is_kept() -> None:
     assert format_subagent_task_assistant_for_display(raw, subagent_type="tacitus") == raw
 
 
-def test_non_tacitus_still_uses_explore_formatter() -> None:
+def test_non_tacitus_returns_raw_text_as_is() -> None:
     raw = '{"decision": "continue"}'
-    assert format_subagent_task_assistant_for_display(raw, subagent_type="explore") == ""
+    assert format_subagent_task_assistant_for_display(raw, subagent_type="other") == raw

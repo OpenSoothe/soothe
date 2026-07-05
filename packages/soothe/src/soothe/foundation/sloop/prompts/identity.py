@@ -67,10 +67,7 @@ def build_identity_reply(assistant_name: str, query: str) -> str:
             f"I'm {name}, a cloud-based AI assistant {_INVENTOR_ATTRIBUTION_EN} — "
             "I don't have a physical location. How can I help you today?"
         )
-    return (
-        f"I'm {name}, an AI assistant {_INVENTOR_ATTRIBUTION_EN}. "
-        "How can I help you today?"
-    )
+    return f"I'm {name}, an AI assistant {_INVENTOR_ATTRIBUTION_EN}. How can I help you today?"
 
 
 def build_assistant_identity_block(assistant_name: str) -> str:

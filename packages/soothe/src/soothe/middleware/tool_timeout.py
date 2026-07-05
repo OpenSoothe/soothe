@@ -17,7 +17,7 @@ Default timeouts:
 
 Configuration:
     config.agent.tool_timeout.default_seconds: 60.0
-    config.agent.tool_timeout.per_tool: {grep: 30.0, explore: 1800.0, task: 86400.0}
+    config.agent.tool_timeout.per_tool: {grep: 30.0, task: 86400.0}
 """
 
 from __future__ import annotations
@@ -150,7 +150,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
             default_timeout_seconds=60.0,
             per_tool_timeout={
                 "grep": 30.0,
-                "explore": 180.0,
+                "tacitus": 180.0,
             },
         )
         ```
@@ -294,7 +294,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         strategy rather than crashing the entire request.
 
         IG-516: When task tool times out, emit subagent completion event to
-        close the TUI subagent card (explore, browser_use, etc).
+        close the TUI subagent card (tacitus, browser_use, etc).
 
         IG-517: Skip timeout for batched operations (fast path).
 
