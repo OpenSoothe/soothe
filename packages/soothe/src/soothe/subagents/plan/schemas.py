@@ -29,21 +29,3 @@ class PlanRefinement(BaseModel):
     finish_planning: bool = Field(
         description="Set true when the plan needs no further revision.",
     )
-
-
-# --- Legacy structured models (retained for tests / external reuse) ---
-
-
-class PlanStepDraft(BaseModel):
-    """One step in a static plan decomposition (optional tooling)."""
-
-    id: str = Field(description="Stable step id, e.g. S1, S2.")
-    title: str = Field(default="", description="Short title for the step.")
-    description: str = Field(description="What to do in this step.")
-
-
-class PlanDecomposition(BaseModel):
-    """Structured plan (legacy single-shot decomposition)."""
-
-    objective: str = Field(description="Restated objective in one or two sentences.")
-    steps: list[PlanStepDraft] = Field(default_factory=list, description="Ordered execution steps.")

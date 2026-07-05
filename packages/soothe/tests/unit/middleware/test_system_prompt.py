@@ -679,11 +679,7 @@ def test_available_tools_block_when_progressive_enabled() -> None:
         progressive_tool_middleware=progressive,
     )
     request = MockModelRequest(
-        state={
-            "routing_classification": RoutingClassification(
-                intent_type="agentic", task_complexity="simple"
-            )
-        },
+        state={"routing_classification": RoutingClassification(task_complexity="simple")},
         system_message=SystemMessage(content="base"),
     )
     # Simulate ProgressiveToolMiddleware filtering bound tools to core only.

@@ -11,16 +11,12 @@ from soothe_sdk.plugin import plugin, subagent
 
 from .implementation import create_plan_subagent
 from .schemas import (
-    PlanDecomposition,
     PlanRefinement,
-    PlanStepDraft,
     PlanSubagentConfig,
 )
 
 __all__ = [
-    "PlanDecomposition",
     "PlanRefinement",
-    "PlanStepDraft",
     "PlanSubagentConfig",
     "PlanPlugin",
     "create_plan_subagent",

@@ -1316,14 +1316,6 @@ class SessionState:
         self.loop_id = generate_loop_id()
 
 
-SHELL_TOOL_NAMES: frozenset[str] = frozenset({"bash", "shell", "execute"})
-"""Tool names recognized as shell/command-execution tools.
-
-Only `'execute'` is registered by the SDK and CLI backends in practice.
-`'bash'` and `'shell'` are legacy names carried over and kept as
-backwards-compatible aliases.
-"""
-
 DANGEROUS_SHELL_PATTERNS = (
     "$(",  # Command substitution
     "`",  # Backtick command substitution

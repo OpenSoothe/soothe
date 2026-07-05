@@ -39,7 +39,6 @@ __all__ = [
     "LoopStateGetParams",
     "LoopStateUpdateParams",
     "LoopCardsFetchParams",
-    "LoopSubscribeParams",
     "LoopDetachParams",
     # Job RPC
     "JobCreateParams",
@@ -72,7 +71,6 @@ __all__ = [
     "DisconnectParams",
     "PingParams",
     "PongParams",
-    "DaemonReadyParams",
     # Cron RPC (RFC-229)
     "CronAddParams",
     "CronListParams",
@@ -205,19 +203,6 @@ class LoopCardsFetchParams(ParamsBase):
 
     loop_id: str = Field(..., min_length=1)
     since: str | None = None
-
-
-class LoopSubscribeParams(ParamsBase):
-    """Params for method=loop_subscribe (legacy flat type).
-
-    In the protocol-1 envelope this maps to ``(subscribe, loop_events)`` with
-    ``SubscribeParams``, but the legacy ``loop_subscribe`` flat type is still
-    dispatched by the router.
-    """
-
-    loop_id: str = Field(..., min_length=1)
-    stream_delivery: Literal["batch", "adaptive", "streaming"] = "adaptive"
-    wire_tier: Literal["full", "compact"] = "full"
 
 
 class LoopDetachParams(ParamsBase):
@@ -421,10 +406,6 @@ class PingParams(EmptyParams):
 
 class PongParams(EmptyParams):
     """Params for type=pong (no required fields)."""
-
-
-class DaemonReadyParams(EmptyParams):
-    """Params for legacy type=daemon_ready (no required fields)."""
 
 
 # ---------------------------------------------------------------------------

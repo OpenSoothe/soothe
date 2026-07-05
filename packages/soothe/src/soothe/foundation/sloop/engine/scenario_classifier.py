@@ -341,11 +341,10 @@ async def classify_synthesis_scenario(
     Raises:
         No exceptions - returns fallback classification on any failure.
     """
-    # Extract intent classification
+    # intent_type is always "agentic" after RFC-630 3-class intake
     intent_type = "agentic"
     task_complexity = "medium"
-    if state.intent and hasattr(state.intent, "intent_type"):
-        intent_type = state.intent.intent_type
+    if state.intent:
         task_complexity = getattr(state.intent, "task_complexity", "medium")
 
     # Extract execution summary

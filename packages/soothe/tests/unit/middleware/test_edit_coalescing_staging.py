@@ -157,8 +157,8 @@ class TestEditCoalescingConfig:
         assert middleware._config.staging_buffer_max_entries == 10
 
     def test_middleware_detection_window_ms_override(self) -> None:
-        """detection_window_ms kwarg should override config default."""
-        middleware = EditCoalescingMiddleware(detection_window_ms=120)
+        """Custom detection window via config should be respected."""
+        middleware = EditCoalescingMiddleware(config=EditCoalescingConfig(detection_window_ms=120))
         assert middleware._detection_window_ms == 120
         assert middleware._config.staging_buffer_max_entries == DEFAULT_STAGING_BUFFER_MAX_ENTRIES
 

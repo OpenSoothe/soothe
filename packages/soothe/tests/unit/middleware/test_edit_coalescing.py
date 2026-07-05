@@ -18,6 +18,7 @@ from soothe.middleware.edit_coalescing import (
     DEFAULT_DETECTION_WINDOW_MS,
     EDIT_TOOL_NAMES,
     EditBatch,
+    EditCoalescingConfig,
     EditCoalescingMiddleware,
     EditConflictError,
     PendingEdit,
@@ -335,7 +336,7 @@ class TestEditCoalescingMiddleware:
 
     def test_detection_window_custom(self) -> None:
         """Custom detection window should be stored."""
-        middleware = EditCoalescingMiddleware(detection_window_ms=100)
+        middleware = EditCoalescingMiddleware(config=EditCoalescingConfig(detection_window_ms=100))
         assert middleware._detection_window_ms == 100
 
     def test_is_edit_tool(self) -> None:

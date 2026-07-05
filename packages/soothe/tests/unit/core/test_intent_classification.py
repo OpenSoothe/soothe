@@ -24,7 +24,6 @@ class TestIntentClassificationModel:
             intake_label=IntakeLabel.TRIVIAL,
             task_complexity=TaskComplexity.MINIMAL,
         )
-        assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.TRIVIAL
 
     def test_model_creation_complex(self) -> None:
@@ -33,7 +32,6 @@ class TestIntentClassificationModel:
             goal_description="Build a web scraper",
             task_complexity=TaskComplexity.COMPLEX,
         )
-        assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.COMPLEX
         assert intent.goal_description == "Build a web scraper"
 
@@ -61,7 +59,6 @@ class TestIntakeClassificationLLMResult:
             goal_description="hello",
         )
         intent = llm_result.to_intent_classification()
-        assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.TRIVIAL
         assert intent.task_complexity == TaskComplexity.MINIMAL
 
@@ -72,7 +69,6 @@ class TestIntakeClassificationLLMResult:
             goal_description="summarize RFC-220 topology",
         )
         intent = llm_result.to_intent_classification()
-        assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.SIMPLE
         assert intent.task_complexity == TaskComplexity.SIMPLE
 
@@ -83,7 +79,6 @@ class TestIntakeClassificationLLMResult:
             goal_description="refactor the persistence layer",
         )
         intent = llm_result.to_intent_classification()
-        assert intent.intent_type == "agentic"
         assert intent.intake_label == IntakeLabel.COMPLEX
         assert intent.task_complexity == TaskComplexity.COMPLEX
 
@@ -139,7 +134,6 @@ class TestIntakeClassifier:
         with patch.object(classifier, "_classify_intake_llm", new_callable=AsyncMock) as mock_llm:
             mock_llm.return_value = (mock_llm_result, "human", {"intake_label": "trivial"})
             result = await classifier.classify_intake("你好")
-        assert result.intent_type == "agentic"
         assert result.intake_label == IntakeLabel.TRIVIAL
 
     async def test_weather_query_skips_llm_via_heuristic(self) -> None:

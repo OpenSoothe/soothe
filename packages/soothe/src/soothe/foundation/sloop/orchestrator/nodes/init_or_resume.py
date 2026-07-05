@@ -57,7 +57,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         await ctx.emit(
             "intent_classified",
             {
-                "intent_type": getattr(intent, "intent_type", ""),
+                "intent_type": "agentic",
                 "task_complexity": getattr(intent, "task_complexity", ""),
             },
         )
@@ -79,7 +79,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "intent_fast_path",
             {
                 "fast_path_kind": "trivial",
-                "intent_type": getattr(intent, "intent_type", "agentic"),
+                "intent_type": "agentic",
                 "classification": intent,
                 "context_engine": getattr(ctx, "ce", None),
                 "ce_goal_id": getattr(ctx, "ce_goal_id", None),

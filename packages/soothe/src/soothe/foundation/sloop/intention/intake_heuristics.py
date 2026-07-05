@@ -59,7 +59,6 @@ def classify_intake_heuristic(query: str) -> IntentClassification | None:
 
 def _trivial(query: str, reasoning: str) -> IntentClassification:
     return IntentClassification(
-        intent_type="agentic",
         intake_label=IntakeLabel.TRIVIAL,
         reasoning=reasoning,
         goal_description=query,

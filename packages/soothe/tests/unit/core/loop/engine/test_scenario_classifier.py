@@ -36,7 +36,6 @@ class _StubLLM:
 def _build_state(
     step_count: int = 1,
     all_success: bool = True,
-    intent_type: str = "agentic",
     task_complexity: str = "medium",
 ) -> SimpleNamespace:
     results = []
@@ -45,7 +44,7 @@ def _build_state(
             _StubStepResult(success=all_success, outcome_type="tool" if i % 2 == 0 else "llm_call")
         )
     return SimpleNamespace(
-        intent=SimpleNamespace(intent_type=intent_type, task_complexity=task_complexity),
+        intent=SimpleNamespace(task_complexity=task_complexity),
         step_results=results,
     )
 

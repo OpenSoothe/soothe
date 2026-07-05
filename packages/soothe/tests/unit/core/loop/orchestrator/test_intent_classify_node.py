@@ -21,7 +21,6 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
 
     classifier = MagicMock()
     intent = IntentClassification(
-        intent_type="agentic",
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll plan a lightweight change.",
         goal_description="Fix the typo",

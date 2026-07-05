@@ -65,7 +65,6 @@ class TestIntakeClassifierLedger:
     async def test_records_ledger_pair_when_context_engine_provided(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_result = IntentClassification(
-            intent_type="agentic",
             intake_label=IntakeLabel.SIMPLE,
             goal_description="summarize readme",
             task_complexity=TaskComplexity.SIMPLE,
@@ -101,7 +100,6 @@ class TestIntakeClassifierLedger:
     async def test_skips_ledger_when_no_context_engine(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         mock_result = IntentClassification(
-            intent_type="agentic",
             intake_label=IntakeLabel.COMPLEX,
             goal_description="refactor",
             task_complexity=TaskComplexity.COMPLEX,
@@ -131,23 +129,6 @@ class TestIntakeLangfuseInvokeConfig:
 
         goal_trace.intake_invoke_config.assert_called_once()
         assert out["metadata"]["purpose"] == "classify_intake"
-
-
-@pytest.mark.asyncio
-class TestLoadIntakeContext:
-    """Ledger loading for pre-stream classification."""
-
-    async def test_returns_empty_on_failure(self) -> None:
-        from soothe.foundation.sloop.intention.intake_context import load_intake_context
-
-        config = MagicMock()
-        with patch(
-            "soothe.foundation.context.engine.ContextEngine",
-            side_effect=RuntimeError("boom"),
-        ):
-            ctx = await load_intake_context(config, "loop-1")
-        assert ctx.loop_messages == []
-        assert ctx.context_engine is None
 
 
 class TestIntakePriorGoalProjection:

@@ -235,15 +235,6 @@ def _extract_post_content(content_json: dict) -> tuple[str, list[str]]:
     return "", []
 
 
-def _extract_post_text(content_json: dict) -> str:
-    """Extract plain text from Feishu post (rich text) message content.
-
-    Legacy wrapper for _extract_post_content, returns only text.
-    """
-    text, _ = _extract_post_content(content_json)
-    return text
-
-
 class FeishuConfig:
     """Feishu/Lark channel configuration using WebSocket long connection."""
 
