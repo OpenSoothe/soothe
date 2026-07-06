@@ -11,7 +11,7 @@ on:
       - "*"
     inputs:
       soothe_version:
-        description: "PyPI version override (optional). When set, checkout resolves the matching git tag. When omitted, build from the branch or tag selected in 'Use workflow from'."
+        description: "PyPI version to build (optional). Uses matching git tag; builds from source on branch if unpublished."
         required: false
         default: ""
         type: string
@@ -135,11 +135,15 @@ jobs:
           SOOTHE_VERSION: ${{ steps.soothe_version.outputs.version }}
         run: |
           set -euo pipefail
+          pypi_pkg_available() {
+            local pkg="$1"
+            curl -sf "https://pypi.org/pypi/${pkg}/${SOOTHE_VERSION}/json" >/dev/null
+          }
           wait_pkg() {
             local pkg="$1"
             echo "Waiting for ${pkg}==${SOOTHE_VERSION} on PyPI..."
             for attempt in $(seq 1 12); do
-              if python -m pip index versions "${pkg}" 2>/dev/null | grep -qF "${SOOTHE_VERSION}"; then
+              if pypi_pkg_available "${pkg}"; then
                 echo "✓ ${pkg} ${SOOTHE_VERSION} is on PyPI"
                 return 0
               fi
@@ -149,9 +153,39 @@ jobs:
             echo "::error::Timed out waiting for ${pkg}==${SOOTHE_VERSION} on PyPI"
             return 1
           }
-          python -m pip install --upgrade pip >/dev/null
           wait_pkg soothe
           wait_pkg soothe-daemon
+
+      - name: Resolve Docker build mode
+        id: build_mode
+        env:
+          SOOTHE_VERSION: ${{ steps.soothe_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          pypi_pkg_available() {
+            local pkg="$1"
+            curl -sf "https://pypi.org/pypi/${pkg}/${SOOTHE_VERSION}/json" >/dev/null
+          }
+
+          soothe_on_pypi=false
+          daemon_on_pypi=false
+          if pypi_pkg_available soothe; then soothe_on_pypi=true; fi
+          if pypi_pkg_available soothe-daemon; then daemon_on_pypi=true; fi
+
+          if [ "${soothe_on_pypi}" = "true" ] && [ "${daemon_on_pypi}" = "true" ]; then
+            echo "mode=pypi" >> "${GITHUB_OUTPUT}"
+            echo "Using PyPI wheels for soothe and soothe-daemon ${SOOTHE_VERSION}"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_run" ] || \
+             [ "${{ steps.build_context.outputs.publish_version_tags }}" = "true" ]; then
+            echo "::error::PyPI packages for ${SOOTHE_VERSION} are not available (soothe=${soothe_on_pypi}, soothe-daemon=${daemon_on_pypi}). Release publish must finish before building the Docker image."
+            exit 1
+          fi
+
+          echo "mode=local" >> "${GITHUB_OUTPUT}"
+          echo "::notice::Version ${SOOTHE_VERSION} is not on PyPI yet; building from local source (Dockerfile.local)"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -207,7 +241,8 @@ jobs:
             type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
 
-      - name: Build and push daemon image (multi-platform)
+      - name: Build and push daemon image from PyPI (multi-platform)
+        if: ${{ steps.build_mode.outputs.mode == 'pypi' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -216,6 +251,23 @@ jobs:
           build-args: |
             SOOTHE_VERSION=${{ steps.soothe_version.outputs.version }}
             SOOTHE_DAEMON_VERSION=${{ steps.soothe_version.outputs.version }}
+            PYTHON_BASE=${{ env.PYTHON_BASE }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ steps.publish.outputs.should_push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+      - name: Build and push daemon image from source (multi-platform)
+        if: ${{ steps.build_mode.outputs.mode == 'local' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/soothe-daemon/Dockerfile.local
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            INCLUDE_BROWSER=false
             PYTHON_BASE=${{ env.PYTHON_BASE }}
           platforms: linux/amd64,linux/arm64
           push: ${{ steps.publish.outputs.should_push == 'true' }}

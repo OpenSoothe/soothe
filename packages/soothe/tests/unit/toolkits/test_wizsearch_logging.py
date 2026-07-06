@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from soothe.toolkits._internal import wizsearch as wiz_internal
+
+_TAVILY_ENV = patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}, clear=False)
 
 
 @pytest.mark.asyncio
@@ -29,6 +32,7 @@ async def test_perform_wizsearch_search_logs_start_and_done(
     ]
 
     with (
+        _TAVILY_ENV,
         patch.object(wiz_internal, "_check_wizsearch_available", return_value=True),
         patch.object(wiz_internal, "_maybe_apply_tavily_key"),
         patch("wizsearch.WizSearch") as mock_cls,
@@ -55,6 +59,7 @@ async def test_perform_wizsearch_search_logs_failure(caplog: pytest.LogCaptureFi
     caplog.set_level("WARNING", logger="soothe.toolkits._internal.wizsearch")
 
     with (
+        _TAVILY_ENV,
         patch.object(wiz_internal, "_check_wizsearch_available", return_value=True),
         patch.object(wiz_internal, "_maybe_apply_tavily_key"),
         patch("wizsearch.WizSearch") as mock_cls,

@@ -144,7 +144,9 @@ def build_file_change_preview(
         if physical and physical.is_file():
             before = read_physical_file_text(physical) or ""
         old_segment = extract_line_range_text(before, start_line, end_line) if before else ""
-        after_text = apply_edit_file_lines_to_content(before, start_line, end_line, "") if before else ""
+        after_text = (
+            apply_edit_file_lines_to_content(before, start_line, end_line, "") if before else ""
+        )
         if after_text is None:
             after_text = before
         return EditFileLinesPreviewWidget, {

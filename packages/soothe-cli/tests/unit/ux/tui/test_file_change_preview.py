@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_sdk.tools.metadata import get_file_write_tool_names
 
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
@@ -26,7 +27,6 @@ from soothe_cli.tui.file_change_renderers import (
     build_file_change_preview,
     update_preview_data_from_record,
 )
-from soothe_sdk.tools.metadata import get_file_write_tool_names
 from soothe_cli.tui.widgets.file_change_preview import (
     DeleteFilePreviewWidget,
     EditFileLinesPreviewWidget,
@@ -272,22 +272,28 @@ def test_build_apply_diff_preview_shows_patch(tmp_path: Path) -> None:
 
 def test_file_change_action_label_for_surgical_tools() -> None:
     """Surgical file tools get distinct completed labels."""
-    assert file_change_action_label(
-        FileOperationRecord(
-            tool_name="insert_lines",
-            display_path="a.md",
-            physical_path=None,
-            tool_call_id="tc-1",
+    assert (
+        file_change_action_label(
+            FileOperationRecord(
+                tool_name="insert_lines",
+                display_path="a.md",
+                physical_path=None,
+                tool_call_id="tc-1",
+            )
         )
-    ) == "Inserted"
-    assert file_change_action_label(
-        FileOperationRecord(
-            tool_name="apply_diff",
-            display_path="a.py",
-            physical_path=None,
-            tool_call_id="tc-2",
+        == "Inserted"
+    )
+    assert (
+        file_change_action_label(
+            FileOperationRecord(
+                tool_name="apply_diff",
+                display_path="a.py",
+                physical_path=None,
+                tool_call_id="tc-2",
+            )
         )
-    ) == "Updated"
+        == "Updated"
+    )
 
 
 def test_build_delete_file_preview_reads_disk(tmp_path: Path) -> None:
