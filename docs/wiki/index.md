@@ -1,6 +1,8 @@
 ---
 title: Wiki
+layout: default
 nav_order: 2
+has_children: true
 description: >-
   Soothe documentation wiki — comprehensive guides for users, developers, and operators.
 permalink: /wiki/

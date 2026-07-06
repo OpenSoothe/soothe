@@ -145,6 +145,7 @@ class StrangeLoopStateManager:
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
         self._worker_started = False
         self._worker_lock = asyncio.Lock()
+        self._checkpoint_write_lock = asyncio.Lock()
         self._closed = False
 
     async def _ensure_backend_initialized(self) -> None:
@@ -576,14 +577,15 @@ class StrangeLoopStateManager:
 
         RFC-803 Phase 6: Extracted backend write logic for reuse.
         """
-        if self._backend_type == "postgresql":
-            # PostgreSQL async save
-            await self._ensure_backend_initialized()
-            await self._postgres_backend.save_checkpoint(checkpoint)
-        else:
-            # SQLite save via writer connection
-            conn = await self._ensure_writer_connection()
-            await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
+        async with self._checkpoint_write_lock:
+            if self._backend_type == "postgresql":
+                # PostgreSQL async save
+                await self._ensure_backend_initialized()
+                await self._postgres_backend.save_checkpoint(checkpoint)
+            else:
+                # SQLite save via writer connection
+                conn = await self._ensure_writer_connection()
+                await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
 
     async def _start_flush_worker(self) -> None:
         """Start background worker for periodic checkpoint flushes.
@@ -610,11 +612,20 @@ class StrangeLoopStateManager:
     async def _stop_flush_worker(self) -> None:
         """Stop the async checkpoint worker and release queue resources."""
         async with self._worker_lock:
+            pending = self._pending_saves
             worker = self._flush_worker
             self._flush_worker = None
             self._pending_saves = None
             self._worker_started = False
             self._worker_loop = None
+
+        if pending is not None:
+            while True:
+                try:
+                    queued = pending.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                await self._do_save_checkpoint(queued)
 
         if worker is None:
             return
@@ -1185,9 +1196,9 @@ class StrangeLoopStateManager:
         For shared pool mode, only clears references (pool closed at daemon shutdown).
         """
         self._closed = True
-        # RFC-803 Phase 6: Force final checkpoint write, then stop worker
-        await self.force_flush()
+        # Stop worker (drain queue) before force_flush to avoid concurrent SQLite writes.
         await self._stop_flush_worker()
+        await self.force_flush()
 
         # Close PostgreSQL backend pool (only if owned, not shared)
         if self._postgres_backend is not None:

@@ -20,6 +20,35 @@ from soothe_daemon.protocol import MessageRouter
 from soothe_daemon.server.core import _ClientConn
 
 
+async def _await_background_query_idle(
+    daemon: SootheDaemon,
+    sent: list[dict[str, Any]],
+    *,
+    timeout_s: float = 2.0,
+) -> list[dict[str, Any]]:
+    """Wait for IG-054 background query task to broadcast running and idle status.
+
+    The query task may finish and unregister from ``_active_threads`` before the
+    test observes it, so poll ``sent`` until both status transitions appear.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout_s
+    while loop.time() < deadline:
+        for task in list(getattr(daemon, "_active_threads", {}).values()):
+            if task and not task.done():
+                await task
+        status = [m for m in sent if m.get("type") == "status"]
+        if any(m.get("state") == "running" for m in status) and any(
+            m.get("state") == "idle" for m in status
+        ):
+            return status
+        await asyncio.sleep(0.01)
+    status = [m for m in sent if m.get("type") == "status"]
+    states = [m.get("state") for m in status]
+    msg = f"Timed out waiting for running+idle status broadcasts; got {states!r}"
+    raise AssertionError(msg)
+
+
 class _SequencedClient:
     def __init__(self, events: list[dict[str, Any] | None]) -> None:
         self._events = list(events)
@@ -211,17 +240,7 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
         "download skills", loop_id="loop-u", autonomous=True, max_iterations=42
     )
 
-    # IG-054: run_query now creates background task, wait for it to complete.
-    # The task may complete so quickly that _active_threads is empty when we check,
-    # but the finally block (which broadcasts idle) needs event loop ticks to run.
-    # Yield multiple times to ensure the finally block completes.
-    for _ in range(3):
-        if daemon._active_threads:
-            tasks = list(daemon._active_threads.values())
-            for task in tasks:
-                if task and not task.done():
-                    await task
-        await asyncio.sleep(0.01)
+    await _await_background_query_idle(daemon, sent)
 
     assert daemon._runner.calls  # type: ignore[attr-defined]
     call = daemon._runner.calls[0]  # type: ignore[attr-defined]
@@ -229,10 +248,6 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
     assert call["thread_id"] == "thread-1"
     assert call["autonomous"] is True
     assert call["max_iterations"] == 42
-    # The test's primary goal is verifying autonomous kwargs are passed correctly.
-    # Events may not be broadcast in the simplified mock environment; status messages
-    # are sufficient evidence that the query ran and completed.
-    assert len(sent) >= 2  # At least running + idle status
 
 
 @pytest.mark.asyncio
@@ -440,12 +455,7 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
     # Run a query
     await daemon._query_engine.run_query("Hello, assistant", loop_id="loop-u")
 
-    # IG-054: run_query now creates background task, wait for it to complete
-    if daemon._active_threads:
-        tasks = list(daemon._active_threads.values())
-        for task in tasks:
-            if task and not task.done():
-                await task
+    await _await_background_query_idle(daemon, sent)
 
     # Flush buffered writes before reading
     thread_logger.flush()
@@ -713,14 +723,7 @@ async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
     daemon._broadcast = _fake_broadcast  # type: ignore[method-assign]
     await daemon._query_engine.run_query("analyze project structure", loop_id="loop-u")
 
-    # IG-054: run_query now creates background task, wait for it to complete
-    if daemon._active_threads:
-        tasks = list(daemon._active_threads.values())
-        for task in tasks:
-            if task and not task.done():
-                await task
-
-    status_messages = [msg for msg in sent if msg.get("type") == "status"]
+    status_messages = await _await_background_query_idle(daemon, sent)
     assert status_messages[0]["state"] == "running"
     assert status_messages[0]["loop_id"] == "loop-u"
     assert status_messages[-1]["state"] == "idle"

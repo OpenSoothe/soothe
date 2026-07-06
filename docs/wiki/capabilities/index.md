@@ -1,5 +1,7 @@
 ---
 title: Capabilities
+parent: Wiki
+has_children: true
 nav_order: 6
 description: >-
   Subagents, tools, MCP integration, and the plugin system.

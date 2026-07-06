@@ -1,7 +1,7 @@
 # GitHub Pages / Jekyll configuration for Soothe documentation
 #
-# This configures the Just the Docs theme for the docs/wiki/ knowledge base.
-# Pages use index.md as directory landing pages (GitHub Pages convention).
+# Publishes docs/wiki/ as the user-facing knowledge base at:
+# https://mirasoth.github.io/soothe/
 
 title: Soothe Docs
 description: >-
@@ -10,7 +10,8 @@ description: >-
 url: "https://mirasoth.github.io"
 baseurl: "/soothe"
 
-remote_theme: just-the-docs/just-the-docs
+repository: mirasoth/soothe
+remote_theme: just-the-docs/just-the-docs@v0.10.2
 
 # Enable auxiliary_links in the top-right navigation
 aux_links:
@@ -32,7 +33,7 @@ search:
 mermaid:
   version: "10.4.0"
 
-# Exclude build artifacts and non-doc directories from Jekyll processing
+# Exclude internal-only directories from the published site
 exclude:
   - "specs/"
   - "impl/"
@@ -48,9 +49,6 @@ exclude:
   - "node_modules"
   - "vendor"
 
-# Collections not needed — wiki pages are regular Jekyll pages
-collections: null
-
 # Callouts / collapsible sections (Just the Docs features)
 callouts:
   warning:
@@ -63,6 +61,58 @@ callouts:
     title: Highlight
     color: yellow
 
-# Plugin: jekyll-remote-theme is required for remote_theme
 plugins:
   - jekyll-remote-theme
+  - jekyll-include-cache
+  - jekyll-seo-tag
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+  - scope:
+      path: "wiki/getting-started"
+    values:
+      parent: Getting Started
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/architecture"
+    values:
+      parent: Architecture
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/core"
+    values:
+      parent: Core Modules
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/configuration-guide"
+    values:
+      parent: Configuration Guide
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/backends"
+    values:
+      parent: Backends
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/capabilities"
+    values:
+      parent: Capabilities
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/protocols"
+    values:
+      parent: Protocols
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/deployment"
+    values:
+      parent: Deployment
+      grand_parent: Wiki
+  - scope:
+      path: "wiki/api-reference"
+    values:
+      parent: API Reference
+      grand_parent: Wiki

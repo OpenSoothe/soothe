@@ -28,8 +28,16 @@ from soothe_cli.tui.widgets.file_change_preview import (
     DeleteFilePreviewWidget,
     EditFileLinesPreviewWidget,
     EditFilePreviewWidget,
+    FileChangePreviewWidget,
     WriteFilePreviewWidget,
 )
+from soothe_cli.tui.widgets.messages.diff_message import DiffMessage
+
+
+def test_file_change_preview_uses_stream_card_bottom_margin() -> None:
+    """File edit cards match cognition/assistant inter-card spacing (RFC-501 §10.3)."""
+    assert "margin: 0 0 1 0;" in FileChangePreviewWidget.DEFAULT_CSS
+    assert "margin: 0 0 1 0;" in DiffMessage.DEFAULT_CSS
 
 
 def test_textual_widget_id_sanitizes_unified_tool_call_id() -> None:

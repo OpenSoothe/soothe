@@ -26,7 +26,7 @@ class DiffMessage(Static):
     DiffMessage {
         height: auto;
         padding: 0 1;
-        margin: 0;
+        margin: 0 0 1 0;
         background: $surface;
         border: solid $primary;
     }
