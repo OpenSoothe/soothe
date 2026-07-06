@@ -187,6 +187,6 @@ Resolved via `resolve_planner(config)` and `resolve_loop_planner(config)` — bo
 
 ## Related Documentation
 
-- [StrangeLoop Architecture](../sloop.md)
+- [StrangeLoop Architecture](../core/strangeloop.md)
 - [Execution Protocols](execution-protocols.md) — runner orchestrates the planner
 - [Loop Protocols](loop-protocols.md) — working memory feeds the planner

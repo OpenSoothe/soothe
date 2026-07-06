@@ -1,3 +1,11 @@
+---
+title: Protocols
+nav_order: 7
+description: >-
+  Protocol layer abstractions — persistence, cognition, and execution protocols.
+permalink: /wiki/protocols/
+---
+
 # Protocol Layer: Core Abstractions
 
 **Status**: Implemented (except ContextProtocol — draft)
@@ -124,4 +132,4 @@ Protocol interfaces live in `packages/soothe/src/soothe/protocols/`. Several are
 
 - [RFC-000](../../specs/) — System Conceptual Design (protocol philosophy)
 - [RFC-802](../../specs/) — Persistence Architecture Refactor
-- [Backend Implementation Guide](../backends.md)
+- [Backend Implementation Guide](../backends/index.md)

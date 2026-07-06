@@ -176,6 +176,6 @@ The resolver functions (`resolve_memory`, `resolve_durability`, `resolve_planner
 
 - [Daemon API](daemon-api.md) — Layer 3 server infrastructure
 - [SDK API](sdk-api.md) — Client and plugin development
-- [Protocols Layer](../protocols/README.md) — Protocol specifications
-- [Configuration Guide](../configuration-guide/README.md) — Full config reference
+- [Protocols Layer](../protocols/index.md) — Protocol specifications
+- [Configuration Guide](../configuration-guide/index.md) — Full config reference
 - [RFC-000 System Design](../../specs/RFC-000-system-conceptual-design.md) — Architecture RFCs

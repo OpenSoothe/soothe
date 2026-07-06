@@ -134,7 +134,7 @@ Three methods:
 2. **YAML config file**: `~/.soothe/config/config.yml` or `--config path/to/config.yml`
 3. **CLI arguments**: `soothe --debug --config my.yml`
 
-See [Configuration Guide](configuration-guide/README.md) for complete reference.
+See [Configuration Guide](configuration-guide/index.md) for complete reference.
 
 ### How do I set API keys?
 
@@ -364,7 +364,7 @@ See [Transport Guide](multi-transport.md).
 
 ### How do I deploy Soothe in production?
 
-See [Deployment Guide](deployment/README.md) for comprehensive production deployment instructions.
+See [Deployment Guide](deployment/index.md) for comprehensive production deployment instructions.
 
 **Quick start** (Docker Compose):
 ```bash
@@ -522,7 +522,7 @@ tail -f ~/.soothe/data/threads/<thread-id>/thread.log
 - View LLM calls, prompts, responses
 - Track token usage and latency
 
-See [Debug Guide](../howto_debug.md) and [Troubleshooting Guide](troubleshooting.md).
+See [Debug Guide](howto_debug.md) and [Troubleshooting Guide](troubleshooting.md).
 
 ---
 
@@ -643,7 +643,7 @@ See [Channel Plugin Guide](channel-plugin-guide.md).
 └─────────────────────────────────────┘
 ```
 
-See [Architecture Overview](architecture/README.md).
+See [Architecture Overview](architecture/index.md).
 
 ### What protocols does Soothe use?
 
@@ -660,7 +660,7 @@ See [Architecture Overview](architecture/README.md).
 | VectorStoreProtocol | Embedding storage (PGVector, Weaviate) |
 | WorkspaceProtocol | Workspace resolution and validation |
 
-See [Architecture Overview - Protocols](architecture/README.md#protocols).
+See [Architecture Overview - Protocols](architecture/index.md#protocols).
 
 ### How does the Plan → Execute loop work?
 
@@ -794,8 +794,8 @@ See [Deployment Guide - Monitoring](deployment/monitoring.md#langfuse-integratio
 ## More Questions?
 
 - **Troubleshooting**: [Troubleshooting Guide](troubleshooting.md)
-- **Configuration**: [Configuration Guide](configuration-guide/README.md)
-- **Architecture**: [Architecture Overview](architecture/README.md)
-- **Deployment**: [Deployment Guide](deployment/README.md)
+- **Configuration**: [Configuration Guide](configuration-guide/index.md)
+- **Architecture**: [Architecture Overview](architecture/index.md)
+- **Deployment**: [Deployment Guide](deployment/index.md)
 - **Development**: [Contributing Guide](contributing-guide.md)
 - **GitHub Issues**: Bug reports and feature requests

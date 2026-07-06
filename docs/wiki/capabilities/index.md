@@ -1,3 +1,11 @@
+---
+title: Capabilities
+nav_order: 6
+description: >-
+  Subagents, tools, MCP integration, and the plugin system.
+permalink: /wiki/capabilities/
+---
+
 # Capabilities Layer
 
 The **Capabilities Layer** is Soothe's extensibility framework for adding specialized behaviors through subagents, tools, and MCP integration. It sits between the protocol layer and the backend implementations, providing concrete capabilities that the agent can invoke during execution.
@@ -81,14 +89,14 @@ All capabilities are configured via `config.yml`. Subagents and MCP servers have
 
 | RFC | Title |
 |-----|-------|
-| [RFC-600](../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
-| [RFC-601](../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
-| [RFC-613](../specs/RFC-613-explore-agent-llm-orchestrated-search.md) | Explore Agent |
-| [RFC-618](../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
-| [RFC-619](../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
-| [RFC-622](../specs/RFC-622-veritas-auto-clarification.md) | Veritas Auto-Clarification |
-| [RFC-101](../specs/RFC-101-tool-interface.md) | Tool Interface (single-purpose design) |
-| [RFC-412](../specs/RFC-412-mcp-management.md) | MCP Management |
+| [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
+| [RFC-601](../../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
+| [RFC-613](../../specs/RFC-613-explore-agent-llm-orchestrated-search.md) | Explore Agent |
+| [RFC-618](../../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
+| [RFC-619](../../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
+| [RFC-622](../../specs/RFC-622-veritas-auto-clarification.md) | Veritas Auto-Clarification |
+| [RFC-101](../../specs/RFC-101-tool-interface.md) | Tool Interface (single-purpose design) |
+| [RFC-412](../../specs/RFC-412-mcp-management.md) | MCP Management |
 
 ## Decision Guide: When to Use What
 

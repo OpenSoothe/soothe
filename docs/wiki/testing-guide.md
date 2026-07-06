@@ -696,6 +696,6 @@ pytest -m slow
 ## See Also
 
 - **[Contributing Guide](contributing-guide.md)** - Development workflow and code standards
-- **[Configuration Guide](configuration-guide/README.md)** - Test configuration settings
-- **[Architecture Overview](architecture/README.md)** - System architecture for test design
+- **[Configuration Guide](configuration-guide/index.md)** - Test configuration settings
+- **[Architecture Overview](architecture/index.md)** - System architecture for test design
 - **[RFC-000](../specs/RFC-000-system-conceptual-design.md)** - Conceptual design for test planning

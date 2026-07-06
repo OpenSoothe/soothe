@@ -1,3 +1,11 @@
+---
+title: Getting Started
+nav_order: 1
+description: >-
+  Installation, quick start, and basic concepts for new Soothe users.
+permalink: /wiki/getting-started/
+---
+
 # Getting Started with Soothe
 
 Welcome to Soothe! This section guides you from installation to your first autonomous agent session.
@@ -58,6 +66,6 @@ For detailed setup, continue with the guides above.
 
 ## 🆘 Getting Help
 
-- **Documentation**: Browse the [wiki](../README.md)
+- **Documentation**: Browse the [wiki](../index.md)
 - **Issues**: Check [troubleshooting](../troubleshooting.md) first
-- **Architecture**: See [architecture overview](../architecture/README.md)
+- **Architecture**: See [architecture overview](../architecture/index.md)

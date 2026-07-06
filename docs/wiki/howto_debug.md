@@ -510,11 +510,11 @@ rm -rf ~/.soothe/data/threads/*
 
 ## 🔗 Related Documentation
 
-- [Troubleshooting Guide](wiki/troubleshooting.md) - Common issues and solutions
-- [Configuration Guide](wiki/configuration-guide/README.md) - Configuration reference
-- [Daemon Management](wiki/daemon-management.md) - Daemon lifecycle
-- [RFC-302](specs/RFC-302-context-protocol-architecture.md) - Progress event protocol
-- [RFC-401](specs/RFC-401.md) - Event filtering and verbosity
+- [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
+- [Configuration Guide](configuration-guide/index.md) - Configuration reference
+- [Daemon Management](daemon-management.md) - Daemon lifecycle
+- [RFC-302](../specs/RFC-302-context-protocol-architecture.md) - Progress event protocol
+- [RFC-401](../specs/RFC-401.md) - Event filtering and verbosity
 
 ---
 

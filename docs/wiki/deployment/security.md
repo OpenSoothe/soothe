@@ -965,11 +965,11 @@ After security hardening:
 
 ## Related Documentation
 
-- [Deployment Guide](README.md) - Deployment overview
+- [Deployment Guide](index.md) - Deployment overview
 - [Production Setup](production-setup.md) - Deployment steps
 - [Authentication](../authentication.md) - Reverse proxy authentication
 - [Multi-Transport](../multi-transport.md) - Transport security
-- [Configuration Guide](../configuration-guide/README.md) - Security policy settings
+- [Configuration Guide](../configuration-guide/index.md) - Security policy settings
 
 ---
 

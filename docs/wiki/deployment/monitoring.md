@@ -761,9 +761,9 @@ After setting up monitoring:
 
 ## Related Documentation
 
-- [Deployment Guide](README.md) - Production deployment overview
+- [Deployment Guide](index.md) - Production deployment overview
 - [Production Setup](production-setup.md) - Deployment steps
-- [Configuration Guide](../configuration-guide/README.md) - Observability settings
+- [Configuration Guide](../configuration-guide/index.md) - Observability settings
 - [Debugging Guide](../howto_debug.md) - Detailed debugging with logs
 - [Langfuse Documentation](https://langfuse.com/docs)
 

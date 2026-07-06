@@ -117,4 +117,4 @@ The run binds to a `thread_id` (DurabilityProtocol). Thread metadata — includi
 - [Planner Protocol](planner.md) — `LoopPlannerProtocol` drives each iteration
 - [Loop Protocols](loop-protocols.md) — working memory and operation security within loops
 - [Policy Protocol](policy.md) — permission checks during execution
-- [StrangeLoop Architecture](../sloop.md)
+- [StrangeLoop Architecture](../core/strangeloop.md)

@@ -551,7 +551,7 @@ pip install 'soothe[all]' soothe-cli soothe-daemon
 
 ## See Also
 
-- **[Architecture Overview](architecture/README.md)** - System design
+- **[Architecture Overview](architecture/index.md)** - System design
 - **[Contributing Guide](contributing-guide.md)** - Development workflow
 - **[FAQ](faq.md)** - Frequently asked questions
 - **[RFC Index](../specs/)** - Specification documents

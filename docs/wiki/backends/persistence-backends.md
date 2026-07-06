@@ -137,6 +137,6 @@ Persistence backends are the foundation other backends build on:
 
 ## Related Documentation
 
-- **[Backends Overview](README.md)** — Backend layer introduction
+- **[Backends Overview](index.md)** — Backend layer introduction
 - **[Durability Backends](durability-backends.md)** — Composes on top of PersistStore
 - **[Memory Backends](memory-backends.md)** — Memory storage patterns

@@ -81,7 +81,7 @@ The `tools` section is where you shape *what the agent can do*. Disabling tools 
 
 Each tool group is a block with an `enabled: bool`; set the ones you want off to `false` and configure the ones you keep (e.g. `wizsearch.default_engines: [tavily, duckduckgo]`).
 
-**Why disable rather than restrict:** a disabled tool never enters the model's tool array, so the model never wastes tokens considering it. Path policies (see [Security](security-config.md)) are a *second* layer for tools you keep enabled.
+**Why disable rather than restrict:** a disabled tool never enters the model's tool array, so the model never wastes tokens considering it. Path policies (see [Security](../deployment/security.md)) are a *second* layer for tools you keep enabled.
 
 ## Autonomous Mode Tradeoffs
 

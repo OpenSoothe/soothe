@@ -24,7 +24,7 @@ export OPENAI_API_KEY=sk-your-key-here
 soothe
 ```
 
-For detailed setup instructions, see the [Getting Started Guide](wiki/getting-started/README.md).
+For detailed setup instructions, see the [Getting Started Guide](getting-started/index.md).
 
 ---
 
@@ -57,31 +57,31 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 🚀 Getting Started
 
-- [Getting Started Hub](wiki/getting-started/README.md) - Installation, configuration, first run
-  - [Installation Guide](wiki/getting-started/Installation.md) - System requirements and setup
-  - [Quick-Start Guide](wiki/getting-started/Quick-Start.md) - Your first session and workflows
-  - [Basic Concepts](wiki/getting-started/Basic-Concepts.md) - Core architecture and concepts
-- [CLI Reference](wiki/cli-reference.md) - Complete command-line interface documentation
-- [TUI Guide](wiki/tui-guide.md) - Terminal UI usage, slash commands, and keyboard shortcuts
+- [Getting Started Hub](getting-started/index.md) - Installation, configuration, first run
+  - [Installation Guide](getting-started/Installation.md) - System requirements and setup
+  - [Quick-Start Guide](getting-started/Quick-Start.md) - Your first session and workflows
+  - [Basic Concepts](getting-started/Basic-Concepts.md) - Core architecture and concepts
+- [CLI Reference](cli-reference.md) - Complete command-line interface documentation
+- [TUI Guide](tui-guide.md) - Terminal UI usage, slash commands, and keyboard shortcuts
 
 ### 📖 User Guides
 
-- [Specialized Subagents](wiki/subagents.md) - Core explore, plan, tacitus, browser_use, and veritas; optional agents from soothe-plugins
-- [Autonomous Mode](wiki/autonomous-mode.md) - Enable autonomous iteration for complex tasks
-- [Thread Management](wiki/thread-management.md) - Work with conversation threads and maintain context
-- [MCP Servers](wiki/mcp-servers.md) - Extend capabilities with Model Context Protocol servers
+- [Specialized Subagents](subagents.md) - Core explore, plan, tacitus, browser_use, and veritas; optional agents from soothe-plugins
+- [Autonomous Mode](autonomous-mode.md) - Enable autonomous iteration for complex tasks
+- [Thread Management](thread-management.md) - Work with conversation threads and maintain context
+- [MCP Servers](capabilities/mcp.md) - Extend capabilities with Model Context Protocol servers
 
 ### 🔧 Configuration & Management
 
-- [Configuration Guide](wiki/configuration-guide/README.md) - Environment variables, YAML config, and model routing
-- [Daemon Management](wiki/daemon-management.md) - Manage the Soothe daemon lifecycle
-- [Transport Setup](wiki/multi-transport.md) - Configure WebSocket
-- [Authentication](wiki/authentication.md) - API keys, JWT, and security model
+- [Configuration Guide](configuration-guide/index.md) - Environment variables, YAML config, and model routing
+- [Daemon Management](daemon-management.md) - Manage the Soothe daemon lifecycle
+- [Transport Setup](multi-transport.md) - Configure WebSocket
+- [Authentication](authentication.md) - API keys, JWT, and security model
 
 ### 🛠️ Troubleshooting & Advanced
 
 - [Debug Guide](howto_debug.md) - Enable debug logs, diagnose issues, log locations
-- [Troubleshooting Guide](wiki/troubleshooting.md) - Common issues and solutions
+- [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
 
 ---
 
@@ -93,120 +93,120 @@ Technical documentation for developers and system architects.
 
 | RFC | Title |
 |-----|-------|
-| [RFC-000](specs/RFC-000-system-conceptual-design.md) | System Conceptual Design |
-| [RFC-001](specs/RFC-001-core-modules-architecture.md) | Core Modules Architecture |
-| [RFC-100](specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime |
-| [RFC-101](specs/RFC-101-tool-interface.md) | Tool Interface |
-| [RFC-102](specs/RFC-102-security-filesystem-policy.md) | Security Filesystem Policy |
-| [RFC-200](specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management |
-| [RFC-201](specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop |
-| [RFC-300](specs/RFC-300-context-memory-protocols.md) | Context and Memory Protocols |
-| [RFC-302](specs/RFC-302-context-protocol-architecture.md) | Context Protocol Architecture |
-| [RFC-401](specs/RFC-401-event-processing.md) | Event Processing |
-| [RFC-450](specs/RFC-450-daemon-communication-protocol.md) | Daemon Communication Protocol |
-| [RFC-500](specs/RFC-500-cli-tui-architecture.md) | CLI TUI Architecture |
-| [RFC-600](specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
-| [RFC-601](specs/RFC-601-built-in-agents.md) | Built-in Agents |
+| [RFC-000](../specs/RFC-000-system-conceptual-design.md) | System Conceptual Design |
+| [RFC-001](../specs/RFC-001-core-modules-architecture.md) | Core Modules Architecture |
+| [RFC-100](../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime |
+| [RFC-101](../specs/RFC-101-tool-interface.md) | Tool Interface |
+| [RFC-102](../specs/RFC-102-security-filesystem-policy.md) | Security Filesystem Policy |
+| [RFC-200](../specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management |
+| [RFC-201](../specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop |
+| [RFC-300](../specs/RFC-300-context-memory-protocols.md) | Context and Memory Protocols |
+| [RFC-302](../specs/RFC-302-context-protocol-architecture.md) | Context Protocol Architecture |
+| [RFC-401](../specs/RFC-401-event-processing.md) | Event Processing |
+| [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) | Daemon Communication Protocol |
+| [RFC-500](../specs/RFC-500-cli-tui-architecture.md) | CLI TUI Architecture |
+| [RFC-600](../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
+| [RFC-601](../specs/RFC-601-built-in-agents.md) | Built-in Agents |
 
 ### Implementation Guides
 
 | Guide | Title |
 |-------|-------|
-| [IG-351](impl/IG-351-cli-shared-reorganization.md) | CLI Shared Reorganization |
-| [IG-352](impl/IG-352-subagent-delegation-goal-loop-evidence.md) | Subagent Delegation and Goal Loop Evidence |
-| [IG-353](impl/IG-353-planner-performance-prototype.md) | Planner Performance Prototype |
-| [IG-355](impl/IG-355-subagent-completion-wire.md) | Subagent Completion Wire |
-| [IG-356](impl/IG-356-subagent-gap-closure.md) | Subagent Gap Closure |
-| [IG-357](impl/IG-357-act-wave-finalize-polish.md) | Act Wave Finalize and Polish |
-| [IG-358](impl/IG-358-replan-step-id-collision.md) | Replan Step ID Collision |
-| [IG-359](impl/IG-359-compact-log-level-format.md) | Compact Log Level Format |
-| [IG-360](impl/IG-360-compact-logger-module-names.md) | Compact Logger Module Names |
-| [IG-361](impl/IG-361-loop-input-content-coercion.md) | Loop Input Content Coercion |
-| [IG-362](impl/IG-362-daemon-input-loop-input-queue-parity.md) | Daemon Input Loop Input Queue Parity |
-| [IG-363](impl/IG-363-intent-classification-prompt-xml.md) | Intent Classification Prompt XML |
-| [IG-364](impl/IG-364-planning-intent-prompt-layout-xml.md) | Planning Intent Prompt Layout XML |
-| [IG-365](impl/IG-365-merge-cognition-into-core.md) | Merge Cognition into Core |
-| [IG-366](impl/IG-366-policy-virtual-path-glob-root.md) | Policy Virtual Path Glob Root |
-| [IG-367](impl/IG-367-langfuse-observability.md) | Langfuse Observability |
-| [IG-368](impl/IG-368-remove-detailed-evidence-string.md) | Remove Detailed Evidence String |
-| [IG-369](impl/IG-369-langfuse-strangeloop-langchain-fix.md) | Langfuse StrangeLoop LangChain Fix |
-| [IG-370](impl/IG-370-strangeloop-evidence-dedup.md) | StrangeLoop Evidence Deduplication |
-| [IG-371](impl/IG-371-plan-human-omit-working-memory.md) | Plan Human Omit Working Memory |
-| [IG-372](impl/IG-372-plan-phase-split-prompts.md) | Plan Phase Split Prompts |
-| [IG-374](impl/IG-374-parallel-execute-ledger-for-plan-assess.md) | Parallel Execute Ledger for Plan Assess |
-| [IG-375](impl/IG-375-remove-langsmith-tracing.md) | Remove LangSmith Tracing |
-| [IG-376](impl/IG-376-plan-assess-human-and-llm-progress.md) | Plan Assess Human and LLM Progress |
-| [IG-377](impl/IG-377-plan-human-trim-and-langfuse-execute-step.md) | Plan Human Trim and Langfuse Execute Step |
-| [IG-378](impl/IG-378-plan-generate-goal-progress-system.md) | Plan Generate Goal Progress System |
-| [IG-379](impl/IG-379-langfuse-cost-dashboard-bridge.md) | Langfuse Cost Dashboard Bridge |
-| [IG-380](impl/IG-380-strangeloop-plan-ledger-explore-messages.md) | StrangeLoop Plan Ledger Explore Messages |
-| [IG-381](impl/IG-381-plan-generate-progressive-evidence-explore-bundle.md) | Plan Generate Progressive Evidence Explore Bundle |
-| [IG-382](impl/IG-382-remove-stepaction-tools-hint.md) | Remove StepAction Tools Hint |
-| [IG-383](impl/IG-383-routing-classification-rename-git-status-trim.md) | Routing Classification Rename Git Status Trim |
-| [IG-384](impl/IG-384-system-prompt-merge-and-fallback.md) | System Prompt Merge and Fallback |
-| [IG-386](impl/IG-386-strangeloop-step-subagent-coreagent-enforcement.md) | StrangeLoop Step Subagent CoreAgent Enforcement |
-| [IG-387](impl/IG-387-drop-strangeloop-tool-result-cache.md) | Drop StrangeLoop Tool Result Cache |
-| [IG-388](impl/IG-388-plan-generate-sequential-step-ids.md) | Plan Generate Sequential Step IDs |
-| [IG-390](impl/IG-390-explore-migrate-create-agent.md) | Explore Migrate Create Agent |
-| [IG-391](impl/IG-391-explore-execute-readonly-prompt.md) | Explore Execute Readonly Prompt |
-| [IG-392](impl/IG-392-event-bus-drop-log-throttle.md) | Event Bus Drop Log Throttle |
-| [IG-393](impl/IG-393-explore-max-iterations-defaults.md) | Explore Max Iterations Defaults |
-| [IG-394](impl/IG-394-langgraph-agent-loop-orchestrator.md) | LangGraph Agent Loop Orchestrator |
-| [IG-395](impl/IG-395-langfuse-trace-goal-io.md) | Langfuse Trace Goal IO |
-| [IG-396](impl/IG-396-rfc-220-loop-graph-topology-langfuse.md) | RFC-220 Loop Graph Topology Langfuse |
-| [IG-397](impl/IG-397-strangeloop-graph-intent-and-assess-bypass.md) | StrangeLoop Graph Intent and Assess Bypass |
-| [IG-398](impl/IG-398-cancellation-propagation-strangeloop.md) | Cancellation Propagation StrangeLoop |
-| [IG-399](impl/IG-399-plan-pre-generate-evidence-and-flat-generation.md) | Plan Pre-generate Evidence and Flat Generation |
-| [IG-400](impl/IG-400-planmanager-plandag-architecture.md) | PlanManager PlanDAG Architecture |
-| [IG-401](impl/IG-401-plan-generation-optimization.md) | Plan Generation Optimization |
-| [IG-402](impl/IG-402-step-card-tool-aggregator.md) | Step Card Tool Aggregator |
-| [IG-403](impl/IG-403-event-size-distribution-stats.md) | Event Size Distribution Stats |
-| [IG-404](impl/IG-404-tui-card-display-fixes.md) | TUI Card Display Fixes |
-| [IG-405](impl/IG-405-virtual-file-system-backend-integration.md) | Virtual File System Backend Integration |
-| [IG-406](impl/IG-406-headless-and-tui-goal-completion-output.md) | Headless and TUI Goal Completion Output |
-| [IG-407](impl/IG-407-config-unification-agentic-execution.md) | Config Unification Agentic Execution |
-| [IG-408](impl/IG-408-loop-client-isolation.md) | Loop Client Isolation |
-| [IG-409](impl/IG-409-loop-new-client-workspace.md) | Loop New Client Workspace |
-| [IG-410](impl/IG-410-loop-runner-protocol-and-subprocess-isolation.md) | Loop Runner Protocol and Subprocess Isolation |
-| [IG-411](impl/IG-411-worker-pool-robustness.md) | Worker Pool Robustness |
-| [IG-412](impl/IG-412-tui-coreagent-hitl.md) | CoreAgent interrupt auto-resume (legacy HITL removed) |
-| [IG-413](impl/IG-413-plan-subagent-rfc-618.md) | Plan Subagent RFC-618 |
-| [IG-414](impl/IG-414-soothe-daemon-package-split.md) | Soothe Daemon Package Split |
-| [IG-415](impl/IG-415-optional-community-subagents.md) | Optional Community Subagents |
-| [IG-416](impl/IG-416-tool-call-realtime-display.md) | Tool Call Realtime Display |
-| [IG-418](impl/IG-418-remove-legacy-tool-call-id.md) | Remove Legacy Tool Call ID |
-| [IG-419](impl/IG-419-direct-llm-structured-output.md) | Direct LLM Structured Output |
-| [IG-420](impl/IG-420-goal-engine-strangeloop-autopilot-integration.md) | Goal Engine StrangeLoop Autopilot Integration |
-| [IG-421](impl/IG-421-step-card-tool-stats-display.md) | Step Card Tool Stats Display |
-| [IG-422](impl/IG-422-cli-runtime-module.md) | CLI Runtime Module |
-| [IG-425](impl/IG-425-tacitus-subagent.md) | Tacitus Subagent |
-| [IG-426](impl/IG-426-tui-streaming-event-reduction.md) | TUI Streaming Event Reduction |
-| [IG-427](impl/IG-427-stream-event-volume-fifo-latency.md) | Stream Event Volume FIFO Latency |
-| [IG-428](impl/IG-428-step-card-tool-activity-preview.md) | Step Card Tool Activity Preview |
-| [IG-437](impl/IG-437-deepxiv-integration.md) | DeepXiv Integration |
-| [IG-501](impl/IG-501-dynamic-rate-limit-adjustment.md) | Dynamic LLM Rate Limit Adjustment |
-| [IG-502](impl/IG-502-cron-service-implementation.md) | Cron Service Implementation |
-| [IG-503](impl/IG-503-file-descriptor-leak-and-network-resilience-fixes.md) | File Descriptor Leak and Network Resilience Fixes |
-| [IG-504](impl/IG-504-remove-http-rest-channel.md) | Remove HTTP REST Channel |
-| [IG-505](impl/IG-505-identity-service-implementation.md) | Identity Service Implementation |
-| [IG-506](impl/IG-506-coreagent-cold-start-and-code-interpreter-prep.md) | CoreAgent Cold Start and Code Interpreter Prep |
-| [IG-507](impl/IG-507-loop-3328-log-analysis-fixes.md) | Loop 3328 Log Analysis Fixes |
-| [IG-508](impl/IG-508-step-full-description.md) | Step Full Description for Enhanced Execution Context |
-| [IG-509](impl/IG-509-loop-7cba-hang-analysis.md) | Loop 7cba Hang Analysis |
-| [IG-510](impl/IG-510-grep-fallback-hang-recovery.md) | Grep Fallback Hang Recovery |
-| [IG-511](impl/IG-511-tool-timeout-analysis.md) | Tool Timeout Architecture Analysis |
-| [IG-512](impl/IG-512-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
-| [IG-513](impl/IG-513-subagent-card.md) | SubAgent Card — Flattened Display (RFC-628 Part II) |
-| [IG-514](impl/IG-514-execute-namespace-tool-stamping-fix.md) | Execute Namespace Tool Stamping Fix |
-| [IG-515](impl/IG-515-step-subagent-card-footer-and-lifecycle-fixes.md) | Step / SubAgent Card Footer & Lifecycle Fixes (RFC-628) |
+| [IG-351](../impl/IG-351-cli-shared-reorganization.md) | CLI Shared Reorganization |
+| [IG-352](../impl/IG-352-subagent-delegation-goal-loop-evidence.md) | Subagent Delegation and Goal Loop Evidence |
+| [IG-353](../impl/IG-353-planner-performance-prototype.md) | Planner Performance Prototype |
+| [IG-355](../impl/IG-355-subagent-completion-wire.md) | Subagent Completion Wire |
+| [IG-356](../impl/IG-356-subagent-gap-closure.md) | Subagent Gap Closure |
+| [IG-357](../impl/IG-357-act-wave-finalize-polish.md) | Act Wave Finalize and Polish |
+| [IG-358](../impl/IG-358-replan-step-id-collision.md) | Replan Step ID Collision |
+| [IG-359](../impl/IG-359-compact-log-level-format.md) | Compact Log Level Format |
+| [IG-360](../impl/IG-360-compact-logger-module-names.md) | Compact Logger Module Names |
+| [IG-361](../impl/IG-361-loop-input-content-coercion.md) | Loop Input Content Coercion |
+| [IG-362](../impl/IG-362-daemon-input-loop-input-queue-parity.md) | Daemon Input Loop Input Queue Parity |
+| [IG-363](../impl/IG-363-intent-classification-prompt-xml.md) | Intent Classification Prompt XML |
+| [IG-364](../impl/IG-364-planning-intent-prompt-layout-xml.md) | Planning Intent Prompt Layout XML |
+| [IG-365](../impl/IG-365-merge-cognition-into-core.md) | Merge Cognition into Core |
+| [IG-366](../impl/IG-366-policy-virtual-path-glob-root.md) | Policy Virtual Path Glob Root |
+| [IG-367](../impl/IG-367-langfuse-observability.md) | Langfuse Observability |
+| [IG-368](../impl/IG-368-remove-detailed-evidence-string.md) | Remove Detailed Evidence String |
+| [IG-369](../impl/IG-369-langfuse-strangeloop-langchain-fix.md) | Langfuse StrangeLoop LangChain Fix |
+| [IG-370](../impl/IG-370-strangeloop-evidence-dedup.md) | StrangeLoop Evidence Deduplication |
+| [IG-371](../impl/IG-371-plan-human-omit-working-memory.md) | Plan Human Omit Working Memory |
+| [IG-372](../impl/IG-372-plan-phase-split-prompts.md) | Plan Phase Split Prompts |
+| [IG-374](../impl/IG-374-parallel-execute-ledger-for-plan-assess.md) | Parallel Execute Ledger for Plan Assess |
+| [IG-375](../impl/IG-375-remove-langsmith-tracing.md) | Remove LangSmith Tracing |
+| [IG-376](../impl/IG-376-plan-assess-human-and-llm-progress.md) | Plan Assess Human and LLM Progress |
+| [IG-377](../impl/IG-377-plan-human-trim-and-langfuse-execute-step.md) | Plan Human Trim and Langfuse Execute Step |
+| [IG-378](../impl/IG-378-plan-generate-goal-progress-system.md) | Plan Generate Goal Progress System |
+| [IG-379](../impl/IG-379-langfuse-cost-dashboard-bridge.md) | Langfuse Cost Dashboard Bridge |
+| [IG-380](../impl/IG-380-strangeloop-plan-ledger-explore-messages.md) | StrangeLoop Plan Ledger Explore Messages |
+| [IG-381](../impl/IG-381-plan-generate-progressive-evidence-explore-bundle.md) | Plan Generate Progressive Evidence Explore Bundle |
+| [IG-382](../impl/IG-382-remove-stepaction-tools-hint.md) | Remove StepAction Tools Hint |
+| [IG-383](../impl/IG-383-routing-classification-rename-git-status-trim.md) | Routing Classification Rename Git Status Trim |
+| [IG-384](../impl/IG-384-system-prompt-merge-and-fallback.md) | System Prompt Merge and Fallback |
+| [IG-386](../impl/IG-386-strangeloop-step-subagent-coreagent-enforcement.md) | StrangeLoop Step Subagent CoreAgent Enforcement |
+| [IG-387](../impl/IG-387-drop-strangeloop-tool-result-cache.md) | Drop StrangeLoop Tool Result Cache |
+| [IG-388](../impl/IG-388-plan-generate-sequential-step-ids.md) | Plan Generate Sequential Step IDs |
+| [IG-390](../impl/IG-390-explore-migrate-create-agent.md) | Explore Migrate Create Agent |
+| [IG-391](../impl/IG-391-explore-execute-readonly-prompt.md) | Explore Execute Readonly Prompt |
+| [IG-392](../impl/IG-392-event-bus-drop-log-throttle.md) | Event Bus Drop Log Throttle |
+| [IG-393](../impl/IG-393-explore-max-iterations-defaults.md) | Explore Max Iterations Defaults |
+| [IG-394](../impl/IG-394-langgraph-agent-loop-orchestrator.md) | LangGraph Agent Loop Orchestrator |
+| [IG-395](../impl/IG-395-langfuse-trace-goal-io.md) | Langfuse Trace Goal IO |
+| [IG-396](../impl/IG-396-rfc-220-loop-graph-topology-langfuse.md) | RFC-220 Loop Graph Topology Langfuse |
+| [IG-397](../impl/IG-397-strangeloop-graph-intent-and-assess-bypass.md) | StrangeLoop Graph Intent and Assess Bypass |
+| [IG-398](../impl/IG-398-cancellation-propagation-strangeloop.md) | Cancellation Propagation StrangeLoop |
+| [IG-399](../impl/IG-399-plan-pre-generate-evidence-and-flat-generation.md) | Plan Pre-generate Evidence and Flat Generation |
+| [IG-400](../impl/IG-400-planmanager-plandag-architecture.md) | PlanManager PlanDAG Architecture |
+| [IG-401](../impl/IG-401-plan-generation-optimization.md) | Plan Generation Optimization |
+| [IG-402](../impl/IG-402-step-card-tool-aggregator.md) | Step Card Tool Aggregator |
+| [IG-403](../impl/IG-403-event-size-distribution-stats.md) | Event Size Distribution Stats |
+| [IG-404](../impl/IG-404-tui-card-display-fixes.md) | TUI Card Display Fixes |
+| [IG-405](../impl/IG-405-virtual-file-system-backend-integration.md) | Virtual File System Backend Integration |
+| [IG-406](../impl/IG-406-headless-and-tui-goal-completion-output.md) | Headless and TUI Goal Completion Output |
+| [IG-407](../impl/IG-407-config-unification-agentic-execution.md) | Config Unification Agentic Execution |
+| [IG-408](../impl/IG-408-loop-client-isolation.md) | Loop Client Isolation |
+| [IG-409](../impl/IG-409-loop-new-client-workspace.md) | Loop New Client Workspace |
+| [IG-410](../impl/IG-410-loop-runner-protocol-and-subprocess-isolation.md) | Loop Runner Protocol and Subprocess Isolation |
+| [IG-411](../impl/IG-411-worker-pool-robustness.md) | Worker Pool Robustness |
+| [IG-412](../impl/IG-412-tui-coreagent-hitl.md) | CoreAgent interrupt auto-resume (legacy HITL removed) |
+| [IG-413](../impl/IG-413-plan-subagent-rfc-618.md) | Plan Subagent RFC-618 |
+| [IG-414](../impl/IG-414-soothe-daemon-package-split.md) | Soothe Daemon Package Split |
+| [IG-415](../impl/IG-415-optional-community-subagents.md) | Optional Community Subagents |
+| [IG-416](../impl/IG-416-tool-call-realtime-display.md) | Tool Call Realtime Display |
+| [IG-418](../impl/IG-418-remove-legacy-tool-call-id.md) | Remove Legacy Tool Call ID |
+| [IG-419](../impl/IG-419-direct-llm-structured-output.md) | Direct LLM Structured Output |
+| [IG-420](../impl/IG-420-goal-engine-strangeloop-autopilot-integration.md) | Goal Engine StrangeLoop Autopilot Integration |
+| [IG-421](../impl/IG-421-step-card-tool-stats-display.md) | Step Card Tool Stats Display |
+| [IG-422](../impl/IG-422-cli-runtime-module.md) | CLI Runtime Module |
+| [IG-425](../impl/IG-425-tacitus-subagent.md) | Tacitus Subagent |
+| [IG-426](../impl/IG-426-tui-streaming-event-reduction.md) | TUI Streaming Event Reduction |
+| [IG-427](../impl/IG-427-stream-event-volume-fifo-latency.md) | Stream Event Volume FIFO Latency |
+| [IG-428](../impl/IG-428-step-card-tool-activity-preview.md) | Step Card Tool Activity Preview |
+| [IG-437](../impl/IG-437-deepxiv-integration.md) | DeepXiv Integration |
+| [IG-501](../impl/IG-501-dynamic-rate-limit-adjustment.md) | Dynamic LLM Rate Limit Adjustment |
+| [IG-502](../impl/IG-502-cron-service-implementation.md) | Cron Service Implementation |
+| [IG-503](../impl/IG-503-file-descriptor-leak-and-network-resilience-fixes.md) | File Descriptor Leak and Network Resilience Fixes |
+| [IG-504](../impl/IG-504-remove-http-rest-channel.md) | Remove HTTP REST Channel |
+| [IG-505](../impl/IG-505-identity-service-implementation.md) | Identity Service Implementation |
+| [IG-506](../impl/IG-506-coreagent-cold-start-and-code-interpreter-prep.md) | CoreAgent Cold Start and Code Interpreter Prep |
+| [IG-507](../impl/IG-507-loop-3328-log-analysis-fixes.md) | Loop 3328 Log Analysis Fixes |
+| [IG-508](../impl/IG-508-step-full-description.md) | Step Full Description for Enhanced Execution Context |
+| [IG-509](../impl/IG-509-loop-7cba-hang-analysis.md) | Loop 7cba Hang Analysis |
+| [IG-510](../impl/IG-510-grep-fallback-hang-recovery.md) | Grep Fallback Hang Recovery |
+| [IG-511](../impl/IG-511-tool-timeout-analysis.md) | Tool Timeout Architecture Analysis |
+| [IG-512](../impl/IG-512-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
+| [IG-513](../impl/IG-513-subagent-card.md) | SubAgent Card — Flattened Display (RFC-628 Part II) |
+| [IG-514](../impl/IG-514-execute-namespace-tool-stamping-fix.md) | Execute Namespace Tool Stamping Fix |
+| [IG-515](../impl/IG-515-step-subagent-card-footer-and-lifecycle-fixes.md) | Step / SubAgent Card Footer & Lifecycle Fixes (RFC-628) |
 
 ---
 
 ## Getting Help
 
 - Use `/help` in the TUI to see available commands
-- Check the [Troubleshooting Guide](wiki/troubleshooting.md) for common issues
+- Check the [Troubleshooting Guide](troubleshooting.md) for common issues
 - Review daemon logs at `~/.soothe/logs/soothed.log`
-- Browse the [RFC specifications](specs/) for design details
-- Check the [implementation guides](impl/) for technical documentation
-- See the [Event Catalog](specs/event-catalog.md) for all event types and their schemas
+- Browse the [RFC specifications](../specs/) for design details
+- Check the [implementation guides](../impl/) for technical documentation
+- See the [Event Catalog](../specs/event-catalog.md) for all event types and their schemas
