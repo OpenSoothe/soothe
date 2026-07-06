@@ -1,3 +1,11 @@
+---
+title: "User Guide"
+parent: Wiki
+nav_order: 2.1
+description: >-
+  Comprehensive user documentation for Soothe — a goal-driven orchestration framework for building 24/7 autonomous agents.
+---
+
 # Soothe User Guide
 
 ## Introduction

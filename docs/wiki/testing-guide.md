@@ -1,3 +1,11 @@
+---
+title: Testing Guide
+parent: Development & Contributing
+nav_order: 2
+description: >-
+  Comprehensive testing guide for the Soothe monorepo.
+---
+
 # Testing Guide
 
 Comprehensive testing guide for Soothe monorepo.

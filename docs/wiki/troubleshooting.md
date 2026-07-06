@@ -1,3 +1,11 @@
+---
+title: Troubleshooting Guide
+parent: Troubleshooting & Debugging
+nav_order: 1
+description: >-
+  Solutions to common issues with Soothe.
+---
+
 # Troubleshooting Guide
 
 Solutions to common issues with Soothe.

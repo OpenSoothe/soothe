@@ -2,7 +2,7 @@
 title: Backends
 parent: Wiki
 has_children: true
-nav_order: 5
+nav_order: 6
 description: >-
   Memory, durability, vector store, persistence, and policy backend implementations.
 permalink: /wiki/backends/

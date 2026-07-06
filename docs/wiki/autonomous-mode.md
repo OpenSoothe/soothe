@@ -1,3 +1,11 @@
+---
+title: Autonomous Mode
+parent: User Guides
+nav_order: 3
+description: >-
+  Multi-step autonomous task execution with plan-execute-reflect loops.
+---
+
 # Autonomous Mode
 
 Enable autonomous iteration for complex tasks.

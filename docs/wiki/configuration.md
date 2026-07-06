@@ -1,3 +1,11 @@
+---
+title: "Configuration (Quick Reference)"
+parent: Wiki
+nav_order: 4.1
+description: >-
+  Quick configuration overview — this page has been consolidated into the Configuration Guide for the complete reference.
+---
+
 # Configuration Guide
 
 > **This page has been consolidated.** For the complete, up-to-date configuration reference, see the **[Configuration Guide](configuration-guide/index.md)**.

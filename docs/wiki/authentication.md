@@ -1,3 +1,11 @@
+---
+title: "Authentication"
+parent: Wiki
+nav_order: 4.4
+description: >-
+  Soothe does not include built-in authentication — all auth is handled by external services like reverse proxies and API gateways.
+---
+
 # Authentication
 
 **Important**: Soothe does not include built-in authentication. All authentication and authorization is handled by external services (reverse proxies, API gateways, etc.).

@@ -1,3 +1,10 @@
+---
+title: "FAQ"
+parent: Wiki
+nav_order: 9.1
+description: Frequently asked questions about Soothe, organized by topic with common questions and answers.
+---
+
 # Frequently Asked Questions (FAQ)
 
 Common questions and answers about Soothe.

@@ -1,3 +1,11 @@
+---
+title: "Daemon Management"
+parent: Wiki
+nav_order: 4.2
+description: >-
+  Manage the Soothe daemon process for background execution — start, stop, attach, and lifecycle control.
+---
+
 # Daemon Management
 
 Manage the Soothe daemon process for background execution.

@@ -1,3 +1,11 @@
+---
+title: "Execution Protocols"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 8
+description: LoopRunner and Autopilot dispatch protocols for protocol-orchestrated agent execution.
+---
+
 # Execution Protocols
 
 **RFC**: 221 (LoopRunner), 222 revised (Autopilot dispatch)

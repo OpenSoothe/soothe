@@ -1,3 +1,11 @@
+---
+title: "Quick Start"
+parent: Getting Started
+grand_parent: Wiki
+nav_order: 2
+description: Get up and running with Soothe in minutes — your first session and common workflows.
+---
+
 # Quick-Start Guide
 
 Get up and running with Soothe in minutes. This guide walks you through your first session and common workflows.

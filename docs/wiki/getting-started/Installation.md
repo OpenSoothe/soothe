@@ -1,3 +1,12 @@
+---
+title: "Installation"
+parent: Getting Started
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  Complete installation guide for Soothe, covering system requirements, installation methods, and troubleshooting.
+---
+
 # Installation
 
 Complete installation guide for Soothe.

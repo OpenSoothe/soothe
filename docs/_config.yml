@@ -75,44 +75,47 @@ defaults:
       path: "wiki/getting-started"
     values:
       parent: Getting Started
-      grand_parent: Wiki
   - scope:
       path: "wiki/architecture"
     values:
       parent: Architecture
-      grand_parent: Wiki
   - scope:
       path: "wiki/core"
     values:
       parent: Core Modules
-      grand_parent: Wiki
   - scope:
       path: "wiki/configuration-guide"
     values:
       parent: Configuration Guide
-      grand_parent: Wiki
   - scope:
       path: "wiki/backends"
     values:
       parent: Backends
-      grand_parent: Wiki
   - scope:
       path: "wiki/capabilities"
     values:
       parent: Capabilities
-      grand_parent: Wiki
   - scope:
       path: "wiki/protocols"
     values:
       parent: Protocols
-      grand_parent: Wiki
   - scope:
       path: "wiki/deployment"
     values:
       parent: Deployment
-      grand_parent: Wiki
   - scope:
       path: "wiki/api-reference"
     values:
       parent: API Reference
-      grand_parent: Wiki
+  - scope:
+      path: "wiki/user-guides"
+    values:
+      parent: User Guides
+  - scope:
+      path: "wiki/troubleshooting"
+    values:
+      parent: Troubleshooting & Debugging
+  - scope:
+      path: "wiki/development"
+    values:
+      parent: Development & Contributing

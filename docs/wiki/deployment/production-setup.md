@@ -1,3 +1,11 @@
+---
+title: "Production Setup"
+parent: Deployment
+grand_parent: Wiki
+nav_order: 1
+description: Complete guide for deploying Soothe in production, covering Docker Compose, systemd, and Kubernetes.
+---
+
 # Production Setup Guide
 
 Complete guide for deploying Soothe in production environments.

@@ -1,3 +1,12 @@
+---
+title: "Durability Backends"
+parent: Backends
+grand_parent: Wiki
+nav_order: 2
+description: >-
+  Thread lifecycle and state management via DurabilityProtocol, the foundation of crash-recovery and durable execution.
+---
+
 # Durability Backends
 
 Thread lifecycle and state management via `DurabilityProtocol`. Durability backends persist thread metadata, track status transitions (active → suspended → archived), and maintain a thread index for fast listing. They are the foundation of Soothe's crash-recovery and durable execution model.

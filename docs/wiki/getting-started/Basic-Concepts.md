@@ -1,3 +1,11 @@
+---
+title: "Basic Concepts"
+parent: Getting Started
+grand_parent: Wiki
+nav_order: 3
+description: Understand the core concepts and architecture behind Soothe's autonomous agent framework.
+---
+
 # Basic Concepts
 
 Understand the core concepts and architecture behind Soothe's autonomous agent framework.

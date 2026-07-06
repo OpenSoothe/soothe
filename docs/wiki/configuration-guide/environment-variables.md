@@ -1,3 +1,12 @@
+---
+title: "Environment Variables"
+parent: Configuration Guide
+grand_parent: Wiki
+nav_order: 2
+description: >-
+  How Soothe consumes environment variables — the distinct mechanisms, what works today, and secrets management.
+---
+
 # Environment Variables
 
 How Soothe consumes environment variables — the distinct mechanisms, what actually works today, and how to manage secrets safely.

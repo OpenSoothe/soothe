@@ -1,3 +1,12 @@
+---
+title: "Memory Backends"
+parent: Backends
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  Cross-thread long-term memory via MemoryProtocol, providing semantic recall that lets agents learn from past interactions.
+---
+
 # Memory Backends
 
 Cross-thread long-term memory via `MemoryProtocol`. Unlike context (which is within-thread and ephemeral), memory survives thread boundaries and accumulates knowledge across conversations. Memory backends provide the semantic recall that makes Soothe agents *learn* from past interactions.

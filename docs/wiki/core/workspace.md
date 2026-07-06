@@ -1,3 +1,11 @@
+---
+title: "Workspace Management"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 7
+description: Unified workspace resolution, path validation, and sandbox boundaries.
+---
+
 # Workspace Management
 
 Unified workspace resolution, path validation, and sandbox boundaries.

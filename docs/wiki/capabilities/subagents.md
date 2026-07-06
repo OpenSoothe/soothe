@@ -1,3 +1,12 @@
+---
+title: "Subagents Architecture"
+parent: Capabilities
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  Specialized autonomous agents that perform multi-step, stateful workflows, extending capabilities beyond simple tool invocations.
+---
+
 # Subagents Architecture
 
 **Subagents** are specialized autonomous agents that perform multi-step, stateful workflows. They extend Soothe's capabilities beyond simple tool invocations, enabling complex operations like filesystem exploration, structured planning, and deep research — tasks that require multiple LLM calls, tool invocations, and iterative refinement.

@@ -1,3 +1,11 @@
+---
+title: "SootheRunner"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 2
+description: Protocol-orchestrated agent runner for thread lifecycle and event streaming.
+---
+
 # SootheRunner
 
 Protocol-orchestrated agent runner for thread lifecycle and event streaming.

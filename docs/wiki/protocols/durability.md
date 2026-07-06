@@ -1,3 +1,12 @@
+---
+title: "DurabilityProtocol"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  Thread lifecycle protocol — create, resume, suspend, and archive threads — with PostgreSQL and SQLite backends.
+---
+
 # DurabilityProtocol
 
 **RFC**: 306 (Protocol Specifications series)

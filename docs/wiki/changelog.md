@@ -1,3 +1,10 @@
+---
+title: "Changelog"
+parent: Wiki
+nav_order: 9.2
+description: All notable changes to Soothe are documented in this file, following the Keep a Changelog format.
+---
+
 # Changelog
 
 All notable changes to Soothe are documented in this file.

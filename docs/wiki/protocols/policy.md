@@ -1,3 +1,11 @@
+---
+title: "PolicyProtocol"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 4
+description: Permission-based access control protocol for security boundaries and least-privilege delegation.
+---
+
 # PolicyProtocol
 
 **RFC**: 305 (Protocol Specifications series)

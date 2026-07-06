@@ -1,3 +1,12 @@
+---
+title: "Backup and Recovery"
+parent: Deployment
+grand_parent: Wiki
+nav_order: 5
+description: >-
+  Comprehensive disaster recovery strategy for Soothe production deployments, covering PostgreSQL backup and recovery.
+---
+
 # Backup and Recovery Guide
 
 Comprehensive disaster recovery strategy for Soothe production deployments.

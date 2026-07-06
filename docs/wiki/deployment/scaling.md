@@ -1,3 +1,12 @@
+---
+title: "Scaling Strategies"
+parent: Deployment
+grand_parent: Wiki
+nav_order: 4
+description: >-
+  Guide for scaling Soothe deployments from single-node to large-scale production with Kubernetes and performance tuning.
+---
+
 # Scaling Strategies
 
 Guide for scaling Soothe deployments from single-node to large-scale production.

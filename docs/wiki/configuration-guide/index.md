@@ -2,7 +2,7 @@
 title: Configuration Guide
 parent: Wiki
 has_children: true
-nav_order: 4
+nav_order: 5
 description: >-
   YAML reference, environment variables, providers, and common patterns.
 permalink: /wiki/configuration-guide/

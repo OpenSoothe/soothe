@@ -1,3 +1,12 @@
+---
+title: "Daemon Server API"
+parent: API Reference
+grand_parent: Wiki
+nav_order: 2
+description: >-
+  The soothe_daemon package — a long-running background server hosting SootheRunner instances with multi-transport communication.
+---
+
 # Daemon Server (`soothe_daemon`)
 
 The `soothe_daemon` package is Layer 3 of the Soothe architecture — a long-running background server that hosts `SootheRunner` instances, manages multi-transport communication, and coordinates goal dispatch. It is the bridge between clients (CLI, SDK, messaging platforms) and the agent runtime.

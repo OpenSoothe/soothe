@@ -1,3 +1,11 @@
+---
+title: "User Query Processing Flow"
+parent: Wiki
+nav_order: 10.1
+description: >-
+  How a user query flows through Soothe from CLI entry to final response, covering the runner and StrangeLoop engine.
+---
+
 # User Query Processing Flow
 
 This document describes how a user query flows through Soothe from CLI entry to final response.

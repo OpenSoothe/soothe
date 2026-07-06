@@ -1,3 +1,11 @@
+---
+title: Clone Bandwidth Reduction Strategy
+parent: Development & Contributing
+nav_order: 3
+description: >-
+  Reducing git clone transfer size for the Soothe main repository.
+---
+
 # Clone Bandwidth Reduction Strategy
 
 > Reducing `git clone` transfer size for the Soothe main repository.

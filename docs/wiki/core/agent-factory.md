@@ -1,3 +1,12 @@
+---
+title: "Agent Factory"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  CoreAgent construction and the Layer 1 runtime foundation, covering the builder pipeline and compiled graph.
+---
+
 # Agent Factory
 
 CoreAgent construction and the Layer 1 runtime foundation.

@@ -1,3 +1,10 @@
+---
+title: "WebSocket Transport Setup"
+parent: Wiki
+nav_order: 4.3
+description: Configure the WebSocket transport for the Soothe daemon — currently the only supported transport.
+---
+
 # WebSocket Transport Setup
 
 Configure the WebSocket transport for the Soothe daemon.

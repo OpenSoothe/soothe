@@ -2,7 +2,7 @@
 title: Architecture
 parent: Wiki
 has_children: true
-nav_order: 2
+nav_order: 3
 description: >-
   System design, three-level execution model, and design principles.
 permalink: /wiki/architecture/

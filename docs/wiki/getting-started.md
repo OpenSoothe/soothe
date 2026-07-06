@@ -1,3 +1,10 @@
+---
+title: "Getting Started (Legacy)"
+parent: Wiki
+nav_order: 1
+description: Legacy getting started page that redirects to the comprehensive Getting Started section.
+---
+
 # Getting Started
 
 > **New Documentation Structure**: This page now redirects to our comprehensive Getting Started section.

@@ -1,3 +1,12 @@
+---
+title: "Client & Plugin SDK API"
+parent: API Reference
+grand_parent: Wiki
+nav_order: 3
+description: >-
+  The soothe_sdk package — the public API surface for client developers and plugin authors, re-exporting protocol definitions.
+---
+
 # Client & Plugin SDK (`soothe_sdk`)
 
 The `soothe_sdk` package is the public API surface for two audiences: **client developers** who build applications that talk to a running daemon, and **plugin authors** who extend the agent with custom tools, subagents, and events. It is intentionally lightweight — it re-exports the protocol definitions from the core package so plugins can type-check without depending on the daemon.
