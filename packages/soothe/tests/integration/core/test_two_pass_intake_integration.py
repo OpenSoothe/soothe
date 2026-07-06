@@ -281,6 +281,32 @@ async def test_two_pass_identity_query_is_social() -> None:
 
 
 @pytest.mark.asyncio
+async def test_low_confidence_social_overridden_to_task() -> None:
+    """Low-confidence social verdict is fail-safe overridden to task (Pass 2 runs)."""
+    coordinator = TwoPassIntakeCoordinator(MagicMock())
+    coordinator._pass1_classifier.classify = AsyncMock(
+        return_value=IntakePass1LLMResult(
+            is_task=False,
+            confidence=IntakePass1Confidence.LOW,
+            social_response="Sure!",
+            reasoning="uncertain greeting",
+        )
+    )
+    coordinator._pass2_classifier.classify = AsyncMock(
+        return_value=IntakePass2LLMResult(
+            scope=IntakeScope.SIMPLE,
+            goal_description="Apply the fix",
+            reasoning="work request",
+        )
+    )
+    result = await coordinator.classify("ok, now apply the fix")
+
+    assert result.is_task is True
+    assert result.intake_label == IntakeLabel.SIMPLE
+    coordinator._pass2_classifier.classify.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_two_pass_low_confidence_still_routes_to_task() -> None:
     """Low confidence in Pass 1 should still route to task."""
     coordinator = create_mock_coordinator(

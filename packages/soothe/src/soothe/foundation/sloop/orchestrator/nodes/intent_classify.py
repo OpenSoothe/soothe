@@ -1,8 +1,8 @@
 """Loop Graph entry node: LLM intake classification (RFC-220, RFC-630, IG-554).
 
-IG-554: Two-pass intake architecture:
-- Pass 1: Social vs task (no prior context)
-- Pass 2: Scope classification (with prior projection), only if is_task=True
+When intake was not pre-classified in the pre-graph gather, this node runs
+the two-pass coordinator. Pre-classified intents (Pass 1 social early-exit
+handled in StrangeLoop; Pass 2 after CE load) skip LLM calls here.
 """
 
 from __future__ import annotations
@@ -14,11 +14,7 @@ from langchain_core.messages import BaseMessage
 
 from soothe.foundation.sloop.intention.models import (
     IntakeLabel,
-    IntentClassification,
     build_loop_routing_classification,
-)
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-    project_last_goal_completion_for_intake,
 )
 
 from ..runtime_context import LoopRuntimeContext
@@ -54,13 +50,21 @@ def _should_skip_intent_classify(ctx: LoopRuntimeContext) -> bool:
 
 
 async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Classify user intake using two-pass architecture (RFC-630 IG-554).
-
-    Pass 1 decides social vs task; Pass 2 decides scope (trivial/simple/complex).
-    Prior context is excluded from Pass 1 for clean decision boundary.
-    """
+    """Classify user intake using two-pass architecture (RFC-630 IG-554)."""
     if _should_skip_intent_classify(ctx):
         logger.info("[Intent] Skipping graph entry classification (clarification resume)")
+        return {}
+
+    if ctx.loop_state.intent is not None:
+        if ctx.loop_state.routing_classification is None:
+            ctx.loop_state.routing_classification = build_loop_routing_classification(
+                ctx.loop_state.intent,
+                ctx.preferred_subagent,
+            )
+        logger.info(
+            "[Intent] Skipping graph entry classification (pre-classified: %s)",
+            getattr(ctx.loop_state.intent, "intake_label", "unknown"),
+        )
         return {}
 
     classifier = ctx.intent_classifier
@@ -74,86 +78,21 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     thread_id = ctx.loop_state.thread_id
     loop_messages = _ledger_messages_for_intake(ctx)
 
-    # IG-554: Two-pass intake
-    # Check if classifier supports two-pass (has _pass1_classifier attribute)
-    # Fall back to legacy classify_intake for backward compatibility
-    if hasattr(classifier, "_pass1_classifier"):
-        # Two-pass mode
-        from soothe.foundation.sloop.intention.two_pass_coordinator import TwoPassIntakeCoordinator
+    intent = await classifier.classify_intake(
+        query,
+        loop_messages=loop_messages,
+        thread_id=thread_id,
+        context_engine=ctx.ce,
+        goal_trace=ctx.goal_trace,
+        observability_phase="strange_loop_graph",
+        observability_component="strange_loop.intent_classification",
+    )
 
-        # Build prior projection for Pass 2
-        ledger_cfg = None
-        strange_loop = getattr(ctx, "strange_loop", None)
-        if strange_loop is not None:
-            config = getattr(strange_loop, "config", None)
-            if config is not None and hasattr(config, "agent"):
-                ledger_cfg = getattr(config.agent.loop, "plan_prompt_ledger", None)
-        prior_projection_text = None
-        if loop_messages:
-            # Get projection text for Pass 2
-            projected_messages = project_last_goal_completion_for_intake(loop_messages, ledger_cfg)
-            if projected_messages:
-                # Extract text from projected messages
-                prior_projection_text = "\n".join(
-                    getattr(msg, "content", str(msg)) for msg in projected_messages
-                )
-
-        coordinator = TwoPassIntakeCoordinator(
-            fast_model=classifier._fast_model,
-            soothe_config=classifier._soothe_config,
-        )
-
-        result = await coordinator.classify(
-            query,
-            prior_projection=prior_projection_text,
-            goal_trace=ctx.goal_trace,
-            observability_metadata={"thread_id": thread_id},
-        )
-
-        if result.is_social:
-            # Social fast-path
-            intent = IntentClassification(
-                intake_label=IntakeLabel.CHITCHAT,
-                reasoning=result.pass1_reasoning,
-                goal_description=query,
-                chitchat_response=result.social_response,
-                task_complexity=classifier._fallback(query).task_complexity
-                if hasattr(classifier, "_fallback")
-                else None,
-            )
-            logger.info(
-                "[Intent] Two-pass: SOCIAL (Pass1 confidence=%s) - %s",
-                result.pass1_confidence,
-                query[:50],
-            )
-        else:
-            # Task - use Pass 2 result
-            intent = result.intent_classification
-            if intent is None:
-                # Fallback to complex if Pass 2 failed
-                intent = classifier._fallback(query) if hasattr(classifier, "_fallback") else None
-            logger.info(
-                "[Intent] Two-pass: TASK scope=%s (Pass1 confidence=%s) - %s",
-                result.scope,
-                result.pass1_confidence,
-                query[:50],
-            )
-    else:
-        # Legacy one-pass mode (backward compatibility)
-        intent = await classifier.classify_intake(
-            query,
-            loop_messages=loop_messages,
-            thread_id=thread_id,
-            context_engine=ctx.ce,
-            goal_trace=ctx.goal_trace,
-            observability_phase="strange_loop_graph",
-            observability_component="strange_loop.intent_classification",
-        )
-        logger.info(
-            "[Intent] Legacy one-pass: intake=%s - %s",
-            intent.intake_label,
-            query[:50],
-        )
+    logger.info(
+        "[Intent] Two-pass: intake=%s - %s",
+        intent.intake_label,
+        query[:50],
+    )
 
     ctx.loop_state.intent = intent
     ctx.loop_state.routing_classification = build_loop_routing_classification(

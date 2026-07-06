@@ -39,6 +39,10 @@ class LoopGraphState(TypedDict, total=False):
     # on idle loop). Used by route_by_intent routing guard to block chitchat
     # fast-path when structural admission contradicts social classification.
     new_goal_created: bool | None
+    # IG-554: derived intake fields for routing and downstream consumers.
+    is_task: bool | None
+    scope: IntakeLabel | None
+    has_deliverable: bool | None
     # Clarification relay (RFC-622): serialized to keep the channel JSON-safe.
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None

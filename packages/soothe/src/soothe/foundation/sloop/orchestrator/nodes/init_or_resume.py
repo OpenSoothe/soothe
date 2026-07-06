@@ -74,6 +74,21 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     # to block chitchat fast-path when structural admission contradicts social.
     new_goal_created = not getattr(ctx, "recovery_valid_resume", False)
 
+    is_task = intake_label != IntakeLabel.CHITCHAT if intake_label is not None else None
+    scope = (
+        intake_label if intake_label is not None and intake_label != IntakeLabel.CHITCHAT else None
+    )
+    has_deliverable = intake_label is not None and intake_label not in (
+        IntakeLabel.CHITCHAT,
+        IntakeLabel.TRIVIAL,
+    )
+
+    graph_intake_fields = {
+        "is_task": is_task,
+        "scope": scope,
+        "has_deliverable": has_deliverable,
+    }
+
     # RFC-630 chitchat fast-path: runner emits piggybacked response directly.
     # Chitchat always bypasses StrangeLoop — even on loop continuation turns
     # (e.g. a second "who are you" in the same session).
@@ -103,6 +118,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "assess_route": None,
             "last_outcome": None,
             "resume_synth": None,
+            **graph_intake_fields,
         }
 
     # RFC-630 trivial branch: pseudo 1-step plan (goal_description), skip
@@ -130,6 +146,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "assess_route": None,
             "last_outcome": None,
             "resume_synth": None,
+            **graph_intake_fields,
         }
 
     # RFC-630: simple branch — reaches plan_generate directly (skipping
@@ -150,4 +167,5 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         "assess_route": None,
         "last_outcome": None,
         "resume_synth": None,
+        **graph_intake_fields,
     }

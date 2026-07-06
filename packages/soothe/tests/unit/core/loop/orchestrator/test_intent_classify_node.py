@@ -14,15 +14,13 @@ from soothe.foundation.sloop.orchestrator.nodes.intent_classify import node_inte
 
 @pytest.mark.asyncio
 async def test_intent_classify_emits_interpreting_status_and_sets_state() -> None:
-    """Legacy one-pass classifier still works for backward compatibility."""
+    """Two-pass classify_intake populates loop state when not pre-classified."""
     emitted: list[tuple[str, object]] = []
 
     async def _emit(event_type: str, event_data: object) -> None:
         emitted.append((event_type, event_data))
 
-    # Create a mock classifier WITHOUT _pass1_classifier (legacy mode)
-    # Use spec to limit attributes to what IntentClassifier actually has
-    classifier = MagicMock(spec=["classify_intake", "_fast_model", "_soothe_config", "_fallback"])
+    classifier = MagicMock()
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll plan a lightweight change.",
@@ -30,7 +28,6 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
         task_complexity=TaskComplexity.SIMPLE,
     )
     classifier.classify_intake = AsyncMock(return_value=intent)
-    classifier._fallback = MagicMock(return_value=intent)
 
     loop_state = SimpleNamespace(
         goal="Fix the typo",
@@ -68,8 +65,43 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
 
 
 @pytest.mark.asyncio
+async def test_intent_classify_skips_when_preclassified() -> None:
+    """Pre-classified intent from pre-graph gather skips LLM."""
+    classifier = MagicMock()
+    classifier.classify_intake = AsyncMock()
+    existing = IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        goal_description="refactor",
+        task_complexity=TaskComplexity.COMPLEX,
+    )
+    loop_state = SimpleNamespace(
+        goal="refactor",
+        goal_user_submission="refactor",
+        thread_id="t1",
+        intent=existing,
+        routing_classification=None,
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        intent_classifier=classifier,
+        preferred_subagent=None,
+        clarification_resume_text=None,
+        clarification_resume_answers=None,
+        ce=None,
+        goal_trace=None,
+        state_manager=SimpleNamespace(loop_id="L1"),
+        emit=AsyncMock(),
+    )
+
+    await node_intent_classify(ctx, {})
+
+    classifier.classify_intake.assert_not_called()
+    assert loop_state.routing_classification is not None
+
+
+@pytest.mark.asyncio
 async def test_intent_classify_skips_on_clarification_resume() -> None:
-    classifier = MagicMock(spec=["classify_intake"])
+    classifier = MagicMock()
     classifier.classify_intake = AsyncMock()
 
     loop_state = SimpleNamespace(

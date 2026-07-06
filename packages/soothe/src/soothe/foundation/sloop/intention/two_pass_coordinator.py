@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from .models import (
     IntakeLabel,
+    IntakePass1Confidence,
     IntakePass1LLMResult,
     IntakePass2LLMResult,
     IntakeScope,
@@ -175,6 +176,7 @@ class TwoPassIntakeCoordinator:
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
+        pass1_result = _apply_low_confidence_fail_safe(pass1_result)
 
         logger.debug(
             "Pass1 result: is_task=%s confidence=%s",
@@ -234,6 +236,7 @@ class TwoPassIntakeCoordinator:
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
+        pass1_result = _apply_low_confidence_fail_safe(pass1_result)
 
         if not pass1_result.is_task:
             logger.info(
@@ -275,6 +278,20 @@ class TwoPassIntakeCoordinator:
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
+
+
+def _apply_low_confidence_fail_safe(pass1_result: IntakePass1LLMResult) -> IntakePass1LLMResult:
+    """Low-confidence social verdicts fail-safe to task (Pass 2 runs)."""
+    if not pass1_result.is_task and pass1_result.confidence == IntakePass1Confidence.LOW:
+        logger.info("Pass1 low-confidence social verdict overridden to task (fail-safe)")
+        return pass1_result.model_copy(
+            update={
+                "is_task": True,
+                "social_response": None,
+                "reasoning": "Low confidence fail-safe to task",
+            }
+        )
+    return pass1_result
 
 
 __all__ = [
