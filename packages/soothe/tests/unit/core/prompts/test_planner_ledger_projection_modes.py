@@ -23,6 +23,24 @@ def test_resolve_planner_projection_mode_mid_goal_on_step_results() -> None:
     assert resolve_planner_projection_mode(state) == "mid_goal"
 
 
+def test_project_planner_ledger_mid_goal_isolates_prior_execute() -> None:
+    ledger = [
+        LoopHumanMessage(content="exec h1", phase="execute_step", thread_id="t"),
+        LoopAIMessage(content="exec a1", phase="execute_step", thread_id="t"),
+        LoopHumanMessage(content="gc h1", phase="goal_completion", thread_id="t"),
+        LoopAIMessage(content="gc a1", phase="goal_completion", thread_id="t"),
+        LoopHumanMessage(content="exec h2", phase="execute_step", thread_id="t"),
+        LoopAIMessage(content="exec a2", phase="execute_step", thread_id="t"),
+    ]
+    projected = project_planner_ledger(ledger, "mid_goal", None)
+    contents = " ".join(str(getattr(m, "content", "")) for m in projected)
+    assert "gc a1" in contents
+    assert "exec a2" in contents
+    assert "exec h2" in contents
+    assert "exec a1" not in contents
+    assert "exec h1" not in contents
+
+
 def test_project_planner_ledger_mid_goal_includes_execute() -> None:
     state = LoopState(
         goal="g",

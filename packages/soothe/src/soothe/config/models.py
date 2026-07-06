@@ -877,7 +877,7 @@ class PlanPromptLedgerConfig(BaseModel):
     """
 
     plan_ledger_max_messages: int = Field(
-        default=0,
+        default=40,
         ge=0,
         le=500,
         description="Max ledger messages tail for plan prompts (0 = unlimited)",
@@ -910,6 +910,15 @@ class ExecutePromptLedgerConfig(BaseModel):
         ge=0,
         le=500,
         description="Max predecessor execute_step ledger rows for Slice B (0 = unlimited)",
+    )
+    execute_ai_ledger_max_tokens: int = Field(
+        default=2048,
+        ge=0,
+        le=100_000,
+        description=(
+            "Max tokens for execute_step AI rows at ledger write time via langchain "
+            "trim_messages (0 = store full text)"
+        ),
     )
 
 

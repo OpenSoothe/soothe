@@ -12,6 +12,43 @@ if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import LoopState
 
 
+def _char_split_for_trim(text: str, chunk_size: int = 400) -> list[str]:
+    """Split long single-line execute output for ``trim_messages`` partial strategy."""
+    if not text:
+        return [""]
+    return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+
+def compact_execute_ai_message(msg: Any, max_tokens: int) -> Any:
+    """Bound execute-step AI ledger text using langchain ``trim_messages``."""
+    if max_tokens <= 0:
+        return msg
+    from langchain_core.messages import BaseMessage, trim_messages
+
+    if not isinstance(msg, BaseMessage):
+        return msg
+    if not type(msg).__name__.endswith("AIMessage"):
+        return msg
+
+    trimmed = trim_messages(
+        [msg],
+        max_tokens=max_tokens,
+        token_counter="approximate",
+        strategy="last",
+        allow_partial=True,
+        text_splitter=_char_split_for_trim,
+    )
+    if not trimmed:
+        return msg
+    compact = trimmed[0]
+    if compact is msg:
+        return msg
+    copier = getattr(msg, "model_copy", None)
+    if callable(copier):
+        return copier(update={"content": compact.content})
+    return compact
+
+
 def _record_ledger_message(
     context_engine: Any | None,
     msg: Any,
@@ -38,6 +75,9 @@ def _record_ledger_message(
     from langchain_core.messages import BaseMessage
 
     if isinstance(msg, BaseMessage):
+        if phase == "execute_step" and type(msg).__name__.endswith("AIMessage"):
+            max_tokens = int(getattr(context_engine, "execute_ai_ledger_max_tokens", 0) or 0)
+            msg = compact_execute_ai_message(msg, max_tokens)
         context_engine.ledger.record_message(msg, phase)
     else:
         import logging

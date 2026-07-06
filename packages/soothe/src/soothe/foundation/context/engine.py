@@ -114,6 +114,7 @@ class ContextEngine:
         self._persistence = persistence
         self._callbacks: dict[str, list[Callable]] = {}
         self._save_dirty = False
+        self.execute_ai_ledger_max_tokens: int = 0
 
         # Planning submodule (RFC-624 Phase 3c)
         from soothe.foundation.context.planning import (

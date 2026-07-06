@@ -48,6 +48,7 @@ _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
 _NEW_GOAL_LEDGER_PHASES = frozenset({"intent_classify", "plan_generate", "goal_completion"})
 _PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"plan_assess"})
+_MID_GOAL_CURRENT_PHASES = frozenset({"intent_classify", "plan_generate", "execute_step"})
 
 
 def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
@@ -267,26 +268,79 @@ def project_loop_messages_for_plan(
     return _apply_intent_classify_human_compaction(copies)
 
 
+def _current_goal_segment_start(loop_messages: list[BaseMessage]) -> int:
+    """Return index after the last prior-goal ``goal_completion`` AI row."""
+    for i in range(len(loop_messages) - 1, -1, -1):
+        msg = loop_messages[i]
+        if getattr(msg, "phase", None) == "goal_completion" and _is_loop_ai_message(msg):
+            return i + 1
+    return 0
+
+
+def _project_planner_ledger_mid_goal_isolated(
+    loop_messages: list[BaseMessage],
+    *,
+    ledger_cfg: PlanPromptLedgerConfig | None,
+    soothe_config: Any | None,
+    exclude_phases: frozenset[str],
+) -> list[BaseMessage]:
+    """Mid-goal planner projection: Slice A prior goals + current-goal segment only."""
+    exec_cfg = _execute_prompt_ledger_config(soothe_config)
+    slice_a = project_cross_goal_completion_tail(
+        loop_messages,
+        k=exec_cfg.cross_goal_completion_tail,
+        ledger_cfg=ledger_cfg,
+    )
+    seg_start = _current_goal_segment_start(loop_messages)
+    current_segment = [
+        _deep_copy_message(m)
+        for m in loop_messages[seg_start:]
+        if getattr(m, "phase", None) in _MID_GOAL_CURRENT_PHASES
+    ]
+    combined = [*slice_a, *current_segment]
+    filtered = filter_ledger_phases(combined, exclude_phases)
+    projected = project_loop_messages_for_plan(filtered, ledger_cfg)
+    logger.debug(
+        "Planner mid_goal projection: slice_a=%d current=%d out=%d seg_start=%d",
+        len(slice_a),
+        len(current_segment),
+        len(projected),
+        seg_start,
+    )
+    return projected
+
+
 def project_planner_ledger(
     loop_messages: list[BaseMessage],
     mode: PlannerProjectionMode,
     ledger_cfg: PlanPromptLedgerConfig | None,
     *,
     exclude_phases: frozenset[str] | None = None,
+    soothe_config: Any | None = None,
 ) -> list[BaseMessage]:
     """Project CE ledger for planner prompts with ``new_goal`` / ``mid_goal`` phase filter (IG-538).
 
     Args:
         loop_messages: Full RFC-214 ledger from ``LoopState.loop_messages``.
-        mode: ``new_goal`` excludes ``execute_step`` by default; ``mid_goal`` includes all phases.
+        mode: ``new_goal`` excludes ``execute_step`` by default; ``mid_goal`` uses Slice A
+            (prior ``goal_completion`` units) plus the current goal segment only.
         ledger_cfg: Optional tail/char caps (IG-380).
         exclude_phases: Extra phase tags to omit in addition to ``plan_assess``.
+        soothe_config: Optional SootheConfig for execute Slice A ``cross_goal_completion_tail``.
 
     Returns:
         Filtered then capped message list for plan LLM prompts.
     """
-    filtered = filter_loop_messages_for_planner_mode(loop_messages, mode)
     phases_to_exclude = _PLANNER_PROJECTED_EXCLUDED_PHASES | (exclude_phases or frozenset())
+    if mode == "mid_goal":
+        return _project_planner_ledger_mid_goal_isolated(
+            loop_messages,
+            ledger_cfg=ledger_cfg,
+            soothe_config=soothe_config,
+            exclude_phases=phases_to_exclude,
+        )
+
+    filtered = filter_loop_messages_for_planner_mode(loop_messages, mode)
     filtered = filter_ledger_phases(filtered, phases_to_exclude)
     projected = project_loop_messages_for_plan(filtered, ledger_cfg)
     logger.debug(

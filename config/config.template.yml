@@ -167,13 +167,14 @@ agent:
       projection_max_project_instructions_chars: 8000
     # Plan-phase ledger trim; 0 = unlimited (PlanPromptLedgerConfig)
     plan_prompt_ledger:
-      plan_ledger_max_messages: 0
+      plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 0
       plan_ledger_max_message_chars: 0
     # Execute-step ledger projection (ExecutePromptLedgerConfig)
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96
+      execute_ai_ledger_max_tokens: 2048
     report_output:
       display_threshold: 20000
       preview_chars: 500
