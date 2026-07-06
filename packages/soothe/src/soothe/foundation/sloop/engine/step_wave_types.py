@@ -9,16 +9,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain_core.messages import BaseMessage
 
 from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
-from soothe.foundation.sloop.state.schemas import StepAction
-
-if TYPE_CHECKING:
-    from soothe.foundation.sloop.state.schemas import StepResult
-
+from soothe.foundation.sloop.state.schemas import StepAction, StepResult
 
 # Re-export for executor tests and legacy imports.
 _DEFAULT_MAX_TOOL_CALLS_PER_STEP = DEFAULT_MAX_TOOL_CALLS_PER_STEP
@@ -140,6 +136,12 @@ class _ParallelStepDone:
     payload: _ExecuteStepResult | BaseException
 
 
+def step_had_tool_error(result: StepResult) -> bool:
+    """Return True when a completed step recorded recoverable tool errors."""
+    outcome = result.outcome
+    return isinstance(outcome, dict) and bool(outcome.get("has_tool_error"))
+
+
 def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
     """Return the first tool error preview from RFC-211 outcome metadata."""
     for outcome in outcomes:
@@ -190,6 +192,7 @@ __all__ = [
     "_ExecuteStepResult",
     "_StreamCollectChunk",
     "_first_tool_error_message",
+    "step_had_tool_error",
     "_DEFAULT_MAX_TOOL_CALLS_PER_STEP",
     "_PendingInterruptFetch",
     "_ParallelStepDone",
