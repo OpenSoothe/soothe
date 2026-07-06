@@ -140,48 +140,6 @@ class IntentClassification(BaseModel):
         )
 
 
-class IntakeClassificationLLMResult(BaseModel):
-    """Structured output from the 4-class intake LLM (RFC-630).
-
-    The LLM picks one of ``chitchat``/``trivial``/``simple``/``complex``; the
-    label drives ``route_by_intent``. ``chitchat`` carries ``chitchat_response``
-    for direct client emission. Other non-trivial labels carry brief
-    ``reasoning`` for client visibility (IG-518). Loop continuation is derived
-    structurally, not classified.
-    """
-
-    intake_label: IntakeLabel = Field(
-        description="Primary intake: chitchat (greetings/thanks/casual small talk with "
-        "direct reply), trivial (trivia/single obvious action, no planning LLM), "
-        "simple (single focused step, lightweight plan), "
-        "complex (multi-step/multi-phase, full plan)"
-    )
-    reasoning: str | None = Field(
-        default=None,
-        description="One first-person sentence (max 20 words) starting with I'll or Let me; "
-        "user-facing next action, never intake-label jargon.",
-    )
-    goal_description: str | None = Field(
-        default=None,
-        description="Normalized goal description for display and GoalEngine",
-    )
-    chitchat_response: str | None = Field(
-        default=None,
-        description="Required when intake_label is chitchat: friendly direct reply to the user",
-    )
-
-    def to_intent_classification(self) -> IntentClassification:
-        """Convert LLM result to runtime IntentClassification."""
-        task_complexity = derive_task_complexity_from_intake(self.intake_label)
-        return IntentClassification(
-            intake_label=self.intake_label,
-            reasoning=self.reasoning,
-            goal_description=self.goal_description,
-            chitchat_response=self.chitchat_response,
-            task_complexity=task_complexity,
-        )
-
-
 def build_loop_routing_classification(
     intent: IntentClassification | None,
     preferred_subagent: str | None,

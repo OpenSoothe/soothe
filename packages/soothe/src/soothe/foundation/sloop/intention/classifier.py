@@ -1,9 +1,8 @@
-"""Intent classifier implementation (RFC-225, RFC-630, IG-540).
+"""Intent classifier implementation (RFC-225, RFC-630, IG-554).
 
-3-class LLM intake classification (``trivial`` | ``simple`` | ``complex``) via
-``classify_intake``, driving ``route_by_intent`` branch routing. Loop
-continuation is derived structurally inside ``StrangeLoop`` from the loaded
-checkpoint and is not a classifier concern.
+Two-pass intake classification: Pass 1 (social vs task) then Pass 2 (scope).
+Loop continuation is derived structurally inside ``StrangeLoop`` from the
+loaded checkpoint and is not a classifier concern.
 """
 
 from __future__ import annotations
@@ -12,22 +11,21 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 
-from soothe.utils.llm.invoke_policy import (
-    await_with_llm_call_policy,
-    llm_rate_limit_config_from,
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    project_last_goal_completion_for_intake,
 )
-from soothe.utils.llm.structured import invoke_structured_chat
 
 from .intake_heuristics import classify_intake_heuristic
-from .intake_messages import build_intake_human_message, build_intake_system_message
 from .models import (
-    IntakeClassificationLLMResult,
     IntakeLabel,
+    IntakePass1LLMResult,
+    IntakePass2LLMResult,
     IntentClassification,
     derive_task_complexity_from_intake,
 )
+from .two_pass_coordinator import TwoPassIntakeCoordinator, TwoPassIntakeResult
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -37,12 +35,24 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class IntentClassifier:
-    """LLM-driven intent classification (RFC-225, RFC-630).
+def prior_projection_text_from_messages(
+    loop_messages: list[BaseMessage] | None,
+    ledger_cfg: Any | None,
+) -> str | None:
+    """Build prior-goal summary text for Pass 2 from ledger messages."""
+    if not loop_messages:
+        return None
+    projected = project_last_goal_completion_for_intake(loop_messages, ledger_cfg)
+    if not projected:
+        return None
+    return "\n".join(getattr(msg, "content", str(msg)) for msg in projected)
 
-    - 3-class intake label via a single structured LLM call.
-    - No structural / continuation logic — that is owned by ``StrangeLoop``.
-    - Robust fallback to ``complex`` on failure (fail-safe: full pipeline runs).
+
+class IntentClassifier:
+    """Two-pass LLM intake classification (RFC-630, IG-554).
+
+    Pass 1 decides social vs task without prior context. Pass 2 classifies
+    scope (trivial/simple/complex) with prior projection when available.
 
     Args:
         model: Fast LLM for classification (e.g., gpt-4o-mini).
@@ -59,13 +69,68 @@ class IntentClassifier:
         self._fast_model = model
         self._assistant_name = assistant_name
         self._soothe_config = soothe_config
+        self._two_pass = TwoPassIntakeCoordinator(model, soothe_config)
+        self._pass1_classifier = self._two_pass._pass1_classifier
 
         if model:
-            logger.info("[IntentClassifier] Initialized with structured output model")
+            logger.info("[IntentClassifier] Initialized with two-pass intake")
         else:
             logger.warning("[IntentClassifier] No model provided, classification disabled")
 
-    # -- Public API --------------------------------------------------------
+    async def classify_pass1(
+        self,
+        query: str,
+        *,
+        observability_metadata: dict[str, str] | None = None,
+        goal_trace: Any | None = None,
+    ) -> IntakePass1LLMResult:
+        """Run Pass 1 only (social vs task) for pre-graph gather."""
+        result = await self._two_pass.classify_social_only(
+            query,
+            observability_metadata=observability_metadata,
+            goal_trace=goal_trace,
+        )
+        return result._pass1_result  # noqa: SLF001
+
+    async def classify_scope_intake(
+        self,
+        query: str,
+        *,
+        loop_messages: list[BaseMessage] | None = None,
+        thread_id: str | None = None,
+        context_engine: Any | None = None,
+        observability_metadata: dict[str, str] | None = None,
+        goal_trace: Any | None = None,
+        observability_phase: str = "pre-stream",
+        observability_component: str = "intake.pass2",
+    ) -> IntentClassification:
+        """Run Pass 2 only after Pass 1 determined the query is a task."""
+        if not self._fast_model:
+            return self._fallback(query)
+
+        ledger_cfg = (
+            self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
+        )
+        prior_projection = prior_projection_text_from_messages(loop_messages, ledger_cfg)
+
+        pass2_result = await self._two_pass.classify_scope(
+            query,
+            prior_projection=prior_projection,
+            observability_metadata={
+                **(observability_metadata or {}),
+                "observability_phase": observability_phase,
+                "observability_component": observability_component,
+            },
+            goal_trace=goal_trace,
+        )
+        intent = self._pass2_to_intent(pass2_result, query)
+        await self._record_pass2_ledger(
+            query=query,
+            pass2_result=pass2_result,
+            thread_id=thread_id,
+            context_engine=context_engine,
+        )
+        return intent
 
     async def classify_intake(
         self,
@@ -76,13 +141,10 @@ class IntentClassifier:
         context_engine: Any | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
-        observability_phase: str = "pre-stream",
-        observability_component: str = "intake.primary",
+        observability_phase: str = "strange_loop_graph",
+        observability_component: str = "strange_loop.intent_classification",
     ) -> IntentClassification:
-        """Classify the query into a 3-class intake label (RFC-630).
-
-        One structured LLM call with retry; fallback to ``complex`` so the full
-        pipeline runs (fail-safe, RFC-630 §9.3).
+        """Classify query via two-pass intake (RFC-630, IG-554).
 
         Args:
             query: User input text.
@@ -90,15 +152,12 @@ class IntentClassifier:
             thread_id: Thread id for ledger metadata (optional).
             context_engine: Optional CE instance for intent-classify ledger writes.
             observability_metadata: Optional metadata for observability.
-            goal_trace: ``GoalLoopTrace`` from ``SootheLangfuse.begin_goal_loop`` so
-                intent-classify nests under the same trace as ``strange-loop-graph``.
-            observability_phase: Langfuse/metadata phase label (graph entry uses
-                ``strange_loop_graph``).
-            observability_component: Langfuse component label for the classifier call.
+            goal_trace: Optional Langfuse trace context.
+            observability_phase: Langfuse/metadata phase label.
+            observability_component: Langfuse component label.
 
         Returns:
-            IntentClassification with ``intake_label`` ∈
-            {``trivial``, ``simple``, ``complex``}.
+            IntentClassification with intake_label for routing.
         """
         if not self._fast_model:
             return self._fallback(query)
@@ -112,145 +171,96 @@ class IntentClassifier:
             )
             return heuristic
 
-        result: IntentClassification | None = None
-        last_error: Exception | None = None
-        last_human_content: str | None = None
-        last_llm_dict: dict[str, Any] | None = None
+        ledger_cfg = (
+            self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
+        )
+        prior_projection = prior_projection_text_from_messages(loop_messages, ledger_cfg)
 
-        for retry_mode in (False, True):
-            try:
-                result, last_human_content, last_llm_dict = await self._classify_intake_llm(
-                    query,
-                    retry_mode=retry_mode,
-                    loop_messages=loop_messages,
-                    observability_metadata=observability_metadata,
-                    goal_trace=goal_trace,
-                    observability_phase=observability_phase,
-                    observability_component=observability_component,
-                )
-                break
-            except Exception as exc:
-                last_error = exc
-                logger.warning(
-                    "Intake classification failed (%s), retrying...",
-                    "retry" if retry_mode else "primary",
-                )
-                logger.debug("Intake classification error: %s", exc, exc_info=True)
+        two_pass_result = await self._two_pass.classify(
+            query,
+            prior_projection=prior_projection,
+            observability_metadata={
+                **(observability_metadata or {}),
+                "observability_phase": observability_phase,
+                "observability_component": observability_component,
+            },
+            goal_trace=goal_trace,
+        )
+        intent = self._two_pass_to_intent(two_pass_result, query)
+        intent = self._apply_identity_query_override(intent, query)
 
-        if result is None:
-            logger.warning(
-                "Intake classification failed after retry, using fallback (error: %s)",
-                type(last_error).__name__ if last_error else "unknown",
-            )
-            return self._fallback(query, error_context=last_error)
-
-        result = self._patch_missing_fields(result, query)
-        result = self._apply_identity_query_override(result, query)
-
-        if last_human_content is not None and last_llm_dict is not None:
-            await self._record_intake_ledger(
-                human_content=last_human_content,
-                llm_result=last_llm_dict,
+        if two_pass_result.is_task and two_pass_result._pass2_result is not None:
+            await self._record_pass2_ledger(
+                query=query,
+                pass2_result=two_pass_result._pass2_result,
                 thread_id=thread_id,
                 context_engine=context_engine,
             )
 
         logger.debug(
             "Intake classified: intake_label=%s complexity=%s",
-            result.intake_label,
-            result.task_complexity,
+            intent.intake_label,
+            intent.task_complexity,
         )
+        return intent
 
-        return result
-
-    # -- Internal LLM calls ------------------------------------------------
-
-    async def _classify_intake_llm(
+    def pass1_to_intent(
         self,
+        pass1_result: IntakePass1LLMResult,
         query: str,
-        *,
-        retry_mode: bool = False,
-        loop_messages: list[BaseMessage] | None = None,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-        observability_phase: str = "pre-stream",
-        observability_component: str = "intake.primary",
-    ) -> tuple[IntentClassification, str, dict[str, Any]]:
-        """3-class intake LLM call with structured output (RFC-630)."""
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-            project_last_goal_completion_for_intake,
+    ) -> IntentClassification:
+        """Convert Pass 1 social result to IntentClassification for fast-path."""
+        response = (
+            pass1_result.social_response or ""
+        ).strip() or "Hello! How can I help you today?"
+        return IntentClassification(
+            intake_label=IntakeLabel.CHITCHAT,
+            reasoning=pass1_result.reasoning,
+            goal_description=query,
+            chitchat_response=response,
+            task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
         )
 
-        system_content = build_intake_system_message(self._assistant_name, retry=retry_mode)
-        human_content = build_intake_human_message(query=query, retry=retry_mode)
+    def _two_pass_to_intent(
+        self,
+        result: TwoPassIntakeResult,
+        query: str,
+    ) -> IntentClassification:
+        """Convert coordinator result to IntentClassification."""
+        if result.is_social:
+            intent = self.pass1_to_intent(result._pass1_result, query)  # noqa: SLF001
+            return self._patch_missing_fields(intent, query)
 
-        ledger_cfg = (
-            self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
+        intent = result.intent_classification
+        if intent is None:
+            return self._fallback(query)
+        return self._patch_missing_fields(intent, query)
+
+    def _pass2_to_intent(
+        self,
+        pass2_result: IntakePass2LLMResult,
+        query: str,
+    ) -> IntentClassification:
+        """Convert Pass 2 scope result to IntentClassification."""
+        intake_label = pass2_result.to_intake_label()
+        intent = IntentClassification(
+            intake_label=intake_label,
+            reasoning=pass2_result.reasoning,
+            goal_description=pass2_result.goal_description,
+            chitchat_response=None,
+            task_complexity=derive_task_complexity_from_intake(intake_label),
         )
-        projected = project_last_goal_completion_for_intake(loop_messages or [], ledger_cfg)
+        return self._patch_missing_fields(intent, query)
 
-        config = self._build_invoke_config(
-            "classify_intake",
-            observability_component,
-            observability_metadata=observability_metadata,
-            goal_trace=goal_trace,
-            phase=observability_phase,
-        )
-
-        messages: list[BaseMessage] = [SystemMessage(content=system_content)]
-        messages.extend(projected)
-        messages.append(HumanMessage(content=human_content))
-
-        schema = IntakeClassificationLLMResult.model_json_schema()
-        try:
-
-            async def _invoke() -> dict[str, Any]:
-                return await invoke_structured_chat(
-                    self._fast_model,
-                    messages,
-                    json_schema=schema,
-                    schema_name="IntakeClassificationLLMResult",
-                    strict=True,
-                    config=config,
-                )
-
-            result_dict = await await_with_llm_call_policy(
-                _invoke,
-                config=llm_rate_limit_config_from(self._soothe_config),
-            )
-        except Exception:
-            logger.exception("LLM intake classification call failed")
-            raise
-
-        if result_dict is None:
-            raise ValueError("LLM returned None - structured output parsing failed")
-
-        if result_dict.get("intake_label") not in (
-            IntakeLabel.CHITCHAT,
-            IntakeLabel.TRIVIAL,
-            IntakeLabel.SIMPLE,
-            IntakeLabel.COMPLEX,
-        ):
-            raise ValueError(f"Invalid intake_label from LLM: {result_dict.get('intake_label')!r}")
-
-        if (
-            result_dict.get("intake_label") == IntakeLabel.CHITCHAT
-            and not (result_dict.get("chitchat_response") or "").strip()
-        ):
-            raise ValueError("chitchat intake requires chitchat_response")
-
-        llm_result = IntakeClassificationLLMResult(**result_dict)
-        return llm_result.to_intent_classification(), human_content, result_dict
-
-    async def _record_intake_ledger(
+    async def _record_pass2_ledger(
         self,
         *,
-        human_content: str,
-        llm_result: dict[str, Any],
+        query: str,
+        pass2_result: IntakePass2LLMResult,
         thread_id: str | None,
         context_engine: Any | None,
     ) -> None:
-        """Append intent-classify Human/AI pair to the CE ledger (RFC-214, IG-540)."""
+        """Append Pass 2 intake pair to the CE ledger when CE is available."""
         if context_engine is None:
             return
         from soothe.foundation.sloop.cognition.ledger_compaction import (
@@ -262,6 +272,8 @@ class IntentClassifier:
             _record_ledger_message,
         )
 
+        human_content = f"GOAL:\n{query}\n\nTASK:\nClassify scope."
+        llm_dict = pass2_result.model_dump()
         tid = (thread_id or "").strip()
         human_msg = LoopHumanMessage(
             content=compact_planning_human_content(human_content),
@@ -270,7 +282,7 @@ class IntentClassifier:
             phase="intent_classify",
         )
         ai_msg = LoopAIMessage(
-            content=json.dumps(llm_result, ensure_ascii=False),
+            content=json.dumps(llm_dict, ensure_ascii=False),
             thread_id=tid or None,
             iteration=0,
             phase="intent_classify",
@@ -279,15 +291,8 @@ class IntentClassifier:
             _record_ledger_message(context_engine, human_msg, "intent_classify")
             _record_ledger_message(context_engine, ai_msg, "intent_classify")
             await context_engine.save()
-            logger.debug(
-                "Recorded intent-classify ledger pair: human=%d chars, ai=%d chars",
-                len(human_content),
-                len(ai_msg.content),
-            )
         except Exception:
-            logger.warning("Failed to record intent-classify ledger pair", exc_info=True)
-
-    # -- Helpers ------------------------------------------------------------
+            logger.warning("Failed to record Pass 2 intent-classify ledger pair", exc_info=True)
 
     def _fallback(
         self,
@@ -295,7 +300,7 @@ class IntentClassifier:
         *,
         error_context: Exception | None = None,
     ) -> IntentClassification:
-        """Safe fallback to ``complex`` (RFC-630 §9.3): run the full pipeline."""
+        """Safe fallback to ``complex`` (RFC-630): run the full pipeline."""
         reason = type(error_context).__name__ if error_context else "classification_disabled"
         logger.debug("Intake fallback to complex (%s)", reason)
         return IntentClassification(
@@ -310,7 +315,7 @@ class IntentClassifier:
         intent: IntentClassification,
         query: str,
     ) -> IntentClassification:
-        """Patch missing goal_description and reasoning (IG-518)."""
+        """Patch missing goal_description and reasoning."""
         if not intent.goal_description:
             intent.goal_description = query
             logger.debug("Patched missing goal_description")
@@ -342,46 +347,5 @@ class IntentClassifier:
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
         )
 
-    def _build_invoke_config(
-        self,
-        purpose: str,
-        component: str,
-        *,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-        phase: str = "pre-stream",
-    ) -> dict[str, Any]:
-        """Build RunnableConfig with Langfuse tracing and call metadata."""
-        from soothe.middleware._utils import create_llm_call_metadata
 
-        if goal_trace is not None:
-            return goal_trace.intake_invoke_config(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase=phase,
-                extra_metadata=observability_metadata,
-            )
-
-        if self._soothe_config is not None:
-            from soothe.utils.observability.langfuse import (
-                SootheLangfuse,
-                intent_classify_langfuse_run_display_name,
-            )
-
-            trace_name = (self._soothe_config.observability.langfuse.trace_name or "").strip()
-            return SootheLangfuse(self._soothe_config).traced_llm(
-                purpose=purpose,
-                component=f"classifier.{component}",
-                phase=phase,
-                run_name=intent_classify_langfuse_run_display_name(trace_name or None),
-                extra_metadata=observability_metadata,
-            )
-
-        metadata = create_llm_call_metadata(
-            purpose=purpose,
-            component=f"classifier.{component}",
-            phase=phase,
-        )
-        if observability_metadata:
-            metadata.update(observability_metadata)
-        return {"metadata": metadata}
+__all__ = ["IntentClassifier", "prior_projection_text_from_messages"]

@@ -12,7 +12,6 @@ loaded checkpoint, not classified here.
 from __future__ import annotations
 
 from .classifier import IntentClassifier
-from .identity_messages import build_intake_identity_message
 from .models import (
     IntakeLabel,
     IntakePass1Confidence,
@@ -42,6 +41,5 @@ __all__ = [
     "TaskComplexity",
     "TwoPassIntakeCoordinator",
     "TwoPassIntakeResult",
-    "build_intake_identity_message",
     "build_loop_routing_classification",
 ]

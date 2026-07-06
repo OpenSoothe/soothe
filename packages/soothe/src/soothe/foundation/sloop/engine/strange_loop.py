@@ -12,6 +12,11 @@ from typing import TYPE_CHECKING, Any
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.sloop.cognition.phase import PlanPhase
+from soothe.foundation.sloop.intention.models import (
+    IntakePass1Confidence,
+    IntakePass1LLMResult,
+    build_loop_routing_classification,
+)
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -251,10 +256,73 @@ class StrangeLoop:
                 self.config.agent.loop, "goal_context", GoalContextConfig()
             )
 
+            preclassified_intent = intent
+            checkpoint: Any = None
+
+            # IG-554 Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
+            if (
+                preclassified_intent is None
+                and intent_classifier is not None
+                and not clarification_answer
+            ):
+                pass1_task = intent_classifier.classify_pass1(
+                    execution_goal,
+                    observability_metadata={"thread_id": main_thread_id},
+                    goal_trace=goal_trace,
+                )
+                checkpoint_task = state_manager.load()
+                pass1_raw, checkpoint_raw = await asyncio.gather(
+                    pass1_task,
+                    checkpoint_task,
+                    return_exceptions=True,
+                )
+
+                if isinstance(pass1_raw, Exception):
+                    logger.warning(
+                        "Pass1 pre-graph classification failed (%s); continuing as task",
+                        type(pass1_raw).__name__,
+                    )
+                    pass1_result = IntakePass1LLMResult(
+                        is_task=True,
+                        confidence=IntakePass1Confidence.LOW,
+                        social_response=None,
+                        reasoning="Pre-graph Pass1 error fail-safe",
+                    )
+                else:
+                    pass1_result = pass1_raw
+
+                if isinstance(checkpoint_raw, Exception):
+                    logger.warning(
+                        "Checkpoint load failed during Pass1 gather (%s)",
+                        type(checkpoint_raw).__name__,
+                        exc_info=checkpoint_raw,
+                    )
+                    checkpoint = None
+                else:
+                    checkpoint = checkpoint_raw
+
+                if not pass1_result.is_task:
+                    social_intent = intent_classifier.pass1_to_intent(pass1_result, execution_goal)
+                    logger.info(
+                        "[StrangeLoop] Pre-graph social fast-path (Pass1 confidence=%s)",
+                        pass1_result.confidence,
+                    )
+                    yield (
+                        "intent_fast_path",
+                        {
+                            "intent_type": "agentic",
+                            "classification": social_intent,
+                            "chitchat_response": social_intent.chitchat_response,
+                            "context_engine": None,
+                            "ce_goal_id": None,
+                            "thread_id": main_thread_id,
+                        },
+                    )
+                    return
+            else:
+                checkpoint = await state_manager.load()
+
             # Try to recover from checkpoint (RFC-216: loop-scoped).
-            # Use explicit ``loop_id`` from the runner (conversation ``thread_id``) so the
-            # same TUI/daemon thread reuses one StrangeLoop checkpoint across user turns.
-            checkpoint = await state_manager.load()
 
             if checkpoint is not None:
                 checkpoint_normalized = False
@@ -420,7 +488,7 @@ class StrangeLoop:
                 workspace=workspace,
                 iteration=iteration,  # Use recovered or initial iteration
                 max_iterations=max_iterations,
-                intent=intent,
+                intent=preclassified_intent,
                 routing_classification=routing_classification,
                 loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
             )
@@ -524,6 +592,39 @@ class StrangeLoop:
                     len(ce_instance.get_all_goals()),
                     persistence_backend,
                 )
+
+            # IG-554 Stage 2: Pass 2 scope classification (prior projection from CE ledger).
+            if (
+                preclassified_intent is None
+                and intent_classifier is not None
+                and not clarification_answer
+            ):
+                ledger_messages: list[Any] = []
+                try:
+                    ledger_messages = [msg for msg, _phase in ce_instance.get_ledger_entries()]
+                except Exception:
+                    logger.debug(
+                        "Could not read CE ledger for Pass2 prior projection",
+                        exc_info=True,
+                    )
+                preclassified_intent = await intent_classifier.classify_scope_intake(
+                    execution_goal,
+                    loop_messages=ledger_messages,
+                    thread_id=main_thread_id,
+                    context_engine=ce_instance,
+                    goal_trace=goal_trace,
+                    observability_metadata={"thread_id": main_thread_id},
+                    observability_phase="pre-stream",
+                    observability_component="intake.pass2",
+                )
+                state.intent = preclassified_intent
+                effective_routing = build_loop_routing_classification(
+                    preclassified_intent,
+                    preferred_subagent,
+                )
+                if effective_routing is not None:
+                    state.routing_classification = effective_routing
+                    routing_classification = effective_routing
 
             if force_continue_loop and loaded:
                 for prior in ce_instance.get_all_goals():

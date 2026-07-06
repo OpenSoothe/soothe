@@ -401,8 +401,8 @@ class StrangeLoopMixin:
         # One load for unified classification (tail) - IG-128, IG-133
         # IG-506: defer CoreAgent/checkpointer init until execute materializes.
 
-        # RFC-630: intake classification runs in the graph entry ``intent_classify`` node.
-        # Loop continuation is derived structurally inside StrangeLoop from the checkpoint.
+        # RFC-630 IG-554: Pass 1 runs pre-graph in StrangeLoop (parallel with checkpoint).
+        # Pass 2 runs after CE load; social queries END before the graph.
         #
         # When the caller flags this turn as a clarification answer (RFC-622), the graph
         # skips classification so a bare word like "soothe" does not short-circuit resume.
