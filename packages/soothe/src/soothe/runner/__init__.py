@@ -339,6 +339,12 @@ class SootheRunner(
         from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
 
         self._sloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
+        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+
+        await LoopPersistenceWriter.get_shared_instance(
+            self._config,
+            shared_pool=self._sloop_shared_pool,
+        )
         return self._sloop_shared_pool
 
     async def list_persisted_threads(

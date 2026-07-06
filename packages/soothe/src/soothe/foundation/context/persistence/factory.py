@@ -20,30 +20,27 @@ def resolve_context_engine_persistence(config: SootheConfig, loop_id: str) -> An
 
     persistence = None
     if persistence_backend == "postgresql":
-        try:
-            import asyncpg  # noqa: F401
-        except ImportError:
-            logger.warning("[CE] asyncpg not installed; falling back to SQLite for CE persistence")
-        else:
-            from soothe.foundation.context.persistence.pgsql_backend import (
-                PgsqlContextPersistence,
-            )
+        from soothe.foundation.context.persistence.pgsql_backend import (
+            PgsqlContextPersistence,
+        )
 
-            base_dsn = config.persistence.postgres_base_dsn
-            if base_dsn:
-                db_name = config.persistence.postgres_databases.get(
-                    "checkpoints", "soothe_checkpoints"
-                )
-                pgsql_dsn = f"{base_dsn.rstrip('/')}/{db_name}"
-            else:
-                pgsql_dsn = config.persistence.soothe_postgres_dsn
-            if not pgsql_dsn:
-                msg = (
-                    "PostgreSQL persistence backend requires "
-                    "postgres_base_dsn or soothe_postgres_dsn in config"
-                )
-                raise ValueError(msg)
-            persistence = PgsqlContextPersistence(loop_id=loop_id, dsn=pgsql_dsn)
+        base_dsn = config.persistence.postgres_base_dsn
+        if base_dsn:
+            db_name = config.persistence.postgres_databases.get("checkpoints", "soothe_checkpoints")
+            pgsql_dsn = f"{base_dsn.rstrip('/')}/{db_name}"
+        else:
+            pgsql_dsn = config.persistence.soothe_postgres_dsn
+        if not pgsql_dsn:
+            msg = (
+                "PostgreSQL persistence backend requires "
+                "postgres_base_dsn or soothe_postgres_dsn in config"
+            )
+            raise ValueError(msg)
+        persistence = PgsqlContextPersistence(
+            loop_id=loop_id,
+            dsn=pgsql_dsn,
+            config=config,
+        )
 
     if persistence is None:
         if persistence_backend not in ("sqlite", "postgresql"):

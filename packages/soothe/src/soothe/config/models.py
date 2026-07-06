@@ -1043,32 +1043,34 @@ class LLMRateLimitConfig(BaseModel):
 
 
 class LoopCheckpointAsyncConfig(BaseModel):
-    """Async checkpoint write configuration (RFC-803 Phase 6).
+    """Async checkpoint write configuration (RFC-803 Phase 6, IG-550).
 
-    Enables fire-and-forget checkpoint writes with periodic forced flush
-    to bound crash data loss risk. Reduces peak latency at step boundaries.
+    Checkpoint writes are always coalesced and non-blocking. PostgreSQL uses the
+    process-scoped persistence writer; SQLite uses a per-manager flush worker.
 
     Args:
-        async_write: Enable non-blocking checkpoint writes.
         flush_interval: Periodic forced write interval (seconds).
-        queue_size: Max queued checkpoints before blocking caller.
+        close_timeout_seconds: Max seconds to wait for persist on manager close.
+        durable_flush_timeout: Max seconds for goal-boundary durable flush.
     """
 
-    async_write: bool = Field(
-        default=True,
-        description="Enable fire-and-forget checkpoint writes (non-blocking)",
-    )
     flush_interval: float = Field(
         default=5.0,
         ge=1.0,
         le=60.0,
         description="Periodic forced write interval (seconds). Bounds crash data loss window.",
     )
-    queue_size: int = Field(
-        default=100,
-        ge=10,
-        le=500,
-        description="Max queued checkpoints before blocking caller",
+    close_timeout_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=300.0,
+        description="Bounded wait for checkpoint flush during StrangeLoopStateManager.close()",
+    )
+    durable_flush_timeout: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=120.0,
+        description="Bounded wait for durable goal-boundary checkpoint flush",
     )
 
 

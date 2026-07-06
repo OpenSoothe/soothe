@@ -95,6 +95,10 @@ agent:
       max_parallel_tools: 64
       global_max_llm_calls: 16
       step_parallelism: max
+      checkpoint:
+        flush_interval: 5.0
+        close_timeout_seconds: 30
+        durable_flush_timeout: 10
     max_tool_calls_per_step: 999
     max_subagent_tasks_per_wave: 8
     plan_assess_model_role: fast

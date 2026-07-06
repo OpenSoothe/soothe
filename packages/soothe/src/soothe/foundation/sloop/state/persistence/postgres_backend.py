@@ -34,6 +34,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _is_missing_hot_cold_schema(exc: BaseException) -> bool:
+    """Return True when PostgreSQL lacks hot/cold checkpoint columns or tables."""
+    msg = str(exc).casefold()
+    markers = (
+        "checkpoint_index",
+        "agentloop_checkpoint_blobs",
+        "undefined column",
+        "undefined table",
+        "does not exist",
+    )
+    return any(marker in msg for marker in markers)
+
+
 class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
     """PostgreSQL backend for StrangeLoop persistence (RFC-612, IG-055).
 
@@ -183,34 +196,146 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             pool_resetter=self._reset_pool_for_recovery,
         )
 
-    async def save_checkpoint(self, checkpoint: StrangeLoopCheckpoint) -> None:
+    async def save_checkpoint(
+        self,
+        checkpoint: StrangeLoopCheckpoint,
+        *,
+        write_mode: str = "full",
+        hot_cold_enabled: bool = False,
+    ) -> None:
         """Save StrangeLoop checkpoint to PostgreSQL with retry.
 
         Args:
             checkpoint: StrangeLoopCheckpoint to save.
+            write_mode: ``index_only`` updates hot index only; ``full`` writes complete row.
+            hot_cold_enabled: When True, also upsert cold blob table on full writes.
         """
         checkpoint_data = checkpoint.model_dump(mode="json")
         loop_id = checkpoint_data["loop_id"]
         thread_id = checkpoint_data["current_thread_id"]
         status = checkpoint_data["status"]
+
+        if write_mode == "index_only" and hot_cold_enabled:
+            from soothe.foundation.persistence.checkpoint_split import extract_hot_index
+
+            hot_json = json.dumps(extract_hot_index(checkpoint))
+
+            async def _do_save_index(pool: AsyncConnectionPool) -> None:
+                async with pool.connection() as conn:
+                    async with conn.cursor() as cur:
+                        try:
+                            await cur.execute(
+                                """
+                                UPDATE agentloop_checkpoints
+                                SET thread_id = %s,
+                                    status = %s,
+                                    checkpoint_index = %s::jsonb,
+                                    updated_at = NOW()
+                                WHERE loop_id = %s
+                                """,
+                                (thread_id, status, hot_json, loop_id),
+                            )
+                            if cur.rowcount == 0:
+                                data_json = json.dumps(checkpoint_data)
+                                await cur.execute(
+                                    """
+                                    INSERT INTO agentloop_checkpoints
+                                        (loop_id, thread_id, status, checkpoint_data,
+                                         checkpoint_index, updated_at)
+                                    VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                                    ON CONFLICT (loop_id) DO UPDATE SET
+                                        thread_id = EXCLUDED.thread_id,
+                                        status = EXCLUDED.status,
+                                        checkpoint_index = EXCLUDED.checkpoint_index,
+                                        updated_at = NOW()
+                                    """,
+                                    (loop_id, thread_id, status, data_json, hot_json),
+                                )
+                        except Exception as exc:
+                            if not _is_missing_hot_cold_schema(exc):
+                                raise
+                            data_json = json.dumps(checkpoint_data)
+                            await cur.execute(
+                                """
+                                INSERT INTO agentloop_checkpoints
+                                    (loop_id, thread_id, status, checkpoint_data, updated_at)
+                                VALUES (%s, %s, %s, %s, NOW())
+                                ON CONFLICT (loop_id) DO UPDATE SET
+                                    thread_id = EXCLUDED.thread_id,
+                                    status = EXCLUDED.status,
+                                    checkpoint_data = EXCLUDED.checkpoint_data,
+                                    updated_at = NOW()
+                                """,
+                                (loop_id, thread_id, status, data_json),
+                            )
+
+            try:
+                await self._run_with_retry("save_checkpoint_index", _do_save_index)
+            except Exception as exc:
+                if _is_missing_hot_cold_schema(exc):
+                    hot_cold_enabled = False
+                else:
+                    raise
+            if hot_cold_enabled:
+                return
+
         data_json = json.dumps(checkpoint_data)
+        hot_json = None
+        cold_json = None
+        if hot_cold_enabled:
+            from soothe.foundation.persistence.checkpoint_split import (
+                extract_cold_blob,
+                extract_hot_index,
+            )
+
+            hot_json = json.dumps(extract_hot_index(checkpoint))
+            cold_json = json.dumps(extract_cold_blob(checkpoint))
 
         async def _do_save(pool: AsyncConnectionPool) -> None:
             async with pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    await cur.execute(
-                        """
-                        INSERT INTO agentloop_checkpoints (loop_id, thread_id, status, checkpoint_data, updated_at)
-                        VALUES (%s, %s, %s, %s, NOW())
-                        ON CONFLICT (loop_id)
-                        DO UPDATE SET
-                            thread_id = EXCLUDED.thread_id,
-                            status = EXCLUDED.status,
-                            checkpoint_data = EXCLUDED.checkpoint_data,
-                            updated_at = NOW()
-                    """,
-                        (loop_id, thread_id, status, data_json),
-                    )
+                    if hot_json is not None:
+                        await cur.execute(
+                            """
+                            INSERT INTO agentloop_checkpoints
+                                (loop_id, thread_id, status, checkpoint_data,
+                                 checkpoint_index, updated_at)
+                            VALUES (%s, %s, %s, %s, %s::jsonb, NOW())
+                            ON CONFLICT (loop_id) DO UPDATE SET
+                                thread_id = EXCLUDED.thread_id,
+                                status = EXCLUDED.status,
+                                checkpoint_data = EXCLUDED.checkpoint_data,
+                                checkpoint_index = EXCLUDED.checkpoint_index,
+                                updated_at = NOW()
+                            """,
+                            (loop_id, thread_id, status, data_json, hot_json),
+                        )
+                        if cold_json is not None:
+                            await cur.execute(
+                                """
+                                INSERT INTO agentloop_checkpoint_blobs
+                                    (loop_id, cold_json, updated_at)
+                                VALUES (%s, %s::jsonb, NOW())
+                                ON CONFLICT (loop_id) DO UPDATE SET
+                                    cold_json = EXCLUDED.cold_json,
+                                    updated_at = NOW()
+                                """,
+                                (loop_id, cold_json),
+                            )
+                    else:
+                        await cur.execute(
+                            """
+                            INSERT INTO agentloop_checkpoints (loop_id, thread_id, status, checkpoint_data, updated_at)
+                            VALUES (%s, %s, %s, %s, NOW())
+                            ON CONFLICT (loop_id)
+                            DO UPDATE SET
+                                thread_id = EXCLUDED.thread_id,
+                                status = EXCLUDED.status,
+                                checkpoint_data = EXCLUDED.checkpoint_data,
+                                updated_at = NOW()
+                        """,
+                            (loop_id, thread_id, status, data_json),
+                        )
 
         await self._run_with_retry("save_checkpoint", _do_save)
 
@@ -227,26 +352,66 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
 
         async with pool.connection() as conn:
             async with conn.cursor() as cur:
-                await cur.execute(
-                    """
-                    SELECT checkpoint_data FROM agentloop_checkpoints WHERE loop_id = %s
-                """,
-                    (loop_id,),
-                )
+                row = None
+                try:
+                    await cur.execute(
+                        """
+                        SELECT checkpoint_data, checkpoint_index
+                        FROM agentloop_checkpoints WHERE loop_id = %s
+                    """,
+                        (loop_id,),
+                    )
+                    row = await cur.fetchone()
+                except Exception as exc:
+                    if not _is_missing_hot_cold_schema(exc):
+                        raise
+                    await cur.execute(
+                        """
+                        SELECT checkpoint_data
+                        FROM agentloop_checkpoints WHERE loop_id = %s
+                    """,
+                        (loop_id,),
+                    )
+                    row = await cur.fetchone()
 
-                result = await cur.fetchone()
-                if not result:
+                if not row:
                     return None
 
+                from soothe.foundation.persistence.checkpoint_split import merge_hot_into_checkpoint
                 from soothe.foundation.sloop.state.checkpoint import (
                     StrangeLoopCheckpoint,
                     normalize_checkpoint_data,
                 )
 
                 checkpoint_data = normalize_checkpoint_data(
-                    dict(result["checkpoint_data"]),
+                    dict(row["checkpoint_data"]),
                     loop_id=loop_id,
                 )
+                hot_index = row.get("checkpoint_index")
+                if hot_index is not None:
+                    if not isinstance(hot_index, dict):
+                        hot_index = dict(hot_index)
+                    checkpoint_data = merge_hot_into_checkpoint(checkpoint_data, hot_index)
+
+                cold_row = None
+                try:
+                    await cur.execute(
+                        """
+                        SELECT cold_json FROM agentloop_checkpoint_blobs
+                        WHERE loop_id = %s
+                        """,
+                        (loop_id,),
+                    )
+                    cold_row = await cur.fetchone()
+                except Exception:
+                    cold_row = None
+
+                if cold_row is not None:
+                    cold = cold_row["cold_json"]
+                    if not isinstance(cold, dict):
+                        cold = dict(cold)
+                    checkpoint_data.update(cold)
+
                 return StrangeLoopCheckpoint.model_validate(checkpoint_data)
 
     async def delete_checkpoint(self, loop_id: str) -> None:

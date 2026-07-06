@@ -47,7 +47,6 @@ async def test_close_stops_flush_worker() -> None:
 
             assert manager._worker_started is False
             assert manager._flush_worker is None
-            assert manager._pending_saves is None
 
 
 def test_cancel_orphan_loop_tasks_clears_leaked_worker() -> None:

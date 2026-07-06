@@ -128,18 +128,24 @@ class StrangeLoopStateManager:
         self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
         self._init_lock = asyncio.Lock()
 
-        # RFC-803 Phase 6: Async checkpoint write configuration
+        # RFC-803 / IG-550: async coalesced checkpoint writes (always on)
         checkpoint_cfg = (
             config.agent.loop.concurrency.checkpoint
             if config and hasattr(config.agent.loop.concurrency, "checkpoint")
             else None
         )
-        self._async_write_enabled = checkpoint_cfg.async_write if checkpoint_cfg else True
         self._flush_interval = checkpoint_cfg.flush_interval if checkpoint_cfg else 5.0
-        self._queue_size = checkpoint_cfg.queue_size if checkpoint_cfg else 100
+        self._close_timeout_seconds = (
+            checkpoint_cfg.close_timeout_seconds if checkpoint_cfg else 30.0
+        )
+        self._durable_flush_timeout = (
+            checkpoint_cfg.durable_flush_timeout if checkpoint_cfg else 10.0
+        )
+        self._config = config
+        self._loop_writer = None
 
-        # Async write infrastructure (lazy initialized)
-        self._pending_saves: asyncio.Queue[StrangeLoopCheckpoint] | None = None
+        # SQLite-only async coalesce worker (PostgreSQL uses LoopPersistenceWriter)
+        self._coalesced_pending: StrangeLoopCheckpoint | None = None
         self._flush_worker: asyncio.Task | None = None
         self._worker_loop: asyncio.AbstractEventLoop | None = None
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
@@ -147,6 +153,21 @@ class StrangeLoopStateManager:
         self._worker_lock = asyncio.Lock()
         self._checkpoint_write_lock = asyncio.Lock()
         self._closed = False
+        self._goal_boundary_persisted = False
+
+    async def _ensure_loop_writer(self) -> Any | None:
+        """Lazy-init process-scoped persistence writer (PostgreSQL only)."""
+        if self._backend_type != "postgresql" or self._config is None:
+            return None
+        if self._loop_writer is not None:
+            return self._loop_writer
+        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+
+        self._loop_writer = await LoopPersistenceWriter.get_shared_instance(
+            self._config,
+            shared_pool=self._shared_pool,
+        )
+        return self._loop_writer
 
     async def _ensure_backend_initialized(self) -> None:
         """Lazy backend initialization (IG-055: PostgreSQL or SQLite).
@@ -543,145 +564,119 @@ class StrangeLoopStateManager:
         self._checkpoint = checkpoint
         self._last_save_checkpoint = checkpoint
 
+        writer = await self._ensure_loop_writer()
+        if writer is not None and not self._closed:
+            from soothe.foundation.persistence.loop_writer import PersistWriteMode
+
+            await writer.enqueue_checkpoint(
+                self.loop_id,
+                checkpoint,
+                durable=False,
+                write_mode=PersistWriteMode.INDEX_ONLY,
+            )
+            return
+
         if self._closed:
             await self._do_save_checkpoint(checkpoint)
             return
 
-        if self._async_write_enabled:
-            # RFC-803 Phase 6: Async mode - enqueue for background write
-            if not self._worker_started:
-                await self._start_flush_worker()
+        if not self._worker_started:
+            await self._start_flush_worker()
 
-            # Enqueue (non-blocking if queue not full)
-            if self._pending_saves is not None:
-                try:
-                    self._pending_saves.put_nowait(checkpoint)
-                    logger.debug(
-                        "Enqueued async checkpoint: loop=%s status=%s",
-                        self.loop_id,
-                        checkpoint.status,
-                    )
-                    return  # Early return - worker will handle write
-                except asyncio.QueueFull:
-                    # Queue full - fallback to sync write
-                    logger.warning(
-                        "Checkpoint queue full, sync write fallback: loop=%s",
-                        self.loop_id,
-                    )
+        self._coalesced_pending = checkpoint
+        logger.debug(
+            "Coalesced async checkpoint: loop=%s status=%s",
+            self.loop_id,
+            checkpoint.status,
+        )
 
-        # Sync write (either disabled or queue full fallback)
-        await self._do_save_checkpoint(checkpoint)
-
-    async def _do_save_checkpoint(self, checkpoint: StrangeLoopCheckpoint) -> None:
+    async def _do_save_checkpoint(
+        self,
+        checkpoint: StrangeLoopCheckpoint,
+        *,
+        write_mode: str = "full",
+    ) -> None:
         """Perform actual checkpoint write (called by worker or sync fallback).
 
         RFC-803 Phase 6: Extracted backend write logic for reuse.
         """
         async with self._checkpoint_write_lock:
+            hot_cold = self._backend_type == "postgresql"
             if self._backend_type == "postgresql":
-                # PostgreSQL async save
                 await self._ensure_backend_initialized()
-                await self._postgres_backend.save_checkpoint(checkpoint)
+                await self._postgres_backend.save_checkpoint(
+                    checkpoint,
+                    write_mode=write_mode if hot_cold else "full",
+                    hot_cold_enabled=hot_cold,
+                )
             else:
-                # SQLite save via writer connection
                 conn = await self._ensure_writer_connection()
                 await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
 
     async def _start_flush_worker(self) -> None:
-        """Start background worker for periodic checkpoint flushes.
-
-        RFC-803 Phase 6: Fire-and-forget async write infrastructure.
-        """
+        """Start SQLite background worker for periodic coalesced flushes."""
         async with self._worker_lock:
             if self._closed or self._worker_started:
                 return
 
             worker_loop = asyncio.get_running_loop()
             self._worker_loop = worker_loop
-            self._pending_saves = asyncio.Queue(maxsize=self._queue_size)
             self._flush_worker = worker_loop.create_task(self._flush_worker_loop())
             self._worker_started = True
 
             logger.info(
-                "Async checkpoint worker started: loop=%s flush_interval=%ss queue_size=%d",
+                "Async checkpoint worker started: loop=%s flush_interval=%ss",
                 self.loop_id,
                 self._flush_interval,
-                self._queue_size,
             )
 
-    async def _stop_flush_worker(self) -> None:
-        """Stop the async checkpoint worker and release queue resources."""
+    async def _stop_flush_worker(self, *, timeout: float | None = None) -> None:
+        """Stop the SQLite flush worker and drain coalesced pending writes."""
+        timeout = self._close_timeout_seconds if timeout is None else timeout
         async with self._worker_lock:
-            pending = self._pending_saves
+            coalesced = self._coalesced_pending
+            self._coalesced_pending = None
             worker = self._flush_worker
             self._flush_worker = None
-            self._pending_saves = None
             self._worker_started = False
             self._worker_loop = None
 
-        if pending is not None:
-            while True:
-                try:
-                    queued = pending.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                await self._do_save_checkpoint(queued)
+        async def _drain() -> None:
+            if coalesced is not None:
+                await self._do_save_checkpoint(coalesced, write_mode="full")
+
+        try:
+            async with asyncio.timeout(timeout):
+                await _drain()
+        except TimeoutError:
+            logger.warning(
+                "Checkpoint worker drain timed out after %.0fs loop=%s",
+                timeout,
+                self.loop_id,
+            )
 
         if worker is None:
             return
 
         worker.cancel()
         try:
-            await worker
-        except asyncio.CancelledError:
+            async with asyncio.timeout(timeout):
+                await worker
+        except (TimeoutError, asyncio.CancelledError):
             pass
 
     async def _flush_worker_loop(self) -> None:
-        """Background loop that flushes queued checkpoints.
-
-        RFC-803 Phase 6: Handles queued writes and periodic forced flush.
-        """
-        worker_loop = self._worker_loop
-        pending_saves = self._pending_saves
-        if worker_loop is None or pending_saves is None:
-            return
-
+        """Periodic flush of coalesced SQLite checkpoint writes."""
         while True:
-            if worker_loop.is_closed():
-                logger.warning(
-                    "Async checkpoint worker stopping: event loop closed loop=%s",
-                    self.loop_id,
-                )
-                return
-
             try:
-                # Wait for either:
-                # 1. New checkpoint in queue
-                # 2. Flush interval timeout (force periodic write)
-                checkpoint = await asyncio.wait_for(
-                    pending_saves.get(),
-                    timeout=self._flush_interval,
-                )
-                await self._do_save_checkpoint(checkpoint)
-
-            except TimeoutError:
-                # Periodic flush: ensure latest checkpoint is persisted
-                if self._last_save_checkpoint:
-                    await self._do_save_checkpoint(self._last_save_checkpoint)
-
+                await asyncio.sleep(self._flush_interval)
+                if self._coalesced_pending is not None:
+                    pending = self._coalesced_pending
+                    self._coalesced_pending = None
+                    await self._do_save_checkpoint(pending, write_mode="full")
             except asyncio.CancelledError:
-                # Final flush only if not explicitly stopped via close().
-                # When close() calls _stop_flush_worker(), it sets _worker_started=False
-                # before cancel, and handles flush via force_flush() separately.
-                # Only do final flush here if cancelled externally (e.g., task group cleanup).
-                if self._worker_started and self._last_save_checkpoint:
-                    try:
-                        await self._do_save_checkpoint(self._last_save_checkpoint)
-                    except Exception:
-                        logger.exception("Final checkpoint flush failed: loop=%s", self.loop_id)
                 logger.info("Async checkpoint worker stopped: loop=%s", self.loop_id)
                 raise
-
             except RuntimeError as exc:
                 if _is_async_loop_runtime_error(exc):
                     logger.warning(
@@ -690,21 +685,51 @@ class StrangeLoopStateManager:
                     )
                     return
                 raise
-
             except Exception:
                 logger.exception("Async checkpoint write failed: loop=%s", self.loop_id)
-                # Continue loop - periodic flush will retry
 
-    async def force_flush(self) -> None:
+    async def force_flush(self, *, timeout: float | None = None) -> None:
         """Force immediate checkpoint write (for critical operations).
 
         RFC-803 Phase 6: Used by finalize_loop, archive_and_finalize, close.
-
-        Ensures latest checkpoint state is persisted before critical operations.
         """
-        if self._last_save_checkpoint:
-            await self._do_save_checkpoint(self._last_save_checkpoint)
+        timeout = self._durable_flush_timeout if timeout is None else timeout
+        if not self._last_save_checkpoint:
+            return
+
+        writer = await self._ensure_loop_writer()
+        if writer is not None:
+            result = await writer.flush_durable(self.loop_id, timeout=timeout)
+            if not result.ok:
+                from soothe.foundation.persistence.checkpoint_split import mark_persist_degraded
+
+                mark_persist_degraded(self._last_save_checkpoint)
+            else:
+                self._goal_boundary_persisted = True
+            logger.info("Force checkpoint flush: loop=%s ok=%s", self.loop_id, result.ok)
+            return
+
+        async def _flush() -> None:
+            if self._coalesced_pending is not None:
+                pending = self._coalesced_pending
+                self._coalesced_pending = None
+                await self._do_save_checkpoint(pending, write_mode="full")
+            await self._do_save_checkpoint(self._last_save_checkpoint, write_mode="full")
+
+        try:
+            async with asyncio.timeout(timeout):
+                await _flush()
+            self._goal_boundary_persisted = True
             logger.info("Force checkpoint flush: loop=%s", self.loop_id)
+        except TimeoutError:
+            logger.warning(
+                "Force checkpoint flush timed out after %.0fs loop=%s",
+                timeout,
+                self.loop_id,
+            )
+            from soothe.foundation.persistence.checkpoint_split import mark_persist_degraded
+
+            mark_persist_degraded(self._last_save_checkpoint)
 
     def _save_checkpoint_sync(
         self, conn: sqlite3.Connection, checkpoint: StrangeLoopCheckpoint
@@ -889,27 +914,12 @@ class StrangeLoopStateManager:
 
         return goal_record
 
-    async def finalize_goal(
-        self,
-        goal_record: GoalIndexEntry,
-        _goal_completion: str,
-        loop_state: LoopState | None = None,
-    ) -> None:
-        """Mark goal completed, update loop metrics (RFC-216).
-
-        Args:
-            goal_record: Goal execution record to finalize.
-            _goal_completion: Ledger-owned synthesis text (kept for call-site compat).
-            loop_state: Active LoopState (unused; CE owns execution payloads).
-        """
+    def _apply_goal_finalize_memory(self, goal_record: GoalIndexEntry) -> None:
+        """Update in-memory checkpoint for a completed goal (no persist)."""
         if self._checkpoint is None:
             return
 
         checkpoint = self._checkpoint
-
-        # BUGFIX: Modify goal_history entry directly (not passed parameter)
-        # Pydantic model_copy() creates new instances, so goal_record may be detached
-        # Find the goal in goal_history by goal_id and modify that object directly
         target_goal = None
         for g in checkpoint.goal_history:
             if g.goal_id == goal_record.goal_id:
@@ -926,13 +936,8 @@ class StrangeLoopStateManager:
             target_goal is goal_record,
         )
 
-        # Update goal record status (modify history object directly)
         target_goal.status = "completed"
         target_goal.completed_at = datetime.now(UTC)
-
-        # RFC-624 Phase 4 Stage 2: No mirroring of CE-owned data.
-        # GoalIndexEntry is loop-level index only; CE DAG is the real data store.
-        # Removed: current_plan, completed_step_ids, step_results, evidence_ledger.
 
         logger.debug(
             "finalize_goal: modified id=%s status=%s",
@@ -940,22 +945,73 @@ class StrangeLoopStateManager:
             target_goal.status,
         )
 
-        # Update loop metrics
         checkpoint.total_goals_completed += 1
         checkpoint.total_duration_ms += target_goal.duration_ms
         checkpoint.total_tokens_used += target_goal.tokens_used
-
-        # Update thread health (reset consecutive failures on success)
         checkpoint.thread_health_metrics.consecutive_goal_failures = 0
         checkpoint.thread_health_metrics.consecutive_rate_limit_errors = 0
         checkpoint.thread_health_metrics.last_goal_status = "completed"
-
-        # Reset loop state for next goal
         checkpoint.status = "idle"
-        checkpoint.current_goal_index = -1  # IG-055: Reset index after goal completion
+        checkpoint.current_goal_index = -1
 
-        await self.save(checkpoint)
-        await self.force_flush()
+    async def persist_goal_boundary_durable(
+        self,
+        *,
+        dag: Any | None = None,
+        ledger: list[Any] | None = None,
+    ) -> Any:
+        """Durable goal-boundary persist (checkpoint + optional CE) in one transaction."""
+        from soothe.foundation.persistence.loop_writer import PersistResult
+
+        if self._checkpoint is None:
+            return PersistResult(ok=True)
+
+        writer = await self._ensure_loop_writer()
+        if writer is None:
+            await self.force_flush(timeout=self._durable_flush_timeout)
+            self._goal_boundary_persisted = True
+            return PersistResult(ok=True)
+
+        result = await writer.persist_goal_boundary(
+            self.loop_id,
+            checkpoint=self._checkpoint,
+            dag=dag,
+            ledger=ledger,
+        )
+        self._goal_boundary_persisted = result.ok
+        return result
+
+    async def finalize_goal(
+        self,
+        goal_record: GoalIndexEntry,
+        _goal_completion: str,
+        loop_state: LoopState | None = None,
+        *,
+        skip_persist: bool = False,
+    ) -> None:
+        """Mark goal completed, update loop metrics (RFC-216).
+
+        Args:
+            goal_record: Goal execution record to finalize.
+            _goal_completion: Ledger-owned synthesis text (kept for call-site compat).
+            loop_state: Active LoopState (unused; CE owns execution payloads).
+            skip_persist: When True, only apply in-memory updates (tail uses durable persist).
+        """
+        _ = loop_state
+        self._apply_goal_finalize_memory(goal_record)
+        if skip_persist:
+            logger.info(
+                "Finalized goal %s in memory (persist deferred) loop=%s",
+                goal_record.goal_id,
+                self.loop_id,
+            )
+            return
+
+        if self._checkpoint is None:
+            return
+
+        await self.save(self._checkpoint)
+        await self.force_flush(timeout=self._durable_flush_timeout)
 
         logger.info(
             "Finalized goal %s on thread %s (loop %s)",
@@ -1196,9 +1252,37 @@ class StrangeLoopStateManager:
         For shared pool mode, only clears references (pool closed at daemon shutdown).
         """
         self._closed = True
-        # Stop worker (drain queue) before force_flush to avoid concurrent SQLite writes.
-        await self._stop_flush_worker()
-        await self.force_flush()
+        try:
+            async with asyncio.timeout(self._close_timeout_seconds):
+                writer = await self._ensure_loop_writer()
+                if writer is not None:
+                    if not self._goal_boundary_persisted and self._last_save_checkpoint:
+                        from soothe.foundation.persistence.loop_writer import PersistWriteMode
+
+                        await writer.enqueue_checkpoint(
+                            self.loop_id,
+                            self._last_save_checkpoint,
+                            durable=True,
+                            write_mode=PersistWriteMode.FULL,
+                        )
+                    await writer.release_loop(
+                        self.loop_id,
+                        timeout=self._close_timeout_seconds,
+                    )
+                else:
+                    await self._stop_flush_worker(timeout=self._close_timeout_seconds)
+                    if not self._goal_boundary_persisted:
+                        await self.force_flush(timeout=self._close_timeout_seconds)
+        except TimeoutError:
+            logger.warning(
+                "StrangeLoopStateManager.close timed out after %.0fs loop=%s",
+                self._close_timeout_seconds,
+                self.loop_id,
+            )
+            if self._checkpoint is not None:
+                from soothe.foundation.persistence.checkpoint_split import mark_persist_degraded
+
+                mark_persist_degraded(self._checkpoint)
 
         # Close PostgreSQL backend pool (only if owned, not shared)
         if self._postgres_backend is not None:

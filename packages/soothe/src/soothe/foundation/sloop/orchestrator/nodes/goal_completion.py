@@ -111,6 +111,55 @@ async def _goal_completion_tail_persistence(
 ) -> list[str]:
     """Persist CE + checkpoint tail state after the ``completed`` wire event."""
     failures: list[str] = []
+    writer = None
+    with contextlib.suppress(Exception):
+        writer = await state_manager._ensure_loop_writer()
+
+    try:
+        await state_manager.finalize_goal(
+            goal_record,
+            full_output,
+            loop_state=loop_state,
+            skip_persist=True,
+        )
+    except Exception as exc:
+        failures.append(f"checkpoint_finalize:{type(exc).__name__}")
+        logger.warning(
+            "Goal-completion in-memory finalize failed for loop %s",
+            loop_id,
+            exc_info=True,
+        )
+        return failures
+
+    if writer is not None:
+        dag = None
+        ledger: list[dict[str, Any]] | None = None
+        if context_engine is not None:
+            try:
+                dag, ledger = context_engine.persistence_snapshot()
+            except Exception as exc:
+                failures.append(f"ce_snapshot:{type(exc).__name__}")
+                logger.warning(
+                    "Goal-completion CE snapshot failed for loop %s",
+                    loop_id,
+                    exc_info=True,
+                )
+        try:
+            result = await state_manager.persist_goal_boundary_durable(
+                dag=dag,
+                ledger=ledger,
+            )
+            if not result.ok:
+                failures.extend(result.failures)
+        except Exception as exc:
+            failures.append(f"goal_boundary:{type(exc).__name__}")
+            logger.warning(
+                "Goal-completion durable persist failed for loop %s",
+                loop_id,
+                exc_info=True,
+            )
+        return failures
+
     if context_engine is not None:
         try:
             await context_engine.save()
@@ -122,15 +171,14 @@ async def _goal_completion_tail_persistence(
                 exc_info=True,
             )
     try:
-        await state_manager.finalize_goal(
-            goal_record,
-            full_output,
-            loop_state=loop_state,
-        )
+        checkpoint = getattr(state_manager, "_checkpoint", None)
+        if checkpoint is not None:
+            await state_manager.save(checkpoint)
+        await state_manager.force_flush()
     except Exception as exc:
         failures.append(f"checkpoint_finalize:{type(exc).__name__}")
         logger.warning(
-            "Goal-completion checkpoint finalize failed for loop %s",
+            "Goal-completion checkpoint flush failed for loop %s",
             loop_id,
             exc_info=True,
         )

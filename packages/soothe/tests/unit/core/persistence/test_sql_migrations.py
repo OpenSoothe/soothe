@@ -43,12 +43,14 @@ def test_split_sql_statements_init_migration_file() -> None:
 def test_migration_sql_root_contains_init_script() -> None:
     root = migration_sql_root()
     scripts = discover_migration_scripts("soothe_checkpoints", sql_root=root)
-    assert len(scripts) == 1
+    assert len(scripts) == 2
     assert scripts[0].version == "000"
     assert scripts[0].name == "init"
     assert "soothe_schema_migrations" in scripts[0].sql
     assert "agentloop_checkpoints" in scripts[0].sql
     assert "client_workspace TEXT" in scripts[0].sql
+    assert scripts[1].version == "001"
+    assert "checkpoint_index" in scripts[1].sql
 
 
 def test_discover_rejects_invalid_filename(tmp_path: Path) -> None:
