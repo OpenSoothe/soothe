@@ -25,7 +25,8 @@
 #
 # Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) requires --profile langfuse.
 # UI (browser): http://localhost:3300 — config/develop/config.docker.yml uses http://langfuse-web:3000 for the daemon container.
-# Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector.
+# Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector
+# (created on first PG boot via config/develop/init-langfuse-db.sql).
 # Internal Langfuse backends use langfuse-internal (no host routes). langfuse-web also joins
 # langfuse-edge so Docker can publish port 3300 to the host.
 # Langfuse app images are pulled from ghcr.io (not Docker Hub) to avoid registry-1.docker.io / auth.docker.io token EOF on some networks.
@@ -70,7 +71,7 @@ services:
         host_ip: ${POSTGRES_BIND_IP:-0.0.0.0}
     volumes:
       - soothe_postgres_data:/var/lib/postgresql/data
-      - ./config/init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
+      - ./config/develop/init-langfuse-db.sql:/docker-entrypoint-initdb.d/10-init-langfuse-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
@@ -88,7 +89,7 @@ services:
         max-size: "100m"
         max-file: "3"
 
-  # --- Langfuse v3 — shares soothe-pgvector (langfuse DB in config/init-db.sql) ---
+  # --- Langfuse v3 — shares soothe-pgvector (langfuse DB via config/develop/init-langfuse-db.sql) ---
   langfuse-clickhouse:
     profiles:
       - langfuse

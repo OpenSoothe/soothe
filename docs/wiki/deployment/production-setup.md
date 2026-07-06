@@ -131,14 +131,16 @@ docker compose ps
 
 ### Step 4: Verify Database Initialization
 
+Soothe auto-provisions PostgreSQL databases on first daemon startup when `postgres_base_dsn` is configured (RFC-612). No manual SQL init script is required for production.
+
 ```bash
-# Check PostgreSQL logs for initialization
-docker compose logs soothe-pgvector | grep "init-databases"
+# Start daemon and wait for provisioning (check logs)
+docker compose logs soothed | grep -i "PostgreSQL database"
 
 # Verify databases created
 docker compose exec soothe-pgvector psql -U postgres -l
 
-# Expected databases:
+# Expected databases (after soothed has started):
 # soothe_checkpoints | postgres | UTF8
 # soothe_metadata    | postgres | UTF8
 # soothe_vectors     | postgres | UTF8 | pgvector extension
@@ -191,7 +193,6 @@ services:
     shm_size: 256mb
     volumes:
       - soothe_postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
 
   soothed:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
@@ -255,8 +256,8 @@ sudo apt install postgresql-17 postgresql-17-pgvector
 # Install Python 3.11+
 sudo apt install python3.11 python3.11-venv python3-pip
 
-# Create PostgreSQL databases
-sudo -u postgres psql -f deploy/init-db.sql
+# PostgreSQL databases are auto-provisioned on first soothed startup
+# when postgres_base_dsn is configured in config.yml.
 ```
 
 ### Step 2: Configure PostgreSQL
@@ -272,8 +273,7 @@ work_mem = 16MB
 ```
 
 ```bash
-# Enable pgvector extension
-sudo -u postgres psql -d soothe_vectors -c "CREATE EXTENSION vector;"
+# pgvector extension is installed automatically in soothe_vectors on daemon startup.
 ```
 
 ### Step 3: Create Soothe User

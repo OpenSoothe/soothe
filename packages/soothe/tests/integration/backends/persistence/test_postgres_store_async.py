@@ -8,7 +8,8 @@ import pytest
 import pytest_asyncio
 
 # Default matches docker-compose ``soothe-pgvector`` (host port 6432) and
-# ``config/init-db.sql`` (``soothe_metadata`` and other app DBs — not ``soothe_test``).
+# Requires PostgreSQL with soothe_* databases (auto-provisioned on daemon startup;
+# ``soothe_metadata`` and other app DBs — not ``soothe_test``).
 _DEFAULT_TEST_POSTGRES_DSN = "postgresql://postgres:postgres@127.0.0.1:6432/soothe_metadata"
 
 

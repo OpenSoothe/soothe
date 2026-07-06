@@ -22,9 +22,9 @@ Required (`.env`):
 
 ```
 soothe-pgvector (PostgreSQL 17 + pgvector)
-├── soothe_checkpoints   → LangGraph state
+├── soothe_checkpoints   → LangGraph state (auto-provisioned on daemon start)
 ├── soothe_metadata      → Thread metadata
-├── soothe_vectors       → Embeddings
+├── soothe_vectors       → Embeddings (+ pgvector extension)
 └── soothe_memory        → Long-term memory
 
 soothed (daemon)
