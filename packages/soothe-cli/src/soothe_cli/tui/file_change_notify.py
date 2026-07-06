@@ -6,7 +6,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe_cli.runtime.state.file_tracker import FILE_CHANGE_TOOLS, parse_line_range_args
+from soothe_cli.runtime.state.file_tracker import FILE_CHANGE_TOOLS, parse_insert_line_arg, parse_line_range_args
 from soothe_cli.tui.file_change_renderers import (
     build_file_change_preview,
     file_change_preview_label,
@@ -75,6 +75,12 @@ async def mount_file_change_preview(
     ):
         return
     if tool_name == "edit_file_lines" and parse_line_range_args(args) is None:
+        return
+    if tool_name == "insert_lines" and parse_insert_line_arg(args) is None:
+        return
+    if tool_name == "delete_lines" and parse_line_range_args(args) is None:
+        return
+    if tool_name == "apply_diff" and not str(args.get("diff") or "").strip():
         return
 
     built = build_file_change_preview(tool_name, args, assistant_id=assistant_id)
