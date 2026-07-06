@@ -274,7 +274,7 @@ def message_from_widget(widget: Widget) -> MessageData:
     if isinstance(widget, FileChangePreviewWidget):
         path = str(widget.data.get("file_path") or widget.data.get("path") or "")
         summary = f"{widget._action_label}: {path}" if path else widget._action_label
-        return MessageData(type=MessageType.APP, content=summary or "File change", id=widget_id)
+        return MessageData(type=MessageType.APP, content=summary or "Change", id=widget_id)
 
     if isinstance(widget, SummarizationMessage):
         return MessageData(

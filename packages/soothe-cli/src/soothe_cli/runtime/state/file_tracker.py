@@ -19,6 +19,16 @@ FileOpStatus = Literal["pending", "success", "error"]
 FILE_CHANGE_TOOLS: frozenset[str] = get_file_write_tool_names()
 """Filesystem tools that produce before/after diffs in the TUI chat."""
 
+_FILE_CHANGE_PREVIEW_LABELS: dict[str, str] = {
+    "write_file": "Writing",
+    "edit_file": "Editing",
+    "edit_file_lines": "Editing",
+    "insert_lines": "Inserting",
+    "delete_lines": "Deleting",
+    "apply_diff": "Patching",
+    "delete_file": "Deleting",
+}
+
 
 def _safe_read(path: Path) -> str | None:
     """Read file content, returning None on failure.
@@ -429,12 +439,17 @@ def track_file_operation(
     tracker.start_operation(tool_name, args, tcid)
 
 
+def file_change_preview_label(tool_name: str) -> str:
+    """Short header label for a pending filesystem tool preview."""
+    return _FILE_CHANGE_PREVIEW_LABELS.get(tool_name, "Change")
+
+
 def file_change_action_label(record: FileOperationRecord) -> str:
     """Human-readable label for a completed file operation (chat diff header)."""
     if record.tool_name == "delete_file":
         return "Deleted"
     if record.tool_name == "write_file" and not (record.before_content or ""):
-        return "New file"
+        return "Created"
     if record.tool_name == "write_file":
         return "Written"
     if record.tool_name in ("edit_file", "edit_file_lines", "delete_lines", "apply_diff"):

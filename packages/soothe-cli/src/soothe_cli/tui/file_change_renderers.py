@@ -27,21 +27,6 @@ from soothe_cli.tui.widgets.file_change_preview import (
     unified_diff_body_lines,
 )
 
-_PREVIEW_LABELS: dict[str, str] = {
-    "write_file": "Writing file",
-    "edit_file": "Editing file",
-    "edit_file_lines": "Editing lines",
-    "insert_lines": "Inserting lines",
-    "delete_lines": "Deleting lines",
-    "apply_diff": "Applying patch",
-    "delete_file": "Deleting file",
-}
-
-
-def file_change_preview_label(tool_name: str) -> str:
-    """Short header label for a pending filesystem tool preview."""
-    return _PREVIEW_LABELS.get(tool_name, "File change")
-
 
 def build_file_change_preview(
     tool_name: str,

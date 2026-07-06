@@ -11,6 +11,7 @@ from soothe.foundation.sloop.engine.scenario_classifier import (
     _extract_execution_summary,
     _heuristic_classify,
     classify_synthesis_scenario,
+    format_hint_for_scenario,
 )
 
 
@@ -184,3 +185,11 @@ async def test_heuristic_skips_llm_for_single_step() -> None:
     result = await classify_synthesis_scenario("count readmes", _build_state(step_count=1), llm)
     assert result.scenario == "general_summary"
     assert result.contextual_focus[0].startswith("Summarize result for:")
+
+
+def test_format_hint_for_scenario_builtin_and_custom_fallback() -> None:
+    """IG-552: every built-in scenario has a format hint; unknown uses custom."""
+    hint = format_hint_for_scenario("code_architecture_design")
+    assert "GFM table" in hint
+    assert "mermaid" in hint
+    assert format_hint_for_scenario("novel_scenario") == format_hint_for_scenario("custom")

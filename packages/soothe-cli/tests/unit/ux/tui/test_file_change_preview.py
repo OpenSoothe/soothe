@@ -17,6 +17,7 @@ from soothe_cli.runtime.state.file_tracker import (
     apply_insert_lines_to_content,
     extract_line_range_text,
     file_change_action_label,
+    file_change_preview_label,
 )
 from soothe_cli.tui.file_change_notify import (
     finalize_file_change_preview,
@@ -41,6 +42,18 @@ from soothe_cli.tui.widgets.messages.diff_message import DiffMessage
 def test_file_change_tools_match_metadata_registry() -> None:
     """TUI file-change previews cover every file_write tool in metadata."""
     assert FILE_CHANGE_TOOLS == get_file_write_tool_names()
+
+
+def test_file_change_preview_labels_are_single_word_verbs() -> None:
+    """In-flight file cards use one-word action prefixes before the path."""
+    assert file_change_preview_label("write_file") == "Writing"
+    assert file_change_preview_label("edit_file") == "Editing"
+    assert file_change_preview_label("edit_file_lines") == "Editing"
+    assert file_change_preview_label("insert_lines") == "Inserting"
+    assert file_change_preview_label("delete_lines") == "Deleting"
+    assert file_change_preview_label("apply_diff") == "Patching"
+    assert file_change_preview_label("delete_file") == "Deleting"
+    assert file_change_preview_label("unknown_tool") == "Change"
 
 
 def test_file_change_preview_uses_stream_card_bottom_margin() -> None:
@@ -91,7 +104,7 @@ def test_write_file_preview_starts_collapsed() -> None:
     """File previews default to a single-line summary in the message stream."""
     widget = WriteFilePreviewWidget(
         {"file_path": "src/a.py", "content": "hello", "is_new_file": True},
-        action_label="Writing file",
+        action_label="Writing",
     )
     assert widget.is_expanded is False
     widget.toggle_expand()
@@ -106,7 +119,7 @@ def test_write_file_preview_compose_includes_header_and_body() -> None:
     """Expanded compose still includes header and diff/content children."""
     widget = WriteFilePreviewWidget(
         {"file_path": "src/a.py", "content": "line1\nline2", "is_new_file": True},
-        action_label="Writing file",
+        action_label="Writing",
     )
     children = list(widget.compose())
     classes = [c for child in children for c in (getattr(child, "classes", None) or set())]
@@ -119,7 +132,7 @@ async def test_finalize_preserves_collapsed_state() -> None:
     """Finalizing on-disk results does not force the preview open."""
     widget = WriteFilePreviewWidget(
         {"file_path": "/tmp/x.txt", "content": "draft", "is_new_file": True},
-        action_label="Writing file",
+        action_label="Writing",
     )
     widget._finalized = False
     record = FileOperationRecord(
@@ -328,7 +341,7 @@ async def test_mount_renders_collapsed_one_line_summary() -> None:
 
     class PreviewApp(App):
         def compose(self) -> ComposeResult:
-            yield VerticalScroll(cls(data, action_label="Editing file"))
+            yield VerticalScroll(cls(data, action_label="Editing"))
 
     app = PreviewApp()
     async with app.run_test(size=(100, 10)):
@@ -338,7 +351,7 @@ async def test_mount_renders_collapsed_one_line_summary() -> None:
         assert widget.size.height >= 1
         assert header.size.height >= 1
         rendered = str(header.render())
-        assert "Editing file" in rendered
+        assert "Editing" in rendered
         assert "src/a.py" in rendered
 
 
@@ -383,7 +396,7 @@ async def test_finalize_file_change_preview_upgrades_mounted_widget() -> None:
         assistant_id=None,
     )
     widget = adapter._file_change_widgets["tc-1"]
-    assert widget._action_label == "Writing file"
+    assert widget._action_label == "Writing"
 
     record = FileOperationRecord(
         tool_name="write_file",

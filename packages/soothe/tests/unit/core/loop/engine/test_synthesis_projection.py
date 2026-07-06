@@ -213,3 +213,32 @@ def test_system_prompt_uses_synthesis_instructions_wrapper_and_anti_echo_rules()
     assert "SYNTHESIS_REPORT" not in text
     assert "Never output `<SYNTHESIS_INSTRUCTIONS>`" in text
     assert "start immediately with the first required section heading" in text
+
+
+def test_system_prompt_includes_cli_formatting_rules() -> None:
+    """IG-552: synthesis system prompt instructs tables, bullets, and mermaid."""
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=["Summary"],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Group by theme",
+    )
+    text = render_synthesis_system_prompt(classification, user_goal="summarize work")
+    assert "CLI presentation" in text
+    assert "GFM pipe tables" in text
+    assert "markdown bullets" in text
+    assert "```mermaid" in text
+
+
+def test_system_prompt_includes_scenario_format_hint() -> None:
+    """IG-552: per-scenario layout hints are injected for the matched scenario."""
+    classification = ScenarioClassification(
+        scenario="decision_analysis",
+        sections=["Context", "Options", "Trade-offs", "Recommendation"],
+        contextual_focus=["Compare approaches"],
+        evidence_emphasis="Tabulate options",
+    )
+    text = render_synthesis_system_prompt(classification, user_goal="pick a cache")
+    assert 'Scenario-specific layout for "decision_analysis"' in text
+    assert "Options comparison" in text
+    assert "GFM table" in text
