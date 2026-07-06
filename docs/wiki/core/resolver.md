@@ -1,3 +1,11 @@
+---
+title: "Protocol Resolver"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 6
+description: Wiring protocol declarations from configuration to runtime instances.
+---
+
 # Protocol Resolver
 
 Wiring protocol declarations from configuration to runtime instances.

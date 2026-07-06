@@ -1,3 +1,11 @@
+---
+title: "ContextProtocol"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 3
+description: Within-thread context and working memory protocol — currently draft status, not yet implemented.
+---
+
 # ContextProtocol
 
 **RFC**: 302 (Protocol Specifications series)

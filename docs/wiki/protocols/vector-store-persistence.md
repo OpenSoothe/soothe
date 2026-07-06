@@ -1,3 +1,12 @@
+---
+title: "VectorStoreProtocol & AsyncPersistStore"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 5
+description: >-
+  Semantic vector search and namespaced key-value storage protocols, with PGVector, SQLiteVec, and Weaviate backends.
+---
+
 # VectorStoreProtocol & AsyncPersistStore
 
 **RFCs**: RFC-000 Module 8 (VectorStore), RFC-300 (PersistStore)

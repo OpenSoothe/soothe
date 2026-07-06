@@ -1,3 +1,12 @@
+---
+title: "Vector Store Backends"
+parent: Backends
+grand_parent: Wiki
+nav_order: 4
+description: >-
+  Semantic search via VectorStoreProtocol, storing embedding vectors and performing similarity search for meaning-based retrieval.
+---
+
 # Vector Store Backends
 
 Semantic search via `VectorStoreProtocol`. Vector store backends store embedding vectors and perform similarity search, enabling meaning-based retrieval for memory, context, and knowledge systems. They are the engine behind Soothe's "find by meaning, not keywords" capabilities.

@@ -1,3 +1,11 @@
+---
+title: "MemoryProtocol"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 2
+description: Cross-thread long-term knowledge protocol with semantic recall, implemented by the MemU backend.
+---
+
 # MemoryProtocol
 
 **RFC**: 303 (Protocol Specifications series)

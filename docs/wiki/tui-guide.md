@@ -1,3 +1,11 @@
+---
+title: TUI Guide
+parent: User Guides
+nav_order: 2
+description: >-
+  Terminal user interface walkthrough — slash commands, panels, shortcuts.
+---
+
 # TUI Guide
 
 Master the Soothe terminal user interface (TUI).

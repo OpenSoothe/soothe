@@ -1,3 +1,11 @@
+---
+title: "ContextEngine (Goal Engine)"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 4
+description: Autonomous goal management via goal DAGs, ledger, and bounded projection.
+---
+
 # ContextEngine (Goal Engine)
 
 Autonomous goal management via goal DAGs, ledger, and bounded projection.

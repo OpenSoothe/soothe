@@ -1,3 +1,11 @@
+---
+title: Contributing Guide
+parent: Development & Contributing
+nav_order: 1
+description: >-
+  Development workflow, code standards, and contribution process.
+---
+
 # Contributing Guide
 
 Welcome to Soothe! This guide covers development workflow, code standards, and contribution process.

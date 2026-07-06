@@ -1,3 +1,12 @@
+---
+title: "Policy Backends"
+parent: Backends
+grand_parent: Wiki
+nav_order: 5
+description: >-
+  Permission-based access control via PolicyProtocol, enforcing security boundaries and least-privilege delegation.
+---
+
 # Policy Backends
 
 Permission-based access control via `PolicyProtocol`. Policy backends enforce security boundaries, filesystem access rules, and least-privilege delegation across Soothe's execution. They determine whether each action (file read, shell command, network call, subagent spawn) is allowed, denied, or requires interactive approval.

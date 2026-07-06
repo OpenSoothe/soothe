@@ -1,3 +1,12 @@
+---
+title: "Security Hardening"
+parent: Deployment
+grand_parent: Wiki
+nav_order: 3
+description: >-
+  Comprehensive security guide for production Soothe deployments, covering reverse proxies, TLS, and access control.
+---
+
 # Security Hardening Guide
 
 Comprehensive security guide for production Soothe deployments.

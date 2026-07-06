@@ -2,7 +2,7 @@
 title: API Reference
 parent: Wiki
 has_children: true
-nav_order: 9
+nav_order: 12
 description: >-
   Core, daemon, and SDK package API knowledge articles.
 permalink: /wiki/api-reference/

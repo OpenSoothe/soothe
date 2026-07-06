@@ -1,3 +1,12 @@
+---
+title: "MCP Integration"
+parent: Capabilities
+grand_parent: Wiki
+nav_order: 3
+description: >-
+  Model Context Protocol integration providing standardized access to external tools, prompts, and resources.
+---
+
 # MCP Integration
 
 **MCP (Model Context Protocol)** integration provides standardized access to external tools, prompts, and resources. Soothe implements a daemon-singleton MCP subsystem (RFC-412) that wraps `langchain_mcp_adapters.MultiServerMCPClient` with progressive disclosure, policy gating, and resource management.

@@ -1,3 +1,12 @@
+---
+title: "Tools System"
+parent: Capabilities
+grand_parent: Wiki
+nav_order: 2
+description: >-
+  Single-purpose utilities the agent invokes for immediate operations, following the single-purpose tool design pattern.
+---
+
 # Tools System
 
 **Tools** are single-purpose utilities that the agent invokes directly for immediate operations. Soothe follows a **single-purpose tool design pattern** (RFC-101) where each tool performs exactly one operation, eliminating the mode/action indirection that creates cognitive load for the LLM.

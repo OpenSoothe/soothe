@@ -1,3 +1,11 @@
+---
+title: "StrangeLoop"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 3
+description: Plan-Execute loop for single-goal agentic execution — Layer 2 of the execution model.
+---
+
 # StrangeLoop
 
 Plan-Execute loop for single-goal agentic execution — Layer 2 of the execution model.

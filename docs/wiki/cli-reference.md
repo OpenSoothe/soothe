@@ -1,3 +1,11 @@
+---
+title: CLI Reference
+parent: User Guides
+nav_order: 1
+description: >-
+  Complete command-line interface documentation for Soothe.
+---
+
 # CLI Reference
 
 Complete command-line interface documentation for Soothe.

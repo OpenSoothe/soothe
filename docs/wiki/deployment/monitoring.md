@@ -1,3 +1,11 @@
+---
+title: "Monitoring and Observability"
+parent: Deployment
+grand_parent: Wiki
+nav_order: 2
+description: Comprehensive guide for monitoring Soothe daemon, tracking LLM usage, and setting up observability.
+---
+
 # Monitoring and Observability Guide
 
 Comprehensive guide for monitoring Soothe daemon, tracking LLM usage, and setting up observability.

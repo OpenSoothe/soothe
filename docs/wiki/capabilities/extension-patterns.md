@@ -1,3 +1,12 @@
+---
+title: "Extension Patterns"
+parent: Capabilities
+grand_parent: Wiki
+nav_order: 4
+description: >-
+  Design decisions, patterns, and gotchas for building extensions that integrate cleanly with Soothe's plugin architecture.
+---
+
 # Extension Patterns
 
 The **Plugin System** (RFC-600) provides a decorator-based API for extending Soothe with custom tools, subagents, and event types. This guide covers the design decisions, patterns, and gotchas for building extensions that integrate cleanly with Soothe's architecture.

@@ -1,3 +1,12 @@
+---
+title: "PlannerProtocol & LoopPlannerProtocol"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 6
+description: >-
+  Planning protocols for structured plan generation, two-phase loop planning, and continuation routing.
+---
+
 # PlannerProtocol & LoopPlannerProtocol
 
 **RFCs**: 304 (Planner), 604 (LoopPlanner two-phase), 226 (continuation routing)

@@ -1,3 +1,12 @@
+---
+title: "Core Framework API"
+parent: API Reference
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  The soothe package — configuration model, protocol abstractions, agent construction pipeline, and execution runner.
+---
+
 # Core Framework (`soothe`)
 
 The `soothe` package is the heart of the system — it provides the configuration model, the protocol abstractions that define every pluggable capability, the agent construction pipeline, and the execution runner. The daemon and SDK packages build on top of this foundation.

@@ -1,3 +1,12 @@
+---
+title: "YAML Reference"
+parent: Configuration Guide
+grand_parent: Wiki
+nav_order: 1
+description: >-
+  A condensed quick-reference for the Soothe YAML schema, mapping fields to their types, defaults, and constraints.
+---
+
 # YAML Reference
 
 A condensed quick-reference for the Soothe YAML schema. This is a map, not an enumeration — for every field's type, default, and constraint, read the authoritative source in `packages/soothe/src/soothe/config/models.py`.

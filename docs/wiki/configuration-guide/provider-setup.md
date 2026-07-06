@@ -1,3 +1,11 @@
+---
+title: "Provider Setup"
+parent: Configuration Guide
+grand_parent: Wiki
+nav_order: 4
+description: Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends.
+---
+
 # Provider Setup
 
 Choosing and configuring LLM providers, embedding models, vector stores, and persistence backends — with the decision criteria the schema alone won't tell you.

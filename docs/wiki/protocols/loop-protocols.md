@@ -1,3 +1,12 @@
+---
+title: "Loop-Level Protocols"
+parent: Protocols
+grand_parent: Wiki
+nav_order: 7
+description: >-
+  Loop working memory, StrangeLoop, LoopPlanner, and OperationSecurity protocols for loop-level execution control.
+---
+
 # Loop-Level Protocols
 
 **RFCs**: 203 (LoopWorkingMemory), 220 (StrangeLoop), 604 (LoopPlanner), 617 (OperationSecurity)

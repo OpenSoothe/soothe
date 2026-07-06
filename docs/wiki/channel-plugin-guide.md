@@ -1,3 +1,11 @@
+---
+title: "Channel Plugin Development Guide"
+parent: Wiki
+nav_order: 6.1
+description: >-
+  How to create new channel plugins for the Soothe daemon, enabling communication with external platforms like Telegram and Discord.
+---
+
 # Channel Plugin Development Guide
 
 This guide explains how to create new channel plugins for the Soothe daemon. Channels enable the agent to communicate with external platforms like Telegram, Discord, Matrix, Slack, and more.

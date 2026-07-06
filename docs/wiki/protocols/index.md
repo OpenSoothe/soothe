@@ -2,7 +2,7 @@
 title: Protocols
 parent: Wiki
 has_children: true
-nav_order: 7
+nav_order: 8
 description: >-
   Protocol layer abstractions — persistence, cognition, and execution protocols.
 permalink: /wiki/protocols/

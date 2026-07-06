@@ -1,3 +1,11 @@
+---
+title: "Event System"
+parent: Core Modules
+grand_parent: Wiki
+nav_order: 5
+description: Centralized event infrastructure for Soothe's protocol observability and event registration.
+---
+
 # Event System
 
 Centralized event infrastructure for Soothe's protocol observability.

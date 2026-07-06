@@ -1,3 +1,11 @@
+---
+title: Subagents
+parent: User Guides
+nav_order: 4
+description: >-
+  Built-in specialized subagents and community plugin agents.
+---
+
 # Specialized Subagents
 
 Core Soothe ships five built-in subagents: **planner**, **tacitus**, **browser_use**, **veritas**, and **skillify**. Additional optional delegated agents (e.g. **weaver** and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.

@@ -1,3 +1,12 @@
+---
+title: "Common Configuration Patterns"
+parent: Configuration Guide
+grand_parent: Wiki
+nav_order: 3
+description: >-
+  Real-world Soothe configuration recipes with the reasoning behind each one, for use as starting points.
+---
+
 # Common Configuration Patterns
 
 Real-world Soothe recipes — and the reasoning behind each one. Use these as starting points, not gospel; the goal is to understand *why* a config looks the way it does so you can adapt it.

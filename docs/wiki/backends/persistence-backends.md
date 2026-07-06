@@ -1,3 +1,12 @@
+---
+title: "Persistence Backends"
+parent: Backends
+grand_parent: Wiki
+nav_order: 3
+description: >-
+  Generic key-value storage via AsyncPersistStore, the foundational storage layer for durability, context, and other protocols.
+---
+
 # Persistence Backends
 
 Generic key-value storage via `AsyncPersistStore`. Persistence backends are the foundational storage layer — durability, context, and other protocols compose on top of them. They store arbitrary JSON-serializable data indexed by string keys, with namespace isolation and prefix-based listing.

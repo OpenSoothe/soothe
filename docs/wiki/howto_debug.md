@@ -1,3 +1,11 @@
+---
+title: Debug Guide
+parent: Troubleshooting & Debugging
+nav_order: 2
+description: >-
+  Comprehensive guide for debugging Soothe agents and diagnosing issues.
+---
+
 # Soothe Debug Guide
 
 Comprehensive guide for debugging Soothe agents and diagnosing issues.

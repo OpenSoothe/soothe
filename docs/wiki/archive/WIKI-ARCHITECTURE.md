@@ -1,3 +1,10 @@
+---
+title: "Wiki Architecture (Archived)"
+parent: Wiki
+nav_order: 13.1
+description: Archived design proposal for the wiki structure — retained for historical reference only.
+---
+
 > **⚠️ ARCHIVED DESIGN PROPOSAL**
 >
 > This document is a future-dated (2026-06-06) planning proposal for the wiki structure.

@@ -1,3 +1,11 @@
+---
+title: Thread Management
+parent: User Guides
+nav_order: 5
+description: >-
+  Conversation threads, session resumption, and context persistence.
+---
+
 # Thread Management
 
 Work with conversation threads in Soothe.
