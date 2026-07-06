@@ -49,6 +49,7 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
 
     This avoids importing heavy subagent modules at module load time.
     """
+    from soothe.subagents.browser_use import create_browser_use_subagent
     from soothe.subagents.plan import create_plan_subagent
     from soothe.subagents.skillify import create_skillify_subagent
     from soothe.subagents.tacitus import create_tacitus_subagent
@@ -57,6 +58,7 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
         "planner": create_plan_subagent,
         "skillify": create_skillify_subagent,
         "tacitus": create_tacitus_subagent,
+        "browser_use": create_browser_use_subagent,
     }
 
 

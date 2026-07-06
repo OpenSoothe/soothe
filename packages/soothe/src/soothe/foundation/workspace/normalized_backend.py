@@ -85,7 +85,10 @@ def _read_result_for_path(
     end_idx = min(start_idx + limit, len(lines))
     if start_idx >= len(lines):
         return ReadResult(
-            error=f"Line offset {offset} exceeds file length ({len(lines)} lines)",
+            error=(
+                f"Line offset {offset} exceeds file length ({len(lines)} lines). "
+                f"Offset is 0-indexed: use offset={max(len(lines) - 1, 0)} to read the last line."
+            ),
         )
 
     return ReadResult(

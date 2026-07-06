@@ -575,6 +575,17 @@ class TestComposeSkillsBlockJustInvokedExclusion:
         assert "search_tools" in prompt
 
 
+class TestToolSelectionGuidance:
+    def test_prompt_includes_tool_selection_block(self) -> None:
+        from soothe.middleware.system_prompt import SystemPromptMiddleware
+
+        middleware = SystemPromptMiddleware(config=SootheConfig())
+        prompt = middleware._get_prompt_for_complexity("simple", {})
+        assert "<TOOL_SELECTION>" in prompt
+        assert "read_command" in prompt
+        assert "run_command" in prompt
+
+
 class TestWorkspaceInjection:
     """`_should_inject_workspace` is unconditional on `state['workspace']`.
 

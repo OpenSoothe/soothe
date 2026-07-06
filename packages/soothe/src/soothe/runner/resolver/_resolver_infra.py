@@ -38,13 +38,17 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
         try:
             from soothe.backends.durability.postgresql import PostgreSQLDurability
             from soothe.backends.persistence import create_persist_store
+            from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
 
             # RFC-612: Use dedicated metadata database
             dsn = config.resolve_postgres_dsn_for_database("metadata")
+            shared_pool = SharedMetadataPool.get_or_create_pool(config)
             persist_store = create_persist_store(
                 backend="postgresql",
                 dsn=dsn,
                 namespace="durability",
+                config=config,
+                shared_pool=shared_pool,
             )
             logger.debug("Using PostgreSQL durability backend (metadata database)")
             return PostgreSQLDurability(persist_store=persist_store)

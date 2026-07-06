@@ -504,6 +504,9 @@ class SystemPromptMiddleware(AgentMiddleware):
         if tools_block:
             static_sections.append(tools_block)
 
+        if complexity != "minimal":
+            static_sections.append(self._build_tool_selection_guidance_section())
+
         # ── Gated static blocks ─────────────────────────────────────────
 
         # Context projection (static — changes infrequently)
@@ -648,6 +651,20 @@ class SystemPromptMiddleware(AgentMiddleware):
             Formatted prompt based on complexity level with XML sections.
         """
         return self._get_prompt_for_complexity(classification.task_complexity, state)
+
+    @staticmethod
+    def _build_tool_selection_guidance_section() -> str:
+        """Build static builtin-tool naming guidance to reduce hallucinated tool names."""
+        return (
+            "<TOOL_SELECTION>\n"
+            "Builtin tool naming (use exact names; aliases do not exist):\n"
+            "- Shell commands and pipelines: run_command (not read_command or shell)\n"
+            "- Search text inside files: grep\n"
+            "- Find files by path pattern: glob\n"
+            "- List a directory: ls with path in args (not in the tool name)\n"
+            "- Read file contents: read_file with file_path in args\n"
+            "</TOOL_SELECTION>"
+        )
 
     def _build_memory_section(self, memories: list[MemoryItem]) -> str:
         """Build <MEMORY_SUMMARY> XML for long-term memories (RFC-214).

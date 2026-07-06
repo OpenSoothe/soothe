@@ -434,6 +434,23 @@ class TestInsertLinesTool:
         assert "Inserted" in result
         assert test_file.read_text() == "line1\nline2\nline3\n"
 
+    def test_insert_defaults_line_to_one(
+        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
+    ) -> None:
+        test_file = tmp_path / "doc.md"
+        test_file.write_text("body\n")
+
+        tool = self._get_tool(middleware)
+        result = tool.invoke(
+            {
+                "file_path": str(test_file),
+                "content": "---\ntitle: Example\n---\n",
+            }
+        )
+
+        assert "Inserted" in result
+        assert test_file.read_text().startswith("---\n")
+
     def test_invalid_line_number(
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware
     ) -> None:

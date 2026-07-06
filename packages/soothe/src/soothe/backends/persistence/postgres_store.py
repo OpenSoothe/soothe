@@ -32,19 +32,32 @@ class PostgreSQLPersistStore:
         dsn: str,
         namespace: str = "default",
         pool_size: int = 10,
+        *,
+        shared_pool: Any | None = None,
+        pool_timing: dict[str, Any] | None = None,
     ) -> None:
         """Initialize PostgreSQL store.
 
         Args:
             dsn: PostgreSQL connection string
             namespace: Namespace for key isolation (e.g., "context", "memory", "durability")
-            pool_size: Connection pool size (default: 10, matching checkpointer)
+            pool_size: Connection pool size (default: 10). Use 0 with ``shared_pool`` for
+                process-wide singleton mode.
+            shared_pool: Externally managed ``AsyncConnectionPool`` (daemon singleton).
+            pool_timing: Optional psycopg pool options when creating an owned pool.
         """
         self._dsn = dsn
         self._namespace = namespace
         self._pool_size = pool_size
-        self._pool: Any = None
+        self._pool_timing = pool_timing
+        self._shared_pool = shared_pool
+        self._owns_pool = pool_size != 0 and shared_pool is None
+        if shared_pool is not None:
+            self._pool = shared_pool
+        else:
+            self._pool: Any = None
         self._init_lock = asyncio.Lock()
+        self._schema_initialized = shared_pool is not None
 
     async def _reset_pool(self) -> None:
         """Close and clear the current pool after a fatal connection error."""
@@ -125,7 +138,14 @@ class PostgreSQLPersistStore:
             RuntimeError: If pool initialization fails
         """
         if self._pool is not None:
+            if not self._schema_initialized:
+                await self._initialize_schema(self._pool)
+                self._schema_initialized = True
             return self._pool
+
+        if self._pool_size == 0:
+            msg = "PostgreSQL persist store in shared pool mode but pool not set"
+            raise RuntimeError(msg)
 
         async with self._init_lock:
             if self._pool is not None:
@@ -137,16 +157,23 @@ class PostgreSQLPersistStore:
                 msg = "psycopg[pool] is required for PostgreSQL persistence: pip install 'soothe[postgres]'"
                 raise ImportError(msg) from exc
 
-            pool = AsyncConnectionPool(
-                conninfo=self._dsn,
-                min_size=1,
-                max_size=self._pool_size,
-                open=False,
-            )
+            from soothe.foundation.persistence.postgres_pool_lifecycle import apply_row_factory
+
+            pool_kwargs: dict[str, Any] = {
+                "conninfo": self._dsn,
+                "max_size": self._pool_size,
+                "open": False,
+            }
+            if self._pool_timing:
+                pool_kwargs.update(self._pool_timing)
+            else:
+                pool_kwargs["min_size"] = min(1, self._pool_size)
+            pool = AsyncConnectionPool(**apply_row_factory(pool_kwargs))
 
             try:
                 await pool.open()
                 await self._initialize_schema(pool)
+                self._schema_initialized = True
                 logger.debug(
                     "[Store] PostgreSQL initialized (namespace=%s, pool=%d)",
                     self._namespace,
@@ -159,6 +186,18 @@ class PostgreSQLPersistStore:
 
             self._pool = pool
             return self._pool
+
+    async def close(self) -> None:
+        """Close the owned connection pool (skip shared singleton pools)."""
+        if not self._owns_pool or self._pool is None:
+            return
+        try:
+            if not getattr(self._pool, "closed", False):
+                await self._pool.close()
+        except Exception:
+            logger.debug("[Store] Failed to close PostgreSQL pool", exc_info=True)
+        finally:
+            self._pool = None
 
     async def _initialize_schema(self, pool: Any) -> None:
         """Apply soothe_metadata init script (async)."""
@@ -289,10 +328,3 @@ class PostgreSQLPersistStore:
                 return [row[0] for row in rows]
 
         return await self._run_with_pool_recovery("list_keys", _list_keys_with_pool)
-
-    async def close(self) -> None:
-        """Close connection pool (async)."""
-        if self._pool is not None:
-            await self._pool.close()
-            self._pool = None
-            logger.info("[Store] PostgreSQL closed (namespace=%s)", self._namespace)

@@ -196,6 +196,9 @@ class TestGoalContextAdapterCEDAGReads:
             async def load(self):
                 return MockCheckpoint()
 
+            def get_checkpoint(self):
+                return MockCheckpoint()
+
             async def save(self, checkpoint):
                 pass
 
@@ -218,6 +221,9 @@ class TestGoalContextAdapterCEDAGReads:
 
         class MockStateManager:
             async def load(self):
+                return MockCheckpoint()
+
+            def get_checkpoint(self):
                 return MockCheckpoint()
 
             async def save(self, checkpoint):

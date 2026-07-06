@@ -304,7 +304,8 @@ class ThreadPoolConfig(BaseModel):
     Daemon-level singleton pools are shared by ALL threads in the pool. This is
     efficient because threads share the same memory space and asyncio event loops
     can access shared AsyncConnectionPool instances. Defaults use postgres_pool_min_size
-    4 and max 24 per shared checkpointer/sloop pool; tune if thread_pool.max_pool_size grows.
+    8 and max 64 per shared checkpointer/sloop pool; tune for 50–100 concurrent loops
+    with PgBouncer (see persistence.metadata_pool_size).
 
     Trade-offs vs WorkerPoolConfig:
     - Lower spawn overhead (milliseconds vs ~8s subprocess)
@@ -332,16 +333,16 @@ class ThreadPoolConfig(BaseModel):
         description="Enable thread pool mode (lighter weight, ~ms vs ~8s subprocess spawn)",
     )
     min_pool_size: int = Field(
-        default=8,
+        default=16,
         ge=1,
         le=64,
-        description="Minimum threads to keep pooled (IG-535: 8 baseline for burst handling)",
+        description="Minimum threads to keep pooled (IG-553: 16 baseline for burst handling)",
     )
     max_pool_size: int = Field(
-        default=32,
+        default=96,
         ge=1,
         le=128,
-        description="Maximum threads to scale up (IG-535: 32 for concurrent loop parallelism)",
+        description="Maximum threads to scale up (IG-553: 96 for 50–100 concurrent loops)",
     )
     idle_timeout_seconds: int = Field(
         default=300,

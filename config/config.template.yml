@@ -432,12 +432,14 @@ persistence:
     vectors: soothe_vectors
     memory: soothe_memory
   soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
-  postgres_pool_min_size: 4
-  checkpointer_pool_size: 24
-  sloop_pool_size: 24
+  postgres_pool_min_size: 8
+  checkpointer_pool_size: 64
+  sloop_pool_size: 64
+  metadata_pool_size: 32
   postgres_pool_max_idle_seconds: 120.0
   postgres_pool_max_lifetime_seconds: 1800.0
-  postgres_pool_acquire_timeout_seconds: 30.0
+  postgres_pool_acquire_timeout_seconds: 45.0
+  # Thread-pool + 50–100 loops: shared pools (checkpointer+sloop+metadata+vector), use PgBouncer.
   sqlite_reader_pool_size: 8
   archive_enabled: true
   archive_retention_days: 90
@@ -447,7 +449,7 @@ vector_stores:
 - name: sqlite_vec_default
   provider_type: sqlite_vec
   dsn: null
-  pool_size: 5
+  pool_size: 48
   index_type: hnsw
   url: null
   api_key: null

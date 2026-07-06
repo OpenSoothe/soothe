@@ -35,7 +35,7 @@ class TestPGVectorStoreUnit:
             # Check defaults
             assert init_sig.parameters["collection"].default == "soothe_vectors"
             assert init_sig.parameters["dsn"].default == "postgresql://localhost/soothe"
-            assert init_sig.parameters["pool_size"].default == 5
+            assert init_sig.parameters["pool_size"].default == 48
             assert init_sig.parameters["index_type"].default == "hnsw"
 
         except ImportError:

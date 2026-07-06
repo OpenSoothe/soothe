@@ -1069,6 +1069,7 @@ class LLMPlanner:
         # Retry structured output up to 2 times when None returned (IG-xxx)
         max_retries = 2
         last_error: Exception | None = None
+        attempt_messages = list(messages)
 
         for attempt in range(max_retries + 1):
             try:
@@ -1077,7 +1078,7 @@ class LLMPlanner:
                 )
                 plan_result = await self._invoke_structured(
                     model,
-                    messages,
+                    attempt_messages,
                     plan_schema,
                     config=lf_cfg,
                     thread_id=thread_id,
@@ -1121,6 +1122,17 @@ class LLMPlanner:
                         attempt + 1,
                         max_retries,
                     )
+                    if "requires non-empty steps" in detail:
+                        attempt_messages = [
+                            *attempt_messages,
+                            HumanMessage(
+                                content=(
+                                    "Your previous plan had type=execute_steps but an empty "
+                                    "steps array. Return execute_steps with at least one step "
+                                    "(id + description)."
+                                )
+                            ),
+                        ]
                     continue
             except Exception as e:
                 # IG-503: Check for transient network error first

@@ -348,11 +348,12 @@ class TestModelRouter:
         assert cfg.resolve_backend("sqlite") == "sqlite"
 
     def test_persistence_postgres_pool_size_defaults(self) -> None:
-        """Shared PostgreSQL pool defaults (min 4, max 24 per pool)."""
+        """Shared PostgreSQL pool defaults for 50–100 concurrent loops (thread_pool)."""
         p = PersistenceConfig(default_backend="postgresql")
-        assert p.postgres_pool_min_size == 4
-        assert p.checkpointer_pool_size == 24
-        assert p.sloop_pool_size == 24
+        assert p.postgres_pool_min_size == 8
+        assert p.checkpointer_pool_size == 64
+        assert p.sloop_pool_size == 64
+        assert p.metadata_pool_size == 32
 
 
 class TestRouterProfiles:

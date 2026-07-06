@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _INDEXING_WAIT_TIMEOUT = 10.0
+_VECTOR_SEARCH_MAX_ATTEMPTS = 3
+_VECTOR_SEARCH_BACKOFF_BASE = 0.5
 
 
 class LazyEmbeddings:
@@ -101,7 +103,7 @@ class SkillRetriever:
             return SkillBundle(query=query)
 
         try:
-            records = await self._vector_store.search(
+            records = await self._search_with_retry(
                 query=query,
                 vector=vector,
                 limit=limit,
@@ -132,6 +134,40 @@ class SkillRetriever:
             results=results,
             total_indexed=total_records,
         )
+
+    async def _search_with_retry(
+        self,
+        *,
+        query: str,
+        vector: list[float],
+        limit: int,
+    ) -> list[Any]:
+        """Search vector store with backoff when the connection pool is saturated."""
+        last_exc: Exception | None = None
+        for attempt in range(_VECTOR_SEARCH_MAX_ATTEMPTS):
+            try:
+                return await self._vector_store.search(
+                    query=query,
+                    vector=vector,
+                    limit=limit,
+                )
+            except Exception as exc:
+                last_exc = exc
+                exc_name = type(exc).__name__
+                is_pool_timeout = exc_name == "PoolTimeout" or "PoolTimeout" in str(exc)
+                if not is_pool_timeout or attempt >= _VECTOR_SEARCH_MAX_ATTEMPTS - 1:
+                    raise
+                delay = _VECTOR_SEARCH_BACKOFF_BASE * (2**attempt)
+                logger.warning(
+                    "Vector store pool timeout (attempt %d/%d), retrying in %.1fs",
+                    attempt + 1,
+                    _VECTOR_SEARCH_MAX_ATTEMPTS,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+        if last_exc is not None:
+            raise last_exc
+        return []
 
     def _check_policy(self, query: str) -> None:
         if self._policy is None:

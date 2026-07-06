@@ -357,6 +357,60 @@ class StrangeLoopStateManager:
 
         return checkpoint
 
+    def get_checkpoint(self) -> StrangeLoopCheckpoint | None:
+        """Return the in-memory checkpoint without reloading from storage."""
+        return self._checkpoint
+
+    def _merge_loaded_checkpoint(self, loaded: StrangeLoopCheckpoint) -> StrangeLoopCheckpoint:
+        """Prefer richer in-memory goal_history over stale index-only DB rows."""
+        mem = self._checkpoint
+        if mem is None:
+            return loaded
+
+        mem_goals = len(mem.goal_history)
+        loaded_goals = len(loaded.goal_history)
+        if mem_goals > loaded_goals:
+            return loaded.model_copy(
+                update={
+                    "goal_history": list(mem.goal_history),
+                    "current_goal_index": mem.current_goal_index,
+                }
+            )
+        if (
+            mem_goals == loaded_goals
+            and mem_goals > 0
+            and mem.updated_at
+            and loaded.updated_at
+            and mem.updated_at > loaded.updated_at
+        ):
+            return loaded.model_copy(
+                update={
+                    "goal_history": list(mem.goal_history),
+                    "current_goal_index": mem.current_goal_index,
+                }
+            )
+        return loaded
+
+    def _resolve_goal_in_history(
+        self,
+        checkpoint: StrangeLoopCheckpoint,
+        goal_record: GoalIndexEntry,
+    ) -> GoalIndexEntry | None:
+        """Find goal in history, repairing when index-only reload dropped entries."""
+        for goal in checkpoint.goal_history:
+            if goal.goal_id == goal_record.goal_id:
+                return goal
+
+        checkpoint.goal_history.append(goal_record)
+        if checkpoint.current_goal_index < 0:
+            checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+        logger.warning(
+            "Repaired missing goal %s in goal_history (now %d entries)",
+            goal_record.goal_id,
+            len(checkpoint.goal_history),
+        )
+        return goal_record
+
     async def load(self) -> StrangeLoopCheckpoint | None:
         """Load existing loop checkpoint (RFC-216: by loop_id).
 
@@ -372,6 +426,7 @@ class StrangeLoopStateManager:
             checkpoint = await self._postgres_backend.load_checkpoint(self.loop_id)
 
             if checkpoint:
+                checkpoint = self._merge_loaded_checkpoint(checkpoint)
                 self._checkpoint = checkpoint
                 logger.debug(
                     "Loaded loop %s checkpoint from PostgreSQL (status %s, %d goals, %d threads)",
@@ -468,6 +523,8 @@ class StrangeLoopStateManager:
                     schema_version=schema_version,
                 )
 
+                checkpoint = self._merge_loaded_checkpoint(checkpoint)
+
                 self._checkpoint = checkpoint
 
                 # Auto-repair: Detect and fix orphaned running goals
@@ -543,15 +600,31 @@ class StrangeLoopStateManager:
         )
         return cursor.fetchall()
 
-    async def save(self, checkpoint: StrangeLoopCheckpoint) -> None:
+    async def save(
+        self,
+        checkpoint: StrangeLoopCheckpoint,
+        *,
+        include_goal_history: bool = False,
+    ) -> None:
         """Persist loop checkpoint to SQLite (RFC-216: indexed by loop_id).
 
         Args:
             checkpoint: Checkpoint to save
+            include_goal_history: When True, write full checkpoint (goal_history
+                included). Use on goal-start boundaries; default index-only is
+                insufficient for reload merge.
         """
-        await self._save_checkpoint_to_db(checkpoint)
+        await self._save_checkpoint_to_db(
+            checkpoint,
+            include_goal_history=include_goal_history,
+        )
 
-    async def _save_checkpoint_to_db(self, checkpoint: StrangeLoopCheckpoint) -> None:
+    async def _save_checkpoint_to_db(
+        self,
+        checkpoint: StrangeLoopCheckpoint,
+        *,
+        include_goal_history: bool = False,
+    ) -> None:
         """Save checkpoint to database (IG-055: PostgreSQL or SQLite).
 
         IG-258 Phase 2: Use single writer connection for SQLite consistency.
@@ -568,11 +641,14 @@ class StrangeLoopStateManager:
         if writer is not None and not self._closed:
             from soothe.foundation.persistence.loop_writer import PersistWriteMode
 
+            write_mode = (
+                PersistWriteMode.FULL if include_goal_history else PersistWriteMode.INDEX_ONLY
+            )
             await writer.enqueue_checkpoint(
                 self.loop_id,
                 checkpoint,
                 durable=False,
-                write_mode=PersistWriteMode.INDEX_ONLY,
+                write_mode=write_mode,
             )
             return
 
@@ -920,14 +996,8 @@ class StrangeLoopStateManager:
             return
 
         checkpoint = self._checkpoint
-        target_goal = None
-        for g in checkpoint.goal_history:
-            if g.goal_id == goal_record.goal_id:
-                target_goal = g
-                break
-
+        target_goal = self._resolve_goal_in_history(checkpoint, goal_record)
         if target_goal is None:
-            logger.error("Cannot find goal %s in goal_history", goal_record.goal_id)
             return
 
         logger.debug(
@@ -1052,15 +1122,8 @@ class StrangeLoopStateManager:
 
         # BUGFIX: Modify goal_history entry directly (not passed parameter)
         # Pydantic model_copy() creates new instances, so goal_record may be detached
-        # Find the goal in goal_history by goal_id and modify that object directly
-        target_goal = None
-        for g in checkpoint.goal_history:
-            if g.goal_id == goal_record.goal_id:
-                target_goal = g
-                break
-
+        target_goal = self._resolve_goal_in_history(checkpoint, goal_record)
         if target_goal is None:
-            logger.error("Cannot find goal %s in goal_history", goal_record.goal_id)
             return
 
         logger.debug(
