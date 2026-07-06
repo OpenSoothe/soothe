@@ -489,6 +489,9 @@ class StrangeLoop:
                 if workspace:
                     self._ce._semantic.workspace = Path(workspace)
 
+            exec_ledger_cfg = self.config.agent.loop.execute_prompt_ledger
+            self._ce.execute_ai_ledger_max_tokens = exec_ledger_cfg.execute_ai_ledger_max_tokens
+
             ce_instance = self._ce
 
             # RFC-630 Phase C: parallelize the pre-graph IO. ``ce.load()`` (prior

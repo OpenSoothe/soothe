@@ -142,7 +142,7 @@ def test_non_continuation_mid_goal_includes_execute_ledger() -> None:
     assert "execute human" in contents
 
 
-def test_continuation_replan_includes_ledger_after_execution() -> None:
+def test_continuation_replan_projects_goal_completion_not_prior_execute() -> None:
     state = _continuation_state(iteration=1)
     state.step_results.append(
         StepResult(step_id="01", success=True, duration_ms=1, thread_id="tid")
@@ -155,5 +155,8 @@ def test_continuation_replan_includes_ledger_after_execution() -> None:
         plan_phase="generate",
     )
 
-    assert len(msgs) == 6  # system + 4 ledger + task human
-    assert "prior execute human" in " ".join(str(getattr(m, "content", "")) for m in msgs)
+    assert len(msgs) == 4  # system + 2 goal_completion ledger + task human
+    contents = " ".join(str(getattr(m, "content", "")) for m in msgs)
+    assert "ledger completion body" in contents
+    assert "prior execute human" not in contents
+    assert "prior execute ai" not in contents

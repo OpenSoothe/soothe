@@ -136,6 +136,7 @@ class PromptBuilder:
             state.loop_messages,
             projection_mode,
             ledger_cfg,
+            soothe_config=self.config,
         )
         completion_in_ledger = projected_ledger_has_goal_completion(projected)
 
