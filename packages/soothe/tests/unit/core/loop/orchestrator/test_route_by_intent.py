@@ -25,10 +25,25 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 # -- Group 2: route_by_intent truth table ---------------------------------
 
 
-def test_route_by_intent_continuation_overlay_wins() -> None:
-    """Continuation (structural) overrides the intake label."""
+def test_route_by_intent_continuation_trivial() -> None:
+    """Continuation trivial goals use plan_assess (continuation discriminator)."""
     state = {"is_continuation": True, "intake_label": IntakeLabel.TRIVIAL}
     assert route_by_intent(state) == "plan_assess"
+
+
+def test_route_by_intent_continuation_simple() -> None:
+    state = {"is_continuation": True, "intake_label": IntakeLabel.SIMPLE}
+    assert route_by_intent(state) == "plan_generate"
+
+
+def test_route_by_intent_continuation_complex() -> None:
+    state = {"is_continuation": True, "intake_label": IntakeLabel.COMPLEX}
+    assert route_by_intent(state) == "bounded_evidence_gather"
+
+
+def test_route_by_intent_continuation_missing_label() -> None:
+    state = {"is_continuation": True, "intake_label": None}
+    assert route_by_intent(state) == "bounded_evidence_gather"
 
 
 def test_route_by_intent_trivial() -> None:
@@ -199,6 +214,42 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
     assert result["is_continuation"] is True
     assert scratch.plan_result is None
+
+
+@pytest.mark.asyncio
+async def test_init_or_resume_simple_synthesizes_assessment_on_continuation() -> None:
+    """Simple intake on continuation turns still synthesizes plan_assessment."""
+    from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        goal_description="upgrade client library",
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
+    loop_state = SimpleNamespace(intent=intent, goal="upgrade client library")
+    prior_goal = SimpleNamespace(
+        id="goal-0",
+        status="completed",
+        description="prior work",
+        action_history=[],
+        steps=SimpleNamespace(nodes={"s1": SimpleNamespace(status="completed")}),
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        scratch=scratch,
+        ce=SimpleNamespace(get_all_goals=lambda: [prior_goal]),
+        ce_goal_id="goal-1",
+        checkpoint=SimpleNamespace(goal_history=[SimpleNamespace(), SimpleNamespace()]),
+        continue_loop_mode=True,
+        emit=_noop_emit,
+    )
+
+    result = await node_init_or_resume(ctx, {})
+
+    assert result["is_continuation"] is True
+    assert scratch.plan_assessment is not None
+    assert scratch.plan_assessment.status == "continue"
 
 
 @pytest.mark.asyncio

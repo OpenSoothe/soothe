@@ -2,7 +2,7 @@
 
 **RFCs**: [RFC-225](../specs/RFC-225-loop-continuity-and-goal-record-enrichment.md), [RFC-226](../specs/RFC-226-loop-continuation-routing.md) (continuation routing), RFC-630 (intake branch routing), RFC-214 (ledger phases)  
 **Created**: 2026-07-06  
-**Status**: Draft  
+**Status**: Implemented (P0–P2)  
 **Related**: [IG-538](IG-538-unified-planner-prompt-assembly.md), [IG-540](IG-540-intent-classify-prompt-ledger-optimization.md), [IG-549](IG-549-loop-worker-goal-boundary-hardening.md)  
 **Incident loop**: `0b37` (`019f3543-de29-7bb1-9e6a-487262690b37`, goal_4)
 

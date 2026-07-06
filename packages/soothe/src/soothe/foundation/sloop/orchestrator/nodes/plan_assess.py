@@ -1,10 +1,8 @@
 """Assess-only planning node (RFC-220 split plan flow).
 
-RFC-226: iter=0 dispatch for continuation queries calls a single
-LLM-driven discriminator (``LLMPlanner.assess_continuation``) that
-routes to either a terminal bootstrap (one step using prior context)
-or the full ``plan_generate`` flow. iter > 0 and fresh-goal iter=0
-keep the existing status-check assess.
+RFC-226: iter=0 continuation goals coordinate intake complexity with optional
+``assess_continuation`` for trivial follow-ups. Simple/complex intake skips the
+discriminator and routes to ``plan_generate`` (or the evidence-gather spine).
 """
 
 from __future__ import annotations
@@ -13,10 +11,17 @@ import logging
 import random
 from typing import Any, Literal
 
+from soothe.foundation.sloop.cognition.plan_step_safety import intake_label_from_state
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continue_bootstrap_step_briefs,
     build_prior_goal_summaries,
     polish_continuation_assess_reasoning,
+)
+from soothe.foundation.sloop.intention.models import IntakeLabel
+from soothe.foundation.sloop.orchestrator.continuation_routing import (
+    bootstrap_terminal_after_execute,
+    continuation_forced_plan_generate_assessment,
+    goal_has_explicit_multi_step_markers,
 )
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -107,7 +112,8 @@ def build_continue_loop_bootstrap_plan(
     goal: str,
     *,
     raw_user_goal: str | None = None,
-    terminal_after_execute: bool = False,
+    goal_description: str | None = None,
+    terminal_after_execute: bool | None = None,
     reasoning: str = "",
     goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low",
 ) -> PlanResult:
@@ -121,7 +127,8 @@ def build_continue_loop_bootstrap_plan(
         raw_user_goal: Original user submission (e.g. lone ``continue`` keyword).
         terminal_after_execute: When True (RFC-226), the plan asserts its single
             step IS the goal completion; ``record_iteration`` routes directly to
-            ``goal_completion`` without an iter=1 status check.
+            ``goal_completion`` without an iter=1 status check. When None, derived
+            from goal text and intent ``goal_description``.
         reasoning: One-sentence assessment reasoning from the discriminator LLM.
         goal_progress: Initial progress estimate.
 
@@ -130,7 +137,20 @@ def build_continue_loop_bootstrap_plan(
     """
     user_goal = (raw_user_goal or goal).strip()
     next_action = random.choice(_CONTINUE_THREAD_DESCRIPTIONS)
-    briefs = build_continue_bootstrap_step_briefs(user_goal=user_goal)
+    briefs = build_continue_bootstrap_step_briefs(
+        user_goal=user_goal,
+        goal_description=goal_description,
+    )
+    if terminal_after_execute is None:
+        terminal_after_execute = bootstrap_terminal_after_execute(
+            raw_user_goal=user_goal,
+            goal_description=goal_description,
+        )
+    default_reasoning = (
+        ""
+        if is_continue_keyword(user_goal)
+        else "Loop-continuation bootstrap: initial planner call skipped."
+    )
     decision = AgentDecision(
         type="execute_steps",
         steps=[
@@ -149,9 +169,7 @@ def build_continue_loop_bootstrap_plan(
     return PlanResult(
         status="continue",
         goal_progress=goal_progress,
-        assessment_reasoning=(
-            reasoning or "Loop-continuation bootstrap: initial planner call skipped."
-        ),
+        assessment_reasoning=reasoning or default_reasoning,
         plan_reasoning="Single execute wave grounded on prior goal completion report.",
         next_action=next_action,
         plan_action="new",
@@ -161,17 +179,58 @@ def build_continue_loop_bootstrap_plan(
     )
 
 
-async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Run assess phase and decide whether generation is needed."""
-    strange_loop = ctx.strange_loop
+async def _emit_continuation_bootstrap_plan(
+    ctx: LoopRuntimeContext,
+    *,
+    plan_result: PlanResult,
+) -> None:
+    """Emit plan wire event for continuation bootstrap."""
     state = ctx.loop_state
-    plan_manager = ctx.plan_manager
-    context = strange_loop._build_plan_context(state)
+    if is_continue_keyword(state.goal):
+        await ctx.emit(
+            "plan",
+            {
+                "iteration": state.iteration,
+                "status": plan_result.status,
+                "progress": plan_result.goal_progress,
+                "next_action": "",
+                "assessment_reasoning": "",
+                "plan_reasoning": "",
+                "plan_action": plan_result.plan_action,
+            },
+        )
+    else:
+        await ctx.emit(
+            "plan",
+            {
+                "iteration": state.iteration,
+                "status": plan_result.status,
+                "progress": plan_result.goal_progress,
+                "next_action": plan_result.next_action,
+                "assessment_reasoning": plan_result.assessment_reasoning,
+                "plan_reasoning": plan_result.plan_reasoning,
+                "plan_action": plan_result.plan_action,
+            },
+        )
 
-    # RFC-226: iter=0 continuation discriminator.
-    # Fires when prior goal context exists, state is a true first plan (no step
-    # results), and the structural continue_loop_mode flag is set by StrangeLoop.
-    if (
+
+def _intent_goal_description(state: LoopState) -> str | None:
+    intent = state.intent
+    if intent is None:
+        return None
+    desc = getattr(intent, "goal_description", None)
+    return desc.strip() if isinstance(desc, str) and desc.strip() else None
+
+
+async def _handle_continuation_first_plan(
+    ctx: LoopRuntimeContext,
+    *,
+    context: Any,
+    strange_loop: Any,
+) -> dict[str, Any] | None:
+    """Run iter=0 continuation routing when eligible; None to fall through."""
+    state = ctx.loop_state
+    if not (
         state.iteration == 0
         and ctx.continue_loop_mode
         and not state.step_results
@@ -185,97 +244,115 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             )
         )
     ):
-        prior_goals = build_prior_goal_summaries(
-            ce=ctx.ce,
-            checkpoint=ctx.checkpoint,
-            exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
+        return None
+
+    prior_goals = build_prior_goal_summaries(
+        ce=ctx.ce,
+        checkpoint=ctx.checkpoint,
+        exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
+    )
+    if not prior_goals:
+        return None
+
+    intake_label = intake_label_from_state(state)
+    goal_description = _intent_goal_description(state)
+
+    if intake_label in (IntakeLabel.SIMPLE, IntakeLabel.COMPLEX):
+        logger.info("[Plan] continuation-assess skipped (intake=%s)", intake_label.value)
+        ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
+        return {"assess_route": "continue_generate"}
+
+    if goal_has_explicit_multi_step_markers(state.goal):
+        logger.info("[Plan] continuation guardrail: multi-step goal forced plan_generate")
+        ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
+        return {"assess_route": "continue_generate"}
+
+    if is_continue_keyword(state.goal):
+        logger.info("[Plan] iter=0 continuation-assess: bootstrap (continue keyword)")
+        plan_result = build_continue_loop_bootstrap_plan(
+            state.goal,
+            raw_user_goal=state.goal,
+            goal_description=goal_description,
+            terminal_after_execute=True,
+            reasoning="",
+            goal_progress="low",
         )
-        if prior_goals:
-            await _emit_plan_phase_status(
-                ctx,
-                label=_PLAN_CONTINUATION_STATUS_LABEL,
+        ctx.scratch.plan_result = plan_result
+        ctx.scratch.plan_assessment = None
+        await _emit_continuation_bootstrap_plan(ctx, plan_result=plan_result)
+        return {"assess_route": "skip_generate"}
+
+    await _emit_plan_phase_status(ctx, label=_PLAN_CONTINUATION_STATUS_LABEL)
+    context_bundle = None
+    if ctx.ce is not None:
+        try:
+            context_bundle = await ctx.ce.project(goal_id=ctx.ce_goal_id)
+        except Exception:
+            logger.debug(
+                "[Plan] continuation-assess: ContextEngine.project() failed",
+                exc_info=True,
             )
-            context_bundle = None
-            if ctx.ce is not None:
-                try:
-                    context_bundle = await ctx.ce.project(goal_id=ctx.ce_goal_id)
-                except Exception:
-                    logger.debug(
-                        "[Plan] continuation-assess: ContextEngine.project() failed",
-                        exc_info=True,
-                    )
-            assessment = await strange_loop.loop_planner.assess_continuation(
-                state=state,
-                context=context,
-                checkpoint=ctx.checkpoint,
-                exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
-                context_bundle=context_bundle,
-            )
-            reason_text = polish_continuation_assess_reasoning(assessment.reasoning or "")
-            if assessment.action == "bootstrap":
-                logger.info(
-                    "[Plan] iter=0 continuation-assess: bootstrap (%s)",
-                    reason_text[:120],
-                )
-                plan_result = build_continue_loop_bootstrap_plan(
-                    state.goal,
-                    raw_user_goal=state.goal,
-                    terminal_after_execute=True,
-                    reasoning=reason_text,
-                    goal_progress=assessment.goal_progress,
-                )
-                ctx.scratch.plan_result = plan_result
-                ctx.scratch.plan_assessment = None
-                if is_continue_keyword(state.goal):
-                    await ctx.emit(
-                        "plan",
-                        {
-                            "iteration": state.iteration,
-                            "status": plan_result.status,
-                            "progress": plan_result.goal_progress,
-                            "next_action": "",
-                            "assessment_reasoning": "",
-                            "plan_reasoning": "",
-                            "plan_action": plan_result.plan_action,
-                        },
-                    )
-                else:
-                    await ctx.emit(
-                        "plan",
-                        {
-                            "iteration": state.iteration,
-                            "status": plan_result.status,
-                            "progress": plan_result.goal_progress,
-                            "next_action": plan_result.next_action,
-                            "assessment_reasoning": plan_result.assessment_reasoning,
-                            "plan_reasoning": plan_result.plan_reasoning,
-                            "plan_action": plan_result.plan_action,
-                        },
-                    )
-                return {"assess_route": "skip_generate"}
-            # action == "plan_generate": escalate to full planner.
-            # Surface discriminator reasoning before plan_generate (RFC-226).
-            if reason_text:
-                await ctx.emit(
-                    "assess",
-                    {
-                        "assessment_reasoning": reason_text,
-                        "iteration": state.iteration,
-                    },
-                )
-            # Build a StatusAssessment from the ContinuationAssessment so the
-            # downstream plan_generate node has the payload it requires.
-            logger.info(
-                "[Plan] iter=0 continuation-assess: plan_generate (%s)",
-                reason_text[:120],
-            )
-            ctx.scratch.plan_assessment = StatusAssessment(
-                status="continue",
-                goal_progress=assessment.goal_progress,
-                assessment_reasoning=reason_text,
-                require_goal_completion=False,
-            )
-            return {"assess_route": "continue_generate"}
+    assessment = await strange_loop.loop_planner.assess_continuation(
+        state=state,
+        context=context,
+        checkpoint=ctx.checkpoint,
+        exclude_goal_id=ctx.goal_record.goal_id if ctx.goal_record else None,
+        context_bundle=context_bundle,
+    )
+    reason_text = polish_continuation_assess_reasoning(assessment.reasoning or "")
+    if assessment.action == "bootstrap":
+        logger.info(
+            "[Plan] iter=0 continuation-assess: bootstrap (%s)",
+            reason_text[:120],
+        )
+        plan_result = build_continue_loop_bootstrap_plan(
+            state.goal,
+            raw_user_goal=state.goal,
+            goal_description=goal_description,
+            terminal_after_execute=None,
+            reasoning=reason_text,
+            goal_progress=assessment.goal_progress,
+        )
+        ctx.scratch.plan_result = plan_result
+        ctx.scratch.plan_assessment = None
+        await _emit_continuation_bootstrap_plan(ctx, plan_result=plan_result)
+        return {"assess_route": "skip_generate"}
+
+    if reason_text:
+        await ctx.emit(
+            "assess",
+            {
+                "assessment_reasoning": reason_text,
+                "iteration": state.iteration,
+            },
+        )
+    logger.info(
+        "[Plan] iter=0 continuation-assess: plan_generate (%s)",
+        reason_text[:120],
+    )
+    ctx.scratch.plan_assessment = StatusAssessment(
+        status="continue",
+        goal_progress=assessment.goal_progress,
+        assessment_reasoning=reason_text,
+        require_goal_completion=False,
+    )
+    return {"assess_route": "continue_generate"}
+
+
+async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
+    """Run assess phase and decide whether generation is needed."""
+    strange_loop = ctx.strange_loop
+    state = ctx.loop_state
+    plan_manager = ctx.plan_manager
+    context = strange_loop._build_plan_context(state)
+
+    continuation_result = await _handle_continuation_first_plan(
+        ctx,
+        context=context,
+        strange_loop=strange_loop,
+    )
+    if continuation_result is not None:
+        return continuation_result
 
     await _emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
     assessment = await strange_loop.plan_phase.assess_status(
