@@ -938,7 +938,11 @@ class StepResult(BaseModel):
             return f"Step {self.step_id}: ✗ Error: {self.error}"
 
         # Use outcome metadata (RFC-211)
-        return self._outcome_to_evidence_string(truncate)
+        summary = self._outcome_to_evidence_string(truncate)
+        if self.outcome.get("has_tool_error") and self.error:
+            preview = self.error[:120] + ("…" if len(self.error) > 120 else "")
+            return f"{summary} (tool warning: {preview})"
+        return summary
 
     def _outcome_to_evidence_string(self, truncate: bool) -> str:
         """Generate evidence from outcome metadata.

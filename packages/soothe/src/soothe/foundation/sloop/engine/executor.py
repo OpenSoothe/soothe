@@ -972,8 +972,10 @@ class Executor:
         hit_cap = any(r.hit_subagent_cap for r in step_results)
         hit_tool_budget = any(r.hit_tool_budget for r in step_results)
 
-        # Count errors
-        error_count = sum(1 for r in step_results if not r.success)
+        # Count execution failures and recoverable tool errors (planner wave signal)
+        from soothe.foundation.sloop.engine.step_wave_types import step_had_tool_error
+
+        error_count = sum(1 for r in step_results if not r.success or step_had_tool_error(r))
 
         # Measure output length
         output_length = len(output) if output else 0
@@ -1780,7 +1782,7 @@ class Executor:
             messages: list[BaseMessage] = []
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
-            has_tool_error = False  # IG-454: Track tool errors for StepResult.success
+            has_tool_error = False  # Track tool errors for planner/outcome metadata
             async for chunk in self._stream_and_collect(
                 stream,
                 budget=budget,
@@ -1832,11 +1834,22 @@ class Executor:
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
-            # IG-454: Determine step success based on tool errors
-            step_success = not has_tool_error
+            # Step success reflects overall CoreAgent run completion, not individual
+            # tool failures — agents may recover from tool errors and still finish.
+            step_success = True
             step_error = _first_tool_error_message(stream_outcomes) if has_tool_error else None
 
-            if step_success:
+            if has_tool_error:
+                primary_outcome["has_tool_error"] = True
+                logger.warning(
+                    "Step %s completed with recoverable tool errors in %dms "
+                    "(main_tools=%d, subgraph_tools=%d)",
+                    step.id,
+                    duration_ms,
+                    main_tool_call_count,
+                    subgraph_tool_call_count,
+                )
+            else:
                 logger.info(
                     "Step %s completed successfully in %dms (main_tools=%d, subgraph_tools=%d, subagent_cap_hit=%s, tool_budget_hit=%s)",
                     step.id,
@@ -1845,16 +1858,6 @@ class Executor:
                     subgraph_tool_call_count,
                     budget.hit_subagent_cap,
                     budget.hit_tool_budget,
-                )
-            else:
-                # Include error info in outcome for planner visibility
-                primary_outcome["has_tool_error"] = True
-                logger.warning(
-                    "Step %s completed with tool errors in %dms (main_tools=%d, subgraph_tools=%d)",
-                    step.id,
-                    duration_ms,
-                    main_tool_call_count,
-                    subgraph_tool_call_count,
                 )
 
             return _ExecuteStepResult(
@@ -1946,7 +1949,7 @@ class Executor:
         subgraph AIMessages are not folded into root-graph act aggregation.
         IG-416: Rewrites root-graph AI and ``ToolMessage`` ``tool_call_id`` values to unified
         ``{step_id}:s:{tool_fragment}`` so streamed tool rows and tool results share stable ids.
-        IG-454: Tracks ToolMessage.status="error" to mark step failures.
+        Tracks ToolMessage.status="error" and Error: tool bodies for outcome metadata.
 
         Args:
             stream: Async iterator from agent.astream()

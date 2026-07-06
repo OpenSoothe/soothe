@@ -110,7 +110,7 @@ def _detect_stuck_loop(state: LoopState) -> str | None:
 
     Checks for:
     1. Repeated identical actions (same internal action line N times consecutively)
-    2. Consecutive failed step results (N errors without success)
+    2. Consecutive execution failures (``success=False`` from crashes/timeouts)
 
     Args:
         state: Current loop state with action_history and step_results.
