@@ -1,5 +1,6 @@
 ---
 title: Home
+layout: default
 nav_order: 1
 description: >-
   Soothe — goal-driven orchestration framework for 24/7 autonomous agents.

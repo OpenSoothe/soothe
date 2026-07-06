@@ -110,7 +110,7 @@ class FileChangePreviewWidget(Vertical):
     FileChangePreviewWidget {
         height: auto;
         padding: 0;
-        margin: 0;
+        margin: 0 0 1 0;
     }
 
     FileChangePreviewWidget.-collapsed {

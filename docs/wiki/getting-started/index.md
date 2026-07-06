@@ -1,5 +1,7 @@
 ---
 title: Getting Started
+parent: Wiki
+has_children: true
 nav_order: 1
 description: >-
   Installation, quick start, and basic concepts for new Soothe users.

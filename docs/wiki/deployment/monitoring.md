@@ -561,7 +561,9 @@ observability:
 
 **LLM call latency** (Loki):
 ```logql
+{% raw %}
 {job="soothe"} | json | line_format "{{.value_ms}}" | metric_name="llm_call_latency"
+{% endraw %}
 ```
 
 **Active threads** (PostgreSQL):

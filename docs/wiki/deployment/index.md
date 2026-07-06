@@ -1,5 +1,7 @@
 ---
 title: Deployment
+parent: Wiki
+has_children: true
 nav_order: 8
 description: >-
   Production setup, monitoring, security, scaling, and backup recovery.

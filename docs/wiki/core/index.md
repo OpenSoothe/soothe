@@ -1,5 +1,7 @@
 ---
 title: Core Modules
+parent: Wiki
+has_children: true
 nav_order: 3
 description: >-
   Agent factory, runner, strange loop, goal engine, events, resolver, workspace.
