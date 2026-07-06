@@ -6,10 +6,18 @@ import re
 from typing import TYPE_CHECKING
 
 from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.state.schemas import FIRST_WAVE_MAX_STEPS, StatusAssessment, StepAction
+from soothe.foundation.sloop.state.schemas import (
+    FIRST_WAVE_MAX_STEPS,
+    AgentDecision,
+    StatusAssessment,
+    StepAction,
+)
 
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import LoopState
+
+# IG-555: max plan_generate retries when complex iter=0 plans stay undersized.
+MAX_UNDERSIZED_PLAN_REPLANS = 2
 
 _FILLER_STEP_RE = re.compile(
     r"^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|"
@@ -34,6 +42,41 @@ def intake_label_from_state(state: LoopState) -> IntakeLabel | None:
         except ValueError:
             return None
     return None
+
+
+def plan_has_minimum_steps_for_intake(
+    decision: AgentDecision | None,
+    intake_label: IntakeLabel | None,
+    iteration: int,
+    *,
+    treat_missing_as_undersized: bool = True,
+) -> bool:
+    """Return True when a plan satisfies the complex-intake minimum step count (IG-555).
+
+    Complex intake at iter=0 must produce at least two steps before execution.
+    Simple/trivial intake may legitimately use a single step. After execution
+    (iter>0), replan may consolidate to fewer steps.
+
+    Args:
+        decision: Current or generated plan decision.
+        intake_label: Intake classification from intent_classify.
+        iteration: Current loop iteration.
+        treat_missing_as_undersized: When False, a missing decision passes the
+            guard (used after plan_generate when no executable plan was returned).
+
+    Returns:
+        True when the plan satisfies the minimum step requirement.
+    """
+    if intake_label != IntakeLabel.COMPLEX:
+        return True
+    if iteration > 0:
+        return True
+    if decision is None:
+        return not treat_missing_as_undersized
+    steps = getattr(decision, "steps", None)
+    if not steps:
+        return not treat_missing_as_undersized
+    return len(steps) >= 2
 
 
 def max_plan_steps_for_state(state: LoopState) -> int | None:

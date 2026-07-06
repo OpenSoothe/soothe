@@ -258,6 +258,7 @@ class StrangeLoop:
 
             preclassified_intent = intent
             checkpoint: Any = None
+            pass1_reasoning_text = ""
 
             # IG-554 Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
             if (
@@ -265,6 +266,12 @@ class StrangeLoop:
                 and intent_classifier is not None
                 and not clarification_answer
             ):
+                from soothe.foundation.sloop.orchestrator.nodes.intent_classify import (
+                    INTENT_CLASSIFY_STATUS_LABEL,
+                )
+
+                yield ("plan_phase_status", {"label": INTENT_CLASSIFY_STATUS_LABEL})
+
                 pass1_task = intent_classifier.classify_pass1(
                     execution_goal,
                     observability_metadata={"thread_id": main_thread_id},
@@ -288,6 +295,11 @@ class StrangeLoop:
                         social_response=None,
                         reasoning="Pre-graph Pass1 error fail-safe",
                     )
+                    logger.info(
+                        "Pass1 reasoning (is_task=True confidence=%s): %s",
+                        pass1_result.confidence,
+                        pass1_result.reasoning,
+                    )
                 else:
                     pass1_result = pass1_raw
 
@@ -300,6 +312,9 @@ class StrangeLoop:
                     checkpoint = None
                 else:
                     checkpoint = checkpoint_raw
+
+                if pass1_result.is_task:
+                    pass1_reasoning_text = (pass1_result.reasoning or "").strip()
 
                 if not pass1_result.is_task:
                     social_intent = intent_classifier.pass1_to_intent(pass1_result, execution_goal)
@@ -576,12 +591,48 @@ class StrangeLoop:
                     asyncio.to_thread(ce_instance._semantic.load_memory),
                 ]
 
-            if semantic_tasks:
-                loaded, *_ = await asyncio.gather(
-                    ce_instance.load(), *semantic_tasks, return_exceptions=True
+            pass2_needed = (
+                preclassified_intent is None
+                and intent_classifier is not None
+                and not clarification_answer
+            )
+
+            async def _classify_scope_after_ce_load() -> Any:
+                ledger_messages: list[Any] = []
+                try:
+                    ledger_messages = [msg for msg, _phase in ce_instance.get_ledger_entries()]
+                except Exception:
+                    logger.debug(
+                        "Could not read CE ledger for Pass2 prior projection",
+                        exc_info=True,
+                    )
+                return await intent_classifier.classify_scope_intake(
+                    execution_goal,
+                    loop_messages=ledger_messages,
+                    thread_id=main_thread_id,
+                    context_engine=ce_instance,
+                    goal_trace=goal_trace,
+                    observability_metadata={"thread_id": main_thread_id},
+                    observability_phase="pre-stream",
+                    observability_component="intake.pass2",
                 )
+
+            if semantic_tasks:
+                semantic_wrapped = [asyncio.create_task(task) for task in semantic_tasks]
+                ce_load_task = asyncio.create_task(ce_instance.load())
+                loaded = await ce_load_task
+                pass2_task = (
+                    asyncio.create_task(_classify_scope_after_ce_load()) if pass2_needed else None
+                )
+                if pass2_task is not None:
+                    await asyncio.gather(*semantic_wrapped, pass2_task, return_exceptions=True)
+                    preclassified_intent = pass2_task.result()
+                else:
+                    await asyncio.gather(*semantic_wrapped, return_exceptions=True)
             else:
                 loaded = await ce_instance.load()
+                if pass2_needed:
+                    preclassified_intent = await _classify_scope_after_ce_load()
 
             if isinstance(loaded, Exception):
                 logger.warning("[CE] load() failed: %s", loaded, exc_info=True)
@@ -593,30 +644,8 @@ class StrangeLoop:
                     persistence_backend,
                 )
 
-            # IG-554 Stage 2: Pass 2 scope classification (prior projection from CE ledger).
-            if (
-                preclassified_intent is None
-                and intent_classifier is not None
-                and not clarification_answer
-            ):
-                ledger_messages: list[Any] = []
-                try:
-                    ledger_messages = [msg for msg, _phase in ce_instance.get_ledger_entries()]
-                except Exception:
-                    logger.debug(
-                        "Could not read CE ledger for Pass2 prior projection",
-                        exc_info=True,
-                    )
-                preclassified_intent = await intent_classifier.classify_scope_intake(
-                    execution_goal,
-                    loop_messages=ledger_messages,
-                    thread_id=main_thread_id,
-                    context_engine=ce_instance,
-                    goal_trace=goal_trace,
-                    observability_metadata={"thread_id": main_thread_id},
-                    observability_phase="pre-stream",
-                    observability_component="intake.pass2",
-                )
+            # IG-554 Stage 2: apply Pass 2 scope result and surface reasoning to TUI.
+            if pass2_needed and preclassified_intent is not None:
                 state.intent = preclassified_intent
                 effective_routing = build_loop_routing_classification(
                     preclassified_intent,
@@ -625,6 +654,17 @@ class StrangeLoop:
                 if effective_routing is not None:
                     state.routing_classification = effective_routing
                     routing_classification = effective_routing
+
+                from soothe.foundation.sloop.orchestrator.nodes.intent_classify import (
+                    intent_classified_reasoning_event,
+                )
+
+                reasoning_event = intent_classified_reasoning_event(
+                    preclassified_intent,
+                    pass1_reasoning=pass1_reasoning_text,
+                )
+                if reasoning_event is not None:
+                    yield reasoning_event
 
             if force_continue_loop and loaded:
                 for prior in ce_instance.get_all_goals():

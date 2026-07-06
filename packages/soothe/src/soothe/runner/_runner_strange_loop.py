@@ -520,9 +520,17 @@ class StrangeLoopMixin:
                             or getattr(classification, "chitchat_response", "")
                             or ""
                         )
-                    resolved_response = (chitchat_response or "").strip()
-                    if not resolved_response:
-                        resolved_response = "Hello! How can I help you today?"
+                    from soothe.foundation.sloop.prompts.identity import (
+                        GENERIC_CHITCHAT_FALLBACK,
+                        finalize_chitchat_response,
+                    )
+
+                    resolved_response = finalize_chitchat_response(
+                        user_input,
+                        chitchat_response,
+                        assistant_name=self._config.agent.name,
+                        generic_fallback=GENERIC_CHITCHAT_FALLBACK,
+                    )
                     main_thread_id = (strange_loop_id or tid or "").strip() or tid
                     async for chunk in self._run_chitchat(
                         user_input,

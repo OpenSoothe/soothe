@@ -160,6 +160,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         {
             "goal_completion": "goal_completion",
             "resolve_decision": "resolve_decision",
+            "plan_generate": "plan_generate",
             "await_clarification": "await_clarification",
         },
     )

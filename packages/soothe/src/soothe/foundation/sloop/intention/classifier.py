@@ -13,18 +13,20 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
+from soothe.foundation.sloop.prompts.identity import GENERIC_CHITCHAT_FALLBACK
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_last_goal_completion_for_intake,
 )
 
-from .intake_heuristics import classify_intake_heuristic
 from .models import (
     IntakeLabel,
+    IntakePass1Confidence,
     IntakePass1LLMResult,
     IntakePass2LLMResult,
     IntentClassification,
     derive_task_complexity_from_intake,
 )
+from .pass1_social_response import resolve_pass1_chitchat_response
 from .two_pass_coordinator import TwoPassIntakeCoordinator, TwoPassIntakeResult
 
 if TYPE_CHECKING:
@@ -39,10 +41,16 @@ def prior_projection_text_from_messages(
     loop_messages: list[BaseMessage] | None,
     ledger_cfg: Any | None,
 ) -> str | None:
-    """Build prior-goal summary text for Pass 2 from ledger messages."""
+    """Build prior-goal summary text for Pass 2 from ledger messages.
+
+    IG-555: Intake Pass 2 omits boundary marker since classifier needs prior
+    scope signal for reference resolution, not planning anchoring prevention.
+    """
     if not loop_messages:
         return None
-    projected = project_last_goal_completion_for_intake(loop_messages, ledger_cfg)
+    projected = project_last_goal_completion_for_intake(
+        loop_messages, ledger_cfg, include_boundary=False
+    )
     if not projected:
         return None
     return "\n".join(getattr(msg, "content", str(msg)) for msg in projected)
@@ -69,7 +77,11 @@ class IntentClassifier:
         self._fast_model = model
         self._assistant_name = assistant_name
         self._soothe_config = soothe_config
-        self._two_pass = TwoPassIntakeCoordinator(model, soothe_config)
+        self._two_pass = TwoPassIntakeCoordinator(
+            model,
+            soothe_config,
+            assistant_name=assistant_name,
+        )
         self._pass1_classifier = self._two_pass._pass1_classifier
 
         if model:
@@ -162,15 +174,6 @@ class IntentClassifier:
         if not self._fast_model:
             return self._fallback(query)
 
-        heuristic = classify_intake_heuristic(query, assistant_name=self._assistant_name)
-        if heuristic is not None:
-            logger.debug(
-                "Intake classified (heuristic): intake_label=%s complexity=%s",
-                heuristic.intake_label,
-                heuristic.task_complexity,
-            )
-            return heuristic
-
         ledger_cfg = (
             self._soothe_config.agent.loop.plan_prompt_ledger if self._soothe_config else None
         )
@@ -187,7 +190,6 @@ class IntentClassifier:
             goal_trace=goal_trace,
         )
         intent = self._two_pass_to_intent(two_pass_result, query)
-        intent = self._apply_identity_query_override(intent, query)
 
         if two_pass_result.is_task and two_pass_result._pass2_result is not None:
             await self._record_pass2_ledger(
@@ -210,9 +212,10 @@ class IntentClassifier:
         query: str,
     ) -> IntentClassification:
         """Convert Pass 1 social result to IntentClassification for fast-path."""
-        response = (
-            pass1_result.social_response or ""
-        ).strip() or "Hello! How can I help you today?"
+        response = resolve_pass1_chitchat_response(
+            pass1_result,
+            generic_fallback=GENERIC_CHITCHAT_FALLBACK,
+        )
         return IntentClassification(
             intake_label=IntakeLabel.CHITCHAT,
             reasoning=pass1_result.reasoning,
@@ -321,31 +324,21 @@ class IntentClassifier:
             logger.debug("Patched missing goal_description")
         if intent.intake_label == IntakeLabel.CHITCHAT:
             if not (intent.chitchat_response or "").strip():
-                intent.chitchat_response = "Hello! How can I help you today?"
+                intent.chitchat_response = resolve_pass1_chitchat_response(
+                    IntakePass1LLMResult(
+                        is_task=False,
+                        confidence=IntakePass1Confidence.HIGH,
+                        social_response=None,
+                        reasoning=intent.reasoning or "",
+                    ),
+                    generic_fallback=GENERIC_CHITCHAT_FALLBACK,
+                )
                 logger.debug("Patched missing chitchat_response")
             return intent
         if not intent.reasoning:
             intent.reasoning = "I'll use tools to work through this goal."
             logger.debug("Patched missing reasoning")
         return intent
-
-    def _apply_identity_query_override(
-        self,
-        intent: IntentClassification,
-        query: str,
-    ) -> IntentClassification:
-        """Force identity questions onto the chitchat fast path with a stable reply."""
-        from soothe.foundation.sloop.prompts.identity import build_identity_reply, is_identity_query
-
-        if not is_identity_query(query):
-            return intent
-
-        return IntentClassification(
-            intake_label=IntakeLabel.CHITCHAT,
-            goal_description=query,
-            chitchat_response=build_identity_reply(self._assistant_name, query),
-            task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
-        )
 
 
 __all__ = ["IntentClassifier", "prior_projection_text_from_messages"]

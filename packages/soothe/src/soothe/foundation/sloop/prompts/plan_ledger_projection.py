@@ -50,6 +50,16 @@ _NEW_GOAL_LEDGER_PHASES = frozenset({"intent_classify", "plan_generate", "goal_c
 _PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"plan_assess"})
 _MID_GOAL_CURRENT_PHASES = frozenset({"intent_classify", "plan_generate", "execute_step"})
 
+# IG-555: Boundary marker for prior goal completion in planning projections.
+# Prevents planner anchoring on prior "Recommended next actions" instead of
+# decomposing the current goal independently.
+_GOAL_COMPLETION_CONTEXT_BOUNDARY = (
+    '<PRIOR_GOAL_CONTEXT role="reference_resolution">\n'
+    "The following completed goal provides context for resolving user mentions.\n"
+    "DO NOT use the recommended actions below as your plan template.\n"
+    "Decompose the current goal independently based on its scope.\n"
+)
+
 
 def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
     """Return ``new_goal`` at iter=0 before any execution, else ``mid_goal``."""
@@ -284,12 +294,16 @@ def _project_planner_ledger_mid_goal_isolated(
     soothe_config: Any | None,
     exclude_phases: frozenset[str],
 ) -> list[BaseMessage]:
-    """Mid-goal planner projection: Slice A prior goals + current-goal segment only."""
+    """Mid-goal planner projection: Slice A prior goals + current-goal segment only.
+
+    IG-555: Slice A includes boundary marker to prevent planner anchoring.
+    """
     exec_cfg = _execute_prompt_ledger_config(soothe_config)
     slice_a = project_cross_goal_completion_tail(
         loop_messages,
         k=exec_cfg.cross_goal_completion_tail,
         ledger_cfg=ledger_cfg,
+        include_boundary=True,  # IG-555: prevent planner anchoring
     )
     seg_start = _current_goal_segment_start(loop_messages)
     current_segment = [
@@ -342,14 +356,16 @@ def project_planner_ledger(
 
     filtered = filter_loop_messages_for_planner_mode(loop_messages, mode)
     filtered = filter_ledger_phases(filtered, phases_to_exclude)
+    filtered = _compact_goal_completion_units_in_messages(filtered, include_boundary=True)
     projected = project_loop_messages_for_plan(filtered, ledger_cfg)
     logger.debug(
-        "Planner ledger projection: mode=%s in=%d filtered=%d out=%d exclude=%s",
+        "Planner ledger projection: mode=%s in=%d filtered=%d out=%d exclude=%s boundary=%s",
         mode,
         len(loop_messages),
         len(filtered),
         len(projected),
         sorted(phases_to_exclude),
+        True,
     )
     return projected
 
@@ -358,8 +374,11 @@ def project_continuation_assess_ledger(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None,
 ) -> list[BaseMessage]:
-    """Lean ledger for continuation-assess: last goal_completion unit only (mirrors intake)."""
-    return project_last_goal_completion_for_intake(loop_messages, ledger_cfg)
+    """Lean ledger for continuation-assess: last goal_completion unit only (mirrors intake).
+
+    IG-555: Includes boundary marker to prevent anchoring on prior recommendations.
+    """
+    return project_last_goal_completion_for_intake(loop_messages, ledger_cfg, include_boundary=True)
 
 
 def current_iteration_plan_assess_in_ledger(
@@ -412,9 +431,56 @@ def _extract_last_phase_pair(
     return [loop_messages[last_ai_idx]]
 
 
-def _compact_goal_completion_unit_for_projection(unit: list[BaseMessage]) -> list[BaseMessage]:
-    """Rewrite goal_completion human envelopes for downstream prompt projection."""
+def _compact_goal_completion_units_in_messages(
+    messages: list[BaseMessage],
+    *,
+    include_boundary: bool,
+) -> list[BaseMessage]:
+    """Rewrite ``goal_completion`` pairs in a flat ledger slice for planner prompts."""
+    out: list[BaseMessage] = []
+    i = 0
+    while i < len(messages):
+        msg = messages[i]
+        phase = getattr(msg, "phase", None)
+        if (
+            phase == "goal_completion"
+            and _is_loop_human_message(msg)
+            and i + 1 < len(messages)
+            and getattr(messages[i + 1], "phase", None) == "goal_completion"
+            and _is_loop_ai_message(messages[i + 1])
+        ):
+            out.extend(
+                _compact_goal_completion_unit_for_projection(
+                    [msg, messages[i + 1]],
+                    include_boundary=include_boundary,
+                )
+            )
+            i += 2
+            continue
+        out.append(_deep_copy_message(msg))
+        i += 1
+    return out
+
+
+def _compact_goal_completion_unit_for_projection(
+    unit: list[BaseMessage],
+    *,
+    include_boundary: bool = True,
+) -> list[BaseMessage]:
+    """Rewrite goal_completion human envelopes for downstream prompt projection.
+
+    Args:
+        unit: Human/AI pair for a goal_completion ledger phase.
+        include_boundary: When True (default), prepend IG-555 boundary marker
+            to prevent planner anchoring. Set False for execute-step Slice A
+            where prior actions genuinely help execution grounding.
+
+    Returns:
+        Deep-copied unit with rewritten human envelope.
+    """
     compact_human = "Prior goal completed. Terminal report follows."
+    if include_boundary:
+        compact_human = _GOAL_COMPLETION_CONTEXT_BOUNDARY + compact_human
     out: list[BaseMessage] = []
     for msg in unit:
         copy_msg = _deep_copy_message(msg)
@@ -429,6 +495,8 @@ def _compact_goal_completion_unit_for_projection(unit: list[BaseMessage]) -> lis
 def project_last_goal_completion_for_intake(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None,
+    *,
+    include_boundary: bool = True,
 ) -> list[BaseMessage]:
     """Project the last ``goal_completion`` ledger unit into intake classify input (IG-540).
 
@@ -439,6 +507,8 @@ def project_last_goal_completion_for_intake(
     Args:
         loop_messages: Full RFC-214 ledger loaded from CE persistence.
         ledger_cfg: Optional caps (same knobs as plan prompts).
+        include_boundary: When True (default), prepend IG-555 boundary marker.
+            Set False for intake Pass 2 where classifier needs prior scope signal.
 
     Returns:
         Bounded ledger slice injected before the classify human message.
@@ -450,13 +520,14 @@ def project_last_goal_completion_for_intake(
     if found is not None:
         unit, _ = found
         projected = project_loop_messages_for_plan(
-            _compact_goal_completion_unit_for_projection(unit),
+            _compact_goal_completion_unit_for_projection(unit, include_boundary=include_boundary),
             ledger_cfg,
         )
         logger.debug(
-            "Intake goal-completion projection: in=%d out=%d",
+            "Intake goal-completion projection: in=%d out=%d boundary=%s",
             len(unit),
             len(projected),
+            include_boundary,
         )
         return projected
 
@@ -620,21 +691,37 @@ def project_cross_goal_completion_tail(
     *,
     k: int,
     ledger_cfg: PlanPromptLedgerConfig | None,
+    include_boundary: bool = False,
 ) -> list[BaseMessage]:
-    """Project K prior-goal ``goal_completion`` units for execute Slice A (IG-542)."""
+    """Project K prior-goal ``goal_completion`` units for execute Slice A (IG-542).
+
+    Args:
+        loop_messages: Full RFC-214 ledger.
+        k: Maximum number of prior goal completion units to project.
+        ledger_cfg: Optional caps.
+        include_boundary: When False (default for execute), omit IG-555 boundary marker
+            since prior actions genuinely help execution grounding. Set True for
+            planner projections where anchoring prevention is needed.
+
+    Returns:
+        Bounded ledger slice for Slice A.
+    """
     units = collect_cross_goal_completion_units(loop_messages, k=k)
     flat: list[BaseMessage] = []
     for unit in units:
-        flat.extend(_compact_goal_completion_unit_for_projection(unit))
+        flat.extend(
+            _compact_goal_completion_unit_for_projection(unit, include_boundary=include_boundary)
+        )
     if not flat:
         return []
 
     projected = project_loop_messages_for_plan(flat, ledger_cfg)
     logger.debug(
-        "Execute Slice A projection: k=%d units=%d out_msgs=%d",
+        "Execute Slice A projection: k=%d units=%d out_msgs=%d boundary=%s",
         k,
         len(units),
         len(projected),
+        include_boundary,
     )
     return projected
 

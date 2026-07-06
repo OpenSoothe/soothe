@@ -63,6 +63,7 @@ def test_new_goal_projection_excludes_execute_step() -> None:
     contents = " ".join(str(getattr(m, "content", "")) for m in projected)
     assert "ledger completion body" in contents
     assert "prior execute human" not in contents
+    assert "<PRIOR_GOAL_CONTEXT" in contents
 
 
 def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> None:
@@ -93,6 +94,8 @@ def test_continuation_plan_generate_projects_ledger_and_prior_goals_tree() -> No
     assert "PRIOR GOAL COMPLETION:" not in human
     assert "Checkpoint completion body" not in human
     assert "prior execute human" not in " ".join(str(getattr(m, "content", "")) for m in msgs)
+    ledger_contents = " ".join(str(getattr(m, "content", "")) for m in msgs[1:-1])
+    assert "<PRIOR_GOAL_CONTEXT" in ledger_contents
 
 
 def test_continuation_assess_omits_plan_assess_ledger() -> None:

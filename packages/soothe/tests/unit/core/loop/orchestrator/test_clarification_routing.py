@@ -35,6 +35,19 @@ def test_route_after_plan_short_circuits_on_pending_clarification() -> None:
     )
 
 
+def test_route_after_plan_loops_on_undersized_replan() -> None:
+    assert route_after_plan({"assess_route": "continue_generate"}) == "plan_generate"
+
+
+def test_route_after_plan_prefers_goal_done_over_replan() -> None:
+    from soothe.foundation.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
+
+    assert (
+        route_after_plan({"plan_route": PLAN_ROUTE_GOAL_DONE, "assess_route": "continue_generate"})
+        == "goal_completion"
+    )
+
+
 def test_route_after_assess_short_circuits_on_pending_clarification() -> None:
     assert (
         route_after_assess({"pending_clarification": {"questions": ["q"]}}) == "await_clarification"

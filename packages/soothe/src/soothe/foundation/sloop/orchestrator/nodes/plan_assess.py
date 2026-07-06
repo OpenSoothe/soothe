@@ -3,6 +3,8 @@
 RFC-226: iter=0 continuation goals coordinate intake complexity with optional
 ``assess_continuation`` for trivial follow-ups. Simple/complex intake skips the
 discriminator and routes to ``plan_generate`` (or the evidence-gather spine).
+
+IG-555: Structural guardrail rejects undersized plans for complex intake at iter=0.
 """
 
 from __future__ import annotations
@@ -11,7 +13,10 @@ import logging
 import random
 from typing import Any, Literal
 
-from soothe.foundation.sloop.cognition.plan_step_safety import intake_label_from_state
+from soothe.foundation.sloop.cognition.plan_step_safety import (
+    intake_label_from_state,
+    plan_has_minimum_steps_for_intake,
+)
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continue_bootstrap_step_briefs,
     build_prior_goal_summaries,
@@ -429,7 +434,31 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         return {"plan_route": PLAN_ROUTE_GOAL_DONE}
 
     # goal_progress-based early routing: when progress is complete, go to goal completion
+    # IG-555: Guardrail rejects premature "complete" for complex intake at iter=0
     if assessment.goal_progress == "complete":
+        intake_label = intake_label_from_state(state)
+        if state.iteration == 0 and intake_label == IntakeLabel.COMPLEX and not state.step_results:
+            logger.warning(
+                "[Plan] Reject goal_progress=complete for complex intake at iter=0 "
+                "(prior completion anchoring); forcing replan"
+            )
+            assessment.goal_progress = "medium"
+            return {"assess_route": "continue_generate"}
+
+        # Check undersized plan for complex intake (IG-555)
+        if not plan_has_minimum_steps_for_intake(
+            state.current_decision,
+            intake_label,
+            state.iteration,
+        ):
+            logger.warning(
+                "[Plan] Reject goal_progress=complete: undersized plan (%d step) "
+                "for complex intake at iter=0, forcing replan",
+                len(state.current_decision.steps) if state.current_decision else 0,
+            )
+            assessment.goal_progress = "medium"
+            return {"assess_route": "continue_generate"}
+
         logger.info(
             "[Plan] goal_progress=%s routing to goal completion",
             assessment.goal_progress,

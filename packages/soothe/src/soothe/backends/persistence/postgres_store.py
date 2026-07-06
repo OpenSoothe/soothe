@@ -271,7 +271,7 @@ class PostgreSQLPersistStore:
                     return None
                 # PostgreSQL JSONB column returns already-parsed Python objects (list/dict)
                 # not JSON strings, so we can return directly
-                data = row[0]
+                data = row["data"]
                 if isinstance(data, (bytes, bytearray)):
                     # Defensive: JSONB should not return bytes; if it does, decode as JSON text.
                     try:
@@ -325,6 +325,6 @@ class PostgreSQLPersistStore:
                     (ns,),
                 )
                 rows = await cur.fetchall()
-                return [row[0] for row in rows]
+                return [row["key"] for row in rows]
 
         return await self._run_with_pool_recovery("list_keys", _list_keys_with_pool)

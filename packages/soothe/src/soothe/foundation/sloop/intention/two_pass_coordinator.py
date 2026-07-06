@@ -138,8 +138,14 @@ class TwoPassIntakeCoordinator:
         self,
         fast_model: BaseChatModel | None,
         soothe_config: SootheConfig | None = None,
+        *,
+        assistant_name: str = "Soothe",
     ) -> None:
-        self._pass1_classifier = IntakePass1Classifier(fast_model, soothe_config)
+        self._pass1_classifier = IntakePass1Classifier(
+            fast_model,
+            soothe_config,
+            assistant_name=assistant_name,
+        )
         self._pass2_classifier = IntakePass2Classifier(fast_model, soothe_config)
         self._soothe_config = soothe_config
 

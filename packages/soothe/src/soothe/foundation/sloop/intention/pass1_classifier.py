@@ -11,6 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from soothe.foundation.sloop.prompts.identity import (
+    GENERIC_CHITCHAT_FALLBACK,
+    prepend_assistant_identity,
+)
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
@@ -18,7 +22,17 @@ from soothe.utils.llm.invoke_policy import (
 from soothe.utils.llm.structured import invoke_structured_chat
 
 from .models import IntakePass1Confidence, IntakePass1LLMResult
-from .prompts import INTAKE_PASS1_HUMAN_TASK, INTAKE_PASS1_SYSTEM_PROMPT
+from .pass1_social_response import (
+    Pass1SocialReplyLLMResult,
+    coalesce_pass1_dict,
+    pass1_json_schema,
+)
+from .prompts import (
+    INTAKE_PASS1_HUMAN_TASK,
+    INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK,
+    INTAKE_PASS1_SOCIAL_REPLY_PROMPT,
+    INTAKE_PASS1_SYSTEM_PROMPT,
+)
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -26,6 +40,23 @@ if TYPE_CHECKING:
     from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _log_pass1_result(result: IntakePass1LLMResult) -> None:
+    """Log Pass 1 reasoning at info for log-file visibility (IG-554)."""
+    reasoning = (result.reasoning or "").strip()
+    if reasoning:
+        logger.info(
+            "Pass1 reasoning (is_task=%s confidence=%s): %s",
+            result.is_task,
+            result.confidence,
+            reasoning,
+        )
+    logger.debug(
+        "Pass1 classified: is_task=%s confidence=%s",
+        result.is_task,
+        result.confidence,
+    )
 
 
 class IntakePass1Classifier:
@@ -37,15 +68,19 @@ class IntakePass1Classifier:
     Args:
         model: Fast LLM for classification.
         soothe_config: Optional config for rate limiting and tracing.
+        assistant_name: Display name for dedicated social-reply fallback.
     """
 
     def __init__(
         self,
         model: BaseChatModel | None,
         soothe_config: SootheConfig | None = None,
+        *,
+        assistant_name: str = "Soothe",
     ) -> None:
         self._fast_model = model
         self._soothe_config = soothe_config
+        self._assistant_name = (assistant_name or "Soothe").strip() or "Soothe"
 
         if model:
             logger.debug("[IntakePass1] Initialized")
@@ -61,7 +96,8 @@ class IntakePass1Classifier:
     ) -> IntakePass1LLMResult:
         """Classify query as social or task.
 
-        No retry on failure — fail-safe to task (is_task=True) so Pass 2 runs.
+        Social replies are recovered via reasoning salvage and, if needed, a
+        dedicated reply-only LLM call before falling back to task routing.
 
         Args:
             query: User input text.
@@ -72,7 +108,9 @@ class IntakePass1Classifier:
             IntakePass1LLMResult with is_task, confidence, social_response, reasoning.
         """
         if not self._fast_model:
-            return self._fallback(query)
+            fallback = self._fallback(query)
+            _log_pass1_result(fallback)
+            return fallback
 
         try:
             result = await self._classify_llm(
@@ -80,11 +118,32 @@ class IntakePass1Classifier:
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
             )
-            logger.debug(
-                "Pass1 classified: is_task=%s confidence=%s",
-                result.is_task,
-                result.confidence,
-            )
+            if not result.is_task and not (result.social_response or "").strip():
+                logger.warning("Pass1 social verdict missing social_response; retrying once")
+                result = await self._classify_llm(
+                    query,
+                    observability_metadata=observability_metadata,
+                    goal_trace=goal_trace,
+                    require_social_response=True,
+                )
+            if not result.is_task and not (result.social_response or "").strip():
+                logger.warning(
+                    "Pass1 social verdict still missing social_response; generating reply"
+                )
+                try:
+                    reply = await self._generate_social_response(
+                        query,
+                        observability_metadata=observability_metadata,
+                        goal_trace=goal_trace,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Pass1 dedicated social reply failed; using generic fallback",
+                        exc_info=True,
+                    )
+                    reply = GENERIC_CHITCHAT_FALLBACK
+                result = result.model_copy(update={"social_response": reply})
+            _log_pass1_result(result)
             return result
         except Exception as exc:
             logger.warning(
@@ -92,7 +151,9 @@ class IntakePass1Classifier:
                 type(exc).__name__,
             )
             logger.debug("Pass1 error: %s", exc, exc_info=True)
-            return self._fallback(query, error_context=exc)
+            fallback = self._fallback(query, error_context=exc)
+            _log_pass1_result(fallback)
+            return fallback
 
     async def _classify_llm(
         self,
@@ -100,11 +161,21 @@ class IntakePass1Classifier:
         *,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
+        require_social_response: bool = False,
     ) -> IntakePass1LLMResult:
         """Single LLM call for Pass 1 classification."""
+        human_task = INTAKE_PASS1_HUMAN_TASK
+        if require_social_response:
+            human_task = (
+                f"{INTAKE_PASS1_HUMAN_TASK}\n"
+                "Set is_task=false and include a non-empty social_response JSON field "
+                "(not in reasoning)."
+            )
         messages = [
-            SystemMessage(content=INTAKE_PASS1_SYSTEM_PROMPT),
-            HumanMessage(content=f"{query}\n\n{INTAKE_PASS1_HUMAN_TASK}"),
+            SystemMessage(
+                content=prepend_assistant_identity(INTAKE_PASS1_SYSTEM_PROMPT, self._assistant_name)
+            ),
+            HumanMessage(content=f"{query}\n\n{human_task}"),
         ]
 
         config = self._build_invoke_config(
@@ -114,7 +185,7 @@ class IntakePass1Classifier:
             goal_trace=goal_trace,
         )
 
-        schema = IntakePass1LLMResult.model_json_schema()
+        schema = pass1_json_schema(require_social_response=require_social_response)
 
         async def _invoke() -> dict[str, Any]:
             return await invoke_structured_chat(
@@ -134,11 +205,9 @@ class IntakePass1Classifier:
         if result_dict is None:
             raise ValueError("LLM returned None - structured output parsing failed")
 
-        # Validate is_task is boolean
         if result_dict.get("is_task") not in (True, False):
             raise ValueError(f"Invalid is_task from LLM: {result_dict.get('is_task')!r}")
 
-        # Validate confidence
         if result_dict.get("confidence") not in (
             IntakePass1Confidence.HIGH,
             IntakePass1Confidence.MEDIUM,
@@ -146,14 +215,54 @@ class IntakePass1Classifier:
         ):
             result_dict["confidence"] = IntakePass1Confidence.MEDIUM
 
-        # Ensure social_response when is_task=False
-        if (
-            not result_dict.get("is_task")
-            and not (result_dict.get("social_response") or "").strip()
-        ):
-            result_dict["social_response"] = "Hello! How can I help you today?"
-
+        result_dict = coalesce_pass1_dict(result_dict)
         return IntakePass1LLMResult(**result_dict)
+
+    async def _generate_social_response(
+        self,
+        query: str,
+        *,
+        observability_metadata: dict[str, str] | None = None,
+        goal_trace: Any | None = None,
+    ) -> str:
+        """Dedicated reply-only LLM call when classification omits social_response."""
+        system_prompt = prepend_assistant_identity(
+            INTAKE_PASS1_SOCIAL_REPLY_PROMPT,
+            self._assistant_name,
+        )
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"{query}\n\n{INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK}"),
+        ]
+        config = self._build_invoke_config(
+            "classify_pass1_social_reply",
+            "intake.pass1_social_reply",
+            observability_metadata=observability_metadata,
+            goal_trace=goal_trace,
+        )
+        schema = Pass1SocialReplyLLMResult.model_json_schema()
+        schema["required"] = ["social_response"]
+
+        async def _invoke() -> dict[str, Any]:
+            return await invoke_structured_chat(
+                self._fast_model,
+                messages,
+                json_schema=schema,
+                schema_name="Pass1SocialReplyLLMResult",
+                strict=True,
+                config=config,
+            )
+
+        result_dict = await await_with_llm_call_policy(
+            _invoke,
+            config=llm_rate_limit_config_from(self._soothe_config),
+        )
+        if result_dict is None:
+            raise ValueError("Social reply LLM returned None")
+        reply = str(result_dict.get("social_response") or "").strip()
+        if not reply:
+            raise ValueError("Social reply LLM returned empty social_response")
+        return reply
 
     def _fallback(
         self,

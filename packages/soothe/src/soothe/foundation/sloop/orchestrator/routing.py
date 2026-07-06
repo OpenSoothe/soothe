@@ -140,6 +140,9 @@ def route_after_plan(state: dict[str, Any]) -> str:
         return "await_clarification"
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
         return "goal_completion"
+    if state.get("assess_route") == "continue_generate":
+        logger.info("[routing] route_after_plan → plan_generate (undersized replan)")
+        return "plan_generate"
     return "resolve_decision"
 
 

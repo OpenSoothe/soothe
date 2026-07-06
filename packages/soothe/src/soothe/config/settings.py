@@ -905,7 +905,7 @@ class SootheConfig(BaseSettings):
         Returns:
             The system prompt string.
         """
-        from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
+        from soothe.foundation.sloop.prompts.identity import prepend_assistant_identity
         from soothe.foundation.sloop.prompts.system_templates import (
             format_complex_agent_system_prompt_core,
         )
@@ -914,13 +914,12 @@ class SootheConfig(BaseSettings):
         current_date = local_date_str()
         tz_label = local_timezone_label()
 
-        identity_block = build_assistant_identity_block(self.agent.name)
         base_prompt = format_complex_agent_system_prompt_core(
             self.agent.system_prompt,
             self.agent.name,
         )
-
-        return f"{identity_block}\n\n{base_prompt}\n\nToday's date is {current_date} ({tz_label})."
+        body = f"{base_prompt}\n\nToday's date is {current_date} ({tz_label})."
+        return prepend_assistant_identity(body, self.agent.name)
 
     def propagate_env(self) -> None:
         """Set provider-specific env vars for downstream libraries.

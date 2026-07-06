@@ -78,6 +78,12 @@ class TestTwoPassPrompts:
     def test_pass2_human_task_mentions_scope(self) -> None:
         assert "scope" in INTAKE_PASS2_HUMAN_TASK.lower()
 
+    def test_pass2_prompt_requires_first_person_reasoning(self) -> None:
+        prompt = INTAKE_PASS2_SYSTEM_PROMPT
+        assert "first-person" in prompt
+        assert "I'll list the files in src/." in prompt
+        assert "Let me plan the OAuth2 migration steps." in prompt
+
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
@@ -120,13 +126,19 @@ class TestIntakeClassifier:
             result = await classifier.classify_intake("summarize readme")
         assert result.intake_label == IntakeLabel.TRIVIAL
 
-    async def test_weather_query_skips_llm_via_heuristic(self) -> None:
+    async def test_weather_query_uses_llm_intake(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
+        mock_result = self._mock_two_pass_result(
+            is_task=True,
+            intake_label=IntakeLabel.TRIVIAL,
+            goal_description="北京今天的天气",
+        )
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
+            mock_classify.return_value = mock_result
             result = await classifier.classify_intake("北京今天的天气")
-        mock_classify.assert_not_called()
+        mock_classify.assert_awaited_once()
         assert result.intake_label == IntakeLabel.TRIVIAL
 
     async def test_complex_intake_classification(self) -> None:
@@ -163,13 +175,22 @@ class TestIntakeClassifier:
         mock_classify.assert_awaited()
         assert result.intake_label == IntakeLabel.TRIVIAL
 
-    async def test_identity_query_overrides_llm_to_chitchat(self) -> None:
+    async def test_identity_query_uses_llm_intake(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
+        mock_result = self._mock_two_pass_result(
+            is_task=False,
+            intake_label=IntakeLabel.CHITCHAT,
+            social_response=(
+                "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. "
+                "How can I help you today?"
+            ),
+        )
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
         ) as mock_classify:
+            mock_classify.return_value = mock_result
             result = await classifier.classify_intake("who are u")
-        mock_classify.assert_not_called()
+        mock_classify.assert_awaited_once()
         assert result.intake_label == IntakeLabel.CHITCHAT
         assert result.chitchat_response == (
             "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen. How can I help you today?"

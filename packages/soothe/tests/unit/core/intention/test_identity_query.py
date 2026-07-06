@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from soothe.foundation.sloop.prompts.identity import (
     build_identity_reply,
+    claims_wrong_vendor_identity,
+    finalize_chitchat_response,
     is_identity_query,
+    prepend_assistant_identity,
 )
 
 
@@ -43,3 +46,32 @@ def test_build_identity_reply_chinese() -> None:
     reply = build_identity_reply("Soothe", "你是谁")
     assert "Soothe" in reply
     assert "Dr. Xiaming Chen" in reply
+
+
+def test_prepend_assistant_identity_adds_block() -> None:
+    prompt = prepend_assistant_identity("<TASK>Do work</TASK>", "Soothe")
+    assert prompt.startswith("<ASSISTANT_IDENTITY>")
+    assert "<TASK>Do work</TASK>" in prompt
+
+
+def test_claims_wrong_vendor_identity_detects_claude() -> None:
+    assert claims_wrong_vendor_identity("I'm Claude, an AI assistant made by Anthropic.")
+    assert not claims_wrong_vendor_identity("I'm doing well, thanks for asking!")
+
+
+def test_finalize_chitchat_response_overrides_identity_query() -> None:
+    reply = finalize_chitchat_response(
+        "what is your name",
+        "I'm Claude, an AI assistant made by Anthropic. Nice to meet you!",
+        assistant_name="Soothe",
+    )
+    assert "Soothe" in reply
+    assert "Dr. Xiaming Chen" in reply
+    assert "Claude" not in reply
+    assert "Anthropic" not in reply
+
+
+def test_finalize_chitchat_response_is_idempotent_for_identity_query() -> None:
+    first = finalize_chitchat_response("who are u", "I'm Claude", assistant_name="Soothe")
+    second = finalize_chitchat_response("who are u", first, assistant_name="Soothe")
+    assert first == second

@@ -23,5 +23,6 @@ class LoopPhaseScratch:
     plan_result: PlanResult | None = None
     plan_assessment: StatusAssessment | None = None
     decision: AgentDecision | None = None
+    undersized_plan_replan_attempts: int = 0
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)

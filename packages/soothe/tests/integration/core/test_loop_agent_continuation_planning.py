@@ -26,9 +26,15 @@ from soothe.foundation.sloop.orchestrator.nodes.plan_generate import node_plan_g
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.sloop.orchestrator.routing import (
     route_after_evidence_gather,
+    route_after_plan,
     route_by_intent,
 )
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    _GOAL_COMPLETION_CONTEXT_BOUNDARY,
+    project_planner_ledger,
+    resolve_planner_projection_mode,
+)
 from soothe.foundation.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
@@ -76,6 +82,29 @@ def _multi_step_plan_result() -> PlanResult:
         ),
         next_action="I'll build the image, start services, then run e2e tests.",
         plan_reasoning="Three-phase operational goal.",
+        goal_progress="none",
+    )
+
+
+def _one_step_plan_result() -> PlanResult:
+    return PlanResult(
+        status="continue",
+        plan_action="new",
+        decision=AgentDecision(
+            type="execute_steps",
+            steps=[
+                StepAction(
+                    id="01",
+                    description="Apply prior recommendation",
+                    full_description="Execute recommended next action from prior goal.",
+                    expected_output="Change applied",
+                ),
+            ],
+            execution_mode="parallel",
+            reasoning="Anchored on prior completion report.",
+        ),
+        next_action="Apply the recommended change.",
+        plan_reasoning="Single step from prior report.",
         goal_progress="none",
     )
 
@@ -237,6 +266,62 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
     assert plan_result.decision is not None
     assert len(plan_result.decision.steps) >= 2
     ctx.strange_loop.plan_phase.generate_from_assessment.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_continuation_complex_goal_replans_undersized_plan() -> None:
+    """IG-555: 1-step generate loops via route_after_plan until a multi-step plan is produced."""
+    goal = "build image then start components and run e2e"
+    ctx, _assess_continuation = await _make_continuation_context(goal=goal)
+    ctx.strange_loop.plan_phase.generate_from_assessment = AsyncMock(
+        side_effect=[_one_step_plan_result(), _multi_step_plan_result()]
+    )
+
+    graph_state: dict[str, Any] = {}
+    await node_init_or_resume(ctx, graph_state)
+    await node_bounded_evidence_gather(ctx, graph_state)
+    assess_out = await node_plan_assess(ctx, graph_state)
+    graph_state.update(assess_out)
+
+    first_generate = await node_plan_generate(ctx, graph_state)
+    graph_state.update(first_generate)
+    assert first_generate.get("assess_route") == "continue_generate"
+    assert route_after_plan(graph_state) == "plan_generate"
+
+    second_generate = await node_plan_generate(ctx, graph_state)
+    graph_state.update(second_generate)
+    assert second_generate.get("plan_route") == "execute"
+    assert second_generate.get("assess_route") is None
+    assert len(ctx.scratch.plan_result.decision.steps) >= 2
+    assert ctx.strange_loop.plan_phase.generate_from_assessment.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_continuation_new_goal_projection_includes_boundary_marker() -> None:
+    """IG-555: iter=0 continuation plan prompts include prior-goal boundary marker."""
+    goal = "build image then run e2e"
+    ctx, _ = await _make_continuation_context(goal=goal)
+    ctx.loop_state.loop_messages = [
+        LoopHumanMessage(content="finalize", phase="goal_completion", thread_id="tid"),
+        LoopAIMessage(
+            content="Recommended: apply signature change.",
+            phase="goal_completion",
+            thread_id="tid",
+        ),
+        LoopHumanMessage(content="GOAL: build", phase="intent_classify", thread_id="tid"),
+        LoopAIMessage(
+            content='{"intake_label":"complex"}', phase="intent_classify", thread_id="tid"
+        ),
+    ]
+    mode = resolve_planner_projection_mode(ctx.loop_state)
+    projected = project_planner_ledger(
+        ctx.loop_state.loop_messages,
+        mode,
+        None,
+        soothe_config=ctx.strange_loop.config,
+    )
+    contents = " ".join(str(getattr(m, "content", "")) for m in projected)
+    assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in contents
 
 
 @pytest.mark.asyncio
