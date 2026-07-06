@@ -8,15 +8,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from soothe_sdk.tools.metadata import get_file_write_tool_names
+
 from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
 
 logger = logging.getLogger(__name__)
 
 FileOpStatus = Literal["pending", "success", "error"]
 
-FILE_CHANGE_TOOLS: frozenset[str] = frozenset(
-    {"write_file", "edit_file", "edit_file_lines", "delete_file"}
-)
+FILE_CHANGE_TOOLS: frozenset[str] = get_file_write_tool_names()
 """Filesystem tools that produce before/after diffs in the TUI chat."""
 
 
@@ -150,6 +150,22 @@ def resolve_physical_path(path_str: str | None, assistant_id: str | None) -> Pat
         return None
 
 
+def parse_insert_line_arg(args: dict[str, Any]) -> int | None:
+    """Parse ``line`` from insert_lines tool args (1-indexed).
+
+    Returns:
+        Line number or None when missing or not an integer.
+    """
+    line = args.get("line")
+    if isinstance(line, bool):
+        return None
+    if isinstance(line, int):
+        return line
+    if isinstance(line, float) and line.is_integer():
+        return int(line)
+    return None
+
+
 def parse_line_range_args(args: dict[str, Any]) -> tuple[int, int] | None:
     """Parse ``start_line`` and ``end_line`` from tool args (1-indexed inclusive).
 
@@ -186,6 +202,26 @@ def extract_line_range_text(content: str, start_line: int, end_line: int) -> str
         return ""
     end_line = min(end_line, total)
     return "".join(lines[start_line - 1 : end_line])
+
+
+def apply_insert_lines_to_content(content: str, line: int, insert_content: str) -> str | None:
+    """Insert ``insert_content`` before line ``line`` (matches middleware semantics).
+
+    Returns:
+        Modified file text, or None when ``line`` is out of range for ``content``.
+    """
+    lines = content.splitlines(keepends=True)
+    total = len(lines)
+    if total == 0 and content:
+        lines = [content]
+        total = 1
+    if line < 1 or line > total + 1:
+        return None
+    new_lines = insert_content.splitlines(keepends=True)
+    if new_lines and not new_lines[-1].endswith("\n"):
+        new_lines[-1] += "\n"
+    lines[line - 1 : line - 1] = new_lines
+    return "".join(lines)
 
 
 def apply_edit_file_lines_to_content(
@@ -401,6 +437,8 @@ def file_change_action_label(record: FileOperationRecord) -> str:
         return "New file"
     if record.tool_name == "write_file":
         return "Written"
-    if record.tool_name in ("edit_file", "edit_file_lines"):
+    if record.tool_name in ("edit_file", "edit_file_lines", "delete_lines", "apply_diff"):
         return "Updated"
+    if record.tool_name == "insert_lines":
+        return "Inserted"
     return "Changed"

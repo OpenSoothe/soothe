@@ -744,6 +744,19 @@ def get_all_path_arg_keys() -> frozenset[str]:
     return frozenset(keys)
 
 
+def get_file_write_tool_names() -> frozenset[str]:
+    """Return canonical tool names with ``outcome_type='file_write'``."""
+    seen_ids: set[int] = set()
+    names: set[str] = set()
+    for meta in TOOL_REGISTRY.values():
+        if id(meta) in seen_ids:
+            continue
+        seen_ids.add(id(meta))
+        if meta.outcome_type == "file_write":
+            names.add(meta.name)
+    return frozenset(names)
+
+
 def get_tools_with_header_info() -> frozenset[str]:
     """Return the set of tool names where header already shows key info.
 

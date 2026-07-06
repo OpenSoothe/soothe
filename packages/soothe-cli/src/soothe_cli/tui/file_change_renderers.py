@@ -7,7 +7,10 @@ from typing import Any
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOperationRecord,
+    apply_edit_file_lines_to_content,
+    apply_insert_lines_to_content,
     extract_line_range_text,
+    parse_insert_line_arg,
     parse_line_range_args,
     read_physical_file_text,
     resolve_physical_path,
@@ -19,6 +22,7 @@ from soothe_cli.tui.widgets.file_change_preview import (
     EditFilePreviewWidget,
     FileChangePreviewWidget,
     GenericFilePreviewWidget,
+    InsertLinesPreviewWidget,
     WriteFilePreviewWidget,
     unified_diff_body_lines,
 )
@@ -27,6 +31,9 @@ _PREVIEW_LABELS: dict[str, str] = {
     "write_file": "Writing file",
     "edit_file": "Editing file",
     "edit_file_lines": "Editing lines",
+    "insert_lines": "Inserting lines",
+    "delete_lines": "Deleting lines",
+    "apply_diff": "Applying patch",
     "delete_file": "Deleting file",
 }
 
@@ -109,6 +116,60 @@ def build_file_change_preview(
             "new_string": new_string,
         }
 
+    if tool_name == "insert_lines":
+        line = parse_insert_line_arg(args)
+        if line is None:
+            return GenericFilePreviewWidget, dict(args)
+        insert_content = str(args.get("content") or "")
+        before = ""
+        physical = resolve_physical_path(path_str, assistant_id)
+        if physical and physical.is_file():
+            before = read_physical_file_text(physical) or ""
+        after_text = apply_insert_lines_to_content(before, line, insert_content) or before
+        return InsertLinesPreviewWidget, {
+            "file_path": path_str,
+            "insert_line": line,
+            "diff_lines": unified_diff_body_lines(before, after_text),
+            "old_string": before,
+            "new_string": after_text,
+        }
+
+    if tool_name == "delete_lines":
+        line_range = parse_line_range_args(args)
+        if line_range is None:
+            return GenericFilePreviewWidget, dict(args)
+        start_line, end_line = line_range
+        before = ""
+        physical = resolve_physical_path(path_str, assistant_id)
+        if physical and physical.is_file():
+            before = read_physical_file_text(physical) or ""
+        old_segment = extract_line_range_text(before, start_line, end_line) if before else ""
+        after_text = apply_edit_file_lines_to_content(before, start_line, end_line, "") if before else ""
+        if after_text is None:
+            after_text = before
+        return EditFileLinesPreviewWidget, {
+            "file_path": path_str,
+            "start_line": start_line,
+            "end_line": end_line,
+            "diff_lines": unified_diff_body_lines(before, after_text),
+            "old_string": old_segment,
+            "new_string": "",
+        }
+
+    if tool_name == "apply_diff":
+        diff_text = str(args.get("diff") or "")
+        before = ""
+        physical = resolve_physical_path(path_str, assistant_id)
+        if physical and physical.is_file():
+            before = read_physical_file_text(physical) or ""
+        diff_lines = [ln for ln in diff_text.splitlines() if ln.strip()]
+        return EditFilePreviewWidget, {
+            "file_path": path_str,
+            "diff_lines": diff_lines,
+            "old_string": before,
+            "new_string": "",
+        }
+
     if tool_name == "delete_file":
         content = ""
         physical = resolve_physical_path(path_str, assistant_id)
@@ -157,6 +218,16 @@ def update_preview_data_from_record(data: dict[str, Any], record: FileOperationR
         return
 
     if record.tool_name == "edit_file_lines":
+        line_range = parse_line_range_args(record.args)
+        if line_range is not None:
+            data["start_line"], data["end_line"] = line_range
+
+    if record.tool_name == "insert_lines":
+        line = parse_insert_line_arg(record.args)
+        if line is not None:
+            data["insert_line"] = line
+
+    if record.tool_name == "delete_lines":
         line_range = parse_line_range_args(record.args)
         if line_range is not None:
             data["start_line"], data["end_line"] = line_range

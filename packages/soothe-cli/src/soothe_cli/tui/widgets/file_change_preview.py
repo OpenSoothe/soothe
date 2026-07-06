@@ -358,9 +358,14 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
 
     def compose(self) -> ComposeResult:
         """Compose diff preview."""
-        yield from self._compose_edit_diff_body(show_line_range=False)
+        yield from self._compose_edit_diff_body()
 
-    def _compose_edit_diff_body(self, *, show_line_range: bool) -> ComposeResult:
+    def _compose_edit_diff_body(
+        self,
+        *,
+        show_line_range: bool = False,
+        show_insert_line: bool = False,
+    ) -> ComposeResult:
         file_path = self.data.get("file_path", "")
         diff_lines = self.data.get("diff_lines", [])
         old_string = self.data.get("old_string", "")
@@ -373,6 +378,10 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
             end_line = self.data.get("end_line")
             if isinstance(start_line, int) and isinstance(end_line, int):
                 extra = f"lines {start_line}–{end_line}"
+        elif show_insert_line:
+            insert_line = self.data.get("insert_line")
+            if isinstance(insert_line, int):
+                extra = f"at line {insert_line}"
         yield from self._yield_compact_header(
             file_path,
             additions=additions,
@@ -404,11 +413,19 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
 
 
 class EditFileLinesPreviewWidget(EditFilePreviewWidget):
-    """Preview for edit_file_lines — line range + segment diff."""
+    """Preview for edit_file_lines / delete_lines — line range + segment diff."""
 
     def compose(self) -> ComposeResult:
         """Compose line-range edit preview."""
         yield from self._compose_edit_diff_body(show_line_range=True)
+
+
+class InsertLinesPreviewWidget(EditFilePreviewWidget):
+    """Preview for insert_lines — insertion point + file diff."""
+
+    def compose(self) -> ComposeResult:
+        """Compose insert-at-line preview."""
+        yield from self._compose_edit_diff_body(show_insert_line=True)
 
 
 class GenericFilePreviewWidget(FileChangePreviewWidget):

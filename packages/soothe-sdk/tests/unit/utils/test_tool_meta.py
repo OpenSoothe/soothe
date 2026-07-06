@@ -4,6 +4,7 @@ from soothe_sdk.tools.metadata import (
     TOOL_REGISTRY,
     extract_filesystem_path_for_policy,
     get_all_path_arg_keys,
+    get_file_write_tool_names,
     get_outcome_type,
     get_tool_categories,
     get_tool_display_name,
@@ -50,7 +51,16 @@ class TestOutcomeTypeCoverage:
 
     def test_file_write_tools_have_correct_outcome_type(self) -> None:
         """File write tools should have outcome_type='file_write'."""
-        file_write_tools = [
+        for name in get_file_write_tool_names():
+            meta = get_tool_meta(name)
+            assert meta is not None
+            assert meta.outcome_type == "file_write", (
+                f"{name}: expected file_write, got {meta.outcome_type}"
+            )
+
+    def test_get_file_write_tool_names_is_complete(self) -> None:
+        """Every known file write tool is returned by get_file_write_tool_names()."""
+        expected = {
             "write_file",
             "edit_file",
             "delete_file",
@@ -58,13 +68,8 @@ class TestOutcomeTypeCoverage:
             "insert_lines",
             "delete_lines",
             "apply_diff",
-        ]
-        for name in file_write_tools:
-            meta = get_tool_meta(name)
-            assert meta is not None
-            assert meta.outcome_type == "file_write", (
-                f"{name}: expected file_write, got {meta.outcome_type}"
-            )
+        }
+        assert get_file_write_tool_names() == frozenset(expected)
 
     def test_media_tools_have_file_read_outcome_type(self) -> None:
         """Media tools should have outcome_type='file_read' (they read files)."""

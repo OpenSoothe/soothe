@@ -9,9 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe_cli.runtime.state.file_tracker import (
+    FILE_CHANGE_TOOLS,
     FileOperationRecord,
     FileOpMetrics,
     apply_edit_file_lines_to_content,
+    apply_insert_lines_to_content,
     extract_line_range_text,
     file_change_action_label,
 )
@@ -24,14 +26,21 @@ from soothe_cli.tui.file_change_renderers import (
     build_file_change_preview,
     update_preview_data_from_record,
 )
+from soothe_sdk.tools.metadata import get_file_write_tool_names
 from soothe_cli.tui.widgets.file_change_preview import (
     DeleteFilePreviewWidget,
     EditFileLinesPreviewWidget,
     EditFilePreviewWidget,
     FileChangePreviewWidget,
+    InsertLinesPreviewWidget,
     WriteFilePreviewWidget,
 )
 from soothe_cli.tui.widgets.messages.diff_message import DiffMessage
+
+
+def test_file_change_tools_match_metadata_registry() -> None:
+    """TUI file-change previews cover every file_write tool in metadata."""
+    assert FILE_CHANGE_TOOLS == get_file_write_tool_names()
 
 
 def test_file_change_preview_uses_stream_card_bottom_margin() -> None:
@@ -202,6 +211,83 @@ def test_build_edit_file_lines_preview_uses_line_range(tmp_path: Path) -> None:
     assert after is not None
     assert "new_a" in after
     assert "old_a" not in after
+
+
+def test_build_insert_lines_preview_shows_file_diff(tmp_path: Path) -> None:
+    """insert_lines preview diffs the file before and after insertion."""
+    target = tmp_path / "doc.md"
+    target.write_text("# Title\n\nBody\n", encoding="utf-8")
+    frontmatter = "---\ntitle: Doc\n---\n\n"
+    built = build_file_change_preview(
+        "insert_lines",
+        {"file_path": str(target), "line": 1, "content": frontmatter},
+        assistant_id=None,
+    )
+    assert built is not None
+    cls, data = built
+    assert cls is InsertLinesPreviewWidget
+    assert data["insert_line"] == 1
+    assert any(line.startswith("+") for line in data["diff_lines"])
+
+    after = apply_insert_lines_to_content(target.read_text(encoding="utf-8"), 1, frontmatter)
+    assert after is not None
+    assert after.startswith("---")
+
+
+def test_build_delete_lines_preview_shows_removed_lines(tmp_path: Path) -> None:
+    """delete_lines preview shows a unified diff with deletions."""
+    target = tmp_path / "doc.md"
+    target.write_text("keep\nremove\nkeep2\n", encoding="utf-8")
+    built = build_file_change_preview(
+        "delete_lines",
+        {"file_path": str(target), "start_line": 2, "end_line": 2},
+        assistant_id=None,
+    )
+    assert built is not None
+    cls, data = built
+    assert cls is EditFileLinesPreviewWidget
+    assert "-remove" in "".join(data["diff_lines"])
+
+
+def test_build_apply_diff_preview_shows_patch(tmp_path: Path) -> None:
+    """apply_diff preview renders the patch body."""
+    target = tmp_path / "a.py"
+    target.write_text("print('old')\n", encoding="utf-8")
+    patch = """--- a.py
++++ a.py
+@@ -1 +1 @@
+-print('old')
++print('new')
+"""
+    built = build_file_change_preview(
+        "apply_diff",
+        {"file_path": str(target), "diff": patch},
+        assistant_id=None,
+    )
+    assert built is not None
+    cls, data = built
+    assert cls is EditFilePreviewWidget
+    assert "-print('old')" in "".join(data["diff_lines"])
+
+
+def test_file_change_action_label_for_surgical_tools() -> None:
+    """Surgical file tools get distinct completed labels."""
+    assert file_change_action_label(
+        FileOperationRecord(
+            tool_name="insert_lines",
+            display_path="a.md",
+            physical_path=None,
+            tool_call_id="tc-1",
+        )
+    ) == "Inserted"
+    assert file_change_action_label(
+        FileOperationRecord(
+            tool_name="apply_diff",
+            display_path="a.py",
+            physical_path=None,
+            tool_call_id="tc-2",
+        )
+    ) == "Updated"
 
 
 def test_build_delete_file_preview_reads_disk(tmp_path: Path) -> None:
