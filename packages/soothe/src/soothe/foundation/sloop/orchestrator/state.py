@@ -1,4 +1,4 @@
-"""Loop Graph channel schema for LangGraph routing (RFC-220, RFC-630)."""
+"""Loop Graph channel schema for LangGraph routing (RFC-220, RFC-630, IG-554)."""
 
 from __future__ import annotations
 
@@ -35,6 +35,10 @@ class LoopGraphState(TypedDict, total=False):
     # checkpoint state (continue_loop_mode + prior completed goals). When True,
     # route_by_intent dispatches to plan_assess regardless of intake_label.
     is_continuation: bool | None
+    # IG-554: True when daemon created a new goal record (fresh loop or new goal
+    # on idle loop). Used by route_by_intent routing guard to block chitchat
+    # fast-path when structural admission contradicts social classification.
+    new_goal_created: bool | None
     # Clarification relay (RFC-622): serialized to keep the channel JSON-safe.
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None

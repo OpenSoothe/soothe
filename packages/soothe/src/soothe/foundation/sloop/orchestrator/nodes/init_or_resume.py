@@ -1,4 +1,4 @@
-"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630).
+"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554).
 
 Hydrates intent/routing from intake classified in the graph entry node.
 Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
@@ -6,6 +6,10 @@ node emits the classified intake for event streaming, surfaces the 3-class
 ``intake_label`` and a structural ``is_continuation`` flag onto the graph
 state for ``route_by_intent``. Trivial labels inject a pseudo single-step plan
 and route through resolve_decision → execute → goal_completion.
+
+IG-554: Derives ``new_goal_created`` from ``recovery_valid_resume`` for the
+routing guard that blocks chitchat fast-path when daemon has committed to
+starting agentic work.
 """
 
 from __future__ import annotations
@@ -65,6 +69,11 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
     intake_label: IntakeLabel | None = getattr(intent, "intake_label", None)
     is_continuation = _is_continuation(ctx)
 
+    # IG-554: new_goal_created signals daemon committed to agentic work.
+    # True when NOT resuming an existing running goal. Used by routing guard
+    # to block chitchat fast-path when structural admission contradicts social.
+    new_goal_created = not getattr(ctx, "recovery_valid_resume", False)
+
     # RFC-630 chitchat fast-path: runner emits piggybacked response directly.
     # Chitchat always bypasses StrangeLoop — even on loop continuation turns
     # (e.g. a second "who are you" in the same session).
@@ -89,6 +98,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "intent_route": "fast_path",
             "intake_label": intake_label,
             "is_continuation": is_continuation,
+            "new_goal_created": new_goal_created,
             "plan_route": None,
             "assess_route": None,
             "last_outcome": None,
@@ -115,6 +125,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             "intent_route": "continue_loop",
             "intake_label": intake_label,
             "is_continuation": is_continuation,
+            "new_goal_created": new_goal_created,
             "plan_route": None,
             "assess_route": None,
             "last_outcome": None,
@@ -134,6 +145,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         "intent_route": "continue_loop",
         "intake_label": intake_label,
         "is_continuation": is_continuation,
+        "new_goal_created": new_goal_created,
         "plan_route": None,
         "assess_route": None,
         "last_outcome": None,

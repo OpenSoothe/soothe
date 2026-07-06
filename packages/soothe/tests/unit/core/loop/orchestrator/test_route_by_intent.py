@@ -2,6 +2,8 @@
 
 Covers IG-528 test groups 2 (routing truth table), 4 (branch node sequence),
 and 6 (trivial-branch synth plan + mislabel recovery).
+
+IG-554: Routing guard tests for new_goal_created constraint blocking chitchat.
 """
 
 from __future__ import annotations
@@ -320,3 +322,80 @@ def test_trivial_plan_has_no_synthetic_reasoning_prefix() -> None:
     assert plan.require_goal_completion is False
     # The ## Result evidence contract is retained.
     assert "## Result" in plan.decision.steps[0].expected_output
+
+
+# -- IG-554: Routing guard tests (new_goal_created constraint) --------------
+
+
+def test_routing_guard_blocks_chitchat_on_new_goal() -> None:
+    """IG-554: chitchat fast-path blocked when new_goal_created=True."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "fast_path",
+        "new_goal_created": True,
+    }
+    # Routing guard forces complex instead of END
+    assert route_by_intent(state) == "bounded_evidence_gather"
+
+
+def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
+    """IG-554: chitchat label forced to complex when new_goal_created=True."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "new_goal_created": True,
+    }
+    # Routing guard forces complex instead of END
+    assert route_by_intent(state) == "bounded_evidence_gather"
+
+
+def test_routing_guard_allows_chitchat_on_existing_goal() -> None:
+    """IG-554: chitchat allowed when new_goal_created=False (resume existing)."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "fast_path",
+        "new_goal_created": False,
+    }
+    assert route_by_intent(state) == END
+
+
+def test_routing_guard_complex_not_blocked_by_new_goal() -> None:
+    """IG-554: complex label not affected by routing guard."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.COMPLEX,
+        "new_goal_created": True,
+    }
+    assert route_by_intent(state) == "bounded_evidence_gather"
+
+
+def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
+    """IG-554: simple label not affected by routing guard."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.SIMPLE,
+        "new_goal_created": True,
+    }
+    assert route_by_intent(state) == "plan_generate"
+
+
+def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
+    """IG-554: trivial label not affected by routing guard."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.TRIVIAL,
+        "new_goal_created": True,
+    }
+    assert route_by_intent(state) == "resolve_decision"
+
+
+def test_routing_guard_missing_new_goal_defaults_false() -> None:
+    """IG-554: missing new_goal_created defaults to False (chitchat allowed)."""
+    state = {
+        "is_continuation": False,
+        "intake_label": IntakeLabel.CHITCHAT,
+        "intent_route": "fast_path",
+    }
+    assert route_by_intent(state) == END

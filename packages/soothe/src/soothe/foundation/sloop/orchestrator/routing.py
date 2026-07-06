@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-554)."""
 
 from __future__ import annotations
 
@@ -52,7 +52,10 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_by_intent(state: dict[str, Any]) -> str:
-    """RFC-630: branch dispatch after init_or_resume by intake label.
+    """RFC-630 IG-554: branch dispatch after init_or_resume by intake label.
+
+    Routing guard (P0): block chitchat fast-path when new_goal_created. If daemon
+    has committed to starting agentic work, chitchat is structurally invalid.
 
     Continuation is checked first from the structural ``is_continuation`` flag
     set by ``init_or_resume``. Continuation turns follow intake-aware routing:
@@ -71,12 +74,31 @@ def route_by_intent(state: dict[str, Any]) -> str:
     Falls back to ``bounded_evidence_gather`` (complex) when the label is
     missing — the fail-safe path runs the full pipeline.
     """
+    # P0 routing guard: block chitchat when new_goal_created (IG-554)
+    # If daemon created a new goal record, chitchat is structurally invalid.
+    new_goal_created = state.get("new_goal_created", False)
+    label = state.get("intake_label")
+
+    if new_goal_created and label == IntakeLabel.CHITCHAT:
+        logger.warning(
+            "[routing] chitchat blocked by new_goal_created constraint; "
+            "forcing complex route (structural override)"
+        )
+        label = IntakeLabel.COMPLEX
+
+    # Original fast-path check (chitchat from intent_classify node)
     if state.get("intent_route") == "fast_path":
+        # Apply routing guard here too
+        if new_goal_created:
+            logger.warning(
+                "[routing] intent_route fast_path blocked by new_goal_created; "
+                "forcing complex route"
+            )
+            return "bounded_evidence_gather"
         logger.info("[routing] route_by_intent → END (chitchat fast-path)")
         return END
 
     if state.get("is_continuation"):
-        label = state.get("intake_label")
         if label == IntakeLabel.SIMPLE:
             logger.info("[routing] route_by_intent → plan_generate (continuation+simple)")
             return "plan_generate"
@@ -88,7 +110,6 @@ def route_by_intent(state: dict[str, Any]) -> str:
         logger.info("[routing] route_by_intent → plan_assess (continuation+trivial)")
         return "plan_assess"
 
-    label = state.get("intake_label")
     if label == IntakeLabel.TRIVIAL:
         logger.info("[routing] route_by_intent → resolve_decision (trivial pseudo-plan)")
         return "resolve_decision"

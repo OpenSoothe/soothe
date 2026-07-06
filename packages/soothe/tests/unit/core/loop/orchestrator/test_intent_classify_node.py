@@ -14,12 +14,15 @@ from soothe.foundation.sloop.orchestrator.nodes.intent_classify import node_inte
 
 @pytest.mark.asyncio
 async def test_intent_classify_emits_interpreting_status_and_sets_state() -> None:
+    """Legacy one-pass classifier still works for backward compatibility."""
     emitted: list[tuple[str, object]] = []
 
     async def _emit(event_type: str, event_data: object) -> None:
         emitted.append((event_type, event_data))
 
-    classifier = MagicMock()
+    # Create a mock classifier WITHOUT _pass1_classifier (legacy mode)
+    # Use spec to limit attributes to what IntentClassifier actually has
+    classifier = MagicMock(spec=["classify_intake", "_fast_model", "_soothe_config", "_fallback"])
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll plan a lightweight change.",
@@ -27,6 +30,7 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
         task_complexity=TaskComplexity.SIMPLE,
     )
     classifier.classify_intake = AsyncMock(return_value=intent)
+    classifier._fallback = MagicMock(return_value=intent)
 
     loop_state = SimpleNamespace(
         goal="Fix the typo",
@@ -65,7 +69,7 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
 
 @pytest.mark.asyncio
 async def test_intent_classify_skips_on_clarification_resume() -> None:
-    classifier = MagicMock()
+    classifier = MagicMock(spec=["classify_intake"])
     classifier.classify_intake = AsyncMock()
 
     loop_state = SimpleNamespace(
