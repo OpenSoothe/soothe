@@ -561,10 +561,9 @@ class CognitionStepMessage(Vertical):
             colors = theme.DARK_COLORS
         icon = g.checkmark if success else g.error
         head_tone = colors.card_success if success else colors.card_error
-        suffix_tone = colors.cognition
         parts: list[object] = [Content.styled(f"{gutter}{icon} {head}", head_tone)]
         if suffix:
-            parts.append(Content.styled(suffix, suffix_tone))
+            parts.append(Content.styled(suffix, theme.SECONDARY_TEXT_STYLE))
         self._status_widget.update(Content.assemble(*parts))
         self._status_widget.display = True
 

@@ -290,6 +290,9 @@ class TextualUIAdapter:
         self._execute_wave_completed: int = 0
         """Completed steps in the current execute batch."""
 
+        self._successful_step_ids: set[str] = set()
+        """Step ids that finished successfully this loop (survives plan=keep replays)."""
+
         self._clarification_input_by_step: dict[str, ClarificationInputMessage] = {}
         """Active inline ``ClarificationInputMessage`` widgets keyed by step id.
 
@@ -1426,6 +1429,8 @@ async def sync_pending_step_cards_from_plan(
         sid = str(row.get("id", "")).strip()
         if not sid or sid in adapter._current_step_messages:
             continue
+        if _is_successful_step_id(adapter, sid):
+            continue
         desc = str(row.get("description", "")).strip() or "(step)"
         step_widget = CognitionStepMessage(
             step_id=sid,
@@ -1449,6 +1454,17 @@ def _step_card_lookup_keys(step_id: str) -> list[str]:
     if dash not in keys:
         keys.append(dash)
     return keys
+
+
+def _register_successful_step_id(adapter: TextualUIAdapter, step_id: str) -> None:
+    """Remember a step that completed successfully so plan=keep does not remount it."""
+    for key in _step_card_lookup_keys(step_id):
+        adapter._successful_step_ids.add(key)
+
+
+def _is_successful_step_id(adapter: TextualUIAdapter, step_id: str) -> bool:
+    """True when this step already succeeded earlier in the current loop."""
+    return any(key in adapter._successful_step_ids for key in _step_card_lookup_keys(step_id))
 
 
 def _lookup_step_card(
@@ -2731,6 +2747,7 @@ async def execute_task_textual(
     router.reset_turn()
     adapter._execute_wave_total = 0
     adapter._execute_wave_completed = 0
+    adapter._successful_step_ids.clear()
     ui_coalesce = TurnToolUiCoalescer()
     adapter._goal_completion_mounted_this_turn = False
     adapter._goal_tree_message = None
@@ -3742,7 +3759,11 @@ async def execute_task_textual(
                                     execution_mode = str(data.get("execution_mode", "")).strip()
                                     adapter._last_plan_execution_mode = execution_mode or None
                                     adapter._execute_wave_total = len(raw_steps)
-                                    adapter._execute_wave_completed = 0
+                                    done_steps = int(data.get("done_steps", 0) or 0)
+                                    adapter._execute_wave_completed = min(
+                                        done_steps,
+                                        len(raw_steps),
+                                    )
                                     await sync_pending_step_cards_from_plan(
                                         adapter,
                                         steps=raw_steps,
@@ -3896,6 +3917,8 @@ async def execute_task_textual(
                                         pending_text_by_namespace[ns_key] = ""
                                         assistant_message_by_namespace.pop(ns_key, None)
                                     success = bool(data.get("success", True))
+                                    if success:
+                                        _register_successful_step_id(adapter, step_id)
                                     duration_ms = int(data.get("duration_ms", 0))
                                     tool_call_count = int(data.get("tool_call_count", 0))
                                     summary = str(
