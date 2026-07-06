@@ -16,6 +16,7 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
     should_ingest_tool_for_step_stats,
 )
 from soothe_cli.runtime.state.step_router import StepTaskRouter
+from soothe_cli.tui.preview_limits import STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT
 from soothe_cli.tui.textual_adapter import TextualUIAdapter, apply_tool_call_wire_update
 from soothe_cli.tui.widgets.messages import CognitionStepMessage
 
@@ -432,10 +433,12 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
     assert subagent_card is not None, "SubAgent card should be created for task delegation"
 
     text = str(subagent_card._step_task_activity_content())
-    # Preview shows the latest tool only; earlier list_files is summarized.
+    # Preview shows up to 3 tools; both list_files and glob fit without overflow.
     assert "Glob(" in text
     assert "**/*.py" in text
-    assert "+1 more tool" in text
+    assert "ListFiles(" in text
+    assert "mirasurf/soothe" in text
+    assert "+1 more tool" not in text
 
 
 @pytest.mark.asyncio
@@ -562,3 +565,28 @@ def test_subagent_footer_ignores_server_step_tool_count() -> None:
     text = call_arg.plain if hasattr(call_arg, "plain") else str(call_arg)
     assert "7 tools" in text
     assert "8 tools" not in text
+
+
+def test_subagent_card_shows_latest_three_tool_activities() -> None:
+    """SubAgent cards preview the latest 3 tool rows, same cap as step cards."""
+    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+
+    card = create_subagent_card(
+        step_id="ZCH-01",
+        description="Scan repo",
+        subagent_type="tacitus",
+        parent_step_id="ZCH-01",
+        parent_task_key="ZCH-01:s:task:0",
+        task_idx=0,
+        id="subagent-preview",
+    )
+    for i in range(7):
+        card.add_tool_call(f"ZCH_01:t0:glob:{i}", "glob", {"glob_pattern": f"**/{i}"})
+    text = str(card._step_task_activity_content())
+    assert "Glob(**/4)" in text or "**/4" in text
+    assert "**/5" in text
+    assert "**/6" in text
+    assert "**/3" not in text
+    assert "**/0" not in text
+    assert "+4 more tools" in text
+    assert STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT == 3
