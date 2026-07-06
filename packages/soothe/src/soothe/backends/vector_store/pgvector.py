@@ -29,7 +29,7 @@ class PGVectorStore:
         self,
         collection: str = "soothe_vectors",
         dsn: str = "postgresql://localhost/soothe",
-        pool_size: int = 5,
+        pool_size: int = 48,
         index_type: str = "hnsw",
         vector_size: int = 1536,
     ) -> None:

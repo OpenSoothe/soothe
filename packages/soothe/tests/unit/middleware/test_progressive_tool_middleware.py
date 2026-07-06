@@ -148,6 +148,54 @@ def test_state_schema_declares_tool_activation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_invalid_tool_not_promoted(config: SootheConfig) -> None:
+    """Hallucinated tool names must not pollute tool_activation.promoted."""
+    middleware = ProgressiveToolMiddleware(config=config)
+    tools = [_tool("run_command"), _tool("wizsearch_search")]
+    middleware.set_tool_catalog(tools)
+
+    request = MagicMock()
+    request.tool_call = {
+        "name": "read_command",
+        "args": {"command": "grep foo"},
+        "id": "bad1",
+    }
+    request.state = {"tool_activation": {"sent": set(), "promoted": set()}}
+
+    async def handler(_req: object) -> ToolMessage:
+        return ToolMessage(
+            content="Error: read_command is not a valid tool, try one of [run_command].",
+            tool_call_id="bad1",
+            name="read_command",
+            status="error",
+        )
+
+    result = await middleware.awrap_tool_call(request, handler)
+    assert isinstance(result, ToolMessage)
+    assert "read_command" not in request.state["tool_activation"].get("promoted", set())
+
+
+@pytest.mark.asyncio
+async def test_deferred_tool_still_promoted_on_success(config: SootheConfig) -> None:
+    middleware = ProgressiveToolMiddleware(config=config)
+    tools = [_tool("run_command"), _tool("wizsearch_search")]
+    middleware.set_tool_catalog(tools)
+
+    request = MagicMock()
+    request.tool_call = {"name": "wizsearch_search", "args": {"query": "x"}, "id": "ok1"}
+    request.state = {"tool_activation": {"sent": set(), "promoted": set()}}
+
+    async def handler(_req: object) -> ToolMessage:
+        return ToolMessage(content="results", tool_call_id="ok1", name="wizsearch_search")
+
+    result = await middleware.awrap_tool_call(request, handler)
+    assert isinstance(result, Command)
+    update = result.update
+    assert isinstance(update, dict)
+    assert "wizsearch_search" in update["tool_activation"]["promoted"]
+
+
+@pytest.mark.asyncio
 async def test_default_core_binds_skill_discovery_tools() -> None:
     """Core tier must include search_skills/invoke_skill so AVAILABLE_SKILLS is usable."""
     cfg = SootheConfig()

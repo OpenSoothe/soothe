@@ -315,7 +315,7 @@ class StrangeLoop:
                     checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
                     checkpoint.status = "running"
                     # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
-                    await state_manager.save(checkpoint)
+                    await state_manager.save(checkpoint, include_goal_history=True)
                     iteration = 0
                     recovery_valid_resume = False
                 else:
@@ -329,7 +329,7 @@ class StrangeLoop:
                     checkpoint.goal_history.append(goal_record)
                     checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
                     checkpoint.status = "running"
-                    await state_manager.save(checkpoint)
+                    await state_manager.save(checkpoint, include_goal_history=True)
                     iteration = 0
                     recovery_valid_resume = False
 
@@ -343,7 +343,7 @@ class StrangeLoop:
                 checkpoint.status = "running"
                 # RFC-624 Phase 4 Step 3: seeding removed — CE ledger spans all goals
                 # via ce.load() which restores prior DAG + ledger state.
-                await state_manager.save(checkpoint)
+                await state_manager.save(checkpoint, include_goal_history=True)
                 iteration = 0
                 logger.info(
                     "continued loop %s: new goal id=%s idx=%d",
@@ -372,7 +372,7 @@ class StrangeLoop:
                     id(goal_record),
                 )
 
-                await state_manager.save(checkpoint)
+                await state_manager.save(checkpoint, include_goal_history=True)
 
             user_submission_line = (goal_user_submission or goal or "").strip()
             force_continue_loop = is_continue_keyword(user_submission_line)
@@ -391,7 +391,7 @@ class StrangeLoop:
                 checkpoint.status = "running"
                 recovery_valid_resume = False
                 iteration = 0
-                await state_manager.save(checkpoint)
+                await state_manager.save(checkpoint, include_goal_history=True)
                 logger.info(
                     "[Goal] continue keyword promoted interrupted goal to cancelled; "
                     "new goal=%s history=%d",

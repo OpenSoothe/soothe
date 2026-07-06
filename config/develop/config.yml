@@ -120,8 +120,13 @@ agent:
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
+  postgres_pool_min_size: 8
+  checkpointer_pool_size: 64
+  sloop_pool_size: 64
+  metadata_pool_size: 32
   postgres_pool_max_idle_seconds: 90
   postgres_pool_max_lifetime_seconds: 900
+  postgres_pool_acquire_timeout_seconds: 45
 
 security:
   allow_paths_outside_workspace: true
@@ -157,6 +162,7 @@ cron:
 vector_stores:
   - name: pgvector_dev
     provider_type: pgvector
+    pool_size: 48
 
 vector_store_router:
   default: pgvector_dev:soothe_default

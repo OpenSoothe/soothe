@@ -26,7 +26,7 @@ async def preopen_shared_postgres_pools(
     config: SootheConfig,
     daemon_config: DaemonConfig,
 ) -> None:
-    """Pre-open shared StrangeLoop and checkpointer pools in thread_pool mode."""
+    """Pre-open shared StrangeLoop, checkpointer, and metadata pools in thread_pool mode."""
     if not uses_postgresql_persistence(config):
         return
 
@@ -39,6 +39,7 @@ async def preopen_shared_postgres_pools(
     if not daemon_config.thread_pool.enabled:
         return
 
+    from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
     from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
@@ -50,19 +51,30 @@ async def preopen_shared_postgres_pools(
     if cp_pool is not None:
         await cp_pool.open()
 
+    metadata_pool = SharedMetadataPool.get_or_create_pool(config)
+    if metadata_pool is not None:
+        await metadata_pool.open()
+        from soothe.foundation.persistence.db_init import initialize_database
+
+        await initialize_database(metadata_pool, "soothe_metadata")
+        logger.info("Shared metadata PostgreSQL pool opened and schema initialized")
+
 
 async def release_idle_shared_postgres_pools() -> None:
     """Release idle connections on process-wide shared PostgreSQL pools."""
+    from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
     from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
     await SharedPostgreSQLPool.release_idle_shared()
     await SharedCheckpointerPool.release_idle()
+    await SharedMetadataPool.release_idle()
 
 
 async def close_shared_postgres_pools() -> None:
     """Close shared StrangeLoop and checkpointer pools at daemon shutdown."""
     try:
+        from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
         from soothe.foundation.sloop.state.persistence.shared_pool import (
             SharedPostgreSQLPool,
             close_shared_sqlite_backend_instance,
@@ -80,6 +92,8 @@ async def close_shared_postgres_pools() -> None:
         logger.info("Shared StrangeLoop PostgreSQL pool closed")
         await SharedCheckpointerPool.close_shared_instance()
         logger.info("Shared checkpointer PostgreSQL pool closed")
+        await SharedMetadataPool.close_shared_instance()
+        logger.info("Shared metadata PostgreSQL pool closed")
         await close_shared_sqlite_backend_instance()
         logger.info("Shared StrangeLoop SQLite backend closed")
     except ImportError:

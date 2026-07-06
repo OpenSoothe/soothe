@@ -112,7 +112,8 @@ def _render_entries(
 # Preamble injected by SystemPromptMiddleware before the listing body.
 AVAILABLE_TOOLS_PREAMBLE = (
     "Deferred tools (not yet bound). Use search_tools(query) to find a tool, "
-    "or call any name below to promote it for subsequent hops."
+    "or call any name below to promote it for subsequent hops. "
+    "There is no read_command — use run_command for shell output or grep to search files."
 )
 
 

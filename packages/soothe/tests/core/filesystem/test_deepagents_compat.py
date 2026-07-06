@@ -54,6 +54,7 @@ class TestNormalizedPathBackendReadResult:
         result = backend.read("/sample.txt", offset=100, limit=20)
         assert result.error is not None
         assert "exceeds file length" in result.error
+        assert "0-indexed" in result.error
 
     @pytest.mark.asyncio
     async def test_aread_matches_read(self, backend: NormalizedPathBackend) -> None:

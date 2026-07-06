@@ -121,7 +121,11 @@ class InsertLinesSchema(BaseModel):
 
     file_path: str = Field(description="Absolute path to the file. Must be absolute, not relative.")
     line: int = Field(
-        description="Line number to insert at (1-indexed). Can be 1 to total_lines+1."
+        default=1,
+        description=(
+            "Line number to insert at (1-indexed). Defaults to 1 for frontmatter at file top. "
+            "Valid range: 1 to total_lines+1."
+        ),
     )
     content: str = Field(description="Content to insert at the specified line.")
 

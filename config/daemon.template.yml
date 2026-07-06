@@ -115,8 +115,10 @@ identity:
 # Thread pool (DEFAULT) - Lightweight async, fast startup
 # IG-534: Each concurrent synthesis loop occupies one thread for the full turn.
 # IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
-# - max_pool_size ≥ concurrent loops (32 default, supports full parallelism)
-# - min_pool_size pre-warms 8 threads for fast initial dispatch
+# IG-553: For 50–100 concurrent loops, raise max_pool_size to 96–100 and align
+# persistence.checkpointer_pool_size / sloop_pool_size (64) behind PgBouncer.
+# - max_pool_size ≥ concurrent loops for full parallelism
+# - min_pool_size pre-warms threads for fast initial dispatch
 # - Lower values cause queue waits; higher values increase memory and PG connection usage.
 #
 # CoreAgent cold start (daemon + TUI): keep agent.runtime.lazy_core_agent=true in soothe
@@ -125,8 +127,8 @@ identity:
 # two multi-second compiles (~7s primary + ~7s execute twin).
 thread_pool:
   enabled: true
-  min_pool_size: 8  # IG-535: Pre-warm baseline for burst handling
-  max_pool_size: 32  # IG-535: Support 32 concurrent synthesis loops
+  min_pool_size: 16  # IG-553: Pre-warm baseline for 50–100 loop bursts
+  max_pool_size: 96  # IG-553: Support up to 96 concurrent synthesis loops
   idle_timeout_seconds: 120
   max_requests_per_thread: 50
   request_timeout_seconds: 7200  # 2h default; 0 = no timeout

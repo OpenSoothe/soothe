@@ -102,7 +102,9 @@ class ContextEngineGoalContextAdapter:
             # Thread switch detection needs state_manager
             current_thread = ""
             if self._state_manager is not None:
-                checkpoint = await self._state_manager.load()
+                checkpoint = self._state_manager.get_checkpoint()
+                if checkpoint is None:
+                    checkpoint = await self._state_manager.load()
                 if not checkpoint:
                     return None
                 if not checkpoint.thread_switch_pending:

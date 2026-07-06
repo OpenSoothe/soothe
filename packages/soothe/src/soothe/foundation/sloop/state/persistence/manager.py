@@ -59,10 +59,11 @@ class StrangeLoopCheckpointPersistenceManager:
                     "`psycopg`. Install soothe with postgres extras."
                 ) from exc
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-            pool_timing = postgres_pool_timing_from_config(config, max_size=10)
+            pool_size = config.persistence.metadata_pool_size
+            pool_timing = postgres_pool_timing_from_config(config, max_size=pool_size)
             self._backend = PostgreSQLPersistenceBackend(
                 dsn=dsn,
-                pool_size=10,
+                pool_size=pool_size,
                 pool_timing=pool_timing,
             )
         else:

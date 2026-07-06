@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from soothe.protocols.persistence import AsyncPersistStore
 
 
@@ -12,6 +14,9 @@ def create_persist_store(
     namespace: str = "default",
     db_path: str | None = None,
     reader_pool_size: int = 8,
+    *,
+    config: Any | None = None,
+    shared_pool: Any | None = None,
 ) -> AsyncPersistStore | None:
     """Factory for async persistence backends.
 
@@ -22,6 +27,8 @@ def create_persist_store(
         namespace: Namespace for key isolation (PostgreSQL and SQLite).
         db_path: SQLite database file path (SQLite only).
         reader_pool_size: SQLite reader connection pool size for concurrent reads.
+        config: Optional ``SootheConfig`` for PostgreSQL pool sizing.
+        shared_pool: Optional shared ``AsyncConnectionPool`` for metadata (daemon mode).
 
     Returns:
         An AsyncPersistStore instance, or None if persistence is disabled.
@@ -31,7 +38,30 @@ def create_persist_store(
             raise ValueError("DSN required for PostgreSQL backend")
         from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
 
-        return PostgreSQLPersistStore(dsn=dsn, namespace=namespace)
+        pool_size = 10
+        pool_timing = None
+        if config is not None:
+            from soothe.foundation.persistence.postgres_pool_lifecycle import (
+                postgres_pool_timing_from_config,
+            )
+
+            pool_size = config.persistence.metadata_pool_size
+            pool_timing = postgres_pool_timing_from_config(config, max_size=pool_size)
+
+        if shared_pool is not None:
+            return PostgreSQLPersistStore(
+                dsn=dsn,
+                namespace=namespace,
+                pool_size=0,
+                shared_pool=shared_pool,
+            )
+
+        return PostgreSQLPersistStore(
+            dsn=dsn,
+            namespace=namespace,
+            pool_size=pool_size,
+            pool_timing=pool_timing,
+        )
 
     if backend == "sqlite":
         from soothe.backends.persistence.sqlite_store import SQLitePersistStore

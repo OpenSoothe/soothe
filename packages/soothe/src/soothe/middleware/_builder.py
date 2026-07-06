@@ -192,6 +192,11 @@ def build_soothe_middleware_stack(
     logger.debug("[Middleware] Tool output cap enabled")
 
     # 2c. Progressive builtin-tool loading (optional)
+    from .invalid_tool_hints import InvalidToolHintsMiddleware
+
+    stack.append(InvalidToolHintsMiddleware())
+    logger.debug("[Middleware] Invalid tool hints enabled")
+
     progressive_tool_middleware = None
     if config.progressive_tools.enabled:
         from .progressive_tools import ProgressiveToolMiddleware

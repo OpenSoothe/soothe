@@ -17,6 +17,10 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
+from soothe.middleware.tool_name_hints import (
+    extract_tool_message_content,
+    is_invalid_tool_error,
+)
 from soothe.toolkits.progressive.registry import (
     DEFAULT_CORE_TOOL_NAMES,
     ProgressiveToolRegistry,
@@ -123,6 +127,23 @@ class ProgressiveToolMiddleware(AgentMiddleware):
         _, deferred = self._registry.partition(self._catalog)
         return deferred
 
+    def _known_tool_names(self) -> set[str]:
+        """Registered catalog names plus the always-bound core tier."""
+        return {d.name for d in self._catalog} | set(self._registry.core_tool_names)
+
+    def _should_promote_after_invoke(
+        self,
+        tool_name: str,
+        result: ToolMessage | Command[Any],
+    ) -> bool:
+        """Promote only real deferred tools that executed without invalid-name errors."""
+        if not tool_name or tool_name in self._registry.core_tool_names:
+            return False
+        if tool_name not in self._known_tool_names():
+            return False
+        content = extract_tool_message_content(result)
+        return not (content and is_invalid_tool_error(content))
+
     def _handle_search_tools(
         self,
         query: str,
@@ -185,7 +206,7 @@ class ProgressiveToolMiddleware(AgentMiddleware):
 
         result = await handler(request)
 
-        if tool_name and tool_name not in self._registry.core_tool_names:
+        if self._should_promote_after_invoke(tool_name, result):
             self._registry.mark_promoted(activation, [tool_name])
             logger.debug("[ProgressiveTools] Promoted %s after invocation", tool_name)
             return self._command_with_activation(result, activation)
