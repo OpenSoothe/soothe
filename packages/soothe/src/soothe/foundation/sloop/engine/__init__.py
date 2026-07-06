@@ -7,9 +7,23 @@ from .executor import Executor, ephemeral_execute_stream_enabled
 from .metadata_generator import generate_outcome_metadata
 from .scenario_classifier import ScenarioClassification
 from .step_wave_types import StepWaveQueued, StepWaveStart
-from .strange_loop import StrangeLoop
 from .synthesis import SynthesisGenerator, generate_user_fallback_summary
 from .thread_switch_policy import ThreadSwitchPolicyManager
+
+_LAZY_EXPORTS = {
+    "StrangeLoop": (".strange_loop", "StrangeLoop"),
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_EXPORTS:
+        module_name, attr = _LAZY_EXPORTS[name]
+        import importlib
+
+        module = importlib.import_module(module_name, __name__)
+        return getattr(module, attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "CheckpointAnchorManager",

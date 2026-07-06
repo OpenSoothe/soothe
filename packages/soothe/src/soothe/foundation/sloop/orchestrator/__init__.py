@@ -6,6 +6,12 @@ during ``soothe.config`` initialization.
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-
 __all__ = ["LoopRuntimeContext"]
+
+
+def __getattr__(name: str):
+    if name == "LoopRuntimeContext":
+        from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+
+        return LoopRuntimeContext
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -229,9 +229,9 @@ flowchart TD
 | goal_3: create git commit (trivial) | bootstrap |
 | goal_4: docker-build + e2e (complex) | evidence_gather → plan_generate, multi-step |
 
-### Integration (optional)
+### Integration
 
-- `tests/integration/core/test_loop_agent_prior_progress.py` — continuation follow-up with complex goal produces ≥2 steps in first plan.
+- `tests/integration/core/test_loop_agent_continuation_planning.py` — complex continuation (goal_4 shape) exercises `bounded_evidence_gather` → `plan_assess` → `plan_generate` with ≥2 steps and no bootstrap; trivial continuation (goal_3 shape) regression for bootstrap path.
 
 ---
 
