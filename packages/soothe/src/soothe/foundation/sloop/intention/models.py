@@ -5,6 +5,9 @@ Intent classification produces a 4-class intake label (RFC-630) —
 ``route_by_intent`` branch routing. Whether an agentic query continues an
 in-flight loop is derived structurally inside ``StrangeLoop`` from the loaded
 checkpoint, not classified here.
+
+Two-pass intake (RFC-630 IG-554): Pass 1 (social vs task) → Pass 2 (scope).
+Pass 1 returns ``is_task`` boolean; Pass 2 returns ``scope`` for work requests.
 """
 
 from __future__ import annotations
@@ -203,3 +206,86 @@ def build_loop_routing_classification(
             update={"preferred_subagent": preferred_subagent, "routing_hint": "subagent"}
         )
     return base
+
+
+# -----------------------------------------------------------------------------
+# Two-pass intake schemas (RFC-630, IG-554)
+# -----------------------------------------------------------------------------
+
+
+class IntakePass1Confidence(StrEnum):
+    """Confidence level for Pass 1 social vs task classification."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class IntakePass1LLMResult(BaseModel):
+    """Structured output from Pass 1: social vs task (RFC-630 IG-554).
+
+    Pass 1 cleanly separates social interactions from work requests. No prior
+    context is provided — the decision depends only on GOAL text. ``social_response``
+    is included for fast-path END when ``is_task=False``.
+
+    Args:
+        is_task: True if work request, False if social interaction.
+        confidence: High/medium/low confidence in the classification.
+        social_response: Direct reply when is_task=False (required for chitchat path).
+        reasoning: Brief reasoning (≤15 words).
+    """
+
+    is_task: bool = Field(
+        description="True if the GOAL is a work request; False if social (greeting, thanks, etc.)"
+    )
+    confidence: IntakePass1Confidence = Field(
+        description="Confidence in the classification: high, medium, or low"
+    )
+    social_response: str | None = Field(
+        default=None,
+        description="Required when is_task=False: friendly direct reply to the user",
+    )
+    reasoning: str = Field(
+        description="Brief reasoning for the classification (≤15 words)",
+    )
+
+
+class IntakeScope(StrEnum):
+    """3-class scope for Pass 2 classification (trivial, simple, complex).
+
+    Pass 2 only runs when Pass 1 returns ``is_task=True``. The ``chitchat`` label
+    is not an option — Pass 1 already decided social vs task.
+    """
+
+    TRIVIAL = "trivial"
+    SIMPLE = "simple"
+    COMPLEX = "complex"
+
+
+class IntakePass2LLMResult(BaseModel):
+    """Structured output from Pass 2: scope classification (RFC-630 IG-554).
+
+    Pass 2 classifies work scope as trivial, simple, or complex. Prior-goal
+    projection is included for reference resolution ("apply it"). The model
+    does not see ``chitchat`` as an option — Pass 1 already decided social vs task.
+
+    Args:
+        scope: Work scope: trivial (single action), simple (focused step), complex (multi-step).
+        goal_description: Normalized imperative summary of the goal.
+        reasoning: Brief reasoning (≤15 words).
+    """
+
+    scope: IntakeScope = Field(
+        description="Work scope: trivial (single action, no planning), "
+        "simple (focused step, light planning), complex (multi-step, full plan)"
+    )
+    goal_description: str = Field(
+        description="Normalized imperative summary of the goal",
+    )
+    reasoning: str = Field(
+        description="Brief reasoning for scope classification (≤15 words)",
+    )
+
+    def to_intake_label(self) -> IntakeLabel:
+        """Convert scope to IntakeLabel for routing."""
+        return IntakeLabel(self.scope)

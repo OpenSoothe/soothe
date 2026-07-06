@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Authors**: Xiaming Chen
 **Created**: 2026-06-30
-**Last Updated**: 2026-06-30
+**Last Updated**: 2026-07-06
 **Depends on**: RFC-220, RFC-225, RFC-226, RFC-503
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
@@ -16,9 +16,9 @@
 
 ## 1. Abstract
 
-The start-phase pipeline — from user goal arrival to the first task submitted to CoreAgent — mixes keyword/rule heuristics with LLM calls arranged sequentially. `IntentClassifier._is_likely_agentic` forces any query over 80 characters, 15 words, or 2 newlines down the agentic path without consulting the LLM, mis-routing long trivia as agentic; `simple_bypass` recognizes a synthetic plan by a `startswith` string prefix. Meanwhile, on a fresh first message the intent-classification LLM call, the pre-graph IO cluster (checkpoint load, ContextEngine load, instruction/memory file reads, git status), and the plan-generation LLM call all run strictly sequentially, none parallelized.
+The start-phase pipeline — from user goal arrival to the first task submitted to CoreAgent — uses a **two-pass intake architecture** that cleanly separates social/task classification from scope classification. Pass 1 decides whether the user goal is a social interaction (greeting, thanks, small talk) or a work request; Pass 2 (if work) classifies scope as trivial, simple, or complex. This separation resolves the semantic blind spot where acknowledgment+pivot phrasing ("Ok, now apply the fix") misroutes to social fast-path.
 
-This RFC replaces the binary intent classifier and its heuristic bypass with a single **intake LLM** call returning a lean 4-class label (`quiz | trivial | simple | complex`), runs that call `asyncio.gather`-ed with the pre-graph IO cluster so the LLM round-trip is hidden behind IO that must run anyway, and adds a `route_by_intent` conditional edge after `init_or_resume` that dispatches to four branches — each running only the phases it needs. Continuation remains a structural overlay derived from the checkpoint; clarification remains emergent from the planner. The fresh-loop skip (IG-476) is preserved as an internal optimization of the `complex` branch. The verbose `"I will complete this goal directly:"` synthetic reasoning prefix is deleted; the `trivial` branch emits the goal itself as the step action. The 4-class intake is the sole intent path — the legacy binary classifier, its prompt fragments, and the `_is_likely_agentic` heuristic are removed outright (no feature flag, no backward-compat shim).
+Both passes run structured LLM calls on the fast model. Pass 1 runs `asyncio.gather`-ed with checkpoint load and git status in stage 1; Pass 2 runs after stage 1 completes (only if Pass 1 returns `is_task=true`). A `route_by_intent` conditional edge after `init_or_resume` dispatches to four branches. A P0 hard routing guard blocks social-path when daemon has created a new goal record. The legacy binary intent classifier, its heuristic bypass (`_is_likely_agentic`), and the `simple_bypass` string-prefix detector are removed outright.
 
 ---
 
@@ -28,12 +28,14 @@ This RFC replaces the binary intent classifier and its heuristic bypass with a s
 
 This RFC defines:
 
-- A 4-class intake taxonomy (`quiz | trivial | simple | complex`) and the structured-output schema replacing the binary `IntentClassificationLLMResult`.
-- The removal of the `_is_likely_agentic` heuristic bypass, the legacy binary `IntentClassificationLLMResult` schema, the legacy `classify_intent` path, and the `simple_bypass` string-prefix detector.
-- A two-stage parallelized pre-graph sequence in the runner: intake LLM ∥ checkpoint load ∥ git status in stage 1; ContextEngine construct + load + `create_goal`/`activate_goal` (which depend on the checkpoint) and instruction/memory file reads (wrapped in `to_thread`) in stage 2.
-- A `route_by_intent` conditional edge after `init_or_resume` driving four branches, with continuation as a structural overlay.
-- Complexity-tiered planning: `trivial` skips `plan_generate` with a minimal synthetic plan; `simple` runs a lightweight plan call; `complex` runs the existing full spine.
-- The trivial-branch plan shape: goal-as-step-action, no synthetic reasoning message, `## Result` evidence contract retained.
+- A **two-pass intake architecture**: Pass 1 (social vs task) → Pass 2 (scope: trivial|simple|complex).
+- Pass 1 prompt, schema, and context exclusion (no prior projection).
+- Pass 2 prompt, schema, and context inclusion (prior projection for reference resolution).
+- A `route_by_intent` conditional edge after `init_or_resume` driving four branches.
+- A P0 hard routing guard: block social-path when `loop_state.new_goal_created`.
+- Complexity-tiered planning: `trivial` skips `plan_generate`; `simple` runs lightweight; `complex` runs full spine.
+- The trivial-branch plan shape: goal-as-step-action, no synthetic reasoning message.
+- Derived fields: `intake_label` and `has_deliverable` computed at routing.
 
 ### 2.2 Non-Goals
 
@@ -43,42 +45,50 @@ This RFC defines:
 - Post-execution failure-intent classification (`failure_intent_classifier.py`).
 - Changes to the wire protocol, event envelopes, or daemon transport.
 - Changes to the continuation discriminator (`RFC-226`) or clarification relay (`RFC-622`) — both preserved unchanged.
-- A feature flag or staged rollout — the 4-class intake replaces the binary classifier outright.
+- A feature flag or staged rollout — two-pass replaces one-pass outright.
+- Fine-tuning pipeline for intake classification (future work).
 
 ---
 
 ## 3. Motivation
 
-### 3.1 Unintelligent heuristic judgment
+### 3.1 Semantic blind spot in one-pass taxonomy
 
-`IntentClassifier._is_likely_agentic` (`packages/soothe/src/soothe/foundation/sloop/intention/classifier.py:260`) classifies any query with `len(query) > 80`, `len(query.split()) > 15`, or `query.count("\n") >= 2` as `agentic` *before* the LLM is consulted. A long trivia question is forced down the agentic path. The `simple_bypass` string-prefix match (`planning/simple_bypass.py:28`, `startswith("I will complete this goal directly:")`) is similarly content-blind: it recognizes a synthetic plan by its prefix rather than by an intelligent label.
+The original one-pass design used a 4-class label: `chitchat|trivial|simple|complex`. The `chitchat` label conflated **interaction type** (social) with **scope** (no deliverable):
 
-### 3.2 High first-message latency
+```
+chitchat = "greeting/thanks/casual small talk" + "no work"
+```
 
-On a fresh first message, the critical path runs these steps strictly sequentially (none parallelized):
+This created an overlap zone where acknowledgment+pivot phrasing misroutes:
 
-1. Intent classification LLM call (`runner/_runner_strange_loop.py:447`).
-2. `get_git_status` (`_runner_strange_loop.py:530`).
-3. `state_manager.load()` checkpoint (`foundation/sloop/engine/strange_loop.py:234`).
-4. ContextEngine backend construct + `ce.load()` + `create_goal`/`activate_goal` (`strange_loop.py:416`–`502`).
-5. Three synchronous file reads on the event loop: `load_project_instructions()`, `load_agent_instructions()`, `load_memory()` (`strange_loop.py:507`–`515`).
-6. PlanGeneration LLM call (`foundation/sloop/planning/planner.py:1297`).
+| User GOAL | One-pass misroute | Correct classification |
+|-----------|-------------------|------------------------|
+| `Ok, now apply the signature change` | "Ok" → social → `chitchat` | Acknowledgment pivot → work (complex) |
 
-The fresh-loop shortcut (IG-476) already removes the StatusAssessment LLM from the fresh path. The remaining blockers are the intent call, the pre-graph IO cluster, and the single plan call.
+This is a **systemic blind spot**, not a rare edge case. Any phrasing with social acknowledgment prefix + pivot phrase + terse engineering reference falls into the same trap.
 
-### 3.3 The central tension
+### 3.2 Context dominance amplifies the blind spot
 
-Replacing `_is_likely_agentic` with an LLM call naïvely *adds* a sequential round-trip to every first message — and today that heuristic *saves* latency for long queries by skipping the LLM. The resolution is to run the intake LLM in parallel with the pre-graph IO cluster (which must run anyway), so the LLM costs approximately zero added critical-path latency, then use its richer label to skip whole phases for easy goals. Intelligence goes up *and* latency goes down.
+Prior-goal projection (IG-540) biases toward "wrap-up" tone on continuation loops. When user says "Ok, about the signature change" after a completed goal, the model sees prior completion + "Ok" and overweights "user is confirming" vs "user is pivoting to new request."
+
+### 3.3 Unintelligent heuristic judgment (removed)
+
+`IntentClassifier._is_likely_agentic` forced any query over 80 characters, 15 words, or 2 newlines to agentic path before LLM consultation. The `simple_bypass` string-prefix match recognized synthetic plans by prefix. Both are removed — LLM decides content, structural state decides routing constraints.
+
+### 3.4 The resolution: Two-pass separation
+
+Pass 1 asks a single clean question: "Is this social or work?" No scope, no prior context, no bias. Pass 2 (if work) asks: "How much scope?" with full context for reference resolution. The decision boundaries are distinct; the blind spot is architecturally removed.
 
 ---
 
 ## 4. Guiding Principles
 
-1. **LLM over heuristic for content judgment.** Decisions about what the user's goal *means* are made by an LLM, not by string length, word count, or prefix matching. Structural state (iteration counters, checkpoint status, prior completed goals) remains structural — it is not content and does not need an LLM.
-2. **Parallelize independent work.** The intake LLM round-trip and the pre-graph IO cluster are independent; they run concurrently. Dependencies (CE construct needs the checkpoint) are respected by staging.
-3. **Match effort to difficulty.** A trivial goal does not pay for a plan-generation LLM call; a complex goal runs the full pipeline. The intake label selects the branch.
-4. **Fail safe.** On intake failure, route to the most capable pipeline (`complex`), preserving today's "fail safe = run the full loop" behavior.
-5. **Preserve what works.** The fresh-loop skip (IG-476), the continuation discriminator (RFC-226), and the clarification relay (RFC-622) are unchanged. This RFC adds a routing layer *around* them, not *instead of* them.
+1. **Separate decisions at the source.** Social vs task and trivial vs simple vs complex are different questions; different passes ask them.
+2. **LLM over heuristic for content judgment.** Decisions about what the goal *means* are made by LLM, not string length or prefix matching.
+3. **Partition context appropriately.** Pass 1 sees no prior projection (clean boundary); Pass 2 sees full projection (reference resolution).
+4. **Fail safe.** Pass 1 uncertain → treat as task; Pass 2 uncertain → complex. Routing guard blocks social on structural contradiction.
+5. **Preserve what works.** Fresh-loop skip (IG-476), continuation overlay (RFC-226), clarification relay (RFC-622) unchanged.
 
 ---
 
@@ -87,11 +97,12 @@ Replacing `_is_likely_agentic` with an LLM call naïvely *adds* a sequential rou
 ```mermaid
 graph TB
     Goal["user goal"] --> Runner["_run_strange_loop"]
-    Runner -->|"stage 1 gather"| G1["intake LLM ∥ checkpoint.load ∥ git_status"]
-    G1 --> G2["stage 2: CE construct+load ∥ to_thread: instructions/memory"]
+    Runner -->|"stage 1 gather"| G1["Pass 1 LLM ∥ checkpoint.load ∥ git_status"]
+    G1 -->|"is_task=false"| QuizEND["END: emit social_response"]
+    G1 -->|"is_task=true"| G2["stage 2: Pass 2 LLM ∥ CE construct+load ∥ to_thread: instructions/memory"]
     G2 --> Graph["graph: init_or_resume"]
     Graph --> Route["route_by_intent"]
-    Route -->|"quiz"| QuizEND["quiz executor → END"]
+    Route -->|"chitchat"| END["END (blocked if new_goal_created)"]
     Route -->|"trivial"| Trivial["resolve_decision → validate → execute"]
     Route -->|"simple"| Simple["plan_generate(lightweight) → resolve → validate → execute"]
     Route -->|"complex"| Complex["bounded_evidence_gather → plan_assess? → plan_generate → resolve → validate → execute"]
@@ -102,54 +113,145 @@ graph TB
 
 ## 6. Component Responsibilities
 
-### 6.1 Intake Classifier
+### 6.1 Pass 1 Classifier (IntakePass1)
 
-**Purpose**: Classify the user goal into one of four labels via a single structured LLM call on the fast model.
+**Purpose**: Binary decision — is this a social interaction or a work request?
 
 **Capabilities**:
-- Returns `IntakeLabel ∈ {quiz, trivial, simple, complex}` plus, for `quiz`, a piggybacked `quiz_response` (preserving the existing quiz short-circuit optimization).
-- Reuses the existing `TaskComplexity` enum (`minimal | simple | medium | complex`, `intention/models.py:27`) — no new complexity vocabulary.
-- No heuristic bypass. The `intent_hint == QUIZ` caller-assertion bypass (a structural hint, not content) is retained.
+- Returns `{is_task: bool, confidence, social_response?, reasoning}`.
+- Social response included when `is_task=false` for fast-path END.
+- No prior context projection — clean decision boundary.
+- Ultra-lean prompt (~120 tokens).
 
 **Interfaces**:
-- Provides: `IntentClassifier.classify_intake(query, *, intent_hint) -> IntakeClassification`.
-- Requires: fast chat model (`config.create_chat_model("fast")`).
+- Provides: `IntakePass1Classifier.classify(query) -> IntakePass1Result`.
+- Requires: fast chat model.
 
-### 6.2 `route_by_intent`
+**Prompt**:
 
-**Purpose**: Branch dispatch immediately after `init_or_resume`, driven by the intake label with continuation as a structural overlay.
+```xml
+<INTAKE_PASS1>
+Classify: social interaction or work request?
+
+SOCIAL: greeting, thanks, identity question, small talk, standalone acknowledgment ("ok", "sure" alone).
+WORK: references code/files/APIs/tests; requests action; acknowledgment + pivot ("ok, now...", "about the X...", "next: Y").
+
+Rules:
+- Names technical entity → WORK
+- Pivot phrase after acknowledgment → WORK
+- Uncertain → WORK
+
+JSON only:
+{"is_task":bool,"confidence":"high"|"medium"|"low","social_response":"string|null","reasoning":"≤15 words"}
+
+social_response required when is_task=false. Match user's language/tone. Identity: "I'm Soothe, created by Dr. Xiaming Chen."
+
+Examples:
+"hi" → is_task:false, social_response:"Hi! How can I help?"
+"thanks!" → is_task:false, social_response:"You're welcome!"
+"ok, now apply the fix" → is_task:true
+"about the refactor — finish it" → is_task:true
+"alright, so the tests..." → is_task:true
+</INTAKE_PASS1>
+```
+
+### 6.2 Pass 2 Classifier (IntakePass2)
+
+**Purpose**: Scope classification for work requests — trivial, simple, or complex.
 
 **Capabilities**:
-- Pure function over `(state, ctx)` — testable without an LLM.
-- Checks `ctx.continue_loop_mode` and prior completed goals first (structural continuation overlay); then matches the intake label.
+- Returns `{scope: trivial|simple|complex, goal_description, reasoning}`.
+- Prior-goal projection included for reference resolution.
+- Prompt streamlined to 3-label (no `chitchat` option).
+
+**Interfaces**:
+- Provides: `IntakePass2Classifier.classify(query, prior_projection) -> IntakePass2Result`.
+- Requires: fast chat model, prior projection from IG-540.
+
+**Prompt**:
+
+```xml
+<INTAKE_PASS2>
+Classify work scope: trivial, simple, or complex?
+
+trivial: one obvious action, no planning (e.g., single file read, simple query, math).
+simple: one focused deliverable, light planning (e.g., single function fix, add one test).
+complex: multi-step, multi-file, architecture, migration, multi-phase.
+
+Rules:
+- Multiple files/components → complex
+- Architecture/system change → complex
+- Uncertain → complex
+
+JSON only:
+{"scope":"trivial"|"simple"|"complex","goal_description":"imperative summary","reasoning":"≤15 words"}
+
+goal_description: normalize as action statement, match user's language, preserve code/paths/IDs.
+
+Examples:
+"list the files in src/" → scope:trivial
+"fix the type error in auth.py" → scope:simple
+"refactor SessionStore across all callers" → scope:complex
+"add tests for the new API endpoint" → scope:simple
+"migrate the auth system to OAuth2" → scope:complex
+</INTAKE_PASS2>
+```
+
+**Context packaging**:
+
+```
+[System]     Pass 2 prompt (above)
+[Context]    PRIOR_GOAL_SUMMARY (from IG-540 projection)
+[Human]      CURRENT_GOAL: <verbatim user text>
+             TASK: classify scope only
+```
+
+### 6.3 `route_by_intent`
+
+**Purpose**: Branch dispatch after `init_or_resume`, with routing guard.
+
+**Capabilities**:
+- Pure function over `(state, ctx)` — testable without LLM.
+- Checks routing guard first: `new_goal_created` blocks social-path.
+- Matches intake_label derived from Pass 1 + Pass 2.
+
+**Routing guard (P0 hard constraint)**:
+
+```python
+if loop_state.new_goal_created and intake_label == "chitchat":
+    intake_label = "complex"  # structural override
+    log.warning("chitchat blocked by new-goal constraint, forcing complex")
+```
 
 **Interfaces**:
 - Provides: conditional-edge target string for `init_or_resume`.
-- Requires: `LoopGraphState.intake_label`, `ctx.continue_loop_mode`.
+- Requires: `LoopGraphState.intake_label`, `ctx.loop_state.new_goal_created`.
 
-### 6.3 `node_init_or_resume` (extended)
+### 6.4 `node_init_or_resume` (extended)
 
-**Purpose**: Surface the pre-graph intake result onto the graph state; for the `trivial` branch, inject a minimal synthetic plan into `ctx.scratch`.
-
-**Capabilities**:
-- Sets `intake_label` on the graph state from `ctx.loop_state.intent`.
-- For `trivial`: builds a minimal 1-step `PlanResult` (goal as step action, `## Result` evidence contract, no reasoning prose) and stashes it in `ctx.scratch.plan_result` so `resolve_decision` can ingest it.
-
-### 6.4 `plan_phase.generate_lightweight`
-
-**Purpose**: A cheaper plan call for the `simple` branch.
+**Purpose**: Surface intake results onto graph state; inject minimal plan for trivial.
 
 **Capabilities**:
-- Reuses `generate_from_assessment`'s structured-output path with a reduced context window (last N step results, no full evidence ledger).
-- Same `PlanGeneration` schema; smaller prompt.
+- Derives `intake_label` from Pass 1 + Pass 2 results.
+- Derives `has_deliverable` at routing.
+- For `trivial`: builds minimal 1-step plan into `ctx.scratch`.
 
-### 6.5 `_run_strange_loop` (restructured)
+### 6.5 `plan_phase.generate_lightweight`
 
-**Purpose**: Orchestrate the two-stage parallel pre-graph gather.
+**Purpose**: Cheaper plan call for `simple` branch.
 
 **Capabilities**:
-- Stage 1: `asyncio.gather(intake, checkpoint.load, git_status)`.
-- Stage 2: CE construct + load (needs checkpoint) and instruction/memory file reads via `to_thread`, gathered together.
+- Reuses structured-output path with reduced context window.
+- Same schema as full plan; smaller prompt.
+
+### 6.6 `_run_strange_loop` (restructured)
+
+**Purpose**: Orchestrate two-stage parallel pre-graph gather with two-pass intake.
+
+**Capabilities**:
+- Stage 1: `asyncio.gather(pass1, checkpoint.load, git_status)`.
+- If `is_task=true`: Stage 2: `asyncio.gather(pass2, ce.load, to_thread(file_reads))`.
+- If `is_task=false`: END immediately with `social_response`.
 
 ---
 
@@ -157,64 +259,91 @@ graph TB
 
 ### 7.1 Pre-graph (parallelized)
 
-1. Stage 1: intake LLM call, `state_manager.load()`, `get_git_status()` run concurrently.
-2. Stage 2: CE backend construct + `ce.load()` + `create_goal`/`activate_goal` (branched on the stage-1 checkpoint result); the three instruction/memory file reads run via `asyncio.to_thread` gathered with `ce.load()`.
-3. The intake result is stored on `loop_state.intent` exactly as today; `LoopRuntimeContext` is assembled after stage 2.
+**Stage 1:**
+```
+asyncio.gather(
+    pass1_llm_call,
+    state_manager.load(),
+    get_git_status()
+)
+```
+
+If `pass1.is_task == false`:
+- Emit `social_response` to user
+- END (no further stages)
+
+If `pass1.is_task == true`:
+- Proceed to Stage 2
+
+**Stage 2:**
+```
+asyncio.gather(
+    pass2_llm_call(prior_projection),
+    ce_backend_construct + ce.load + create_goal/activate_goal,
+    asyncio.to_thread(load_instructions, load_memory)
+)
+```
 
 ### 7.2 Graph (branch routing)
 
-1. `init_or_resume` sets `intake_label`; for `trivial`, injects the minimal plan into `ctx.scratch`.
-2. `route_by_intent` dispatches:
-   - `quiz` → END (handled pre-graph; defensive duplicate).
-   - `trivial` → `resolve_decision` (synth plan in scratch) → `validate_evidence_bindings` → `execute`.
-   - `simple` → `plan_generate` (lightweight) → `resolve_decision` → `validate_evidence_bindings` → `execute`.
-   - `complex` → `bounded_evidence_gather` (fresh-loop skip intact) → `plan_assess?` → `plan_generate` (full) → `resolve_decision` → `validate_evidence_bindings` → `execute`.
-   - continuation overlay → `plan_assess` (RFC-226 discriminator) → `plan_generate` → `resolve_decision` → `validate_evidence_bindings` → `execute`.
-3. Clarification remains emergent: `plan_generate`/`plan_assess` still route to `await_clarification` (RFC-622) when they cannot plan; it is not an intake branch.
+1. `init_or_resume` derives `intake_label` and `has_deliverable`.
+2. Routing guard checks `new_goal_created`.
+3. `route_by_intent` dispatches:
+   - `chitchat` → END (social fast-path)
+   - `trivial` → `resolve_decision` → `validate` → `execute`
+   - `simple` → `plan_generate(lightweight)` → `resolve` → `validate` → `execute`
+   - `complex` → `bounded_evidence_gather` → `plan_assess?` → `plan_generate` → `resolve` → `validate` → `execute`
+   - continuation overlay → `plan_assess` (RFC-226) → `plan_generate` → ...
 
 ---
 
 ## 8. Abstract Schemas
 
-### 8.1 IntakeLabel
+### 8.1 IntakePass1Result
 
 ```
-IntakeLabel :=
-  | "quiz"      // greeting/thanks/trivia, no tools
-  | "trivial"   // single obvious action, no planning LLM needed
-  | "simple"    // single focused step, lightweight plan
-  | "complex"   // multi-step / multi-phase, full plan
-```
-
-### 8.2 IntakeClassificationLLMResult (replaces IntentClassificationLLMResult)
-
-```
-IntakeClassificationLLMResult {
-  intake_label: IntakeLabel
-  reasoning: string | null        // one sentence, ≤20 words; empty for quiz
-  goal_description: string | null // normalized goal (non-quiz)
-  task_complexity: TaskComplexity  // reuses existing enum
-  quiz_response: string | null    // piggybacked answer for quiz
+IntakePass1Result {
+  is_task: bool
+  confidence: "high" | "medium" | "low"
+  social_response: string | null   // required when is_task=false
+  reasoning: string                // ≤15 words
 }
 ```
 
-### 8.3 LoopGraphState additions
+### 8.2 IntakePass2Result
+
+```
+IntakePass2Result {
+  scope: "trivial" | "simple" | "complex"
+  goal_description: string         // imperative summary
+  reasoning: string                // ≤15 words
+}
+```
+
+### 8.3 Derived fields at routing
+
+```
+intake_label = "chitchat" if not is_task else scope
+has_deliverable = is_task and scope != "trivial"
+```
+
+### 8.4 LoopGraphState
 
 ```
 LoopGraphState += {
-  intake_label: IntakeLabel   // set by init_or_resume, read by route_by_intent
+  intake_label: "chitchat" | "trivial" | "simple" | "complex"
+  is_task: bool
+  scope: "trivial" | "simple" | "complex" | null
 }
 ```
 
-`intent_route` (existing, quiz fast-path) is retained for the defensive duplicate.
-
-### 8.4 Trivial-branch plan shape
+### 8.5 Trivial-branch plan shape
 
 ```
 PlanResult {
   status: "execute"
-  next_action: <intake goal_description or raw goal>   // no prefix
-  plan_reasoning: null                                  // no synthetic prose
+  next_action: <goal_description>
+  plan_reasoning: null
   expected_output: SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT  // ## Result contract
   steps: [ single step ]
 }
@@ -224,22 +353,21 @@ PlanResult {
 
 ## 9. Architectural Constraints
 
-1. **Continuation is structural, not classified.** The intake LLM never decides continuation; it is derived from the checkpoint (`continue_loop_mode`, prior completed goals) and overlays the intake label. This preserves RFC-225's structural-continuation invariant.
-2. **Clarification is emergent, not pre-classified.** The intake taxonomy deliberately omits a clarification class; the planner routes to `await_clarification` when it cannot plan. Pre-classifying clarification would risk blocking goals the planner could handle with richer context.
-3. **Fail-safe label is `complex`.** On intake LLM failure after retry, the label defaults to `complex` so the full pipeline runs. No correctness loss; latency cost only.
-4. **No new complexity vocabulary.** The existing `TaskComplexity` enum is reused; the 4-class intake label is a new enum but maps to the same complexity tiers.
-5. **Pre-graph gather respects dependencies.** CE construct + `create_goal` branch on the checkpoint result and therefore cannot run in stage 1. The two-stage structure is a correctness constraint, not an optimization choice.
-6. **Internal-only identifiers.** Per project terminology rules, RFC/IG identifiers do not appear in runtime strings; log/CLI/error text uses concrete component names.
+1. **Pass 1 has no prior context.** The social/task decision depends only on GOAL text; prior projection would bias toward wrap-up.
+2. **Pass 2 has full prior context.** Scope classification needs reference resolution ("apply it") and continuation depth.
+3. **Routing guard is hard constraint.** `new_goal_created` blocks social-path regardless of Pass 1 result — structural override.
+4. **Fail-safe toward task.** Pass 1 `confidence=low` → treat as task; Pass 2 uncertain → `complex`.
+5. **No retry on Pass 1.** Fail-safe immediately to Pass 2; Pass 2 routes appropriately regardless.
+6. **Continuation is structural.** Pass 1/2 never decide continuation; derived from checkpoint (RFC-226 overlay).
+7. **Clarification is emergent.** No pre-classified clarification branch; planner routes when it cannot plan.
 
 ---
 
 ## 10. Branch Wiring
 
-The `route_after_init` conditional edge (RFC-220) is replaced by `route_by_intent` with an expanded target set:
-
 ```
 init_or_resume --(route_by_intent)--> {
-  END                      // quiz
+  END                      // chitchat (blocked if new_goal_created)
   resolve_decision         // trivial (synth plan in scratch)
   plan_generate            // simple
   bounded_evidence_gather  // complex
@@ -247,69 +375,74 @@ init_or_resume --(route_by_intent)--> {
 }
 ```
 
-The `complex` branch then runs the existing spine unchanged: `bounded_evidence_gather` (IG-476 fresh-loop skip intact) → `plan_assess?` → `plan_generate` → `resolve_decision` → `validate_evidence_bindings` → `execute`. No change to the complex path's internals or to any downstream conditional edges (`route_after_assess`, `route_after_plan`, `route_after_resolve_decision`, `route_after_validate_evidence`, `route_after_execute`).
+---
+
+## 11. Error Handling
+
+- **Pass 1 failure** — treat as task, proceed to Pass 2.
+- **Pass 2 failure** — fallback `scope = complex`; full pipeline runs.
+- **IO gather failure** — partial failures degrade gracefully (return_exceptions=True).
+- **Mislabel risk** — `trivial` mislabeled `complex` pays extra plan call (latency, no correctness loss). `complex` mislabeled `trivial` produces 1-step plan; post-execution `plan_assess` catches on next iteration.
+- **Routing guard activation** — log warning; forced `complex` route.
 
 ---
 
-## 11. Trivial-Branch Plan Shape (no synthetic reasoning message)
+## 12. Migration
 
-The legacy `simple_bypass` (`planning/simple_bypass.py`) bundles two concerns; only one survives:
-
-- **`SIMPLE_QUERY_DIRECT_PREFIX`** (`"I will complete this goal directly:"`) — a verbose prefix prepended to the goal to form the step's `next_action`. **Deleted.** Under LLM routing the trivial label comes from the intake LLM; the prefix existed only so `is_simple_query_direct_next_action` (a `startswith` detector) could recognize the synthetic plan in the legacy path. With the label authoritative, both the prefix and the string detector are dead weight.
-- **`SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT`** (the `## Result` block contract) — **kept.** It is functional, not cosmetic: an `expected_output` hint in the step's user message that forces the assistant to restate concrete data (numbers, paths, names) so `plan_assess` recognizes completion on the next iteration. It adds no LLM call and no user-visible text.
-
-The trivial branch synthesizes a **minimal plan object**, not a synthetic *reasoning message*:
-
-- Step action: the intake LLM's normalized `goal_description` (fallback: raw user goal). No prefix.
-- Plan reasoning: `None` / empty. The loop does not narrate "I will complete this directly" to the user.
-- The 1-step `Decision` indirection is retained because `Executor` consumes a structured decision (step ids allocated by `resolve_decision`, plan ingested by `plan_manager.ingest_plan`); CoreAgent cannot take a bare goal string.
+- **Direct replacement** — two-pass replaces one-pass in same change.
+- **Removed** — legacy `IntentClassificationLLMResult`, `classify_intent`, `_is_likely_agentic`, `simple_bypass` prefix/detector, `chitchat` row in intake prompt.
+- **No wire-protocol change** — `IntentClassifiedEvent` derived from combined results.
 
 ---
 
-## 12. Error Handling
+## 13. Testing
 
-- **Intake LLM failure** — after the single retry, fallback label = `complex`; the full pipeline runs. Logged with error context (preserves today's `_fallback_intent` pattern).
-- **IO gather failure** — each IO task is wrapped; partial failures degrade gracefully as today (e.g., `git_status = None` on failure). The gather uses `return_exceptions=True` where a task failure should not abort the others.
-- **Mislabel risk** — a `trivial` goal mislabeled `complex` pays an extra plan call (latency, no correctness loss). A `complex` goal mislabeled `trivial` produces a 1-step plan that the loop's existing post-execution `plan_assess` catches on the next iteration (the loop replans). The intake prompt errs toward `complex` when uncertain.
-- **Synthetic plan failure (trivial branch)** — if `init_or_resume` cannot build the synth plan, it downgrades `intake_label` to `complex` and falls through to the full spine.
-
----
-
-## 13. Migration
-
-- **Direct replacement** — the 4-class intake is the sole intent path; the legacy binary `IntentClassificationLLMResult` schema, `classify_intent`, the binary prompt fragments, and `_is_likely_agentic` are removed in the same change. No feature flag, no backward-compat shim.
-- **`simple_bypass` removal** — `SIMPLE_QUERY_DIRECT_PREFIX` and `is_simple_query_direct_next_action` are deleted; the `## Result` contract is extracted to a shared `planning/trivial_plan.py` helper used by `init_or_resume` (trivial branch).
-- **No wire-protocol change** — internal to the loop; does not touch Protocol-1. The `IntentClassifiedEvent` wire contract (`intent_type: quiz|agentic`) is preserved; `intent_type` is derived from the 4-class label.
+- **Pass 1 unit tests** — pivot patterns, technical entity references, pure social, fail-safe cases.
+- **Pass 2 unit tests** — scope golden-set, continuation context, reference resolution.
+- **Routing unit tests** — guard truth table, derived field computation.
+- **Parallelization tests** — assert Pass 1 ∥ checkpoint ∥ git_status concurrent.
+- **Branch integration tests** — visited node sequence per branch.
+- **Latency regression test** — task query within budget (<200ms added).
+- **Mislabel recovery test** — trivial on multi-step goal → replans on iteration 2.
 
 ---
 
-## 14. Testing
+## 14. Latency Impact
 
-- **Intake classifier unit tests** — golden-set queries per label, including the long-trivia case that today's heuristic misroutes. Assert the LLM is called for all queries (no heuristic bypass).
-- **Routing unit tests** — `route_by_intent` truth table over `(label, continue_loop_mode, has_prior_completed_goal)`.
-- **Parallelization tests** — assert intake, `checkpoint.load`, `git_status` run concurrently (mock with `asyncio.Event` latches); assert file reads go through `to_thread`.
-- **Branch integration tests** — one fixture per branch: assert the visited node sequence matches §10 (e.g., `trivial` skips `plan_generate`; `simple` skips `bounded_evidence_gather` and `plan_assess`).
-- **Latency regression test** — timing-based with generous bounds, asserting a fresh `complex` first-message does not exceed today's p95 by more than gather overhead; skippable in CI if flaky.
-- **Mislabel recovery test** — force `trivial` on a multi-step goal; assert the loop replans on iteration 2 via `plan_assess`.
+| Query type | Passes | Latency |
+|------------|--------|---------|
+| Social | Pass 1 only | Same as one-pass (one LLM call) |
+| Task | Pass 1 + Pass 2 | ~100-200ms added |
 
-Tests live in `packages/soothe/tests/unit/` and `tests/integration/` per project convention.
+Budget: relaxed (<300ms acceptable). Pass 1 ultra-lean (~50-80 tokens input, ~120 token prompt).
 
 ---
 
-## 15. Open Questions
+## 15. Success Criteria
 
-1. **Lightweight plan prompt scope** — exactly which context slots to drop for `simple`. Proposal: drop evidence-ledger history beyond the last 2 step results, drop full prior-goal context. Confirm with a planning-quality eval during implementation.
-2. **Intake prompt boundary calibration** — the `trivial`/`simple`/`complex` boundary is the main mislabel surface; lock definitions with the §14 golden set before implementation.
+| Criterion | Target |
+|-----------|--------|
+| Pivot patterns (e47d-like) | Pass 1 → `is_task=true`, never social |
+| Pure social regression | 100% remain social on eval set |
+| False social-path rate | Near-zero |
+| Added latency on task | <200ms median |
+| Routing guard activation | <1% (structural contradiction rare) |
 
 ---
 
-## 16. Related Documents
+## 16. Open Questions
 
-- [RFC Standard](./rfc-standard.md)
-- [RFC Index](./rfc-index.md)
-- [RFC-220](./RFC-220-langgraph-agent-loop-orchestrator.md) — LangGraph Agent Loop Orchestrator (topology revised)
-- [RFC-225](./RFC-225-loop-continuity-and-goal-record-enrichment.md) — Loop Continuity and Goal Record Enrichment (intent taxonomy extended)
-- [RFC-226](./RFC-226-continuation-aware-plan-assess.md) — Continuation-Aware plan_assess (preserved)
-- [RFC-503](./RFC-503-loop-first-user-experience.md) — Loop-First User Experience (first-message latency)
-- [RFC-604](./RFC-604-reason-phase-robustness.md) — Plan Phase Robustness
-- Design draft: `docs/drafts/2026-06-30-start-phase-llm-intake-routing-design.md`
+1. **Pass 2 prompt tuning** — Confirm scope definitions match planner tier expectations.
+2. **Prior projection truncation** — Optimal summary length before Pass 2 quality degrades?
+3. **Pass 2 retry policy** — Single retry on low confidence, or fail-safe immediately?
+
+---
+
+## 17. Related Documents
+
+- [RFC-220](./RFC-220-langgraph-agent-loop-orchestrator.md) — LangGraph Agent Loop Orchestrator
+- [RFC-225](./RFC-225-loop-continuity-and-goal-record-enrichment.md) — Loop Continuity (continuation overlay)
+- [RFC-226](./RFC-226-continuation-aware-plan-assess.md) — Continuation-Aware plan_assess
+- [RFC-503](./RFC-503-loop-first-user-experience.md) — First-message latency
+- Design draft: `docs/drafts/2026-07-06-two-pass-intake-classification.md`
+- Rejected one-pass draft: `docs/drafts/2026-07-06-one-pass-intent-classify-optimization.md`

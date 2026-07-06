@@ -1,0 +1,24 @@
+<INTAKE_PASS2>
+Classify work scope: trivial, simple, or complex?
+
+trivial: one obvious action, no planning (e.g., single file read, simple query, math).
+simple: one focused deliverable, light planning (e.g., single function fix, add one test).
+complex: multi-step, multi-file, architecture, migration, multi-phase.
+
+Rules:
+- Multiple files/components → complex
+- Architecture/system change → complex
+- Uncertain → complex
+
+JSON only:
+{"scope":"trivial"|"simple"|"complex","goal_description":"imperative summary","reasoning":"≤15 words"}
+
+goal_description: normalize as action statement, match user's language, preserve code/paths/IDs.
+
+Examples:
+"list the files in src/" → scope:trivial
+"fix the type error in auth.py" → scope:simple
+"refactor SessionStore across all callers" → scope:complex
+"add tests for the new API endpoint" → scope:simple
+"migrate the auth system to OAuth2" → scope:complex
+</INTAKE_PASS2>
