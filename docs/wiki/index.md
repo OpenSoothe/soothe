@@ -33,8 +33,8 @@ pip install -U 'soothe[all]' soothe-cli soothe-daemon
 # Set API key
 export OPENAI_API_KEY=sk-...
 
-# Initialize configuration
-soothe config init
+# Start the daemon (auto-creates ~/.soothe/ directory structure)
+soothed start
 
 # Run your first query
 soothe -p "List all Python files in the current directory and count lines of code"
@@ -57,7 +57,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 ### 🤖 Core Capabilities
 
 - **[Autonomous Mode](autonomous-mode.md)** - Multi-step autonomous task execution
-- **[Subagents](subagents.md)** - Specialized subagents (explore, plan, veritas, etc.)
+- **[Subagents](subagents.md)** - Specialized subagents (planner, tacitus, veritas, etc.)
 - **[Thread Management](thread-management.md)** - Conversation threads and session resumption
 
 ### 🔧 Configuration & Management

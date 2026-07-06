@@ -48,7 +48,7 @@ The fastest way to deploy Soothe in production.
 cd soothe/deploy
 
 # Create environment file
-cp .env.example .env
+cp env-example .env
 vim .env
 ```
 
@@ -75,7 +75,7 @@ SOOTHE_POSTGRES_VECTORS_DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@s
 ### Step 2: Create Agent Configuration
 
 ```bash
-cp config.yml.example config.yml
+cp config.prod.yml config.yml
 vim config.yml  # Optional customization
 ```
 
@@ -131,7 +131,7 @@ docker compose ps
 
 ### Step 4: Verify Database Initialization
 
-Soothe auto-provisions PostgreSQL databases on first daemon startup when `postgres_base_dsn` is configured (RFC-612). No manual SQL init script is required for production.
+Soothe auto-provisions PostgreSQL databases on first daemon startup when `postgres_base_dsn` is configured (RFC-802). No manual SQL init script is required for production.
 
 ```bash
 # Start daemon and wait for provisioning (check logs)
@@ -305,7 +305,7 @@ sudo /opt/soothe/venv/bin/pip install -e /path/to/soothe/packages/soothe
 ```bash
 # Create configuration
 sudo mkdir -p /var/lib/soothe/config
-sudo cp deploy/config.yml.example /var/lib/soothe/config/config.yml
+sudo cp deploy/config.prod.yml /var/lib/soothe/config/config.yml
 sudo vim /var/lib/soothe/config/config.yml
 
 # Set environment variables

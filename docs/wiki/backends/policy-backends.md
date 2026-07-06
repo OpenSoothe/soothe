@@ -52,7 +52,7 @@ The sole `PolicyProtocol` implementation — configuration-driven policy with na
 **Key characteristics**:
 - **Profile-based**: Policies are named profiles (`readonly`, `standard`, `privileged`) each with a `PermissionSet`, `approvable` set, and `deny_rules`.
 - **Least-privilege delegation**: `narrow_for_child()` intersects parent permissions with per-child restrictions. A child can never have *more* permissions than its parent.
-- **Per-child overrides**: `child_restrictions` map allows further restricting specific subagents (e.g., `explore` gets only `fs:read:*`).
+- **Per-child overrides**: `child_restrictions` map allows further restricting specific subagents (e.g., `veritas` gets only `fs:read:*`).
 - **Operation security integration**: Filesystem path validation and shell command extraction happen before permission matching.
 
 **When to use**: This is the only policy backend. The decision is *which profile* to use, not *which backend*.

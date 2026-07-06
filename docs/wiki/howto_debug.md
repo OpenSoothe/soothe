@@ -238,7 +238,7 @@ tail -f ~/.soothe/logs/soothed.log
 
 4. Look for:
 - Agent loop iteration count
-- Planner decisions (`RFC-200 PlannerProtocol`)
+- Planner decisions (`RFC-304 PlannerProtocol`)
 - Tool selection and execution
 - Subagent delegation attempts
 - Goal state transitions

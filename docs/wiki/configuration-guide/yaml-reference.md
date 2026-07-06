@@ -34,7 +34,7 @@ The full set of sections:
 | `router` | `ModelRouter` | **Derived** (not in YAML) — role → `provider:model` mapping |
 | `embedding_dims` | int | **Derived** from active profile; must match embedding model |
 | `agent` | `AgentConfig` | Identity, loop, autonomous mode, protocols |
-| `subagents` | `SubagentConfig` (dict) | explore / plan / tacitus / browser_use |
+| `subagents` | `SubagentConfig` (dict) | plan / tacitus / browser_use / skillify / veritas |
 | `tools` | `ToolsConfig` | Tool group enable/disable + config |
 | `mcp_servers` | `MCPServerConfig` (list) | External MCP server connections |
 | `observability` | `ObservabilityConfig` | Logging, verbosity, Langfuse |
@@ -105,9 +105,9 @@ The `default` sentinel in durability lets you set the backend once in `persisten
 
 ## Subagents
 
-A dict of `SubagentConfig` entries. Each has `enabled`, `model` (null → falls back to `fast` role), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. `explore` takes `config.thoroughness` (quick/medium/thorough); `tacitus` takes `config.effort` (minimal/normal/thorough).
+A dict of `SubagentConfig` entries. Each has `enabled`, `model` (null → falls back to `fast` role), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. `tacitus` takes `config.effort` (minimal/normal/thorough); `plan` takes `config.routing` (auto/always_direct/always_planner).
 
-Built-ins (`explore`, `plan`, `tacitus`, `browser_use`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Claude Code runs via `agent.core_agent_backend`, not as a subagent.
+Built-ins (`plan`, `tacitus`, `browser_use`, `skillify`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Claude Code runs via `agent.core_agent_backend`, not as a subagent.
 
 ## Tools
 
@@ -123,7 +123,7 @@ A list of `MCPServerConfig` entries. Each has `name` (unique, validated at start
 
 ## Persistence
 
-`PersistenceConfig` supports two modes: single-database (`soothe_postgres_dsn`) or multi-database (`postgres_base_dsn` + `postgres_databases` map of checkpoints/metadata/vectors/memory, RFC-612). `default_backend` selects sqlite or postgresql. SQLite paths default to `~/.soothe/data/`. Pool fields: `postgres_pool_min_size`, `checkpointer_pool_size`, `sloop_pool_size`, and idle/lifetime/acquire timeouts. Multi-database is preferred for production — independent backup/restore per component. Pool sizing differs between thread-pool (shared singleton) and worker-pool (per-worker) modes; see [Provider Setup](provider-setup.md).
+`PersistenceConfig` supports two modes: single-database (`soothe_postgres_dsn`) or multi-database (`postgres_base_dsn` + `postgres_databases` map of checkpoints/metadata/vectors/memory, RFC-802). `default_backend` selects sqlite or postgresql. SQLite paths default to `~/.soothe/data/`. Pool fields: `postgres_pool_min_size`, `checkpointer_pool_size`, `sloop_pool_size`, and idle/lifetime/acquire timeouts. Multi-database is preferred for production — independent backup/restore per component. Pool sizing differs between thread-pool (shared singleton) and worker-pool (per-worker) modes; see [Provider Setup](provider-setup.md).
 
 ## Vector Stores
 

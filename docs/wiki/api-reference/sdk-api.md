@@ -12,7 +12,7 @@ The `soothe_sdk` package is the public API surface for two audiences: **client d
 
 > **Source**: `packages/soothe-sdk/src/soothe_sdk/client/websocket.py`
 
-`WebSocketClient` is the bidirectional communication client for talking to a Soothe daemon. It handles connection lifecycle, the RFC-0013 handshake protocol, background event reading, and high-level RPC helpers.
+`WebSocketClient` is the bidirectional communication client for talking to a Soothe daemon. It handles connection lifecycle, the RFC-450 handshake protocol, background event reading, and high-level RPC helpers.
 
 ### Key Design Decisions
 
@@ -149,7 +149,7 @@ Async key-value store with `get(key) -> bytes | None`, `set(key, value: bytes)`,
 
 ### VectorStoreProtocol
 
-Vector database operations: `add_vectors(records)`, `search(query_vector, k, filter)`, `delete_vector(id)`. Returns `(vector_id, score)` tuples from search. Implementations: `PGVectorStore`, `SQLiteVecStore`, `WeaviateStore`.
+Vector database operations: `add_vectors(records)`, `search(query_vector, k, filter)`, `delete_vector(id)`. Returns `(vector_id, score)` tuples from search. Implementations: `PGVectorStore`, `SQLiteVecStore`, `WeaviateVectorStore`.
 
 ### PermissionSet & Policy Types
 

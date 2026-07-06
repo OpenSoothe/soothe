@@ -146,11 +146,11 @@ Using Docker Compose (recommended):
 cd soothe/deploy
 
 # 2. Configure environment
-cp .env.example .env
+cp env-example .env
 vim .env  # Set API keys, passwords
 
 # 3. Create config.yml
-cp config.yml.example config.yml
+cp config.prod.yml config.yml
 
 # 4. Deploy stack
 docker compose up -d

@@ -26,24 +26,17 @@ The critical contract: **state must include `messages: Annotated[list, add_messa
 
 ## Built-in Subagents
 
-### Explore (RFC-613): LLM-Orchestrated Search
+The core `soothe` package ships five built-in subagents: **planner**, **tacitus**, **browser_use**, **skillify**, and **veritas**. Each is registered via the `@plugin` + `@subagent` decorator pattern (except veritas, which is a direct structured-output call invoked by `AutoClarificationPolicy`).
 
-Explore is the filesystem search subagent. Its architecture is a plan-execute-assess loop: the LLM generates a search action (glob, grep, ls, read_file), executes it, assesses whether the results are sufficient, and either continues, adjusts strategy, or synthesizes findings.
+### Planner (RFC-618): Structured Planning with Iterative Refinement
 
-**Key design decisions:**
-- **LLM as orchestrator, not pattern matcher** — instead of fixed search heuristics, the model dynamically chooses tools based on findings. This handles ambiguous queries that rule-based search can't.
-- **Configurable thoroughness** — `quick` (2 iterations), `medium` (4), `thorough` (6) lets callers trade cost for depth.
-- **Read-only safety** — explore never modifies the filesystem, making it safe to delegate to aggressively.
-- **Tool reuse** — uses deepagents' existing filesystem tools, no custom implementations.
-
-### Plan (RFC-618): Structured Planning with Delegation
-
-Plan is a two-phase subagent: **collection** (calls explore multiple times to gather context) followed by **planning** (iteratively refines a markdown plan). The two-phase design separates information gathering from plan design.
+Planner is a multi-round planning subagent: it iteratively refines a markdown execution plan until the model declares it complete, then returns a single structured report. The design separates plan design from execution, giving the main agent a stable blueprint to follow.
 
 **Key design decisions:**
-- **Direct explore invocation** — plan calls explore's runnable directly (not via the nested `task` tool), avoiding re-resolution overhead and maintaining tighter control.
-- **Agentic on both sides** — collection runs multiple rounds with multiple explore tasks per round; planning runs multiple refinement rounds until the model declares "done."
-- **Bounded cost** — explicit caps: `max_explore_passes` (total explore invocations), `max_collection_rounds`, `max_plan_rounds`. These prevent runaway loops.
+- **Agentic refinement loop** — planning runs multiple refinement rounds, each producing a progressively refined markdown plan, until the model declares "done."
+- **Think-role model** — the resolver always passes the router's `think` role, ensuring the strongest reasoning model is used for plan design.
+- **Bounded cost** — explicit cap on `max_plan_rounds` prevents runaway refinement loops.
+- **Registered as `name="planner"`** — the subagent directory is `plan/` but the plugin and subagent name is `planner`. Triggers include `planner`, `decompose`, `roadmap`, `break down`.
 
 ### Tacitus (RFC-619): Public-Domain Research
 
@@ -61,10 +54,13 @@ Veritas is unique — it's not a general-purpose subagent but a **single structu
 
 If veritas cannot answer with sufficient confidence, it sets `defer=True` and the loop transitions the goal to `awaiting_clarification` for out-of-band human resolution. This is the autonomous-mode safety valve: the system attempts self-resolution before blocking on human input.
 
-### Browser Use & Claude (Opt-in)
+### Skillify: Semantic Skill Retrieval
 
-- **browser_use**: Browser automation (navigate, click, fill, extract, screenshot). Ships with base `soothe` dependencies but `on_load` verifies runtime deps.
-- **claude**: Claude Code agent for multi-file refactoring and deep code analysis. Requires `soothe[claude]` extra.
+Skillify is the skill warehouse subagent — it indexes and retrieves skills using semantic search. It provides a `SkillRetriever` that builds an incremental, mtime-cached index of user skills, enabling the agent to discover relevant skills by semantic similarity rather than keyword matching.
+
+### Browser Use (Opt-in)
+
+**browser_use**: Browser automation (navigate, click, fill, extract, screenshot). Ships with base `soothe` dependencies but `on_load` verifies runtime deps.
 
 ## Model Role Resolution
 
@@ -72,11 +68,12 @@ Subagents use specific model roles, not the main agent's model. This is a cost o
 
 | Subagent | Model Role | Rationale |
 |----------|------------|-----------|
-| explore | `fast` | Search planning doesn't need deep reasoning |
-| plan | `think` | Plan design needs the strongest reasoning model |
+| planner | `think` | Plan design needs the strongest reasoning model |
 | tacitus | `fast` | Query generation and summarization are fast-model tasks |
+| browser_use | `default` | Browser step planning uses the default model |
+| skillify | `default` | Skill retrieval uses the default model |
 
-The plan subagent's primary model always uses the router's `think` role — planning quality directly determines execution quality. Note that `subagents.<name>.model` config overrides are **ignored** for built-in subagents; the role is fixed by design.
+The planner subagent's primary model always uses the router's `think` role — planning quality directly determines execution quality. Note that `subagents.<name>.model` config overrides are **ignored** for built-in subagents; the role is fixed by design.
 
 ## Workspace Isolation
 
@@ -129,10 +126,9 @@ The factory function builds a `StateGraph`, adds nodes and conditional edges, an
 |-----|-------|
 | [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
 | [RFC-601](../../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
-| [RFC-613](../../specs/RFC-613-explore-agent-llm-orchestrated-search.md) | Explore Agent |
 | [RFC-618](../../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
 | [RFC-619](../../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
-| [RFC-622](../../specs/RFC-622-veritas-auto-clarification.md) | Veritas Auto-Clarification |
+| [RFC-622](../../specs/RFC-622-coreagent-clarification-relay.md) | Veritas Auto-Clarification |
 
 ---
 

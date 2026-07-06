@@ -24,7 +24,7 @@ Use the development Docker Compose stack:
 
 ```bash
 # Start Langfuse + dependencies
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml up -d
 
 # Langfuse UI: http://localhost:3300
 # Default credentials:
@@ -88,7 +88,7 @@ Goal Execution (trace)
   ├─ Plan Phase (span)
   │   ├─ LLM: Plan generation
   │   ├─ LLM: Plan assessment
-  │   └─ Subagent: explore
+  │   └─ Subagent: veritas
   │       └─ LLM: File search reasoning
   ├─ Execute Phase (span)
   │   ├─ LLM: Execute reasoning
@@ -454,7 +454,7 @@ observability:
       "phase": "plan",
       "iterations": 1,
       "llm_calls": 2,
-      "tools_invoked": ["explore"],
+      "tools_invoked": ["veritas"],
       "duration_seconds": 5.2
     },
     {

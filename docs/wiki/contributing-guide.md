@@ -53,7 +53,7 @@ uv sync --all-packages --all-extras
 4. **Start development services** (optional, for integration tests):
 ```bash
 # PostgreSQL + pgvector + Langfuse (dev stack)
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml up -d
 ```
 
 ### Workspace Structure
@@ -182,14 +182,14 @@ if TYPE_CHECKING:
 
 ```bash
 # 1. Make code changes
-vim packages/soothe/src/soothe/core/strange_loop/graph.py
+vim packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py
 
 # 2. Write/update tests
-vim packages/soothe/tests/unit/core/strange_loop/test_graph.py
+vim packages/soothe/tests/unit/core/loop/engine/test_strange_loop_model_roles.py
 
 # 3. Run relevant tests
 cd packages/soothe
-uv run pytest tests/unit/core/strange_loop/test_graph.py -v
+uv run pytest tests/unit/core/loop/engine/test_strange_loop_model_roles.py -v
 
 # 4. Format code
 make format
@@ -338,16 +338,12 @@ PR will be merged after:
 Place tests **close to the code they test**:
 
 ```
-packages/soothe/src/soothe/core/strange_loop/
+packages/soothe/src/soothe/foundation/sloop/engine/
 ├── __init__.py
-├── graph.py
-├── nodes.py
-├── events.py
+├── strange_loop.py
 
-packages/soothe/tests/unit/core/strange_loop/
-├── test_graph.py      # Tests for graph.py
-├── test_nodes.py      # Tests for nodes.py
-├── test_events.py     # Tests for events.py
+packages/soothe/tests/unit/core/loop/engine/
+├── test_strange_loop_model_roles.py      # Tests for strange_loop.py
 ```
 
 ### Event Registration

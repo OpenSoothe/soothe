@@ -152,7 +152,7 @@ packages/
 ├── soothe-sdk/        # Plugin SDK (decorators, types, utilities)
 ├── soothe-cli/        # CLI client (Typer CLI + Textual TUI)
 ├── soothe-daemon/     # Background daemon server (transports, lifecycle)
-├── soothe-plugins/    # Community plugins (e.g. claude subagent)
+├── soothe-plugins/    # Community plugins (e.g. weaver subagent)
 └── soothe/            # Agent core (library)
 ```
 
@@ -163,7 +163,7 @@ packages/
 | **core/** | Framework orchestration | agent, runner, events, workspace, context, scheduling, persistence, middleware |
 | **protocols/** | Protocol definitions | context, memory, planner, policy, durability, vector_store |
 | **backends/** | Protocol implementations | memory, durability, vector_store, persistence |
-| **subagents/** | Built-in subagents | explore, plan, tacitus, browser_use, veritas |
+| **subagents/** | Built-in subagents | plan, tacitus, browser_use, skillify, veritas |
 | **skills/** | Agent skills | builtin_skills, registry, budget |
 | **middleware/** | Event processing | system_prompt, policy, workspace_context, execution_hints |
 | **mcp/** | MCP integration | server management, tool discovery |
@@ -206,7 +206,7 @@ Soothe follows a **protocol-first, runtime-second** design. Every module is defi
 | **PlannerProtocol** | Planning and goal decomposition | RFC-304 |
 | **PolicyProtocol** | Security policy enforcement | RFC-305 |
 | **DurabilityProtocol** | State persistence and recovery | RFC-306 |
-| **VectorStoreProtocol** | Vector database abstraction | RFC-611 |
+| **VectorStoreProtocol** | Vector database abstraction | RFC-301 |
 | **LoopWorkingMemory** | Working memory for StrangeLoop | RFC-224 |
 | **LoopPlanner** | Planning within StrangeLoop | RFC-226 |
 | **RemoteProtocol** | Remote agent communication | RFC-450 |
@@ -233,7 +233,7 @@ Protocol (ABC)
     │   └── PostgresDurability
     └── VectorStoreProtocol
         ├── PGVectorStore
-        ├── WeaviateStore
+        ├── WeaviateVectorStore
         └── InMemoryStore
 ```
 
@@ -371,7 +371,7 @@ Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graph
 
 ### StrangeLoop & Cognition (2xx)
 
-- **[RFC-200](../../specs/RFC-200-autonomous-goal-management.md)** - Autonomous Goal Management Loop
+- **[RFC-200](../../specs/archive/RFC-200-autonomous-goal-management.md)** - Autonomous Goal Management Loop (archived)
 - **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - StrangeLoop Plan-Execute Loop
 - **[RFC-203](../../specs/RFC-203-strangeloop-state-memory.md)** - StrangeLoop State Memory
 - **[RFC-204](../../specs/RFC-204-autopilot-mode.md)** - Autopilot Mode
@@ -381,7 +381,7 @@ Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graph
 
 ### Protocols (3xx)
 
-- **[RFC-300](../../specs/RFC-300-context-memory-protocols.md)** - Context & Memory Protocols
+- **[RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md)** - Context & Memory Protocols (archived)
 - **[RFC-301](../../specs/RFC-301-protocol-registry.md)** - Protocol Registry
 - **[RFC-302](../../specs/RFC-302-context-protocol-architecture.md)** - Context Protocol Architecture
 - **[RFC-303](../../specs/RFC-303-memory-protocol-architecture.md)** - Memory Protocol Architecture

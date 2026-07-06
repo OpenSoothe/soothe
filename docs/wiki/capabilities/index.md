@@ -25,12 +25,11 @@ The key architectural insight is the **capability spectrum**: tools are stateles
 Subagents are specialized autonomous agents that perform multi-step, stateful workflows lasting seconds to minutes. They use the LLM as an orchestrator, can call tools or even other subagents, and return comprehensive structured reports. Each subagent is a compiled LangGraph `StateGraph` with its own state schema, nodes, and flow control.
 
 **Built-in subagents** include:
-- **explore** (RFC-613): LLM-orchestrated iterative filesystem search
-- **plan** (RFC-618): Structured planning with explore delegation
+- **planner** (RFC-618): Structured planning with iterative refinement
 - **tacitus** (RFC-619): Public-domain research across web, academic papers, and URLs
 - **browser_use**: Browser automation (included in base dependencies)
+- **skillify**: Semantic skill retrieval and discovery
 - **veritas** (RFC-622): Intent-grounded clarification auto-answerer
-- **claude**: Claude Code agent (opt-in via `soothe[claude]`)
 
 → See [Subagents Architecture](subagents.md) for design philosophy and extension patterns.
 
@@ -93,7 +92,6 @@ All capabilities are configured via `config.yml`. Subagents and MCP servers have
 |-----|-------|
 | [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
 | [RFC-601](../../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
-| [RFC-613](../../specs/RFC-613-explore-agent-llm-orchestrated-search.md) | Explore Agent |
 | [RFC-618](../../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
 | [RFC-619](../../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
 | [RFC-622](../../specs/RFC-622-veritas-auto-clarification.md) | Veritas Auto-Clarification |

@@ -195,63 +195,22 @@ soothe loop tag abc123 research --remove
 
 ## Configuration Management
 
-### soothe config show
+### soothe config reload
 
-Display current configuration.
+Reload configuration from disk without restarting the daemon.
 
-**Usage**: `soothe config show [options]`
-
-**Options**:
-- `--format, -f <fmt>` - Output format: json or summary (default: summary)
-- `--show-sensitive` - Show sensitive values like API keys
-- `--config <file>` - Use custom configuration file
-
-**Examples**:
-```bash
-# Summary view (default)
-soothe config show
-
-# Detailed JSON view
-soothe config show --format json
-
-# Include sensitive values
-soothe config show --show-sensitive
-```
-
-### soothe config init
-
-Initialize `~/.soothe` with default configuration.
-
-**Usage**: `soothe config init [options]`
-
-**Options**:
-- `--force, -f` - Overwrite existing configuration without confirmation
-
-**Examples**:
-```bash
-# Initialize with confirmation
-soothe config init
-
-# Force overwrite
-soothe config init --force
-```
-
-### soothe config validate
-
-Validate configuration file and show basic info.
-
-**Usage**: `soothe config validate [options]`
+**Usage**: `soothe config reload [options]`
 
 **Options**:
 - `--config <file>` - Use custom configuration file
 
 **Examples**:
 ```bash
-# Validate default config
-soothe config validate
+# Reload default config
+soothe config reload
 
-# Validate custom config
-soothe config validate --config custom.yml
+# Reload custom config
+soothe config reload --config custom.yml
 ```
 
 ## Agent Management
@@ -473,9 +432,7 @@ If you were using the old flat command syntax, here's how to migrate:
 | `soothe thread -a <id>` | `soothe loop archive <id>` |
 | `soothe thread -d <id>` | `soothe loop delete <id>` |
 | `soothe thread -e <id>` | `soothe loop show <id>` |
-| `soothe config` | `soothe config show` |
-| `soothe config -i` | `soothe config init` |
-| `soothe config --validate` | `soothe config validate` |
+| `soothe config` | `soothe config reload` |
 | `soothe agent` | `soothe agent list` |
 | `soothe agent --status` | `soothe agent status` |
 | `soothe autopilot "task"` | `soothe autopilot run "task"` |

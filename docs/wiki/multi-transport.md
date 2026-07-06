@@ -1,14 +1,16 @@
-# Transport Setup
+# WebSocket Transport Setup
 
 Configure the WebSocket transport for the Soothe daemon.
 
+> **Note**: WebSocket is currently the only supported transport. HTTP REST transport was removed in 0.6.x. Future transports may be added, but none are planned for the near term.
+
 ## Transport Overview
 
-The Soothe daemon supports WebSocket as its transport protocol:
+The Soothe daemon uses WebSocket as its sole transport protocol:
 
 | Transport | Status | Use Case | Performance |
 |-----------|--------|----------|-------------|
-| **WebSocket** | ✅ Default | All clients (CLI, TUI, web apps) | ~1-5ms latency |
+| **WebSocket** | ✅ Default (only) | All clients (CLI, TUI, web apps) | ~1-5ms latency |
 
 All clients share the same:
 - Authentication system (via reverse proxy)

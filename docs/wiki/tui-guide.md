@@ -41,7 +41,6 @@ Route queries to specialized subagents:
 | Command | Subagent | Use Case |
 |---------|----------|----------|
 | `/tacitus <query>` | Tacitus | Multi-source public-domain research |
-| `/explore <query>` | Explore | Readonly repo search |
 | `/plan` | Plan | Plan-mode routing |
 | `/«id» <query>` | Configured id | Optional plugins from soothe-plugins (see that repo for ids) |
 

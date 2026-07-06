@@ -22,7 +22,7 @@ SootheRunner is composed of four focused mixins rather than a monolithic class:
 | Mixin | Responsibility |
 |-------|---------------|
 | `PhasesMixin` | Pre-stream helpers: thread creation/resumption, workspace resolution, policy validation |
-| `StrangeLoopMixin` | StrangeLoop execution: the agentic loop (RFC-0008) |
+| `StrangeLoopMixin` | StrangeLoop execution: the agentic loop (RFC-201) |
 | `AutopilotWorkerMixin` | Single-goal worker entry (RFC-222 revised) |
 | `CheckpointMixin` | Progressive checkpointing, artifact storage, report generation |
 
@@ -43,7 +43,7 @@ When you call `runner.run(query)`, execution flows through three phases:
 
 ### Agentic Loop Phase
 
-Delegates to StrangeLoop (RFC-0008) for the Plan → Execute iterative refinement loop. The runner passes Layer 2 hints (workspace, intent, routing classification) through `config.configurable`. StrangeLoop yields progress events; the runner forwards them as `soothe.*` custom events.
+Delegates to StrangeLoop (RFC-201) for the Plan → Execute iterative refinement loop. The runner passes Layer 2 hints (workspace, intent, routing classification) through `config.configurable`. StrangeLoop yields progress events; the runner forwards them as `soothe.*` custom events.
 
 ### Post-Stream Phase
 
