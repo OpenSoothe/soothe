@@ -7,42 +7,47 @@ on:
       - 'docs/**'
       - 'Gemfile'
       - 'Gemfile.lock'
+      - '.ruby-version'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
           bundler-cache: true
-      - name: Build with Jekyll
-        run: bundle exec jekyll build -s docs -d _site
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Build with Jekyll
+        run: |
+          bundle exec jekyll build -s docs -d _site
+          touch _site/.nojekyll
+
+      - name: Verify build output
+        run: |
+          test -f _site/index.html
+          test -f _site/wiki/index.html
+          test -f _site/.nojekyll
+          test ! -e _site/specs
+          echo "Pages artifact verification passed ($(du -sh _site | cut -f1))"
+
+      - name: Deploy to gh-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: _site
+          clean: true
+          single-commit: true
+          commit-message: "deploy: GitHub Pages from ${{ github.sha }}"
