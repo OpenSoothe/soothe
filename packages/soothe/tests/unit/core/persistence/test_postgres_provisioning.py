@@ -65,10 +65,10 @@ def test_uses_postgresql_when_pgvector_configured() -> None:
     assert uses_postgresql_persistence(cfg) is True
 
 
-@patch("soothe.foundation.persistence.postgres_provisioning._ensure_pgvector_extension")
+@patch("soothe.foundation.persistence.postgres_provisioning._initialize_postgres_schemas")
 @patch("psycopg.connect")
 def test_ensure_postgres_databases_creates_missing(
-    mock_connect: MagicMock, mock_pgvector: MagicMock
+    mock_connect: MagicMock, mock_init_schemas: MagicMock
 ) -> None:
     pytest.importorskip("psycopg")
 
@@ -109,16 +109,14 @@ def test_ensure_postgres_databases_creates_missing(
     ]
     assert len(select_calls) == 4
     assert cur.execute.call_count == 6
-    mock_pgvector.assert_called_once_with(
-        "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
-    )
+    mock_init_schemas.assert_called_once()
 
 
-@patch("soothe.foundation.persistence.postgres_provisioning._ensure_pgvector_extension")
+@patch("soothe.foundation.persistence.postgres_provisioning._initialize_postgres_schemas")
 @patch("psycopg.connect")
 def test_ensure_postgres_databases_is_idempotent_per_process(
     mock_connect: MagicMock,
-    mock_pgvector: MagicMock,
+    mock_init_schemas: MagicMock,
 ) -> None:
     pytest.importorskip("psycopg")
 
@@ -136,4 +134,4 @@ def test_ensure_postgres_databases_is_idempotent_per_process(
     assert ensure_postgres_databases(cfg) == []
     assert ensure_postgres_databases(cfg) == []
     mock_connect.assert_called_once()
-    mock_pgvector.assert_called_once()
+    mock_init_schemas.assert_called_once()

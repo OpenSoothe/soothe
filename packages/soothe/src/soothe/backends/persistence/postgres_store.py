@@ -146,7 +146,7 @@ class PostgreSQLPersistStore:
 
             try:
                 await pool.open()
-                await self._create_table(pool)
+                await self._initialize_schema(pool)
                 logger.debug(
                     "[Store] PostgreSQL initialized (namespace=%s, pool=%d)",
                     self._namespace,
@@ -160,29 +160,11 @@ class PostgreSQLPersistStore:
             self._pool = pool
             return self._pool
 
-    async def _create_table(self, pool: Any | None = None) -> None:
-        """Create persistence table with indexes if not exists (async)."""
-        pool = pool or await self._ensure_pool()
-        async with pool.connection() as conn, conn.cursor() as cur:
-            await cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS soothe_persistence (
-                    key TEXT NOT NULL,
-                    namespace TEXT NOT NULL,
-                    data JSONB NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (namespace, key)
-                )
-            """
-            )
-            await cur.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_persistence_updated
-                ON soothe_persistence(updated_at)
-            """
-            )
-            await conn.commit()
+    async def _initialize_schema(self, pool: Any) -> None:
+        """Apply soothe_metadata init script (async)."""
+        from soothe.foundation.persistence.db_init import initialize_database
+
+        await initialize_database(pool, "soothe_metadata")
 
     async def save(self, key: str, data: Any) -> None:
         """Persist data under the given key (upsert) (async).

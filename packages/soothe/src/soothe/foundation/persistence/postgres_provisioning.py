@@ -1,8 +1,8 @@
 """Auto-provision PostgreSQL databases for RFC-612 multi-database layout.
 
-Creates missing logical databases on first connect. Schema inside each database is
-still initialized lazily by the owning backend (SQL migrations, persist store,
-pgvector collection setup, LangGraph checkpointer setup, etc.).
+Creates missing logical databases on first connect, then applies each database's
+``sql/<database>/init.sql`` bootstrap script. Collection-specific vector tables and
+LangGraph checkpoint tables are still created by their owning backends at runtime.
 """
 
 from __future__ import annotations
@@ -158,11 +158,7 @@ def _ensure_postgres_databases_unlocked(
         msg = f"Failed to provision PostgreSQL databases via {admin_dsn}: {exc}"
         raise RuntimeError(msg) from exc
 
-    vectors_key = "vectors"
-    if vectors_key in db_keys:
-        vectors_db = config.persistence.postgres_databases.get(vectors_key)
-        if vectors_db:
-            _ensure_pgvector_extension(postgres_target_dsn(base_dsn, vectors_db))
+    _initialize_postgres_schemas(config, db_keys, base_dsn)
 
     if created:
         logger.info("Provisioned PostgreSQL databases: %s", ", ".join(created))
@@ -172,23 +168,27 @@ def _ensure_postgres_databases_unlocked(
     return created
 
 
-def _ensure_pgvector_extension(dsn: str) -> None:
-    """Install pgvector extension in the vectors database if missing."""
-    try:
-        import psycopg
-    except ImportError:
-        return
+def _initialize_postgres_schemas(
+    config: SootheConfig,
+    db_keys: frozenset[str],
+    base_dsn: str,
+) -> None:
+    """Apply ``init.sql`` for each configured PostgreSQL database."""
+    from soothe.foundation.persistence.db_init import initialize_database_sync
 
-    try:
-        with psycopg.connect(dsn, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    except Exception:
-        logger.warning(
-            "Could not install pgvector extension in %s; vector store init will retry",
-            dsn.split("/")[-1],
-            exc_info=True,
-        )
+    for db_key in sorted(db_keys):
+        db_name = config.persistence.postgres_databases.get(db_key)
+        if not db_name:
+            continue
+        dsn = postgres_target_dsn(base_dsn, db_name)
+        try:
+            initialize_database_sync(dsn, db_name)
+        except Exception:
+            logger.warning(
+                "Could not initialize PostgreSQL schema for %s; backends will retry on connect",
+                db_name,
+                exc_info=True,
+            )
 
 
 async def ensure_postgres_databases_async(config: SootheConfig) -> list[str]:

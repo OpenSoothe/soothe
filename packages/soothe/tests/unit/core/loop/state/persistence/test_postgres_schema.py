@@ -8,6 +8,7 @@ import pytest
 
 pytest.importorskip("psycopg_pool")
 
+from soothe.foundation.persistence.db_init import DatabaseSchemaResult
 from soothe.foundation.sloop.state.persistence.postgres_schema import (
     AGENTLOOP_POSTGRES_DATABASE,
     initialize_agentloop_postgres_schema,
@@ -15,14 +16,14 @@ from soothe.foundation.sloop.state.persistence.postgres_schema import (
 
 
 @pytest.mark.asyncio
-async def test_initialize_schema_runs_checkpoints_migrations() -> None:
-    """Pool open delegates to versioned SQL migrations for soothe_checkpoints."""
+async def test_initialize_schema_runs_checkpoints_init_and_migrations() -> None:
+    """Pool open delegates to soothe_checkpoints init + versioned migrations."""
     pool = object()
     with patch(
-        "soothe.foundation.sloop.state.persistence.postgres_schema.run_database_migrations",
+        "soothe.foundation.sloop.state.persistence.postgres_schema.initialize_database",
         new_callable=AsyncMock,
-        return_value=["001"],
-    ) as run_migrations:
+        return_value=DatabaseSchemaResult(init_applied=True, migrations_applied=["001"]),
+    ) as run_init:
         await initialize_agentloop_postgres_schema(pool)  # type: ignore[arg-type]
 
-    run_migrations.assert_awaited_once_with(pool, AGENTLOOP_POSTGRES_DATABASE)
+    run_init.assert_awaited_once_with(pool, AGENTLOOP_POSTGRES_DATABASE)
