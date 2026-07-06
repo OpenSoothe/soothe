@@ -276,8 +276,7 @@ See [Thread Management Guide](thread-management.md).
 Subagents are specialized helper agents:
 
 **Built-in** (always available):
-- `explore` - Targeted filesystem search
-- `plan` - Planning delegate
+- `planner` - Planning delegate
 - `tacitus` - Deep public-domain research
 - `browser_use` - Browser automation
 - `veritas` - Verification and fact-checking
@@ -369,7 +368,7 @@ See [Deployment Guide](deployment/index.md) for comprehensive production deploym
 **Quick start** (Docker Compose):
 ```bash
 cd deploy
-cp .env.example .env
+cp env-example .env
 vim .env  # Set API keys and passwords
 docker compose up -d
 ```
@@ -554,7 +553,7 @@ See [Testing Guide](testing-guide.md).
 make test-unit
 
 # Integration tests (requires PostgreSQL)
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml up -d
 make test-integration
 
 # Full verification
@@ -657,7 +656,7 @@ See [Architecture Overview](architecture/index.md).
 | PolicyProtocol | Security policies (ConfigDrivenPolicy) |
 | DurabilityProtocol | Thread lifecycle and checkpoints |
 | PersistenceProtocol | Key-value storage (SQLite, PostgreSQL) |
-| VectorStoreProtocol | Embedding storage (PGVector, Weaviate) |
+| VectorStoreProtocol | Embedding storage (`PGVectorStore`, `WeaviateVectorStore`) |
 | WorkspaceProtocol | Workspace resolution and validation |
 
 See [Architecture Overview - Protocols](architecture/index.md#protocols).
@@ -783,7 +782,7 @@ observability:
 
 **Local Langfuse** (dev):
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml up -d
 # UI: http://localhost:3300
 ```
 

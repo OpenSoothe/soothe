@@ -29,8 +29,8 @@ pip install -U 'soothe[all]' soothe-cli soothe-daemon
 # Set API key
 export OPENAI_API_KEY=sk-your-key-here
 
-# Initialize configuration
-soothe config init
+# Start the daemon (auto-creates ~/.soothe/ directory structure)
+soothed start
 
 # Run your first query
 soothe -p "List all Python files in the current directory and count lines of code"
@@ -46,7 +46,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 - Multiple installation methods (pip, uv, from source)
 - Package overview and capability groups
 - API key setup
-- Configuration initialization
+- Configuration auto-created on first daemon startup
 - Platform-specific notes
 - Troubleshooting installation issues
 

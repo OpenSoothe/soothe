@@ -24,8 +24,11 @@ providers:
     models:
       - gpt-4o-mini
 
-router:
-  default: openai:gpt-4o-mini
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+active_router_profile: default
 ```
 
 **Priority**: Command-line args (`--config`) > Environment variables (`SOOTHE_*`) > YAML file > Built-in defaults

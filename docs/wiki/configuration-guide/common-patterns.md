@@ -76,7 +76,7 @@ The `tools` section is where you shape *what the agent can do*. Disabling tools 
 | Use case | Disable | Enable |
 |----------|---------|--------|
 | Research agent | `execution`, `file_ops` | `wizsearch`, `deepxiv` |
-| Code assistant | `wizsearch`, `http_requests` | `execution`, `file_ops`, `explore` subagent |
+| Code assistant | `wizsearch`, `http_requests` | `execution`, `file_ops` |
 | Safe assistant | `execution`, `http_requests` | `file_ops` (with path policy) |
 
 Each tool group is a block with an `enabled: bool`; set the ones you want off to `false` and configure the ones you keep (e.g. `wizsearch.default_engines: [tavily, duckduckgo]`).
@@ -112,15 +112,15 @@ Subagents inherit the `fast` router role by default. Override per-subagent when 
 
 ```yaml
 subagents:
-  explore:
-    model: openai:gpt-4o-mini
   tacitus:
     model: anthropic:claude-sonnet-4-20250514
     config:
       effort: thorough
+  plan:
+    model: think  # uses the think router role
 ```
 
-**Rule of thumb:** `explore` wants speed (cheap model, medium thoroughness); `tacitus` wants quality (strong model, thorough effort); `plan` wants reasoning (use the `think` role). Disabling all three puts you in single-agent mode — simpler but no parallelism or specialized planning.
+**Rule of thumb:** `tacitus` wants quality (strong model, thorough effort); `plan` wants reasoning (use the `think` role); `browser_use` wants vision-capable models. Disabling all three puts you in single-agent mode — simpler but no parallelism or specialized planning.
 
 ## MCP Servers
 

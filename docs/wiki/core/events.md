@@ -14,7 +14,7 @@ The system exists because Soothe streams execution progress to clients in real t
 
 ---
 
-## The Naming Convention (RFC-0015)
+## The Naming Convention (RFC-403)
 
 All event types follow a **4-segment convention**: `soothe.<domain>.<component>.<action>`
 

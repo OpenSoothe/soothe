@@ -130,7 +130,7 @@ soothe loop delete <thread-id>
 | **Browser Use** | Web automation | Interacting with websites |
 | **Veritas** | Research synthesis and verification | Fact-checking, validation |
 
-> **Note**: `claude` and other community subagents are available via the
+> **Note**: Community subagents (e.g. `weaver`) are available via the
 > `soothe-plugins` package, not as core subagents.
 
 ### Subagent Workflow
@@ -517,11 +517,11 @@ observability:
 
 # Subagents (core defaults; optional from soothe-plugins)
 subagents:
-  explore:
-    enabled: true
   plan:
     enabled: true
   tacitus:
+    enabled: true
+  browser_use:
     enabled: true
 ```
 
@@ -581,6 +581,6 @@ Now that you understand the basics:
 ## Further Reading
 
 - **[RFC-000: System Conceptual Design](../../specs/RFC-000-system-conceptual-design.md)** - Complete architecture
-- **[RFC-200: Autonomous Goal Management](../../specs/RFC-200-autonomous-goal-management.md)** - ContextEngine details
+- **[RFC-200: Autonomous Goal Management](../../specs/archive/RFC-200-autonomous-goal-management.md)** - ContextEngine details (archived)
 - **[RFC-201: StrangeLoop](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - Execution loop details
 - **[Architecture Overview](../architecture/index.md)** - Visual guides and explanations

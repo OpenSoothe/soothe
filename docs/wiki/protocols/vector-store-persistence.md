@@ -31,7 +31,7 @@ VectorStoreProtocol abstracts vector databases. It stores embedding vectors with
 
 ### Design Principle: Connection Lifecycle Internal
 
-The protocol contract states: *"Implementations must handle connection lifecycle internally (lazy connect, connection pooling, etc.)."* Callers never open or close connections. This simplifies usage and lets each backend optimize its own connection strategy — PGVectorStore pools PostgreSQL connections; SQLiteVecStore uses aiosqlite's async wrapper; WeaviateStore manages HTTP connections.
+The protocol contract states: *"Implementations must handle connection lifecycle internally (lazy connect, connection pooling, etc.)."* Callers never open or close connections. This simplifies usage and lets each backend optimize its own connection strategy — PGVectorStore pools PostgreSQL connections; SQLiteVecStore uses aiosqlite's async wrapper; WeaviateVectorStore manages HTTP connections.
 
 ### VectorRecord
 
@@ -80,7 +80,7 @@ This separation provides:
 |---------|----------|----------|
 | `PGVectorStore` | `backends/vector_store/pgvector.py` | Production — PostgreSQL with pgvector extension |
 | `SQLiteVecStore` | `backends/vector_store/sqlite_vec.py` | Development — zero-config, single-file |
-| `WeaviateStore` | `backends/vector_store/weaviate.py` | Cloud — multi-tenancy, hybrid search |
+| `WeaviateVectorStore` | `backends/vector_store/weaviate.py` | Cloud — multi-tenancy, hybrid search |
 
 ### PersistStore Backends
 

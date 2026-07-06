@@ -1,15 +1,15 @@
 # Specialized Subagents
 
-Core Soothe ships six built-in subagents: **explore**, **plan**, **tacitus**, **browser_use**, **veritas**, and **skillify**. Additional optional delegated agents (e.g. **weaver** and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.
+Core Soothe ships five built-in subagents: **planner**, **tacitus**, **browser_use**, **veritas**, and **skillify**. Additional optional delegated agents (e.g. **weaver** and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.
 
 ## Overview
 
 | Subagent | Slash Command | Prefix | Best For |
 |----------|--------------|--------|----------|
 | Tacitus | `/tacitus <query>` | (see TUI guide) | Multi-source public-domain research |
-| Explore | `/explore <query>` | (see TUI guide) | Readonly repository search |
-| Plan | `/plan` or `/plan <prompt>` | — | Plan-mode routing |
+| Planner | `/plan` or `/plan <prompt>` | — | Plan-mode routing |
 | Browser Use | `/browser_use <url>` | (see TUI guide) | Browser automation and web interaction |
+| Skillify | `/skillify <query>` | (see TUI guide) | Semantic skill retrieval |
 | Veritas | (auto-invoked) | — | Clarification auto-answerer in autonomous mode |
 
 ## Tacitus Agent
@@ -71,37 +71,33 @@ subagents:
 
 **Note**: Tacitus uses semantic capability routing to automatically select the most appropriate sources for your query. It only accesses public-domain sources and does not perform filesystem operations or CLI commands.
 
-## Explore Agent
+## Skillify Agent
 
-Readonly filesystem and repository exploration agent.
+Semantic skill warehouse indexing and retrieval agent.
 
 **Capabilities**:
-- Search and explore codebases without making changes
-- Find files, functions, and patterns
-- Read file contents and directory structures
-- Analyze git history and repository metadata
-- Gather context for planning and implementation
+- Index and retrieve skills from the local skill warehouse
+- Semantic search over skill metadata and descriptions
+- Return structured skill bundles for execution
+- Supports incremental index updates (mtime-cached)
 
 **Usage**:
 ```bash
 # In TUI
-/explore Find where authentication middleware is registered
+/skillify Find skills related to code review
 
-# Explore specific patterns
-/explore Show me all places where the config is loaded
+# Search for specific capabilities
+/skillify Show me skills for git operations
 ```
 
 **Configuration**:
 ```yaml
 subagents:
-  explore:
+  skillify:
     enabled: true
-    # Optional: configure search behavior
-    max_iterations: 10  # Maximum exploration iterations
-    max_files_per_iteration: 20  # Files to examine per iteration
 ```
 
-**Note**: Explore is designed for readonly operations only. It cannot modify files or execute commands. Use it to understand codebases before making changes.
+**Note**: Skillify uses semantic embedding search to find relevant skills in the warehouse. It only retrieves skill definitions — actual execution is handled by the main agent or execute-phase threads.
 
 ## Browser Use Agent
 
@@ -154,7 +150,7 @@ subagents:
 
 **Note**: Veritas is a single structured-output LLM call (not a CoreAgent). When it cannot answer with sufficient confidence, it sets `defer=True` and the loop transitions the goal to `awaiting_clarification` for out-of-band resolution.
 
-## Plan Agent
+## Planner Agent
 
 Planning and task decomposition agent for complex multi-step tasks.
 
@@ -177,14 +173,14 @@ Planning and task decomposition agent for complex multi-step tasks.
 **Configuration**:
 ```yaml
 subagents:
-  plan:
+  planner:
     enabled: true
     # Optional: configure planning behavior
     max_steps: 20  # Maximum steps in a plan
     evidence_bundle: true  # Enable progressive evidence gathering
 ```
 
-**Note**: The Plan agent is automatically invoked during autonomous mode. You can also use `/plan` manually to review or create plans.
+**Note**: The Planner agent is automatically invoked during autonomous mode. You can also use `/plan` manually to review or create plans.
 
 ## Subagent Routing
 
@@ -193,9 +189,9 @@ subagents:
 Direct routing with slash commands for core agents:
 ```bash
 /tacitus <query>    # Route to Tacitus
-/explore <query>   # Route to Explore
-/plan <prompt>     # Route to Plan
+/plan <prompt>     # Route to Planner
 /browser_use <url> # Route to Browser Use
+/skillify <query>  # Route to Skillify
 ```
 
 ### Prefix Routing
@@ -214,11 +210,6 @@ Without a prefix or slash command, queries go to the Main agent (prefix `1`):
 ### Tacitus
 ```bash
 /tacitus Compare vector databases for RAG workloads
-```
-
-### Explore
-```bash
-/explore Find where authentication middleware is registered
 ```
 
 ### Browser Automation

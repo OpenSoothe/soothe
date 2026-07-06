@@ -10,7 +10,7 @@ Before starting, ensure you have:
 
 - ✅ Soothe installed (`pip install -U 'soothe[all]' soothe-cli soothe-daemon`)
 - ✅ API key set (`export OPENAI_API_KEY=sk-your-key-here`)
-- ✅ Configuration initialized (`soothe config init`)
+- ✅ Daemon started (`soothed start` — auto-creates `~/.soothe/`)
 
 Need help? See the [Installation Guide](Installation.md).
 
@@ -237,7 +237,7 @@ Web automation:
 soothe -p "Go to the project's GitHub page and extract the open issues count"
 ```
 
-> **Note**: The `claude` subagent (complex code analysis) and other community
+> **Note**: Community subagents (e.g. `weaver`) and other community
 > agents are available via the `soothe-plugins` package, not as core subagents.
 
 ---
@@ -504,8 +504,8 @@ export OPENAI_API_KEY=sk-your-key-here
 
 **"Config file not found"**
 ```bash
-# Initialize configuration
-soothe config init
+# Start the daemon to auto-create ~/.soothe/ directory structure
+soothed start
 ```
 
 **"Command not found: soothe"**

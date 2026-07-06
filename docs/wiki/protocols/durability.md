@@ -8,7 +8,7 @@
 
 DurabilityProtocol defines the interface for **thread lifecycle management**. A "thread" is Soothe's unit of conversational continuity — an agent run with its own ID, metadata, and status. DurabilityProtocol handles creating, resuming, suspending, archiving, and querying threads, plus their metadata.
 
-A critical distinction: DurabilityProtocol manages *thread metadata and lifecycle status*, not execution state. Checkpoint state (LangGraph graph snapshots) and run artifacts are handled separately by the Checkpointer system and `RunArtifactStore` (RFC-0010). DurabilityProtocol is the *identity and metadata* layer; the Checkpointer is the *execution state* layer.
+A critical distinction: DurabilityProtocol manages *thread metadata and lifecycle status*, not execution state. Checkpoint state (LangGraph graph snapshots) and run artifacts are handled separately by the Checkpointer system and `RunArtifactStore` (RFC-802). DurabilityProtocol is the *identity and metadata* layer; the Checkpointer is the *execution state* layer.
 
 ## Why It Exists
 
@@ -91,7 +91,7 @@ Backends are selected via `persistence.durability_backend` in config. The `resol
 - **RFC-306**: Durability Protocol Architecture
 - **RFC-452**: Enhanced thread metadata (labels, priority, category)
 - **RFC-802**: Multi-database persistence architecture
-- **RFC-0010**: RunArtifactStore (separate from durability)
+- **RFC-802**: RunArtifactStore (separate from durability)
 
 ## Related Documentation
 

@@ -212,9 +212,9 @@ export SOOTHE_DEBUG=true
 soothed start
 ```
 
-3. Verify configuration:
+3. Verify configuration file syntax:
 ```bash
-soothe config validate
+python -c "import yaml; yaml.safe_load(open('~/.soothe/config/config.yml'.replace('~', '$HOME')))"
 ```
 
 ### Error: Daemon not responding
@@ -282,7 +282,7 @@ soothe loop delete abc123
 
 1. Start infrastructure (development stack):
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.yml up -d
 ```
 
 2. Configure connection:
@@ -405,7 +405,7 @@ The debug guide covers:
 1. Use `/help` in the TUI to see available commands
 2. Check the [Debug Guide](howto_debug.md) for comprehensive debugging instructions
 3. Check logs: `~/.soothe/logs/soothed.log`, `~/.soothe/logs/soothe.log`, `~/.soothe/logs/soothe-cli.log`
-4. Review configuration: `soothe config show`
+4. Review configuration: check `~/.soothe/config/config.yml`
 5. Check the [documentation](../) for detailed guides
 6. Review RFCs and implementation guides in `docs/specs/` and `docs/impl/`
 

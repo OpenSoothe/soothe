@@ -147,11 +147,9 @@ export TAVILY_API_KEY=tvly-your-key
 
 ## Configuration Setup
 
-### Initialize Default Configuration
+### Auto-Created Directory Structure
 
-```bash
-soothe config init
-```
+Starting the daemon (`soothed start`) automatically creates the `~/.soothe/` directory tree on first run. No manual initialization is needed.
 
 This creates:
 ```
@@ -169,8 +167,8 @@ This creates:
 # Check version
 soothe --version
 
-# Verify configuration
-soothe config show
+# Verify configuration exists
+ls ~/.soothe/config/config.yml
 
 # Test with simple query
 soothe -p "Hello, are you working?"
@@ -286,9 +284,9 @@ pip install -U 'soothe[all]' soothe-cli soothe-daemon
 
 **Problem**: `Config file not found`
 
-**Solution**: Initialize configuration:
+**Solution**: The daemon auto-creates a default configuration on first start. Simply launch `soothed` and it will bootstrap `~/.soothe/config/config.yml` automatically:
 ```bash
-soothe config init
+soothed  # Auto-creates config on first run
 ```
 
 **Problem**: `OPENAI_API_KEY not set`

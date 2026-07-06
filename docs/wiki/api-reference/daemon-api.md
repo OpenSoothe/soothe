@@ -32,14 +32,9 @@ run_daemon(config_path="config/config.yml")
 
 ### Key Lifecycle Gotchas
 
-- **`wait_ready(timeout)`** — Use this after `start()` before accepting connections. It raises `TimeoutError` if the daemon doesn't reach `ready` state.
 - **Detached mode** — When `detached=True`, SIGINT shutdown handling is disabled. This is for daemonized background processes where the parent manages lifecycle.
 - **Heartbeat** — The daemon broadcasts a heartbeat every 5 seconds (`_HEARTBEAT_INTERVAL_S`) to all connected clients.
 - **Cleanup timeout** — On `stop()`, the daemon waits up to 8 seconds (`_STOP_TIMEOUT_S`) for graceful shutdown, then 3 seconds (`_CLEANUP_TIMEOUT_S`) for channel cleanup.
-
-### `status()` Return Shape
-
-The `status()` method returns a dict with `state`, `uptime_seconds`, `active_connections`, `active_loops`, per-transport client counts, and autopilot status (`enabled`, `dreaming`, `active_goals`). The `state` field is one of: `ready`, `starting`, `warming`, `error`.
 
 ---
 

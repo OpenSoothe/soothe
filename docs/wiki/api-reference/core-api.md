@@ -64,11 +64,11 @@ Protocols are runtime-agnostic `typing.Protocol` interfaces that define *what* a
 
 | Protocol | Purpose | RFC | Backends |
 |----------|---------|-----|----------|
-| `MemoryProtocol` | Remember/recall agent memories with scoped search | RFC-301 | `MemUMemory` |
-| `DurabilityProtocol` | Thread lifecycle: create, suspend, resume, archive, list | RFC-304 | `SQLiteDurability`, `PostgreSQLDurability` |
-| `PlannerProtocol` | Goal decomposition into steps + completion assessment | RFC-305 | `LLMPlanner` |
-| `PolicyProtocol` | Permission enforcement + child-agent permission narrowing | RFC-306 | `ConfigDrivenPolicy` |
-| `VectorStoreProtocol` | Vector add/search/delete with metadata filtering | RFC-303 | `PGVectorStore`, `SQLiteVecStore`, `WeaviateStore` |
+| `MemoryProtocol` | Remember/recall agent memories with semantic search | RFC-303 | `MemUMemory` |
+| `DurabilityProtocol` | Thread lifecycle: create, suspend, resume, archive, list | RFC-306 | `SQLiteDurability`, `PostgreSQLDurability` |
+| `PlannerProtocol` | Goal decomposition into steps + completion assessment | RFC-304 | `LLMPlanner` |
+| `PolicyProtocol` | Permission enforcement + child-agent permission narrowing | RFC-305 | `ConfigDrivenPolicy` |
+| `VectorStoreProtocol` | Vector add/search/delete with metadata filtering | RFC-303 | `PGVectorStore`, `SQLiteVecStore`, `WeaviateVectorStore` |
 | `AsyncPersistStore` | Async key-value persistence (bytes values) | RFC-302 | `SQLitePersistStore`, `PostgreSQLPersistStore` |
 | `IdentityProtocol` | Token issuance, auth, external identity mapping | RFC-307 | (re-exported from SDK) |
 
@@ -76,9 +76,9 @@ Protocols are runtime-agnostic `typing.Protocol` interfaces that define *what* a
 
 The protocols use `typing.Protocol` (structural subtyping) rather than `abc.ABC` (nominal subtyping). This means a third-party class can satisfy a protocol *without* importing it — critical for plugin authors who want zero hard dependencies on the core package. The SDK re-exports the same protocol definitions so plugin authors can type-check against them without pulling in daemon code.
 
-### Memory Scoping
+### Memory API
 
-`MemoryProtocol.remember/recall` take a `scope` parameter: `thread`, `workspace`, `user`, or `global`. The scope determines visibility — a thread-scoped memory is invisible to other threads, even in the same workspace. This is the mechanism behind per-conversation context isolation.
+`MemoryProtocol` provides four operations: `remember(item)` stores a `MemoryItem` and returns its ID; `recall(query, limit)` retrieves items by semantic relevance; `recall_by_tags(tags, limit)` retrieves items matching all specified tags (AND logic); `forget(item_id)` removes an item. Each `MemoryItem` carries `content`, `tags`, `importance` (0.0–1.0), and arbitrary `metadata`. Memory is explicitly populated — there is no auto-memorization.
 
 ---
 
@@ -129,7 +129,7 @@ For custom protocol injection (e.g., a test-memory backend), use `AgentBuilder` 
 | `PhasesMixin` | Pre-stream: thread binding, policy setup, memory recall, plan bootstrap |
 | `StrangeLoopMixin` | The Reason→Act iterative loop (RFC-201, RFC-220) |
 | `AutopilotWorkerMixin` | Single-goal worker entry for daemon-dispatched goals (RFC-222) |
-| `CheckpointMixin` | Progressive checkpointing, artifacts, reports (RFC-0010) |
+| `CheckpointMixin` | Progressive checkpointing, artifacts, reports (RFC-220) |
 
 The runner's `astream()` method yields `StreamChunk` objects — a normalized `(namespace, mode, data)` tuple that extends the raw LangGraph stream with `soothe.*` custom events for protocol observability. Namespaces include `assistant` (model output), `tool` (tool execution), and `soothe` (protocol-level events like memory recall or policy checks).
 

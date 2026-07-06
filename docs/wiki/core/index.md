@@ -75,7 +75,7 @@ These modules don't have dedicated knowledge articles but are referenced through
 | RFC | Title | Primary Module |
 |-----|-------|----------------|
 | [RFC-100](../../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime | agent |
-| [RFC-200](../../specs/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management | context |
+| [RFC-200](../../specs/archive/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management (archived) | context |
 | [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop | loop |
 | [RFC-001](../../specs/RFC-001-core-modules-architecture.md) | Core Protocol Modules | multiple |
 

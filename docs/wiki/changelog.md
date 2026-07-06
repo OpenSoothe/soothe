@@ -11,12 +11,207 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Release Date | Summary |
 |---------|-------------|---------|
-| **0.6.x** | 2025-Q2+ | Current — HTTP REST removed, soothe-plugins package, 16+ channels, unified autonomous config |
+| **0.7.x** | 2026-06-30+ | Current — router profiles, skill runtime discovery, sloop refactor, explore removal, config hot-reload |
+| **0.6.x** | 2025-Q2+ | HTTP REST removed, soothe-plugins package, 16+ channels, unified autonomous config |
 | **0.5.x** | 2025-01+ | RFC-220 loop orchestrator, deployment guides |
 | **0.4.x** | 2024-Q4 | Protocol consolidation, multi-package monorepo, RFC-802 PostgreSQL |
 | **0.3.x** | 2024-Q3 | Daemon multi-transport (WebSocket, Unix Socket), event system |
 | **0.2.x** | 2024-Q2 | CoreAgent + StrangeLoop, autonomous goal execution |
 | **0.1.x** | 2024-Q1 | Initial prototype - basic agent runtime |
+
+---
+
+## [0.7.0] - 2026-06-30
+
+### Added - Router Profiles
+
+Replaced flat `router:` config with named router profiles (RFC-450, IG-530):
+
+```yaml
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+      think: null
+      fast: null
+      image: null
+      ocr: null
+      embedding: null
+    embedding_dims: 1536
+active_router_profile: default
+```
+
+### Added - Environment-First Provider Bootstrap
+
+Providers can now be configured via environment variables without YAML (IG-530). SQLite with `sqlite_vec` is the default vector store for local development.
+
+### Added - Daemon WebSocket Protocol Standardization
+
+Daemon WebSocket standardized on protocol-1 (RFC-450). All clients use the same protocol layer.
+
+### Added - Start-Phase LLM Intake Routing
+
+RFC-630 Phase A: LLM-based intake routing with 4-class label (IG-528). Phase B+C completed: legacy simple-bypass removed.
+
+### Changed - SOOTHE_HOME Persistence Consolidation
+
+Consolidated SOOTHE_HOME persistence into shared SQLite stores (IG-529). MemU memory backend disabled pending redesign.
+
+### Changed - Checkpoint Async Writes
+
+Async checkpoint writes with periodic flush (RFC-803 Phase 6, IG-523) for lower latency.
+
+### Changed - Goal Completion Synthesis
+
+Improved goal-synthesis prompt design (IG-524).
+
+### Fixed
+
+- Graceful detach on closed connection with CE persistence fallback
+- Premature stream abort when concurrent daemon queries run
+- Direct LLM streaming + structured parse on local OMLX
+
+---
+
+## [0.7.1] - 2026-07-01
+
+### Added - Daemon-TUI Performance Isolation
+
+Performance isolation Phases 2–3 (IG-535 opt 3): daemon and TUI run independently with planning consolidation. TUI shows daemon startup status in thinking row.
+
+### Changed - foundation.loop → foundation.sloop
+
+Renamed `foundation.loop` package to `foundation.sloop` for terminology clarity. All import paths updated.
+
+### Fixed
+
+- Goal-completion stream tail preservation and worker lifecycle hardening
+- TUI startup race, cancel resubmit poison, drift checker strict mode
+- Durability thread metadata recovery on daemon restart
+
+---
+
+## [0.7.2] - 2026-07-03
+
+### Added - Skill Runtime Discovery
+
+Skill runtime discovery (IG-543, RFC-105 P1): skills are discovered and bound at turn 0 with tag-based matching.
+
+### Added - Cross-Wave Step DAG Planning
+
+Cross-wave step DAG planning (IG-539) and intent-classify prompt with ledger optimization (IG-540, RFC-214).
+
+### Added - Execute-Step Ledger Projection
+
+Execute-step ledger projection (IG-542) for predecessor context.
+
+### Changed - General-Purpose Subagent Gate
+
+Removed deprecated autopilot internals; added general-purpose subagent gate.
+
+### Changed - System Prompt Handling
+
+Refactored agent system prompt handling with builtin/default detection. Removed `git_status` from prompt injection system.
+
+### Fixed
+
+- Duplicate ledger messages when Slice A fallback overlaps Slice B
+- LangGraph checkpointer serialization under PostgreSQL advisory lock
+
+---
+
+## [0.7.3] - 2026-07-05
+
+### Added - Skill Auto-Invoke
+
+Core skill auto-invoke with corpus matching and intake heuristics. Skills auto-invoke based on tag matching with word-boundary enforcement for short tags.
+
+### Added - Cron Job APIs
+
+Cron job APIs optimized; cron enabled by default. `agent.autonomous` renamed to `agent.autopilot`.
+
+### Added - RFC-621 Workspace Mount Mapping
+
+Workspace mount mapping for container deployments (RFC-621).
+
+### Changed - Intake Routing Simplification
+
+Collapsed quiz intake into trivial 3-class routing (RFC-630). Spinner labels centralized; event stats converted to structured JSON.
+
+### Changed - Persistence I/O Deferral
+
+Persistence I/O deferred to background tasks for lower latency.
+
+### Fixed
+
+- Test isolation issues and workspace validation logic
+- Dead foundation code removed; vulture dead-code checks added
+
+---
+
+## [0.7.4] - 2026-07-06
+
+### Added - Config Hot-Reload
+
+Hot-reload for config changes with watchdog (IG-552). Config file changes are detected and applied without daemon restart.
+
+### Added - Goal-Bound Display Snapshots
+
+Goal-bound display snapshots and hardened worker lifecycle for TUI.
+
+### Changed - Explore Subagent Removed
+
+Removed `explore` subagent and all related dead code. General-purpose subagent gate retained.
+
+### Changed - LLM Rate Limiting
+
+Unified LLM rate limiting with shorter 429 retry timeouts to prevent agent hangs. Simplified rate limiting middleware.
+
+### Changed - Assistant Identity
+
+Unified assistant identity handling with inventor attribution. Hardened `browser_use` subagent.
+
+### Fixed
+
+- Execute-step tool budget raised to 999; edit coalescing hardened on stream teardown
+- TUI streaming regression; skill discovery tools bound on turn 0
+
+---
+
+## [0.7.5] - 2026-07-06
+
+### Added - High-Performance Persistence
+
+High-performance persistence with mid-loop continuation routing fixes.
+
+### Changed - Database Bootstrap
+
+Replaced `sql_migrations` with `db_init` for idempotent bootstrap + migrations. Removed `init-db.sql`; relies on auto-provisioning for Soothe databases.
+
+### Fixed
+
+- Execute-step stream fan-out to avoid duplicate events and forward heartbeats
+- Multi-goal loop ledger growth bounded to keep planner context scalable
+- GitHub Pages deployment via gh-pages branch; Jekyll build hardened
+- StrangeLoop checkpoint shutdown hardening
+
+---
+
+## [0.7.6] - 2026-07-06 (Current)
+
+### Added - CLI Report Formatting
+
+Goal-completion synthesis instructs GFM tables, bullets, and optional Mermaid blocks via per-scenario format hints (IG-552). Removed unused `synthesis_format.xml`.
+
+### Changed - TUI File-Change Cards
+
+TUI file-change cards use single-word action prefixes (Writing, Editing, Created) with labels consolidated in `file_tracker`. Dead preview-widget/CSS paths removed.
+
+### Fixed
+
+- File-change previews shown for all surgical write tools
+- Plan=keep remount of successful steps prevented; secondary text style unified
+- Docker build from source when PyPI packages unavailable
 
 ---
 
@@ -46,10 +241,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Five built-in subagents ship with the core `soothe` package:
 
-- `explore`: Targeted filesystem search
 - `plan`: Structured planning delegate
 - `tacitus`: Public-domain research (web, academic, URLs)
 - `browser_use`: Browser automation specialist
+- `skillify`: Skill discovery and invocation
 - `veritas`: Intent-grounded clarification auto-answerer
 
 ### Changed - HTTP REST Transport Removed

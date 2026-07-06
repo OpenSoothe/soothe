@@ -76,7 +76,7 @@ The `embedding` role and the top-level `embedding_dims` field are coupled — th
 | `weaviate` | Managed vector DB decoupled from Postgres | Cloud or self-hosted |
 | `in_memory` | Tests, ephemeral sessions | Lost on restart |
 
-The router format is `provider_name:collection_name`. Unset roles fall back to `default` — same pattern as the model router. If you use pgvector, Soothe can auto-resolve the vectors database from `persistence.postgres_base_dsn` (RFC-612) when no explicit `dsn` is set.
+The router format is `provider_name:collection_name`. Unset roles fall back to `default` — same pattern as the model router. If you use pgvector, Soothe can auto-resolve the vectors database from `persistence.postgres_base_dsn` (RFC-802) when no explicit `dsn` is set.
 
 ## Persistence Backends
 
@@ -85,7 +85,7 @@ The router format is `provider_name:collection_name`. Unset roles fall back to `
 | `sqlite` (default) | Dev, testing, single-process | WAL mode helps, but writers still serialize |
 | `postgresql` | Production, parallel autonomous goals, multi-worker | Pool-based, handles concurrent writers |
 
-**RFC-612 multi-database architecture:** when `postgres_base_dsn` is set, Soothe splits state across four databases (checkpoints, metadata, vectors, memory) for lifecycle isolation and backup granularity. Define them in the `postgres_databases` map. If `postgres_base_dsn` is unset, it falls back to a single `soothe_postgres_dsn` database. The multi-database layout is strongly recommended for production — it lets you back up/restore components independently.
+**RFC-802 multi-database architecture:** when `postgres_base_dsn` is set, Soothe splits state across four databases (checkpoints, metadata, vectors, memory) for lifecycle isolation and backup granularity. Define them in the `postgres_databases` map. If `postgres_base_dsn` is unset, it falls back to a single `soothe_postgres_dsn` database. The multi-database layout is strongly recommended for production — it lets you back up/restore components independently.
 
 **Pool sizing (from source docstrings):**
 - `postgres_pool_min_size` (default 4): warm connections kept ready.

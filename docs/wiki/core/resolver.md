@@ -63,7 +63,7 @@ The runner handles both cases: if it gets a tuple, it stores the pool/path and i
 
 For PostgreSQL, the resolver uses `SharedCheckpointerPool.get_or_create_pool(config)` — a singleton pool shared across multiple runners/loops for high-concurrency support. This avoids creating a new connection pool per runner instance.
 
-### RFC-612 Multi-Database Architecture
+### RFC-802 Multi-Database Architecture
 
 PostgreSQL uses **dedicated databases** per concern:
 - `metadata` database → durability
@@ -96,7 +96,7 @@ Always returns `ConfigDrivenPolicy(config)`. No backend selection — config-dri
 2. **Plugin tools** — loaded via `load_plugin_tools(config)`
 3. **MCP tools** — loaded from configured MCP servers
 
-`resolve_subagents(config)` assembles subagents from a `SUBAGENT_FACTORIES` registry — built-in subagents (explore, plan, veritas, tacitus) plus plugin subagents. Each subagent has a factory function gated by its config flag.
+`resolve_subagents(config)` assembles subagents from a `SUBAGENT_FACTORIES` registry — built-in subagents (plan, tacitus, browser_use, skillify, veritas) plus plugin subagents. Each subagent has a factory function gated by its config flag.
 
 The resolver also provides **lazy subagent** loading (`_lazy_subagent.py`) — subagents can be compiled on first use rather than at agent construction time, reducing startup cost.
 

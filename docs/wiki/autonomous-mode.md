@@ -43,19 +43,20 @@ Use autonomous mode for tasks that:
 # Dedicated autopilot command
 soothe autopilot run "Research quantum error correction advances"
 
-# With iteration limit (note: max-iterations is ignored; configure via agent.autonomous.max_iterations)
-soothe autopilot run "Build a web scraper" --max-iterations 15
+# The --max-iterations flag is accepted but ignored.
+# Configure the iteration limit via daemon config: agent.autopilot.max_iterations
+soothe autopilot run "Build a web scraper"
 ```
 
 ## Progress Events
 
 During autonomous execution, you'll see progress events:
 
-- `soothe.iteration.started` - Iteration began
-- `soothe.iteration.completed` - Iteration finished
-- `soothe.goal.created` - New goal created
-- `soothe.goal.completed` - Goal achieved
-- `soothe.goal.failed` - Goal failed
+- `soothe.cognition.strange_loop.started` - StrangeLoop execution began
+- `soothe.cognition.strange_loop.completed` - StrangeLoop execution finished
+- `soothe.cognition.goal.created` - New goal created
+- `soothe.cognition.goal.completed` - Goal achieved
+- `soothe.cognition.goal.failed` - Goal failed
 
 ## Configuration
 
@@ -63,11 +64,11 @@ Set defaults in your configuration file:
 
 ```yaml
 agent:
-  autonomous:
-    # Enable autonomous mode (starts scheduling loop for 24/7 operation)
+  autopilot:
+    # Enable autopilot scheduling loop (starts on daemon startup for 24/7 operation)
     enabled: false
 
-    # Maximum iterations per autonomous thread (default: 10)
+    # Maximum iterations per autopilot thread (default: 10)
     max_iterations: 10
 
     # Maximum retries per goal on failure (default: 2)
@@ -77,9 +78,9 @@ agent:
 ### Environment Variables
 
 ```bash
-export SOOTHE_AGENT_AUTONOMOUS_ENABLED=true
-export SOOTHE_AGENT_AUTONOMOUS_MAX_ITERATIONS=15
-export SOOTHE_AGENT_AUTONOMOUS_MAX_RETRIES=3
+export SOOTHE_AGENT_AUTOPILOT_ENABLED=true
+export SOOTHE_AGENT_AUTOPILOT_MAX_ITERATIONS=15
+export SOOTHE_AGENT_AUTOPILOT_MAX_RETRIES=3
 ```
 
 ## How It Works
@@ -131,7 +132,7 @@ Soothe will:
 ### Development Task
 
 ```bash
-soothe autopilot run --max-iterations 25 "Build a comprehensive test suite for the authentication module"
+soothe autopilot run "Build a comprehensive test suite for the authentication module"
 ```
 
 Soothe will:
@@ -157,8 +158,8 @@ In the TUI, you'll see:
 With `--format jsonl`, each progress event is a JSON object:
 
 ```json
-{"type": "event", "event_type": "soothe.iteration.started", "data": {"iteration": 1}}
-{"type": "event", "event_type": "soothe.goal.created", "data": {"goal_id": "goal_1", "description": "..." }}
+{"type": "event", "event_type": "soothe.cognition.strange_loop.started", "data": {"iteration": 1}}
+{"type": "event", "event_type": "soothe.cognition.goal.created", "data": {"goal_id": "goal_1", "description": "..." }}
 ```
 
 ## Best Practices

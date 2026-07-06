@@ -2,7 +2,7 @@
 
 This document describes how a user query flows through Soothe from CLI entry to final response.
 
-**Repository layout:** Daemon and StrangeLoop live under `packages/soothe/src/soothe/` (notably `core/runner/`, `core/strange_loop/`). The CLI Typer app lives under `packages/soothe-cli/src/soothe_cli/`. Older `src/soothe/cognition/*` paths have been folded into `core/`.
+**Repository layout:** The runner lives under `packages/soothe/src/soothe/runner/` and the StrangeLoop engine under `packages/soothe/src/soothe/foundation/sloop/`. The CLI Typer app lives under `packages/soothe-cli/src/soothe_cli/`.
 
 ## Overview
 
@@ -124,9 +124,9 @@ response    mode         execution
 | Default | Agentic Loop | Iterative observe-act-verify |
 
 **Key files:**
-- `packages/soothe/src/soothe/core/runner/__init__.py` — Runner package entry
-- `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` — Agentic loop
-- `packages/soothe/src/soothe/core/runner/_runner_autonomous.py` — Autonomous mode
+- `packages/soothe/src/soothe/runner/__init__.py` — Runner package entry
+- `packages/soothe/src/soothe/runner/_runner_strange_loop.py` — Agentic loop
+- `packages/soothe/src/soothe/runner/_runner_autonomous.py` — Autonomous mode
 
 ## 4. Agentic Loop (RFC-200)
 
@@ -165,9 +165,9 @@ The default execution mode follows an iterative observe-act-verify cycle:
 
 ```python
 # _agentic_act()
-- Delegate to `StrangeLoop` (`packages/soothe/src/soothe/core/strange_loop/core/strange_loop.py`)
-- Plan via `LLMPlanner` (`packages/soothe/src/soothe/core/strange_loop/core/planner.py`, RFC-604 two-phase assess + generate)
-- Execute plan (single step or multi-step DAG via `packages/soothe/src/soothe/core/strange_loop/core/executor.py`)
+- Delegate to `StrangeLoop` (`packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py`)
+- Plan via `LLMPlanner` (`packages/soothe/src/soothe/foundation/sloop/cognition/planner.py`, RFC-604 two-phase assess + generate)
+- Execute plan (single step or multi-step DAG via `packages/soothe/src/soothe/foundation/sloop/engine/executor.py`)
 ```
 
 ### Verify Phase
@@ -179,12 +179,12 @@ The default execution mode follows an iterative observe-act-verify cycle:
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` — Agentic loop
-- `packages/soothe/src/soothe/core/runner/_runner_phases.py` — Phase helpers
+- `packages/soothe/src/soothe/runner/_runner_strange_loop.py` — Agentic loop
+- `packages/soothe/src/soothe/runner/_runner_phases.py` — Phase helpers
 
 ## 5. Planning (StrangeLoop + LLMPlanner)
 
-Planning is implemented inside **StrangeLoop**, not a separate `cognition/planning` package. **`LLMPlanner`** (`packages/soothe/src/soothe/core/strange_loop/core/planner.py`, RFC-604) performs:
+Planning is implemented inside **StrangeLoop**, not a separate `cognition/planning` package. **`LLMPlanner`** (`packages/soothe/src/soothe/foundation/sloop/cognition/planner.py`, RFC-604) performs:
 
 1. **StatusAssessment** — structured `status`, `goal_progress`, `confidence`, `require_goal_completion`
 2. **PlanGeneration** (when not `done`) — `plan_action`, `AgentDecision` steps, `next_action`
@@ -207,9 +207,9 @@ class PlanStep(BaseModel):
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/core/strange_loop/core/planner.py` — `LLMPlanner`
-- `packages/soothe/src/soothe/core/strange_loop/core/plan_phase.py` — Plan phase wiring
-- `packages/soothe/src/soothe/core/prompts/builder.py` — `PromptBuilder` for assess/generate prompts
+- `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py` — `LLMPlanner`
+- `packages/soothe/src/soothe/foundation/sloop/cognition/phase.py` — Plan phase wiring
+- `packages/soothe/src/soothe/foundation/sloop/prompts/builder.py` — `PromptBuilder` for assess/generate prompts
 
 ## 6. Step Execution (DAG-based)
 
@@ -245,9 +245,9 @@ Execution: A + B parallel, then C
 
 **Key files:**
 
-- `packages/soothe/src/soothe/core/loop/engine/executor.py` — execute waves, DAG batches, CoreAgent streaming
-- `packages/soothe/src/soothe/core/loop/planning/dag.py` — `StepScheduler`
-- `packages/soothe/src/soothe/core/loop/state/schemas.py` — `LoopState`, step ledger metadata
+- `packages/soothe/src/soothe/foundation/sloop/engine/executor.py` — execute waves, DAG batches, CoreAgent streaming
+- `packages/soothe/src/soothe/foundation/sloop/cognition/plan_dag_normalizer.py` — DAG normalization
+- `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` — `LoopState`, step ledger metadata
 
 ## 7. Agent Execution
 
@@ -287,8 +287,8 @@ async for chunk in core_agent.astream(
 | `custom` | Protocol events |
 
 **Key files:**
-- `packages/soothe/src/soothe/core/loop/engine/executor.py` — CoreAgent streaming for execute waves
-- `packages/soothe/src/soothe/core/agent.py` — CoreAgent factory
+- `packages/soothe/src/soothe/foundation/sloop/engine/executor.py` — CoreAgent streaming for execute waves
+- `packages/soothe/src/soothe/foundation/core/agent/_builder.py` — CoreAgent factory
 
 ## 8. Response Streaming
 
@@ -359,7 +359,7 @@ FinalReportEvent
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/core/runner/_runner_autonomous.py`
+- `packages/soothe/src/soothe/runner/_runner_autonomous.py`
 - `packages/soothe/src/soothe/foundation/context/engine.py`
 
 ## 10. Event Flow Summary
@@ -419,15 +419,15 @@ User Query
 | CLI | `packages/soothe-cli/src/soothe_cli/cli/execution/headless.py` | Headless mode |
 | Daemon | `packages/soothe/src/soothe/daemon/server.py` | Daemon server |
 | Daemon | `packages/soothe/src/soothe/daemon/_handlers.py` | Query handling |
-| Runner | `packages/soothe/src/soothe/core/runner/__init__.py` | Runner package |
-| Runner | `packages/soothe/src/soothe/core/runner/_runner_strange_loop.py` | Agentic loop |
-| Runner | `packages/soothe/src/soothe/core/runner/_runner_phases.py` | Pre-stream (thread, policy, memory, plan bootstrap) |
-| Planning | `packages/soothe/src/soothe/core/strange_loop/core/planner.py` | `LLMPlanner` (RFC-604) |
-| Agent | `packages/soothe/src/soothe/core/agent.py` | CoreAgent factory |
+| Runner | `packages/soothe/src/soothe/runner/__init__.py` | Runner package |
+| Runner | `packages/soothe/src/soothe/runner/_runner_strange_loop.py` | Agentic loop |
+| Runner | `packages/soothe/src/soothe/runner/_runner_phases.py` | Pre-stream (thread, policy, memory, plan bootstrap) |
+| Planning | `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py` | `LLMPlanner` (RFC-604) |
+| Agent | `packages/soothe/src/soothe/foundation/core/agent/_builder.py` | CoreAgent factory |
 
 ### RFC References
 
 - [RFC-201](../specs/RFC-201-strangeloop-plan-execute-loop.md) — StrangeLoop plan–execute (observe / act / verify)
-- [RFC-200](../specs/RFC-200-autonomous-goal-management.md) — Autonomous goal management
+- [RFC-200](../specs/archive/RFC-200-autonomous-goal-management.md) — Autonomous goal management (archived)
 - [RFC-604](../specs/RFC-604-reason-phase-robustness.md) — Two-phase plan assess and generation (`LLMPlanner`)
 - [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) — Daemon communication
