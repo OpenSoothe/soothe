@@ -92,8 +92,8 @@ def test_build_bootstrap_plan_shape() -> None:
     assert step.full_description
     assert "user follow-up" in step.full_description
     assert "completion report" in step.full_description.lower()
-    # RFC-226 default: not terminal
-    assert pr.terminal_after_execute is False
+    # Chat-like follow-ups default to terminal bootstrap (skip iter=1 replan).
+    assert pr.terminal_after_execute is True
 
 
 def test_build_bootstrap_plan_terminal_flag_propagates() -> None:

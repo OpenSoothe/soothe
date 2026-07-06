@@ -132,16 +132,9 @@ def _make_ctx(
 
 
 @pytest.mark.asyncio
-async def test_continue_keyword_routes_through_assess_bootstrap() -> None:
-    """Lone ``continue`` uses continuation-assess and envelope-grounded bootstrap plan."""
+async def test_continue_keyword_bootstrap_without_assess_continuation() -> None:
+    """Lone ``continue`` bootstraps deterministically without continuation-assess LLM."""
     ctx = _make_ctx(goal="continue")
-    continuation = ContinuationAssessment(
-        action="bootstrap",
-        reasoning="Prior completion is a short summary only.",
-        goal_progress="low",
-    )
-    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
-
     cancelled_goal = MagicMock()
     cancelled_goal.id = "goal-0"
     cancelled_goal.description = "review all local changes"
@@ -149,31 +142,25 @@ async def test_continue_keyword_routes_through_assess_bootstrap() -> None:
     cancelled_goal.action_history = []
     cancelled_goal.steps = MagicMock()
     cancelled_goal.steps.nodes = {"s1": MagicMock(status="completed")}
-
     ctx.ce.get_all_goals.return_value = [cancelled_goal]
 
     result = await node_plan_assess(ctx, {})
 
     assert result.get("assess_route") == "skip_generate"
-    ctx.strange_loop.loop_planner.assess_continuation.assert_awaited_once()
+    ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
     assert ctx.scratch.plan_result is not None
     assert ctx.scratch.plan_assessment is None
     step = ctx.scratch.plan_result.decision.steps[0]
     assert step.description == "Continue prior goal completion recommendations"
-    assert "completion report" in (step.full_description or "").lower()
-    assert "review all local changes" not in (step.full_description or "")
-    assert "review all local changes" not in step.description
     assert ctx.scratch.plan_result.terminal_after_execute is True
 
 
 @pytest.mark.asyncio
 async def test_continue_keyword_respects_assess_plan_generate() -> None:
-    """Continue keyword defers bootstrap vs plan_generate to continuation-assess LLM."""
+    """Continue keyword always bootstraps; plan_generate requires a specific follow-up goal."""
     ctx = _make_ctx(goal="continue")
     completion_body = (
-        "## Recommendations\n"
-        "High priority: implement continuation envelope grounding. "
-        "Must complete unit tests and update RFC documentation."
+        "## Recommendations\nHigh priority: implement continuation envelope grounding."
     )
     completed_goal = MagicMock()
     completed_goal.id = "goal-0"
@@ -184,18 +171,11 @@ async def test_continue_keyword_respects_assess_plan_generate() -> None:
     completed_goal.steps.nodes = {"s1": MagicMock(status="completed")}
     ctx.ce.get_all_goals.return_value = [completed_goal]
 
-    continuation = ContinuationAssessment(
-        action="plan_generate",
-        reasoning="Prior report lists implementation follow-up work.",
-        goal_progress="none",
-    )
-    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
-
     result = await node_plan_assess(ctx, {})
 
-    assert result.get("assess_route") == "continue_generate"
-    assert ctx.scratch.plan_assessment is not None
-    assert "implementation follow-up" in ctx.scratch.plan_assessment.assessment_reasoning
+    assert result.get("assess_route") == "skip_generate"
+    ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
+    assert ctx.scratch.plan_result is not None
 
 
 @pytest.mark.asyncio
@@ -203,12 +183,6 @@ async def test_continue_keyword_plan_event_omits_duplicate_reason_display() -> N
     """Continue keyword bootstrap suppresses boilerplate on the plan wire event."""
     emitted: list[tuple[str, dict[str, object]]] = []
     ctx = _make_ctx(goal="continue")
-    continuation = ContinuationAssessment(
-        action="bootstrap",
-        reasoning="Prior completion is a short summary only.",
-        goal_progress="low",
-    )
-    ctx.strange_loop.loop_planner.assess_continuation = AsyncMock(return_value=continuation)
 
     cancelled_goal = MagicMock()
     cancelled_goal.id = "goal-0"
@@ -234,9 +208,7 @@ async def test_continue_keyword_plan_event_omits_duplicate_reason_display() -> N
     assert plan_events[0]["plan_reasoning"] == ""
     assert plan_events[0]["next_action"] == ""
     assert ctx.scratch.plan_result is not None
-    assert (
-        ctx.scratch.plan_result.assessment_reasoning == "Prior completion is a short summary only."
-    )
+    assert ctx.scratch.plan_result.assessment_reasoning == ""
 
 
 @pytest.mark.asyncio
@@ -311,3 +283,28 @@ async def test_continuation_bootstrap_emits_single_combined_reason_card() -> Non
     assert len(plan_events) == 1
     assert plan_events[0]["assessment_reasoning"] == "Pure translation; no new tools needed."
     assert plan_events[0]["plan_reasoning"]
+
+
+@pytest.mark.asyncio
+async def test_continuation_complex_intake_skips_bootstrap() -> None:
+    """Complex intake on continuation must not bootstrap (loop 0b37 goal_4 shape)."""
+    from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+    from soothe.foundation.sloop.intention.models import IntakeLabel
+
+    goal = (
+        "run make docker-build to build airway image. "
+        "then start docker components and run e2e test scripts"
+    )
+    ctx = _make_ctx(goal=goal)
+    ctx.loop_state.intent = IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        goal_description="Build image, start components, run e2e tests",
+        task_complexity=TaskComplexity.COMPLEX,
+    )
+
+    result = await node_plan_assess(ctx, {})
+
+    assert result.get("assess_route") == "continue_generate"
+    ctx.strange_loop.loop_planner.assess_continuation.assert_not_called()
+    assert ctx.scratch.plan_assessment is not None
+    assert ctx.scratch.plan_result is None

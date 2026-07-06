@@ -354,6 +354,14 @@ def project_planner_ledger(
     return projected
 
 
+def project_continuation_assess_ledger(
+    loop_messages: list[BaseMessage],
+    ledger_cfg: PlanPromptLedgerConfig | None,
+) -> list[BaseMessage]:
+    """Lean ledger for continuation-assess: last goal_completion unit only (mirrors intake)."""
+    return project_last_goal_completion_for_intake(loop_messages, ledger_cfg)
+
+
 def current_iteration_plan_assess_in_ledger(
     loop_messages: list[BaseMessage],
     iteration: int,

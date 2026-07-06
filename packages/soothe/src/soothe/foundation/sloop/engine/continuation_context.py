@@ -45,7 +45,11 @@ def _truncate_description(text: str, *, max_words: int = 16) -> str:
     return " ".join(words[:max_words]).rstrip(".,;:") + "…"
 
 
-def build_continue_bootstrap_step_briefs(*, user_goal: str) -> ContinueBootstrapStepBriefs:
+def build_continue_bootstrap_step_briefs(
+    *,
+    user_goal: str,
+    goal_description: str | None = None,
+) -> ContinueBootstrapStepBriefs:
     """Build description + full_description for loop-continuation bootstrap steps.
 
     Mirrors plan-generate: ``description`` is a short TUI/logging label;
@@ -56,6 +60,13 @@ def build_continue_bootstrap_step_briefs(*, user_goal: str) -> ContinueBootstrap
         return ContinueBootstrapStepBriefs(
             description=_CONTINUE_KEYWORD_DESCRIPTION,
             full_description=_CONTINUE_KEYWORD_FULL_DESCRIPTION,
+        )
+
+    refined = (goal_description or "").strip()
+    if refined and refined != goal:
+        return ContinueBootstrapStepBriefs(
+            description=_truncate_description(refined),
+            full_description=refined,
         )
 
     description = _truncate_description(goal)

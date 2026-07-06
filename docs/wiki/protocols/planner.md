@@ -76,14 +76,18 @@ If Phase 1 returns `complete`, Phase 2 is skipped entirely. This saves tokens �
 
 The unified `plan()` method orchestrates both phases: assess first, generate only if needed.
 
-### Continuation Routing (RFC-226)
+### Continuation Routing (RFC-226, coordinated with RFC-630 intake)
 
-`assess_continuation()` is a special iter=0 discriminator. When a follow-up query arrives in an *existing* loop (with prior completed goals), it routes to either:
+Mid-loop follow-ups coordinate **intake label** with optional **continuation-assess**:
 
-- **`bootstrap`** — single execute step using prior context (terminal path)
-- **`plan_generate`** — full plan generation flow
+| Intake (continuation turn) | Route | Continuation-assess LLM |
+|----------------------------|-------|-------------------------|
+| `trivial` | `plan_assess` → bootstrap or `plan_generate` | Only for ambiguous trivial goals |
+| `simple` | `plan_generate` (lightweight) | Skipped |
+| `complex` | `bounded_evidence_gather` → full spine | Skipped |
+| `continue` keyword | deterministic bootstrap | Skipped |
 
-This avoids expensive planning when a simple follow-up can be answered from existing context.
+`assess_continuation()` remains the trivial-path discriminator (`bootstrap` vs `plan_generate`). Simple/complex intake never bootstraps.
 
 ### Progressive Planning with PlanManager
 

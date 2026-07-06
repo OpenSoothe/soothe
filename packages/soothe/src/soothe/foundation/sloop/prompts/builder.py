@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from langchain_core.messages import BaseMessage, SystemMessage
 
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    project_continuation_assess_ledger,
     project_planner_ledger,
     projected_ledger_has_goal_completion,
     resolve_planner_projection_mode,
@@ -132,12 +133,15 @@ class PromptBuilder:
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
         projection_mode = resolve_planner_projection_mode(state)
         ledger_cfg = self.config.agent.loop.plan_prompt_ledger if self.config is not None else None
-        projected = project_planner_ledger(
-            state.loop_messages,
-            projection_mode,
-            ledger_cfg,
-            soothe_config=self.config,
-        )
+        if kind == "continuation":
+            projected = project_continuation_assess_ledger(state.loop_messages, ledger_cfg)
+        else:
+            projected = project_planner_ledger(
+                state.loop_messages,
+                projection_mode,
+                ledger_cfg,
+                soothe_config=self.config,
+            )
         completion_in_ledger = projected_ledger_has_goal_completion(projected)
 
         prior_goals = _enrich_prior_goals(

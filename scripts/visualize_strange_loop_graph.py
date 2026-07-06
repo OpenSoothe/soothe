@@ -256,10 +256,12 @@ Evaluated in order; first match wins:
 | Priority | Condition | Target | Notes |
 |----------|-----------|--------|-------|
 | 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
-| 2 | ``is_continuation`` | ``plan_assess`` | Structural continuation overlay (RFC-225/RFC-226); derived from checkpoint, not intake LLM |
-| 3 | ``intake_label == trivial`` | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
-| 4 | ``intake_label == simple`` | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
-| 5 | default / ``complex`` | ``bounded_evidence_gather`` | Full spine; fresh-loop skip (IG-476) intact |
+| 2 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
+| 2b | ``is_continuation`` + ``simple`` | ``plan_generate`` | Skips continuation-assess; lightweight generate |
+| 2c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
+| 3 | ``intake_label == trivial`` (fresh) | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
+| 4 | ``intake_label == simple`` (fresh) | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
+| 5 | default / ``complex`` (fresh) | ``bounded_evidence_gather`` | Full spine; fresh-loop skip (IG-476) intact |
 
 ### Chitchat fast-path (``init_or_resume``)
 
@@ -281,10 +283,10 @@ When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is 
     summary += "Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are conditional.\n\n"
     summary += "### From ``init_or_resume`` (`route_by_intent`)\n\n"
     summary += "- → ``__end__`` — chitchat fast-path\n"
-    summary += "- → ``plan_assess`` — continuation overlay\n"
-    summary += "- → ``resolve_decision`` — trivial pseudo-plan\n"
-    summary += "- → ``plan_generate`` — simple branch\n"
-    summary += "- → ``bounded_evidence_gather`` — complex / default\n\n"
+    summary += "- → ``plan_assess`` — continuation + trivial\n"
+    summary += "- → ``plan_generate`` — continuation + simple, or fresh simple\n"
+    summary += "- → ``bounded_evidence_gather`` — continuation + complex, or fresh complex\n"
+    summary += "- → ``resolve_decision`` — fresh trivial pseudo-plan\n\n"
     summary += "### All edges\n\n"
     for edge in graph.edges:
         source = edge.source if hasattr(edge, "source") else str(edge)

@@ -55,9 +55,13 @@ def route_by_intent(state: dict[str, Any]) -> str:
     """RFC-630: branch dispatch after init_or_resume by intake label.
 
     Continuation is checked first from the structural ``is_continuation`` flag
-    set by ``init_or_resume`` (derived from checkpoint state, not the LLM
-    label) — continuation turns always go to ``plan_assess``. Then matches intake
-    label (after chitchat ``fast_path`` → END):
+    set by ``init_or_resume``. Continuation turns follow intake-aware routing:
+
+    - ``trivial`` → ``plan_assess`` (continuation discriminator)
+    - ``simple``  → ``plan_generate`` (lightweight; skip continuation-assess)
+    - ``complex`` / missing label → ``bounded_evidence_gather`` (full spine)
+
+    Fresh-loop (non-continuation) routing is unchanged:
 
     - ``trivial`` → ``resolve_decision`` (pseudo 1-step plan from init_or_resume;
                     skips plan_assess/plan_generate; terminal_after_execute → goal_completion)
@@ -72,7 +76,16 @@ def route_by_intent(state: dict[str, Any]) -> str:
         return END
 
     if state.get("is_continuation"):
-        logger.info("[routing] route_by_intent → plan_assess (continuation overlay)")
+        label = state.get("intake_label")
+        if label == IntakeLabel.SIMPLE:
+            logger.info("[routing] route_by_intent → plan_generate (continuation+simple)")
+            return "plan_generate"
+        if label == IntakeLabel.COMPLEX or label is None:
+            logger.info(
+                "[routing] route_by_intent → bounded_evidence_gather (continuation+complex)"
+            )
+            return "bounded_evidence_gather"
+        logger.info("[routing] route_by_intent → plan_assess (continuation+trivial)")
         return "plan_assess"
 
     label = state.get("intake_label")

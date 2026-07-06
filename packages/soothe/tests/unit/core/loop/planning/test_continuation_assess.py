@@ -155,3 +155,31 @@ async def test_continuation_assess_uses_unified_message_list() -> None:
     assert len(captured[0]) >= 2
     last = captured[0][-1]
     assert "TASK:" in str(getattr(last, "content", ""))
+
+
+@pytest.mark.asyncio
+async def test_continuation_assess_guardrail_overrides_bootstrap_for_complex_intake() -> None:
+    from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+    from soothe.foundation.sloop.intention.models import IntakeLabel
+
+    planner = _make_planner()
+    state = _state(goal="run make docker-build then start docker and run e2e")
+    state.intent = IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        goal_description="Build image, start components, run e2e",
+        task_complexity=TaskComplexity.COMPLEX,
+    )
+    expected = ContinuationAssessment(
+        action="bootstrap",
+        reasoning="",
+        goal_progress="low",
+    )
+
+    with patch(
+        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        return_value=planner._model,
+    ):
+        planner._invoke_structured = AsyncMock(return_value=expected)
+        result = await planner.assess_continuation(state=state, context=PlanContext())
+
+    assert result.action == "plan_generate"

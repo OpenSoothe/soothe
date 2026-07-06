@@ -137,6 +137,48 @@ def _detect_stuck_loop(state: LoopState) -> str | None:
     return None
 
 
+def _apply_continuation_intake_guardrails(result: Any, state: LoopState) -> Any:
+    """Override bootstrap when intake complexity or empty reasoning forbids it."""
+    from soothe.foundation.sloop.intention.models import IntakeLabel
+    from soothe.foundation.sloop.orchestrator.continuation_routing import (
+        goal_has_explicit_multi_step_markers,
+    )
+
+    if getattr(result, "action", None) != "bootstrap":
+        return result
+
+    intake = intake_label_from_state(state)
+    if intake in (IntakeLabel.SIMPLE, IntakeLabel.COMPLEX):
+        logger.info(
+            "[Plan] continuation guardrail: intake=%s forced plan_generate",
+            intake.value,
+        )
+        return result.model_copy(
+            update={
+                "action": "plan_generate",
+                "reasoning": "Intake complexity requires full planning.",
+            }
+        )
+
+    if not (getattr(result, "reasoning", None) or "").strip():
+        return result.model_copy(
+            update={
+                "action": "plan_generate",
+                "reasoning": "I'll use the full planner because assess output was empty.",
+            }
+        )
+
+    if goal_has_explicit_multi_step_markers(state.goal):
+        return result.model_copy(
+            update={
+                "action": "plan_generate",
+                "reasoning": "Multi-step goal requires full planning.",
+            }
+        )
+
+    return result
+
+
 class LLMPlanner:
     """PlannerProtocol for StrangeLoop Plan phase using RFC-604 structured LLM calls.
 
@@ -946,6 +988,8 @@ class LLMPlanner:
         polished = polish_continuation_assess_reasoning(getattr(result, "reasoning", "") or "")
         if polished != (result.reasoning or ""):
             result = result.model_copy(update={"reasoning": polished})
+
+        result = _apply_continuation_intake_guardrails(result, state)
 
         logger.debug(
             "[ContinuationAssess] action=%s reason=%s",
