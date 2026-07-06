@@ -35,25 +35,6 @@ class DiffMessage(Static):
         text-style: bold;
         margin: 0;
     }
-
-    DiffMessage .diff-add {
-        color: $text-success;
-        background: $success-muted;
-    }
-
-    DiffMessage .diff-remove {
-        color: $text-error;
-        background: $error-muted;
-    }
-
-    DiffMessage .diff-context {
-        color: $text-muted;
-    }
-
-    DiffMessage .diff-hunk {
-        color: $secondary;
-        text-style: bold;
-    }
     """
     """Diff syntax coloring per theme: additions, removals, muted context."""
 
@@ -70,7 +51,7 @@ class DiffMessage(Static):
         Args:
             diff_content: The unified diff content
             file_path: Path to the file being modified
-            action_label: Short verb for the change (e.g. ``Updated``, ``Deleted``)
+            action_label: Short verb for the change (e.g. ``Edited``, ``Deleted``)
             **kwargs: Additional arguments passed to parent
         """
         super().__init__(**kwargs)

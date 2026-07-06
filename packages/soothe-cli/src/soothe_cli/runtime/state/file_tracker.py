@@ -19,16 +19,6 @@ FileOpStatus = Literal["pending", "success", "error"]
 FILE_CHANGE_TOOLS: frozenset[str] = get_file_write_tool_names()
 """Filesystem tools that produce before/after diffs in the TUI chat."""
 
-_FILE_CHANGE_PREVIEW_LABELS: dict[str, str] = {
-    "write_file": "Writing",
-    "edit_file": "Editing",
-    "edit_file_lines": "Editing",
-    "insert_lines": "Inserting",
-    "delete_lines": "Deleting",
-    "apply_diff": "Patching",
-    "delete_file": "Deleting",
-}
-
 
 def _safe_read(path: Path) -> str | None:
     """Read file content, returning None on failure.
@@ -439,21 +429,28 @@ def track_file_operation(
     tracker.start_operation(tool_name, args, tcid)
 
 
-def file_change_preview_label(tool_name: str) -> str:
-    """Short header label for a pending filesystem tool preview."""
-    return _FILE_CHANGE_PREVIEW_LABELS.get(tool_name, "Change")
+def file_change_label(tool_name: str, *, is_new_file: bool = False) -> str:
+    """Single-word past-tense prefix for a file-change card header."""
+    if tool_name in ("delete_file", "delete_lines"):
+        return "Deleted"
+    if tool_name == "write_file":
+        return "Created" if is_new_file else "Written"
+    if tool_name in ("edit_file", "edit_file_lines"):
+        return "Edited"
+    if tool_name == "insert_lines":
+        return "Inserted"
+    if tool_name == "apply_diff":
+        return "Patched"
+    return "Changed"
+
+
+def file_change_label_from_preview_data(tool_name: str, data: dict[str, Any]) -> str:
+    """Derive a preview header label from renderer-built widget data."""
+    is_new = bool(data.get("is_new_file")) if tool_name == "write_file" else False
+    return file_change_label(tool_name, is_new_file=is_new)
 
 
 def file_change_action_label(record: FileOperationRecord) -> str:
     """Human-readable label for a completed file operation (chat diff header)."""
-    if record.tool_name == "delete_file":
-        return "Deleted"
-    if record.tool_name == "write_file" and not (record.before_content or ""):
-        return "Created"
-    if record.tool_name == "write_file":
-        return "Written"
-    if record.tool_name in ("edit_file", "edit_file_lines", "delete_lines", "apply_diff"):
-        return "Updated"
-    if record.tool_name == "insert_lines":
-        return "Inserted"
-    return "Changed"
+    is_new = record.tool_name == "write_file" and not (record.before_content or "")
+    return file_change_label(record.tool_name, is_new_file=is_new)

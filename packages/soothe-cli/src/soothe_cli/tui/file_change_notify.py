@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
-    file_change_preview_label,
+    file_change_label_from_preview_data,
     parse_insert_line_arg,
     parse_line_range_args,
 )
@@ -89,7 +89,7 @@ async def mount_file_change_preview(
     if built is None:
         return
     widget_cls, data = built
-    label = file_change_preview_label(tool_name)
+    label = file_change_label_from_preview_data(tool_name, data)
     try:
         widget = widget_cls(data, action_label=label)
         widget.id = textual_widget_id("file-preview", tcid)
