@@ -153,6 +153,6 @@ The workspace directory itself is resolved at runtime (not from config) — it c
 
 - **[Agent Factory](agent-factory.md)** — workspace middleware integration
 - **[SootheRunner](runner.md)** — stream workspace resolution
-- **[Security Policy](../architecture/security-policy.md)** — policy enforcement
+- **[Security Policy](../protocols/policy.md)** — policy enforcement
 - **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** — security policy spec
 - **[RFC-103](../../specs/RFC-103-thread-aware-workspace.md)** — thread workspace spec

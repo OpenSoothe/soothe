@@ -8,7 +8,7 @@
 
 For the complete getting started experience, visit:
 
-### **[Getting Started Hub](getting-started/README.md)** 🚀
+### **[Getting Started Hub](getting-started/index.md)** 🚀
 
 The hub provides:
 
@@ -92,4 +92,4 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 - **Troubleshooting**: See the [Troubleshooting Guide](troubleshooting.md)
 - **Configuration**: See the [Configuration Guide](configuration.md)
-- **Architecture**: See the [Architecture Overview](architecture/README.md)
+- **Architecture**: See the [Architecture Overview](architecture/index.md)

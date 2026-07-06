@@ -1,3 +1,11 @@
+---
+title: Backends
+nav_order: 5
+description: >-
+  Memory, durability, vector store, persistence, and policy backend implementations.
+permalink: /wiki/backends/
+---
+
 # Backends Layer
 
 Concrete implementations for Soothe's protocol interfaces. Each backend category maps one protocol to one or more storage engines, with distinct performance, scalability, and operational trade-offs.
@@ -108,6 +116,6 @@ Implement `PolicyProtocol` for permission-based access control and least-privile
 
 ## Related Documentation
 
-- **[Protocol Layer](../architecture/protocols.md)** — Abstract interface definitions
+- **[Protocol Layer](../protocols/index.md)** — Abstract interface definitions
 - **[Protocol Resolver](../core/resolver.md)** — How backends are selected at runtime
 - **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** — Core modules architecture

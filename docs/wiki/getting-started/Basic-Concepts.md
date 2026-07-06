@@ -573,7 +573,7 @@ Now that you understand the basics:
 
 1. **[Configuration Guide](../configuration.md)** - Customize Soothe for your needs
 2. **[Autonomous Mode](../autonomous-mode.md)** - Enable autonomous execution
-3. **[Architecture Overview](../architecture/README.md)** - Deep dive into design
+3. **[Architecture Overview](../architecture/index.md)** - Deep dive into design
 4. **[RFC Specifications](../../specs/)** - Technical specifications
 
 ---
@@ -583,4 +583,4 @@ Now that you understand the basics:
 - **[RFC-000: System Conceptual Design](../../specs/RFC-000-system-conceptual-design.md)** - Complete architecture
 - **[RFC-200: Autonomous Goal Management](../../specs/RFC-200-autonomous-goal-management.md)** - ContextEngine details
 - **[RFC-201: StrangeLoop](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - Execution loop details
-- **[Architecture Overview](../architecture/README.md)** - Visual guides and explanations
+- **[Architecture Overview](../architecture/index.md)** - Visual guides and explanations

@@ -1,3 +1,11 @@
+---
+title: Configuration Guide
+nav_order: 4
+description: >-
+  YAML reference, environment variables, providers, and common patterns.
+permalink: /wiki/configuration-guide/
+---
+
 # Configuration Guide
 
 How to configure Soothe â€” YAML settings, environment variables, and the design decisions behind them.
@@ -64,9 +72,9 @@ A template with every option documented ships at `config/config.template.yml` â€
 | [Environment Variables](environment-variables.md) | `SOOTHE_*` mapping, `${VAR}` interpolation gotchas, secret hygiene |
 | [Provider Setup](provider-setup.md) | Choosing LLM/embedding providers, model routing, persistence & vector stores |
 | [YAML Reference](yaml-reference.md) | Condensed schema quick-reference (full schema lives in source) |
-| [Autonomous Mode](autonomous-config.md) | 24/7 self-running agent tuning |
-| [Daemon Setup](daemon-config.md) | Multi-transport server configuration |
-| [Security](security-config.md) | Sandboxing, path policies, approval flows |
+| [Autonomous Mode](../autonomous-mode.md) | 24/7 self-running agent tuning |
+| [Daemon Setup](../daemon-management.md) | Multi-transport server configuration |
+| [Security](../deployment/security.md) | Sandboxing, path policies, approval flows |
 
 ## Method Comparison
 

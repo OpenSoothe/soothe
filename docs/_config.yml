@@ -1,0 +1,68 @@
+# GitHub Pages / Jekyll configuration for Soothe documentation
+#
+# This configures the Just the Docs theme for the docs/wiki/ knowledge base.
+# Pages use index.md as directory landing pages (GitHub Pages convention).
+
+title: Soothe Docs
+description: >-
+  Goal-driven orchestration framework for building 24/7 long-running
+  autonomous agents.
+url: "https://mirasoth.github.io"
+baseurl: "/soothe"
+
+remote_theme: just-the-docs/just-the-docs
+
+# Enable auxiliary_links in the top-right navigation
+aux_links:
+  "GitHub": "https://github.com/mirasoth/soothe"
+  "PyPI": "https://pypi.org/project/soothe/"
+
+# Search
+search_enabled: true
+search:
+  heading_level: 3
+  previews: 2
+  preview_words_before: 3
+  preview_words_after: 3
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Mermaid diagrams (used in architecture pages)
+mermaid:
+  version: "10.4.0"
+
+# Exclude build artifacts and non-doc directories from Jekyll processing
+exclude:
+  - "specs/"
+  - "impl/"
+  - "drafts/"
+  - "analysis/"
+  - "configuration/"
+  - "diagrams/"
+  - "agent-skill-spec.md"
+  - "wiki/archive/"
+  - "wiki/WIKI-ARCHITECTURE.md"
+  - "Gemfile"
+  - "Gemfile.lock"
+  - "node_modules"
+  - "vendor"
+
+# Collections not needed — wiki pages are regular Jekyll pages
+collections: null
+
+# Callouts / collapsible sections (Just the Docs features)
+callouts:
+  warning:
+    title: Warning
+    color: red
+  note:
+    title: Note
+    color: blue
+  highlight:
+    title: Highlight
+    color: yellow
+
+# Plugin: jekyll-remote-theme is required for remote_theme
+plugins:
+  - jekyll-remote-theme

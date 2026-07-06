@@ -99,7 +99,7 @@ When ContextProtocol ships, it slots in alongside existing mechanisms rather tha
 
 ## Related Documentation
 
-- [RFC-302 Draft](../specs/RFC-302-context-protocol-architecture.md)
+- [RFC-302 Draft](../../specs/RFC-302-context-protocol-architecture.md)
 - [Memory Protocol](memory.md) — current cross-thread memory
 - [Loop Protocols](loop-protocols.md) — current bounded scratchpad
 - [Planner Protocol](planner.md) — consumes bounded context for planning

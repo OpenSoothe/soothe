@@ -1,3 +1,11 @@
+---
+title: API Reference
+nav_order: 9
+description: >-
+  Core, daemon, and SDK package API knowledge articles.
+permalink: /wiki/api-reference/
+---
+
 # API Knowledge Articles
 
 These articles explain the *why* and *how* of each Soothe package — architectural decisions, integration points, workflows, and gotchas. For exhaustive field/method references, consult the source files linked in each article.
@@ -48,8 +56,8 @@ Each layer has a strict contract: Layer 1 knows nothing about goals; Layer 2 kno
 
 ## Related Documentation
 
-- [Architecture Overview](../architecture/README.md) — System architecture and design
-- [Protocols Layer](../protocols/README.md) — Protocol specifications
-- [Capabilities Layer](../capabilities/README.md) — Subagents, tools, MCP
-- [Configuration Guide](../configuration-guide/README.md) — Configuration reference
+- [Architecture Overview](../architecture/index.md) — System architecture and design
+- [Protocols Layer](../protocols/index.md) — Protocol specifications
+- [Capabilities Layer](../capabilities/index.md) — Subagents, tools, MCP
+- [Configuration Guide](../configuration-guide/index.md) — Configuration reference
 - [RFC Specifications](../../specs/) — Detailed RFCs for each component

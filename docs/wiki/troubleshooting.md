@@ -366,7 +366,7 @@ soothe loop prune abc123 --dry-run
 
 ## Debug Mode
 
-For comprehensive debugging instructions, see the [Debug Guide](../howto_debug.md).
+For comprehensive debugging instructions, see the [Debug Guide](howto_debug.md).
 
 Enable verbose logging to diagnose issues:
 
@@ -403,7 +403,7 @@ The debug guide covers:
 ## Getting Help
 
 1. Use `/help` in the TUI to see available commands
-2. Check the [Debug Guide](../howto_debug.md) for comprehensive debugging instructions
+2. Check the [Debug Guide](howto_debug.md) for comprehensive debugging instructions
 3. Check logs: `~/.soothe/logs/soothed.log`, `~/.soothe/logs/soothe.log`, `~/.soothe/logs/soothe-cli.log`
 4. Review configuration: `soothe config show`
 5. Check the [documentation](../) for detailed guides
@@ -411,7 +411,7 @@ The debug guide covers:
 
 ## Related Guides
 
-- [Debug Guide](../howto_debug.md) - Enable debug logs, diagnose issues, log locations
+- [Debug Guide](howto_debug.md) - Enable debug logs, diagnose issues, log locations
 - [Configuration Guide](configuration.md) - Configuration reference
 - [Daemon Management](daemon-management.md) - Daemon lifecycle
 - [Multi-Transport Setup](multi-transport.md) - Transport configuration

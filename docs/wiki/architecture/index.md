@@ -1,3 +1,11 @@
+---
+title: Architecture
+nav_order: 2
+description: >-
+  System design, three-level execution model, and design principles.
+permalink: /wiki/architecture/
+---
+
 # Architecture Overview
 
 > **Soothe Architecture** - Goal-driven orchestration framework for 24/7 autonomous agents
@@ -395,8 +403,8 @@ Local subagents, MCP tools, ACP endpoints, A2A peers, and LangGraph remote graph
 
 ## See Also
 
-- **[Core Module README](../../../packages/soothe/src/soothe/core/README.md)** - Core module architecture details
+- **[Core Module Overview](../core/index.md)** - Core module architecture details
 - **[RFC Index](../../specs/rfc-index.md)** - Complete RFC catalog (73 RFCs)
 - **[Implementation Guides](../../impl/)** - Implementation tracking
 - **[User Guide](../user_guide.md)** - End-user documentation
-- **[Debugging Guide](../../howto_debug.md)** - Debug and diagnostics
+- **[Debugging Guide](../howto_debug.md)** - Debug and diagnostics

@@ -756,13 +756,13 @@ After successful production deployment:
 
 ## Related Documentation
 
-- [Deployment Guide Overview](README.md) - Deployment architecture overview
-- [Docker Compose Reference](../../deploy/docker-compose.yml) - Production stack definition
-- [Configuration Guide](../configuration-guide/README.md) - Complete YAML reference
+- [Deployment Guide Overview](index.md) - Deployment architecture overview
+- [Docker Compose Reference](../../../deploy/docker-compose.yml) - Production stack definition
+- [Configuration Guide](../configuration-guide/index.md) - Complete YAML reference
 - [Daemon Management](../daemon-management.md) - Daemon lifecycle commands
 - [Multi-Transport](../multi-transport.md) - Transport configuration
 - [Authentication](../authentication.md) - Reverse proxy authentication
 
 ---
 
-**Questions?** Check [Troubleshooting](../troubleshooting.md) or the [Production Deployment README](../../deploy/README.md).
+**Questions?** Check [Troubleshooting](../troubleshooting.md) or the [Production Deployment README](../../../deploy/README.md).

@@ -530,6 +530,6 @@ For more help, see the [Troubleshooting Guide](../troubleshooting.md).
 
 ## Getting Help
 
-- **Documentation**: [Wiki](../README.md)
+- **Documentation**: [Wiki](../index.md)
 - **Issues**: [GitHub Issues](https://github.com/mirasoth/soothe/issues)
-- **Architecture**: [Architecture Overview](../architecture/README.md)
+- **Architecture**: [Architecture Overview](../architecture/index.md)

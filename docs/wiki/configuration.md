@@ -1,10 +1,10 @@
 # Configuration Guide
 
-> **This page has been consolidated.** For the complete, up-to-date configuration reference, see the **[Configuration Guide](configuration-guide/README.md)**.
+> **This page has been consolidated.** For the complete, up-to-date configuration reference, see the **[Configuration Guide](configuration-guide/index.md)**.
 
 The configuration system has been reorganized into a dedicated guide with detailed sub-pages:
 
-- **[Configuration Guide README](configuration-guide/README.md)** — Overview, quick start, and file locations
+- **[Configuration Guide README](configuration-guide/index.md)** — Overview, quick start, and file locations
 - **[YAML Reference](configuration-guide/yaml-reference.md)** — Complete YAML schema with all options
 - **[Environment Variables](configuration-guide/environment-variables.md)** — All `SOOTHE_*` environment variables
 - **[Common Patterns](configuration-guide/common-patterns.md)** — Real-world configuration examples
@@ -30,4 +30,4 @@ router:
 
 **Priority**: Command-line args (`--config`) > Environment variables (`SOOTHE_*`) > YAML file > Built-in defaults
 
-See the [full configuration guide](configuration-guide/README.md) for complete details.
+See the [full configuration guide](configuration-guide/index.md) for complete details.

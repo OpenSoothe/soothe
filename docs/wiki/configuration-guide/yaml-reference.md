@@ -73,7 +73,7 @@ The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt
 
 ### Autonomous (`agent.autonomous`)
 
-Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](autonomous-config.md) for detail.
+Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](../autonomous-mode.md) for detail.
 
 ### Loop (`agent.loop`)
 
@@ -133,7 +133,7 @@ A list of `VectorStoreProviderConfig` entries (`name`, `provider_type`: pgvector
 
 `SecurityConfig` fields: `sandbox` (enables sandboxed `execute` tool; host tools always available), `allow_paths_outside_workspace`, `require_approval_for_outside_paths`, `denied_paths` (globs, checked first), `allowed_paths` (overrides denied within workspace), `denied_file_types`, `require_approval_for_file_types` (defaults to `.env`/`.pem`/`.key`/`.p12`/`.pfx`/`.crt`), plus `whitelist_paths_bypass` and `whitelist_commands_bypass`.
 
-**Evaluation order:** denied_paths → allowed_paths → workspace boundary → file-type rules → default deny. See [Security](security-config.md) for policy design.
+**Evaluation order:** denied_paths → allowed_paths → workspace boundary → file-type rules → default deny. See [Security](../deployment/security.md) for policy design.
 
 ## UI & Runtime
 

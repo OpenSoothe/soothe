@@ -1,3 +1,11 @@
+---
+title: Deployment
+nav_order: 8
+description: >-
+  Production setup, monitoring, security, scaling, and backup recovery.
+permalink: /wiki/deployment/
+---
+
 # Deployment Guide
 
 Comprehensive deployment documentation for production, development, and scaling Soothe.
@@ -348,7 +356,7 @@ See [Security Hardening](security.md)
 
 ## Related Documentation
 
-- [Configuration Guide](../configuration-guide/README.md) - Complete YAML reference
+- [Configuration Guide](../configuration-guide/index.md) - Complete YAML reference
 - [Daemon Management](../daemon-management.md) - Daemon lifecycle
 - [Transport Setup](../multi-transport.md) - WebSocket configuration
 - [Authentication](../authentication.md) - Reverse proxy authentication

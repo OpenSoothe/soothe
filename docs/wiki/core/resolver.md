@@ -152,5 +152,5 @@ Tool and subagent configs live under their own top-level keys (`tools:` and `sub
 
 - **[Agent Factory](agent-factory.md)** — consumes resolved protocols
 - **[SootheRunner](runner.md)** — consumes checkpointer and durability
-- **[Configuration Guide](../configuration-guide/README.md)** — config schema
+- **[Configuration Guide](../configuration-guide/index.md)** — config schema
 - **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** — architecture spec

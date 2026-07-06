@@ -558,9 +558,9 @@ Key decisions made during implementation.
 When making changes, update relevant docs:
 
 - **Code changes**: Update docstrings, inline comments
-- **API changes**: Update [API Reference](api-reference/README.md)
-- **Config changes**: Update [Configuration Guide](configuration-guide/README.md)
-- **Architecture changes**: Update [Architecture Overview](architecture/README.md)
+- **API changes**: Update [API Reference](api-reference/index.md)
+- **Config changes**: Update [Configuration Guide](configuration-guide/index.md)
+- **Architecture changes**: Update [Architecture Overview](architecture/index.md)
 
 ### Docstring Standards
 
@@ -601,10 +601,10 @@ make daemon-publish
 
 ### Resources
 
-- **[Architecture Overview](architecture/README.md)** - System design
+- **[Architecture Overview](architecture/index.md)** - System design
 - **[Testing Guide](testing-guide.md)** - Testing instructions
 - **[RFC-000](../specs/RFC-000-system-conceptual-design.md)** - Conceptual design
-- **[CLAUDE.md](../CLAUDE.md)** - AI agent instructions
+- **[CLAUDE.md](../../CLAUDE.md)** - AI agent instructions
 
 ### Communication
 
@@ -632,6 +632,6 @@ Before submitting PR:
 ## See Also
 
 - **[Testing Guide](testing-guide.md)** - Testing workflow and best practices
-- **[Configuration Guide](configuration-guide/README.md)** - Development configuration
-- **[Architecture Overview](architecture/README.md)** - System architecture
+- **[Configuration Guide](configuration-guide/index.md)** - Development configuration
+- **[Architecture Overview](architecture/index.md)** - System architecture
 - **[RFC-000](../specs/RFC-000-system-conceptual-design.md)** - Conceptual design

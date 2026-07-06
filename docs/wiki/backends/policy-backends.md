@@ -142,7 +142,7 @@ This means policy enforcement happens at two layers: operation security (workspa
 
 ## Related Documentation
 
-- **[Backends Overview](README.md)** — Backend layer introduction
+- **[Backends Overview](index.md)** — Backend layer introduction
 - **[Workspace Management](../core/workspace.md)** — Workspace security boundaries
 - **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** — Security policy spec
 - **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** — Policy protocol spec

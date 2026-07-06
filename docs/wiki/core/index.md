@@ -1,3 +1,11 @@
+---
+title: Core Modules
+nav_order: 3
+description: >-
+  Agent factory, runner, strange loop, goal engine, events, resolver, workspace.
+permalink: /wiki/core/
+---
+
 # Core Modules Architecture
 
 Soothe's core framework provides the foundational runtime for autonomous agent execution. This is an index of the core module knowledge articles — each linked page distills the architecture, design decisions, and integration points you won't find by reading source code alone.
@@ -95,6 +103,6 @@ Use `create_soothe_agent` directly for Layer 1 execution (tests, CLI one-shots).
 
 ## Additional Resources
 
-- **[Protocol Layer](../architecture/protocol-first.md)** — Protocol definitions
-- **[Backend Layer](../modules/backends/README.md)** — Protocol implementations
-- **[RFC Index](../../specs/README.md)** — All RFCs
+- **[Protocol Layer](../architecture/index.md)** — Protocol definitions
+- **[Backend Layer](../backends/index.md)** — Protocol implementations
+- **[RFC Index](../../specs/)** — All RFCs

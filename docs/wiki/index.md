@@ -1,3 +1,11 @@
+---
+title: Wiki
+nav_order: 2
+description: >-
+  Soothe documentation wiki — comprehensive guides for users, developers, and operators.
+permalink: /wiki/
+---
+
 # Soothe Wiki
 
 > **Goal-driven orchestration framework for building 24/7 long-running autonomous agents**
@@ -13,7 +21,7 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
 1. **Install**: `pip install -U 'soothe[all]' soothe-cli soothe-daemon`
 2. **Configure**: Set `OPENAI_API_KEY` or create `~/.soothe/config/config.yml`
 3. **Run**: `soothe -p "your query"` for one-shot mode
-4. **Learn**: Read [Getting Started](getting-started/README.md)
+4. **Learn**: Read [Getting Started](getting-started/index.md)
 
 **30-Second Example:**
 ```bash
@@ -36,13 +44,13 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ### 🚀 Getting Started
 
-- **[Getting Started Hub](getting-started/README.md)** - Start here!
+- **[Getting Started Hub](getting-started/index.md)** - Start here!
   - **[Installation](getting-started/Installation.md)** - System requirements, installation methods, troubleshooting
   - **[Quick-Start Guide](getting-started/Quick-Start.md)** - Your first session, common workflows
   - **[Basic Concepts](getting-started/Basic-Concepts.md)** - Core architecture and concepts
 - **[CLI Reference](cli-reference.md)** - Complete CLI documentation with examples
 - **[TUI Guide](tui-guide.md)** - Terminal UI, slash commands, keyboard shortcuts
-- **[Architecture Overview](architecture/README.md)** ⭐ - System design and concepts
+- **[Architecture Overview](architecture/index.md)** ⭐ - System design and concepts
 
 ### 🤖 Core Capabilities
 
@@ -52,7 +60,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ### 🔧 Configuration & Management
 
-- **[Configuration Guide](configuration-guide/README.md)** ⭐ - Complete configuration reference
+- **[Configuration Guide](configuration-guide/index.md)** ⭐ - Complete configuration reference
   - **[YAML Reference](configuration-guide/yaml-reference.md)** - Full YAML schema with all options
   - **[Environment Variables](configuration-guide/environment-variables.md)** - SOOTHE_* variables reference
   - **[Common Patterns](configuration-guide/common-patterns.md)** - Real-world configuration examples
@@ -64,7 +72,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ### 🚀 Deployment & Operations
 
-- **[Deployment Guide](deployment/README.md)** ⭐ - Production deployment patterns
+- **[Deployment Guide](deployment/index.md)** ⭐ - Production deployment patterns
   - **[Production Setup](deployment/production-setup.md)** - Docker Compose, systemd, Kubernetes
   - **[Monitoring & Observability](deployment/monitoring.md)** - Langfuse, logs, health checks
   - **[Security Hardening](deployment/security.md)** - Reverse proxy, TLS, access control
@@ -73,7 +81,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ### 🏗️ Architecture & Core Modules
 
-- **[Core Modules Overview](core/README.md)** ⭐ - Core framework architecture
+- **[Core Modules Overview](core/index.md)** ⭐ - Core framework architecture
   - **[Agent Factory](core/agent-factory.md)** - CoreAgent construction and runtime
   - **[SootheRunner](core/runner.md)** - Protocol-orchestrated execution
   - **[StrangeLoop](core/strangeloop.md)** - Plan-Execute loop for single goals
@@ -81,11 +89,11 @@ soothe -p "List all Python files in the current directory and count lines of cod
   - **[Event System](core/events.md)** - Event infrastructure and registration
   - **[Protocol Resolver](core/resolver.md)** - Protocol wiring from config
   - **[Workspace Management](core/workspace.md)** - Workspace resolution and validation
-- **[Architecture Overview](architecture/README.md)** - System design and concepts
+- **[Architecture Overview](architecture/index.md)** - System design and concepts
 
 ### 🔧 Backend Implementations
 
-- **[Backends Overview](backends/README.md)** ⭐ - Protocol implementations
+- **[Backends Overview](backends/index.md)** ⭐ - Protocol implementations
   - **[Memory Backends](backends/memory-backends.md)** - MemU semantic memory
   - **[Durability Backends](backends/durability-backends.md)** - SQLite, PostgreSQL thread storage
   - **[Persistence Backends](backends/persistence-backends.md)** - Key-value storage
@@ -136,7 +144,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 - **Plan-driven execution** - Complex goals decomposed into plans with steps
 - **Least-privilege delegation** - Fine-grained permissions for tools and subagents
 
-**Learn more:** [Architecture Overview](architecture/README.md) | [RFC-000](../specs/RFC-000-system-conceptual-design.md)
+**Learn more:** [Architecture Overview](architecture/index.md) | [RFC-000](../specs/RFC-000-system-conceptual-design.md)
 
 ### Framework Stack
 
@@ -202,11 +210,11 @@ class MyPlugin:
 
 ## 📚 Additional Resources
 
-- **[Architecture Overview](architecture/README.md)** - Detailed system design
+- **[Architecture Overview](architecture/index.md)** - Detailed system design
 - **[RFC Index](../specs/rfc-index.md)** - All specifications (73 RFCs)
 - **[Implementation Guides](../impl/)** - Implementation tracking
-- **[Debugging Guide](../howto_debug.md)** - Debug and diagnostics
-- **[User Guide](../user_guide.md)** - Comprehensive user documentation
+- **[Debugging Guide](howto_debug.md)** - Debug and diagnostics
+- **[User Guide](user_guide.md)** - Comprehensive user documentation
 
 ---
 
@@ -237,7 +245,7 @@ class MyPlugin:
 
 ### 📖 Extended Documentation
 
-- **[User Guide](../user_guide.md)** - Comprehensive usage guide with detailed examples
+- **[User Guide](user_guide.md)** - Comprehensive usage guide with detailed examples
 - **[RFCs & Specifications](../specs/)** - Technical architecture and design documents
 - **[Implementation Guides](../impl/)** - Development documentation
 
