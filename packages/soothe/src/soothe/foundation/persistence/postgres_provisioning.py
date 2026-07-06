@@ -1,7 +1,6 @@
 """Auto-provision PostgreSQL databases for RFC-612 multi-database layout.
 
-Creates missing logical databases on first connect so deployments do not
-depend on external ``init-db.sql`` scripts. Schema inside each database is
+Creates missing logical databases on first connect. Schema inside each database is
 still initialized lazily by the owning backend (SQL migrations, persist store,
 pgvector collection setup, LangGraph checkpointer setup, etc.).
 """
