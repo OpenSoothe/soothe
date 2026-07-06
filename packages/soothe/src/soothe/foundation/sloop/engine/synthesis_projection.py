@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from soothe.foundation.sloop.engine.scenario_classifier import ScenarioClassification
+from soothe.foundation.sloop.engine.scenario_classifier import (
+    ScenarioClassification,
+    format_hint_for_scenario,
+)
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_loop_messages_for_synthesis,
 )
@@ -69,6 +72,7 @@ def render_synthesis_system_prompt(
             sections=classification.sections,
             contextual_focus=focus_items,
             evidence_emphasis=classification.evidence_emphasis,
+            format_hint=format_hint_for_scenario(classification.scenario),
             user_goal=user_goal,
         )
     ]

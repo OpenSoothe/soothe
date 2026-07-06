@@ -9,9 +9,8 @@ Cache Strategy (RFC-104, IG-183):
 - Estimated cache hit rate: >95% for static content
 - Estimated savings: -5-10ms per request, -200-400 tokens
 
-Note: The Jinja2 template ``instructions/synthesis_format.xml`` lives alongside
-these fragments but is loaded on demand via ``prompts.loader.load_prompt_fragment``;
-it is intentionally not prefetched as a string here.
+Jinja2 templates under ``instructions/`` (e.g. ``synthesis_report_system.xml``) are
+loaded on demand via ``prompts.loader.load_prompt_fragment``.
 """
 
 from pathlib import Path

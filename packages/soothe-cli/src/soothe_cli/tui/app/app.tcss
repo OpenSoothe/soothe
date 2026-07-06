@@ -97,11 +97,6 @@ Screen {
     margin: 0;
 }
 
-.file-change-preview-label {
-    text-style: bold;
-    margin: 0;
-}
-
 .file-change-preview-body {
     color: $text-muted;
     margin: 0;

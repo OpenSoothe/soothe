@@ -125,7 +125,6 @@ class FileChangePreviewWidget(Vertical):
 
     FileChangePreviewWidget.-collapsed .file-change-preview-body,
     FileChangePreviewWidget.-collapsed .file-change-preview-section-label,
-    FileChangePreviewWidget.-collapsed .file-change-preview-label,
     FileChangePreviewWidget.-collapsed .diff-line-added,
     FileChangePreviewWidget.-collapsed .diff-line-removed,
     FileChangePreviewWidget.-collapsed .diff-context {
@@ -192,15 +191,6 @@ class FileChangePreviewWidget(Vertical):
         await self.remove_children()
         await self.mount(*self.compose())
         self._apply_expand_classes()
-
-    def compose(self) -> ComposeResult:  # noqa: PLR6301
-        """Default compose — subclasses override."""
-        if self._action_label:
-            yield Static(
-                Content.from_markup("[bold]$label[/bold]", label=self._action_label),
-                classes="file-change-preview-label",
-            )
-        yield Static("Change details not available", classes="file-change-preview-body")
 
     def _yield_compact_header(
         self,
@@ -270,7 +260,7 @@ class WriteFilePreviewWidget(FileChangePreviewWidget):
         total_lines = len(lines)
 
         if is_new_file:
-            extra = "new file" if not self._finalized else ""
+            extra = "new" if not self._finalized else ""
             yield from self._yield_compact_header(file_path, extra=extra)
         else:
             yield from self._yield_compact_header(
@@ -436,10 +426,7 @@ class GenericFilePreviewWidget(FileChangePreviewWidget):
         if file_path:
             yield from self._yield_compact_header(file_path)
         elif self._action_label:
-            yield Static(
-                Content.from_markup("[bold]$label[/bold]", label=self._action_label),
-                classes="file-change-preview-header",
-            )
+            yield from self._yield_compact_header("")
         for key, value in self.data.items():
             if value is None:
                 continue

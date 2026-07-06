@@ -31,7 +31,7 @@ def test_write_file_produces_diff_after_completion(tmp_path: Path) -> None:
     assert record is not None
     assert record.diff is not None
     assert "+line one" in record.diff
-    assert file_change_action_label(record) == "New file"
+    assert file_change_action_label(record) == "Created"
 
 
 def test_edit_file_produces_diff(tmp_path: Path) -> None:

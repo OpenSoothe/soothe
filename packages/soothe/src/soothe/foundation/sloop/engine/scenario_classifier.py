@@ -85,6 +85,56 @@ BUILTIN_SCENARIOS: dict[str, list[str]] = {
     ],
 }
 
+# Per-scenario CLI layout hints for goal-completion synthesis (IG-552 Phase 1).
+# Markdown tables and bullets render in Rich TUI today; Mermaid fences are
+# preserved as source until a terminal diagram renderer lands (Phase 3).
+SCENARIO_FORMAT_HINTS: dict[str, str] = {
+    "code_architecture_design": (
+        "Component inventory: GFM table (Name | Role | Location). "
+        "Key findings and recommendations: bullet lists. "
+        "Main request/data/control flow: ```mermaid flowchart when evidence supports it."
+    ),
+    "code_implementation_design": (
+        "APIs, signatures, or config keys: GFM table. "
+        "Patterns, usage, and caveats: bullet lists. "
+        "Call or deployment sequence: ```mermaid sequenceDiagram when helpful."
+    ),
+    "research_synthesis": (
+        "Source comparison: GFM table (Source | Finding | Confidence). "
+        "Discoveries and conclusions: bullet lists."
+    ),
+    "travel_activity_plan": (
+        "Itinerary: GFM table (Day/Time | Activity | Location | Notes). "
+        "Tips and recommendations: bullet lists."
+    ),
+    "tutorial_guide": (
+        "Prerequisites or checklist items: GFM table or bullets. "
+        "Procedure: numbered or bullet steps. "
+        "Optional overview flow: ```mermaid flowchart."
+    ),
+    "analysis_report": (
+        "Metrics and measurements: GFM table (Metric | Value | Notes). "
+        "Trends and recommendations: bullet lists."
+    ),
+    "investigation_summary": (
+        "Symptom/cause matrix: GFM table (Symptom | Cause | Status). "
+        "Investigation steps and resolution: bullet lists. "
+        "Repro or request path: ```mermaid sequenceDiagram when evidence supports it."
+    ),
+    "decision_analysis": (
+        "Options comparison: GFM table (Option | Pros | Cons | Fit). "
+        "Recommendation rationale: bullet lists."
+    ),
+    "content_draft": (
+        "Use short paragraphs for narrative sections; bullet lists for outlines or key beats."
+    ),
+    "general_summary": ("Brief summary paragraph; Key Points as a bullet list (3–5 items)."),
+    "custom": (
+        "Use GFM tables for comparisons or inventories; bullets for lists of 3+ items; "
+        "```mermaid diagrams for workflows when a diagram clarifies structure."
+    ),
+}
+
 _SCENARIO_DESCRIPTIONS: dict[str, str] = {
     "code_architecture_design": "System/module structure analysis",
     "code_implementation_design": "Concrete implementation patterns and examples",
@@ -99,6 +149,11 @@ _SCENARIO_DESCRIPTIONS: dict[str, str] = {
 }
 
 _JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
+
+
+def format_hint_for_scenario(scenario: str) -> str:
+    """Return CLI layout hint for a synthesis scenario name (IG-552)."""
+    return SCENARIO_FORMAT_HINTS.get(scenario, SCENARIO_FORMAT_HINTS["custom"])
 
 
 class ScenarioClassification(BaseModel):

@@ -29,6 +29,16 @@ Focus areas:
 How to use the evidence:
 {{ evidence_emphasis }}
 
+CLI presentation (Markdown for terminal display):
+- Section titles: `##` only (one level; avoid `###` subsections)
+- Lists of 3+ related items: markdown bullets (`- item`)
+- Comparisons, inventories, metrics: GFM pipe tables (≤5 columns; concise cells)
+- Workflows, pipelines, architecture flows: fenced ```mermaid blocks (flowchart, sequenceDiagram, or graph)
+- Prefer tables and bullets over long prose paragraphs where structure helps scanning
+
+Scenario-specific layout for "{{ scenario }}":
+{{ format_hint }}
+
 Rules:
 1. Your reply is ONLY the finished report — start immediately with the first required section heading (e.g. `## Summary`). Never output `<SYNTHESIS_INSTRUCTIONS>`, `</SYNTHESIS_INSTRUCTIONS>`, or any text from this block.
 2. Do not repeat, quote, or summarize these instructions, the scenario list, focus areas, or rules.

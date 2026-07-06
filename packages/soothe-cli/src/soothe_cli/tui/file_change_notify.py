@@ -8,13 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
+    file_change_preview_label,
     parse_insert_line_arg,
     parse_line_range_args,
 )
-from soothe_cli.tui.file_change_renderers import (
-    build_file_change_preview,
-    file_change_preview_label,
-)
+from soothe_cli.tui.file_change_renderers import build_file_change_preview
 
 if TYPE_CHECKING:
     from soothe_cli.runtime.state.file_tracker import FileOperationRecord
