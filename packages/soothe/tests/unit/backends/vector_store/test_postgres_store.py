@@ -104,3 +104,67 @@ class TestPostgreSQLPersistStoreUnit:
             assert reset_pool_calls == 0
 
         asyncio.run(_async_test())
+
+    def test_load_and_list_keys_use_dict_row_column_names(self) -> None:
+        """Rows from dict_row pools must be accessed by column name, not index."""
+        postgres_persist_store_cls = _load_postgres_store_class()
+
+        async def _async_return(value: object) -> object:
+            return value
+
+        async def _async_test() -> None:
+            store = postgres_persist_store_cls(dsn="postgresql://unused/test")
+
+            class _FakeCursor:
+                def __init__(self, rows: list[dict[str, object]]) -> None:
+                    self._rows = rows
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *_args: object) -> None:
+                    return None
+
+                async def execute(self, *_args: object, **_kwargs: object) -> None:
+                    return None
+
+                async def fetchone(self) -> dict[str, object] | None:
+                    return self._rows[0] if self._rows else None
+
+                async def fetchall(self) -> list[dict[str, object]]:
+                    return list(self._rows)
+
+            class _FakeConnection:
+                def __init__(self, cursor: _FakeCursor) -> None:
+                    self._cursor = cursor
+
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, *_args: object) -> None:
+                    return None
+
+                def cursor(self) -> _FakeCursor:
+                    return self._cursor
+
+                async def commit(self) -> None:
+                    return None
+
+            class _FakePool:
+                def __init__(self, cursor: _FakeCursor) -> None:
+                    self._cursor = cursor
+
+                def connection(self) -> _FakeConnection:
+                    return _FakeConnection(self._cursor)
+
+            load_cursor = _FakeCursor([{"data": {"thread": "info"}}])
+            store._ensure_pool = lambda: _async_return(_FakePool(load_cursor))  # type: ignore[method-assign,return-value]
+            loaded = await store.load("thread:abc")
+            assert loaded == {"thread": "info"}
+
+            list_cursor = _FakeCursor([{"key": "a"}, {"key": "b"}])
+            store._ensure_pool = lambda: _async_return(_FakePool(list_cursor))  # type: ignore[method-assign,return-value]
+            keys = await store.list_keys()
+            assert keys == ["a", "b"]
+
+        asyncio.run(_async_test())

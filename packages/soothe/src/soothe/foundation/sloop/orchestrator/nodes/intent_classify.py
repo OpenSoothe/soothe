@@ -14,6 +14,7 @@ from langchain_core.messages import BaseMessage
 
 from soothe.foundation.sloop.intention.models import (
     IntakeLabel,
+    IntentClassification,
     build_loop_routing_classification,
 )
 
@@ -21,7 +22,31 @@ from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
 
-_INTENT_CLASSIFY_STATUS_LABEL = "Interpreting goal"
+INTENT_CLASSIFY_STATUS_LABEL = "Interpreting goal"
+
+
+def intent_classified_reasoning_event(
+    intent: IntentClassification,
+    *,
+    pass1_reasoning: str = "",
+) -> tuple[str, dict[str, Any]] | None:
+    """Build one intake reasoning event for TUI cognition cards (IG-518, IG-554).
+
+    Prefers Pass 2 ``intent.reasoning``; falls back to Pass 1 when Pass 2 is empty.
+    """
+    if intent.intake_label == IntakeLabel.CHITCHAT:
+        return None
+    reasoning = (intent.reasoning or pass1_reasoning or "").strip()
+    if not reasoning:
+        return None
+    return (
+        "intent_classified_reasoning",
+        {
+            "intent_type": "agentic",
+            "reasoning": reasoning,
+            "goal_description": intent.goal_description,
+        },
+    )
 
 
 def _ledger_messages_for_intake(ctx: LoopRuntimeContext) -> list[BaseMessage]:
@@ -72,7 +97,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         logger.debug("[Intent] No classifier configured; graph will use complex fallback routing")
         return {}
 
-    await ctx.emit("plan_phase_status", {"label": _INTENT_CLASSIFY_STATUS_LABEL})
+    await ctx.emit("plan_phase_status", {"label": INTENT_CLASSIFY_STATUS_LABEL})
 
     query = ctx.loop_state.goal_user_submission or ctx.loop_state.goal
     thread_id = ctx.loop_state.thread_id
@@ -100,14 +125,9 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         ctx.preferred_subagent,
     )
 
-    if intent.reasoning and intent.intake_label != IntakeLabel.CHITCHAT:
-        await ctx.emit(
-            "intent_classified_reasoning",
-            {
-                "intent_type": "agentic",
-                "reasoning": intent.reasoning,
-                "goal_description": intent.goal_description,
-            },
-        )
+    reasoning_event = intent_classified_reasoning_event(intent)
+    if reasoning_event is not None:
+        event_type, payload = reasoning_event
+        await ctx.emit(event_type, payload)
 
     return {}

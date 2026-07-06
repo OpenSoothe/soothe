@@ -112,9 +112,17 @@ class PhasesMixin:
         if not main_thread_id:
             main_thread_id = thread_id
 
-        response = (chitchat_response or "").strip()
-        if not response:
-            response = "Hello! How can I help you today?"
+        from soothe.foundation.sloop.prompts.identity import (
+            GENERIC_CHITCHAT_FALLBACK,
+            finalize_chitchat_response,
+        )
+
+        response = finalize_chitchat_response(
+            user_input,
+            chitchat_response,
+            assistant_name=self._config.agent.name,
+            generic_fallback=GENERIC_CHITCHAT_FALLBACK,
+        )
 
         logger.info("Chitchat: %s (main_thread=%s)", user_input[:50], main_thread_id)
 

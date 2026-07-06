@@ -493,11 +493,13 @@ class SystemPromptMiddleware(AgentMiddleware):
         # Gated blocks (context/memory/directive/contract) and semi-static
         # sections follow. Workspace tail (when bound):
         #   ENVIRONMENT → WORKSPACE_RULES → WORKSPACE → AGENT_INSTRUCTIONS
-        from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
+        from soothe.foundation.sloop.prompts.identity import prepend_assistant_identity
         from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
 
-        identity_block = build_assistant_identity_block(self._config.agent.name)
-        static_sections: list[str] = [identity_block, base_core, RESPONSE_LANGUAGE_HINT_FRAGMENT]
+        static_sections: list[str] = [
+            prepend_assistant_identity(base_core, self._config.agent.name),
+            RESPONSE_LANGUAGE_HINT_FRAGMENT,
+        ]
 
         deferred_tools = state.get("_deferred_tools_for_listing") if state else None
         tools_block = self._compose_available_tools_block(state, deferred_tools=deferred_tools)

@@ -11,6 +11,7 @@ from soothe.foundation.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
     max_plan_steps_for_state,
+    plan_has_minimum_steps_for_intake,
     simple_intake_should_force_done,
 )
 from soothe.foundation.sloop.intention.models import IntakeLabel
@@ -30,6 +31,19 @@ def test_intake_label_from_state_reads_intent() -> None:
     state = LoopState(goal="g", thread_id="t1")
     state.intent = SimpleNamespace(intake_label=IntakeLabel.SIMPLE)
     assert intake_label_from_state(state) == IntakeLabel.SIMPLE
+
+
+def test_plan_has_minimum_steps_missing_decision_behavior() -> None:
+    assert plan_has_minimum_steps_for_intake(None, IntakeLabel.COMPLEX, 0) is False
+    assert (
+        plan_has_minimum_steps_for_intake(
+            None,
+            IntakeLabel.COMPLEX,
+            0,
+            treat_missing_as_undersized=False,
+        )
+        is True
+    )
 
 
 def test_max_plan_steps_caps_simple_intake_on_later_iterations() -> None:

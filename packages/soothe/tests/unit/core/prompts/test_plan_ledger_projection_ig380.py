@@ -1,14 +1,23 @@
-"""Plan-phase ledger projection (IG-380)."""
+"""Plan-phase ledger projection (IG-380, IG-555)."""
 
 from __future__ import annotations
 
-from langchain_core.messages import HumanMessage
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
+from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    _GOAL_COMPLETION_CONTEXT_BOUNDARY,
+    _compact_goal_completion_unit_for_projection,
+    project_cross_goal_completion_tail,
+    project_last_goal_completion_for_intake,
     project_loop_messages_for_plan,
     project_loop_messages_for_synthesis,
+    project_planner_ledger,
+    resolve_planner_projection_mode,
 )
+from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -91,3 +100,195 @@ def test_synthesis_projection_keeps_execute_step_only() -> None:
     proj = project_loop_messages_for_synthesis(raw, None)
     assert len(proj) == 2
     assert extract_join(proj) == "exec-hexec-ai"
+
+
+# ── IG-555: Prior Goal Completion Bias Mitigation ─────────────────────────────
+
+
+def test_ig555_new_goal_projection_includes_boundary() -> None:
+    """new_goal planner projection compacts goal_completion with boundary marker."""
+    prior_human = HumanMessage(content="Goal completed.", phase="goal_completion")
+    prior_ai = AIMessage(content="Recommended: apply signature change.", phase="goal_completion")
+    current_human = HumanMessage(content="GOAL: test", phase="intent_classify")
+    current_ai = AIMessage(content='{"scope":"complex"}', phase="intent_classify")
+
+    loop_messages = [prior_human, prior_ai, current_human, current_ai]
+    state = LoopState(goal="test", thread_id="tid", iteration=0)
+    mode = resolve_planner_projection_mode(state)
+    assert mode == "new_goal"
+
+    projected = project_planner_ledger(loop_messages, mode, None, soothe_config=None)
+    boundary_found = False
+    for msg in projected:
+        if getattr(msg, "phase", None) == "goal_completion" and "Human" in type(msg).__name__:
+            content = str(msg.content)
+            assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in content
+            boundary_found = True
+            break
+    assert boundary_found
+
+
+def test_ig555_boundary_marker_constant_defined() -> None:
+    """IG-555 boundary marker contains key instructions."""
+    assert "<PRIOR_GOAL_CONTEXT" in _GOAL_COMPLETION_CONTEXT_BOUNDARY
+    assert "reference_resolution" in _GOAL_COMPLETION_CONTEXT_BOUNDARY
+    assert "DO NOT use" in _GOAL_COMPLETION_CONTEXT_BOUNDARY
+    assert "Decompose" in _GOAL_COMPLETION_CONTEXT_BOUNDARY
+
+
+def test_ig555_compact_includes_boundary_when_true() -> None:
+    """compact function includes boundary marker when include_boundary=True."""
+    human = HumanMessage(content="Goal completed.", phase="goal_completion")
+    ai = AIMessage(content="Completion report.", phase="goal_completion")
+    unit = [human, ai]
+
+    result = _compact_goal_completion_unit_for_projection(unit, include_boundary=True)
+    assert len(result) == 2
+
+    human_content = str(result[0].content)
+    assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in human_content
+    assert "Prior goal completed" in human_content
+
+
+def test_ig555_compact_omits_boundary_when_false() -> None:
+    """compact function omits boundary marker when include_boundary=False."""
+    human = HumanMessage(content="Goal completed.", phase="goal_completion")
+    ai = AIMessage(content="Completion report.", phase="goal_completion")
+    unit = [human, ai]
+
+    result = _compact_goal_completion_unit_for_projection(unit, include_boundary=False)
+    assert len(result) == 2
+
+    human_content = str(result[0].content)
+    assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() not in human_content
+    assert "Prior goal completed" in human_content
+
+
+def test_ig555_intake_projection_boundary_control() -> None:
+    """Intake projection allows boundary control via include_boundary parameter."""
+    human = HumanMessage(content="Goal completed.", phase="goal_completion")
+    ai = AIMessage(content="Completion report.", phase="goal_completion")
+    loop_messages = [human, ai]
+
+    # With boundary (used by continuation-assess)
+    with_boundary = project_last_goal_completion_for_intake(
+        loop_messages, None, include_boundary=True
+    )
+    assert len(with_boundary) >= 1
+    content = str(with_boundary[0].content)
+    assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in content
+
+    # Without boundary (used by intake Pass 2)
+    without_boundary = project_last_goal_completion_for_intake(
+        loop_messages, None, include_boundary=False
+    )
+    assert len(without_boundary) >= 1
+    content = str(without_boundary[0].content)
+    assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() not in content
+
+
+def test_ig555_execute_slice_a_omits_boundary_by_default() -> None:
+    """Execute Slice A projection omits boundary by default."""
+    human = HumanMessage(content="Goal completed.", phase="goal_completion")
+    ai = AIMessage(content="Completion report.", phase="goal_completion")
+    loop_messages = [human, ai]
+
+    # Default: no boundary (execute-step needs prior actions)
+    default_result = project_cross_goal_completion_tail(loop_messages, k=1, ledger_cfg=None)
+    if default_result:
+        content = str(default_result[0].content)
+        assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() not in content
+
+    # Explicit boundary for planner projections
+    with_boundary = project_cross_goal_completion_tail(
+        loop_messages, k=1, ledger_cfg=None, include_boundary=True
+    )
+    if with_boundary:
+        content = str(with_boundary[0].content)
+        assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in content
+
+
+# Mock IntakeLabel values (avoid importing from intention.models)
+_COMPLEX_LABEL = "complex"
+_SIMPLE_LABEL = "simple"
+_TRIVIAL_LABEL = "trivial"
+
+
+@pytest.mark.parametrize(
+    "intake_label,iteration,step_count,expected",
+    [
+        # Complex intake at iter=0 needs ≥2 steps
+        (_COMPLEX_LABEL, 0, 1, False),  # undersized
+        (_COMPLEX_LABEL, 0, 2, True),  # valid
+        (_COMPLEX_LABEL, 0, 3, True),  # valid
+        # Complex intake at iter>0 can have 1 step (replan consolidation)
+        (_COMPLEX_LABEL, 1, 1, True),
+        (_COMPLEX_LABEL, 2, 1, True),
+        # Simple/trivial intake can have 1 step at iter=0
+        (_SIMPLE_LABEL, 0, 1, True),
+        (_TRIVIAL_LABEL, 0, 1, True),
+        # Unknown intake defaults to allowed
+        (None, 0, 1, True),
+    ],
+)
+def test_ig555_plan_has_minimum_steps_for_intake(
+    intake_label: str | None, iteration: int, step_count: int, expected: bool
+) -> None:
+    """Guardrail enforces minimum 2 steps for complex intake at iter=0."""
+    from soothe.foundation.sloop.cognition.plan_step_safety import (
+        plan_has_minimum_steps_for_intake,
+    )
+
+    steps = [StepAction(id=f"S{i}", description=f"Step {i}") for i in range(step_count)]
+    decision = AgentDecision(type="execute_steps", steps=steps, execution_mode="parallel")
+    label = IntakeLabel(intake_label) if intake_label else None
+
+    result = plan_has_minimum_steps_for_intake(decision, label, iteration)
+    assert result == expected
+
+
+def test_ig555_plan_has_minimum_steps_none_decision_returns_false() -> None:
+    """None decision at iter=0 with complex intake returns False (undersized)."""
+    from soothe.foundation.sloop.cognition.plan_step_safety import (
+        plan_has_minimum_steps_for_intake,
+    )
+
+    result = plan_has_minimum_steps_for_intake(None, IntakeLabel.COMPLEX, 0)
+    assert result is False
+
+
+def test_ig555_plan_has_minimum_steps_single_step_returns_false() -> None:
+    """Single step for complex intake at iter=0 is undersized."""
+    from soothe.foundation.sloop.cognition.plan_step_safety import (
+        plan_has_minimum_steps_for_intake,
+    )
+
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[StepAction(id="S1", description="Step 1")],
+        execution_mode="parallel",
+    )
+    result = plan_has_minimum_steps_for_intake(decision, IntakeLabel.COMPLEX, 0)
+    assert result is False
+
+
+def test_ig555_planner_projection_mid_goal_includes_boundary() -> None:
+    """Planner mid_goal projection includes boundary marker in Slice A."""
+    prior_human = HumanMessage(content="Goal completed.", phase="goal_completion")
+    prior_ai = AIMessage(content="Completion report.", phase="goal_completion")
+    current_human = HumanMessage(content="GOAL: test", phase="intent_classify")
+    current_ai = AIMessage(content="{scope: complex}", phase="intent_classify")
+
+    loop_messages = [prior_human, prior_ai, current_human, current_ai]
+
+    state = LoopState(goal="test", thread_id="tid", iteration=1)
+    mode = resolve_planner_projection_mode(state)
+    assert mode == "mid_goal"
+
+    projected = project_planner_ledger(loop_messages, mode, None, soothe_config=None)
+
+    for msg in projected:
+        if getattr(msg, "phase", None) == "goal_completion" and "Human" in type(msg).__name__:
+            content = str(msg.content)
+            assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in content or "Prior goal" in content
+            break

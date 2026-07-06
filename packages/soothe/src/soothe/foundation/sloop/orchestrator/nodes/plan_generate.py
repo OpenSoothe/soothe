@@ -2,6 +2,7 @@
 
 IG-476: Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
 RFC-630: Also handles the ``simple`` intake branch (lightweight plan, synthetic assessment).
+IG-555: Guardrail rejects undersized plans for complex intake at iter=0.
 """
 
 from __future__ import annotations
@@ -9,6 +10,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.sloop.cognition.plan_step_safety import (
+    MAX_UNDERSIZED_PLAN_REPLANS,
+    plan_has_minimum_steps_for_intake,
+)
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import StatusAssessment
 from soothe.foundation.sloop.utils.loop_reason_display import is_displayable_plan_reasoning
@@ -19,20 +24,6 @@ from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 logger = logging.getLogger(__name__)
 
 _PLAN_GENERATE_STATUS_LABEL = "Generating plan"
-
-
-def _create_synthetic_assessment() -> StatusAssessment:
-    """Create synthetic StatusAssessment when plan_assess was skipped.
-
-    Used by the fresh-loop bypass (IG-476) and the ``simple`` intake branch
-    (RFC-630), both of which reach plan_generate without a prior assess call.
-    """
-    return StatusAssessment(
-        status="continue",
-        goal_progress="none",
-        assessment_reasoning="Synthetic assessment: plan_assess skipped (fresh-loop or simple branch).",
-        require_goal_completion=False,
-    )
 
 
 async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -93,6 +84,47 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     ctx.scratch.plan_result = plan_result
 
+    # IG-555: Guardrail rejects undersized plans for complex intake at iter=0
+    if intake_label == IntakeLabel.COMPLEX and state.iteration == 0:
+        if not plan_has_minimum_steps_for_intake(
+            plan_result.decision,
+            intake_label,
+            state.iteration,
+            treat_missing_as_undersized=False,
+        ):
+            step_count = len(plan_result.decision.steps) if plan_result.decision else 0
+            if ctx.scratch.undersized_plan_replan_attempts >= MAX_UNDERSIZED_PLAN_REPLANS:
+                logger.error(
+                    "[PlanGenerate] Undersized plan (%d step) persists after %d replans; aborting",
+                    step_count,
+                    ctx.scratch.undersized_plan_replan_attempts,
+                )
+                await ctx.emit(
+                    "fatal_error",
+                    {
+                        "error": "Plan remained undersized for complex goal after replan attempts",
+                        "step_id": "",
+                    },
+                )
+                return {"last_outcome": "fatal"}
+
+            logger.warning(
+                "[PlanGenerate] Undersized plan (%d step) for complex intake at iter=0; "
+                "forcing replan with expanded scope",
+                step_count,
+            )
+            ctx.scratch.undersized_plan_replan_attempts += 1
+            ctx.scratch.plan_assessment = StatusAssessment(
+                status="continue",
+                goal_progress="low",
+                assessment_reasoning="Plan undersized for complex goal; expanding scope.",
+                require_goal_completion=False,
+            )
+            ctx.scratch.plan_result = None
+            return {"assess_route": "continue_generate"}
+
+    ctx.scratch.undersized_plan_replan_attempts = 0
+
     plan_reasoning = (plan_result.plan_reasoning or "").strip()
     if is_displayable_plan_reasoning(plan_reasoning):
         await ctx.emit(
@@ -115,4 +147,4 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     )
 
     plan_route: PlanRoute = PLAN_ROUTE_GOAL_DONE if plan_result.is_done() else PLAN_ROUTE_EXECUTE
-    return {"plan_route": plan_route}
+    return {"plan_route": plan_route, "assess_route": None}

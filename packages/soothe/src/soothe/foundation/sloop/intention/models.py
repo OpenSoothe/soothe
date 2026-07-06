@@ -230,7 +230,7 @@ class IntakePass2LLMResult(BaseModel):
     Args:
         scope: Work scope: trivial (single action), simple (focused step), complex (multi-step).
         goal_description: Normalized imperative summary of the goal.
-        reasoning: Brief reasoning (≤15 words).
+        reasoning: First-person TUI line (I'll / Let me …), ≤15 words.
     """
 
     scope: IntakeScope = Field(
@@ -241,7 +241,10 @@ class IntakePass2LLMResult(BaseModel):
         description="Normalized imperative summary of the goal",
     )
     reasoning: str = Field(
-        description="Brief reasoning for scope classification (≤15 words)",
+        description=(
+            "First-person agent line for the TUI cognition card (I'll / Let me …), "
+            "≤15 words; not third-person scope commentary"
+        ),
     )
 
     def to_intake_label(self) -> IntakeLabel:

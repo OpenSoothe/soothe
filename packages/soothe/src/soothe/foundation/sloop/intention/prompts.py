@@ -19,12 +19,16 @@ def _read_classifier_fragment(name: str) -> str:
 
 INTAKE_PASS1_SYSTEM_PROMPT = _read_classifier_fragment("intake_pass1_system.xml")
 INTAKE_PASS2_SYSTEM_PROMPT = _read_classifier_fragment("intake_pass2_system.xml")
+INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_classifier_fragment("intake_pass1_social_reply.xml")
 
 INTAKE_PASS1_HUMAN_TASK = "Classify above. JSON only."
 INTAKE_PASS2_HUMAN_TASK = "Classify CURRENT_GOAL scope. JSON only."
+INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
 
 __all__ = [
     "INTAKE_PASS1_HUMAN_TASK",
+    "INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK",
+    "INTAKE_PASS1_SOCIAL_REPLY_PROMPT",
     "INTAKE_PASS1_SYSTEM_PROMPT",
     "INTAKE_PASS2_HUMAN_TASK",
     "INTAKE_PASS2_SYSTEM_PROMPT",

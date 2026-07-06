@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+import logging
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from soothe.foundation.sloop.intention.models import IntakePass1Confidence, IntakePass1LLMResult
-from soothe.foundation.sloop.intention.pass1_classifier import IntakePass1Classifier
+from soothe.foundation.sloop.intention.pass1_classifier import (
+    IntakePass1Classifier,
+    _log_pass1_result,
+)
 
 # -- Helpers ---------------------------------------------------------------
 
@@ -169,14 +173,77 @@ async def test_low_confidence_is_still_valid() -> None:
 # -- Field validation tests ------------------------------------------------
 
 
-async def test_missing_social_response_is_patched() -> None:
-    """Missing social_response for is_task=False should be patched."""
-    classifier = create_pass1_classifier_with_raw_result(
-        {"is_task": False, "confidence": "high", "social_response": "", "reasoning": "greeting"}
+async def test_missing_social_response_retries_once() -> None:
+    """Pass1 retries once when social verdict omits social_response."""
+    mock_model = MagicMock()
+    mock_model.with_structured_output = MagicMock(return_value=mock_model)
+    mock_model.ainvoke = AsyncMock(
+        side_effect=[
+            {
+                "is_task": False,
+                "confidence": "high",
+                "social_response": "",
+                "reasoning": "greeting",
+            },
+            {
+                "is_task": False,
+                "confidence": "high",
+                "social_response": "Hi!",
+                "reasoning": "greeting",
+            },
+        ]
     )
+    classifier = IntakePass1Classifier(model=mock_model)
     result = await classifier.classify("hi")
-    assert result.social_response is not None
-    assert len(result.social_response) > 0
+    assert result.is_task is False
+    assert result.social_response == "Hi!"
+    assert mock_model.ainvoke.await_count == 2
+
+
+async def test_salvage_from_reasoning_avoids_extra_llm_calls() -> None:
+    mock_model = MagicMock()
+    mock_model.with_structured_output = MagicMock(return_value=mock_model)
+    mock_model.ainvoke = AsyncMock(
+        return_value={
+            "is_task": False,
+            "confidence": "high",
+            "reasoning": "Identity. Requested social_response: I'm Soothe!",
+        }
+    )
+    classifier = IntakePass1Classifier(model=mock_model)
+    result = await classifier.classify("who are u")
+    assert "Soothe" in (result.social_response or "")
+    assert mock_model.ainvoke.await_count == 1
+
+
+async def test_generate_social_response_after_failed_retry() -> None:
+    mock_model = MagicMock()
+    mock_model.with_structured_output = MagicMock(return_value=mock_model)
+    mock_model.ainvoke = AsyncMock(
+        side_effect=[
+            {
+                "is_task": False,
+                "confidence": "high",
+                "reasoning": "Social question, not a work request.",
+            },
+            {
+                "is_task": False,
+                "confidence": "high",
+                "social_response": "",
+                "reasoning": "Still missing reply field.",
+            },
+        ]
+    )
+    classifier = IntakePass1Classifier(model=mock_model)
+    with patch.object(
+        classifier,
+        "_generate_social_response",
+        new=AsyncMock(return_value="Dr. Xiaming Chen invented me."),
+    ) as mock_generate:
+        result = await classifier.classify("who is your daddy")
+    assert result.is_task is False
+    assert result.social_response == "Dr. Xiaming Chen invented me."
+    mock_generate.assert_awaited_once()
 
 
 async def test_invalid_confidence_defaults_to_medium() -> None:
@@ -187,3 +254,19 @@ async def test_invalid_confidence_defaults_to_medium() -> None:
     result = await classifier.classify("test")
     # Invalid confidence triggers fallback to complex in current impl
     assert result.confidence in (IntakePass1Confidence.MEDIUM, IntakePass1Confidence.LOW)
+
+
+def test_log_pass1_result_emits_reasoning_at_info(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.intention.pass1_classifier")
+    _log_pass1_result(
+        IntakePass1LLMResult(
+            is_task=True,
+            confidence=IntakePass1Confidence.HIGH,
+            social_response=None,
+            reasoning="Work request with code reference.",
+        )
+    )
+    assert any(
+        record.levelname == "INFO" and "Work request with code reference." in record.message
+        for record in caplog.records
+    )

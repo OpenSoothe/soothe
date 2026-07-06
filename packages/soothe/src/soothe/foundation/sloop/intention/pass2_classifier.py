@@ -170,7 +170,7 @@ class IntakePass2Classifier:
         return IntakePass2LLMResult(
             scope=IntakeScope.COMPLEX,
             goal_description=query,
-            reasoning=f"Fail-safe: {reason}",
+            reasoning="Let me run the full agent loop to work through this goal.",
         )
 
     def _build_invoke_config(

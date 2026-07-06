@@ -1,13 +1,24 @@
-"""Unified assistant identity block for all system prompts."""
+"""Unified assistant identity for system prompts and user-facing chitchat replies."""
 
 from __future__ import annotations
 
+import logging
 import re
 
 from soothe.foundation.sloop.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
 
+logger = logging.getLogger(__name__)
+
 _INVENTOR_ATTRIBUTION_EN = "invented by Dr. Xiaming Chen"
 _INVENTOR_ATTRIBUTION_ZH = "由 Dr. Xiaming Chen 博士发明"
+GENERIC_CHITCHAT_FALLBACK = "Hello! How can I help you today?"
+
+_WRONG_VENDOR_IDENTITY_MARKERS = re.compile(
+    r"(?i)\b("
+    r"anthropic|claude|chatgpt|openai|gpt-?\d+|gemini|google\s+ai|"
+    r"meta\s+ai|llama|copilot|microsoft\s+copilot|deepseek|qwen"
+    r")\b"
+)
 
 _IDENTITY_QUERY_MARKERS = re.compile(
     r"^(?:"
@@ -71,24 +82,85 @@ def build_identity_reply(assistant_name: str, query: str) -> str:
 
 
 def build_assistant_identity_block(assistant_name: str) -> str:
-    """Build the cache-stable assistant identity block prepended to system prompts.
-
-    Used by ``SystemPromptMiddleware`` (CoreAgent) and intake classification
-    so identity/self-description rules stay consistent across paths.
+    """Build the cache-stable ``<ASSISTANT_IDENTITY>`` XML block.
 
     Args:
         assistant_name: Configured assistant display name (e.g. ``Soothe``).
 
     Returns:
-        Formatted ``<ASSISTANT_IDENTITY>`` XML block.
+        Formatted identity block (single source of truth for prompt injection).
     """
     name = normalize_assistant_name(assistant_name)
     return ASSISTANT_IDENTITY_FRAGMENT.format(assistant_name=name).strip()
 
 
+def prepend_assistant_identity(system_body: str, assistant_name: str) -> str:
+    """Prepend the canonical identity block to a system prompt body.
+
+    Use for any single-string system message (intake classifiers, social reply,
+    ``resolve_system_prompt``). For multi-section prompts (CoreAgent middleware),
+    keep the identity block as the first section via ``build_assistant_identity_block``.
+
+    Args:
+        system_body: Phase-specific instructions without identity.
+        assistant_name: Configured assistant display name.
+
+    Returns:
+        Identity block followed by the body.
+    """
+    identity = build_assistant_identity_block(assistant_name)
+    body = system_body.strip()
+    if not body:
+        return identity
+    return f"{identity}\n\n{body}"
+
+
+def claims_wrong_vendor_identity(response: str) -> bool:
+    """Return True when text identifies as a third-party model vendor."""
+    return _WRONG_VENDOR_IDENTITY_MARKERS.search(response.strip()) is not None
+
+
+def finalize_chitchat_response(
+    query: str,
+    response: str | None,
+    *,
+    assistant_name: str = "Soothe",
+    generic_fallback: str = GENERIC_CHITCHAT_FALLBACK,
+) -> str:
+    """Normalize any user-facing chitchat text to the configured assistant identity.
+
+    Single enforcement point for social fast-path replies: identity questions get
+    deterministic answers; vendor-default model names are replaced.
+
+    Args:
+        query: Original user message.
+        response: LLM or salvaged reply text (may be empty).
+        assistant_name: Configured assistant display name.
+        generic_fallback: Reply when text is missing or uses wrong vendor identity.
+
+    Returns:
+        User-facing chitchat string.
+    """
+    name = normalize_assistant_name(assistant_name)
+    if is_identity_query(query):
+        return build_identity_reply(name, query)
+
+    text = (response or "").strip()
+    if text and claims_wrong_vendor_identity(text):
+        logger.info("Chitchat reply used wrong vendor identity; applying fallback")
+        return generic_fallback
+    if text:
+        return text
+    return generic_fallback
+
+
 __all__ = [
+    "GENERIC_CHITCHAT_FALLBACK",
     "build_assistant_identity_block",
     "build_identity_reply",
+    "claims_wrong_vendor_identity",
+    "finalize_chitchat_response",
     "is_identity_query",
     "normalize_assistant_name",
+    "prepend_assistant_identity",
 ]

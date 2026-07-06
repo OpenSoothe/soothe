@@ -87,6 +87,7 @@ class TestIntakePriorGoalProjection:
 
     def test_projects_last_goal_completion_pair(self) -> None:
         from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            _GOAL_COMPLETION_CONTEXT_BOUNDARY,
             project_last_goal_completion_for_intake,
         )
 
@@ -96,8 +97,30 @@ class TestIntakePriorGoalProjection:
             LoopHumanMessage(content="finalize", phase="goal_completion"),
             LoopAIMessage(content="synthesized report", phase="goal_completion"),
         ]
+        # IG-555: Default includes boundary marker for planning projections
         projected = project_last_goal_completion_for_intake(ledger, None)
         assert len(projected) == 2
+        assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in projected[0].content
+        assert "Prior goal completed" in projected[0].content
+        assert projected[-1].content == "synthesized report"
+
+    def test_intake_pass2_omits_boundary_marker(self) -> None:
+        """IG-555: Intake Pass 2 projection omits boundary (classifier needs prior scope)."""
+        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+            _GOAL_COMPLETION_CONTEXT_BOUNDARY,
+            project_last_goal_completion_for_intake,
+        )
+
+        ledger = [
+            LoopHumanMessage(content="step", phase="execute_step"),
+            LoopAIMessage(content="step output", phase="execute_step"),
+            LoopHumanMessage(content="finalize", phase="goal_completion"),
+            LoopAIMessage(content="synthesized report", phase="goal_completion"),
+        ]
+        # Intake Pass 2 uses include_boundary=False for classifier scope signal
+        projected = project_last_goal_completion_for_intake(ledger, None, include_boundary=False)
+        assert len(projected) == 2
+        assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() not in projected[0].content
         assert projected[0].content == "Prior goal completed. Terminal report follows."
         assert projected[-1].content == "synthesized report"
 
