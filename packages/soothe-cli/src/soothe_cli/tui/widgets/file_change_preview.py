@@ -20,7 +20,6 @@ from soothe_cli.tui.preview_limits import (
     TOOL_APPROVAL_BODY_MAX_LINES,
     TOOL_APPROVAL_DIFF_WIDGET_MAX_LINES,
     TOOL_APPROVAL_PREVIEW_LINES,
-    TOOL_APPROVAL_VALUE_PREVIEW_CHARS,
 )
 from soothe_cli.tui.widgets.clipboard import screen_has_text_selection
 from soothe_cli.tui.widgets.diff import DIFF_CODE_GAP, compose_diff_line_list
@@ -416,27 +415,6 @@ class InsertLinesPreviewWidget(EditFilePreviewWidget):
     def compose(self) -> ComposeResult:
         """Compose insert-at-line preview."""
         yield from self._compose_edit_diff_body(show_insert_line=True)
-
-
-class GenericFilePreviewWidget(FileChangePreviewWidget):
-    """Fallback preview — key/value args."""
-
-    def compose(self) -> ComposeResult:
-        file_path = str(self.data.get("file_path") or self.data.get("path") or "").strip()
-        if file_path:
-            yield from self._yield_compact_header(file_path)
-        elif self._action_label:
-            yield from self._yield_compact_header("")
-        for key, value in self.data.items():
-            if value is None:
-                continue
-            value_str = str(value)
-            if len(value_str) > TOOL_APPROVAL_VALUE_PREVIEW_CHARS:
-                hidden = len(value_str) - TOOL_APPROVAL_VALUE_PREVIEW_CHARS
-                value_str = (
-                    value_str[:TOOL_APPROVAL_VALUE_PREVIEW_CHARS] + f"... ({hidden} more chars)"
-                )
-            yield Static(f"{key}: {value_str}", markup=False, classes="file-change-preview-body")
 
 
 def unified_diff_body_lines(old_string: str, new_string: str) -> list[str]:

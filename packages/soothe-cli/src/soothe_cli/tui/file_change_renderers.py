@@ -21,7 +21,6 @@ from soothe_cli.tui.widgets.file_change_preview import (
     EditFileLinesPreviewWidget,
     EditFilePreviewWidget,
     FileChangePreviewWidget,
-    GenericFilePreviewWidget,
     InsertLinesPreviewWidget,
     WriteFilePreviewWidget,
     unified_diff_body_lines,
@@ -84,7 +83,7 @@ def build_file_change_preview(
     if tool_name == "edit_file_lines":
         line_range = parse_line_range_args(args)
         if line_range is None:
-            return GenericFilePreviewWidget, dict(args)
+            return None
         start_line, end_line = line_range
         new_string = str(args.get("new_content") or "")
         before = ""
@@ -104,7 +103,7 @@ def build_file_change_preview(
     if tool_name == "insert_lines":
         line = parse_insert_line_arg(args)
         if line is None:
-            return GenericFilePreviewWidget, dict(args)
+            return None
         insert_content = str(args.get("content") or "")
         before = ""
         physical = resolve_physical_path(path_str, assistant_id)
@@ -122,7 +121,7 @@ def build_file_change_preview(
     if tool_name == "delete_lines":
         line_range = parse_line_range_args(args)
         if line_range is None:
-            return GenericFilePreviewWidget, dict(args)
+            return None
         start_line, end_line = line_range
         before = ""
         physical = resolve_physical_path(path_str, assistant_id)
@@ -172,7 +171,7 @@ def build_file_change_preview(
             "total_lines": len(lines),
         }
 
-    return GenericFilePreviewWidget, dict(args)
+    return None
 
 
 def update_preview_data_from_record(data: dict[str, Any], record: FileOperationRecord) -> None:

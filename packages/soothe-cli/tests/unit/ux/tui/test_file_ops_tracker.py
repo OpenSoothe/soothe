@@ -55,7 +55,7 @@ def test_edit_file_produces_diff(tmp_path: Path) -> None:
     assert record.diff is not None
     assert "-beta" in record.diff
     assert "+gamma" in record.diff
-    assert file_change_action_label(record) == "Updated"
+    assert file_change_action_label(record) == "Edited"
 
 
 def test_edit_file_lines_produces_diff(tmp_path: Path) -> None:
@@ -84,7 +84,7 @@ def test_edit_file_lines_produces_diff(tmp_path: Path) -> None:
     assert record.diff is not None
     assert "-line2" in record.diff
     assert "+LINE2" in record.diff
-    assert file_change_action_label(record) == "Updated"
+    assert file_change_action_label(record) == "Edited"
 
 
 def test_delete_file_produces_deletion_diff(tmp_path: Path) -> None:
@@ -148,7 +148,7 @@ def test_delete_lines_produces_diff(tmp_path: Path) -> None:
     assert record is not None
     assert record.diff is not None
     assert "-remove" in record.diff
-    assert file_change_action_label(record) == "Updated"
+    assert file_change_action_label(record) == "Deleted"
 
 
 def test_apply_diff_produces_diff(tmp_path: Path) -> None:
@@ -178,4 +178,4 @@ def test_apply_diff_produces_diff(tmp_path: Path) -> None:
     assert record.diff is not None
     assert "-print('old')" in record.diff
     assert "+print('new')" in record.diff
-    assert file_change_action_label(record) == "Updated"
+    assert file_change_action_label(record) == "Patched"
