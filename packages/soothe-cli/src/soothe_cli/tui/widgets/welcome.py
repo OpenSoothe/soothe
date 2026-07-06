@@ -144,7 +144,7 @@ class WelcomeBanner(Static):
     def _build_metadata_line(self, *, colors: theme.ThemeColors, ansi: bool) -> Content | None:
         """Build the single metadata row: loop id plus version or update notice."""
         segments: list[str | tuple[str, str | TStyle]] = []
-        dim_style: str | TStyle = "dim"
+        dim_style: str | TStyle = theme.SECONDARY_TEXT_STYLE
 
         if self._cli_loop_id:
             segments.append((f"Loop: {self._cli_loop_id}", dim_style))

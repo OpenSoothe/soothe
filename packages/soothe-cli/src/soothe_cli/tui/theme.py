@@ -38,6 +38,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Rich/Textual style for de-emphasized secondary labels (loop id, tool stats, activity).
+SECONDARY_TEXT_STYLE: str = "dim"
+
 # ---------------------------------------------------------------------------
 # Brand palette — dark  (originally tokyonight-inspired, LangChain blue primary)
 # ---------------------------------------------------------------------------

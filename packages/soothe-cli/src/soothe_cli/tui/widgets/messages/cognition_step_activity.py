@@ -20,6 +20,7 @@ from soothe_sdk.ux.task_namespace import (
 from textual.content import Content
 
 from soothe_cli.runtime.presentation.duration_format import format_duration
+from soothe_cli.tui import theme
 from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
 from soothe_cli.tui.preview_limits import STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT
 from soothe_cli.tui.tool_display import (
@@ -348,13 +349,9 @@ def phase_icon(
 def task_tool_row_tone_for_phase(phase: str, colors: Any) -> str:
     """Textual style for a tool row or task label from lifecycle phase."""
     p = (phase or "pending").strip().lower()
-    if p in ("success", "done"):
-        return colors.cognition
     if p in ("error", "rejected", "failed"):
         return colors.error
-    if p == "running":
-        return colors.cognition
-    return colors.muted
+    return theme.SECONDARY_TEXT_STYLE
 
 
 def task_tool_row_tone(row: StepToolRow, colors: Any) -> str:
@@ -441,7 +438,7 @@ class StepCardStatusLine:
         tail = f"{stats_suffix}{token_suffix}"
         parts: list[object] = [Content.styled(head, colors.warning)]
         if tail:
-            parts.append(Content.styled(tail, colors.cognition))
+            parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
         return Content.assemble(*parts)
 
     @staticmethod
@@ -454,8 +451,12 @@ class StepCardStatusLine:
         colors: Any,
     ) -> Content:
         """Step card footer for planned steps not yet executing."""
-        line = f"{gutter}{circle_empty} Pending...{stats_suffix}{token_suffix}"
-        return Content.styled(line, colors.cognition)
+        head = f"{gutter}{circle_empty} Pending..."
+        tail = f"{stats_suffix}{token_suffix}"
+        parts: list[object] = [Content.styled(head, colors.cognition)]
+        if tail:
+            parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
+        return Content.assemble(*parts)
 
     @staticmethod
     def footer_queued(
@@ -467,8 +468,12 @@ class StepCardStatusLine:
         colors: Any,
     ) -> Content:
         """Step card footer for ready steps waiting for a concurrency slot."""
-        line = f"{gutter}{circle_empty} Queued...{stats_suffix}{token_suffix}"
-        return Content.styled(line, colors.cognition)
+        head = f"{gutter}{circle_empty} Queued..."
+        tail = f"{stats_suffix}{token_suffix}"
+        parts: list[object] = [Content.styled(head, colors.cognition)]
+        if tail:
+            parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
+        return Content.assemble(*parts)
 
 
 # Activity tree renderer
@@ -523,7 +528,7 @@ class StepActivityTree:
             parts.append(
                 Content.styled(
                     f"{branch_gutter}{task_icon} {label}",
-                    task_tone if task_phase != "pending" else colors.foreground,
+                    task_tone,
                 )
             )
 
@@ -533,7 +538,7 @@ class StepActivityTree:
                 if not text:
                     continue
                 parts.append("\n")
-                parts.append(Content.styled(f"{branch_gutter}{text}", colors.muted))
+                parts.append(Content.styled(f"{branch_gutter}{text}", theme.SECONDARY_TEXT_STYLE))
 
         # Main-agent tool preview
         if main_preview:
@@ -551,7 +556,9 @@ class StepActivityTree:
             if hidden_tools > 0:
                 label = f"+{hidden_tools} more tool{'s' if hidden_tools != 1 else ''}"
                 parts.append("\n")
-                parts.append(Content.styled(f"{branch_gutter}· {label}", colors.muted))
+                parts.append(
+                    Content.styled(f"{branch_gutter}· {label}", theme.SECONDARY_TEXT_STYLE)
+                )
 
         # Global subagent notes
         for note in subagent_notes:
@@ -561,6 +568,6 @@ class StepActivityTree:
             if not first_block:
                 parts.append("\n")
             first_block = False
-            parts.append(Content.styled(f"{branch_gutter}{t}", colors.muted))
+            parts.append(Content.styled(f"{branch_gutter}{t}", theme.SECONDARY_TEXT_STYLE))
 
         return Content.assemble(*parts) if parts else Content("")

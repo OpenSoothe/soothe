@@ -297,7 +297,7 @@ class StatusBar(Horizontal):
         except NoMatches:
             return
         text = (new_value or "").strip()
-        tip_widget.update(f"Tips: {text}" if text else "")
+        tip_widget.update(f"Tip: {text}" if text else "")
 
     def watch_cwd(self, new_value: str) -> None:
         """Update cwd display when it changes."""
