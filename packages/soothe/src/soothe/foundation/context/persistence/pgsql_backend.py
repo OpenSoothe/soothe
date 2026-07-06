@@ -1,55 +1,26 @@
 """PostgreSQL persistence backend for the Context Engine (RFC-624 Phase 4).
 
-Stores CE DAG and ledger in a PostgreSQL database keyed by ``loop_id``.
-Uses JSONB columns for queryability and compression. Natively async via
-asyncpg — no ``asyncio.to_thread`` needed.
-
-Requires the ``asyncpg`` package (optional dependency).
+Stores CE DAG and ledger in PostgreSQL keyed by ``loop_id``. Writes go through
+the process-scoped persistence writer; reads use the shared soothe_checkpoints pool.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.context.models import GoalStepDAG, GoalStepDAGSnapshot
 
+if TYPE_CHECKING:
+    from soothe.config import SootheConfig
+
 logger = logging.getLogger(__name__)
 
-_CREATE_TABLES_SQL = """
-CREATE TABLE IF NOT EXISTS ce_dag (
-    loop_id TEXT PRIMARY KEY,
-    dag_json JSONB NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS ce_ledger (
-    loop_id TEXT PRIMARY KEY,
-    ledger_json JSONB NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-"""
-
-_UPSERT_DAG_SQL = """
-INSERT INTO ce_dag (loop_id, dag_json, updated_at)
-VALUES ($1, $2::jsonb, NOW())
-ON CONFLICT (loop_id) DO UPDATE SET
-    dag_json = excluded.dag_json,
-    updated_at = excluded.updated_at
-"""
-
-_UPSERT_LEDGER_SQL = """
-INSERT INTO ce_ledger (loop_id, ledger_json, updated_at)
-VALUES ($1, $2::jsonb, NOW())
-ON CONFLICT (loop_id) DO UPDATE SET
-    ledger_json = excluded.ledger_json,
-    updated_at = excluded.updated_at
-"""
-
-_SELECT_DAG_SQL = "SELECT dag_json FROM ce_dag WHERE loop_id = $1"
-_SELECT_LEDGER_SQL = "SELECT ledger_json FROM ce_ledger WHERE loop_id = $1"
-_DELETE_DAG_SQL = "DELETE FROM ce_dag WHERE loop_id = $1"
-_DELETE_LEDGER_SQL = "DELETE FROM ce_ledger WHERE loop_id = $1"
+_SELECT_DAG_SQL = "SELECT dag_json FROM ce_dag WHERE loop_id = %s"
+_SELECT_LEDGER_SQL = "SELECT ledger_json FROM ce_ledger WHERE loop_id = %s"
+_DELETE_DAG_SQL = "DELETE FROM ce_dag WHERE loop_id = %s"
+_DELETE_LEDGER_SQL = "DELETE FROM ce_ledger WHERE loop_id = %s"
 
 
 class PgsqlContextPersistence:
@@ -61,9 +32,8 @@ class PgsqlContextPersistence:
 
     Args:
         loop_id: Loop identifier used as primary key.
-        dsn: PostgreSQL connection string (e.g. ``postgresql://user:pass@host/db``).
-        pool_min_size: Minimum connection pool size.
-        pool_max_size: Maximum connection pool size.
+        dsn: PostgreSQL connection string (legacy; reads use shared pool).
+        config: SootheConfig for shared pool and persistence writer access.
     """
 
     def __init__(
@@ -71,49 +41,58 @@ class PgsqlContextPersistence:
         loop_id: str,
         dsn: str,
         *,
-        pool_min_size: int = 2,
-        pool_max_size: int = 10,
+        config: SootheConfig | None = None,
     ) -> None:
         self._loop_id = loop_id
         self._dsn = dsn
-        self._pool_min_size = pool_min_size
-        self._pool_max_size = pool_max_size
-        self._pool: Any = None
+        self._config = config
+        self._loop_writer: Any = None
 
-    async def _ensure_pool(self) -> Any:
-        if self._pool is not None:
-            return self._pool
-        try:
-            import asyncpg
-        except ImportError:
-            msg = "asyncpg is required for PgsqlContextPersistence"
-            raise ImportError(msg) from None
+    async def _ensure_loop_writer(self) -> Any:
+        if self._loop_writer is not None:
+            return self._loop_writer
+        if self._config is None:
+            msg = "PgsqlContextPersistence requires SootheConfig"
+            raise RuntimeError(msg)
+        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
 
-        self._pool = await asyncpg.create_pool(
-            self._dsn,
-            min_size=self._pool_min_size,
-            max_size=self._pool_max_size,
-        )
-        async with self._pool.acquire() as conn:
-            await conn.execute(_CREATE_TABLES_SQL)
-        return self._pool
+        writer = await LoopPersistenceWriter.get_shared_instance(self._config)
+        if writer is None:
+            msg = "Loop persistence writer unavailable for PostgreSQL CE backend"
+            raise RuntimeError(msg)
+        self._loop_writer = writer
+        return self._loop_writer
+
+    async def _shared_pool(self) -> Any:
+        if self._config is None:
+            msg = "PgsqlContextPersistence requires SootheConfig"
+            raise RuntimeError(msg)
+        from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+
+        wrapper = await SharedPostgreSQLPool.get_shared_instance(self._config)
+        if wrapper is None:
+            msg = "Shared PostgreSQL pool unavailable for CE reads"
+            raise RuntimeError(msg)
+        pool = wrapper.get_pool()
+        if pool is None:
+            msg = "Shared PostgreSQL pool is not open"
+            raise RuntimeError(msg)
+        return pool
 
     async def save_dag(self, dag: GoalStepDAG) -> None:
-        snapshot = dag.snapshot()
-        data = snapshot.model_dump(mode="json")
-        json_str = json.dumps(data, default=str)
+        writer = await self._ensure_loop_writer()
         try:
-            pool = await self._ensure_pool()
-            async with pool.acquire() as conn:
-                await conn.execute(_UPSERT_DAG_SQL, self._loop_id, json_str)
+            await writer.save_ce_dag(self._loop_id, dag)
         except Exception:
-            logger.warning("[CE] Failed to save DAG to PostgreSQL", exc_info=True)
+            logger.warning("[CE] Failed to save DAG via persistence writer", exc_info=True)
 
     async def load_dag(self) -> GoalStepDAG | None:
         try:
-            pool = await self._ensure_pool()
-            async with pool.acquire() as conn:
-                row = await conn.fetchrow(_SELECT_DAG_SQL, self._loop_id)
+            pool = await self._shared_pool()
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(_SELECT_DAG_SQL, (self._loop_id,))
+                    row = await cur.fetchone()
         except Exception:
             logger.warning("[CE] Failed to load DAG from PostgreSQL", exc_info=True)
             return None
@@ -122,11 +101,9 @@ class PgsqlContextPersistence:
             return None
 
         try:
-            data = (
-                row["dag_json"]
-                if isinstance(row["dag_json"], dict)
-                else json.loads(row["dag_json"])
-            )
+            data = row["dag_json"]
+            if not isinstance(data, dict):
+                data = json.loads(data)
             snapshot = GoalStepDAGSnapshot.model_validate(data)
             dag = GoalStepDAG()
             dag.restore_from_snapshot(snapshot)
@@ -136,19 +113,19 @@ class PgsqlContextPersistence:
             return None
 
     async def save_ledger(self, messages: list[dict[str, Any]]) -> None:
-        json_str = json.dumps(messages, default=str)
+        writer = await self._ensure_loop_writer()
         try:
-            pool = await self._ensure_pool()
-            async with pool.acquire() as conn:
-                await conn.execute(_UPSERT_LEDGER_SQL, self._loop_id, json_str)
+            await writer.save_ce_ledger(self._loop_id, messages)
         except Exception:
-            logger.warning("[CE] Failed to save ledger to PostgreSQL", exc_info=True)
+            logger.warning("[CE] Failed to save ledger via persistence writer", exc_info=True)
 
     async def load_ledger(self) -> list[dict[str, Any]]:
         try:
-            pool = await self._ensure_pool()
-            async with pool.acquire() as conn:
-                row = await conn.fetchrow(_SELECT_LEDGER_SQL, self._loop_id)
+            pool = await self._shared_pool()
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(_SELECT_LEDGER_SQL, (self._loop_id,))
+                    row = await cur.fetchone()
         except Exception:
             logger.warning("[CE] Failed to load ledger from PostgreSQL", exc_info=True)
             return []
@@ -167,17 +144,13 @@ class PgsqlContextPersistence:
 
     async def clear(self) -> None:
         try:
-            pool = await self._ensure_pool()
-            async with pool.acquire() as conn:
-                await conn.execute(_DELETE_DAG_SQL, self._loop_id)
-                await conn.execute(_DELETE_LEDGER_SQL, self._loop_id)
+            pool = await self._shared_pool()
+            async with pool.connection() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute(_DELETE_DAG_SQL, (self._loop_id,))
+                    await cur.execute(_DELETE_LEDGER_SQL, (self._loop_id,))
         except Exception:
             logger.warning("[CE] Failed to clear CE tables in PostgreSQL", exc_info=True)
 
     async def close(self) -> None:
-        if self._pool is not None:
-            try:
-                await self._pool.close()
-            except Exception:
-                pass
-            self._pool = None
+        """No per-loop pool; shared resources are daemon-scoped."""

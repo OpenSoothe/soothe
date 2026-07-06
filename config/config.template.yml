@@ -182,7 +182,7 @@ agent:
     checkpoint:
       progressive: true
       auto_resume_on_start: false
-    # Parallelism caps; checkpoint.async_write = fire-and-forget writes
+    # Parallelism caps; checkpoint writes are async and coalesced by default
     concurrency:
       max_parallel_goals: 4
       max_parallel_steps: 4
@@ -191,9 +191,9 @@ agent:
       step_parallelism: dependency
       max_parallel_tools: 50
       checkpoint:
-        async_write: true
         flush_interval: 5.0
-        queue_size: 100
+        close_timeout_seconds: 30
+        durable_flush_timeout: 10
     tool_output:
       code_exec_max_output_chars: 32000
       tool_output_max_chars: 10000

@@ -56,7 +56,6 @@ async def test_close_blocks_async_flush_worker_restart() -> None:
     from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 
     manager = StrangeLoopStateManager(loop_id="closed-loop-test")
-    manager._async_write_enabled = True
 
     await manager.close()
     assert manager._closed is True

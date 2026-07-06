@@ -155,6 +155,12 @@ class SharedPostgreSQLPool:
         Closes existing pool and reopens with fresh connections.
         Called when PostgreSQL restarts or connection is lost.
         """
+        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+
+        writer = LoopPersistenceWriter.existing_instance()
+        if writer is not None:
+            await writer.pause_for_pool_reset()
+
         async with self._init_lock:
             old_pool = self._pool
             self._pool = None
@@ -170,6 +176,9 @@ class SharedPostgreSQLPool:
             # Reopen pool with fresh connections
             await self.open()
             logger.info("Shared PostgreSQL pool reset complete (fresh connections)")
+
+        if writer is not None:
+            writer.resume_after_pool_reset()
 
     def get_pool(self) -> AsyncConnectionPool | None:
         """Get the underlying pool instance (for direct access).

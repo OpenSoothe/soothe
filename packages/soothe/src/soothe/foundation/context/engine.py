@@ -948,16 +948,21 @@ class ContextEngine:
         await self._persist_now()
         self._save_dirty = False
 
+    def persistence_snapshot(self) -> tuple[Any, list[dict[str, Any]]]:
+        """Return DAG and ledger payloads for unified goal-boundary persist."""
+        ledger_data: list[dict[str, Any]] = []
+        for msg, phase in self._ledger.entries():
+            dump = msg.model_dump()
+            dump["_phase"] = phase
+            dump["_msg_type"] = type(msg).__name__
+            ledger_data.append(dump)
+        return self._dag, ledger_data
+
     async def _persist_now(self) -> None:
         """Write DAG and ledger to the persistence backend."""
         try:
-            await self._persistence.save_dag(self._dag)
-            ledger_data: list[dict[str, Any]] = []
-            for msg, phase in self._ledger.entries():
-                dump = msg.model_dump()
-                dump["_phase"] = phase
-                dump["_msg_type"] = type(msg).__name__
-                ledger_data.append(dump)
+            dag, ledger_data = self.persistence_snapshot()
+            await self._persistence.save_dag(dag)
             await self._persistence.save_ledger(ledger_data)
         except Exception:
             logger.warning("Persistence save failed", exc_info=True)

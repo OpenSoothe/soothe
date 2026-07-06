@@ -1147,7 +1147,10 @@ class SootheDaemon(DaemonHandlersMixin):
         """Release idle connections on shared daemon pools (every 5 minutes)."""
         from soothe_daemon.persistence.pools import periodic_postgres_pool_maintenance
 
-        await periodic_postgres_pool_maintenance(is_running=lambda: self._running)
+        await periodic_postgres_pool_maintenance(
+            is_running=lambda: self._running,
+            config=self._config,
+        )
 
     async def _periodic_stale_worker_reap(self) -> None:
         """Reap orphaned worker_pool subprocesses on a fixed interval."""

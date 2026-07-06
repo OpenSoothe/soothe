@@ -15,14 +15,12 @@ import pytest
 
 from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 
+from ._sync_persist_helper import bind_sync_persist_writes
+
 
 @pytest.fixture
 def temp_state_manager():
-    """Create temporary state manager for testing.
-
-    RFC-803 Phase 6: async_write=False for sync writes in tests that
-    need immediate persistence verification without manager close.
-    """
+    """Create temporary state manager for testing with immediate disk persistence."""
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
         db_path = workspace / "test_loop_checkpoints.db"
@@ -35,8 +33,7 @@ def temp_state_manager():
                 loop_id="test_loop_001",
                 workspace=workspace,
             )
-            # RFC-803 Phase 6: disable async writes for tests needing sync persistence
-            state_manager._async_write_enabled = False
+            bind_sync_persist_writes(state_manager)
             yield state_manager
 
 
@@ -204,6 +201,7 @@ class TestOrphanedGoalRecovery:
         checkpoint.status = "idle"  # Loop thinks it's idle
 
         await sm._save_checkpoint_to_db(checkpoint)
+        await sm.force_flush()
 
         # Load should detect and repair
         loaded = await sm.load()
@@ -231,6 +229,7 @@ class TestOrphanedGoalRecovery:
 
         checkpoint.status = "idle"  # Loop thinks it's idle
         await sm._save_checkpoint_to_db(checkpoint)
+        await sm.force_flush()
 
         # Load and repair
         loaded = await sm.load()
@@ -307,8 +306,7 @@ class TestDatabaseConsistency:
             checkpoint.status = "running"
             await sm.save(checkpoint)
 
-            # RFC-803 Phase 6: async_write=False in fixture ensures sync writes for tests
-            # that need immediate persistence verification without closing manager.
+            # Fixture wraps save() with force_flush() for immediate DB verification.
 
             # Verify index in database
             import aiosqlite

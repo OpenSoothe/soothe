@@ -12,6 +12,8 @@ import pytest
 from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 
+from ._sync_persist_helper import bind_sync_persist_writes
+
 
 @pytest.fixture
 def temp_state_manager():
@@ -24,7 +26,7 @@ def temp_state_manager():
             return_value=db_path,
         ):
             state_manager = StrangeLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
-            state_manager._async_write_enabled = False
+            bind_sync_persist_writes(state_manager)
             yield state_manager
 
 

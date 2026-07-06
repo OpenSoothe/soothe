@@ -77,6 +77,10 @@ async def test_tail_persistence_surfaces_ce_save_failure(caplog: pytest.LogCaptu
     )
     ce.save = AsyncMock(side_effect=RuntimeError("disk full"))  # type: ignore[method-assign]
     sm = Mock(finalize_goal=AsyncMock())
+    sm._ensure_loop_writer = AsyncMock(return_value=None)
+    sm._checkpoint = Mock()
+    sm.save = AsyncMock()
+    sm.force_flush = AsyncMock()
 
     failures = await _goal_completion_tail_persistence(
         context_engine=ce,
@@ -92,3 +96,4 @@ async def test_tail_persistence_surfaces_ce_save_failure(caplog: pytest.LogCaptu
         "Goal-completion CE save failed for loop loop-abc" in r.message for r in caplog.records
     )
     sm.finalize_goal.assert_awaited_once()
+    assert sm.finalize_goal.await_args.kwargs.get("skip_persist") is True

@@ -43,6 +43,9 @@ async def preopen_shared_postgres_pools(
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
     await SharedPostgreSQLPool.get_shared_instance(config)
+    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+
+    await LoopPersistenceWriter.get_shared_instance(config)
     cp_pool = SharedCheckpointerPool.get_or_create_pool(config)
     if cp_pool is not None:
         await cp_pool.open()
@@ -66,6 +69,13 @@ async def close_shared_postgres_pools() -> None:
         )
         from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
+        try:
+            from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+
+            await LoopPersistenceWriter.close_shared_instance()
+            logger.info("Shared loop persistence writer closed")
+        except ImportError:
+            pass
         await SharedPostgreSQLPool.close_shared_instance()
         logger.info("Shared StrangeLoop PostgreSQL pool closed")
         await SharedCheckpointerPool.close_shared_instance()
@@ -82,11 +92,40 @@ async def periodic_postgres_pool_maintenance(
     *,
     is_running: Callable[[], bool],
     interval_s: int = POSTGRES_POOL_MAINTENANCE_INTERVAL_S,
+    config: SootheConfig | None = None,
 ) -> None:
     """Release idle connections on shared pools on a fixed interval."""
     while is_running():
         await asyncio.sleep(interval_s)
         try:
             await release_idle_shared_postgres_pools()
+            await _reconcile_degraded_checkpoints_if_configured(config)
         except Exception:
             logger.debug("PostgreSQL pool maintenance failed", exc_info=True)
+
+
+async def _reconcile_degraded_checkpoints_if_configured(
+    config: SootheConfig | None,
+) -> None:
+    """Run degraded-checkpoint reconciler when unified writer is enabled."""
+    if config is None or config.persistence.default_backend != "postgresql":
+        return
+    try:
+        from soothe.foundation.persistence.persist_reconciler import (
+            reconcile_degraded_checkpoints,
+        )
+        from soothe.foundation.sloop.state.persistence.shared_pool import (
+            SharedPostgreSQLPool,
+        )
+
+        pool_wrapper = await SharedPostgreSQLPool.get_shared_instance(config)
+        if pool_wrapper is None:
+            return
+        pg_pool = pool_wrapper.get_pool()
+        if pg_pool is None:
+            return
+        count = await reconcile_degraded_checkpoints(pg_pool, limit=10)
+        if count:
+            logger.info("Reconciled %d degraded checkpoint(s)", count)
+    except Exception:
+        logger.debug("Degraded checkpoint reconciliation failed", exc_info=True)
