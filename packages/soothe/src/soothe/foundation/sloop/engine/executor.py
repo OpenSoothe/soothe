@@ -621,10 +621,13 @@ class Executor:
                     except asyncio.CancelledError:
                         raise
 
-                    # IG-549: Handle heartbeat sentinel - yield empty tuple to signal alive
+                    # IG-549: Forward heartbeat as a raw LangGraph custom chunk so
+                    # ``_stream_and_collect`` can wrap and fan it out once.
                     if chunk is _STREAM_HEARTBEAT_SENTINEL:
-                        yield _StreamCollectChunk.wire_event(
-                            ((), "custom", {"type": "step_heartbeat", "step_id": step_id})
+                        yield (
+                            (),
+                            "custom",
+                            {"type": "step_heartbeat", "step_id": step_id},
                         )
                         continue
 
@@ -1624,8 +1627,8 @@ class Executor:
         """Execute single step, collecting events for the parallel merge queue.
 
         When ``live_event_queue`` is set (parallel execute), each stream chunk is pushed
-        immediately for upstream TUI/WebSocket display. The returned event list is kept
-        for tests and ledger helpers but is not re-yielded by ``_execute_parallel``.
+        immediately for upstream TUI/WebSocket display and is not duplicated on the
+        returned ``_ExecuteStepResult.events`` list.
 
         RFC-211: Collects outcome metadata instead of full output string.
         IG-355: Fourth tuple element is joined ``task`` tool delegate-final text for finalize.

@@ -160,10 +160,16 @@ def _append_parallel_stream_event(
     event: StreamEvent,
     live_event_queue: asyncio.Queue[_ParallelLiveQueueItem] | None,
 ) -> None:
-    """Record a stream chunk for the step result and optionally fan out to the TUI queue."""
-    events.append(event)
+    """Fan out a stream chunk to the live TUI queue or retain it on the step result.
+
+    Production parallel execute always sets ``live_event_queue``; the returned
+    ``_ExecuteStepResult.events`` list is not re-yielded in that path. Retain
+    events only when no live queue is configured (unit tests, direct callers).
+    """
     if live_event_queue is not None:
         live_event_queue.put_nowait(event)
+    else:
+        events.append(event)
 
 
 def max_tool_calls_for_step(
