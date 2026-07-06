@@ -289,12 +289,6 @@ class OpenAICompatModelWrapper(BaseChatModel):
         schema_name = kwargs.pop("schema_name", None)
         strict = kwargs.pop("strict", True)
 
-        logger.debug(
-            "OpenAICompatModelWrapper converting method='%s' to json_schema for provider '%s'",
-            method,
-            self._provider_name,
-        )
-
         # ALWAYS use JsonSchemaModelWrapper for custom OpenAI-compatible providers
         # This ensures we check additional_kwargs["reasoning_content"] field
         try:
