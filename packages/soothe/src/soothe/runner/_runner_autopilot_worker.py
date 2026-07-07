@@ -328,8 +328,6 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
     if plan_result is None:
         return []
 
-    # Reflection attaches directives via planner.reflect()
-    # Check decision field (from AgentDecision / PlannerOutput)
     decision = getattr(plan_result, "decision", None)
     if decision is None:
         return []

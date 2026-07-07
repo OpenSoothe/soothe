@@ -8,7 +8,7 @@ Key exports:
 - GoalStatus, TERMINAL_STATES, BLOCKED_STATES: Goal lifecycle states
 - EvidenceBundle, BackoffDecision: Backoff reasoning models (RFC-200)
 - GoalDispatchContextBundle, GoalDispatchContextContribution: IPC models (RFC-222)
-- ScheduledTask, SchedulerService: Scheduled goal discovery (RFC-204)
+- ScheduleSpec: Cron schedule math (RFC-204)
 """
 
 from soothe.foundation.autopilot.engine.models import (
@@ -27,11 +27,7 @@ from soothe.foundation.autopilot.engine.models import (
     ToolCallStats,
 )
 from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
-from soothe.foundation.autopilot.engine.scheduled_tasks import (
-    ScheduledTask,
-    SchedulerService,
-    ScheduleSpec,
-)
+from soothe.foundation.autopilot.engine.scheduled_tasks import ScheduleSpec
 
 __all__ = [
     "BLOCKED_STATES",
@@ -47,8 +43,6 @@ __all__ = [
     "Proposal",
     "ProposalQueue",
     "ScheduleSpec",
-    "ScheduledTask",
-    "SchedulerService",
     "StepSummary",
     "TERMINAL_STATES",
     "ToolCallStats",

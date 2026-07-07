@@ -1,6 +1,5 @@
 """Tests for failure intent classifier (IG-433)."""
 
-from soothe.config.models import FailureIntentConfig
 from soothe.foundation.sloop.utils.failure_intent_classifier import (
     classify_failure_intent_keyword,
     is_missing_prerequisite_intent,
@@ -21,9 +20,3 @@ class TestFailureIntentClassifier:
     def test_unknown_failure(self) -> None:
         intent = classify_failure_intent_keyword("something unexpected happened")
         assert intent.category == "unknown"
-
-    def test_disabled_config_uses_legacy_in_reflection(self) -> None:
-        from soothe.foundation.sloop.utils.reflection import _failure_text_indicates_prerequisite
-
-        cfg = FailureIntentConfig(enabled=False)
-        assert _failure_text_indicates_prerequisite("library not found", failure_config=cfg)

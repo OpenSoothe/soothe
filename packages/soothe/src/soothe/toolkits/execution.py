@@ -297,10 +297,6 @@ class RunCommandShellTool(ShellTool):
         return self._run(command, timeout, runtime=runtime)
 
 
-def cleanup_execution_resources() -> None:
-    """Compatibility hook for teardown tests (persistent shell removed in IG-336)."""
-
-
 class RunPythonInput(BaseModel):
     """Arguments for ``run_python`` (PythonREPLTool-based)."""
 

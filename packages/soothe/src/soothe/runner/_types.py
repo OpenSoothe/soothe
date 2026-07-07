@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal
-
-from pydantic import BaseModel
+from typing import Any
 
 
 def generate_thread_id() -> str:
@@ -16,74 +14,6 @@ def generate_thread_id() -> str:
     from uuid_utils import uuid7
 
     return str(uuid7())
-
-
-class IterationRecord(BaseModel):
-    """Structured record of a single autonomous iteration (RFC-0007).
-
-    Args:
-        iteration: Zero-based iteration index.
-        goal_id: Goal being worked on.
-        plan_summary: Brief description of the plan at this iteration.
-        actions_summary: Truncated agent response text.
-        reflection_assessment: Planner's reflection assessment.
-        outcome: Whether the iteration continues, completes, or fails.
-    """
-
-    iteration: int
-    goal_id: str
-    plan_summary: str
-    actions_summary: str
-    reflection_assessment: str
-    outcome: str  # Literal["continue", "goal_complete", "failed"]
-
-
-class AgenticIterationRecord(BaseModel):
-    """Structured record of a single agentic iteration (RFC-0008).
-
-    Args:
-        iteration: Zero-based iteration index.
-        planning_strategy: Strategy used ("none" | "lightweight" | "comprehensive").
-        observation_summary: Summary of observation phase results.
-        actions_taken: Truncated agent response text.
-        verification_result: Verification decision and reasoning.
-        should_continue: Whether loop continued after this iteration.
-        duration_ms: Duration of the iteration in milliseconds.
-    """
-
-    iteration: int
-    planning_strategy: Literal["none", "lightweight", "comprehensive"]
-    observation_summary: str
-    actions_taken: str
-    verification_result: str
-    should_continue: bool
-    duration_ms: int
-
-
-class GoalResult(BaseModel):
-    """Result from StrangeLoop execution for autonomous goal reflection (RFC-200, IG-154).
-
-    Wraps PlanResult from StrangeLoop for autonomous goal reflection.
-
-    IG-399: Descriptive goal_progress levels instead of numeric.
-
-    Args:
-        goal_id: Goal identifier
-        status: Execution status (completed, failed, in_progress)
-        evidence_summary: Accumulated evidence from StrangeLoop execution
-        goal_progress: Progress level (none | low | medium | high | complete)
-        full_output: Final answer when status is completed
-        iteration_count: Number of StrangeLoop iterations used
-        duration_ms: Total execution duration in milliseconds
-    """
-
-    goal_id: str
-    status: Literal["completed", "failed", "in_progress"]
-    evidence_summary: str = ""
-    goal_progress: Literal["none", "low", "medium", "high", "complete"] = "none"  # IG-399
-    full_output: str | None = None
-    iteration_count: int = 0
-    duration_ms: int = 0
 
 
 @dataclass
@@ -102,7 +32,6 @@ class RunnerState:
         workspace_size_bytes: Workspace size in bytes (RFC-104)
         workspace_file_count: Workspace file count (RFC-104)
         plan: Current plan from planner
-        artifact_store: Store for artifacts and evidence
         stream_error: Error message if stream failed
         prior_messages: Prior conversation excerpts for subagent context
         langgraph_thread_id: LangGraph thread ID override
@@ -123,14 +52,8 @@ class RunnerState:
     intent_classification: Any = (
         None  # IG-226: Type: IntentClassification with goal handling strategy
     )
-    cached_routing: Any = None  # Cached classification result for reuse
-    iteration_records: list[Any] = field(default_factory=list)  # AgenticIterationRecord list
-    observation_refresh_needed: bool = False
-    observation_scope_key: str = ""
     # Context for system prompt XML injection (RFC-104)
     thread_context: dict[str, Any] = field(default_factory=dict)
     protocol_summary: dict[str, Any] = field(default_factory=dict)
-    # Per-query artifact store (RFC-0010); avoids sharing one RunArtifactStore on the runner (IG-110)
-    artifact_store: Any = None
     # Thread context for subagents (IG-140)
     prior_messages: str | None = None

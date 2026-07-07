@@ -6,11 +6,7 @@ Provides JSON utilities, reflection logic, and helper components.
 from .events import LoopAgentReasonEvent
 from .json_parsing import _load_llm_json_dict
 from .messages import LoopHumanMessage
-from .reflection import (
-    _default_agent_decision,
-    reflect_heuristic,
-    reflect_with_llm,
-)
+from .reflection import _default_agent_decision
 from .stream_normalize import (
     GoalCompletionAccumState,
     iter_messages_for_act_aggregation,
@@ -20,8 +16,6 @@ from .stream_normalize import (
 
 __all__ = [
     "_load_llm_json_dict",
-    "reflect_heuristic",
-    "reflect_with_llm",
     "_default_agent_decision",
     "LoopHumanMessage",
     "LoopAgentReasonEvent",

@@ -33,7 +33,6 @@ from soothe.protocols.operation_security import (
 )
 from soothe.protocols.persistence import AsyncPersistStore
 from soothe.protocols.planner import (
-    CheckpointEnvelope,
     GoalReport,
     Plan,
     PlanContext,
@@ -58,7 +57,6 @@ from soothe.protocols.vector_store import VectorRecord, VectorStoreProtocol
 __all__ = [
     "ActionRequest",
     "AsyncPersistStore",
-    "CheckpointEnvelope",
     "ConcurrencyPolicy",
     "CoreAgentProtocol",
     "DurabilityProtocol",

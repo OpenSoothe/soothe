@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import planner_outcome_text_preview
+from soothe.foundation.sloop.utils.outcome_preview import planner_outcome_text_preview
 
 logger = logging.getLogger(__name__)
 

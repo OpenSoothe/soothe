@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.autopilot.engine.schedule_timezone import schedule_timezone_label
-from soothe.foundation.autopilot.engine.scheduled_tasks import SchedulerService, ScheduleSpec
+from soothe.foundation.autopilot.engine.scheduled_tasks import ScheduleSpec
 from soothe.foundation.cron.extraction import AutopilotDisabledError, CronExtractionService
 from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.foundation.cron.models import CronJob, DuplicateCronJobError, JobStatus
@@ -30,7 +30,7 @@ class CronService:
 
     Coordinates:
     - NL extraction via CronExtractionService
-    - Schedule math via SchedulerService (wrapped, enhanced)
+    - Schedule math via ScheduleSpec
     - Persistence via CronJobStore
     - Execution via AutopilotService.submit_task()
 
@@ -66,9 +66,6 @@ class CronService:
             model_role=self._cron_config.extraction_model,
             timeout=self._cron_config.extraction_timeout,
         )
-
-        # SchedulerService for schedule math (no file persistence, we use DB)
-        self._scheduler = SchedulerService()
 
         # Running state
         self._running = False
