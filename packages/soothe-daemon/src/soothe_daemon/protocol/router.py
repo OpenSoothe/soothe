@@ -970,6 +970,21 @@ class MessageRouter:
         """
         self._mark_pong_received(client_id)
 
+    async def _handle_delivery_ack(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Record client delivery acknowledgment for stream drain gating (IG-556)."""
+        params = msg.get("params")
+        if not isinstance(params, dict):
+            params = msg
+        loop_id = str(params.get("loop_id") or "").strip()
+        try:
+            seq = int(params.get("seq") or 0)
+        except (TypeError, ValueError):
+            seq = 0
+        if not loop_id or seq <= 0:
+            return
+        d = self._daemon
+        d._session_manager.record_delivery_ack(str(client_id), loop_id, seq)
+
     async def _handle_command(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle legacy ``command`` (slash) messages.
 

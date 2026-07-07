@@ -300,3 +300,24 @@ class TestPriorityAwareInboundQueue:
         # Original HIGH frames + new one should all be present
         assert high_count >= client._inbound_maxsize - 10 + 1
         assert client._inbound_dropped > 0, "Some NORMAL frame should have been dropped"
+
+    async def test_terminal_frame_bumps_delivery_recv_seq(self) -> None:
+        """IG-556 P1.3: terminal frames increment per-loop delivery recv sequence."""
+        client = WebSocketClient(url="ws://localhost:8765")
+        loop_id = "loop-terminal-ack"
+        terminal = {
+            "type": "event",
+            "loop_id": loop_id,
+            "mode": "messages",
+            "data": (
+                {
+                    "type": "AIMessageChunk",
+                    "content": "done",
+                    "chunk_position": "last",
+                    "stream_terminal": True,
+                },
+                {},
+            ),
+        }
+        await client._put_inbound_queue(terminal)
+        assert client._delivery_recv_seq.get(loop_id) == 1

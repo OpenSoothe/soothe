@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Match headless daemon client: brief read window after ``idle`` so stream events
 # that arrive slightly after status are not dropped (``cli/execution/daemon.py``).
-_POST_IDLE_DRAIN_DEADLINE_S = 30.0
+_POST_IDLE_DRAIN_DEADLINE_S = 0.5
 
 # Align with ``bootstrap_loop_session`` daemon-ready wait (RFC-450 §8.2).
 _RPC_HANDSHAKE_TIMEOUT_S = 20.0

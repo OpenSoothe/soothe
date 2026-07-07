@@ -16,6 +16,8 @@ import websockets.exceptions
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.event import loop_event_topic
 from soothe_daemon.query.stream_delivery import StreamDeliveryMode
+from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
+from soothe_sdk.ux.loop_stream import is_stream_terminal_wire_dict
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -31,6 +33,63 @@ _GLOBAL_TOPIC = "global"
 _SENDER_FILTER_DROP_LOG_LAST: dict[str, float] = {}
 _SENDER_FILTER_DROP_LOG_INTERVAL_SEC = 5.0
 _HIGH_PRIORITY_SETTLE_MARGIN_S = 0.15  # IG-436: Extra settle for HIGH events
+_DELIVERY_ACK_POLL_S = 0.01
+
+
+def _extract_loop_id_from_wire(event: dict[str, Any]) -> str | None:
+    """Return ``loop_id`` from a legacy or protocol-1 wire frame."""
+    lid = event.get("loop_id")
+    if isinstance(lid, str) and lid.strip():
+        return lid.strip()
+    if event.get("type") == "next":
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            data = payload.get("data")
+            if isinstance(data, dict):
+                inner = data.get("loop_id")
+                if isinstance(inner, str) and inner.strip():
+                    return inner.strip()
+    return None
+
+
+def _wire_event_needs_delivery_ack(event: dict[str, Any]) -> bool:
+    """True when a wire frame must be acked before turn ``complete`` / ``idle``."""
+    if not isinstance(event, dict):
+        return False
+    etype = event.get("type", "")
+    if etype == "complete":
+        return True
+    if etype == "event":
+        mode = event.get("mode", "")
+        data = event.get("data")
+        if mode == "messages" and isinstance(data, (tuple, list)) and data:
+            body = data[0]
+            if isinstance(body, dict) and is_stream_terminal_wire_dict(body):
+                return True
+        if mode == "custom" and isinstance(data, dict):
+            custom_type = data.get("type", "")
+            if custom_type in (STRANGE_LOOP_COMPLETED, "soothe.stream.end"):
+                return True
+    if etype == "next":
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            inner_mode = payload.get("mode", "")
+            inner_data = payload.get("data")
+            if inner_mode == "event" and isinstance(inner_data, dict):
+                return _wire_event_needs_delivery_ack(inner_data)
+    return False
+
+
+def _delivery_tracked_units(event: dict[str, Any]) -> int:
+    """Count delivery-ack units in one outbound wire frame (incl. ``event_batch``)."""
+    if not isinstance(event, dict):
+        return 0
+    if event.get("type") == "event_batch":
+        sub_events = event.get("events")
+        if not isinstance(sub_events, list):
+            return 0
+        return sum(_delivery_tracked_units(sub) for sub in sub_events if isinstance(sub, dict))
+    return 1 if _wire_event_needs_delivery_ack(event) else 0
 
 # Wire-frame types that are already protocol-1 envelopes and must pass through
 # the legacy→``next`` translator unchanged (RFC-450 §5/§9). ``status`` is a
@@ -229,6 +288,9 @@ class ClientSessionManager:
         self._cancel_callback = cancel_callback
         self._dispatch_cleanup_callback = dispatch_cleanup_callback
         self._config = config
+        # IG-556 P1.3: per-loop delivery sequence + client acks for drain gating.
+        self._delivery_sent_seq: dict[tuple[str, str], int] = {}
+        self._delivery_ack_seq: dict[tuple[str, str], int] = {}
 
     async def create_session(
         self,
@@ -459,6 +521,8 @@ class ClientSessionManager:
         if not session:
             return
 
+        self._clear_client_delivery_state(client_id, session)
+
         # Set loop_id context when client owns a loop
         if owned_loop_id:
             set_loop_id(owned_loop_id)
@@ -588,6 +652,75 @@ class ClientSessionManager:
         async with self._lock:
             return self._client_loop_ownership.get(client_id)
 
+    def _clear_client_delivery_state(self, client_id: str, session: ClientSession) -> None:
+        """Drop delivery-ack counters for one disconnected client."""
+        for loop_id in list(session.subscriptions):
+            self._delivery_sent_seq.pop((loop_id, client_id), None)
+            self._delivery_ack_seq.pop((loop_id, client_id), None)
+
+    def note_delivery_sent(self, loop_id: str, client_id: str, *, units: int = 1) -> int:
+        """Increment outbound delivery sequence for a loop/client pair."""
+        if units <= 0:
+            key = (loop_id, client_id)
+            return self._delivery_sent_seq.get(key, 0)
+        key = (loop_id, client_id)
+        seq = self._delivery_sent_seq.get(key, 0) + units
+        self._delivery_sent_seq[key] = seq
+        return seq
+
+    def record_delivery_ack(self, client_id: str, loop_id: str, seq: int) -> None:
+        """Record the highest delivery sequence acked by a client."""
+        if seq <= 0:
+            return
+        key = (loop_id, client_id)
+        prev = self._delivery_ack_seq.get(key, 0)
+        if seq > prev:
+            self._delivery_ack_seq[key] = seq
+
+    def _delivery_boundary_for_loop(self, loop_id: str) -> int:
+        """Return max outbound delivery seq across subscribers for ``loop_id``."""
+        boundary = 0
+        for session in self._sessions.values():
+            if loop_id not in session.subscriptions:
+                continue
+            boundary = max(
+                boundary,
+                self._delivery_sent_seq.get((loop_id, session.client_id), 0),
+            )
+        return boundary
+
+    def _delivery_acks_met(self, loop_id: str, boundary: int) -> bool:
+        """True when every subscribed client has acked through ``boundary``."""
+        if boundary <= 0:
+            return True
+        for session in self._sessions.values():
+            if loop_id not in session.subscriptions:
+                continue
+            acked = self._delivery_ack_seq.get((loop_id, session.client_id), 0)
+            if acked < boundary:
+                return False
+        return True
+
+    def _note_delivery_sent_for_events(self, client_id: str, events: list[dict[str, Any]]) -> None:
+        """Bump delivery seq for each tracked unit in outbound frames."""
+        for event in events:
+            units = _delivery_tracked_units(event)
+            if units <= 0:
+                continue
+            loop_id = _extract_loop_id_from_wire(event)
+            if loop_id:
+                self.note_delivery_sent(loop_id, client_id, units=units)
+                continue
+            if event.get("type") == "event_batch":
+                sub_events = event.get("events")
+                if not isinstance(sub_events, list):
+                    continue
+                for sub in sub_events:
+                    if isinstance(sub, dict) and _wire_event_needs_delivery_ack(sub):
+                        sub_loop = _extract_loop_id_from_wire(sub)
+                        if sub_loop:
+                            self.note_delivery_sent(sub_loop, client_id)
+
     async def send_to_client(self, session: ClientSession, message: dict[str, Any]) -> None:
         """Send a wire message to one client (serialized per WebSocket connection).
 
@@ -598,6 +731,7 @@ class ClientSessionManager:
         wire = self._translate_for_client(session, message)
         async with session.send_lock:
             await session.transport.send(session.transport_client, wire)
+        self._note_delivery_sent_for_events(session.client_id, [message])
 
     def _translate_for_client(
         self, session: ClientSession, message: dict[str, Any]
@@ -845,6 +979,7 @@ class ClientSessionManager:
         *,
         batch_timeout_s: float | None = None,
         max_wait_s: float = 30.0,
+        require_delivery_acks: bool = True,
     ) -> bool:
         """Wait until subscribed session queues are empty and sender batch window elapses.
 
@@ -854,10 +989,14 @@ class ClientSessionManager:
         race condition where sender hasn't flushed batched goal_completion before
         ownership release.
 
+        IG-556 P1.3: After queue drain, waits until clients ack outbound delivery
+        sequence through terminal frames (or times out with a degraded warning).
+
         Args:
             loop_id: Loop scope to drain.
             batch_timeout_s: Sender/coalesce flush window; defaults to config interval.
             max_wait_s: Hard cap on wait time.
+            require_delivery_acks: When False, skip client ack gating (tests).
 
         Returns:
             True if queues stayed empty after the flush window, False on timeout.
@@ -866,7 +1005,9 @@ class ClientSessionManager:
 
         flush_s = batch_timeout_s if batch_timeout_s is not None else self._get_batch_timeout()
         settle_s = max(flush_s, 0.05) + 0.05
-        deadline = time.monotonic() + max_wait_s
+        started = time.monotonic()
+        deadline = started + max_wait_s
+        queues_drained = False
 
         while time.monotonic() < deadline:
             async with self._lock:
@@ -876,7 +1017,8 @@ class ClientSessionManager:
                     if loop_id in session.subscriptions
                 ]
             if not queues:
-                return True
+                queues_drained = True
+                break
             if any(q.qsize() > 0 for q in queues):
                 await asyncio.sleep(0.05)
                 continue
@@ -888,7 +1030,8 @@ class ClientSessionManager:
                     if loop_id in session.subscriptions
                 ]
             if queues and all(q.empty() for q in queues):
-                return True
+                queues_drained = True
+                break
             # IG-436: Check for HIGH priority events that arrived during settle
             if queues and any(_queue_has_high_priority(q) for q in queues):
                 logger.debug(
@@ -904,12 +1047,34 @@ class ClientSessionManager:
                         if loop_id in session.subscriptions
                     ]
                 if queues and all(q.empty() for q in queues):
-                    return True
+                    queues_drained = True
+                    break
             await asyncio.sleep(0.05)
+
+        if not queues_drained:
+            logger.warning(
+                "Loop %s delivery drain timed out after %.1fs (queues may still hold events)",
+                loop_id[:16],
+                max_wait_s,
+            )
+            return False
+
+        if not require_delivery_acks:
+            return True
+
+        boundary = self._delivery_boundary_for_loop(loop_id)
+        if boundary <= 0:
+            return True
+
+        while time.monotonic() < deadline:
+            if self._delivery_acks_met(loop_id, boundary):
+                return True
+            await asyncio.sleep(_DELIVERY_ACK_POLL_S)
+
         logger.warning(
-            "Loop %s delivery drain timed out after %.1fs (queues may still hold events)",
+            "Loop %s delivery ack drain degraded: boundary=%d not acked by all clients",
             loop_id[:16],
-            max_wait_s,
+            boundary,
         )
         return False
 
