@@ -867,7 +867,7 @@ class Executor:
     ) -> None:
         """Apply resolved Act-wave visible text to state (IG-199, IG-355, IG-357).
 
-        Resolution is centralized in :func:`~soothe.core.loop.engine.executor.compute_act_wave_finalize`.
+        Resolution is centralized in :func:`~soothe.foundation.sloop.engine.executor.compute_act_wave_finalize`.
         """
         root_text = (
             ""

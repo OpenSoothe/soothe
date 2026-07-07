@@ -60,7 +60,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
 
 
 # Domain-based default verbosity tiers, matching daemon's EventRegistry.
-# Kept in sync with soothe.core.event_catalog._DOMAIN_DEFAULT_TIER.
+# Kept in sync with soothe.foundation.events.catalog._DOMAIN_DEFAULT_TIER.
 _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
     "lifecycle": VerbosityTier.INTERNAL,
     "protocol": VerbosityTier.INTERNAL,

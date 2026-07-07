@@ -3,7 +3,6 @@
 This module provides core entity abstractions for job management:
 - Job: Facade over root GoalNode
 - JobState: Job lifecycle state enum
-- JobCheckpoint: IPC checkpoint value object
 """
 
 from __future__ import annotations
@@ -13,8 +12,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
-
-from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from soothe.foundation.context.models import GoalNode
@@ -47,115 +44,6 @@ class JobState(StrEnum):
     CANCELLED = "cancelled"
     VALIDATED = "validated"
     AWAITING_CLARIFICATION = "awaiting_clarification"
-
-
-# Terminal states that indicate job is resolved
-JOB_TERMINAL_STATES: frozenset[JobState] = frozenset(
-    {
-        JobState.COMPLETED,
-        JobState.FAILED,
-        JobState.CANCELLED,
-        JobState.VALIDATED,
-    }
-)
-
-# Blocked states that prevent scheduler execution
-JOB_BLOCKED_STATES: frozenset[JobState] = frozenset(
-    {
-        JobState.SUSPENDED,
-        JobState.BLOCKED,
-        JobState.AWAITING_CLARIFICATION,
-    }
-)
-
-
-class JobCheckpoint(BaseModel):
-    """Job checkpoint for IPC responses and persistence (RFC-228, RFC-626 §4).
-
-    Captures job execution state for recovery and status queries. This is a
-    trimmed checkpoint that stores only job-level metadata; goal/step state
-    is recovered from ContextEngine persistence.
-
-    Per RFC-626 §4: ExecutionCheckpoint pattern stores execution-only fields,
-    not goal-level state (description, steps, ledger). GoalNode state is
-    recovered from CE persistence on restart.
-
-    Attributes:
-        job_id: Unique job identifier (8-char hex, same as GoalNode.id).
-        state: Current job lifecycle state.
-        created_at: Job creation timestamp.
-        updated_at: Last state update timestamp.
-        worker_id: Assigned worker loop_id if executing.
-        total_goals: Total goals in job DAG subtree (including descendants).
-        completed_goals: Number of completed goals in subtree.
-        failed_goals: Number of failed goals in subtree.
-        active_goals: Number of currently active goals.
-        total_tokens_used: Cumulative tokens across all goal executions.
-        total_duration_ms: Cumulative execution duration in milliseconds.
-        last_error: Most recent error message if job is failed.
-        schema_version: Checkpoint schema version for compatibility.
-    """
-
-    job_id: str = Field(description="Unique job identifier (8-char hex, same as GoalNode.id)")
-    state: JobState = Field(default=JobState.PENDING, description="Current job lifecycle state")
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC), description="Job creation timestamp"
-    )
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC), description="Last state update timestamp"
-    )
-    worker_id: str | None = Field(default=None, description="Assigned worker loop_id if executing")
-    total_goals: int = Field(
-        default=1, ge=1, description="Total goals in job DAG subtree (including descendants)"
-    )
-    completed_goals: int = Field(
-        default=0, ge=0, description="Number of completed goals in subtree"
-    )
-    failed_goals: int = Field(default=0, ge=0, description="Number of failed goals in subtree")
-    active_goals: int = Field(default=0, ge=0, description="Number of currently active goals")
-    total_tokens_used: int = Field(
-        default=0, ge=0, description="Cumulative tokens across all goal executions"
-    )
-    total_duration_ms: int = Field(
-        default=0, ge=0, description="Cumulative execution duration in milliseconds"
-    )
-    last_error: str | None = Field(
-        default=None, description="Most recent error message if job is failed"
-    )
-    schema_version: str = Field(
-        default="1.0", description="Checkpoint schema version for compatibility"
-    )
-
-    def is_terminal(self) -> bool:
-        """Check if job is in a terminal state.
-
-        Returns:
-            True if job state is terminal (completed, failed, cancelled, validated).
-        """
-        return self.state in JOB_TERMINAL_STATES
-
-    def is_blocked(self) -> bool:
-        """Check if job is blocked from scheduler execution.
-
-        Returns:
-            True if job state is blocked (suspended, blocked, awaiting_clarification).
-        """
-        return self.state in JOB_BLOCKED_STATES
-
-    def completion_percentage(self) -> float:
-        """Calculate job completion percentage.
-
-        Returns:
-            Completion percentage (0.0 to 100.0).
-        """
-        if self.total_goals == 0:
-            return 0.0
-        completed_or_failed = self.completed_goals + self.failed_goals
-        return (completed_or_failed / self.total_goals) * 100.0
-
-    def touch(self) -> None:
-        """Update updated_at timestamp to current time."""
-        self.updated_at = datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -251,34 +139,18 @@ class Job:
             report=goal.report,
         )
 
-    def to_checkpoint(self) -> JobCheckpoint:
-        """Convert Job to JobCheckpoint for IPC responses.
-
-        Returns:
-            JobCheckpoint instance capturing current job state.
-        """
-        return JobCheckpoint(
-            job_id=self.id,
-            state=self.state,
-            created_at=self.created_at,
-            updated_at=self.updated_at,
-            worker_id=self.worker_id,
-            total_goals=self.total_goals,
-            completed_goals=self.completed_goals,
-            failed_goals=self.failed_goals,
-            active_goals=self._calculate_active_goals(),
-            total_tokens_used=self.total_tokens_used,
-            total_duration_ms=self.total_duration_ms,
-            last_error=self.error,
-        )
-
     def is_terminal(self) -> bool:
         """Check if job is in a terminal state.
 
         Returns:
             True if job state is terminal.
         """
-        return self.state in JOB_TERMINAL_STATES
+        return self.state in {
+            JobState.COMPLETED,
+            JobState.FAILED,
+            JobState.CANCELLED,
+            JobState.VALIDATED,
+        }
 
     def is_blocked(self) -> bool:
         """Check if job is blocked from execution.
@@ -286,7 +158,11 @@ class Job:
         Returns:
             True if job state is blocked.
         """
-        return self.state in JOB_BLOCKED_STATES
+        return self.state in {
+            JobState.SUSPENDED,
+            JobState.BLOCKED,
+            JobState.AWAITING_CLARIFICATION,
+        }
 
     def completion_percentage(self) -> float:
         """Calculate job completion percentage.
@@ -298,16 +174,6 @@ class Job:
             return 0.0
         completed_or_failed = self.completed_goals + self.failed_goals
         return (completed_or_failed / self.total_goals) * 100.0
-
-    def _calculate_active_goals(self) -> int:
-        """Calculate number of active goals.
-
-        Returns:
-            Number of goals currently executing.
-        """
-        if self.state == JobState.ACTIVE and self.worker_id:
-            return max(1, self.total_goals - self.completed_goals - self.failed_goals)
-        return 0
 
     def __repr__(self) -> str:
         """Return concise representation for debugging."""
@@ -321,7 +187,4 @@ class Job:
 __all__ = [
     "Job",
     "JobState",
-    "JobCheckpoint",
-    "JOB_TERMINAL_STATES",
-    "JOB_BLOCKED_STATES",
 ]

@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from soothe.core.agent import CoreAgent
+from soothe.foundation.core.agent import CoreAgent
 
 
 def _truncate(text: str, limit: int = 200) -> str:

@@ -17,7 +17,7 @@ with:
 ## Quick Start
 
 ```python
-from soothe.core.filesystem import LocalFilesystem
+from soothe.foundation.core.filesystem import LocalFilesystem
 
 # Create a filesystem instance
 fs = LocalFilesystem(
@@ -147,7 +147,7 @@ fs.read("")                  # Empty path
 All methods raise typed exceptions:
 
 ```python
-from soothe.core.filesystem import (
+from soothe.foundation.core.filesystem import (
     PathNotFoundError,
     PermissionDeniedError,
     PathTraversalError,
@@ -194,8 +194,8 @@ print(f"Backup at: {result.backup_path}")
 ## Implementing Custom Backends
 
 ```python
-from soothe.core.filesystem import UnifiedFilesystem
-from soothe.core.filesystem.protocol import ReadResult, WriteResult
+from soothe.foundation.core.filesystem import UnifiedFilesystem
+from soothe.foundation.core.filesystem.protocol import ReadResult, WriteResult
 
 class S3Filesystem(UnifiedFilesystem):
     """S3-backed filesystem implementation."""
@@ -221,7 +221,7 @@ class S3Filesystem(UnifiedFilesystem):
 ### FileInfo
 
 ```python
-from soothe.core.filesystem import FileInfo
+from soothe.foundation.core.filesystem import FileInfo
 
 info: FileInfo = fs.info("file.txt")
 print(f"Size: {info.size}")
@@ -232,7 +232,7 @@ print(f"Permissions: {info.permissions}")
 ### ReadResult
 
 ```python
-from soothe.core.filesystem import ReadResult
+from soothe.foundation.core.filesystem import ReadResult
 
 result: ReadResult = fs.read("file.txt")
 print(f"Content: {result.content}")
@@ -243,7 +243,7 @@ print(f"Truncated: {result.truncated}")
 ### GlobResult
 
 ```python
-from soothe.core.filesystem import GlobResult
+from soothe.foundation.core.filesystem import GlobResult
 
 result: GlobResult = fs.glob("**/*.py")
 for match in result.matches:
@@ -268,8 +268,8 @@ fs = LocalFilesystem(
 The UnifiedFilesystem can be combined with the security layer:
 
 ```python
-from soothe.core.security import SecurityEnforcer
-from soothe.core.filesystem import LocalFilesystem
+from soothe.foundation.core.security import SecurityEnforcer
+from soothe.foundation.core.filesystem import LocalFilesystem
 
 # Create filesystem
 fs = LocalFilesystem(workspace="/workspace")

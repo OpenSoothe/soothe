@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 DAG_DEPENDENCY_THRESHOLD = 3
 LOW_SUCCESS_RATE_THRESHOLD = 0.6
 STRUCTURED_PAYLOAD_MIN_LINES = 6
-SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS = 2
+_SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS = 2
 
 
 # ── Core heuristic functions ───────────────────────────────────────────
@@ -72,7 +72,7 @@ def heuristic_requires_goal_completion(
     return False
 
 
-def is_simple_execution(
+def _is_simple_execution(
     *,
     plan_wave_count: int,
     has_dag_dependencies: bool,
@@ -84,11 +84,11 @@ def is_simple_execution(
         plan_wave_count <= 1
         and not has_dag_dependencies
         and failed_steps == 0
-        and total_steps <= SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS
+        and total_steps <= _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS
     )
 
 
-def dag_requires_synthesis(
+def _dag_requires_synthesis(
     *,
     plan_wave_count: int,
     failed_steps: int,
@@ -222,7 +222,7 @@ def determine_completion_strategy(
 
     # 2. Planner says no synthesis needed (trivial / simple single-wave paths)
     if not plan_result_require_goal_completion:
-        if is_simple_execution(
+        if _is_simple_execution(
             plan_wave_count=plan_wave_count,
             has_dag_dependencies=has_dag_dependencies,
             failed_steps=failed_steps,
@@ -237,7 +237,7 @@ def determine_completion_strategy(
         return "synthesize"
 
     # 3. DAG complexity vetoes
-    if dag_requires_synthesis(
+    if _dag_requires_synthesis(
         plan_wave_count=plan_wave_count,
         failed_steps=failed_steps,
         completed_steps=completed_steps,

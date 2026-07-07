@@ -1,6 +1,6 @@
 """Bridge from ``SootheConfig`` + runtime mode to a ``ClarificationPolicy``.
 
-The selector in :mod:`soothe.core.loop.clarification.selector` is config-agnostic.
+The selector in :mod:`soothe.foundation.sloop.clarification.selector` is config-agnostic.
 This module knits together the config's ``ClarificationConfig`` /
 ``VeritasConfig`` blocks with the veritas implementation so runners do not have
 to repeat the wiring.

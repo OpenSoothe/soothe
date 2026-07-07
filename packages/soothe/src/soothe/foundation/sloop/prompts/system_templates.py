@@ -3,7 +3,7 @@
 Moved from ``soothe.config.prompts`` (IG-384); imported by config package for re-exports.
 
 Static prose (system prompts and scenario response guides) lives as ``.xml``
-fragments under ``soothe.core.prompts.fragments``; this module composes them
+fragments under ``soothe.foundation.sloop.prompts.fragments``; this module composes them
 with the in-process tool/subagent guides into the final templates.
 """
 

@@ -21,17 +21,17 @@ from soothe.foundation.context.planning import (
     StepPlanningSubengine,
 )
 from soothe.foundation.context.planning.completion import (
+    _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
     DAG_DEPENDENCY_THRESHOLD,
     LOW_SUCCESS_RATE_THRESHOLD,
-    SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
     STRUCTURED_PAYLOAD_MIN_LINES,
+    _dag_requires_synthesis,
+    _is_simple_execution,
     can_return_directly_from_ledger,
-    dag_requires_synthesis,
     determine_completion_strategy,
     determine_goal_completion_needs,
     heuristic_requires_goal_completion,
     is_rich_enough,
-    is_simple_execution,
     overlaps_with_plan_output,
 )
 from soothe.foundation.context.planning.models import (
@@ -187,7 +187,7 @@ class TestHeuristicRequiresGoalCompletion:
 class TestIsSimpleExecution:
     def test_single_wave_no_deps_no_failures(self) -> None:
         assert (
-            is_simple_execution(
+            _is_simple_execution(
                 plan_wave_count=1,
                 has_dag_dependencies=False,
                 failed_steps=0,
@@ -198,7 +198,7 @@ class TestIsSimpleExecution:
 
     def test_replan_not_simple(self) -> None:
         assert (
-            is_simple_execution(
+            _is_simple_execution(
                 plan_wave_count=2,
                 has_dag_dependencies=False,
                 failed_steps=0,
@@ -209,7 +209,7 @@ class TestIsSimpleExecution:
 
     def test_deps_not_simple(self) -> None:
         assert (
-            is_simple_execution(
+            _is_simple_execution(
                 plan_wave_count=1,
                 has_dag_dependencies=True,
                 failed_steps=0,
@@ -220,7 +220,7 @@ class TestIsSimpleExecution:
 
     def test_failures_not_simple(self) -> None:
         assert (
-            is_simple_execution(
+            _is_simple_execution(
                 plan_wave_count=1,
                 has_dag_dependencies=False,
                 failed_steps=1,
@@ -231,7 +231,7 @@ class TestIsSimpleExecution:
 
     def test_too_many_steps_not_simple(self) -> None:
         assert (
-            is_simple_execution(
+            _is_simple_execution(
                 plan_wave_count=1,
                 has_dag_dependencies=False,
                 failed_steps=0,
@@ -244,7 +244,7 @@ class TestIsSimpleExecution:
 class TestDagRequiresSynthesis:
     def test_replan_requires(self) -> None:
         assert (
-            dag_requires_synthesis(
+            _dag_requires_synthesis(
                 plan_wave_count=2,
                 failed_steps=0,
                 completed_steps=1,
@@ -257,7 +257,7 @@ class TestDagRequiresSynthesis:
 
     def test_failed_steps_require(self) -> None:
         assert (
-            dag_requires_synthesis(
+            _dag_requires_synthesis(
                 plan_wave_count=1,
                 failed_steps=1,
                 completed_steps=0,
@@ -270,7 +270,7 @@ class TestDagRequiresSynthesis:
 
     def test_deep_chain_requires(self) -> None:
         assert (
-            dag_requires_synthesis(
+            _dag_requires_synthesis(
                 plan_wave_count=1,
                 failed_steps=0,
                 completed_steps=3,
@@ -283,7 +283,7 @@ class TestDagRequiresSynthesis:
 
     def test_simple_no_synthesis(self) -> None:
         assert (
-            dag_requires_synthesis(
+            _dag_requires_synthesis(
                 plan_wave_count=1,
                 failed_steps=0,
                 completed_steps=1,
@@ -1126,5 +1126,5 @@ def test_completion_constants_single_source() -> None:
     """Constants live in completion.py (single source of truth)."""
     assert DAG_DEPENDENCY_THRESHOLD == 3
     assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
-    assert SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
+    assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
     assert STRUCTURED_PAYLOAD_MIN_LINES == 6
