@@ -13,6 +13,13 @@ from soothe.config import SootheConfig
 from soothe_daemon.protocol import MessageRouter
 
 
+def _make_router(daemon: Any) -> MessageRouter:
+    """MessageRouter with handshake bypass for unit tests."""
+    router = MessageRouter(daemon)
+    router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
+    return router
+
+
 @pytest.mark.asyncio
 async def test_skills_list_response_shape(tmp_path: Any) -> None:
     skill_dir = tmp_path / "router_skill"
@@ -32,7 +39,6 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
 
     class _FakeDaemon:
         _config = cfg
-        _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-router")
         _session_manager = _FakeSessionManager()
@@ -41,7 +47,7 @@ async def test_skills_list_response_shape(tmp_path: Any) -> None:
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))
 
-    router = MessageRouter(_FakeDaemon())
+    router = _make_router(_FakeDaemon())
     await router.dispatch(
         "client-a",
         {
@@ -87,7 +93,6 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
 
     class _FakeDaemon:
         _config = cfg
-        _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-inv")
         _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
@@ -100,7 +105,7 @@ async def test_invoke_skill_response_then_queued_input(tmp_path: Any) -> None:
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             sent.append((client_id, msg))
 
-    router = MessageRouter(_FakeDaemon())
+    router = _make_router(_FakeDaemon())
     await router.dispatch(
         "client-b",
         {
@@ -166,7 +171,6 @@ async def test_invoke_skill_forwards_clarification_mode(
 
     class _FakeDaemon:
         _config = cfg
-        _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-mode")
         _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
@@ -179,7 +183,7 @@ async def test_invoke_skill_forwards_clarification_mode(
         async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
             return None
 
-    router = MessageRouter(_FakeDaemon())
+    router = _make_router(_FakeDaemon())
     await router.dispatch(
         "client-c",
         {

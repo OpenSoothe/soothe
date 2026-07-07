@@ -12,7 +12,7 @@ from soothe_daemon.server import commands
 @pytest.mark.asyncio
 async def test_cmd_clear_cancels_active_query_before_reinitialize() -> None:
     handler = MagicMock()
-    handler._query_running = True
+    handler._has_active_queries = MagicMock(return_value=True)
     handler._query_engine = AsyncMock()
     handler._runner = MagicMock(state_manager=AsyncMock())
     handler._runner.state_manager.archive_and_finalize = AsyncMock(

@@ -79,7 +79,6 @@ def _daemon_factory(*, broadcasts: list[dict[str, Any]]) -> SimpleNamespace:
         _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
-        _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
         _loops_with_active_query=set(),

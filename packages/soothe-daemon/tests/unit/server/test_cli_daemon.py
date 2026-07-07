@@ -17,7 +17,14 @@ from soothe_sdk.client import session as sdk_session  # For retry logic (moved f
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.protocol import MessageRouter
-from soothe_daemon.server.core import _ClientConn
+
+
+from soothe_daemon.protocol import MessageRouter
+
+
+def _mark_handshake(daemon: SootheDaemon, client_id: str = "client-1") -> None:
+    """Mark protocol-1 handshake complete for unit tests."""
+    daemon._message_router._handshake_state[client_id] = ("1", [])
 
 
 async def _await_background_query_idle(
@@ -265,6 +272,7 @@ async def test_loop_input_enqueues_options(monkeypatch: pytest.MonkeyPatch) -> N
     enqueue = AsyncMock()
     daemon._loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
+    _mark_handshake(daemon)
 
     await daemon._handle_client_message(
         "client-1",
@@ -303,6 +311,7 @@ async def test_cancel_command_bypasses_input_queue() -> None:
         get_owned_loop=AsyncMock(return_value=None),
         get_session=AsyncMock(return_value=session),
     )  # type: ignore[attr-defined]
+    _mark_handshake(daemon)
 
     await daemon._handle_client_message(
         "client-1",
@@ -331,6 +340,7 @@ async def test_exit_and_quit_commands_bypass_input_queue() -> None:
         sent_to_client.append({"client_id": cid, "msg": msg})
 
     daemon._send_client_message = _fake_send_client_message  # type: ignore[method-assign]
+    _mark_handshake(daemon)
 
     await daemon._handle_client_message(
         "client-1",
@@ -374,6 +384,7 @@ async def test_non_cancel_command_still_enqueues() -> None:
     enqueue = AsyncMock()
     daemon._loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
     daemon._session_manager = SimpleNamespace(get_session=AsyncMock(return_value=session))  # type: ignore[attr-defined]
+    _mark_handshake(daemon)
 
     await daemon._handle_client_message(
         "client-1",
@@ -657,58 +668,6 @@ async def test_websocket_client_wait_for_connection_ack_waits_through_warming(mo
 
 
 @pytest.mark.asyncio
-async def test_daemon_initial_status_no_thread_leak() -> None:
-    """Test that daemon initial status doesn't leak cached thread_id to new clients."""
-    daemon = SootheDaemon(SootheConfig())
-    # Set up a runner with an existing thread_id (simulating previous session)
-    daemon._runner = _FakeRunner()  # type: ignore[attr-defined]
-    daemon._runner.current_thread_id = "old-thread-123"  # type: ignore[attr-defined]
-    daemon._running = True
-
-    sent_messages: list[bytes] = []
-
-    # Mock reader
-    class MockReader:
-        async def readline(self) -> bytes:
-            return b""  # EOF immediately
-
-    # Create a mock StreamWriter that captures writes
-    reader = MockReader()
-
-    # Use asyncio.StreamWriter mock - we need to mock it properly
-    class MockStreamWriter:
-        def write(self, data: bytes) -> None:
-            sent_messages.append(data)
-
-        async def drain(self) -> None:
-            pass
-
-        def close(self) -> None:
-            pass
-
-        async def wait_closed(self) -> None:
-            pass
-
-    writer = MockStreamWriter()
-
-    # Handle client connection
-    await daemon._handle_client(reader, writer)  # type: ignore[arg-type]
-
-    # Decode the initial status message
-    from soothe_sdk.client.protocol import decode
-
-    assert len(sent_messages) > 0, "Should have sent initial status message"
-    initial_msg = decode(sent_messages[0])
-    assert initial_msg is not None
-    assert initial_msg["type"] == "status"
-    # Legacy line protocol must not echo the runner's cached CoreAgent thread id.
-    assert initial_msg.get("thread_id") in (None, ""), (
-        "Initial status should not leak cached thread_id"
-    )
-    assert initial_msg["state"] in ("running", "idle", "stopped")
-
-
-@pytest.mark.asyncio
 async def test_daemon_run_query_broadcasts_idle_to_original_thread() -> None:
     daemon = SootheDaemon(SootheConfig())
     fake_runner = _FakeRunnerThatSwapsThread()
@@ -907,18 +866,16 @@ async def test_daemon_ready_request_replies_without_session() -> None:
 
     sent: list[dict[str, Any]] = []
 
-    async def _fake_send(client: Any, msg: dict[str, Any]) -> None:
-        assert isinstance(client, _ClientConn)
+    async def _fake_send_client_message(client_id: Any, msg: dict[str, Any]) -> None:
+        assert client_id == "client-handshake"
         sent.append(msg)
 
-    daemon._send = _fake_send  # type: ignore[method-assign]
+    daemon._send_client_message = _fake_send_client_message  # type: ignore[method-assign]
     daemon._readiness_state = "ready"
     daemon._readiness_message = None
 
-    client = _ClientConn(reader=SimpleNamespace(), writer=SimpleNamespace())
-    # Protocol-1 handshake: connection_init → connection_ack (RFC-450 §8.2)
     await daemon._handle_client_message(
-        client,
+        "client-handshake",
         {
             "proto": "1",
             "type": "connection_init",
@@ -950,6 +907,7 @@ async def test_detach_ignores_connection_loss_for_transport_session() -> None:
         get_session=AsyncMock(return_value=session),
         send_to_client=_send_to_client,
     )  # type: ignore[attr-defined]
+    _mark_handshake(daemon)
 
     await daemon._handle_client_message(
         "client-1",

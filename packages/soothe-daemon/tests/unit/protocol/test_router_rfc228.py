@@ -10,6 +10,13 @@ import pytest
 from soothe_daemon.protocol import ErrorCode, MessageRouter
 
 
+def _make_router(daemon: Any) -> MessageRouter:
+    """MessageRouter with handshake bypass for unit tests."""
+    router = MessageRouter(daemon)
+    router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
+    return router
+
+
 def _make_fake_goal(
     goal_id: str = "a1b2c3d4",
     status: str = "pending",
@@ -87,7 +94,7 @@ class TestJobCreate:
     async def test_job_create_success(self) -> None:
         """job_create with valid goal returns job_id."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="abc12345", status="pending")
         daemon._autopilot_service.submit_task.return_value = goal
@@ -121,7 +128,7 @@ class TestJobCreate:
     async def test_job_create_missing_goal(self) -> None:
         """job_create without goal returns INVALID_REQUEST error."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         await router.dispatch(
             "client-1",
@@ -140,7 +147,7 @@ class TestJobCreate:
     async def test_job_create_empty_goal(self) -> None:
         """job_create with empty goal string returns INVALID_REQUEST."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         await router.dispatch(
             "client-1",
@@ -171,7 +178,7 @@ class TestJobCreate:
                 sent.append((client_id, msg))
 
         daemon = _FakeDaemonWithoutAutopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         await router.dispatch(
             "client-1",
@@ -193,7 +200,7 @@ class TestJobCreate:
     async def test_job_create_submit_task_exception(self) -> None:
         """job_create when submit_task raises exception returns JOB_CREATE_FAILED."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         daemon._autopilot_service.submit_task.side_effect = Exception("Database error")
 
@@ -222,7 +229,7 @@ class TestJobStatus:
     async def test_job_status_success(self) -> None:
         """job_status returns goal counts and workers."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         root_goal = _make_fake_goal(goal_id="job-1", status="active")
         daemon._autopilot_service.get_goal.return_value = root_goal
@@ -266,7 +273,7 @@ class TestJobStatus:
     async def test_job_status_missing_job_id(self) -> None:
         """job_status without job_id returns INVALID_REQUEST."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         await router.dispatch(
             "client-1",
@@ -288,7 +295,7 @@ class TestJobStatus:
     async def test_job_status_not_found(self) -> None:
         """job_status for unknown job returns JOB_NOT_FOUND."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         daemon._autopilot_service.get_goal.return_value = None
 
@@ -316,7 +323,7 @@ class TestJobPause:
     async def test_job_pause_success(self) -> None:
         """job_pause suspends goal and returns paused status."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         root_goal = _make_fake_goal(goal_id="job-p1", status="pending")
         daemon._autopilot_service._ce.get_goal.return_value = root_goal
@@ -349,7 +356,7 @@ class TestJobPause:
     async def test_job_pause_already_suspended(self) -> None:
         """job_pause on already suspended goal returns error."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         suspended_goal = _make_fake_goal(goal_id="job-p2", status="suspended")
         daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
@@ -377,7 +384,7 @@ class TestJobPause:
     async def test_job_pause_completed_job(self) -> None:
         """job_pause on completed job returns error."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         completed_goal = _make_fake_goal(goal_id="job-p3", status="completed")
         daemon._autopilot_service._ce.get_goal.return_value = completed_goal
@@ -407,7 +414,7 @@ class TestJobResume:
     async def test_job_resume_success(self) -> None:
         """job_resume reactivates suspended goal."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         suspended_goal = _make_fake_goal(goal_id="job-r1", status="suspended")
         daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
@@ -440,7 +447,7 @@ class TestJobResume:
     async def test_job_resume_not_suspended(self) -> None:
         """job_resume on non-suspended goal returns error."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         active_goal = _make_fake_goal(goal_id="job-r2", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
@@ -469,7 +476,7 @@ class TestJobCancel:
     async def test_job_cancel_success(self) -> None:
         """job_cancel cancels goal and returns cancelled status."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         cancelled_goal = _make_fake_goal(goal_id="job-c1", status="cancelled")
         daemon._autopilot_service.cancel_goal.return_value = cancelled_goal
@@ -499,7 +506,7 @@ class TestJobCancel:
     async def test_job_cancel_not_found(self) -> None:
         """job_cancel for nonexistent job returns JOB_NOT_FOUND."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         daemon._autopilot_service.cancel_goal.return_value = None
 
@@ -527,7 +534,7 @@ class TestJobDag:
     async def test_job_dag_success(self) -> None:
         """job_dag returns DAG snapshot for visualization."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         root_goal = _make_fake_goal(goal_id="job-d1")
         daemon._autopilot_service.get_goal.return_value = root_goal
@@ -562,7 +569,7 @@ class TestJobDag:
     async def test_job_dag_not_found(self) -> None:
         """job_dag for nonexistent job returns JOB_NOT_FOUND."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         daemon._autopilot_service.get_goal.return_value = None
 
@@ -590,7 +597,7 @@ class TestJobGuidance:
     async def test_job_guidance_success(self) -> None:
         """job_guidance absorbs user guidance text."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         target_goal = _make_fake_goal(goal_id="job-g1")
         daemon._autopilot_service._ce.get_goal.return_value = target_goal
@@ -621,7 +628,7 @@ class TestJobGuidance:
     async def test_job_guidance_with_goal_id(self) -> None:
         """job_guidance can target specific goal within job."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         child_goal = _make_fake_goal(goal_id="child-g2")
         daemon._autopilot_service._ce.get_goal.return_value = child_goal
@@ -654,7 +661,7 @@ class TestJobGuidance:
     async def test_job_guidance_missing_text(self) -> None:
         """job_guidance without text returns INVALID_REQUEST."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         await router.dispatch(
             "client-1",
@@ -676,7 +683,7 @@ class TestJobGuidance:
     async def test_job_guidance_goal_not_found(self) -> None:
         """job_guidance for nonexistent goal returns GOAL_NOT_FOUND."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         daemon._autopilot_service._ce.get_goal.return_value = None
 
@@ -704,7 +711,7 @@ class TestAutopilotSubscribe:
     async def test_autopilot_subscribe_success(self) -> None:
         """autopilot_subscribe sets flag and subscribes to autopilot topic."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # Get session before dispatch (initial state: autopilot_subscribed=False)
         session = await daemon._session_manager.get_session("client-1")
@@ -737,7 +744,7 @@ class TestAutopilotSubscribe:
     async def test_autopilot_unsubscribe_success(self) -> None:
         """autopilot_unsubscribe clears flag and unsubscribes."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # First subscribe
         await router.dispatch(
@@ -772,7 +779,7 @@ class TestJobCreateOptionalFields:
     async def test_job_create_with_verification_rules(self) -> None:
         """job_create accepts optional verification_rules field."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="test-verification", status="pending")
         daemon._autopilot_service.submit_task.return_value = goal
@@ -801,7 +808,7 @@ class TestJobCreateOptionalFields:
     async def test_job_create_with_custom_priority(self) -> None:
         """job_create accepts optional priority field (implementation may use default)."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="high-priority", status="pending", priority=95)
         daemon._autopilot_service.submit_task.return_value = goal
@@ -826,7 +833,7 @@ class TestJobCreateOptionalFields:
     async def test_job_create_default_priority_is_50(self) -> None:
         """job_create uses default priority 50 when not specified."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal()
         daemon._autopilot_service.submit_task.return_value = goal
@@ -855,7 +862,7 @@ class TestJobStatusMultipleWorkers:
     async def test_job_status_with_multiple_workers(self) -> None:
         """job_status returns goal counts (workers field may be implementation-dependent)."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # Create goal with worker assignments
         root_goal = _make_fake_goal(
@@ -886,7 +893,7 @@ class TestJobStatusMultipleWorkers:
     async def test_job_status_with_no_workers(self) -> None:
         """job_status returns empty workers list when no active workers."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="no-workers", status="pending")
         daemon._autopilot_service.get_goal.return_value = goal
@@ -915,7 +922,7 @@ class TestJobDagVisualization:
     async def test_job_dag_with_complex_dependencies(self) -> None:
         """job_dag returns DAG with multiple nodes and edges."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="root-dag")
         daemon._autopilot_service.get_goal.return_value = goal
@@ -988,7 +995,7 @@ class TestJobDagVisualization:
     async def test_job_dag_with_completed_goal_fields(self) -> None:
         """job_dag includes summary and findings for completed goals."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="completed-job")
         daemon._autopilot_service.get_goal.return_value = goal
@@ -1036,7 +1043,7 @@ class TestJobGuidanceEdgeCases:
     async def test_job_guidance_guidance_rejected(self) -> None:
         """job_guidance returns absorbed=false when GoalEngine rejects guidance."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # GoalEngine rejects guidance
         daemon._autopilot_service._ce.absorb_guidance.return_value = False
@@ -1066,7 +1073,7 @@ class TestJobGuidanceEdgeCases:
     async def test_job_guidance_whitespace_preserved(self) -> None:
         """job_guidance sends guidance with goal_id target."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         daemon._autopilot_service._ce.absorb_guidance.return_value = True
 
@@ -1102,7 +1109,7 @@ class TestJobFailedEdgeCases:
     async def test_job_pause_on_failed_job(self) -> None:
         """job_pause on failed job returns appropriate error (implementation-specific code)."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         failed_goal = _make_fake_goal(
             goal_id="failed-job",
@@ -1128,7 +1135,7 @@ class TestJobFailedEdgeCases:
     async def test_job_resume_on_failed_job(self) -> None:
         """job_resume on failed job returns appropriate error."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         failed_goal = _make_fake_goal(
             goal_id="failed-resume", status="failed", error="Out of memory"
@@ -1158,7 +1165,7 @@ class TestJobAlreadyRunningEdgeCase:
     async def test_job_resume_on_active_job(self) -> None:
         """job_resume on already active job returns appropriate error."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         active_goal = _make_fake_goal(goal_id="active-job", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
@@ -1185,7 +1192,7 @@ class TestJobLifecycleIntegration:
     async def test_full_job_lifecycle(self) -> None:
         """Complete job lifecycle: create → status → pause → resume → cancel."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # Step 1: Create job
         goal = _make_fake_goal(goal_id="lifecycle-test", status="pending")
@@ -1288,7 +1295,7 @@ class TestAutopilotSubscriptionMultipleClients:
     async def test_multiple_clients_subscribe_to_autopilot(self) -> None:
         """Multiple clients can subscribe to autopilot events."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # Client 1 subscribes
         await router.dispatch(
@@ -1328,7 +1335,7 @@ class TestAutopilotSubscriptionMultipleClients:
     async def test_client_autopilot_subscription_isolation(self) -> None:
         """Client's autopilot subscription doesn't affect other clients."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # Client 1 subscribes
         await router.dispatch(
@@ -1360,7 +1367,7 @@ class TestParameterValidation:
     async def test_all_handlers_reject_non_string_job_id(self) -> None:
         """Handlers reject non-string job_id values."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         # Test job_status with numeric job_id
         await router.dispatch(
@@ -1392,7 +1399,7 @@ class TestParameterValidation:
     async def test_job_create_strips_whitespace_from_goal(self) -> None:
         """job_create strips whitespace from goal text."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal()
         daemon._autopilot_service.submit_task.return_value = goal
@@ -1418,7 +1425,7 @@ class TestParameterValidation:
     async def test_request_id_preserved_in_all_responses(self) -> None:
         """All handlers preserve request_id in responses."""
         daemon, sent = _make_fake_daemon_with_autopilot()
-        router = MessageRouter(daemon)
+        router = _make_router(daemon)
 
         goal = _make_fake_goal(goal_id="test-id")
         daemon._autopilot_service.submit_task.return_value = goal

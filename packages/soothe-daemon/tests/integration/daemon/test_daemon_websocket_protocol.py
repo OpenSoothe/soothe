@@ -245,11 +245,14 @@ async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
     await client.request_connection_init()
     await client.wait_for_connection_ack()
 
+    hold_task: asyncio.Task[None] | None = None
     try:
         created = await client.request("loop_new", {})
         loop_id = created["loop_id"]
         daemon._runner.set_current_thread_id(loop_id)
-        daemon._query_running = True
+        hold = asyncio.Event()
+        hold_task = asyncio.create_task(hold.wait())
+        daemon._active_threads = {"thread-heartbeat": hold_task}
         await client.subscribe("loop_events", {"loop_id": loop_id})
 
         try:
@@ -273,7 +276,11 @@ async def test_websocket_internal_heartbeat_not_broadcast_while_query_running(
         except TimeoutError:
             pass
     finally:
-        daemon._query_running = False
+        if hold_task is not None:
+            hold_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await hold_task
+        daemon._active_threads.clear()
         if client.is_connected:
             await client.close()
 

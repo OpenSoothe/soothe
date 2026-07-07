@@ -153,20 +153,9 @@ async def test_connection_init_empty_accept_proto_returns_incompatible() -> None
 async def test_pre_handshake_message_rejected_with_invalid_request() -> None:
     """A message sent before connection_init is rejected with -32600."""
     daemon = _make_daemon(readiness_state="ready")
-    # Provide a _ClientConn mock so _is_handshake_complete returns False
-    # (the fallback return-True only applies when no _ClientConn is found).
-    conn = SimpleNamespace(
-        writer=object(),
-        handshake_complete=False,
-        proto_version=None,
-        negotiated_capabilities=None,
-    )
-    daemon._clients = [conn]
     router = MessageRouter(daemon)
 
-    # Send a loop_list before handshaking (using the conn object as client_id
-    # so _lookup_client_conn finds it).
-    await router.dispatch(conn, {"proto": "1", "type": "loop_list"})
+    await router.dispatch("client-pre-handshake", {"proto": "1", "type": "loop_list"})
 
     assert len(daemon._sent) == 1
     err = daemon._sent[0]

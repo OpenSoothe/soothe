@@ -332,7 +332,6 @@ class QueryEngine:
                 return QueryAdmission.DAEMON_BUSY
             if effective_loop_id and effective_loop_id in d._loops_with_active_query:
                 return QueryAdmission.LOOP_BUSY
-            d._query_running = True
             if effective_loop_id:
                 d._loops_with_active_query.add(effective_loop_id)
             return QueryAdmission.ADMITTED
@@ -594,7 +593,7 @@ class QueryEngine:
             return tid
         thread_id = str(d._runner.current_thread_id or "").strip()
         if not thread_id:
-            thread_id = await self.ensure_active_checkpoint_thread_id(client_id)
+            thread_id = await self.ensure_active_checkpoint_thread_id()
         return thread_id
 
     async def run_query(
@@ -727,7 +726,6 @@ class QueryEngine:
                         effective_loop_id,
                         {"type": "status", "state": "idle"},
                     )
-                d._query_running = False
                 await self._release_query_admission(effective_loop_id)
                 if client_id:
                     await d._session_manager.release_loop_ownership(client_id)
@@ -832,7 +830,6 @@ class QueryEngine:
                     )
                 if client_id:
                     await d._session_manager.release_loop_ownership(client_id)
-                d._query_running = False
                 await self._release_query_admission(effective_loop_id)
                 self._pending_cancels.discard(effective_loop_id)
                 return
@@ -1092,7 +1089,6 @@ class QueryEngine:
                     )
             finally:
                 reset_stream_model_override(override_token)
-                d._query_running = False
                 await self._unregister_query_task(thread_id)
                 await self._release_query_admission(effective_loop_id)
                 # RFC-221: tear down the subprocess runner (pool cancel_event / local SIGTERM).
@@ -1228,7 +1224,6 @@ class QueryEngine:
             raise
         except Exception:
             logger.exception("Failed to create query task")
-            d._query_running = False
             await self._unregister_query_task(thread_id)
             await self._release_query_admission(effective_loop_id)
             if client_id:
@@ -1280,7 +1275,6 @@ class QueryEngine:
             raise
         except Exception:
             logger.exception("Failed to create direct model task")
-            d._query_running = False
             await self._unregister_query_task(thread_id)
             await self._release_query_admission(effective_loop_id)
             if client_id:
@@ -1374,7 +1368,6 @@ class QueryEngine:
                 },
             )
         finally:
-            d._query_running = False
             await self._unregister_query_task(thread_id)
             await self._release_query_admission(effective_loop_id)
             try:
@@ -1553,20 +1546,9 @@ class QueryEngine:
         if d._runner and d._runner.current_thread_id == checkpoint_thread_id:
             d._runner.set_current_thread_id(None)
 
-    async def ensure_active_checkpoint_thread_id(self, client_id: str | None = None) -> str:
-        """Ensure the runner has a concrete LangGraph checkpoint id.
-
-        Prefer the checkpoint last bound to ``client_id`` (legacy thread_create /
-        new_thread / resume) so ad-hoc paths do not mint a duplicate persisted
-        checkpoint when the runner has no global current id (IG-361).
-        """
+    async def ensure_active_checkpoint_thread_id(self) -> str:
+        """Ensure the runner has a concrete LangGraph checkpoint id."""
         d = self._daemon
-        if client_id:
-            mapped = (d._thread_registry.get_client_thread(client_id) or "").strip()
-            if mapped:
-                d._runner.set_current_thread_id(mapped)
-                return mapped
-
         current = str(d._runner.current_thread_id or "").strip()
         if current:
             return current
