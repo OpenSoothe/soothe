@@ -334,60 +334,6 @@ class PromptBuilder:
 
         return "\n".join(parts)
 
-    def _build_human_message(
-        self,
-        goal: str,
-        state: LoopState,
-        context: PlanContext,
-    ) -> str:
-        """Construct dynamic task: goal, working memory, prior conversation.
-
-        Maps RFC-206 USER_TASK layer to HumanMessage.
-
-        Execution narrative for Plan is supplied via ``state.loop_messages`` in
-        ``build_plan_messages`` (RFC-214), not duplicated here (IG-368).
-        """
-        parts: list[str] = []
-
-        # Goal line for non-plan human paths (plan phase uses ``GOAL:`` on plan-context human).
-        parts.append(f"Goal: {goal}\n")
-
-        # Working memory excerpt (RFC-203)
-        if context.working_memory_excerpt:
-            parts.append("\n<WORKING_MEMORY>")
-            parts.append(
-                "Structured scratchpad for this goal — treat as authoritative for what was already inspected. "
-                "Prefer read_file on referenced paths instead of repeating large listings.\n"
-            )
-            parts.append(context.working_memory_excerpt)
-            parts.append("</WORKING_MEMORY>\n")
-
-        # Prior conversation (IG-128, RFC-209)
-        # Always inject prior conversation when available (same thread_id for all executions)
-        if context.recent_messages:
-            parts.append("\n<PRIOR_CONVERSATION>\n")
-            parts.append(
-                "Recent messages in this thread before the current goal. The user may refer to this content "
-                '(e.g. "translate that", "summarize the above", "shorter").\n\n'
-            )
-            for msg_xml in context.recent_messages:
-                parts.append(msg_xml)
-                parts.append("\n")
-            parts.append("</PRIOR_CONVERSATION>\n")
-
-        # IG-148: Simplified previous plan assessment (status + progress + next action only)
-        prev = state.previous_plan
-        if prev:
-            from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
-
-            parts.append("\nPREVIOUS ASSESSMENT (continuity):")
-            parts.append(f"- Status: {prev.status}, Progress: {prev.goal_progress:.0%}")
-            prev_action = resolve_plan_action_text(prev)
-            if prev_action:
-                parts.append(f"- Next action: {prev_action}")
-
-        return "\n".join(parts)
-
     def _build_plan_context_human_text(
         self,
         goal: str,

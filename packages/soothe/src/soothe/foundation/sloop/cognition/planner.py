@@ -783,10 +783,10 @@ class LLMPlanner:
         *,
         thread_id: str | None,
     ) -> tuple[Any, Any]:
-        """StatusAssessment call with raw response for ledger recording (RFC-214).
+        """StatusAssessment call with raw response for CE audit (IG-557).
 
-        Returns both the parsed assessment and the raw LLM response object
-        so the caller can record the AI message in the ledger.
+        Returns both the parsed assessment and the raw LLM response object.
+        Assess pairs are not recorded in the CE ledger.
 
         Args:
             messages: Assess-phase messages from ``build_plan_messages(..., plan_phase=\"assess\")``
