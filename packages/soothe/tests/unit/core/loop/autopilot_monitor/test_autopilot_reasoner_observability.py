@@ -15,7 +15,6 @@ from soothe.foundation.autopilot.monitor.dreaming_reasoner import (
 )
 from soothe.foundation.context.models import GoalNode
 
-
 _BACKOFF_JSON = """```json
 {
   "backoff_to_goal_id": "parent-1",
