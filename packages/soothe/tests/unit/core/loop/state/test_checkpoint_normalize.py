@@ -44,3 +44,32 @@ def test_normalize_created_status_maps_to_ready() -> None:
     )
     checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
     assert checkpoint.status == "idle"
+
+
+def test_normalize_strips_enriched_goal_history_fields() -> None:
+    """Pre-RFC-626 goal_history rows drop goal content on load."""
+    normalized = normalize_checkpoint_data(
+        {
+            "loop_id": "loop-b",
+            "thread_ids": ["t1"],
+            "current_thread_id": "t1",
+            "status": "idle",
+            "schema_version": "4.0",
+            "goal_history": [
+                {
+                    "goal_id": "g1",
+                    "thread_id": "t1",
+                    "status": "completed",
+                    "goal_text": "should be stripped",
+                    "loop_messages": [],
+                }
+            ],
+        },
+        loop_id="loop-b",
+    )
+    assert normalized["schema_version"] == "5.0"
+    assert normalized["goal_history"] == [
+        {"goal_id": "g1", "thread_id": "t1", "status": "completed"},
+    ]
+    checkpoint = StrangeLoopCheckpoint.model_validate(normalized)
+    assert checkpoint.goal_history[0].goal_id == "g1"

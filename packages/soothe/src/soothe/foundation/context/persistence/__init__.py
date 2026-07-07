@@ -7,15 +7,6 @@ __all__ = [
 ]
 
 try:
-    from soothe.foundation.context.persistence.file_backend import (
-        FileContextPersistence,  # noqa: F401
-    )
-except ImportError:
-    pass
-else:
-    __all__.append("FileContextPersistence")
-
-try:
     from soothe.foundation.context.persistence.sqlite_backend import (
         SqliteContextPersistence,  # noqa: F401
     )

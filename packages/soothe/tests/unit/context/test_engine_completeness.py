@@ -330,8 +330,8 @@ class TestLosslessPersistence:
         assert entries[0][0].content == "system instruction"
 
     @pytest.mark.asyncio
-    async def test_backward_compat_legacy_format(self) -> None:
-        """Old format (type + content + phase, no _msg_type key) loads correctly."""
+    async def test_pre_rfc624_ledger_format_loads_via_normalize(self) -> None:
+        """Pre-RFC-624 ledger rows (type + content + phase) upgrade on read."""
         from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 
         persistence = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))

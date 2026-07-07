@@ -41,9 +41,8 @@ def normalize_user_query(goal: str | None) -> str:
 def flatten_execute_human_content(content: str) -> str:
     """Extract task-focused text from an execute-step human envelope.
 
-    Handles both the new scenario-based format (extracts GOAL: line)
-    and legacy XML format (extracts <USER_QUERY> body). Returns raw
-    content unchanged when neither marker is present.
+    Delegates to ``flatten_user_message_content`` for scenario-based
+    ``EXECUTION TASK:`` / ``GOAL:`` sections.
     """
     return flatten_user_message_content(content)
 

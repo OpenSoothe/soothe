@@ -160,7 +160,7 @@ class GoalBackoffReasoner:
         invoke_config = {
             "metadata": create_llm_call_metadata(
                 purpose="backoff_reasoning",
-                component="goal_engine.backoff_reasoner",
+                component="autopilot.backoff_reasoner",
                 phase="post-loop",
             )
         }

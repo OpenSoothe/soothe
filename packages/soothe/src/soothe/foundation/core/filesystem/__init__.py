@@ -7,15 +7,6 @@ provides a common API for file operations.
 
 from __future__ import annotations
 
-from .audit_logger import (
-    AuditContext,
-    AuditedFilesystem,
-    AuditEvent,
-    AuditEventType,
-    AuditLevel,
-    AuditLogger,
-    AuditLoggerConfig,
-)
 from .exceptions import (
     DirectoryNotEmptyError,
     FilesystemError,
@@ -65,14 +56,6 @@ __all__ = [
     "PathValidationConfig",
     "SecurityConfig",
     "create_filesystem",
-    # Audit logging
-    "AuditLogger",
-    "AuditLoggerConfig",
-    "AuditEvent",
-    "AuditEventType",
-    "AuditLevel",
-    "AuditContext",
-    "AuditedFilesystem",
     # Protocol types
     "FileInfo",
     "GlobResult",

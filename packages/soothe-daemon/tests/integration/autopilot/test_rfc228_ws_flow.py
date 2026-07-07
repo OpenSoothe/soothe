@@ -96,7 +96,7 @@ async def daemon_with_autopilot_ws(tmp_path: Path):
         }
     )
 
-    # Mock GoalEngine methods
+    # Mock ContextEngine methods
     daemon._autopilot_service._ce.suspend_goal = AsyncMock(
         return_value=_FakeGoal(goal_id="abc12345", status="suspended")
     )
@@ -209,7 +209,7 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
 
     async with websockets.connect(uri) as ws:
         await _handshake(ws)
-        # Update goal status to active for pause test (handler uses goal_engine.get_goal)
+        # Update goal status to active for pause test (handler uses context_engine.get_goal)
         active_goal = _FakeGoal(goal_id="abc12345", status="active")
         daemon._autopilot_service.get_goal.return_value = active_goal
         daemon._autopilot_service._ce.get_goal.return_value = active_goal
@@ -234,7 +234,7 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         assert msg["result"]["job_id"] == "abc12345"
         assert msg["result"]["status"] == "suspended"
 
-        # Update goal status to suspended for resume test (handler uses goal_engine.get_goal)
+        # Update goal status to suspended for resume test (handler uses context_engine.get_goal)
         suspended_goal = _FakeGoal(goal_id="abc12345", status="suspended")
         daemon._autopilot_service.get_goal.return_value = suspended_goal
         daemon._autopilot_service._ce.get_goal.return_value = suspended_goal
@@ -259,7 +259,7 @@ async def test_job_pause_resume_via_websocket(daemon_with_autopilot_ws) -> None:
         assert msg["result"]["job_id"] == "abc12345"
         assert msg["result"]["status"] == "pending"
 
-        # Verify GoalEngine methods called
+        # Verify ContextEngine methods called
         daemon._autopilot_service._ce.suspend_goal.assert_awaited()
         daemon._autopilot_service._ce.reactivate_goal.assert_awaited()
 
@@ -376,7 +376,7 @@ async def test_job_guidance_via_websocket(daemon_with_autopilot_ws) -> None:
         assert result["goal_id"] == "abc12345"  # Defaults to job_id
         assert result["absorbed"] is True
 
-        # Verify GoalEngine.absorb_guidance was called
+        # Verify ContextEngine.absorb_guidance was called
         daemon._autopilot_service._ce.absorb_guidance.assert_awaited()
 
 

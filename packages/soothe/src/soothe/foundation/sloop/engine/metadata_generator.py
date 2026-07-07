@@ -23,7 +23,6 @@ def generate_outcome_metadata(
     result: Any,
     tool_call_id: str,
     *,
-    registry_config: Any | None = None,
     tool_status: str | None = None,
 ) -> dict[str, Any]:
     """Generate structured outcome metadata from tool result.
@@ -32,7 +31,6 @@ def generate_outcome_metadata(
         tool_name: Name of the tool that was executed
         result: Tool execution result (string, dict, or list)
         tool_call_id: Unique identifier for this tool invocation
-        registry_config: Optional tool result registry settings (IG-433).
         tool_status: Optional LangChain ToolMessage status (e.g. ``"error"``).
 
     Returns:
@@ -44,16 +42,6 @@ def generate_outcome_metadata(
         - entities: Key resources found/affected
         - size_bytes: Result size
     """
-    if registry_config is not None and getattr(registry_config, "enabled", False):
-        from soothe.foundation.sloop.engine.tool_result_registry import generate_outcome_metadata_v2
-
-        return generate_outcome_metadata_v2(
-            tool_name,
-            result,
-            tool_call_id,
-            config=registry_config,
-        )
-
     outcome: dict[str, Any] = {
         "tool_call_id": tool_call_id,
         "tool_name": tool_name,

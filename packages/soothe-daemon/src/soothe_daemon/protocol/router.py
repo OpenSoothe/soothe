@@ -2677,7 +2677,7 @@ class MessageRouter:
         d = self._daemon
         request_id = msg.get("request_id")
         goal_text = msg.get("goal")
-        # TODO: verification_rules to be passed to GoalEngine when supported
+        # TODO: verification_rules to be passed to ContextEngine when supported
         _verification_rules = msg.get("verification_rules")  # noqa: F841
 
         if not isinstance(goal_text, str) or not goal_text.strip():
@@ -2847,10 +2847,10 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._ce
+        context_engine = service._ce
 
         # Check goal exists and is not already suspended
-        goal = await goal_engine.get_goal(job_id)
+        goal = await context_engine.get_goal(job_id)
         if goal is None:
             await d._send_client_message(
                 client_id,
@@ -2886,7 +2886,7 @@ class MessageRouter:
 
         # Suspend the root goal
         try:
-            await goal_engine.suspend_goal(job_id, reason="user_pause")
+            await context_engine.suspend_goal(job_id, reason="user_pause")
         except Exception as exc:
             logger.error("[JobPause] Failed to suspend goal %s: %s", job_id, exc)
             await d._send_client_message(
@@ -2934,10 +2934,10 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._ce
+        context_engine = service._ce
 
         # Check goal exists and is suspended
-        goal = await goal_engine.get_goal(job_id)
+        goal = await context_engine.get_goal(job_id)
         if goal is None:
             await d._send_client_message(
                 client_id,
@@ -2962,7 +2962,7 @@ class MessageRouter:
 
         # Reactivate the root goal
         try:
-            await goal_engine.reactivate_goal(job_id)
+            await context_engine.reactivate_goal(job_id)
         except Exception as exc:
             logger.error("[JobResume] Failed to reactivate goal %s: %s", job_id, exc)
             await d._send_client_message(
@@ -3046,7 +3046,7 @@ class MessageRouter:
     async def _handle_job_dag(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle job_dag RPC request (RFC-228).
 
-        Get GoalEngine DAG snapshot for visualization.
+        Get ContextEngine DAG snapshot for visualization.
 
         Args:
             client_id: Client connection identifier.
@@ -3096,7 +3096,7 @@ class MessageRouter:
     async def _handle_job_guidance(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle job_guidance RPC request (RFC-228).
 
-        Send user guidance to GoalEngine for absorption.
+        Send user guidance to ContextEngine for absorption.
 
         Args:
             client_id: Client connection identifier.
@@ -3134,11 +3134,11 @@ class MessageRouter:
         if service is None:
             return
 
-        goal_engine = service._ce
+        context_engine = service._ce
 
         # Determine target goal
         target_id = goal_id if goal_id else job_id
-        target_goal = await goal_engine.get_goal(target_id)
+        target_goal = await context_engine.get_goal(target_id)
         if target_goal is None:
             await d._send_client_message(
                 client_id,
@@ -3150,9 +3150,9 @@ class MessageRouter:
             )
             return
 
-        # Absorb guidance via GoalEngine (RFC-228)
+        # Absorb guidance via ContextEngine (RFC-228)
         scope = "goal" if goal_id else "job"
-        absorbed = await goal_engine.absorb_guidance(target_id, content.strip(), scope=scope)
+        absorbed = await context_engine.absorb_guidance(target_id, content.strip(), scope=scope)
 
         logger.info(
             "[JobGuidance] Guidance for job=%s goal=%s absorbed=%s: %s",

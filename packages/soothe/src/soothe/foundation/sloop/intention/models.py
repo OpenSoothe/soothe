@@ -122,7 +122,7 @@ class IntentClassification(BaseModel):
     )
     goal_description: str | None = Field(
         default=None,
-        description="Normalized goal description for display and GoalEngine",
+        description="Normalized goal description for display and ContextEngine",
     )
     chitchat_response: str | None = Field(
         default=None,

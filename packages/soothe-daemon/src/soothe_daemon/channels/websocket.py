@@ -797,13 +797,13 @@ class WebSocketChannel(Channel):
 
         if action == "resume":
             goal_id = payload.get("goal_id")
-            goal_engine = service._ce
-            goal = await goal_engine.get_goal(goal_id)
+            context_engine = service._ce
+            goal = await context_engine.get_goal(goal_id)
             if goal is None:
                 raise RuntimeError("Goal not found")
             if goal.status not in ("suspended", "blocked"):
                 raise RuntimeError(f"Goal is not paused (status: {goal.status})")
-            reactivated = await goal_engine.reactivate_goal(goal_id)
+            reactivated = await context_engine.reactivate_goal(goal_id)
             return {"status": "reactivated", "goal_id": goal_id, "new_status": reactivated.status}
 
         if action == "wake":
