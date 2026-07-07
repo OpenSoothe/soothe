@@ -370,6 +370,134 @@ def project_planner_ledger(
     return projected
 
 
+_EXECUTE_AI_STRIP_PREFIXES = (
+    "GOAL:",
+    "INSTRUCTIONS:",
+    "WORKSPACE:",
+    "<INSTRUCTIONS",
+    "<WORKSPACE",
+)
+
+
+def _is_execute_ai_message(msg: BaseMessage) -> bool:
+    return getattr(msg, "phase", None) == "execute_step" and _is_loop_ai_message(msg)
+
+
+def _compact_execute_ai_for_assess(msg: BaseMessage, max_chars: int) -> BaseMessage:
+    """Keep outcome prose; strip planning boilerplate from execute AI rows."""
+    text = extract_text_from_message_content(getattr(msg, "content", ""))
+    lines: list[str] = []
+    skip_block = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if any(stripped.startswith(prefix) for prefix in _EXECUTE_AI_STRIP_PREFIXES):
+            skip_block = True
+            continue
+        if skip_block:
+            if not stripped:
+                skip_block = False
+            continue
+        lines.append(line)
+    compacted = "\n".join(lines).strip() or text.strip()
+    if max_chars > 0 and len(compacted) > max_chars:
+        compacted = compacted[-max_chars:]
+    return _set_message_content(_deep_copy_message(msg), compacted)
+
+
+def _apply_head_tail_message_cap(
+    messages: list[BaseMessage],
+    max_msg: int,
+    *,
+    keep_head_tail: bool,
+) -> list[BaseMessage]:
+    """Keep first-wave and recent execute AI rows when tail-truncating."""
+    if max_msg <= 0 or len(messages) <= max_msg:
+        return messages
+    if not keep_head_tail:
+        return messages[-max_msg:]
+    head = max(1, max_msg // 4)
+    tail = max_msg - head
+    if head + tail >= len(messages):
+        return messages
+    return [*messages[:head], *messages[-tail:]]
+
+
+def _collect_assess_execute_ai(
+    loop_messages: list[BaseMessage],
+    mode: PlannerProjectionMode,
+) -> list[BaseMessage]:
+    """Collect current-goal execute AI rows for assess projection."""
+    if mode == "new_goal":
+        has_execute = any(_is_execute_ai_message(m) for m in loop_messages)
+        if not has_execute:
+            return []
+        seg_start = 0
+    else:
+        seg_start = _current_goal_segment_start(loop_messages)
+    return [m for m in loop_messages[seg_start:] if _is_execute_ai_message(m)]
+
+
+def _assess_prompt_ledger_config(soothe_config: Any | None) -> Any | None:
+    from soothe.config.models import PlanAssessPromptConfig
+
+    if soothe_config is None:
+        return PlanAssessPromptConfig()
+    loop_cfg = getattr(soothe_config, "agent", None)
+    loop_cfg = getattr(loop_cfg, "loop", None) if loop_cfg is not None else None
+    assess_cfg = getattr(loop_cfg, "plan_assess_prompt", None) if loop_cfg is not None else None
+    if assess_cfg is None:
+        return PlanAssessPromptConfig()
+    return assess_cfg
+
+
+def _assess_effective_ledger_cfg(
+    assess_cfg: Any,
+    shared_cfg: PlanPromptLedgerConfig | None,
+) -> PlanPromptLedgerConfig | None:
+    from soothe.config.models import PlanPromptLedgerConfig
+
+    max_msg = int(getattr(assess_cfg, "ledger_max_messages", 24))
+    max_total = int(shared_cfg.plan_ledger_max_total_chars) if shared_cfg is not None else 0
+    max_per = int(shared_cfg.plan_ledger_max_message_chars) if shared_cfg is not None else 0
+    if max_msg <= 0 and max_total <= 0 and max_per <= 0:
+        return None
+    return PlanPromptLedgerConfig(
+        plan_ledger_max_messages=max_msg,
+        plan_ledger_max_total_chars=max_total,
+        plan_ledger_max_message_chars=max_per,
+    )
+
+
+def project_planner_ledger_for_assess(
+    loop_messages: list[BaseMessage],
+    mode: PlannerProjectionMode,
+    ledger_cfg: PlanPromptLedgerConfig | None,
+    *,
+    soothe_config: Any | None = None,
+) -> list[BaseMessage]:
+    """Assess-only ledger projection: current-goal execute AI rows only (IG-557)."""
+    assess_cfg = _assess_prompt_ledger_config(soothe_config)
+
+    execute_ai = _collect_assess_execute_ai(loop_messages, mode)
+    max_per = int(getattr(assess_cfg, "execute_ai_max_chars", 400))
+    compacted = [_compact_execute_ai_for_assess(m, max_per) for m in execute_ai]
+    max_msg = int(getattr(assess_cfg, "ledger_max_messages", 24))
+    trimmed = _apply_head_tail_message_cap(
+        compacted,
+        max_msg,
+        keep_head_tail=bool(getattr(assess_cfg, "keep_head_tail_execute_ai", True)),
+    )
+    effective_cfg = _assess_effective_ledger_cfg(assess_cfg, ledger_cfg)
+    projected = project_loop_messages_for_plan(trimmed, effective_cfg)
+    logger.debug(
+        "Assess ledger projection: mode=%s execute_ai=%d out=%d",
+        mode,
+        len(execute_ai),
+        len(projected),
+    )
+    return projected
+
+
 def project_continuation_assess_ledger(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None,

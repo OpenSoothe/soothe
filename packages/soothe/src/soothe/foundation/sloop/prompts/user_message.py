@@ -134,6 +134,67 @@ def _render_prior_progress(digest: PriorProgressDigest) -> str:
     return rendered
 
 
+def _render_prior_progress_for_assess(
+    digest: PriorProgressDigest,
+    *,
+    omit_hint: bool = True,
+    max_step_summaries: int = 4,
+) -> str:
+    """De-noised PRIOR PROGRESS block for assess prompts (IG-557)."""
+    header_parts = [
+        f"iter={digest.iteration}",
+        f"wave={digest.wave_index}",
+        f"completed={digest.steps_completed}",
+        f"failed={digest.steps_failed}",
+    ]
+    if not omit_hint:
+        header_parts.append(f"progress_hint={digest.derived_progress_hint}")
+    header = " ".join(header_parts)
+
+    summaries: list[Any] = list(digest.step_summaries)[:max_step_summaries]
+    if not summaries and digest.evidence_excerpts:
+        summaries = [
+            SimpleNamespace(
+                step_id="",
+                description="prior wave",
+                status="completed",
+                outcome_preview=excerpt,
+            )
+            for excerpt in digest.evidence_excerpts[:3]
+        ]
+
+    def _assemble(tree: str) -> str:
+        tree_text = (tree or "").strip()
+        footer = "hint is heuristic only — judge GOAL components"
+        if tree_text:
+            return f"{header}\n\n{tree_text}\n\n{footer}"
+        return f"{header}\n\n{footer}"
+
+    step_tree = (
+        render_prior_steps_tree(
+            summaries,
+            evidence_in_ledger=False,
+            outcome_preview_chars=PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS,
+        )
+        if summaries
+        else ""
+    )
+    rendered = _assemble(step_tree)
+    while len(rendered) > PRIOR_PROGRESS_MAX_CHARS and summaries:
+        summaries.pop()
+        step_tree = (
+            render_prior_steps_tree(
+                summaries,
+                evidence_in_ledger=False,
+                outcome_preview_chars=PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS,
+            )
+            if summaries
+            else ""
+        )
+        rendered = _assemble(step_tree)
+    return rendered
+
+
 def _should_inject_goal_lineage(
     goal: str,
     goal_lineage: str,
@@ -378,42 +439,75 @@ class UserMessageBuilder:
         projection_mode: str | None = None,
         completion_in_ledger: bool = False,
         prior_goals_override: list[PriorGoalSummary] | None = None,
+        plan_coverage: str | None = None,
+        omit_prior_progress_hint: bool = True,
+        include_plan_coverage: bool = True,
     ) -> str:
-        """Build user message for the plan-assess phase.
+        """Build assess task envelope (allowlist-only, IG-557).
 
-        Args:
-            goal: Current goal text (user instruction only).
-            dag_context: Optional DagPlanningContext for progressive planning.
-            skill_context: Skill reference body when slash-skill invoked.
-            prior_progress: RFC-227 per-wave digest.
-            current_iteration: Current loop iteration for staleness check.
-            context_bundle: Optional ContextBundle from ContextEngine.project().
-
-        Returns:
-            Structured text message for the plan-assess LoopHumanMessage.
+        Legacy kwargs (``dag_context``, ``skill_context``, ``context_bundle``,
+        ``prior_goals_override``, ``display_goal``) are ignored — assess uses a
+        strict allowlist so bundle fields cannot leak into the envelope.
         """
-        sections: list[tuple[str, str]] = [
-            ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
-        ]
-
-        _append_plan_context_sections(
-            sections,
-            goal=goal,
-            dag_context=dag_context,
-            skill_context=skill_context,
+        _ = (
+            dag_context,
+            skill_context,
+            context_bundle,
+            display_goal,
+            completion_in_ledger,
+            prior_goals_override,
+        )
+        return self.build_plan_assess_message_v2(
+            goal,
             prior_progress=prior_progress,
             current_iteration=current_iteration,
-            context_bundle=context_bundle,
             projection_mode=projection_mode,
-            completion_in_ledger=completion_in_ledger,
-            prior_goals_override=prior_goals_override,
+            plan_coverage=plan_coverage,
+            omit_prior_progress_hint=omit_prior_progress_hint,
+            include_plan_coverage=include_plan_coverage,
         )
+
+    def build_plan_assess_message_v2(
+        self,
+        goal: str,
+        *,
+        prior_progress: PriorProgressDigest | None = None,
+        current_iteration: int | None = None,
+        projection_mode: str | None = None,
+        plan_coverage: str | None = None,
+        omit_prior_progress_hint: bool = True,
+        include_plan_coverage: bool = True,
+    ) -> str:
+        """Assess allowlist envelope: GOAL, PRIOR PROGRESS, PLAN COVERAGE, TASK."""
+        sections: list[tuple[str, str]] = [("GOAL", _goal_text(goal))]
+
+        mode = projection_mode or "mid_goal"
+        if (
+            prior_progress is not None
+            and mode != "new_goal"
+            and not (
+                current_iteration is not None and prior_progress.iteration < current_iteration - 1
+            )
+        ):
+            sections.append(
+                (
+                    "PRIOR PROGRESS",
+                    _render_prior_progress_for_assess(
+                        prior_progress,
+                        omit_hint=omit_prior_progress_hint,
+                    ),
+                )
+            )
+
+        if include_plan_coverage and (plan_coverage or "").strip():
+            sections.append(("PLAN COVERAGE", plan_coverage.strip()))
 
         sections.append(
             (
                 "TASK",
-                "Assess goal completion: return status (continue/replan/done), goal_progress, "
-                "and first-person assessment_reasoning (about 10~20 words).",
+                "Assess goal completion for GOAL only. Return status, goal_progress, "
+                "assessment_reasoning. Cite execute evidence if present. "
+                "Do not treat plan step count or prior goals as completion proof.",
             )
         )
 

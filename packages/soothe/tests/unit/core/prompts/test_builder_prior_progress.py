@@ -38,7 +38,7 @@ def test_assess_phase_includes_prior_progress_when_present() -> None:
     msgs = PromptBuilder().build_plan_messages("g", state, ctx, plan_phase="assess")
     assess_human = msgs[-1].content
     assert "PRIOR PROGRESS:" in assess_human
-    assert "progress_hint=high" in assess_human
+    assert "progress_hint=high" not in assess_human
     assert "found marker 42" in assess_human
 
 

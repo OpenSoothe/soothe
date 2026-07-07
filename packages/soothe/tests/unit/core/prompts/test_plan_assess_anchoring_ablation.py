@@ -343,9 +343,9 @@ def test_baseline_omits_plan_assess_anchor_by_default() -> None:
     results = _run_all_conditions()
     base = results["baseline"]
     assert not base.anchor_present
-    # plan_generate human + current plan-context human still carry GOAL:.
-    assert base.duplicated_goal_count >= 2, (
-        f"baseline should still show duplicated GOAL:; got {base.duplicated_goal_count}"
+    # IG-557 assess envelope: single GOAL: in task human only.
+    assert base.duplicated_goal_count == 1, (
+        f"assess v2 should expose one GOAL: block; got {base.duplicated_goal_count}"
     )
 
 
@@ -369,14 +369,13 @@ def test_a2_matches_baseline_when_plan_assess_not_projected() -> None:
     assert a2.total_chars == base.total_chars
 
 
-def test_b1_drops_all_planning_turns() -> None:
+def test_b1_matches_baseline_when_assess_projection_excludes_planning() -> None:
     results = _run_all_conditions()
     b1 = results["B1_drop_all_planning"]
     base = results["baseline"]
     assert not b1.anchor_present
-    # Drop 2 plan_generate turns (plan_assess already excluded by projection).
-    assert b1.message_count == base.message_count - 2
-    # Only the current plan-context human carries GOAL:.
+    # Assess projection already omits plan_generate; B1 matches baseline.
+    assert b1.message_count == base.message_count
     assert b1.duplicated_goal_count == 1
 
 

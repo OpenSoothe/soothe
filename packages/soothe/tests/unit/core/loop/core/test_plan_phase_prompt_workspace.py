@@ -92,7 +92,7 @@ def test_build_loop_plan_messages_omits_working_memory_in_plan_human_ig371() -> 
 
 
 def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
-    """Test build_plan_messages() converts prior conversation XML to native ledger turns (RFC-214)."""
+    """Plan-generate converts prior conversation XML to native ledger turns (RFC-214)."""
     state = LoopState(goal="翻译成中文", thread_id="t1", max_iterations=8)
     ctx = PlanContext(
         workspace=None,
@@ -102,7 +102,12 @@ def test_build_loop_plan_messages_includes_prior_conversation_ig128() -> None:
         ],
     )
     builder = PromptBuilder()
-    messages = builder.build_plan_messages("翻译成中文", state, ctx)
+    messages = builder.build_plan_messages(
+        "翻译成中文",
+        state,
+        ctx,
+        plan_phase="generate",
+    )
 
     system_content = messages[0].content
 
@@ -151,7 +156,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
 
 
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
-    """Ledger (execute turns) precedes plan-context human so assess sees history then framing (IG-372)."""
+    """Assess projection keeps execute AI only between system and task envelope (IG-557)."""
     state = LoopState(goal="read readme", thread_id="t1", max_iterations=8, iteration=1)
     state.loop_messages = [
         LoopHumanMessage(
@@ -170,14 +175,12 @@ def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     builder = PromptBuilder()
     messages = builder.build_plan_messages("read readme", state, PlanContext())
 
-    assert len(messages) == 4
-    assert isinstance(messages[1], LoopHumanMessage)
-    assert isinstance(messages[2], LoopAIMessage)
-    assert isinstance(messages[3], LoopHumanMessage)
-    assert messages[1].content.startswith("Execute:")
-    assert "First lines of README" in messages[2].content
+    assert len(messages) == 3
+    assert isinstance(messages[1], LoopAIMessage)
+    assert isinstance(messages[2], LoopHumanMessage)
+    assert "First lines of README" in messages[1].content
     system = messages[0].content
-    plan_human = messages[3].content
+    plan_human = messages[2].content
     assert "</USER_QUERY>" not in system  # goal text lives in human message only
     assert "GOAL:" in plan_human
     assert "read readme" in plan_human

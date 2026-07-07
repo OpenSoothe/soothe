@@ -97,7 +97,8 @@ def test_build_plan_assess_messages_omit_prior_plan_assess_ledger() -> None:
     contents = " ".join(str(getattr(m, "content", "")) for m in msgs)
     assert "assess h0" not in contents
     assert "assess a0" not in contents
-    assert "exec h" in contents
+    assert "exec h" not in contents
+    assert "exec a" in contents
 
 
 def test_build_plan_generate_messages_omit_plan_assess_from_projection() -> None:

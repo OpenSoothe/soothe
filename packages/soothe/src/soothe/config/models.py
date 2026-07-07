@@ -905,6 +905,39 @@ class PlanPromptLedgerConfig(BaseModel):
     )
 
 
+class PlanAssessPromptConfig(BaseModel):
+    """Assess-specific prompt assembly knobs (mid-goal accuracy, IG-557)."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Use assess-only ledger projection and v2 task envelope",
+    )
+    ledger_max_messages: int = Field(
+        default=24,
+        ge=0,
+        le=500,
+        description="Max execute AI ledger rows for assess projection (0 = unlimited)",
+    )
+    execute_ai_max_chars: int = Field(
+        default=400,
+        ge=0,
+        le=50_000,
+        description="Per execute AI row char cap in assess projection (0 = unlimited)",
+    )
+    keep_head_tail_execute_ai: bool = Field(
+        default=True,
+        description="Preserve first-wave + recent execute AI when tail-truncating",
+    )
+    omit_prior_progress_hint: bool = Field(
+        default=True,
+        description="Omit derived_progress_hint from assess PRIOR PROGRESS block",
+    )
+    include_plan_coverage: bool = Field(
+        default=True,
+        description="Inject deterministic PLAN COVERAGE block when a plan exists",
+    )
+
+
 class ExecutePromptLedgerConfig(BaseModel):
     """Caps for execute-step CoreAgent ledger projection (IG-542)."""
 
@@ -1579,6 +1612,11 @@ class StrangeLoopConfig(BaseModel):
     plan_prompt_ledger: PlanPromptLedgerConfig = Field(
         default_factory=PlanPromptLedgerConfig,
         description="Plan-phase ledger projection limits; zeros = full ledger passthrough",
+    )
+
+    plan_assess_prompt: PlanAssessPromptConfig = Field(
+        default_factory=PlanAssessPromptConfig,
+        description="Assess-only projection and envelope settings (IG-557)",
     )
 
     execute_prompt_ledger: ExecutePromptLedgerConfig = Field(

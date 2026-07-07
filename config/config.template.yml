@@ -170,6 +170,14 @@ agent:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 0
       plan_ledger_max_message_chars: 0
+    # Assess-only prompt assembly (PlanAssessPromptConfig, IG-557)
+    plan_assess_prompt:
+      enabled: true
+      ledger_max_messages: 24
+      execute_ai_max_chars: 400
+      keep_head_tail_execute_ai: true
+      omit_prior_progress_hint: true
+      include_plan_coverage: true
     # Execute-step ledger projection (ExecutePromptLedgerConfig)
     execute_prompt_ledger:
       cross_goal_completion_tail: 3

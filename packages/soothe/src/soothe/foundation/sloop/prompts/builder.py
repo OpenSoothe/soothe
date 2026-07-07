@@ -10,6 +10,7 @@ from langchain_core.messages import BaseMessage, SystemMessage
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_continuation_assess_ledger,
     project_planner_ledger,
+    project_planner_ledger_for_assess,
     projected_ledger_has_goal_completion,
     resolve_planner_projection_mode,
 )
@@ -133,8 +134,18 @@ class PromptBuilder:
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
         projection_mode = resolve_planner_projection_mode(state)
         ledger_cfg = self.config.agent.loop.plan_prompt_ledger if self.config is not None else None
+        assess_prompt_cfg = (
+            self.config.agent.loop.plan_assess_prompt if self.config is not None else None
+        )
         if kind == "continuation":
             projected = project_continuation_assess_ledger(state.loop_messages, ledger_cfg)
+        elif kind == "assess":
+            projected = project_planner_ledger_for_assess(
+                state.loop_messages,
+                projection_mode,
+                ledger_cfg,
+                soothe_config=self.config,
+            )
         else:
             projected = project_planner_ledger(
                 state.loop_messages,
@@ -158,8 +169,17 @@ class PromptBuilder:
             context,
             state,
             call_kind=kind,
-            context_bundle=context_bundle,
+            context_bundle=None if kind == "assess" else context_bundle,
         )
+        plan_coverage = None
+        if kind == "assess":
+            from soothe.foundation.sloop.cognition.plan_step_safety import render_plan_coverage
+
+            include_coverage = (
+                assess_prompt_cfg.include_plan_coverage if assess_prompt_cfg is not None else True
+            )
+            if include_coverage:
+                plan_coverage = render_plan_coverage(state) or None
         human_content = self._build_plan_context_human_text(
             goal,
             state,
@@ -171,6 +191,12 @@ class PromptBuilder:
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals or None,
             inline_assessment=inline_assessment,
+            plan_coverage=plan_coverage,
+            omit_prior_progress_hint=(
+                assess_prompt_cfg.omit_prior_progress_hint
+                if assess_prompt_cfg is not None
+                else True
+            ),
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -184,7 +210,7 @@ class PromptBuilder:
                 projection_mode,
             )
 
-        if context.recent_messages:
+        if context.recent_messages and kind != "assess":
             for msg_xml in context.recent_messages:
                 parsed = _parse_prior_conversation_xml(msg_xml)
                 if parsed is None:
@@ -279,7 +305,7 @@ class PromptBuilder:
 
         # RFC-624: Supplementary instructions from ContextBundle (plan cache-stable:
         # agent/project rules stay on execute-type system prompts only).
-        if context_bundle is not None:
+        if context_bundle is not None and kind != "assess":
             if context_bundle.memory_instructions:
                 parts.append(
                     "<MEMORY_INSTRUCTIONS>\n"
@@ -288,7 +314,7 @@ class PromptBuilder:
                 )
 
         # Prior conversation follow-up policy (static when prior conversation exists)
-        if context.recent_messages:
+        if context.recent_messages and kind != "assess":
             parts.append(
                 "<FOLLOW_UP_POLICY>\n"
                 'Prior-thread goals: status MUST NOT be "done" until execution produced the '
@@ -367,6 +393,8 @@ class PromptBuilder:
         completion_in_ledger: bool = False,
         prior_goals_override: list[Any] | None = None,
         inline_assessment: Any | None = None,
+        plan_coverage: str | None = None,
+        omit_prior_progress_hint: bool = True,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -394,13 +422,12 @@ class PromptBuilder:
         builder = UserMessageBuilder()
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
         mode = projection_mode or resolve_planner_projection_mode(state)
-        display_goal = goal_preview_text(goal) if mode == "new_goal" else None
 
         if kind == "continuation":
             return builder.build_plan_continuation_message(
                 goal,
                 context_bundle=context_bundle,
-                display_goal=display_goal,
+                display_goal=goal_preview_text(goal) if mode == "new_goal" else None,
                 completion_in_ledger=completion_in_ledger,
                 prior_goals_override=prior_goals_override,
             )
@@ -435,14 +462,18 @@ class PromptBuilder:
             prior_progress=getattr(state, "prior_progress", None),
             current_iteration=state.iteration,
             context_bundle=context_bundle,
-            display_goal=display_goal,
+            display_goal=goal_preview_text(goal) if mode == "new_goal" else None,
             projection_mode=mode,
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals_override,
         )
 
         if kind == "assess":
-            return builder.build_plan_assess_message(**common_kwargs)
+            return builder.build_plan_assess_message(
+                **common_kwargs,
+                plan_coverage=plan_coverage,
+                omit_prior_progress_hint=omit_prior_progress_hint,
+            )
         generate_kwargs: dict[str, Any] = {
             **common_kwargs,
             "step_id_hint": step_id_hint,
