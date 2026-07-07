@@ -74,7 +74,5 @@ def test_migrate_goal_records_drops_legacy_columns(tmp_path: Path) -> None:
     }
 
     with sqlite3.connect(db_path) as db:
-        row = db.execute(
-            "SELECT goal_id, status FROM goal_records WHERE goal_id = 'g1'"
-        ).fetchone()
+        row = db.execute("SELECT goal_id, status FROM goal_records WHERE goal_id = 'g1'").fetchone()
     assert row == ("g1", "completed")
