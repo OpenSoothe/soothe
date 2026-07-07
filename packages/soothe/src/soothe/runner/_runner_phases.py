@@ -254,14 +254,11 @@ class PhasesMixin:
         if not loop_id:
             return
 
-        if context_engine is not None and ce_goal_id:
-            try:
-                await context_engine.finalize_goal(ce_goal_id, status="completed")
-            except Exception:
-                logger.debug("CE finalize_goal failed for chitchat fast path", exc_info=True)
-
         try:
             from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
+            from soothe.foundation.sloop.utils.structural_continuation import (
+                chitchat_may_finalize_checkpoint,
+            )
 
             shared_pool = await self.get_sloop_shared_pool()
             sm = StrangeLoopStateManager(
@@ -273,10 +270,25 @@ class PhasesMixin:
                 checkpoint = await sm.load()
                 if checkpoint is None:
                     return
+                if not chitchat_may_finalize_checkpoint(checkpoint):
+                    logger.info(
+                        "Chitchat finalize skipped for loop %s (status=%s)",
+                        loop_id,
+                        checkpoint.status,
+                    )
+                    return
                 idx = checkpoint.current_goal_index
                 if idx < 0 or idx >= len(checkpoint.goal_history):
                     return
                 goal_record = checkpoint.goal_history[idx]
+                if context_engine is not None and ce_goal_id:
+                    try:
+                        await context_engine.finalize_goal(ce_goal_id, status="completed")
+                    except Exception:
+                        logger.debug(
+                            "CE finalize_goal failed for chitchat fast path",
+                            exc_info=True,
+                        )
                 await sm.finalize_goal(goal_record, response)
             finally:
                 await sm.close()

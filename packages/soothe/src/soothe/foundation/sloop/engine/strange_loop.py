@@ -317,23 +317,43 @@ class StrangeLoop:
                     pass1_reasoning_text = (pass1_result.reasoning or "").strip()
 
                 if not pass1_result.is_task:
-                    social_intent = intent_classifier.pass1_to_intent(pass1_result, execution_goal)
-                    logger.info(
-                        "[StrangeLoop] Pre-graph social fast-path (Pass1 confidence=%s)",
-                        pass1_result.confidence,
+                    from soothe.foundation.sloop.utils.structural_continuation import (
+                        should_bypass_pass1_social_fast_path,
                     )
-                    yield (
-                        "intent_fast_path",
-                        {
-                            "intent_type": "agentic",
-                            "classification": social_intent,
-                            "chitchat_response": social_intent.chitchat_response,
-                            "context_engine": None,
-                            "ce_goal_id": None,
-                            "thread_id": main_thread_id,
-                        },
-                    )
-                    return
+
+                    if should_bypass_pass1_social_fast_path(checkpoint, execution_goal):
+                        logger.info(
+                            "[StrangeLoop] Structural loop-control bypasses "
+                            "Pass1 social fast-path"
+                        )
+                        pass1_result = IntakePass1LLMResult(
+                            is_task=True,
+                            confidence=IntakePass1Confidence.HIGH,
+                            social_response=None,
+                            reasoning="Loop-control phrase; resume via checkpoint",
+                        )
+                        pass1_reasoning_text = pass1_result.reasoning or ""
+                    else:
+                        social_intent = intent_classifier.pass1_to_intent(
+                            pass1_result, execution_goal
+                        )
+                        logger.info(
+                            "[StrangeLoop] Pre-graph social fast-path "
+                            "(Pass1 confidence=%s)",
+                            pass1_result.confidence,
+                        )
+                        yield (
+                            "intent_fast_path",
+                            {
+                                "intent_type": "agentic",
+                                "classification": social_intent,
+                                "chitchat_response": social_intent.chitchat_response,
+                                "context_engine": None,
+                                "ce_goal_id": None,
+                                "thread_id": main_thread_id,
+                            },
+                        )
+                        return
             else:
                 checkpoint = await state_manager.load()
 

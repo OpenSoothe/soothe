@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Authors**: xiaming
 **Created**: 2026-05-29
-**Last Updated**: 2026-05-29
+**Last Updated**: 2026-07-07
 **Depends on**: RFC-201, RFC-214, RFC-207, RFC-218, RFC-220
 **Supersedes**: ---
 **Related**: RFC-217 (Goal Context Management), RFC-223 (Thread Inheritance with Checkpoint Forking), RFC-224 (Automatic Context Window Management)
@@ -138,6 +138,24 @@ returns quiz|agentic    derive continue_loop_mode (once)
 ```
 
 On goal completion, transient `LoopState` fields (`current_decision.plan_result`, `completed_step_ids`, `step_results`, `evidence_ledger`) MUST be written back into the active `GoalExecutionRecord` before the loop transitions to `idle`.
+
+### 5.5 Structural Loop-Control Gate (IG-558)
+
+Loop continuation MUST NOT be decided by Pass 1 social classification. The pre-graph intake path loads the checkpoint in parallel with Pass 1; when either condition holds, Pass 1 social fast-path is bypassed and intake proceeds as a task:
+
+```
+bypass_pass1_social :=
+    is_loop_control_signal(user_text)   # continue | resume | proceed keywords and phrases
+```
+
+`is_loop_control_signal` covers:
+
+- Single-word keywords: `continue`, `resume`, `proceed` (existing `is_continue_keyword()`).
+- Explicit loop-resume phrases: `continue this loop`, `continue current loop`, `resume the loop`, etc.
+
+When bypass fires, StrangeLoop recovers from the loaded checkpoint (§5.2) and enters the agentic graph — the same path used for any other follow-up query on an existing loop.
+
+**Chitchat finalize guard:** Pre-graph social fast-path and in-graph chitchat MUST NOT call `finalize_goal` while `checkpoint.status == "running"` or while the active `GoalIndexEntry.status == "running"`. Chitchat on a running loop may persist the Human/AI exchange to the ledger but MUST leave orchestration state unchanged. Goal finalization remains owned by the Loop Graph (`goal_completion` / `finalize_goal` after normal iteration closure).
 
 ---
 

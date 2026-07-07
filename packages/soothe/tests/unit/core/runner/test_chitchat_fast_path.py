@@ -154,3 +154,40 @@ async def test_run_chitchat_defer_persistence_skips_save_in_generator() -> None:
 
     assert len(chunks) == 1
     runner._save_chitchat_to_state.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_finalize_chitchat_skips_running_checkpoint() -> None:
+    from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
+
+    config = MagicMock()
+    runner = _ChitchatRunner(config=config, loop_id="loop-running")
+
+    now = __import__("datetime").datetime.now(__import__("datetime").UTC)
+    goal = GoalIndexEntry(
+        goal_id="goal-0",
+        status="running",
+        thread_id="loop-running",
+        started_at=now,
+        completed_at=None,
+        duration_ms=0,
+        tokens_used=0,
+    )
+    checkpoint = MagicMock()
+    checkpoint.status = "running"
+    checkpoint.current_goal_index = 0
+    checkpoint.goal_history = [goal]
+
+    mock_sm = MagicMock()
+    mock_sm.load = AsyncMock(return_value=checkpoint)
+    mock_sm.finalize_goal = AsyncMock()
+    mock_sm.close = AsyncMock()
+    runner.get_sloop_shared_pool = AsyncMock(return_value=None)
+
+    with patch(
+        "soothe.foundation.sloop.state.sloop_manager.StrangeLoopStateManager",
+        return_value=mock_sm,
+    ):
+        await runner._finalize_chitchat_loop("loop-running", response="Hi!")
+
+    mock_sm.finalize_goal.assert_not_awaited()
