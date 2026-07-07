@@ -67,6 +67,8 @@ The Research agent exhibits subagent characteristics: multi-step workflows, stat
 
 ## 4. Research Agent
 
+> **Note (2026-07-07):** The monolithic Research agent described below was split into **`deep_research`** (public web) and **`academic_research`** (academic literature). See [RFC-619](RFC-619-deep-research-subagent.md) for the current architecture. This section is retained for historical context.
+
 ### 4.1 Purpose
 
 Deep research with iterative reflection across multiple information sources. Upgraded from tool to subagent due to multi-step, stateful nature.

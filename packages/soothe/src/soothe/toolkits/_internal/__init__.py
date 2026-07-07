@@ -11,5 +11,5 @@ External code should import from the public tool modules instead:
 - ``soothe.tools.websearch``
 
 For deep multi-source research, use the built-in **research** subagent
-(``soothe.subagents.tacitus``) via the ``task`` tool, not a tool group.
+(``soothe.subagents.deep_research``) via the ``task`` tool, not a tool group.
 """

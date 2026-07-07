@@ -469,9 +469,9 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-000, RFC-001, RFC-100, RFC-600, RFC-601, RFC-613
   - Authors: Soothe Team
 
-- **RFC-619**: [Tacitus Subagent](RFC-619-tacitus-subagent.md)
+- **RFC-619**: [Deep Research Subagent](RFC-619-deep-research-subagent.md)
   - Kind: Architecture Design
-  - Status: Accepted
+  - Status: Accepted (revised 2026-07-07)
   - Created: 2026-05-21
   - Supersedes: Research subagent identity and local-source gather paths in RFC-601 §4
   - Depends on: RFC-600 (Plugin Extension System), RFC-601 (Built-in Agents), RFC-403 (Unified Event Naming)

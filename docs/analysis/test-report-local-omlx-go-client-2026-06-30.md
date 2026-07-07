@@ -78,7 +78,7 @@ model is fine — the daemon-side parser was too strict.
 
 **Fix:** added `_strip_json_text` (regex fence strip + slice to outermost
 `{`) and routed both `content` and `reasoning_content` through it. Reuses the
-same fence pattern already used by `subagents/tacitus/json_util.py`.
+same fence pattern already used by `subagents/deep_research/json_util.py`.
 
 **Regression test:** `tests/unit/utils/llm/test_wrapper_json_extraction.py`
 (8 tests — fenced json, bare fence, prose prefix, leading-newline fence,

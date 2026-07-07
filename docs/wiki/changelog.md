@@ -28,6 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed - Deep Research subagents (RFC-619, 2026-07-07)
+
+- Replaced the monolithic research subagent with **`deep_research`** (public web) and **`academic_research`** (academic literature)
+- Slash routes: `/deep_research`, `/academic_research`
+- Effort levels: `normal` | `thorough` (replaces `normal` / `high` / `xhigh`)
+- Shared `url_crawl` toolkit; crawl-on-discovery after each search
+- Adaptive research reports with mandatory Scope banner
+
+---
+
 ## [0.7.0] - 2026-06-30
 
 ### Added - Router Profiles
@@ -246,10 +258,11 @@ TUI file-change cards use single-word action prefixes (Writing, Editing, Created
 
 ### Added - Core Subagents
 
-Five built-in subagents ship with the core `soothe` package:
+Six built-in subagents ship with the core `soothe` package:
 
-- `plan`: Structured planning delegate
-- `tacitus`: Public-domain research (web, academic, URLs)
+- `planner`: Structured planning delegate
+- `deep_research`: Public web research
+- `academic_research`: Academic literature research
 - `browser_use`: Browser automation specialist
 - `skillify`: Skill discovery and invocation
 - `veritas`: Intent-grounded clarification auto-answerer
@@ -607,9 +620,9 @@ See [Autonomous Mode Guide](autonomous-mode.md).
 
 Built-in specialized agents:
 
-- `explore`: Targeted filesystem search
-- `plan`: Planning delegate
-- `tacitus`: Deep public-domain research
+- `planner`: Planning delegate
+- `deep_research`: Public web research (split from legacy monolithic research subagent in 0.7.x)
+- `academic_research`: Academic literature research (0.7.x+)
 - `browser_use`: Browser automation (added in 0.6.x)
 - `veritas`: Clarification auto-answerer (added in 0.6.x)
 

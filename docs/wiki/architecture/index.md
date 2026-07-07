@@ -163,7 +163,7 @@ packages/
 | **core/** | Framework orchestration | agent, runner, events, workspace, context, scheduling, persistence, middleware |
 | **protocols/** | Protocol definitions | context, memory, planner, policy, durability, vector_store |
 | **backends/** | Protocol implementations | memory, durability, vector_store, persistence |
-| **subagents/** | Built-in subagents | plan, tacitus, browser_use, skillify, veritas |
+| **subagents/** | Built-in subagents | planner, deep_research, academic_research, browser_use, skillify, veritas |
 | **skills/** | Agent skills | builtin_skills, registry, budget |
 | **middleware/** | Event processing | system_prompt, policy, workspace_context, execution_hints |
 | **mcp/** | MCP integration | server management, tool discovery |

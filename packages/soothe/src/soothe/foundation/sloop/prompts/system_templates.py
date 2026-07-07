@@ -75,7 +75,7 @@ _RESEARCH_GUIDE = """\
 Research tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
 - search_web: Quick web search for factual lookups, news, current events (single call).
 - crawl_web: Extract clean content from a web page URL.
-- tacitus: Public-domain deep investigation (web, academic, URLs).
+- deep_research: Iterative public web research with URL crawling and adaptive reports.
   Set domain='web' for internet, 'code' for codebase, 'deep' for all, 'auto' to decide.\
 """
 
@@ -93,7 +93,7 @@ _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
 - planner: Agentic plan design — iterative markdown execution plan; one report.
-- tacitus: Web or multi-source public-domain investigation—not trivial directory walks.
+- deep_research: Public web investigation—not local codebase or file exploration.
 Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
 """
 
@@ -125,7 +125,7 @@ Progressive tool binding:
 Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_file_lines) instead of full-file rewrites.
-- Use websearch for quick lookups; use tacitus for thorough public-domain investigation.
+- Use websearch for quick lookups; use deep_research for thorough public web research reports.
 - Use run_command for sync shell, run_background for long-running jobs, kill_process to stop background PIDs, run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
@@ -135,7 +135,7 @@ SKILL_CONTEXT_ACTIVE_GUIDE = (
     "One or more skills are pre-loaded in <SKILL_CONTEXT> below. Follow their "
     "instructions on this hop before any other discovery path.\n"
     "Use run_command or run_python exactly as the skill documents. Do NOT call "
-    "search_tools, search_skills, task, tacitus, or browser_use for work the "
+    "search_tools, search_skills, task, deep_research, or browser_use for work the "
     "loaded skill already covers.\n"
     "For simple lookups, one compact command is usually enough — avoid a second "
     "full JSON fetch unless the user asked for detailed data.\n"

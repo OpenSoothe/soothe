@@ -26,7 +26,8 @@ Subagents are specialized autonomous agents that perform multi-step, stateful wo
 
 **Built-in subagents** include:
 - **planner** (RFC-618): Structured planning with iterative refinement
-- **tacitus** (RFC-619): Public-domain research across web, academic papers, and URLs
+- **deep_research** (RFC-619): Public web research with crawl-on-discovery
+- **academic_research** (RFC-619): Academic literature research (DeepXiv)
 - **browser_use**: Browser automation (included in base dependencies)
 - **skillify**: Semantic skill retrieval and discovery
 - **veritas** (RFC-622): Intent-grounded clarification auto-answerer
@@ -93,7 +94,7 @@ All capabilities are configured via `config.yml`. Subagents and MCP servers have
 | [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
 | [RFC-601](../../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
 | [RFC-618](../../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
-| [RFC-619](../../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
+| [RFC-619](../../specs/RFC-619-deep-research-subagent.md) | Deep Research Subagent |
 | [RFC-622](../../specs/RFC-622-veritas-auto-clarification.md) | Veritas Auto-Clarification |
 | [RFC-101](../../specs/RFC-101-tool-interface.md) | Tool Interface (single-purpose design) |
 | [RFC-412](../../specs/RFC-412-mcp-management.md) | MCP Management |
@@ -106,7 +107,7 @@ All capabilities are configured via `config.yml`. Subagents and MCP servers have
 | Run a multi-step workflow with LLM orchestration | A **subagent** |
 | Integrate an external service that speaks MCP | An **MCP server** |
 | Add a capability not available in langchain | A custom **tool** via plugin |
-| Compose multiple searches into a research flow | A **subagent** (e.g., tacitus) |
+| Compose multiple searches into a research flow | A **subagent** (e.g., `deep_research` or `academic_research`) |
 
 The golden rule: **check the langchain ecosystem first**. If langchain or deepagents already provides a tool or agent for your need, use it rather than building a custom one.
 

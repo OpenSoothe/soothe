@@ -104,7 +104,7 @@ Always returns `ConfigDrivenPolicy(config)`. No backend selection — config-dri
 2. **Plugin tools** — loaded via `load_plugin_tools(config)`
 3. **MCP tools** — loaded from configured MCP servers
 
-`resolve_subagents(config)` assembles subagents from a `SUBAGENT_FACTORIES` registry — built-in subagents (plan, tacitus, browser_use, skillify, veritas) plus plugin subagents. Each subagent has a factory function gated by its config flag.
+`resolve_subagents(config)` assembles subagents from a `SUBAGENT_FACTORIES` registry — built-in subagents (planner, deep_research, academic_research, browser_use, skillify, veritas) plus plugin subagents. Each subagent has a factory function gated by its config flag.
 
 The resolver also provides **lazy subagent** loading (`_lazy_subagent.py`) — subagents can be compiled on first use rather than at agent construction time, reducing startup cost.
 

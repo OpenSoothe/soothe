@@ -27,7 +27,7 @@ class TestTaskRowDeduplication:
         step_card.add_tool_call(
             "toolu_01A",
             "task",
-            {"subagent_type": "tacitus", "description": "search files"},
+            {"subagent_type": "deep_research", "description": "search files"},
             is_task_row=True,
         )
         assert len(step_card._rows) == 1
@@ -36,7 +36,7 @@ class TestTaskRowDeduplication:
         step_card.add_tool_call(
             "toolu_01B",
             "task",
-            {"subagent_type": "tacitus", "description": "search files", "prompt": "..."},
+            {"subagent_type": "deep_research", "description": "search files", "prompt": "..."},
             is_task_row=True,
         )
         assert len(step_card._rows) == 1
@@ -49,7 +49,7 @@ class TestTaskRowDeduplication:
         step_card.add_tool_call(
             "toolu_01A",
             "task",
-            {"subagent_type": "tacitus", "description": "search files"},
+            {"subagent_type": "deep_research", "description": "search files"},
             is_task_row=True,
         )
         step_card.add_tool_call(
@@ -67,13 +67,13 @@ class TestTaskRowDeduplication:
         step_card.add_tool_call(
             "toolu_01A",
             "task",
-            {"subagent_type": "tacitus", "description": "search files"},
+            {"subagent_type": "deep_research", "description": "search files"},
             is_task_row=True,
         )
         step_card.add_tool_call(
             "toolu_01B",
             "task",
-            {"subagent_type": "tacitus", "description": "map repo"},
+            {"subagent_type": "deep_research", "description": "map repo"},
             is_task_row=True,
         )
         assert len(step_card._rows) == 2
@@ -85,8 +85,8 @@ class TestSubagentDisplayNames:
     def test_known_subagent_types(self) -> None:
         """Known subagent types should return mapped display names."""
         # Built-in soothe core subagents
-        assert get_subagent_display_name("tacitus") == "Tacitus"
-        assert get_subagent_display_name("tacitus") == "Tacitus"
+        assert get_subagent_display_name("deep_research") == "Deep Research"
+        assert get_subagent_display_name("deep_research") == "Deep Research"
         assert get_subagent_display_name("planner") == "Planner"
         # Plugin-based subagent
         assert get_subagent_display_name("browser_use") == "Browser"
@@ -124,12 +124,12 @@ class TestSubagentDisplayNames:
         row = StepToolRow(
             tool_call_id="test:task",
             tool_name="task",
-            args={"subagent_type": "tacitus", "description": "search code"},
+            args={"subagent_type": "deep_research", "description": "search code"},
             phase="pending",
             is_task_row=True,
         )
         label = task_delegation_label(row)
-        assert label.startswith("Tacitus(")
+        assert label.startswith("Deep Research(")
         assert "search code" in label
 
 

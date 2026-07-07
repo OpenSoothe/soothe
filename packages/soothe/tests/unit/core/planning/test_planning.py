@@ -407,9 +407,9 @@ class TestLLMPlanner:
                 PlanStep(id="2", description="Do work", execution_hint="tool"),
             ],
         )
-        out = LLMPlanner._apply_preferred_subagent(plan, "tacitus")
+        out = LLMPlanner._apply_preferred_subagent(plan, "deep_research")
         assert out.steps[0].subagent is None
-        assert out.steps[1].subagent == "tacitus"
+        assert out.steps[1].subagent == "deep_research"
         assert out.steps[1].execution_hint == "subagent"
 
     def test_apply_preferred_subagent_single_step_names_subagent(self) -> None:
@@ -418,7 +418,7 @@ class TestLLMPlanner:
             goal="g",
             steps=[PlanStep(id="1", description="Only step", execution_hint="tool")],
         )
-        out = LLMPlanner._apply_preferred_subagent(plan, "tacitus")
+        out = LLMPlanner._apply_preferred_subagent(plan, "deep_research")
         assert len(out.steps) == 1
-        assert out.steps[0].subagent == "tacitus"
+        assert out.steps[0].subagent == "deep_research"
         assert out.steps[0].execution_hint == "subagent"

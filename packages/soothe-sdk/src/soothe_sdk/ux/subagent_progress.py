@@ -19,7 +19,7 @@ def get_subagent_name_from_event(event_type: str) -> str | None:
         event_type: Full event type string.
 
     Returns:
-        Subagent segment (e.g., ``explore``, ``tacitus``) for ``soothe.subagent.<id>.…``,
+        Subagent segment (e.g., ``explore``, ``deep_research``) for ``soothe.subagent.<id>.…``,
         else None.
 
     Example:

@@ -585,7 +585,7 @@ class TestEventProcessorToolAndAssistantFiltering:
                         {
                             "name": "task",
                             "id": "tc-task-1",
-                            "args": {"subagent_type": "tacitus", "description": "scan"},
+                            "args": {"subagent_type": "deep_research", "description": "scan"},
                         }
                     ],
                 }

@@ -259,7 +259,7 @@ async def test_wire_update_registers_task_on_execute_namespace() -> None:
             "tool_call_id": "ZCH_01:t0:tool-abc123",
             "name": "task",
             "args": {
-                "subagent_type": "tacitus",
+                "subagent_type": "deep_research",
                 "description": "Survey RFCs 000-105",
             },
         },
@@ -269,7 +269,7 @@ async def test_wire_update_registers_task_on_execute_namespace() -> None:
     assert handled is True
     assert card._has_task_activity_body()
     assert card._iter_task_delegation_rows()
-    assert router._spawns_by_task_id["ZCH_01:s:task:0"][1] == "tacitus"
+    assert router._spawns_by_task_id["ZCH_01:s:task:0"][1] == "deep_research"
 
 
 @pytest.mark.asyncio
@@ -323,7 +323,7 @@ async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
             "tool_call_id": "ZCH_01:s:task:0",
             "name": "task",
             "args": {
-                "subagent_type": "tacitus",
+                "subagent_type": "deep_research",
                 "description": "Enumerate all files",
             },
         },
@@ -390,7 +390,7 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
             "tool_call_id": "ZCH_01:s:task:0",
             "name": "task",
             "args": {
-                "subagent_type": "tacitus",
+                "subagent_type": "deep_research",
                 "description": "Enumerate all files in workspace",
             },
         },
@@ -461,18 +461,18 @@ async def test_subagent_wire_step_event_adds_task_card_rows() -> None:
             "tool_call_id": "ZCH_01:s:task:0",
             "name": "task",
             "args": {
-                "subagent_type": "tacitus",
+                "subagent_type": "deep_research",
                 "description": "World Cup status",
             },
         },
         ns_key=("execute:abc",),
         pending_tool_calls_lc={},
     )
-    scope: tuple[str, str, str] = ("ZCH_01:s:task:0", "tacitus", "ZCH-01")
+    scope: tuple[str, str, str] = ("ZCH_01:s:task:0", "deep_research", "ZCH-01")
 
     handled = _apply_subagent_wire_step_event(
         adapter,
-        event_type="soothe.subagent.tacitus.step.completed",
+        event_type="soothe.subagent.deep_research.step.completed",
         data={"tool_name": "PlanSearches", "args_preview": "4 queries", "status": "done"},
         task_scope=scope,
     )
@@ -506,7 +506,7 @@ async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> No
             "tool_call_id": "ZCH_01:s:task:0",
             "name": "task",
             "args": {
-                "subagent_type": "tacitus",
+                "subagent_type": "deep_research",
                 "description": "Enumerate files",
             },
         },
@@ -529,10 +529,10 @@ async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> No
     card = adapter._subagent_cards_by_key["ZCH-01:t0"]
     assert card._status == "running"
 
-    scope: tuple[str, str, str] = ("ZCH-01:s:task:0", "tacitus", "ZCH-01")
+    scope: tuple[str, str, str] = ("ZCH-01:s:task:0", "deep_research", "ZCH-01")
     handled = _apply_subagent_wire_lifecycle_event(
         adapter,
-        event_type="soothe.subagent.tacitus.completed",
+        event_type="soothe.subagent.deep_research.completed",
         data={"duration_ms": 1200, "completion_status": "complete"},
         task_scope=scope,
     )
@@ -550,7 +550,7 @@ def test_subagent_footer_ignores_server_step_tool_count() -> None:
     card = create_subagent_card(
         step_id="ZCH-01",
         description="Count files",
-        subagent_type="tacitus",
+        subagent_type="deep_research",
         parent_step_id="ZCH-01",
         parent_task_key="ZCH-01:s:task:0",
         task_idx=0,
@@ -574,7 +574,7 @@ def test_subagent_card_shows_latest_three_tool_activities() -> None:
     card = create_subagent_card(
         step_id="ZCH-01",
         description="Scan repo",
-        subagent_type="tacitus",
+        subagent_type="deep_research",
         parent_step_id="ZCH-01",
         parent_task_key="ZCH-01:s:task:0",
         task_idx=0,

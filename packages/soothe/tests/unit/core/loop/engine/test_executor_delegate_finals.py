@@ -263,7 +263,7 @@ async def test_backfill_tool_calls_args_from_chunks_by_index() -> None:
                 "index": 0,
                 "args": {
                     "description": "Indexed chunk args",
-                    "subagent_type": "tacitus",
+                    "subagent_type": "deep_research",
                 },
             },
         ],
@@ -301,7 +301,7 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
             budget=None,
             step_id="JPV-01",
             step_description="Map goal engine to sloop boundaries",
-            step_subagent="tacitus",
+            step_subagent="deep_research",
         )
     ]
     event = rows[0].event
@@ -311,7 +311,7 @@ async def test_stream_injects_step_description_on_empty_task_args() -> None:
     tc = msg.tool_calls[0]
     assert tc["id"] == "JPV_01:s:task:0"
     assert "sloop" in str(tc["args"].get("description", ""))
-    assert tc["args"].get("subagent_type") == "tacitus"
+    assert tc["args"].get("subagent_type") == "deep_research"
 
 
 @pytest.mark.asyncio
@@ -330,7 +330,7 @@ async def test_stream_preserves_model_task_description_over_step_brief() -> None
                         "name": "task",
                         "args": {
                             "description": "Model-specific delegation brief",
-                            "subagent_type": "tacitus",
+                            "subagent_type": "deep_research",
                         },
                         "id": "functions.task:0",
                     }
@@ -352,7 +352,7 @@ async def test_stream_preserves_model_task_description_over_step_brief() -> None
             budget=None,
             step_id="JPV-02",
             step_description="Step plan text only",
-            step_subagent="tacitus",
+            step_subagent="deep_research",
         )
     ]
     event = rows[0].event
@@ -369,7 +369,7 @@ async def test_stream_emits_string_tool_call_chunk_args_after_enrich() -> None:
     from langchain_core.messages import AIMessageChunk
 
     chunk_args = json.dumps(
-        {"description": "From chunks", "subagent_type": "tacitus"},
+        {"description": "From chunks", "subagent_type": "deep_research"},
         separators=(",", ":"),
     )
     chunk: tuple = (
@@ -403,7 +403,7 @@ async def test_stream_emits_string_tool_call_chunk_args_after_enrich() -> None:
             budget=None,
             step_id="WAA-04",
             step_description="Step fallback brief",
-            step_subagent="tacitus",
+            step_subagent="deep_research",
         )
     ]
     event = rows[0].event
@@ -430,7 +430,7 @@ async def test_backfill_tool_calls_args_from_chunks_on_same_message() -> None:
                 "name": "task",
                 "args": {
                     "description": "Explore the repo",
-                    "subagent_type": "tacitus",
+                    "subagent_type": "deep_research",
                 },
                 "id": "call-1",
             },
@@ -455,7 +455,7 @@ async def test_subgraph_rewrite_skips_already_unified_step_level_ids() -> None:
                     {
                         "name": "task",
                         "id": "EZJ_07:s:task:0",
-                        "args": '{"subagent_type": "tacitus"}',
+                        "args": '{"subagent_type": "deep_research"}',
                     },
                 ],
             ),

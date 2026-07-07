@@ -103,7 +103,8 @@ docs/wiki/
 │   │   ├── explore.md
 │   │   ├── plan.md
 │   │   ├── veritas.md
-│   │   ├── tacitus.md
+│   │   ├── deep_research.md
+│   │   ├── academic_research.md
 │   │   ├── claude.md
 │   │   └── browser-use.md
 │   │
@@ -513,7 +514,8 @@ Related modules should be linked:
 | explore | RFC-613 |
 | plan | RFC-618 |
 | veritas | RFC-623 |
-| tacitus | RFC-619 |
+| deep_research | RFC-619 |
+| academic_research | RFC-619 §11 |
 | claude | RFC-601 |
 
 ---

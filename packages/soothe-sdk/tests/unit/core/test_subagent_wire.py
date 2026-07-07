@@ -9,7 +9,7 @@ from soothe_sdk.core.subagent_wire import (
 
 
 def test_curated_structural_match_for_soothe_subagent_types() -> None:
-    assert is_curated_subagent_wire_event_type("soothe.subagent.tacitus.started")
+    assert is_curated_subagent_wire_event_type("soothe.subagent.deep_research.started")
     assert is_curated_subagent_wire_event_type("soothe.subagent.explore.milestone")
     assert is_curated_subagent_wire_event_type("soothe.subagent.explore.started")
     assert not is_curated_subagent_wire_event_type("soothe.capability.browser.started")
@@ -25,7 +25,7 @@ def test_emit_requires_registration() -> None:
 
 
 def test_consumer_allowlist_includes_structural_curated_types() -> None:
-    assert is_allowlisted_subagent_event_type("soothe.subagent.tacitus.completed")
+    assert is_allowlisted_subagent_event_type("soothe.subagent.deep_research.completed")
     assert is_allowlisted_subagent_event_type("soothe.subagent.explore.started")
 
 

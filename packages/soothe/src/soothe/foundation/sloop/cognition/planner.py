@@ -648,7 +648,7 @@ class LLMPlanner:
             "- full_description: Detailed execution context (50-150 words) including key file paths, identifiers, parameters, and context needed to execute without referencing the original goal",
             "- When dependencies is set: full_description is REQUIRED and must instruct using predecessor output without repeating predecessor discovery",
             "- execution_hint: 'tool' (direct tools on execute-step thread), 'subagent' (delegate to named capability), 'auto' (LLM reasoning)",
-            "- When execution_hint='subagent', set subagent to a listed capability (e.g. tacitus, browser_use, planner)",
+            "- When execution_hint='subagent', set subagent to a listed capability (e.g. deep_research, browser_use, planner)",
             "- If user requests specific subagent, set execution_hint='subagent' and subagent accordingly",
             "- Return ONLY valid JSON (no markdown blocks)",
             "</PLANNING_RULES>",
