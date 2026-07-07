@@ -136,10 +136,11 @@ class _ParallelStepDone:
     payload: _ExecuteStepResult | BaseException
 
 
-def step_had_tool_error(result: StepResult) -> bool:
-    """Return True when a completed step recorded recoverable tool errors."""
-    outcome = result.outcome
-    return isinstance(outcome, dict) and bool(outcome.get("has_tool_error"))
+def all_tool_outcomes_failed(outcomes: list[dict[str, Any]]) -> bool:
+    """Return True when every recorded tool outcome in a step reported an error."""
+    if not outcomes:
+        return False
+    return all(bool(o.get("has_error")) for o in outcomes)
 
 
 def _first_tool_error_message(outcomes: list[dict[str, Any]]) -> str:
@@ -192,7 +193,7 @@ __all__ = [
     "_ExecuteStepResult",
     "_StreamCollectChunk",
     "_first_tool_error_message",
-    "step_had_tool_error",
+    "all_tool_outcomes_failed",
     "_DEFAULT_MAX_TOOL_CALLS_PER_STEP",
     "_PendingInterruptFetch",
     "_ParallelStepDone",

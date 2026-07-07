@@ -23,6 +23,22 @@ _MAX_GOAL_HEADER = 100
 _MAX_GOAL_STEP_DESC = 200
 
 
+def _plan_quick_view_step_summary(success: bool, summary: str) -> str:
+    """Return a Ctrl+T-safe step summary tail (hide recoverable tool errors)."""
+    tail = (summary or "").strip()
+    if not tail or tail in ("Done", "Failed"):
+        return ""
+    if success:
+        try:
+            from soothe.foundation.sloop.engine.act_wave_finalize import is_error_tool_result_text
+
+            if is_error_tool_result_text(tail):
+                return ""
+        except Exception:  # noqa: BLE001
+            logger.debug("plan quick view summary filter unavailable", exc_info=True)
+    return tail
+
+
 class _StepLineState:
     """Mutable row state for the goal → steps aggregate."""
 
@@ -218,8 +234,8 @@ class CognitionGoalTreeMessage(Vertical):
         rest = f"{icon} {label} · {dur}"
         if st.tool_call_count > 0:
             rest += f" · {st.tool_call_count} tools"
-        tail = (st.summary or "").strip()
-        if tail and tail not in ("Done", "Failed"):
+        tail = _plan_quick_view_step_summary(st.success, st.summary)
+        if tail:
             rest += f" — {self._clip(tail, 80)}"
         if st.phase == "error" or (st.phase == "done" and not st.success):
             return Content.assemble(
