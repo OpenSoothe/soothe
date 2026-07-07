@@ -55,15 +55,19 @@ def _strip_json_text(raw: str) -> str:
 
 def _extract_json_str_from_response(response: Any) -> str:
     """Extract JSON text from an AIMessage-like provider response."""
-    if hasattr(response, "content") and response.content:
-        return _strip_json_text(str(response.content))
-    if (
-        hasattr(response, "additional_kwargs")
-        and "reasoning_content" in response.additional_kwargs
-        and response.additional_kwargs["reasoning_content"]
-    ):
-        logger.debug("JSON found in reasoning_content field (additional_kwargs)")
-        return _strip_json_text(str(response.additional_kwargs["reasoning_content"]))
+    # Check content field first (primary for AIMessage-like objects)
+    if hasattr(response, "content"):
+        if response.content:
+            return _strip_json_text(str(response.content))
+        # content exists but is empty — check reasoning_content before giving up
+        if hasattr(response, "additional_kwargs"):
+            rc = response.additional_kwargs.get("reasoning_content")
+            if rc:
+                logger.debug("JSON found in reasoning_content field (additional_kwargs)")
+                return _strip_json_text(str(rc))
+        # AIMessage-like object with empty content and no reasoning_content → empty
+        return ""
+    # Fallback for non-AIMessage response types (e.g., raw string)
     return _strip_json_text(str(response))
 
 
@@ -141,7 +145,9 @@ class JsonSchemaModelWrapper(Runnable):
                 100,
             ),
         )
-        json_dict = json.loads(json_str)
+        from soothe.foundation.sloop.utils.json_parsing import _load_llm_json_dict
+
+        json_dict = _load_llm_json_dict(json_str)
         return _coerce_structured_json(
             json_dict,
             self._schema,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from soothe.foundation.sloop.chitchat_fallbacks import GENERIC_CHITCHAT_FALLBACKS_EN
 from soothe.foundation.sloop.intention.classifier import IntentClassifier
 from soothe.foundation.sloop.intention.models import IntakePass1Confidence, IntakePass1LLMResult
 
@@ -61,4 +62,4 @@ def test_pass1_to_intent_generic_fallback_without_llm_response() -> None:
         reasoning="Social question, not a work request.",
     )
     intent = classifier.pass1_to_intent(pass1, "who is your daddy")
-    assert intent.chitchat_response == "Hello! How can I help you today?"
+    assert intent.chitchat_response in GENERIC_CHITCHAT_FALLBACKS_EN

@@ -26,6 +26,13 @@ def test_fragment_anchors_reasoning_on_prior_progress() -> None:
     assert "cite a tool that ran" in text or "evidence excerpt" in text
 
 
+def test_fragment_mandates_full_goal_completion() -> None:
+    text = _FRAGMENT_TEXT
+    assert "Fulfill" in text and "GOAL:" in text
+    assert "do not stop" in text or "do not mark done" in text
+    assert "Multi-part goals" in text
+
+
 def test_fragment_forbids_goal_restatement_in_guards() -> None:
     text = _FRAGMENT_TEXT
     # Look for the guard line we added.
@@ -36,7 +43,7 @@ def test_fragment_preserves_existing_guards() -> None:
     text = _FRAGMENT_TEXT
     # Pre-existing guards must remain (regression check).
     assert 'NEVER status="done"' in text
-    assert 'Never set status="done" without ledger evidence' in text
+    assert "without full-goal ledger evidence" in text
 
 
 def test_plan_assess_fragment_size_guard() -> None:

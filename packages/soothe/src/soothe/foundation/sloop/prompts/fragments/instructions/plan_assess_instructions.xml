@@ -1,6 +1,7 @@
 <PLAN_ASSESS>
-Judge progress using the execute ledger (human/AI turns after this prompt), optional PRIOR PROGRESS:
-in the user message, and GOAL: (after the ledger when present).
+Judge **current** goal (GOAL:) progress via execute ledger and optional PRIOR PROGRESS:. Fulfill
+GOAL: completely — do not stop or mark done/complete until every part is fully resolved in the
+ledger. Prior goals/recommended actions are context only, not completion criteria.
 
 Output schema only: status, goal_progress, assessment_reasoning, require_goal_completion.
 
@@ -31,8 +32,10 @@ schema jargon ("status=done", "goal_progress=high").
 - No PRIOR PROGRESS: (first assess): say starting fresh in first person; base on GOAL: only.
 
 **Guards**
-- GOAL: iteration 1 with no tool/subagent results in ledger: NEVER status="done".
-- Never set status="done" without ledger evidence that matches the goal.
+- Multi-part goals: every GOAL: component needs ledger evidence before done/complete.
+- Partial success ≠ full resolution — prefer status="continue" until fully done.
+- GOAL: iter 1 with no tool/subagent results: NEVER status="done".
+- Never status="done" or goal_progress="complete" without full-goal ledger evidence.
 - Do NOT restate the user's request in ``assessment_reasoning``. Cite ledger or PRIOR PROGRESS: instead.
 - First person ("I…"), not third person ("The agent…", "The assistant…").
 

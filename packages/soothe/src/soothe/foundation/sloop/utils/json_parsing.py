@@ -252,6 +252,19 @@ def _load_llm_json_dict(response: str) -> dict[str, Any]:
                     0,
                 )
 
+    # Truncated provider output (token limit / cut-off mid-string) — close open JSON.
+    start = json_str.find("{")
+    if start >= 0:
+        fragment = json_str[start:]
+        for variant in (fragment, _repair_truncated_json(fragment)):
+            parsed = _try_parse_json_dict(variant)
+            if parsed is not None:
+                logger.debug(
+                    "Parsed LLM JSON after truncation repair: len=%d",
+                    len(variant),
+                )
+                return parsed
+
     if last_error is not None:
         raise last_error
     raise TypeError("LLM JSON root must be an object")

@@ -250,3 +250,33 @@ def test_limited_provider_wrapper_dict_schema() -> None:
         strict=True,
     )
     assert isinstance(out, JsonSchemaModelWrapper)
+
+
+@pytest.mark.asyncio
+async def test_json_schema_wrapper_repairs_truncated_json() -> None:
+    """Truncated json_schema provider output should parse after repair."""
+    inner = MagicMock()
+    inner.ainvoke = AsyncMock(
+        return_value=AIMessage(
+            content='{"is_task":false,"confidence":"high","social_response":"Hello'
+        ),
+    )
+    pass1_schema = {
+        "type": "object",
+        "properties": {
+            "is_task": {"type": "boolean"},
+            "confidence": {"type": "string"},
+            "social_response": {"type": "string"},
+        },
+        "required": ["is_task", "confidence"],
+        "additionalProperties": True,
+    }
+    rf = {
+        "type": "json_schema",
+        "json_schema": {"name": "Pass1", "strict": False, "schema": pass1_schema},
+    }
+    wrapper = JsonSchemaModelWrapper(inner, rf, pass1_schema, strict=False)
+
+    out = await wrapper.ainvoke([])
+    assert out["is_task"] is False
+    assert out["social_response"] == "Hello"

@@ -158,6 +158,35 @@ async def test_llm_error_fails_safe_to_task() -> None:
     assert result.confidence == IntakePass1Confidence.LOW
 
 
+async def test_structured_output_error_retries_once() -> None:
+    """StructuredOutputError should trigger one retry before fail-safe."""
+    from unittest.mock import patch
+
+    from soothe.utils.llm.structured import StructuredOutputError
+
+    mock_model = MagicMock()
+    classifier = IntakePass1Classifier(model=mock_model)
+    with patch(
+        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            side_effect=[
+                StructuredOutputError(
+                    "structured model invoke failed: Unterminated string starting at: line 1 column 50"
+                ),
+                {
+                    "is_task": True,
+                    "confidence": "high",
+                    "social_response": None,
+                    "reasoning": "work request",
+                },
+            ]
+        ),
+    ) as mock_invoke:
+        result = await classifier.classify("fix the bug")
+    assert result.is_task is True
+    assert mock_invoke.await_count == 2
+
+
 async def test_low_confidence_is_still_valid() -> None:
     """Low confidence result is still valid (no retry in Pass 1)."""
     classifier = create_pass1_classifier_with_result(

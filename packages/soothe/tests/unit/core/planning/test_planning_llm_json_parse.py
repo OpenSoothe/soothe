@@ -56,3 +56,19 @@ def test_utf8_bom_prefix() -> None:
 def test_invalid_json_still_raises() -> None:
     with pytest.raises(json.JSONDecodeError):
         _load_llm_json_dict("{not json")
+
+
+def test_truncated_json_mid_string_repaired() -> None:
+    """Pass 1-style output cut off mid social_response should still parse."""
+    raw = '{"is_task":false,"confidence":"high","social_response":"Hi'
+    data = _load_llm_json_dict(raw)
+    assert data["is_task"] is False
+    assert data["confidence"] == "high"
+    assert data["social_response"] == "Hi"
+
+
+def test_truncated_json_unterminated_string_at_column_50() -> None:
+    raw = '{"is_task":false,"confidence":"high","social_response":"I\'m Soothe'
+    data = _load_llm_json_dict(raw)
+    assert data["is_task"] is False
+    assert data["social_response"].startswith("I'm Soothe")
