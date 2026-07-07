@@ -10,7 +10,6 @@ Autopilot concepts. It provides:
 Import paths:
     from soothe.foundation.core import CoreAgent, create_soothe_agent
     from soothe.foundation.core.agent import AgentBuilder
-    from soothe.foundation.core.entities import Job, JobState
 """
 
 from __future__ import annotations
@@ -22,9 +21,6 @@ __all__ = [
     "create_soothe_agent",
     "AgentBuilder",
     "ClaudeCoreAgent",
-    # Entities (RFC-228, RFC-626)
-    "Job",
-    "JobState",
 ]
 
 
@@ -46,11 +42,6 @@ def __getattr__(name: str) -> Any:
         from soothe.foundation.core.agent._claude_agent import ClaudeCoreAgent
 
         return ClaudeCoreAgent
-    # Entities lazy import
-    if name in ("Job", "JobState"):
-        from soothe.foundation.core.entities import Job, JobState
-
-        return {"Job": Job, "JobState": JobState}[name]
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)

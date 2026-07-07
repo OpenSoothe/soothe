@@ -502,7 +502,7 @@ def create_soothe_agent(
     This is a thin wrapper delegating to AgentBuilder.
     See AgentBuilder.build() for full parameter documentation.
 
-    Note: Goal management (GoalEngine, goal_tools) is NOT included.
+    Note: Goal management (ContextEngine, goal_tools) is NOT included.
     That is Layer 3 responsibility - resolve separately in SootheRunner.
 
     Args:

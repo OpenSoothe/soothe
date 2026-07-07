@@ -17,6 +17,9 @@ from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 
 _SLOOP_CHECKPOINT_STATUSES = frozenset({"running", "idle", "finalized", "cancelled"})
 
+# Minimum checkpoint schema written/read by current releases (RFC-626 Phase 3).
+MIN_SUPPORTED_CHECKPOINT_SCHEMA_VERSION = "5.0"
+
 
 class WorkingMemoryEntry(BaseModel):
     """One working memory entry."""
@@ -192,8 +195,8 @@ _GOAL_INDEX_FIELDS = frozenset(
 )
 
 
-def _slim_goal_index_item(item: Any) -> Any:
-    """Normalize legacy goal_history rows to GoalIndexEntry fields."""
+def _strip_enriched_goal_index_fields(item: Any) -> Any:
+    """Drop pre-RFC-626 goal content from ``goal_history`` rows on load."""
     if not isinstance(item, dict):
         return item
     return {k: v for k, v in item.items() if k in _GOAL_INDEX_FIELDS}
@@ -242,16 +245,20 @@ def normalize_checkpoint_data(
     out.setdefault("total_tokens_used", 0)
     out.setdefault("thread_switch_pending", False)
 
-    # Schema version handling
-    schema_version = out.get("schema_version", "5.0")
-    out.setdefault("schema_version", schema_version)
+    # Schema version handling (5.0+ only; older blobs are upgraded on read).
+    schema_version = out.get("schema_version", MIN_SUPPORTED_CHECKPOINT_SCHEMA_VERSION)
+    if schema_version < MIN_SUPPORTED_CHECKPOINT_SCHEMA_VERSION:
+        schema_version = MIN_SUPPORTED_CHECKPOINT_SCHEMA_VERSION
+    out["schema_version"] = schema_version
 
-    # Strip legacy goal content fields from goal_history (schema 5.0+).
-    if schema_version >= "5.0" and out.get("goal_history"):
-        out["goal_history"] = [_slim_goal_index_item(item) for item in out["goal_history"]]
+    # Strip enriched goal fields from goal_history index rows.
+    if out.get("goal_history"):
+        out["goal_history"] = [
+            _strip_enriched_goal_index_fields(item) for item in out["goal_history"]
+        ]
 
-    # RFC-626 Phase 3: execution_checkpoint defaults for schema 5.0
-    if schema_version == "5.0" and "execution_checkpoint" not in out:
+    # RFC-626 Phase 3: execution_checkpoint defaults
+    if "execution_checkpoint" not in out:
         out["execution_checkpoint"] = {
             "loop_id": resolved_loop_id or "",
             "thread_id": current_thread_id,

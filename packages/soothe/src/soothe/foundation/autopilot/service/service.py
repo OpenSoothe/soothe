@@ -513,7 +513,7 @@ class AutopilotService:
     async def _run_scheduling_loop(self) -> None:
         """Main scheduling loop coroutine.
 
-        Polls GoalEngine for ready goals, assigns loops,
+        Polls ContextEngine for ready goals, assigns loops,
         monitors loop health, releases idle loops.
         """
         poll_interval = self._config.poll_interval
@@ -677,7 +677,7 @@ class AutopilotService:
     async def _consume_worker_stream(self, goal_id: str, worker: Any, request: Any) -> None:
         """Drain a worker's stream and react to ``GoalCompletionChunk``.
 
-        On a successful completion: mark goal completed in GoalEngine,
+        On a successful completion: mark goal completed in ContextEngine,
         store the contribution if a context store is wired, return the
         worker to the idle queue, release any workspace reservation.
 

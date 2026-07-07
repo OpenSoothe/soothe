@@ -76,6 +76,26 @@ def _reconstruct_message(type_name: str, data: dict[str, Any]) -> BaseMessage | 
         return cls(content=content)
 
 
+def _normalize_ledger_entry(
+    entry_data: dict[str, Any],
+) -> tuple[str, dict[str, Any], str | None]:
+    """Normalize persisted ledger rows to the current ``_msg_type`` wire shape.
+
+    Pre-RFC-624 rows stored ``type``, ``content``, and ``phase`` only. They are
+    upgraded on read so ``load()`` uses a single reconstruction path.
+    """
+    entry = dict(entry_data)
+    if "_msg_type" in entry:
+        msg_type_name = str(entry.pop("_msg_type"))
+        phase = entry.pop("_phase", None)
+        return msg_type_name, entry, phase
+
+    msg_type_name = str(entry.pop("type", "HumanMessage"))
+    phase = entry.pop("phase", None)
+    content = entry.pop("content", "")
+    return msg_type_name, {"content": content}, phase
+
+
 class ContextEngine:
     """Unified context management for goals, steps, ledger, and projection.
 
@@ -85,9 +105,9 @@ class ContextEngine:
     Args:
         persistence: Persistence backend. Defaults to an in-memory SQLite
             instance suitable for tests; production code should supply an
-            explicit backend (file, SQLite, or pgsql).
+            explicit backend (SQLite or pgsql).
         projection_config: Limits for bounded projection.
-        soothe_home: Base directory for SemanticLoader and FileContextPersistence.
+        soothe_home: Base directory for SemanticLoader and context persistence backends.
         workspace: Working directory for SemanticLoader file lookup.
     """
 
@@ -1002,11 +1022,7 @@ class ContextEngine:
             logger.warning("Persistence save failed", exc_info=True)
 
     async def load(self) -> bool:
-        """Load persisted state. Returns True if DAG was loaded.
-
-        Handles both new format (full BaseMessage dump with _msg_type/_phase)
-        and legacy format (type + content + phase only).
-        """
+        """Load persisted state. Returns True if DAG was loaded."""
         try:
             dag = await self._persistence.load_dag()
             if dag is not None:
@@ -1019,22 +1035,9 @@ class ContextEngine:
             if ledger_data:
                 self._ledger.clear()
                 for entry_data in ledger_data:
-                    # New format: has _msg_type key
-                    if "_msg_type" in entry_data:
-                        msg_type_name = entry_data.pop("_msg_type")
-                        phase = entry_data.pop("_phase", None)
-                        msg = _reconstruct_message(msg_type_name, entry_data)
-                        if msg is not None:
-                            self._ledger.record_message(msg, phase or "")
-                    else:
-                        # Legacy format: type + content + phase
-                        msg_type = entry_data.get("type", "HumanMessage")
-                        content = entry_data.get("content", "")
-                        phase = entry_data.get("phase")
-                        if msg_type == "AIMessage":
-                            msg = AIMessage(content=content)
-                        else:
-                            msg = HumanMessage(content=content)
+                    msg_type_name, payload, phase = _normalize_ledger_entry(entry_data)
+                    msg = _reconstruct_message(msg_type_name, payload)
+                    if msg is not None:
                         self._ledger.record_message(msg, phase or "")
             return dag is not None
         except Exception:

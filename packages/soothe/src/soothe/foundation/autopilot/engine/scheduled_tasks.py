@@ -1,9 +1,9 @@
-"""RFC-204: time-based scheduled tasks that feed GoalEngine.
+"""RFC-204: schedule math for CronService and legacy SchedulerService.
 
 Supports delayed execution (``--delay``), specific time (``--at``),
 simple recurrence (``--every``), and cron expressions (``--cron``).
 
-Scheduled tasks feed goals to GoalEngine when their time arrives.
+Used by CronService for next-run calculation and schedule parsing.
 """
 
 from __future__ import annotations
@@ -89,7 +89,7 @@ class ScheduleSpec:
 
 
 class SchedulerService:
-    """Manages scheduled tasks, feeding goals to GoalEngine.
+    """Manages scheduled tasks and schedule math for CronService.
 
     Args:
         persist_path: Path to persistence file for surviving restarts.

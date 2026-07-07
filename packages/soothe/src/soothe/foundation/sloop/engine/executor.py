@@ -2070,16 +2070,10 @@ class Executor:
                 else:
                     chunks.append(text_out)
 
-            tool_meta_cfg = None
-            if self._config and hasattr(self._config, "optimization"):
-                opt = self._config.optimization
-                if hasattr(opt, "tool_result_registry"):
-                    tool_meta_cfg = opt.tool_result_registry
             outcome = generate_outcome_metadata(
                 tool_name,
                 content,
                 tool_call_id,
-                registry_config=tool_meta_cfg,
                 tool_status=msg_status,
             )
 

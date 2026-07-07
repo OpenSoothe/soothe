@@ -38,7 +38,7 @@ _LOOP_COLUMN_MIGRATIONS: dict[str, str] = {
     "resume_topic": "TEXT",
 }
 
-# RFC-626: legacy goal_records columns dropped; slim index only.
+# RFC-626: pre-slim goal_records columns upgraded on first open.
 _LEGACY_GOAL_RECORD_COLUMNS = frozenset(
     {
         "goal_text",
@@ -1157,7 +1157,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     thread_switch_pending INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '3.2',
+                    schema_version TEXT DEFAULT '5.0',
                     client_workspace TEXT,
                     detached_at TEXT,
                     user_id TEXT,
@@ -1311,7 +1311,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                     thread_switch_pending INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '3.2',
+                    schema_version TEXT DEFAULT '5.0',
                     client_workspace TEXT,
                     detached_at TEXT,
                     user_id TEXT,

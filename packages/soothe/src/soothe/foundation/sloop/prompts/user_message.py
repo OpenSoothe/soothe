@@ -320,7 +320,7 @@ def _render_prior_goals_tree(
 
 
 def _render_prior_goals_section(prior_goals: list[PriorGoalSummary]) -> str:
-    """Render completed prior goals from ContextBundle (legacy flat layout)."""
+    """Render completed prior goals for continuation-mode plan prompts."""
     if not prior_goals:
         return ""
     blocks: list[str] = []
@@ -824,7 +824,7 @@ def flatten_user_message_content(content: str) -> str:
     """Extract the primary directive from a scenario-formatted user message.
 
     Execute-step envelopes use ``EXECUTION TASK:``; plan envelopes use ``GOAL:`` /
-    ``GOAL RECAP:``. Legacy ledger rows may still use ``EXECUTION TASK RECAP:``.
+    ``GOAL RECAP:``. Continuation prompts may use ``EXECUTION TASK RECAP:``.
 
     Returns raw content when no known section prefix matches.
     """
@@ -840,7 +840,7 @@ def flatten_user_message_content(content: str) -> str:
     if execution_task_match:
         return execution_task_match.group(1).strip()
 
-    # Plan-phase or legacy execute format
+    # Plan-phase or continuation execute format
     goal_match = re.match(r"GOAL(?:\s+RECAP)?:\s*\n(.+?)(?:\n\n|\Z)", text, re.DOTALL)
     if goal_match:
         return goal_match.group(1).strip()
