@@ -11,6 +11,7 @@ from typing import Any
 
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
+    PlanGapAnalysis,
     PlanResult,
     StatusAssessment,
 )
@@ -22,6 +23,7 @@ class LoopPhaseScratch:
 
     plan_result: PlanResult | None = None
     plan_assessment: StatusAssessment | None = None
+    plan_gap: PlanGapAnalysis | None = None
     decision: AgentDecision | None = None
     undersized_plan_replan_attempts: int = 0
     iteration_perf_start: float | None = None

@@ -10,7 +10,7 @@ from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     resolve_planner_projection_mode,
 )
 
-PlannerCallKind = Literal["continuation", "assess", "generate"]
+PlannerCallKind = Literal["continuation", "assess", "generate", "gap"]
 
 GOAL_PREVIEW_MAX_CHARS = 120
 COMPLETION_PREVIEW_MAX_CHARS = 160

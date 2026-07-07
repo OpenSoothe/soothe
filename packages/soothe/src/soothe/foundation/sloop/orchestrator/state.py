@@ -13,8 +13,9 @@ IntentRoute = Literal["continue_loop", "fast_path"]
 AssessRoute = Literal[
     "continue_generate", "skip_generate", "continue_assess", "fresh_loop_skip_assess"
 ]
-EvidenceGatherRoute = Literal["plan_assess", "plan_generate_skip_assess"]
-ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess"]
+EvidenceGatherRoute = Literal["plan_assess", "plan_generate_skip_assess", "plan_gap_analysis"]
+GapAnalysisRoute = Literal["plan_assess"]
+ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess", "plan_gap_analysis"]
 
 PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
 PLAN_ROUTE_EXECUTE: PlanRoute = "execute"
@@ -28,6 +29,7 @@ class LoopGraphState(TypedDict, total=False):
     intent_route: IntentRoute | None
     assess_route: AssessRoute | None
     evidence_gather_route: EvidenceGatherRoute | None
+    gap_route: GapAnalysisRoute | None
     # RFC-630: 4-class intake label set by init_or_resume, read by
     # route_by_intent to dispatch to chitchat/trivial/simple/complex branches.
     intake_label: IntakeLabel | None

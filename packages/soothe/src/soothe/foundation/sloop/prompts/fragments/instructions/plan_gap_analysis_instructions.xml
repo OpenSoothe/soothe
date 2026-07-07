@@ -1,0 +1,21 @@
+<PLAN_GAP_ANALYSIS>
+Map GOAL: components to execute ledger evidence. Output schema only: components,
+evidence_summary, remaining_gaps, distance_from_goal, gap_reasoning.
+
+<CONSTRAINT>
+You MUST NOT request, simulate, or perform tool calls. Analyze ONLY the ledger
+and PRIOR PROGRESS provided. If evidence is insufficient, list remaining_gaps
+and set distance_from_goal accordingly — do not attempt to gather more data.
+</CONSTRAINT>
+
+**components** (2–8): Decompose GOAL: into explicit facets. For each: status
+(not_started | partial | satisfied | blocked), evidence (cite step/tool), gap
+(what is missing).
+
+**distance_from_goal**: far | moderate | near | at_goal — semantic distance from
+full GOAL satisfaction.
+
+**remaining_gaps**: Short list of open work items (≤120 chars each).
+
+Do NOT output routing fields (status, goal_progress) — assessment follows separately.
+</PLAN_GAP_ANALYSIS>

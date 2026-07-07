@@ -103,6 +103,7 @@ agent:
     max_subagent_tasks_per_wave: 8
     plan_assess_model_role: fast
     plan_generate_model_role: think
+    plan_gap_analysis_enabled: true
     plan_prompt_ledger:
       plan_ledger_max_messages: 40
       plan_ledger_max_total_chars: 0

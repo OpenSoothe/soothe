@@ -680,7 +680,9 @@ def resolve_execute_projection_mode(state: LoopState) -> ExecuteProjectionMode:
 def _execute_plan_tail_index(loop_messages: list[BaseMessage]) -> int:
     """Index before trailing plan-phase rows for the current goal (exclude from Slice A scan)."""
     idx = len(loop_messages)
-    plan_phases = frozenset({"plan_assess", "plan_generate", "intent_classify", "continuation"})
+    plan_phases = frozenset(
+        {"plan_assess", "plan_generate", "plan_gap_analysis", "intent_classify", "continuation"}
+    )
     while idx > 0:
         phase = getattr(loop_messages[idx - 1], "phase", None)
         if phase in plan_phases:

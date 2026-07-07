@@ -1366,14 +1366,28 @@ class LLMPlanner:
         context: PlanContext,
         *,
         context_engine: Any | None = None,
+        plan_gap: Any | None = None,
+        context_bundle: Any | None = None,
     ) -> Any:
         """Assess-only planner call used by split graph flow (RFC-214).
 
         Persists ``StatusAssessment`` on the CE goal node (IG-557); does not
         append ``plan_assess`` ledger pairs.
         """
+        if context_bundle is None and context_engine is not None:
+            try:
+                goal_id = getattr(state, "_ce_goal_id", None)
+                context_bundle = await context_engine.project(goal_id=goal_id)
+            except Exception:
+                logger.debug("[Plan] assess_status: ContextEngine.project() failed", exc_info=True)
         assess_messages = self._prompt_builder.build_plan_messages(
-            goal, state, context, plan_phase="assess"
+            goal,
+            state,
+            context,
+            plan_phase="assess",
+            call_kind="assess",
+            context_bundle=context_bundle,
+            plan_gap=plan_gap,
         )
         assessment, ai_response = await self._assess_status_with_response(
             assess_messages,
@@ -1424,6 +1438,63 @@ class LLMPlanner:
                 assessment.goal_progress = "high"
             assessment.require_goal_completion = True
         return assessment
+
+    async def analyze_plan_gap(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        *,
+        context_engine: Any | None = None,
+    ) -> Any:
+        """Read-only gap analysis before plan-assess (IG-557)."""
+        from soothe.foundation.sloop.state.schemas import PlanGapAnalysis
+
+        context_bundle = None
+        if context_engine is not None:
+            try:
+                goal_id = getattr(state, "_ce_goal_id", None)
+                context_bundle = await context_engine.project(goal_id=goal_id)
+            except Exception:
+                logger.debug(
+                    "[Plan] analyze_plan_gap: ContextEngine.project() failed", exc_info=True
+                )
+        gap_messages = self._prompt_builder.build_plan_messages(
+            goal,
+            state,
+            context,
+            plan_phase="assess",
+            call_kind="gap",
+            context_bundle=context_bundle,
+        )
+        model = _plan_phase_chat_model(self._plan_assess_model)
+        lf_cfg = self._planner_langfuse_run_config(
+            thread_id=state.thread_id,
+            phase="plan-gap-analysis",
+        )
+        gap = await self._invoke_structured(
+            model,
+            gap_messages,
+            PlanGapAnalysis,
+            config=lf_cfg,
+            thread_id=state.thread_id,
+        )
+        if gap is None:
+            raise ValueError("PlanGapAnalysis returned None")
+        if context_engine is not None:
+            goal_id = getattr(state, "_ce_goal_id", None)
+            if goal_id:
+                context_engine.set_last_gap_analysis(goal_id, gap, iteration=state.iteration)
+                logger.info(
+                    "[Plan] gap distance=%s open_components=%d",
+                    gap.distance_from_goal,
+                    sum(
+                        1
+                        for c in gap.components
+                        if c.status in ("not_started", "partial", "blocked")
+                    ),
+                )
+        return gap
 
     async def generate_from_assessment(
         self,

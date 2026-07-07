@@ -698,6 +698,25 @@ class StatusAssessment(BaseModel):
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
 
 
+class GoalComponentStatus(BaseModel):
+    """One decomposed facet of the current GOAL and its evidence state (IG-557)."""
+
+    component: str = Field(max_length=120)
+    status: Literal["not_started", "partial", "satisfied", "blocked"]
+    evidence: str = Field(default="", max_length=200)
+    gap: str = Field(default="", max_length=200)
+
+
+class PlanGapAnalysis(BaseModel):
+    """Explicit evidence inventory + distance from GOAL (feeds plan-assess, IG-557)."""
+
+    components: list[GoalComponentStatus] = Field(min_length=1, max_length=8)
+    evidence_summary: str = Field(max_length=400)
+    remaining_gaps: list[str] = Field(default_factory=list, max_length=6)
+    distance_from_goal: Literal["far", "moderate", "near", "at_goal"]
+    gap_reasoning: str = Field(max_length=300)
+
+
 class ContinuationAssessment(BaseModel):
     """RFC-226: iter=0 routing decision for continuation queries.
 

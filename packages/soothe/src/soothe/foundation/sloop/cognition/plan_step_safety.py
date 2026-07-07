@@ -9,6 +9,7 @@ from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import (
     FIRST_WAVE_MAX_STEPS,
     AgentDecision,
+    PlanGapAnalysis,
     StatusAssessment,
     StepAction,
 )
@@ -158,3 +159,23 @@ def assess_may_route_complete(
     if not state.step_results and not _current_goal_has_execute_ledger(state):
         return False
     return not state.has_remaining_steps()
+
+
+def assess_respects_gap_analysis(
+    assessment: StatusAssessment,
+    gap: PlanGapAnalysis | None,
+) -> bool:
+    """Return False when assess contradicts gap analysis (IG-557)."""
+    if gap is None:
+        return True
+    if gap.distance_from_goal in ("far", "moderate"):
+        if assessment.goal_progress == "complete" or assessment.status == "done":
+            return False
+    open_components = [
+        component
+        for component in gap.components
+        if component.status in ("not_started", "partial", "blocked")
+    ]
+    if open_components and assessment.goal_progress == "complete":
+        return False
+    return True

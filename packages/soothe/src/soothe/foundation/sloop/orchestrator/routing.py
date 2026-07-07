@@ -25,7 +25,16 @@ def route_after_evidence_gather(state: dict[str, Any]) -> str:
     if route == "plan_generate_skip_assess":
         logger.info("[routing] route_after_evidence_gather → plan_generate (fresh-loop skip)")
         return "plan_generate"
+    if route == "plan_gap_analysis":
+        logger.info("[routing] route_after_evidence_gather → plan_gap_analysis")
+        return "plan_gap_analysis"
     logger.info("[routing] route_after_evidence_gather → plan_assess")
+    return "plan_assess"
+
+
+def route_after_gap_analysis(state: dict[str, Any]) -> str:
+    """Gap analysis always feeds plan-assess."""
+    _ = state
     return "plan_assess"
 
 
@@ -204,6 +213,6 @@ def route_after_clarification(state: dict[str, Any]) -> str:
     if state.get("last_outcome") == "deferred":
         return END
     origin = state.get("last_clarification_origin")
-    if origin in ("execute", "plan_generate", "plan_assess"):
+    if origin in ("execute", "plan_generate", "plan_assess", "plan_gap_analysis"):
         return origin
     return END

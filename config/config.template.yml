@@ -129,6 +129,7 @@ agent:
     context_compaction_target_pct: 0.6
     step_context_check_enabled: false
     plan_assess_model_role: think
+    plan_gap_analysis_enabled: true
     plan_generate_model_role: think
     goal_synthesis_model_role: think
     # Output delivery: batch | adaptive | streaming (OutputStreamingConfig)

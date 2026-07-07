@@ -457,6 +457,22 @@ class ContextEngine:
             goal.last_assessment_iteration = iteration
             goal.touch()
 
+    def set_last_gap_analysis(
+        self,
+        goal_id: str,
+        gap: Any,
+        *,
+        iteration: int,
+    ) -> None:
+        """Overwrite per-goal gap analysis audit snapshot (IG-557)."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is not None:
+            goal.last_gap_analysis = (
+                gap.model_dump(mode="json") if hasattr(gap, "model_dump") else gap
+            )
+            goal.touch()
+            _ = iteration
+
     # ── RFC-625: Monitor-required methods ────────────────────────────────
 
     async def remove_goal(self, goal_id: str) -> bool:
