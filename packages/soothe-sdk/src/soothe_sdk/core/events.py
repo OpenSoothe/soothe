@@ -86,13 +86,12 @@ STRANGE_LOOP_PLAN_PHASE = "soothe.cognition.strange_loop.plan.phase"
 INTENT_CLASSIFIED = "soothe.cognition.intent.classified"
 
 # Clarification relay events (RFC-622 / RFC-623)
-# Emitted while the loop graph is paused on the ``await_clarification`` node.
-# When the stream ends with one of these pending, the TUI must avoid the
-# "stream ended unexpectedly" safety net — the loop is intentionally suspended
-# waiting for an answer, not crashed.
 LOOP_CLARIFICATION_REQUESTED = "soothe.loop.clarification.requested"
 LOOP_CLARIFICATION_ANSWERED = "soothe.loop.clarification.answered"
 LOOP_CLARIFICATION_DEFERRED = "soothe.loop.clarification.deferred"
+
+# Stream termination (IG-556)
+STREAM_END = "soothe.stream.end"
 
 # Message events (DETAILED level)
 MESSAGE_RECEIVED = "soothe.protocol.message.received"
@@ -129,6 +128,7 @@ __all__ = [
     "LOOP_CLARIFICATION_REQUESTED",
     "LOOP_CLARIFICATION_ANSWERED",
     "LOOP_CLARIFICATION_DEFERRED",
+    "STREAM_END",
     # Message (DETAILED)
     "MESSAGE_RECEIVED",
     "MESSAGE_SENT",

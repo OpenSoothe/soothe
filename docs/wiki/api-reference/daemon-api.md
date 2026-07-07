@@ -66,6 +66,10 @@ A common confusion: the daemon uses **two separate config files**:
 
 The agent config can be shared across daemon and non-daemon (embedded) deployments. The daemon config is server-specific.
 
+### Stream termination ordering
+
+Loop subscribers must finalize UI on **`stream_terminal=true`** content frames and **`soothe.stream.end`** (`scope=turn`), not on `chunk_position=last` or `status: idle` alone. See [RFC-614 stream termination](../../specs/RFC-614-unified-streaming-messaging.md#stream-termination-ig-556) for the full wire contract. Clients send `notification` / `delivery_ack` after terminal frames are applied.
+
 ---
 
 ## Channel Architecture

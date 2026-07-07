@@ -2,7 +2,7 @@
 
 **RFCs**: [RFC-614](../specs/RFC-614-unified-streaming-messaging.md) (messages + `phase`), [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) (subscription `complete` / `idle` ordering)
 **Created**: 2026-07-07
-**Status**: In progress (P1)
+**Status**: Complete
 **Related**: [IG-533](IG-533-goal-completion-tui-worker-lifecycle-fixes.md), [IG-441](IG-441-goal-completion-stream-delivery-modes.md) (code comments / stream_delivery), [IG-436](IG-436-daemon-delivery-priority.md) (session drain priority), [IG-535](IG-535-phase4-hidden-bottleneck-optimizations.md) (undroppable terminal frames)
 **Supersedes (partial)**: IG-533 §1.2 post-idle 30s drain workaround; IG-533 §1.3 turn-end flush safety nets
 
@@ -386,19 +386,19 @@ All changes must pass:
 
 ### P2 — Cleanup
 
-- [ ] **P2.1** Register and emit `soothe.stream.end` (generation / phase / turn)
-- [ ] **P2.2** Unified client handler table (SDK + TUI + history)
-- [ ] **P2.3** Delete `build_goal_completion_stream_terminal_message`
-- [ ] **P2.3** Delete `chunk_position`-only fallback in `is_goal_completion_stream_terminal`
-- [ ] **P2.3** Delete TUI turn-end flush safety nets
-- [ ] **P2.4** RFC-614 stream termination section
-- [ ] **P2.4** daemon-api.md ordering docs
+- [x] **P2.1** Register and emit `soothe.stream.end` (generation / phase / turn)
+- [x] **P2.2** Unified client handler table (SDK + TUI + history)
+- [x] **P2.3** Delete `build_goal_completion_stream_terminal_message`
+- [x] **P2.3** Delete `chunk_position`-only fallback in `is_goal_completion_stream_terminal`
+- [x] **P2.3** Delete TUI turn-end flush safety nets
+- [x] **P2.4** RFC-614 stream termination section
+- [x] **P2.4** daemon-api.md ordering docs
 
 ### Exit
 
-- [ ] `./scripts/verify_finally.sh` green
-- [ ] Golden wire trace checked into `packages/soothe-daemon/tests/`
-- [ ] IG-533 cross-link to IG-556 (done in IG-533 header)
+- [x] `./scripts/verify_finally.sh` green
+- [x] Golden wire trace checked into `packages/soothe-daemon/tests/`
+- [x] IG-533 cross-link to IG-556 (done in IG-533 header)
 
 ---
 
@@ -446,3 +446,10 @@ docs/wiki/api-reference/daemon-api.md                # P2.4
 3. TUI shows complete goal_completion text without 30s post-idle wait.
 4. No `_emit_goal_completion_terminal_marker`, no `chunk_position`-only fallback, no turn-end flush safety nets in codebase.
 5. `./scripts/verify_finally.sh` passes with new tests.
+
+## Progress / Handoff (2026-07-07 15:01 UTC+8)
+### Completed
+- P0 committed: `d211fe3e`
+- P1 committed: `672fa333`
+- P1 verify passed and post-idle drain reduced to 0.5s.
+- P2 committed: stream termination unification (`soothe.stream.end`, legacy deletion, AsyncAPI `delivery_ack`, golden wire trace, verify green).

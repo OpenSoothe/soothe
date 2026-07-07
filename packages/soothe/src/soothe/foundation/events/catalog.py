@@ -106,6 +106,7 @@ from .constants import (
     STRANGE_LOOP_STEP_COMPLETED,
     STRANGE_LOOP_STEP_QUEUED,
     STRANGE_LOOP_STEP_STARTED,
+    STREAM_END,
 )
 
 # IG-504: LLM retry event constant (used by middleware and TUI)
@@ -265,6 +266,14 @@ class StrangeLoopCompletedEvent(LifecycleEvent):
     completion_summary: str = ""
     # Layer-2 act steps completed in this thread (for goal-done line when pipeline has 0).
     total_steps: int = 0
+
+
+class StreamEndEvent(LifecycleEvent):
+    """Marks the end of an assistant stream scope (generation, phase, or turn)."""
+
+    type: Literal["soothe.stream.end"] = "soothe.stream.end"
+    scope: Literal["generation", "phase", "turn"]
+    phase: str | None = None
 
 
 class StrangeLoopPlanDecisionEvent(LifecycleEvent):
@@ -814,6 +823,13 @@ _reg(
     StrangeLoopCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="Done: {completion_summary}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    STREAM_END,
+    StreamEndEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Stream end ({scope})",
     priority=EventPriority.HIGH,
 )
 _reg(

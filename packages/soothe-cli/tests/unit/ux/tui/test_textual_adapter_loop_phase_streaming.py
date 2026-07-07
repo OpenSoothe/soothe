@@ -10,7 +10,7 @@ from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES
 
 from soothe_cli.tui.textual_adapter import (
     _INSTANT_LOOP_ASSISTANT_PHASES,
-    _retain_assistant_ns_on_chunk_last,
+    _retain_assistant_ns_on_stream_terminal,
     _try_mount_instant_loop_assistant_phase,
 )
 
@@ -22,10 +22,10 @@ def test_removed_legacy_phases_not_in_instant_or_allowlist() -> None:
     assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
-def test_retain_assistant_ns_on_chunk_last_for_goal_completion_phase() -> None:
+def test_retain_assistant_ns_on_stream_terminal_for_goal_completion_phase() -> None:
     assert (
-        _retain_assistant_ns_on_chunk_last(
-            AIMessageChunk(content="x", phase="goal_completion"),
+        _retain_assistant_ns_on_stream_terminal(
+            AIMessageChunk(content="x", phase="goal_completion", stream_terminal=True),
             ns_key=(),
             assistant_message_by_namespace={},
             is_main_agent=True,

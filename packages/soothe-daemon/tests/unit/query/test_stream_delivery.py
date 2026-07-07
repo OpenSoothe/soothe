@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import time
+from typing import Any
+
+from soothe_sdk.core.events import STREAM_END
 
 from soothe_daemon.query.stream_delivery import (
     STRANGE_LOOP_COMPLETED,
@@ -37,6 +40,27 @@ def _tool_chunk() -> tuple[tuple[()], str, tuple]:
     )
 
 
+def _messages(
+    tuples: list[tuple[tuple[str, ...], str, Any]],
+) -> list[tuple[tuple[str, ...], str, Any]]:
+    return [item for item in tuples if item[1] == "messages"]
+
+
+def _custom(
+    tuples: list[tuple[tuple[str, ...], str, Any]],
+    *,
+    event_type: str | None = None,
+) -> list[tuple[tuple[str, ...], str, Any]]:
+    items = [item for item in tuples if item[1] == "custom"]
+    if event_type is None:
+        return items
+    return [item for item in items if item[2].get("type") == event_type]
+
+
+def _stream_end_scopes(tuples: list[tuple[tuple[str, ...], str, Any]]) -> list[str]:
+    return [str(item[2].get("scope")) for item in _custom(tuples, event_type=STREAM_END)]
+
+
 def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
     coalescer = StreamDeliveryCoalescer("batch")
     assert coalescer.ingest(*_gc_chunk("a")) == []
@@ -46,12 +70,12 @@ def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    assert len(done) == 2
-    assert done[0][1] == "messages"
+    assert len(_messages(done)) == 1
     coalesced_msg = done[0][2][0]
     assert coalesced_msg["content"] == "ab"
     assert coalesced_msg.get("chunk_position") == "last"
-    assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
+    assert len(_custom(done, event_type=STRANGE_LOOP_COMPLETED)) == 1
+    assert _stream_end_scopes(done) == ["generation", "phase"]
     assert coalescer.turn_complete_pending
 
 
@@ -108,10 +132,11 @@ def test_text_chunks_coalesce_until_last() -> None:
     assert coalescer.ingest(*_text_chunk("a")) == []
     assert coalescer.ingest(*_text_chunk("b")) == []
     flushed = coalescer.ingest(*_text_chunk("c", last=True))
-    assert len(flushed) == 1
+    assert len(_messages(flushed)) == 1
     msg = flushed[0][2][0]
     assert msg["content"] == "abc"
     assert msg.get("chunk_position") == "last"
+    assert _stream_end_scopes(flushed) == ["generation"]
     assert coalescer.coalesce_flush_count == 1
 
 
@@ -276,12 +301,12 @@ def test_batch_mode_flushes_goal_completion_on_completed_event() -> None:
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    # Should have flushed goal_completion + completed event
-    assert len(done) == 2
-    assert done[0][1] == "messages"
+    # Should have flushed goal_completion + stream.end scopes + completed event
+    assert len(_messages(done)) == 1
     assert done[0][2][0]["phase"] == "goal_completion"
     assert done[0][2][0]["content"] == "part1part2"
-    assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
+    assert len(_custom(done, event_type=STRANGE_LOOP_COMPLETED)) == 1
+    assert _stream_end_scopes(done) == ["generation", "phase"]
     assert coalescer.turn_complete_pending
 
 
@@ -312,11 +337,12 @@ def test_adaptive_mode_switches_to_chunked_streaming_on_threshold() -> None:
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    assert len(done) == 2
+    assert len(_messages(done)) == 1
     # Final block carries only post-threshold content; streamed "abc" is never
     # re-emitted.
     assert done[0][2][0]["content"] == "defghijklmn"
     assert done[0][2][0]["chunk_position"] == "last"
+    assert _stream_end_scopes(done) == ["generation", "phase"]
 
 
 def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
@@ -362,13 +388,14 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
     # Buffer was empty after the block flush; terminal re-stamps last content block.
-    assert len(done) == 2
+    assert len(_messages(done)) == 1
     marker = done[0][2][0]
     assert marker["phase"] == "goal_completion"
     assert marker["content"] == "defghijklmnopqr"
     assert marker["chunk_position"] == "last"
     assert marker.get("stream_terminal") is True
-    assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED
+    assert len(_custom(done, event_type=STRANGE_LOOP_COMPLETED)) == 1
+    assert _stream_end_scopes(done) == ["generation", "phase"]
 
 
 def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
@@ -423,9 +450,10 @@ def test_adaptive_chunked_streaming_time_based_block_flush() -> None:
             "custom",
             {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
         )
-        assert len(done) == 2
+        assert len(_messages(done)) == 1
         assert done[0][2][0]["content"] == "z"
         assert done[0][2][0]["chunk_position"] == "last"
+        assert _stream_end_scopes(done) == ["generation", "phase"]
     finally:
         sd.time.monotonic = real_monotonic  # type: ignore[assignment]
 
@@ -483,9 +511,10 @@ def test_streaming_mode_file_output_still_buffers() -> None:
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    assert len(done) == 2
+    assert len(_messages(done)) == 1
     assert done[0][2][0]["content"] == "alphabravo"
     assert done[0][2][0]["chunk_position"] == "last"
+    assert _stream_end_scopes(done) == ["generation", "phase"]
 
 
 def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
@@ -509,18 +538,36 @@ def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    assert len(done) == 2
+    assert len(_messages(done)) == 1
     assert done[0][2][0]["content"] == "abcdefgh"
+    assert _stream_end_scopes(done) == ["generation", "phase"]
+
+
+def test_streaming_mode_emits_stream_end_after_terminal() -> None:
+    """IG-556 P2: terminal content is followed by soothe.stream.end scopes."""
+    from soothe_sdk.core.events import STREAM_END
+
+    coalescer = StreamDeliveryCoalescer("streaming")
+    out = coalescer.ingest(*_gc_chunk("final", last=True))
+    custom = [item for item in out if item[1] == "custom"]
+    assert any(
+        item[2].get("type") == STREAM_END and item[2].get("scope") == "generation"
+        for item in custom
+    )
+    assert any(
+        item[2].get("type") == STREAM_END and item[2].get("scope") == "phase" for item in custom
+    )
 
 
 def test_streaming_mode_stamps_stream_terminal_on_last_chunk() -> None:
     """IG-556 P1.2: streaming passthrough stamps stream_terminal on final chunk."""
     coalescer = StreamDeliveryCoalescer("streaming")
     out = coalescer.ingest(*_gc_chunk("final", last=True))
-    assert len(out) == 1
+    assert len(_messages(out)) == 1
     msg = out[0][2][0]
     assert msg.get("stream_terminal") is True
     assert msg.get("chunk_position") == "last"
+    assert _stream_end_scopes(out) == ["generation", "phase"]
 
 
 def test_chunk_position_last_flushes_goal_completion_without_completed_event() -> None:
