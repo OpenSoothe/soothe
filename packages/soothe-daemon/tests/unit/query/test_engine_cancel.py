@@ -139,9 +139,6 @@ class _FakeThreadRegistry:
     def set_workspace(self, _thread_id: str, _workspace: Path) -> None:
         return None
 
-    def get_client_thread(self, _client_id: str) -> str:
-        return ""
-
 
 class _FakePersistenceManager:
     async def get_loop_metadata(self, _loop_id: str) -> dict[str, Any] | None:
@@ -197,7 +194,6 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
         _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
-        _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
         _loops_with_active_query=set(),
@@ -292,7 +288,6 @@ def _daemon_factory(
         _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
-        _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
         _loops_with_active_query=set(),
@@ -452,7 +447,6 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
         _daemon_config=daemon_config,
         _global_history=None,
         _active_threads={},
-        _query_running=False,
         _current_query_task=None,
         _active_stream_loop_ids=set(),
         _loops_with_active_query=set(),

@@ -6,14 +6,11 @@ transport entrypoints and the input queue loop.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import logging
 from typing import Any
 
 import websockets.exceptions
 from soothe.foundation.events import ERROR
-from soothe_sdk.client.protocol import decode, encode
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.protocol import ErrorCode, build_error_response, validate_message
@@ -85,9 +82,6 @@ class DaemonHandlersMixin:
             )
             if session is not None:
                 await self._session_manager.send_to_client(session, msg)
-                return
-            if hasattr(client_id, "writer"):
-                await self._send(client_id, msg)
         except websockets.exceptions.ConnectionClosedOK:
             # Normal disconnect (code 1000) - expected, no error logging
             logger.debug("Client %r disconnected normally", client_id)
@@ -98,66 +92,8 @@ class DaemonHandlersMixin:
             # Unexpected error - log with full traceback
             logger.debug("Failed to send direct response to client %r", client_id, exc_info=True)
 
-    async def _handle_client(
-        self,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-    ) -> None:
-        from soothe_daemon.server.core import _ClientConn
-
-        client = _ClientConn(reader=reader, writer=writer)
-        self._clients.append(client)
-        logger.info("Client connected (total=%d)", len(self._clients))
-
-        try:
-            initial_state = (
-                "running" if self._query_running else ("idle" if self._running else "stopped")
-            )
-            initial_msg = {
-                "proto": "1",
-                "type": "status",
-                "state": initial_state,
-                "input_history": [],
-            }
-
-            client.writer.write(encode(initial_msg))
-            await client.writer.drain()
-        except Exception:
-            logger.exception("Failed to send initial status to client")
-
-        try:
-            while True:
-                line = await reader.readline()
-                if not line:
-                    break
-                msg = decode(line)
-                if msg is None:
-                    continue
-                # Validate message at transport boundary (RFC-450 §6.4).
-                # All transport paths must call validate_message() before
-                # router dispatch.
-                errors = validate_message(msg)
-                if errors:
-                    error_msg = build_error_response(
-                        ErrorCode.INVALID_PARAMS,
-                        "Invalid params",
-                        request_id=msg.get("request_id") or msg.get("id"),
-                        data={"errors": errors},
-                    )
-                    await self._send_client_message(f"legacy:{id(client)}", error_msg)
-                    continue
-                await self._message_router.dispatch(f"legacy:{id(client)}", msg)
-        except (asyncio.CancelledError, ConnectionError):
-            pass
-        finally:
-            self._clients = [c for c in self._clients if c is not client]
-            with contextlib.suppress(Exception):
-                writer.close()
-                await writer.wait_closed()
-            logger.info("Client disconnected (total=%d)", len(self._clients))
-
     async def _handle_client_message(self, client_id: str, msg: dict[str, Any]) -> None:
-        """Handle a message from a client (WebSocket / HTTP transports).
+        """Handle a message from a client (WebSocket transport).
 
         Validates the message at the transport boundary (RFC-450 §6.4) before
         dispatching to the router.
@@ -297,7 +233,6 @@ class DaemonHandlersMixin:
                 )
         except Exception:
             logger.exception("Daemon loop input handler error")
-            self._query_running = False
             lid = str(loop_id or "").strip()
             if lid and self._query_engine is not None:
                 qe = self._query_engine

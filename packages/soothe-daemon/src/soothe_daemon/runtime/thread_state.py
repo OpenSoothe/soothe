@@ -42,7 +42,6 @@ class ThreadState:
 class ThreadStateRegistry:
     """Registry of per-checkpoint state keyed by LangGraph ``thread_id``.
 
-    Also tracks legacy client→checkpoint associations (``set_client_thread``).
     **Loop-first routing** uses ``loop_id`` on the wire; use ``get_thread_loop`` to
     resolve checkpoint → loop.
     """
@@ -50,7 +49,6 @@ class ThreadStateRegistry:
     def __init__(self) -> None:
         """Initialize an empty registry."""
         self._by_thread: dict[str, ThreadState] = {}
-        self._client_active_thread: dict[str, str] = {}
         self._thread_loop: dict[str, str] = {}
         self._lock = threading.Lock()
 
@@ -82,9 +80,6 @@ class ThreadStateRegistry:
         """Drop state for a thread (e.g. after archive/delete)."""
         self._by_thread.pop(thread_id, None)
         self._thread_loop.pop(thread_id, None)
-        for cid, tid in list(self._client_active_thread.items()):
-            if tid == thread_id:
-                self._client_active_thread.pop(cid, None)
 
     def set_thread_loop(self, thread_id: str, loop_id: str | None) -> None:
         """Associate a durability thread with an StrangeLoop id (IG-300)."""
@@ -126,14 +121,6 @@ class ThreadStateRegistry:
         if current_binding == loop_id:
             self._thread_loop.pop(thread_id, None)
 
-    def set_client_thread(self, client_id: str, thread_id: str) -> None:
-        """Record the checkpoint id last associated with *client_id* (legacy helpers)."""
-        self._client_active_thread[client_id] = thread_id
-
-    def get_client_thread(self, client_id: str) -> str | None:
-        """Return last bound checkpoint id for *client_id*, if any."""
-        return self._client_active_thread.get(client_id)
-
     def set_workspace(self, thread_id: str, workspace: Path) -> None:
         """Attach resolved workspace path to a thread."""
         st = self.ensure(thread_id)
@@ -161,10 +148,6 @@ class ThreadStateRegistry:
         for tid in removed:
             self._by_thread.pop(tid, None)
             self._thread_loop.pop(tid, None)
-        # Also clean client-thread mappings for these threads
-        for cid, tid in list(self._client_active_thread.items()):
-            if tid in removed:
-                self._client_active_thread.pop(cid, None)
         return removed
 
     # -----------------------------------------------------------------------

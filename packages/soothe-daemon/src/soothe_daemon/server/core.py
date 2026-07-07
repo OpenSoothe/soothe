@@ -8,7 +8,6 @@ import logging
 import os
 import signal
 import threading
-from dataclasses import dataclass
 from typing import Any
 
 from soothe.config import SootheConfig
@@ -21,7 +20,6 @@ from soothe.foundation.workspace import (
     resolve_daemon_workspace,
 )
 from soothe.logging import ThreadLogger
-from soothe_sdk.client.protocol import encode
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.bootstrap.paths import pid_path
@@ -72,30 +70,6 @@ def _log_startup_banner(channel_manager: ChannelManager | None) -> None:
     )
 
 
-@dataclass
-class _ClientConn:
-    """Internal client connection state.
-
-    Attributes:
-        reader: asyncio stream reader (legacy TCP path).
-        writer: asyncio stream writer (legacy TCP path).
-        can_input: Whether the client may submit loop input.
-        handshake_complete: Whether the protocol-1 connection_init/ack handshake
-            has completed for this connection (RFC-450 §8.2).
-        proto_version: Negotiated protocol version string (e.g. ``"1"``),
-            set when ``connection_ack`` is sent.
-        negotiated_capabilities: Capabilities active for this connection
-            (intersection of client-declared and server-supported).
-    """
-
-    reader: asyncio.StreamReader
-    writer: asyncio.StreamWriter
-    can_input: bool = True
-    handshake_complete: bool = False
-    proto_version: str | None = None
-    negotiated_capabilities: list[str] | None = None
-
-
 class SootheDaemon(DaemonHandlersMixin):
     """Background daemon that runs ``SootheRunner`` and serves TUI clients.
 
@@ -144,8 +118,6 @@ class SootheDaemon(DaemonHandlersMixin):
 
         self._skill_index = SkillIndex()
 
-        self._clients: list[_ClientConn] = []
-        self._server: asyncio.AbstractServer | None = None
         self._runner: Any = None
         # RFC-222 revised (Phase B): daemon-owned AutopilotService placeholder.
         # Constructed in start() with subscribe_to_bus=False to coexist with
@@ -153,7 +125,6 @@ class SootheDaemon(DaemonHandlersMixin):
         self._autopilot_service: Any = None  # AutopilotService | None
         self._cron_service: Any = None  # CronService | None (RFC-229)
         self._running = False
-        self._query_running = False  # Deprecated: use _active_threads instead
         self._current_query_task: asyncio.Task | None = None
         self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
@@ -200,7 +171,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._active_stream_loop_ids: set[str] = set()
         #: Loop ids with an admitted query (exclusive per loop; IG-534 Phase 2.2).
         self._loops_with_active_query: set[str] = set()
-        # Lock protecting query state transitions (_active_threads, _query_running, _current_query_task)
+        # Lock protecting query state transitions (_active_threads, _current_query_task)
         self._query_state_lock = asyncio.Lock()
         from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
 
@@ -968,9 +939,9 @@ class SootheDaemon(DaemonHandlersMixin):
         Returns:
             List containing the initial status message.
         """
-        has_active_threads = hasattr(self, "_active_threads") and bool(self._active_threads)
-        has_active_query = has_active_threads or self._query_running
-        initial_state = "running" if has_active_query else ("idle" if self._running else "stopped")
+        initial_state = (
+            "running" if self._has_active_queries() else ("idle" if self._running else "stopped")
+        )
         initial_msg: dict[str, Any] = {
             "proto": "1",
             "type": "status",
@@ -1439,7 +1410,7 @@ class SootheDaemon(DaemonHandlersMixin):
             await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
 
             # Only send heartbeat when query is running (clients need it most)
-            if not self._query_running:
+            if not self._has_active_queries():
                 continue
 
             # Smart heartbeat: skip if stream actively flowing (IG-426)
@@ -1449,10 +1420,10 @@ class SootheDaemon(DaemonHandlersMixin):
                 continue
 
             try:
-                state = "running" if self._query_running else "idle"
+                state = "running" if self._has_active_queries() else "idle"
                 active_loop_ids = set(self._active_stream_loop_ids)  # snapshot
 
-                # Event payload field is legacy; routing uses envelope ``loop_id`` (IG-408).
+                # Event payload uses empty thread_id; routing uses envelope ``loop_id``.
                 heartbeat = DaemonHeartbeatEvent(
                     thread_id="",
                     timestamp=datetime.now(UTC).isoformat(),
@@ -1534,7 +1505,6 @@ class SootheDaemon(DaemonHandlersMixin):
         self._readiness_state = "stopped"
         self._readiness_message = None
         self._running = False
-        self._query_running = False
 
         # IG-475: Stop memory profiler if running
         if self._memory_profiler is not None:
@@ -1698,18 +1668,6 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._channel_manager:
             await self._channel_manager.stop_all()
 
-        # Cleanup clients
-        for client in self._clients:
-            with contextlib.suppress(Exception):
-                client.writer.close()
-                await client.writer.wait_closed()
-        self._clients.clear()
-
-        if self._server:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
-
         # Shutdown default executor
         if hasattr(self, "_default_executor") and self._default_executor:
             self._default_executor.shutdown(wait=True)
@@ -1782,10 +1740,9 @@ class SootheDaemon(DaemonHandlersMixin):
             msg.get("state"),
         )
 
-    async def _send(self, client: _ClientConn, msg: dict[str, Any]) -> None:
-        with contextlib.suppress(Exception):
-            client.writer.write(encode(msg))
-            await client.writer.drain()
+    def _has_active_queries(self) -> bool:
+        """Return True when one or more background query tasks are running."""
+        return bool(self._active_threads)
 
     def _handle_transport_message(self, client_id: str, msg: dict[str, Any]) -> None:
         """Handle incoming message from any transport.

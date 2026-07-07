@@ -159,7 +159,6 @@ async def test_loop_input_image_to_text_without_attachments_returns_error(
 
     class _FakeDaemon:
         _config = SootheConfig()
-        _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="thr-router-img")
         _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
@@ -171,6 +170,7 @@ async def test_loop_input_image_to_text_without_attachments_returns_error(
             sent.append((client_id, msg))
 
     router = MessageRouter(_FakeDaemon())
+    router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
     await router.dispatch(
         "client-go-parity",
         {
@@ -210,7 +210,6 @@ def _router_with_enqueue_stub(
 
     class _FakeDaemon:
         _config = SootheConfig()
-        _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="thr-router-direct")
         _loop_input_dispatcher = SimpleNamespace(enqueue=enqueue)
@@ -223,6 +222,7 @@ def _router_with_enqueue_stub(
             sent.append((client_id, msg))
 
     router = MessageRouter(_FakeDaemon())
+    router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
     return router, enqueue, sent, loop_id
 
 

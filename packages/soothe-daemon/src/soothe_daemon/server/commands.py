@@ -170,7 +170,7 @@ async def _cmd_clear(
     if not old_loop_id:
         raise ValueError("loop_id required for clear operation")
 
-    if self._query_running:
+    if self._has_active_queries():
         await self._query_engine.cancel_loop(old_loop_id)
 
     # Get state manager from runner
@@ -231,9 +231,9 @@ async def _cmd_exit(
     lid = str(loop_id or "").strip() or (
         self._thread_registry.get_thread_loop(checkpoint_thread_id) or ""
     )
-    if self._query_running and lid:
+    if self._has_active_queries() and lid:
         await self._query_engine.cancel_loop(lid)
-    elif self._query_running and not lid:
+    elif self._has_active_queries() and not lid:
         logger.warning("RPC exit: active query but no loop_id; not cancelling (avoid broad cancel)")
 
     await self._broadcast({"type": "status", "state": "stopped", "exit_requested": True})
@@ -274,9 +274,9 @@ async def _cmd_cancel(
     lid = str(loop_id or "").strip() or (
         self._thread_registry.get_thread_loop(checkpoint_thread_id) or ""
     )
-    if self._query_running and lid:
+    if self._has_active_queries() and lid:
         await self._query_engine.cancel_loop(lid)
-    elif self._query_running and not lid:
+    elif self._has_active_queries() and not lid:
         logger.warning(
             "RPC cancel: active query but no loop_id; not cancelling (avoid broad cancel)"
         )

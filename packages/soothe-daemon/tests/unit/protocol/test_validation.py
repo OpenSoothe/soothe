@@ -19,7 +19,6 @@ async def test_models_list_response_shape() -> None:
 
     class _FakeDaemon:
         _config = cfg
-        _query_running = False
         _active_threads: set[Any] = set()
         _runner = SimpleNamespace(current_thread_id="t-models")
 

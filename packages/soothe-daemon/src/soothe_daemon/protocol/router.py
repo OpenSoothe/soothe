@@ -257,8 +257,7 @@ class MessageRouter:
         """Keep a reference to the daemon for config, runner, and session access."""
         self._daemon = daemon
         # Per-client handshake state (RFC-450 §8.2). Maps client_id →
-        # (proto_version, capabilities). Legacy _ClientConn objects also carry
-        # the flag on the object itself.
+        # (proto_version, capabilities).
         self._handshake_state: dict[Any, tuple[str, list[str]]] = {}
 
     async def _send_response(
@@ -636,8 +635,8 @@ class MessageRouter:
         # -- Protocol-1 envelope dispatch (RFC-450 §5/§9) ---------------------
         # The daemon accepts protocol-1 envelopes (request/notification/
         # subscribe/unsubscribe) plus the three control types in
-        # HANDLER_REGISTRY (connection_init/ping/pong). Legacy flat-form
-        # messages (e.g. ``{type:"loop_get", loop_id:...}``) are rejected with
+        # HANDLER_REGISTRY (connection_init/ping/pong). Flat-form messages
+        # (e.g. ``{type:"loop_get", loop_id:...}``) are rejected with
         # METHOD_NOT_FOUND — clients MUST use the envelope form.
         if msg_type in _ENVELOPE_TYPES:
             unwrapped = self._unwrap_envelope(msg_type, msg)
@@ -721,10 +720,10 @@ class MessageRouter:
 
     @staticmethod
     def _handshake_key(client_id: Any) -> Any:
-        """Return a hashable key for ``client_id`` (handles unhashable _ClientConn).
+        """Return a hashable key for ``client_id``.
 
         Args:
-            client_id: Client identifier (string, int, or connection object).
+            client_id: Client identifier (string or other hashable value).
 
         Returns:
             A hashable key: ``id(client_id)`` for unhashable objects, otherwise
@@ -737,59 +736,8 @@ class MessageRouter:
             return id(client_id)
 
     def _is_handshake_complete(self, client_id: Any) -> bool:
-        """Check whether the protocol-1 handshake has completed for this client.
-
-        Checks the router's per-client dict first, then falls back to the
-        ``_ClientConn.handshake_complete`` flag for legacy TCP connections.
-        When no ``_ClientConn`` is found (e.g. WebSocket sessions tracked by
-        ``ClientSessionManager``), the handshake is enforced at the transport
-        layer, so this method returns ``True`` to allow dispatch.
-
-        Args:
-            client_id: Client identifier or connection object.
-
-        Returns:
-            ``True`` if the handshake is complete or enforcement is deferred
-            to the transport layer.
-        """
-        key = self._handshake_key(client_id)
-        if key in self._handshake_state:
-            return True
-        conn = self._lookup_client_conn(client_id)
-        if conn is not None:
-            return getattr(conn, "handshake_complete", False)
-        # WebSocket sessions enforce the handshake in the channel handler.
-        return True
-
-    def _lookup_client_conn(self, client_id: Any) -> Any:
-        """Find a ``_ClientConn`` by client_id, if any.
-
-        Args:
-            client_id: Client identifier (string id or connection object).
-
-        Returns:
-            The matching ``_ClientConn`` or ``None``.
-        """
-        d = self._daemon
-        clients = getattr(d, "_clients", None)
-        if not clients:
-            return None
-        # _ClientConn objects are stored directly in the list
-        if hasattr(client_id, "writer"):
-            for c in clients:
-                if c is client_id:
-                    return c
-            return None
-        # Legacy TCP clients are dispatched as ``legacy:{id(client)}``
-        if isinstance(client_id, str) and client_id.startswith("legacy:"):
-            try:
-                obj_id = int(client_id.split(":", 1)[1])
-            except ValueError:
-                return None
-            for c in clients:
-                if id(c) == obj_id:
-                    return c
-        return None
+        """Check whether the protocol-1 handshake has completed for this client."""
+        return self._handshake_key(client_id) in self._handshake_state
 
     def _mark_handshake_complete(
         self, client_id: Any, proto_version: str, capabilities: list[str]
@@ -803,11 +751,6 @@ class MessageRouter:
         """
         key = self._handshake_key(client_id)
         self._handshake_state[key] = (proto_version, capabilities)
-        conn = self._lookup_client_conn(client_id)
-        if conn is not None:
-            conn.handshake_complete = True
-            conn.proto_version = proto_version
-            conn.negotiated_capabilities = capabilities
         # Also track in the WebSocket channel's client info (if any) so the
         # transport layer can enforce handshake ordering on subsequent messages.
         d = self._daemon
@@ -837,9 +780,6 @@ class MessageRouter:
         entry = self._handshake_state.get(key)
         if entry is not None:
             return entry[0]
-        conn = self._lookup_client_conn(client_id)
-        if conn is not None:
-            return getattr(conn, "proto_version", None)
         d = self._daemon
         chan = getattr(d, "_channel_manager", None)
         if chan is not None:
@@ -865,10 +805,6 @@ class MessageRouter:
         entry = self._handshake_state.get(key)
         if entry is not None:
             return entry[1]
-        conn = self._lookup_client_conn(client_id)
-        if conn is not None:
-            caps = getattr(conn, "negotiated_capabilities", None)
-            return caps or []
         d = self._daemon
         chan = getattr(d, "_channel_manager", None)
         if chan is not None:
@@ -887,9 +823,6 @@ class MessageRouter:
         Args:
             client_id: Client identifier.
         """
-        # The WebSocket channel tracks heartbeat liveness in its own client
-        # info dict; for legacy TCP clients there is no heartbeat. This method
-        # is a no-op extension point.
         d = self._daemon
         chan = getattr(d, "_channel_manager", None)
         if chan is not None:

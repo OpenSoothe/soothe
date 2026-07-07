@@ -32,6 +32,7 @@ async def test_command_request_enqueued_for_loop_dispatcher() -> None:
             raise AssertionError("_send_client_message should not run for command_request")
 
     router = MessageRouter(_FakeDaemon())
+    router._is_handshake_complete = lambda _cid: True  # type: ignore[method-assign]
     req = {
         "proto": "1",
         "type": "request",
