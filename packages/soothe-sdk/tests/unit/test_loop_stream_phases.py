@@ -9,8 +9,8 @@ from soothe_sdk.ux.loop_stream import (
     GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
     LOOP_ASSISTANT_OUTPUT_PHASES,
     assistant_output_phase,
-    build_goal_completion_stream_terminal_message,
     is_goal_completion_stream_terminal,
+    is_stream_terminal,
     is_stream_terminal_wire_dict,
 )
 
@@ -48,26 +48,39 @@ def test_assistant_output_phase_on_plain_dict() -> None:
     assert assistant_output_phase(msg) == "direct_model"
 
 
-def test_is_stream_terminal_wire_dict() -> None:
+def test_is_stream_terminal_wire_dict_requires_stream_terminal_flag() -> None:
     assert is_stream_terminal_wire_dict({"stream_terminal": True})
-    assert is_stream_terminal_wire_dict({"chunk_position": "last"})
+    assert not is_stream_terminal_wire_dict({"chunk_position": "last"})
     assert not is_stream_terminal_wire_dict({"content": "x"})
 
 
-def test_is_goal_completion_stream_terminal_prefers_stream_terminal_flag() -> None:
-    wire = build_goal_completion_stream_terminal_message()
-    assert is_goal_completion_stream_terminal(wire)
-
-
-def test_is_goal_completion_stream_terminal_chunk_position_last_without_stream_terminal() -> None:
-    """Older wire frames may omit ``stream_terminal`` on the final content block."""
+def test_is_goal_completion_stream_terminal_requires_stream_terminal_flag() -> None:
     msg = {
         "type": "AIMessageChunk",
         "content": "done",
         "phase": "goal_completion",
-        "chunk_position": "last",
+        "stream_terminal": True,
     }
     assert is_goal_completion_stream_terminal(msg)
+    assert not is_goal_completion_stream_terminal(
+        {
+            "type": "AIMessageChunk",
+            "content": "done",
+            "phase": "goal_completion",
+            "chunk_position": "last",
+        }
+    )
+
+
+def test_is_stream_terminal_on_langchain_message() -> None:
+    from langchain_core.messages import AIMessageChunk
+
+    assert is_stream_terminal(
+        AIMessageChunk(content="", phase="goal_completion", stream_terminal=True)
+    )
+    assert not is_stream_terminal(
+        AIMessageChunk(content="", phase="goal_completion", chunk_position="last")
+    )
 
 
 def test_is_goal_completion_stream_terminal_rejects_non_goal_completion() -> None:

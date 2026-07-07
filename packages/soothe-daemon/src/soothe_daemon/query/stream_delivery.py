@@ -40,10 +40,11 @@ from typing import Any, Literal
 from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
 from soothe_sdk.client.wire import prepare_stream_data_for_wire
-from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
+from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED, STREAM_END
 from soothe_sdk.ux.loop_stream import (
     GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
     assistant_output_phase,
+    is_stream_terminal_wire_dict,
 )
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
@@ -237,6 +238,18 @@ def _stamp_stream_terminal_wire_data(wire_data: Any) -> Any:
     return prepare_stream_data_for_wire((stamped, meta))
 
 
+def _stream_end_tuple(
+    namespace: tuple[str, ...],
+    *,
+    scope: Literal["generation", "phase", "turn"],
+    phase: str | None = None,
+) -> tuple[tuple[str, ...], str, dict[str, Any]]:
+    payload: dict[str, Any] = {"type": STREAM_END, "scope": scope}
+    if phase:
+        payload["phase"] = phase
+    return (namespace, "custom", payload)
+
+
 def _updates_has_interrupt(data: Any) -> bool:
     if not isinstance(data, dict):
         return False
@@ -383,6 +396,7 @@ class StreamDeliveryCoalescer:
         ):
             out = self._flush_all_text_buffers(final=True)
             out.extend(self._flush_goal_completion(final=True))
+            out = self._append_stream_end_for_terminals(out)
             out.append((ns, mode, data))
             self._turn_complete_pending = True
             return out_prefix + out
@@ -503,7 +517,31 @@ class StreamDeliveryCoalescer:
             tail.extend(self._flush_text_buffer(namespace, final=True))
         if self._gc is not None and self._gc.parts:
             tail.extend(self._flush_goal_completion(final=True))
-        return out + tail if tail else out
+        merged = out + tail if tail else out
+        return self._append_stream_end_for_terminals(merged)
+
+    def _append_stream_end_for_terminals(
+        self,
+        tuples: list[tuple[tuple[str, ...], str, Any]],
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Emit ``soothe.stream.end`` after terminal content frames (IG-556)."""
+        extended = list(tuples)
+        for ns, mode, data in tuples:
+            if mode != "messages":
+                continue
+            body: dict[str, Any] | None = None
+            if isinstance(data, (tuple, list)) and data:
+                first = data[0]
+                body = first if isinstance(first, dict) else None
+            elif isinstance(data, dict):
+                body = data
+            if body is None or not is_stream_terminal_wire_dict(body):
+                continue
+            phase = assistant_output_phase(body)
+            extended.append(_stream_end_tuple(ns, scope="generation", phase=phase))
+            if phase:
+                extended.append(_stream_end_tuple(ns, scope="phase", phase=phase))
+        return extended
 
     def _flush_due_tool_batches(self, now: float) -> list[tuple[tuple[str, ...], str, Any]]:
         out: list[tuple[tuple[str, ...], str, Any]] = []
@@ -796,6 +834,7 @@ class StreamDeliveryCoalescer:
         msg["content"] = text
         if final:
             msg["chunk_position"] = "last"
+            msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
         elif "chunk_position" in msg:
             msg.pop("chunk_position", None)
         meta: dict[str, Any] = {}

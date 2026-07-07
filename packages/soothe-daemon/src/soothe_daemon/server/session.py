@@ -12,12 +12,12 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import websockets.exceptions
+from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
+from soothe_sdk.ux.loop_stream import is_stream_terminal_wire_dict
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.event import loop_event_topic
 from soothe_daemon.query.stream_delivery import StreamDeliveryMode
-from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
-from soothe_sdk.ux.loop_stream import is_stream_terminal_wire_dict
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -90,6 +90,7 @@ def _delivery_tracked_units(event: dict[str, Any]) -> int:
             return 0
         return sum(_delivery_tracked_units(sub) for sub in sub_events if isinstance(sub, dict))
     return 1 if _wire_event_needs_delivery_ack(event) else 0
+
 
 # Wire-frame types that are already protocol-1 envelopes and must pass through
 # the legacy→``next`` translator unchanged (RFC-450 §5/§9). ``status`` is a

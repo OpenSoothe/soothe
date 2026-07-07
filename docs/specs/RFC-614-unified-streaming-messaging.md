@@ -605,6 +605,33 @@ soothe -p "Write a report"
 soothe --no-streaming -p "Write a report"
 ```
 
+## Stream Termination (IG-556)
+
+Clients must treat **`stream_terminal=true`** on the final content frame as the authoritative end of an LLM generation. Do **not** infer termination from `chunk_position=last` alone.
+
+After terminal content, the daemon emits **`soothe.stream.end`** custom events:
+
+| `scope` | Meaning |
+|---------|---------|
+| `generation` | One LLM generation within a phase |
+| `phase` | Entire assistant phase stream (e.g. `goal_completion`) |
+| `turn` | Full user turn (all phases) |
+
+**Mandatory ordering** on every turn:
+
+```
+terminal content (stream_terminal=true)
+  → soothe.stream.end (scope=generation)
+  → soothe.stream.end (scope=phase)   # per assistant phase
+  → soothe.stream.end (scope=turn)
+  → complete (subscription)
+  → status: idle
+```
+
+Clients should send **`delivery_ack`** notifications after applying terminal frames so the daemon can gate `complete` / `idle` on confirmed delivery. Post-`idle` client drain is **0.5s** (ordering fix, not a 30s compensation window).
+
+**Breaking change**: Empty terminal marker frames and `chunk_position`-only fallbacks are removed. Upgrade daemon and SDK together.
+
 ## References
 
 ### Related RFCs
@@ -630,6 +657,7 @@ soothe --no-streaming -p "Write a report"
 **Authors**: Soothe Team
 
 **Revision History**:
+- v1.4 (2026-07-07): IG-556 — `stream_terminal`, `soothe.stream.end` scopes, strict ordering, `delivery_ack` drain
 - v1.3 (2026-07-01): IG-534 — goal-completion HIGH priority + block on overflow; per-client `stream_delivery`; user-visible NORMAL block at 90% queue
 - v1.2 (2026-04-29): Consistency polish — aligned examples/config semantics with daemon-side execute-phase suppression and goal-completion streaming contract
 - v1.1 (2026-04-28): IG-304 amendment — daemon-side suppression isolation, tool-only message forwarding, goal-completion output contract

@@ -39,6 +39,7 @@ from soothe_sdk.core.events import (
     STRANGE_LOOP_STEP_COMPLETED,
     STRANGE_LOOP_STEP_QUEUED,
     STRANGE_LOOP_STEP_STARTED,
+    STREAM_END,
 )
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.langchain_wire import (
@@ -48,6 +49,7 @@ from soothe_sdk.ux.loop_stream import (
     LOOP_ASSISTANT_OUTPUT_PHASES,
     assistant_output_phase,
     is_goal_completion_stream_terminal,
+    is_stream_terminal,
 )
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
 from soothe_sdk.ux.task_namespace import (
@@ -156,14 +158,14 @@ LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 _INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"chitchat", "plan_direct", "autonomous_goal"})
 
 
-def _retain_assistant_ns_on_chunk_last(
+def _retain_assistant_ns_on_stream_terminal(
     message: Any,
     *,
     ns_key: tuple[Any, ...],
     assistant_message_by_namespace: dict[tuple[Any, ...], Any],
     is_main_agent: bool,
 ) -> bool:
-    """Return True when ``chunk_position=last`` must not release the namespace card.
+    """Return True when ``stream_terminal`` must not release the namespace card.
 
     Loop-tagged assistant streams append deltas onto one ``AssistantMessage``.
     """
@@ -2241,7 +2243,7 @@ async def _finalize_goal_completion_stream(
     )
 
 
-async def _flush_inflight_goal_completion_streams(
+async def _finalize_goal_completion_streams_on_turn_end(
     adapter: TextualUIAdapter,
     *,
     goal_completion_stream_by_namespace: dict[tuple[Any, ...], AssistantMessage],
@@ -2249,7 +2251,7 @@ async def _flush_inflight_goal_completion_streams(
     goal_loop_start_monotonic: float | None,
     turn_start_monotonic: float | None,
 ) -> None:
-    """Finalize partial goal_completion cards before abort or safety-net errors."""
+    """Finalize partial goal_completion cards on ``soothe.stream.end`` scope=turn."""
     if not goal_completion_stream_by_namespace:
         return
     await asyncio.gather(
@@ -3138,22 +3140,6 @@ async def execute_task_textual(
                                 )
                                 continue
 
-                            if (
-                                not is_gc_chunk
-                                and _tui_goal_completion_matches_prior_main_visible_answer(
-                                    adapter,
-                                    ns_key=ns_key,
-                                    output_text=output_text,
-                                    pending_execute_text=pending_text,
-                                )
-                            ):
-                                if adapter._set_active_message:
-                                    adapter._set_active_message(None)
-                                await _maybe_set_thinking_spinner(
-                                    adapter, clarification_pending=clarification_pending
-                                )
-                                continue
-
                             if pending_text:
                                 await _flush_assistant_text_ns(
                                     adapter,
@@ -3561,9 +3547,9 @@ async def execute_task_textual(
 
                                 tool_call_buffers.pop(buffer_key, None)
 
-                        if getattr(message, "chunk_position", None) == "last":
+                        if is_stream_terminal(message):
                             pending_text = pending_text_by_namespace.get(ns_key, "")
-                            retain_ns = _retain_assistant_ns_on_chunk_last(
+                            retain_ns = _retain_assistant_ns_on_stream_terminal(
                                 message,
                                 ns_key=ns_key,
                                 assistant_message_by_namespace=assistant_message_by_namespace,
@@ -3663,15 +3649,20 @@ async def execute_task_textual(
                                     assistant_message_by_namespace.pop(ns_key, None)
                                 continue
 
-                            if event_type == STRANGE_LOOP_COMPLETED:
-                                if not ns_key:
-                                    await _flush_inflight_goal_completion_streams(
+                            if event_type == STREAM_END:
+                                scope = str(data.get("scope", ""))
+                                if scope == "turn":
+                                    await _finalize_goal_completion_streams_on_turn_end(
                                         adapter,
                                         goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
                                         assistant_message_by_namespace=assistant_message_by_namespace,
                                         goal_loop_start_monotonic=goal_loop_start_monotonic,
                                         turn_start_monotonic=start_time,
                                     )
+                                continue
+
+                            if event_type == STRANGE_LOOP_COMPLETED:
+                                if not ns_key:
                                     if adapter._goal_tree_message is not None:
                                         adapter._goal_tree_message.set_loop_finished(
                                             status=str(data.get("status", "done")),
@@ -4162,13 +4153,6 @@ async def execute_task_textual(
                         router=router,
                     )
                 )
-        await _flush_inflight_goal_completion_streams(
-            adapter,
-            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-            assistant_message_by_namespace=assistant_message_by_namespace,
-            goal_loop_start_monotonic=goal_loop_start_monotonic,
-            turn_start_monotonic=start_time,
-        )
         if flush_tasks:
             await asyncio.gather(*flush_tasks)
         pending_text_by_namespace.clear()
@@ -4230,13 +4214,6 @@ async def execute_task_textual(
         await dispatch_hook("task.complete", {"loop_id": loop_id})
 
     except (asyncio.CancelledError, KeyboardInterrupt):
-        await _flush_inflight_goal_completion_streams(
-            adapter,
-            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-            assistant_message_by_namespace=assistant_message_by_namespace,
-            goal_loop_start_monotonic=goal_loop_start_monotonic,
-            turn_start_monotonic=start_time,
-        )
         app_exiting = bool(is_shutting_down()) if is_shutting_down is not None else False
         await _handle_interrupt_cleanup(
             adapter=adapter,
@@ -4253,13 +4230,6 @@ async def execute_task_textual(
         return turn_stats
 
     except Exception:
-        await _flush_inflight_goal_completion_streams(
-            adapter,
-            goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
-            assistant_message_by_namespace=assistant_message_by_namespace,
-            goal_loop_start_monotonic=goal_loop_start_monotonic,
-            turn_start_monotonic=start_time,
-        )
         raise
 
     # Update token count and return stats

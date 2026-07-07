@@ -133,6 +133,9 @@ AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 # Error
 ERROR = "soothe.error.general.failed"
 
+# Stream termination (IG-556)
+STREAM_END = "soothe.stream.end"
+
 # LLM retry events (IG-504)
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
 
@@ -208,4 +211,5 @@ __all__ = [
     "STRANGE_LOOP_STEP_COMPLETED",
     "STRANGE_LOOP_STEP_QUEUED",
     "STRANGE_LOOP_STEP_STARTED",
+    "STREAM_END",
 ]

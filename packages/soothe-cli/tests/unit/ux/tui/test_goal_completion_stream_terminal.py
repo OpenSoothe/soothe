@@ -8,7 +8,6 @@ import pytest
 from langchain_core.messages import AIMessageChunk
 from soothe_sdk.ux.loop_stream import (
     GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
-    build_goal_completion_stream_terminal_message,
     is_goal_completion_stream_terminal,
 )
 
@@ -22,14 +21,6 @@ def test_is_goal_completion_stream_terminal_on_explicit_flag() -> None:
         **{GOAL_COMPLETION_STREAM_TERMINAL_FIELD: True},
     )
     assert is_goal_completion_stream_terminal(msg)
-
-
-def test_build_goal_completion_stream_terminal_message() -> None:
-    wire = build_goal_completion_stream_terminal_message()
-    assert wire["phase"] == "goal_completion"
-    assert wire["content"] == ""
-    assert wire["chunk_position"] == "last"
-    assert wire[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] is True
 
 
 @pytest.mark.asyncio

@@ -91,6 +91,7 @@ channels:
           - $ref: '#/components/messages/loopInputNotification'
           - $ref: '#/components/messages/slashCommandNotification'
           - $ref: '#/components/messages/disconnectNotification'
+          - $ref: '#/components/messages/deliveryAckNotification'
           # Subscriptions
           - $ref: '#/components/messages/loopEventsSubscribe'
           - $ref: '#/components/messages/autopilotEventsSubscribe'
@@ -627,6 +628,20 @@ components:
     disconnectParams:
       type: object
       description: No required fields
+
+    # Delivery ack params (IG-556 stream termination drain)
+    deliveryAckParams:
+      type: object
+      required: [loop_id, seq]
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop whose terminal frames were applied
+        seq:
+          type: integer
+          minimum: 0
+          description: Monotonic delivery sequence acked by the client
 
     # Stream event payload
     streamEventPayload:
@@ -1405,6 +1420,20 @@ components:
                 const: disconnect
               params:
                 $ref: '#/components/schemas/disconnectParams'
+
+    deliveryAckNotification:
+      title: Stream delivery acknowledgment
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: notification
+              method:
+                const: delivery_ack
+              params:
+                $ref: '#/components/schemas/deliveryAckParams'
 
     # Subscription request messages
     loopEventsSubscribe:

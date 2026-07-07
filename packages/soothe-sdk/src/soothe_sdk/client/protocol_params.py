@@ -593,3 +593,10 @@ from soothe_sdk.client.wire import ConnectionInitParams  # noqa: E402,F401
 
 class DisconnectParams(EmptyParams):
     """Params for ``method=disconnect`` notification — no required fields."""
+
+
+class DeliveryAckParams(ParamsBase):
+    """Params for ``method=delivery_ack`` notification (stream termination drain)."""
+
+    loop_id: str = Field(..., min_length=1)
+    seq: int = Field(..., ge=0)

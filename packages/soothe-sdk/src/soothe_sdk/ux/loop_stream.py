@@ -48,7 +48,7 @@ def assistant_output_phase(msg: Any) -> str | None:
     return None
 
 
-# Explicit synthesis-stream end marker on ``phase=goal_completion`` wire frames.
+# Explicit synthesis-stream end marker on assistant wire frames.
 GOAL_COMPLETION_STREAM_TERMINAL_FIELD = "stream_terminal"
 
 
@@ -58,55 +58,32 @@ def _wire_bool_field(msg: Any, field: str) -> bool:
     return getattr(msg, field, None) is True
 
 
-def _wire_str_field(msg: Any, field: str) -> str | None:
-    if isinstance(msg, dict):
-        raw = msg.get(field)
-    else:
-        raw = getattr(msg, field, None)
-    return raw if isinstance(raw, str) else None
-
-
 def is_stream_terminal_wire_dict(msg: dict[str, Any]) -> bool:
     """Return True when a wire message dict marks the end of an LLM stream."""
     if not msg:
         return False
-    if msg.get(GOAL_COMPLETION_STREAM_TERMINAL_FIELD) is True:
-        return True
-    return msg.get("chunk_position") == "last"
+    return msg.get(GOAL_COMPLETION_STREAM_TERMINAL_FIELD) is True
+
+
+def is_stream_terminal(msg: Any) -> bool:
+    """Return True when a message marks the end of an assistant LLM stream."""
+    if isinstance(msg, dict):
+        return is_stream_terminal_wire_dict(msg)
+    return _wire_bool_field(msg, GOAL_COMPLETION_STREAM_TERMINAL_FIELD)
 
 
 def is_goal_completion_stream_terminal(msg: Any) -> bool:
-    """Return True when a ``goal_completion`` message ends the synthesis stream.
-
-    Clients must finalize streaming UI state on this signal even when ``content``
-    is empty (adaptive chunked delivery emits a terminal frame with no text).
-    """
+    """Return True when a ``goal_completion`` message ends the synthesis stream."""
     if assistant_output_phase(msg) != "goal_completion":
         return False
-    if _wire_bool_field(msg, GOAL_COMPLETION_STREAM_TERMINAL_FIELD):
-        return True
-    # Older daemons may omit ``stream_terminal`` on the final content block.
-    return _wire_str_field(msg, "chunk_position") == "last"
-
-
-def build_goal_completion_stream_terminal_message(
-    template_msg: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build a wire dict that marks the end of goal_completion synthesis streaming."""
-    msg = dict(template_msg or {})
-    msg.setdefault("type", "AIMessageChunk")
-    msg["phase"] = "goal_completion"
-    msg["content"] = ""
-    msg["chunk_position"] = "last"
-    msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
-    return msg
+    return is_stream_terminal(msg)
 
 
 __all__ = [
     "GOAL_COMPLETION_STREAM_TERMINAL_FIELD",
     "LOOP_ASSISTANT_OUTPUT_PHASES",
     "assistant_output_phase",
-    "build_goal_completion_stream_terminal_message",
     "is_goal_completion_stream_terminal",
+    "is_stream_terminal",
     "is_stream_terminal_wire_dict",
 ]

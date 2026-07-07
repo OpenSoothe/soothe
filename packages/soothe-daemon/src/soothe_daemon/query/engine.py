@@ -997,6 +997,18 @@ class QueryEngine:
                         chunk_count,
                         turn_completed_via_coalescer,
                     )
+                    if effective_loop_id:
+                        from soothe_sdk.core.events import STREAM_END
+
+                        await self._broadcast_loop_message(
+                            effective_loop_id,
+                            {
+                                "type": "event",
+                                "namespace": [],
+                                "mode": "custom",
+                                "data": {"type": STREAM_END, "scope": "turn"},
+                            },
+                        )
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
