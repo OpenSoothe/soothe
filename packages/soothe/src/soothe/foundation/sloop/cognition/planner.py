@@ -1369,8 +1369,8 @@ class LLMPlanner:
     ) -> Any:
         """Assess-only planner call used by split graph flow (RFC-214).
 
-        Records the plan-assess user/AI pair in the ledger after the LLM call.
-        These messages are NOT injected into CoreAgent thread.
+        Persists ``StatusAssessment`` on the CE goal node (IG-557); does not
+        append ``plan_assess`` ledger pairs.
         """
         assess_messages = self._prompt_builder.build_plan_messages(
             goal, state, context, plan_phase="assess"
@@ -1382,48 +1382,20 @@ class LLMPlanner:
             thread_id=state.thread_id,
         )
 
-        # RFC-214: Record plan-assess pair in ledger (not injected into CoreAgent)
-        # Find the LoopHumanMessage (last message in assess_messages)
-        human_msg = None
-        for msg in reversed(assess_messages):
-            if isinstance(msg, LoopHumanMessage):
-                human_msg = msg
-                break
-
-        if human_msg is not None and ai_response is not None:
-            from soothe.foundation.sloop.cognition.ledger_compaction import (
-                compact_planning_human_content,
-            )
-            from soothe.foundation.sloop.utils.messages import LoopAIMessage, _record_ledger_message
-
-            # Compact the recorded human so the next assess sees cache-stable
-            # prompt prefix (D1), while preserving full AI response in ledger.
-            recorded_human = human_msg.model_copy(
-                update={"content": compact_planning_human_content(str(human_msg.content))}
-            )
-            ai_msg = LoopAIMessage(
-                content=str(ai_response.model_dump())
-                if hasattr(ai_response, "model_dump")
-                else str(ai_response),
-                thread_id=state.thread_id,
-                iteration=state.iteration,
-                phase="plan_assess",
-            )
-            _record_ledger_message(
-                context_engine,
-                recorded_human,
-                "plan_assess",
-            )
-            _record_ledger_message(
-                context_engine,
-                ai_msg,
-                "plan_assess",
-            )
-            logger.debug(
-                "Recorded plan-assess ledger pair: human=%d chars, ai=%d chars",
-                len(str(recorded_human.content)),
-                len(str(ai_msg.content)),
-            )
+        if ai_response is not None and context_engine is not None:
+            goal_id = getattr(state, "_ce_goal_id", None)
+            if goal_id:
+                context_engine.set_last_assessment(
+                    goal_id,
+                    assessment,
+                    iteration=state.iteration,
+                )
+                logger.info(
+                    "[Plan] CE last_assessment iter=%d status=%s progress=%s",
+                    state.iteration,
+                    assessment.status,
+                    assessment.goal_progress,
+                )
 
         # IG-454: Check for stuck loop patterns
         stuck_reason = _detect_stuck_loop(state)

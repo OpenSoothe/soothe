@@ -343,7 +343,8 @@ def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_s
     ledger = [
         LoopHumanMessage(content="h0", phase="execute_step", step_id="00"),
         LoopAIMessage(content="a0", phase="execute_step", step_id="00"),
-        LoopHumanMessage(content="plan0", phase="plan_assess", iteration=0),
+        LoopHumanMessage(content="intent h", phase="intent_classify"),
+        LoopAIMessage(content='{"intake":"complex"}', phase="intent_classify"),
         LoopHumanMessage(content="h1", phase="execute_step", step_id="01"),
         LoopAIMessage(content="a1", phase="execute_step", step_id="01"),
         LoopHumanMessage(content="finalize", phase="goal_completion"),
