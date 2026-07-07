@@ -4,6 +4,8 @@ parent: Wiki
 nav_order: 4.1
 description: >-
   Quick configuration overview — this page has been consolidated into the Configuration Guide for the complete reference.
+redirect_to: configuration-guide/index.md
+canonical: configuration-guide/index.md
 ---
 
 # Configuration Guide

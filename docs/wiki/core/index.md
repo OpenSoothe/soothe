@@ -4,7 +4,7 @@ parent: Wiki
 has_children: true
 nav_order: 4
 description: >-
-  Agent factory, runner, strange loop, goal engine, events, resolver, workspace.
+  Agent factory, runner, strange loop, context engine, events, resolver, workspace.
 permalink: /wiki/core/
 ---
 
@@ -16,10 +16,10 @@ Soothe's core framework provides the foundational runtime for autonomous agent e
 
 ## Where Core Fits
 
-The foundation package (`soothe.foundation`) implements a protocol-orchestrated agent runtime with **no transport or UI dependencies**. It sits between the CLI/daemon layer and the protocol/backend layer:
+The foundation package (`soothe.foundation`) implements a protocol-orchestrated agent runtime with **no transport or UI dependencies**. It sits between the CLI/daemon transport and the protocol/backend infrastructure:
 
 ```
-CLI / Daemon layer  →  Core Framework (foundation)  →  Protocols / Backends / LangGraph
+CLI / Daemon  →  Core Framework (foundation)  →  Protocols / Backends / LangGraph
 ```
 
 The core package is intentionally decoupled from how queries arrive (CLI, WebSocket, autopilot dispatch) and from where state is stored (SQLite, PostgreSQL). This separation lets the same runtime power one-shot CLI commands, long-running daemon sessions, and autonomous multi-goal workflows.
@@ -28,15 +28,15 @@ The core package is intentionally decoupled from how queries arrive (CLI, WebSoc
 
 ## Three-Level Execution Model
 
-Soothe organizes execution into three hierarchical levels. Understanding this layering is the key to navigating the core modules:
+Soothe organizes execution into three hierarchical tiers. Understanding this structure is the key to navigating the core modules:
 
-| Level | Module | Scope | Loop Pattern |
-|-------|--------|-------|--------------|
-| **3 — ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | Goal → PLAN → PERFORM → REFLECT → Update |
-| **2 — StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | Plan → Execute (max ~8 iterations) |
-| **1 — CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | LangGraph native execution |
+| Tier | Module | Scope | Loop Pattern |
+|------|--------|-------|--------------|
+| **ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | Goal → PLAN → PERFORM → REFLECT → Update |
+| **StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | Plan → Execute (max ~8 iterations) |
+| **CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | LangGraph native execution |
 
-Each level delegates downward: ContextEngine dispatches goals to StrangeLoop, which delegates step execution to CoreAgent. Levels communicate via **advisory hints** (passed through `config.configurable`) rather than tight coupling — Layer 1 never knows about goals, it only executes prompts with optional execution hints.
+Each tier delegates downward: ContextEngine dispatches goals to StrangeLoop, which delegates step execution to CoreAgent. Tiers communicate via **advisory hints** (passed through `config.configurable`) rather than tight coupling — CoreAgent never knows about goals, it only executes prompts with optional execution hints.
 
 ---
 
@@ -44,13 +44,13 @@ Each level delegates downward: ContextEngine dispatches goals to StrangeLoop, wh
 
 ### Execution Runtime
 
-- **[Agent Factory](agent-factory.md)** — CoreAgent construction. The `create_soothe_agent()` factory assembles tools, subagents, middlewares, and protocol instances into a compiled LangGraph. Covers the builder pattern, lazy initialization, and the Layer 1/Layer 2 contract.
+- **[Agent Factory](agent-factory.md)** — CoreAgent construction. The `create_soothe_agent()` factory assembles tools, subagents, middlewares, and protocol instances into a compiled LangGraph. Covers the builder pattern, lazy initialization, and the CoreAgent/StrangeLoop contract.
 - **[SootheRunner](runner.md)** — Top-level execution coordinator. Wraps CoreAgent with protocol pre/post-processing (policy validation, memory restore, context projection, checkpointing) and yields the canonical `soothe.*` event stream.
 - **[StrangeLoop](strangeloop.md)** — Plan-Execute loop for single goals. The middle tier: LLM-driven planning via structured `PlanResult`, evidence accumulation, DAG-style step scheduling, and convergence detection.
 
 ### Goal & Context Management
 
-- **[ContextEngine (Goal Engine)](goal-engine.md)** — Autonomous goal management. Manages goal DAGs with dependencies, priorities, dynamic restructuring, backoff reasoning, and dreaming. The top tier for complex workflows.
+- **[ContextEngine](goal-engine.md)** — Autonomous goal management. Manages goal DAGs with dependencies, priorities, dynamic restructuring, backoff reasoning, and dreaming. The top tier for complex workflows.
 
 ### Infrastructure
 
@@ -64,7 +64,7 @@ Each level delegates downward: ContextEngine dispatches goals to StrangeLoop, wh
 
 These modules don't have dedicated knowledge articles but are referenced throughout:
 
-- **Middleware Stack** (`soothe.middleware`) — Five Soothe-specific middlewares: policy enforcement, system prompt injection, execution hints, workspace context, and subagent context isolation.
+- **Middleware Stack** (`soothe.middleware`) — Soothe-specific middlewares assembled by `build_soothe_middleware_stack()`: `IdentityMiddleware` (JWT/identity), `SoothePolicyMiddleware` (policy enforcement), `SystemPromptMiddleware` (dynamic prompt), `LLMRateLimitMiddleware` (LLM-level rate limiting), `WorkspaceContextMiddleware` (thread-aware workspace), `PerTurnModelMiddleware` (per-stream model override), `SootheFilesystemMiddleware` (extended filesystem tools), `CodeInterpreterMiddleware` (embedded QuickJS), `MCPToolSearchMiddleware` (MCP progressive disclosure), `ToolTimeoutMiddleware` (tool call timeout), plus profiler and tool-context helpers.
 - **Persistence** (`soothe.foundation.persistence`) — Artifact store and configuration-driven policy for run outputs.
 - **Prompts** (`soothe.foundation.sloop.prompts`) — System prompt building via `PromptBuilder`, context XML generation, and template loading.
 
@@ -75,7 +75,9 @@ These modules don't have dedicated knowledge articles but are referenced through
 | RFC | Title | Primary Module |
 |-----|-------|----------------|
 | [RFC-100](../../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime | agent |
-| [RFC-200](../../specs/archive/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management (archived) | context |
+| [RFC-200](../../specs/archive/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management (archived — superseded by RFC-624/625) | context |
+| [RFC-624](../../specs/RFC-624-context-engine.md) | Context Engine | context |
+| [RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md) | Autopilot-Monitor-ContextEngine Unification | context |
 | [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop | loop |
 | [RFC-001](../../specs/RFC-001-core-modules-architecture.md) | Core Protocol Modules | multiple |
 
@@ -86,7 +88,7 @@ These modules don't have dedicated knowledge articles but are referenced through
 The two entry points for using the core framework:
 
 ```python
-# Direct agent execution (Layer 1 only)
+# Direct agent execution (CoreAgent only)
 from soothe.foundation.core.agent import create_soothe_agent
 agent = create_soothe_agent(config)
 async for chunk in agent.astream("query", config={"thread_id": "t1"}):
@@ -99,12 +101,12 @@ async for event in runner.run("query"):
     process(event)
 ```
 
-Use `create_soothe_agent` directly for Layer 1 execution (tests, CLI one-shots). Use `SootheRunner` when you need protocol orchestration — thread lifecycle, policy validation, memory persistence, and the `soothe.*` event stream.
+Use `create_soothe_agent` directly for CoreAgent-only execution (tests, CLI one-shots). Use `SootheRunner` when you need protocol orchestration — thread lifecycle, policy validation, memory persistence, and the `soothe.*` event stream.
 
 ---
 
 ## Additional Resources
 
-- **[Protocol Layer](../architecture/index.md)** — Protocol definitions
-- **[Backend Layer](../backends/index.md)** — Protocol implementations
+- **[Architecture Overview](../architecture/index.md)** — Protocol definitions
+- **[Backends](../backends/index.md)** — Protocol implementations
 - **[RFC Index](../../specs/)** — All RFCs

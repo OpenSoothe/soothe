@@ -3,18 +3,18 @@ title: "StrangeLoop"
 parent: Core Modules
 grand_parent: Wiki
 nav_order: 3
-description: Plan-Execute loop for single-goal agentic execution — Layer 2 of the execution model.
+description: Plan-Execute loop for single-goal agentic execution — the middle tier of the execution model.
 ---
 
 # StrangeLoop
 
-Plan-Execute loop for single-goal agentic execution — Layer 2 of the execution model.
+Plan-Execute loop for single-goal agentic execution — the middle tier of the execution model.
 
 ---
 
 ## What This Module Is
 
-StrangeLoop (`soothe.foundation.sloop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine (Layer 3) decides *which* goals to pursue, StrangeLoop executes a *single* goal through iterative Plan → Execute refinement. It delegates actual tool execution to CoreAgent (Layer 1).
+StrangeLoop (`soothe.foundation.sloop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine decides *which* goals to pursue, StrangeLoop executes a *single* goal through iterative Plan → Execute refinement. It delegates actual tool execution to CoreAgent.
 
 The name comes from the core insight: the LLM plans, executes, assesses progress, and re-plans in a loop — a "strange loop" of self-referential refinement. The loop is bounded (default max 8 iterations) and converges based on progress assessment.
 
@@ -144,7 +144,7 @@ async for event_type, event_data in loop.run_with_progress(
         result = event_data["result"]  # PlanResult
 ```
 
-In practice, you rarely instantiate StrangeLoop directly — the runner handles it. The runner passes `intent`, `routing_classification`, `workspace`, `clarification_policy`, and `proposal_queue` (RFC-204 Group C for Layer 2 tool proposals).
+In practice, you rarely instantiate StrangeLoop directly — the runner handles it. The runner passes `intent`, `routing_classification`, `workspace`, `clarification_policy`, and `proposal_queue` (RFC-204 Group C for tool proposals).
 
 ---
 
@@ -160,7 +160,7 @@ In practice, you rarely instantiate StrangeLoop directly — the runner handles 
 
 ## Related
 
-- **[ContextEngine](goal-engine.md)** — Layer 3 goal management
-- **[Agent Factory](agent-factory.md)** — Layer 1 execution
+- **[ContextEngine](goal-engine.md)** — goal management (top tier)
+- **[Agent Factory](agent-factory.md)** — execution runtime (CoreAgent)
 - **[SootheRunner](runner.md)** — runner that drives StrangeLoop
 - **[RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** — full specification

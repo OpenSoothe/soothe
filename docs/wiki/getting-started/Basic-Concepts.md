@@ -254,12 +254,11 @@ Soothe defines **protocols** (interfaces) for all core functions, with pluggable
 
 | Protocol | Purpose | Implementations |
 |----------|---------|-----------------|
-| **ContextProtocol** | Information retrieval | KeywordContext, VectorContext |
-| **MemoryProtocol** | Persistent memory | KeywordMemory, VectorMemory |
-| **PlannerProtocol** | Task planning | SimplePlanner, SubagentPlanner, AutoPlanner |
+| **MemoryProtocol** | Cross-thread memory | MemUMemory |
+| **PlannerProtocol** | Task planning | LLMPlanner |
 | **PolicyProtocol** | Security policies | ConfigDrivenPolicy |
-| **DurabilityProtocol** | State persistence | JsonDurability, RocksDBDurability |
-| **VectorStoreProtocol** | Vector storage | PGVector, Weaviate, InMemory |
+| **DurabilityProtocol** | Thread lifecycle | SQLiteDurability, PostgreSQLDurability |
+| **VectorStoreProtocol** | Vector storage | PGVector, SQLiteVec, Weaviate |
 
 ### Configuring Backends
 
@@ -592,6 +591,7 @@ Now that you understand the basics:
 ## Further Reading
 
 - **[RFC-000: System Conceptual Design](../../specs/RFC-000-system-conceptual-design.md)** - Complete architecture
-- **[RFC-200: Autonomous Goal Management](../../specs/archive/RFC-200-autonomous-goal-management.md)** - ContextEngine details (archived)
+- **[RFC-624: Context Engine](../../specs/RFC-624-context-engine.md)** - ContextEngine (autonomous goal management)
+- **[RFC-200: Autonomous Goal Management](../../specs/archive/RFC-200-autonomous-goal-management.md)** - ContextEngine details (archived, superseded by RFC-624)
 - **[RFC-201: StrangeLoop](../../specs/RFC-201-strangeloop-plan-execute-loop.md)** - Execution loop details
 - **[Architecture Overview](../architecture/index.md)** - Visual guides and explanations

@@ -1,12 +1,19 @@
 ---
-title: "User Guide"
+title: "User Guide (Legacy)"
 parent: Wiki
 nav_order: 2.1
 description: >-
-  Comprehensive user documentation for Soothe — a goal-driven orchestration framework for building 24/7 autonomous agents.
+  Legacy comprehensive user guide — the canonical User Guides hub lives at user-guides/index.md.
+redirect_to: user-guides/index.md
+canonical: user-guides/index.md
 ---
 
 # Soothe User Guide
+
+> **This page is a legacy comprehensive guide.** The canonical User Guides hub is
+> at **[User Guides](user-guides/index.md)**, which links to focused per-topic
+> guides. This page is retained for its consolidated RFC and IG reference tables
+> below.
 
 ## Introduction
 
@@ -89,7 +96,7 @@ Browse the complete Soothe documentation organized by user journey.
 ### 🛠️ Troubleshooting & Advanced
 
 - [Debug Guide](howto_debug.md) - Enable debug logs, diagnose issues, log locations
-- [Troubleshooting Guide](troubleshooting.md) - Common issues and solutions
+- [Troubleshooting Guide](troubleshooting/index.md) - Common issues and solutions
 
 ---
 
@@ -106,10 +113,11 @@ Technical documentation for developers and system architects.
 | [RFC-100](../specs/RFC-100-coreagent-runtime.md) | CoreAgent Runtime |
 | [RFC-101](../specs/RFC-101-tool-interface.md) | Tool Interface |
 | [RFC-102](../specs/RFC-102-security-filesystem-policy.md) | Security Filesystem Policy |
-| [RFC-200](../specs/archive/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management (archived) |
+| [RFC-624](../specs/RFC-624-context-engine.md) | Context Engine (Autonomous Goal Management) |
+| [RFC-200](../specs/archive/RFC-200-autonomous-goal-management.md) | Autonomous Goal Management (archived, superseded by RFC-624) |
 | [RFC-201](../specs/RFC-201-strangeloop-plan-execute-loop.md) | StrangeLoop Plan-Execute Loop |
-| [RFC-300](../specs/archive/RFC-300-context-memory-protocols.md) | Context and Memory Protocols (archived) |
 | [RFC-302](../specs/RFC-302-context-protocol-architecture.md) | Context Protocol Architecture |
+| [RFC-300](../specs/archive/RFC-300-context-memory-protocols.md) | Context and Memory Protocols (archived, superseded by RFC-302) |
 | [RFC-401](../specs/RFC-401-event-processing.md) | Event Processing |
 | [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) | Daemon Communication Protocol |
 | [RFC-500](../specs/RFC-500-cli-tui-architecture.md) | CLI TUI Architecture |
@@ -118,32 +126,45 @@ Technical documentation for developers and system architects.
 
 ### Implementation Guides
 
-> Earlier implementation guides (IG-351 through IG-437) were superseded by the
-> current series starting at IG-501. Only IG-501+ files exist in `docs/impl/`.
+> Current implementation guides (IG-531 through IG-557). Earlier IG series (IG-351–437, IG-501–515) were superseded.
 
 | Guide | Title |
 |-------|-------|
-| [IG-501](../impl/IG-501-dynamic-rate-limit-adjustment.md) | Dynamic LLM Rate Limit Adjustment |
-| [IG-502](../impl/IG-502-cron-service-implementation.md) | Cron Service Implementation |
-| [IG-503](../impl/IG-503-file-descriptor-leak-and-network-resilience-fixes.md) | File Descriptor Leak and Network Resilience Fixes |
-| [IG-504](../impl/IG-504-remove-http-rest-channel.md) | Remove HTTP REST Channel |
-| [IG-505](../impl/IG-505-identity-service-implementation.md) | Identity Service Implementation |
-| [IG-506](../impl/IG-506-coreagent-cold-start-and-code-interpreter-prep.md) | CoreAgent Cold Start and Code Interpreter Prep |
-| [IG-507](../impl/IG-507-loop-3328-log-analysis-fixes.md) | Loop 3328 Log Analysis Fixes |
-| [IG-508](../impl/IG-508-step-full-description.md) | Step Full Description for Enhanced Execution Context |
-| [IG-509](../impl/IG-509-loop-7cba-hang-analysis.md) | Loop 7cba Hang Analysis |
-| [IG-511](../impl/IG-511-tool-timeout-analysis.md) | Tool Timeout Architecture Analysis |
-| [IG-512](../impl/IG-512-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
-| [IG-513](../impl/IG-513-subagent-card.md) | SubAgent Card — Flattened Display (RFC-628 Part II) |
-| [IG-514](../impl/IG-514-execute-namespace-tool-stamping-fix.md) | Execute Namespace Tool Stamping Fix |
-| [IG-515](../impl/IG-515-step-subagent-card-footer-and-lifecycle-fixes.md) | Step / SubAgent Card Footer & Lifecycle Fixes (RFC-628) |
+| [IG-531](../impl/IG-531-typescript-client-appkit.md) | TypeScript Client Core Upgrade and Appkit |
+| [IG-532](../impl/IG-532-daemon-intent-hint-direct-model-turns.md) | Daemon `intent_hint` Direct Model Turns |
+| [IG-533](../impl/IG-533-goal-completion-tui-worker-lifecycle-fixes.md) | Goal-Completion TUI & Worker Lifecycle Fixes |
+| [IG-534](../impl/IG-534-daemon-tui-performance-isolation.md) | Daemon ↔ TUI Performance Isolation |
+| [IG-535](../impl/IG-535-phase4-hidden-bottleneck-optimizations.md) | Phase 4 Hidden Bottleneck Optimizations |
+| [IG-536](../impl/IG-536-plan-generation-benchmark.md) | Plan Generation Benchmark |
+| [IG-537](../impl/IG-537-context-loop-planning-consolidation.md) | Context vs Loop Planning Consolidation |
+| [IG-538](../impl/IG-538-unified-planner-prompt-assembly.md) | Unified Planner Prompt Assembly |
+| [IG-539](../impl/IG-539-cross-wave-step-dag-planning.md) | Cross-Wave Step DAG Planning |
+| [IG-540](../impl/IG-540-intent-classify-prompt-ledger-optimization.md) | Intent-Classify Prompt & Ledger Optimization |
+| [IG-541](../impl/IG-541-tui-markdown-theme-registry.md) | TUI Markdown Theme Registry |
+| [IG-542](../impl/IG-542-execute-step-ledger-projection.md) | Execute-Step Ledger Projection |
+| [IG-543](../impl/IG-543-skill-runtime-discovery.md) | Skill Runtime Discovery |
+| [IG-544](../impl/IG-544-tui-step-flow-and-plan-quick-view.md) | TUI Step Flow & Plan Quick View |
+| [IG-545](../impl/IG-545-coreagent-role-routing-middleware.md) | CoreAgent Role Routing Middleware |
+| [IG-546](../impl/IG-546-loop-tui-event-throughput.md) | Loop TUI Event Throughput |
+| [IG-547](../impl/IG-547-remove-explore-subagent.md) | Remove `explore` Subagent |
+| [IG-548](../impl/IG-548-goal-display-snapshots.md) | Goal-Bound Display Snapshots |
+| [IG-549](../impl/IG-549-loop-worker-goal-boundary-hardening.md) | Loop Worker Goal-Boundary Hardening |
+| [IG-550](../impl/IG-550-high-performance-persistence.md) | High-Performance Persistence Optimization |
+| [IG-551](../impl/IG-551-mid-loop-continuation-planning-coordination.md) | Mid-Loop Continuation Planning Coordination |
+| [IG-552](../impl/IG-552-goal-completion-report-cli-format.md) | Goal Completion Report CLI Format |
+| [IG-553](../impl/IG-553-soothe-log-stability-fixes.md) | soothe.log Stability Fixes |
+| [IG-554](../impl/IG-554-two-pass-intake-classification-implementation.md) | Two-Pass Intake Classification |
+| [IG-555](../impl/IG-555-plan-assess-prior-goal-completion-bias-mitigation.md) | Plan-Assess Goal Completion Bias Mitigation |
+| [IG-556](../impl/IG-556-stream-termination-unification.md) | Stream Termination Unification |
+| [IG-557](../impl/IG-557-mid-goal-plan-assess-accuracy.md) | Mid-Goal Plan-Assess Accuracy |
+| [IG-XXX](../impl/IG-XXX-ledger-context-bounds.md) | Ledger Context Bounds for Multi-Goal Loops |
 
 ---
 
 ## Getting Help
 
 - Use `/help` in the TUI to see available commands
-- Check the [Troubleshooting Guide](troubleshooting.md) for common issues
+- Check the [Troubleshooting Guide](troubleshooting/index.md) for common issues
 - Review daemon logs at `~/.soothe/logs/soothed.log`
 - Browse the [RFC specifications](../specs/) for design details
 - Check the [implementation guides](../impl/) for technical documentation

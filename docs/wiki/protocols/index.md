@@ -10,7 +10,7 @@ permalink: /wiki/protocols/
 
 # Protocol Layer: Core Abstractions
 
-**Status**: Implemented (except ContextProtocol — draft)
+**Status**: All listed protocols implemented. ContextProtocol is **not implemented** — context management uses `ContextEngine` (`soothe.foundation.context`), not a protocol.
 **Philosophy**: Protocol-first, runtime-second (RFC-000 Principle 1)
 
 ## What the Protocol Layer Is
@@ -59,11 +59,11 @@ Soothe's protocols organize into four categories:
 | **LoopWorkingMemoryProtocol** | Bounded scratchpad for Plan prompts | [loop-protocols.md](loop-protocols.md) |
 | **OperationSecurityProtocol** | Operation-level security checks | [loop-protocols.md](loop-protocols.md) |
 
-### Future
+### Not Implemented
 
-| Protocol | Status |
-|----------|--------|
-| **ContextProtocol** | Draft (RFC-302) — unbounded within-thread knowledge accumulator |
+| Protocol | Status | Note |
+|----------|--------|------|
+| ~~ContextProtocol~~ | **Not implemented** (RFC-302 draft) | Context management is handled by `ContextEngine` (`soothe.foundation.context`), not a protocol. See [context.md](context.md). |
 
 ## Protocol Relationships
 
@@ -113,7 +113,7 @@ A few non-obvious collaborations to keep in mind:
 - **Durability ↔ Memory**: archiving a thread triggers memory consolidation. Thread metadata carries a `policy_profile` that flows into policy decisions.
 - **Policy ↔ Execution**: `PolicyEnforcementMiddleware` intercepts tool calls and subagent spawns, calling `PolicyProtocol.check()` before any action proceeds.
 - **Planner ↔ Runner**: the runner drives the StrangeLoop; each iteration calls `LoopPlanner.plan()`, executes the returned decision, collects `StepResult`s, and loops.
-- **VectorStore ↔ Memory**: memory backends use vector search for semantic recall; `AsyncPersistStore` underpins durability and (future) context persistence.
+- **VectorStore ↔ Memory**: memory backends use vector search for semantic recall; `AsyncPersistStore` underpins durability. Context is managed by `ContextEngine` (not a protocol).
 
 ## Multi-Database Architecture (RFC-802)
 
@@ -122,7 +122,7 @@ PostgreSQL deployments split data across dedicated databases for isolation and i
 - `soothe_metadata` — DurabilityProtocol thread records
 - `soothe_vectors` — VectorStoreProtocol embeddings
 - `soothe_checkpoints` — LangGraph Checkpointer state
-- `soothe_context` — ContextProtocol (future)
+- `soothe_context` — reserved for context (ContextProtocol not implemented; ContextEngine manages context directly)
 
 Each database has its own connection pool, backup strategy, and ownership boundary, preventing data contamination between concerns.
 

@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Version | Release Date | Summary |
 |---------|-------------|---------|
 | **0.7.x** | 2026-06-30+ | Current — router profiles, skill runtime discovery, sloop refactor, explore removal, config hot-reload |
-| **0.6.x** | 2025-Q2+ | HTTP REST removed, soothe-plugins package, 16+ channels, unified autonomous config |
+| **0.6.x** | 2025-Q2+ | HTTP REST removed, soothe-plugins package, 15 channels, unified autonomous config |
 | **0.5.x** | 2025-01+ | RFC-220 loop orchestrator, deployment guides |
 | **0.4.x** | 2024-Q4 | Protocol consolidation, multi-package monorepo, RFC-802 PostgreSQL |
 | **0.3.x** | 2024-Q3 | Daemon multi-transport (WebSocket, Unix Socket), event system |
@@ -250,7 +250,7 @@ TUI file-change cards use single-word action prefixes (Writing, Editing, Created
 
 ### Added - Channel System
 
-16+ built-in channels for messaging platform integration:
+15 built-in channels for messaging platform integration:
 
 - WebSocket, Slack, Feishu/Lark, Matrix, WhatsApp, Telegram, Signal, Email
 - Discord, Microsoft Teams, Personal WeChat, Enterprise WeChat, DingTalk
@@ -758,9 +758,9 @@ pip install 'soothe[all]' soothe-cli soothe-daemon
 
 ### RFC Pipeline
 
-- RFC-700: Multi-agent collaboration protocol
-- RFC-800: Web UI architecture
-- RFC-900: Plugin marketplace specification
+- RFC-700: Desktop app product redesign
+- Web UI architecture (RFC number TBD — 8xx series is used by persistence backends)
+- Plugin marketplace specification (RFC-900 series is used by deprecation/security)
 
 ---
 

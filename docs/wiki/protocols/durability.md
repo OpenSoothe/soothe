@@ -104,6 +104,7 @@ Backends are selected via `persistence.durability_backend` in config. The `resol
 
 ## Related Documentation
 
+- **[Durability Backends](../backends/durability-backends.md)** — Backend implementations
 - [Memory Protocol](memory.md) — triggered on archive
 - [Policy Protocol](policy.md) — `policy_profile` in thread metadata
 - [Vector Store & Persistence](vector-store-persistence.md) — `AsyncPersistStore` backends

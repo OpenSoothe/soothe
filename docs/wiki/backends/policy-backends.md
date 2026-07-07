@@ -151,6 +151,7 @@ This means policy enforcement happens at two layers: operation security (workspa
 
 ## Related Documentation
 
+- **[PolicyProtocol](../protocols/policy.md)** — Protocol interface definition
 - **[Backends Overview](index.md)** — Backend layer introduction
 - **[Workspace Management](../core/workspace.md)** — Workspace security boundaries
 - **[RFC-102](../../specs/RFC-102-security-filesystem-policy.md)** — Security policy spec

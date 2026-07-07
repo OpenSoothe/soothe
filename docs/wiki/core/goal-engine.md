@@ -1,12 +1,12 @@
 ---
-title: "ContextEngine (Goal Engine)"
+title: "ContextEngine"
 parent: Core Modules
 grand_parent: Wiki
 nav_order: 4
 description: Autonomous goal management via goal DAGs, ledger, and bounded projection.
 ---
 
-# ContextEngine (Goal Engine)
+# ContextEngine
 
 Autonomous goal management via goal DAGs, ledger, and bounded projection.
 
@@ -14,7 +14,9 @@ Autonomous goal management via goal DAGs, ledger, and bounded projection.
 
 ## What This Module Is
 
-ContextEngine (`soothe.foundation.context`) is **Layer 3** of Soothe's execution model — the "goal engine." It manages autonomous goal execution for long-running, complex workflows. Where StrangeLoop (Layer 2) executes a single goal iteratively, ContextEngine orchestrates *which* goals to pursue, in what order, and how they relate to each other.
+ContextEngine (`soothe.foundation.context`) is the **top tier** of Soothe's execution model — the autonomous goal engine. It manages goal execution for long-running, complex workflows. Where StrangeLoop executes a single goal iteratively, ContextEngine orchestrates *which* goals to pursue, in what order, and how they relate to each other.
+
+> **Note**: The legacy `GoalEngine` class was deleted (RFC-625). ContextEngine is now the sole source of truth for goal management. The old goal-engine naming persists in file paths and some config keys for backward compatibility.
 
 ContextEngine composes five subsystems into a single interface: `GoalStepDAG` (goal/step graph), `LedgerManager` (message history), `SemanticLoader` (file/context loading), `ProjectionEngine` (bounded context for prompts), and a pluggable persistence backend (SQLite or PostgreSQL).
 
@@ -153,7 +155,7 @@ A non-obvious detail: `StepDAG.ready_steps()` uses **dependency token expansion*
 
 ## Related
 
-- **[StrangeLoop](strangeloop.md)** — Layer 2 goal execution
+- **[StrangeLoop](strangeloop.md)** — single-goal execution (middle tier)
 - **[SootheRunner](runner.md)** — runner orchestration
 - **[RFC-624](../../specs/RFC-624-context-engine.md)** — Context Engine specification
 - **[RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md)** — unification spec

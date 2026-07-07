@@ -154,6 +154,7 @@ This means every Soothe execution touches the durability backend at least twice.
 
 ## Related Documentation
 
+- **[DurabilityProtocol](../protocols/durability.md)** — Protocol interface definition
 - **[Backends Overview](index.md)** — Backend layer introduction
 - **[Persistence Backends](persistence-backends.md)** — The PersistStore layer durability builds on
 - **[Memory Backends](memory-backends.md)** — Triggered on thread archival

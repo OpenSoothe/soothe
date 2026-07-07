@@ -16,31 +16,31 @@ These articles explain the *why* and *how* of each Soothe package — architectu
 
 | Article | Package | Role | Stability |
 |---------|---------|------|-----------|
-| [Core API](core-api.md) | `soothe` | Layer 1–2: configuration, protocols, agent construction, runner | ⚠️ Beta |
-| [Daemon API](daemon-api.md) | `soothe_daemon` | Layer 3: background server, multi-transport, goal dispatch | ⚠️ Alpha |
+| [Core API](core-api.md) | `soothe` | CoreAgent & SootheRunner: configuration, protocols, agent construction, runner | ⚠️ Beta |
+| [Daemon API](daemon-api.md) | `soothe_daemon` | SootheDaemon: background server, multi-transport, goal dispatch | ⚠️ Alpha |
 | [SDK API](sdk-api.md) | `soothe_sdk` | Client & plugin development: WebSocket client, decorators, events | ✅ Stable |
 
 ### Core (`soothe`) — Framework Foundation
 
-The configuration model, protocol abstractions, agent construction pipeline, and execution runner. Defines the three-layer architecture (CoreAgent → SootheRunner → SootheDaemon) and the protocol system that makes every capability pluggable.
+The configuration model, protocol abstractions, agent construction pipeline, and execution runner. Defines the three-tier architecture (CoreAgent → SootheRunner → SootheDaemon) and the protocol system that makes every capability pluggable.
 
 ### Daemon (`soothe_daemon`) — Server Infrastructure
 
-Long-running background server hosting `SootheRunner` instances. Manages WebSocket IPC, 16+ messaging platform channels, client sessions, RPC commands, health checks, and daemon-owned autopilot goal dispatch.
+Long-running background server hosting `SootheRunner` instances. Manages WebSocket IPC, 15 messaging platform channels, client sessions, RPC commands, health checks, and daemon-owned autopilot goal dispatch.
 
 ### SDK (`soothe_sdk`) — Client & Plugin API
 
 Public API for two audiences: client developers connecting to a daemon (WebSocket client, RPC helpers) and plugin authors extending the agent (decorators for tools, subagents, events). Re-exports core protocols so plugins have zero hard dependency on the daemon package.
 
-## Architectural Layering
+## Architectural Tiers
 
 ```
-Layer 3  SootheDaemon    — IPC, transports, background scheduling
-Layer 2  SootheRunner    — goal orchestration, strange-loop, protocols
-Layer 1  CoreAgent       — pure execution: tools, subagents, middleware
+SootheDaemon    — IPC, transports, background scheduling
+SootheRunner    — goal orchestration, strange-loop, protocols
+CoreAgent       — pure execution: tools, subagents, middleware
 ```
 
-Each layer has a strict contract: Layer 1 knows nothing about goals; Layer 2 knows nothing about the network; Layer 3 coordinates everything. This enables embedding `CoreAgent` in any async process, using `SootheRunner` for agentic loops without a daemon, and running the full daemon for multi-client deployments.
+Each tier has a strict contract: CoreAgent knows nothing about goals; SootheRunner knows nothing about the network; SootheDaemon coordinates everything. This enables embedding `CoreAgent` in any async process, using `SootheRunner` for agentic loops without a daemon, and running the full daemon for multi-client deployments.
 
 ## Import Paths
 

@@ -18,7 +18,7 @@ The workspace module (`soothe.foundation.workspace`) resolves, validates, and is
 
 The module provides: daemon workspace resolution (ephemeral fallback), client workspace validation, stream-scoped workspace resolution (RFC-103), the `FrameworkFilesystem` singleton, and a workspace-aware backend wrapper.
 
-**Source**: `packages/soothe/src/soothe/foundation/workspace/` (`resolution.py`, `framework_filesystem.py`, `normalized_backend.py`, `loop_workspace.py`, `stream_resolution.py`)
+**Source**: `packages/soothe/src/soothe/foundation/workspace/` — modules: `resolution.py` (daemon/client resolution), `core_resolution.py` (shared precedence), `stream_resolution.py` (runner stream), `runtime_resolution.py` (tool execution), `loop_workspace.py` (loop-scoped), `framework_filesystem.py` (singleton), `normalized_backend.py` (workspace-aware backend), `virtual_home.py` (sandbox mode), `context.py` (workspace ContextVar), `tool_path_resolution.py` (virtual_mode decision), `migration.py` (layout migration)
 
 ---
 

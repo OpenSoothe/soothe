@@ -122,7 +122,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ ContextEngine: Autonomous Goal Management (RFC-200)        │
+│ ContextEngine: Autonomous Goal Management (RFC-624)        │
 │ • Manages goal DAGs, delegates single goals to StrangeLoop   │
 │ • Loop: Goal/Goals → PLAN → PERFORM → REFLECT → Update     │
 └─────────────────────────────────────────────────────────────┘
@@ -156,9 +156,8 @@ soothe -p "List all Python files in the current directory and count lines of cod
 |  - ContextEngine: Autonomous Goal Management         |
 |  - StrangeLoop: Agentic Goal Execution                 |
 |  - CoreAgent: Runtime                                |
-|  - ContextProtocol, MemoryProtocol,                  |
-|    PlannerProtocol, PolicyProtocol,                  |
-|    DurabilityProtocol                                |
+|  - MemoryProtocol, PlannerProtocol,                 |
+|    PolicyProtocol, DurabilityProtocol               |
 +------------------------------------------------------+
 |  deepagents (agent framework)                        |
 |  - BackendProtocol, AgentMiddleware,                 |
@@ -238,7 +237,7 @@ class MyPlugin:
 | **Plugin System** | ✅ Production Ready | [RFC-600](../specs/RFC-600-plugin-extension-system.md) |
 | **Multi-Transport Daemon** | ✅ Production Ready | [Multi-Transport Setup](multi-transport.md) |
 | **Thread Management** | ✅ Production Ready | [Thread Management](thread-management.md) |
-| **Security Policies** | ✅ Production Ready | [RFC-102](../specs/RFC-102-secure-filesystem-policy.md) |
+| **Security Policies** | ✅ Production Ready | [RFC-102](../specs/RFC-102-security-filesystem-policy.md) |
 | **Autonomous Mode** | 🚧 Experimental | [Autonomous Mode](autonomous-mode.md) |
 
 ---

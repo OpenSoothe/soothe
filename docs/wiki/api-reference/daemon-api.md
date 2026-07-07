@@ -9,7 +9,7 @@ description: >-
 
 # Daemon Server (`soothe_daemon`)
 
-The `soothe_daemon` package is Layer 3 of the Soothe architecture — a long-running background server that hosts `SootheRunner` instances, manages multi-transport communication, and coordinates goal dispatch. It is the bridge between clients (CLI, SDK, messaging platforms) and the agent runtime.
+The `soothe_daemon` package is the SootheDaemon tier of the Soothe architecture — a long-running background server that hosts `SootheRunner` instances, manages multi-transport communication, and coordinates goal dispatch. It is the bridge between clients (CLI, SDK, messaging platforms) and the agent runtime.
 
 > **Source**: `packages/soothe-daemon/src/soothe_daemon/`
 > **Package**: `soothe-daemon` (note the hyphen) · **Python**: `>=3.11` · **Stability**: ⚠️ Alpha
@@ -114,7 +114,7 @@ transport:
 
 > **Gotcha**: The SDK client's `max_frame_size` must be ≥ the daemon's. The `websockets` library defaults to 1 MiB, which silently closes the connection (code 1009) when the daemon streams larger JSON events.
 
-### Platform Channels (16+)
+### Platform Channels (15)
 
 Each platform channel is a self-contained plugin following the same `Channel` pattern. They are configured under the top-level `channels:` section:
 
@@ -216,7 +216,7 @@ You can run a subset with `categories=["config", "protocols"]` or exclude specif
 
 ## See Also
 
-- [Core API](core-api.md) — Layer 1/2 agent and runner
+- [Core API](core-api.md) — CoreAgent and SootheRunner
 - [SDK API](sdk-api.md) — WebSocket client for connecting to this daemon
 - [Daemon Management Guide](../daemon-management.md) — Operational lifecycle
 - [Multi-Transport Communication](../multi-transport.md) — Channel architecture deep-dive
