@@ -158,15 +158,20 @@ class NormalizedPathBackend:
         expanded = Path(path.strip()).expanduser()
 
         if expanded.is_absolute():
-            abs_str = str(expanded)
+            abs_str = str(expanded.resolve())
             try:
                 rel = expanded.resolve().relative_to(self._root_dir.resolve())
             except ValueError:
                 # Path is outside workspace
                 if self._virtual_mode:
-                    # Sandboxed: strip leading / so it's treated as workspace-relative
-                    relative = abs_str.lstrip("/")
-                    return relative or "."
+                    from soothe.foundation.workspace.tool_path_resolution import (
+                        should_use_virtual_path_resolution,
+                    )
+
+                    if should_use_virtual_path_resolution(path.strip(), self._root_dir):
+                        relative = abs_str.lstrip("/")
+                        return relative or "."
+                    return abs_str
                 return abs_str
             if self._virtual_mode:
                 return rel.as_posix()
@@ -177,7 +182,7 @@ class NormalizedPathBackend:
     def resolve_os_path(self, path: str) -> Path:
         """Resolve a logical path to an absolute on-disk path under the workspace."""
         normalized = self._normalize_path(path)
-        return self._fs.resolve_path(normalized)
+        return self._fs.resolve_path(normalized, allow_host_absolute=True)
 
     def read(
         self,
@@ -501,18 +506,23 @@ class NormalizedPathBackend:
             output_mode: Output format.
             glob: Glob pattern to filter files (deepagents parameter name).
         """
-        from deepagents.backends.protocol import GrepResult
+        from deepagents.backends.protocol import GrepResult as DaGrepResult
+
+        from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
 
         normalized = self._normalize_path(path)
         try:
             result = self._fs.grep(pattern, path=normalized, glob=glob, output_mode=output_mode)
 
             matches = _coerce_fs_grep_to_da_matches(result)
+            error: str | None = None
+            if isinstance(result, FsGrepResult):
+                error = result.error
 
-            return GrepResult(error=None, matches=matches)
+            return DaGrepResult(error=error, matches=matches)
         except Exception as e:
             logger.warning("grep error for %s: %s", path, e)
-            return GrepResult(error=str(e), matches=None)
+            return DaGrepResult(error=str(e), matches=None)
 
     async def agrep(
         self,
@@ -531,7 +541,9 @@ class NormalizedPathBackend:
             output_mode: Output format.
             glob: Glob pattern to filter files (deepagents parameter name).
         """
-        from deepagents.backends.protocol import GrepResult
+        from deepagents.backends.protocol import GrepResult as DaGrepResult
+
+        from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
 
         normalized = self._normalize_path(path)
         try:
@@ -540,11 +552,14 @@ class NormalizedPathBackend:
             )
 
             matches = _coerce_fs_grep_to_da_matches(result)
+            error: str | None = None
+            if isinstance(result, FsGrepResult):
+                error = result.error
 
-            return GrepResult(error=None, matches=matches)
+            return DaGrepResult(error=error, matches=matches)
         except Exception as e:
             logger.warning("agrep error for %s: %s", path, e)
-            return GrepResult(error=str(e), matches=None)
+            return DaGrepResult(error=str(e), matches=None)
 
     def delete(self, path: str) -> str:
         """Delete file or directory."""

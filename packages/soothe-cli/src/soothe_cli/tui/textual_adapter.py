@@ -2349,6 +2349,8 @@ async def _handle_interrupt_cleanup(
     adapter._tool_to_step.clear()
     adapter._step_by_namespace.clear()
     adapter._step_router.reset_turn()
+    if adapter._goal_tree_message is not None:
+        adapter._goal_tree_message.set_interrupted("Stream cancelled")
 
     adapter._last_completed_main_step_execute_prose = ""
     adapter._last_main_flushed_assistant_prose = ""
@@ -4208,10 +4210,18 @@ async def execute_task_textual(
             or bool(getattr(adapter, "_clarification_pending", False))
             or awaiting_step
         )
-        if (adapter._current_step_messages or adapter._tool_to_step) and not skip_safety_net:
+        if not skip_safety_net:
             stream_end_error = _stream_end_pending_error_message(adapter, daemon_session)
-            adapter.finalize_pending_tools_with_error(stream_end_error)
-            adapter.finalize_pending_steps_with_error(stream_end_error)
+            if adapter._current_step_messages or adapter._tool_to_step:
+                adapter.finalize_pending_tools_with_error(stream_end_error)
+                adapter.finalize_pending_steps_with_error(stream_end_error)
+            elif (
+                adapter._goal_tree_message is not None
+                and adapter._goal_tree_message._goal_tree_status() == "running"
+            ):
+                adapter._goal_tree_message.set_interrupted(stream_end_error)
+            if stream_end_error == "Stream cancelled" and adapter._set_spinner:
+                await adapter._set_spinner(None)
 
         await dispatch_hook("task.complete", {"loop_id": loop_id})
 

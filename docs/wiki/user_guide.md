@@ -132,7 +132,6 @@ Technical documentation for developers and system architects.
 | [IG-507](../impl/IG-507-loop-3328-log-analysis-fixes.md) | Loop 3328 Log Analysis Fixes |
 | [IG-508](../impl/IG-508-step-full-description.md) | Step Full Description for Enhanced Execution Context |
 | [IG-509](../impl/IG-509-loop-7cba-hang-analysis.md) | Loop 7cba Hang Analysis |
-| [IG-510](../impl/IG-510-grep-fallback-hang-recovery.md) | Grep Fallback Hang Recovery |
 | [IG-511](../impl/IG-511-tool-timeout-analysis.md) | Tool Timeout Architecture Analysis |
 | [IG-512](../impl/IG-512-step-card-display-refactor.md) | Step Card Display Refactor (RFC-628) |
 | [IG-513](../impl/IG-513-subagent-card.md) | SubAgent Card — Flattened Display (RFC-628 Part II) |

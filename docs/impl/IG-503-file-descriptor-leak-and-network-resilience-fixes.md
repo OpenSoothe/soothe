@@ -34,7 +34,7 @@ All changes are backward compatible and require no configuration updates.
 1. **`ag` subprocess behavior** (`grep_search.py:261-294`):
    - `ag` (The Silver Searcher) opens many files concurrently when searching large directories
    - When system ulimit (`ulimit -n`, typically 256 on macOS) is exceeded, `ag` fails with OSError 24
-   - The subprocess failure doesn't properly cascade - fallback to Python walk works but `ag` process may leave FDs in bad state
+   - On failure (timeout, EMFILE, spawn error), `run_grep()` returns `None` and `LocalFilesystem.grep()` surfaces a structured error — **no Python walk fallback**
 
 2. **Concurrent grep operations**:
    - Multiple subagent steps running parallel grep operations
@@ -67,125 +67,29 @@ All changes are backward compatible and require no configuration updates.
 
 ## Implementation Plan
 
-### Phase 1: File Descriptor Leak Fix (grep_search.py)
+### Phase 1: File Descriptor Handling (grep_search.py)
 
 **File:** `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py`
 
-#### Change 1.1: Add FD limit detection and proactive fallback
+Grep uses **`ag` or `rg` subprocesses only** (see IG-509 Resolution). There is no Python directory walk fallback.
 
-```python
-# New constant near line 18
-_MAX_FD_SAFE_FILE_COUNT = 200  # Safe threshold before hitting typical ulimit (256)
-```
+#### Implemented
 
-#### Change 1.2: Add pre-flight FD check in `_run_ag_subprocess`
+1. **`_run_grep_subprocess`** — `Popen` with temp-file stdout capture, explicit cleanup on timeout/OSError.
+2. **EMFILE (errno 24)** — Logged with guidance (`ulimit -n`); returns `None` → caller returns `"grep search failed"`.
+3. **Binary resolution** — `get_ag_bin()` / `get_rg_bin()` with `SOOTHE_AG_PATH`, `SOOTHE_RG_PATH`, PATH, and common install paths.
 
-Before spawning `ag`, check if the search directory has too many files. If so, skip `ag` and use Python fallback proactively.
+#### Removed (superseded)
 
-```python
-def _should_skip_ag_due_to_fd_limit(search_path: Path) -> bool:
-    """Check if directory size might exceed FD limit."""
-    if not search_path.is_dir():
-        return False
-    try:
-        # Quick estimate: count files in top 2 levels
-        count = 0
-        for item in search_path.iterdir():
-            if item.is_file():
-                count += 1
-            elif item.is_dir():
-                try:
-                    for sub in item.iterdir():
-                        if sub.is_file():
-                            count += 1
-                except OSError:
-                    pass
-            if count > _MAX_FD_SAFE_FILE_COUNT:
-                return True
-        return False
-    except OSError:
-        return True  # Can't read dir, skip ag
-```
+- `_should_skip_ag_due_to_fd_limit()` and proactive ag skip (>200 files)
+- Python walk fallback and incremental batching (former IG-510/IG-520)
 
-#### Change 1.3: Improve subprocess cleanup in `_run_ag_subprocess`
+<details>
+<summary>Historical implementation plan (obsolete)</summary>
 
-Use `subprocess.Popen` with explicit resource management:
+The original plan proposed skipping `ag` on large directories and falling back to Python walk. This was removed in favor of always using `ag`/`rg`.
 
-```python
-def _run_ag_subprocess(
-    cmd: list[str], *, timeout_s: float
-) -> subprocess.CompletedProcess[str] | None:
-    """Run ``ag`` with explicit FD management."""
-    stdout_path: str | None = None
-    proc: subprocess.Popen | None = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".agout") as tmp:
-            stdout_path = tmp.name
-
-        proc = subprocess.Popen(
-            cmd,
-            stdout=open(stdout_path, "w", encoding="utf-8"),
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        stdout_fh = proc.stdout  # Keep reference for explicit close
-
-        try:
-            proc.wait(timeout=timeout_s)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=5)  # Grace period after kill
-            logger.warning("ag grep timed out after %ss; falling back to Python walk", timeout_s)
-            return None
-
-        # Read output
-        with open(stdout_path, encoding="utf-8") as f:
-            stdout = f.read()
-
-        return subprocess.CompletedProcess(
-            args=cmd,
-            returncode=proc.returncode,
-            stdout=stdout,
-            stderr=proc.stderr.read() if proc.stderr else "",
-        )
-    except OSError as exc:
-        if exc.errno == 24:  # EMFILE - too many open files
-            logger.warning(
-                "ag grep hit FD limit (errno 24); falling back to Python walk. "
-                "Consider increasing ulimit -n."
-            )
-        else:
-            logger.warning("ag grep failed (%s); falling back to Python walk", exc)
-        return None
-    finally:
-        # Explicit cleanup order: process -> stdout_fh -> temp file
-        if proc is not None:
-            if proc.stdout:
-                proc.stdout.close()
-            if proc.stderr:
-                proc.stderr.close()
-        if stdout_path is not None:
-            try:
-                os.unlink(stdout_path)
-            except OSError:
-                pass
-```
-
-#### Change 1.4: Add FD exhaustion recovery in `grep_with_ag`
-
-When `ag` fails with errno 24, emit actionable guidance:
-
-```python
-# In grep_with_ag, after getting None from _run_ag_subprocess
-completed = _run_ag_subprocess(cmd, timeout_s=timeout_s)
-if completed is None:
-    # Log actionable guidance on FD exhaustion
-    if hasattr(sys.exc_info()[1], 'errno') and sys.exc_info()[1].errno == 24:
-        logger.warning(
-            "System file descriptor limit reached. Increase with: ulimit -n 1024"
-        )
-    return None
-```
+</details>
 
 ---
 
@@ -387,36 +291,13 @@ except Exception as exc:
 
 ## Testing Plan
 
-### Test 1: File Descriptor Handling
+### Test 1: Grep subprocess handling
 
-```python
-# tests/core/filesystem/test_grep_search_fd_handling.py
+See `packages/soothe/tests/core/filesystem/test_grep_search.py`:
 
-def test_ag_skipped_on_large_directory():
-    """When directory exceeds FD-safe threshold, skip ag and use Python fallback."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Create 300 files
-        for i in range(300):
-            Path(tmpdir, f"file_{i}.txt").write_text("content")
-
-        result = grep_with_ag(
-            workspace=Path(tmpdir),
-            search_path=Path(tmpdir),
-            pattern="content",
-            glob=None,
-            output_mode="files_with_matches",
-        )
-        # Should fallback to Python, not fail
-        assert result is not None
-
-def test_ag_handles_errno_24_gracefully():
-    """When ag fails with errno 24, fallback gracefully without cascade."""
-    # Mock subprocess to raise OSError(24)
-    with patch("subprocess.Popen") as mock_popen:
-        mock_popen.side_effect = OSError(24, "Too many open files")
-        result = _run_ag_subprocess(["ag", "test"], timeout_s=30)
-        assert result is None  # Graceful fallback
-```
+- `ag`/`rg` resolution and availability
+- EMFILE and timeout return structured errors (no Python walk)
+- Large single-file grep via subprocess
 
 ### Test 2: Network Error Retry
 

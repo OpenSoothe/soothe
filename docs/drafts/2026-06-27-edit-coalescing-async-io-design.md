@@ -328,7 +328,7 @@ for edit in batch.edits:
 ## Out of Scope (Phase 2)
 
 - Backend cache synchronization (`_backend_cache` locking)
-- Grep operation optimization (IG-510 already addressed)
+- Grep uses ag/rg subprocess only (IG-509 Resolution)
 - `apply_diff` merging into batched operations (future extension)
 - Increasing ToolConcurrencyMiddleware default limit (can tune separately)
 

@@ -3,7 +3,8 @@
 **RFC**: [RFC-614](../specs/RFC-614-unified-streaming-messaging.md) (messages + `phase`), [RFC-450](../specs/RFC-450-ws-protocol-v1.md) (stream terminate / idle ordering)
 **Created**: 2026-07-01
 **Status**: Implemented (2026-07-01)
-**Related**: [IG-509](IG-509-loop-7cba-hang-analysis.md), [IG-510](IG-510-grep-fallback-hang-recovery.md), [IG-507](IG-507-loop-3328-log-analysis-fixes.md), [IG-527](IG-527-go-client-appkit.md)
+**Superseded (stream termination)**: [IG-556](IG-556-stream-termination-unification.md) — P0–P2 removes post-idle 30s drain and turn-end flush workarounds
+**Related**: [IG-509](IG-509-loop-7cba-hang-analysis.md), [IG-507](IG-507-loop-3328-log-analysis-fixes.md), [IG-527](IG-527-go-client-appkit.md)
 **Incident loops**: `b84e` (`019f1966-edbb-7ab3-9541-dd665bf7b84e`), `0b0e` (`019f1969-7e78-7143-8351-7bb9a4df0b0e`), `37e2` (`019f196a-dfb7-77f3-ad2a-9b878e9d37e2`)
 **Logs**: `~/.soothe/logs/soothe.log`, `deploy/logs/soothe.log` (docker), loop `runner.log` under `~/.soothe/data/loops/`
 
@@ -41,7 +42,7 @@ Distinct from:
 
 Contributing factors (from IG-509, loop `0b0e` investigation):
 - `request_timeout_seconds=0` → hung tools hold worker indefinitely
-- Unbounded grep walk fallback (partially fixed in IG-510; verify deployed)
+- Unbounded grep walk (resolved: ag/rg-only grep per IG-509 Resolution)
 - Daemon restart / `/clear` while worker busy
 - Dependency mismatch (`langchain_core.tracers.context` missing on some workers)
 
@@ -156,16 +157,16 @@ Daemon may still log: Goal completed: action=synthesize, chars=5182
 |------|--------|
 | `deploy/soothe-config.yml` / config schema | Set `runner.request_timeout_seconds` to **non-zero** (e.g. 7200 for long agent turns, or match `max_query_duration_minutes`) |
 | `packages/soothe-daemon/src/soothe_daemon/runner/thread_runner.py` | Ensure timeout emits `("timeout", RuntimeError(...))` not silent hang |
-| Docs | Document interaction with `ToolTimeoutMiddleware` (IG-510) |
+| Docs | Document interaction with `ToolTimeoutMiddleware` (IG-511) |
 
 **Acceptance**:
 - Hung grep (mock) → worker emits timeout within configured bound; client sees error, worker marked idle
 
-#### 2.3 Verify IG-510 grep fallback deployed
+#### 2.3 Grep ag/rg-only (implemented)
 
-**Files**: `packages/soothe/src/soothe/foundation/core/filesystem/local.py` (already implemented per IG-510)
+**Files**: `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py`, `local.py`
 
-**Action**: Confirm docker/local daemon runs build with incremental grep; add regression test triggered from explore subagent path.
+**Status**: Builtin grep uses `ag`/`rg` subprocesses only; no Python directory walk. See IG-509 Resolution.
 
 #### 2.4 Fix `langchain_core.tracers.context` dependency drift
 
@@ -281,7 +282,7 @@ packages/soothe-cli/src/soothe_cli/
 └── cli/execution/daemon_errors.py  # P0 friendly thread worker copy
 
 packages/soothe/src/soothe/foundation/core/filesystem/
-└── local.py                      # P0 verify IG-510 deployed
+└── grep_search.py, local.py    # ag/rg-only grep (IG-509 Resolution)
 
 mizar-airway/internal/agent/
 └── soothe_agent.go               # P2 gateway timeout + SSE streaming
@@ -321,7 +322,7 @@ Run after each phase; full pass required before release.
 
 | Order | Phase | Risk | Notes |
 |-------|-------|------|-------|
-| 1 | 2.4 deps + 2.3 IG-510 verify | Low | Stops worker crashes on classify |
+| 1 | 2.4 deps + grep ag/rg verify | Low | Stops worker crashes on classify |
 | 2 | 1.1 `/clear` cancel | Medium | Fixes 0b0e crash class |
 | 3 | 1.2 drain + idle ordering | Medium | Fixes truncated synthesis |
 | 4 | 3.1 backpressure | Medium | Needs load test |
@@ -342,8 +343,7 @@ Run after each phase; full pass required before release.
 
 ## References
 
-- [IG-509](IG-509-loop-7cba-hang-analysis.md) — worker hang, no request timeout
-- [IG-510](IG-510-grep-fallback-hang-recovery.md) — grep walk bounds + tool timeout middleware
+- [IG-509](IG-509-loop-7cba-hang-analysis.md) — worker hang, ag/rg-only grep, no request timeout
 - [IG-507](IG-507-loop-3328-log-analysis-fixes.md) — “Stream ended unexpectedly” + step count mismatch
 - [IG-527](IG-527-go-client-appkit.md) — mizar-airway appkit / deliverable phases
 - RFC-614 § goal_completion on `mode=messages` + `phase`

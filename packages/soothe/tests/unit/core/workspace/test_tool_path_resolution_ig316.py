@@ -189,6 +189,38 @@ def test_soothe_filesystem_middleware_uses_workspace_relative_artifact_prefix(
     assert mw._conversation_history_prefix == ".soothe/conversation_history"
 
 
+def test_normalized_backend_read_host_absolute_outside_workspace_rejected_on_write(
+    tmp_path: Path,
+) -> None:
+    """Writes to host absolutes outside the workspace remain blocked in virtual mode."""
+    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
+
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep\n", encoding="utf-8")
+
+    backend = NormalizedPathBackend(root_dir=ws, virtual_mode=True)
+    result = backend.write(str(outside.resolve()), "changed\n")
+    assert result.error is not None
+
+
+def test_resolve_backend_os_path_host_absolute_outside_workspace(tmp_path: Path) -> None:
+    """``resolve_backend_os_path`` follows host absolutes outside the workspace."""
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    outside = tmp_path / "runtime" / "soothe.log"
+    outside.parent.mkdir()
+    outside.write_text("x\n", encoding="utf-8")
+
+    resolved = resolve_backend_os_path(
+        str(outside.resolve()),
+        workspace=ws,
+        virtual_mode=True,
+    )
+    assert resolved.resolve() == outside.resolve()
+
+
 def test_normalized_backend_multi_level_path_allowed_non_virtual_mode(tmp_path: Path) -> None:
     """Multi-level absolute paths are allowed in non-virtual mode.
 

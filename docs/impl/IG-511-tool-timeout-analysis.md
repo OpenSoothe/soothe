@@ -34,7 +34,7 @@
 │  run_command: subprocess.run(timeout=60s)                        │
 │  execute (deepagents): timeout parameter (max 3600s)            │
 │  MCP tools: tool_timeout_seconds = 600s                         │
-│  grep: NO timeout (was unbounded) ← IG-510 fixed                │
+│  grep: subprocess timeout via ag/rg (IG-509); tool middleware optional │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -98,20 +98,22 @@
 
 | Tool | Risk | Current State |
 |------|------|---------------|
-| `grep` | High (IG-509) | **Fixed by IG-510**: incremental batching |
+| `grep` | High (IG-509) | **Fixed**: ag/rg subprocess only (`run_grep()`), 120s subprocess cap; no Python walk |
 | `read_file` (large files) | Medium | Backend may have limits, but no wrapper |
 | `list_directory` (deep trees) | Medium | No timeout, could hang on network mounts |
 | `glob` (local) | Low | deepagents has 20s timeout |
 | Explore subagent | High | Could launch long-running searches |
 | Custom plugin tools | Unknown | No standard timeout interface |
 
-### Root Cause of IG-509 Hang
+### Root Cause of IG-509 Hang (historical)
 
-The grep Python fallback had **no timeout guard at ANY level**:
-- Tool level: No timeout in `_grep_python_walk()`
+The removed Python grep fallback had **no timeout guard at ANY level**:
+- Tool level: `_grep_python_walk()` was unbounded (removed)
 - Executor level: No per-tool timeout wrapper
 - Middleware level: soothe filesystem not wrapped by deepagents middleware
 - Pool level: `request_timeout_seconds=0` (disabled)
+
+Current grep routes through `ag`/`rg` with `_GREP_TIMEOUT_S = 120` in `grep_search.py`.
 
 ---
 
@@ -210,7 +212,7 @@ class ToolTimeoutMiddleware:
 
 ## Recommended Approach
 
-**Phase 1 (Implemented)**: Fix grep specifically with incremental batching (IG-510)
+**Phase 1 (Implemented)**: Grep uses ag/rg subprocess only (IG-509 Resolution); Python walk fallback removed.
 
 **Phase 2 (Future)**: Add `ToolTimeoutMiddleware` to CoreAgent middleware stack:
 - Position after tool resolution, before execution

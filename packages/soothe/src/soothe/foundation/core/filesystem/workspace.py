@@ -222,11 +222,13 @@ class WorkspaceFilesystem(UnifiedFilesystem):
     # Path Operations
     # ========================================================================
 
-    def resolve_path(self, path: str) -> Path:
+    def resolve_path(self, path: str, *, allow_host_absolute: bool = False) -> Path:
         """Resolve a path relative to workspace.
 
         Args:
             path: Input path (may be absolute, relative, or virtual).
+            allow_host_absolute: When ``True``, host-root absolutes outside the
+                workspace resolve to the real on-disk path (read-only ops).
 
         Returns:
             Resolved Path object.
@@ -235,7 +237,7 @@ class WorkspaceFilesystem(UnifiedFilesystem):
             InvalidPathError: If path contains invalid characters.
             PathTraversalError: If path attempts to escape workspace.
         """
-        return self._local_fs.resolve_path(path)
+        return self._local_fs.resolve_path(path, allow_host_absolute=allow_host_absolute)
 
     def exists(self, path: str) -> bool:
         """Check if a path exists."""

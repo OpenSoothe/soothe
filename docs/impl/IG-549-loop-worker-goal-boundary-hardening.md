@@ -296,7 +296,7 @@ packages/soothe/src/soothe/
 
 ## References
 
-- [IG-509](IG-509-loop-7cba-hang-analysis.md) — worker hang, grep fallback, no request timeout
+- [IG-509](IG-509-loop-7cba-hang-analysis.md) — worker hang, ag/rg-only grep, no request timeout
 - [IG-533](IG-533-goal-completion-tui-worker-lifecycle-fixes.md) — goal_completion delivery & `/clear` cancel
 - [IG-534](IG-534-daemon-tui-performance-isolation.md) — drain-before-idle, backpressure
 - [IG-548](IG-548-goal-display-snapshots.md) — goal-bound display snapshots (parallel P0/P1 track)
