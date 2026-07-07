@@ -1,0 +1,39 @@
+[
+  {
+    "kind": "messages",
+    "phase": "goal_completion",
+    "stream_terminal": true
+  },
+  {
+    "kind": "custom",
+    "type": "soothe.stream.end",
+    "scope": "generation"
+  },
+  {
+    "kind": "custom",
+    "type": "soothe.stream.end",
+    "scope": "phase"
+  },
+  {
+    "kind": "custom",
+    "type": "soothe.cognition.strange_loop.completed"
+  },
+  {
+    "kind": "custom",
+    "type": "soothe.stream.end",
+    "scope": "turn"
+  },
+  {
+    "kind": "lifecycle",
+    "type": "delivery_drained"
+  },
+  {
+    "kind": "lifecycle",
+    "type": "complete",
+    "reason": "stream_end"
+  },
+  {
+    "kind": "lifecycle",
+    "type": "idle"
+  }
+]

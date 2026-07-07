@@ -296,6 +296,28 @@ class QueryEngine:
             return
         await d._broadcast(self._loop_scoped_client_message(loop_id, payload))
 
+    async def _emit_turn_stream_end(
+        self,
+        loop_id: str,
+        *,
+        reason: str | None = None,
+    ) -> None:
+        """Broadcast ``soothe.stream.end`` with ``scope=turn`` (IG-556)."""
+        from soothe_sdk.core.events import STREAM_END
+
+        data: dict[str, Any] = {"type": STREAM_END, "scope": "turn"}
+        if reason:
+            data["reason"] = reason
+        await self._broadcast_loop_message(
+            loop_id,
+            {
+                "type": "event",
+                "namespace": [],
+                "mode": "custom",
+                "data": data,
+            },
+        )
+
     async def _admit_query(
         self,
         *,
@@ -756,8 +778,11 @@ class QueryEngine:
         # visible answer, and the legacy concat row mixes plan_direct text
         # with raw tool outputs into a single malformed assistant card.
         phase_tagged_assistant_written = [False]
+        turn_stream_end_emitted = False
+        turn_cancelled = False
 
         async def _run_stream() -> None:
+            nonlocal turn_stream_end_emitted, turn_cancelled
             from soothe.middleware._model_override import (
                 attach_stream_model_override,
                 reset_stream_model_override,
@@ -767,6 +792,16 @@ class QueryEngine:
                 d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
             m_clean = model.strip() if isinstance(model, str) and model.strip() else None
             override_token = attach_stream_model_override(m_clean, model_params)
+
+            async def _ensure_turn_stream_end() -> None:
+                nonlocal turn_stream_end_emitted
+                if turn_stream_end_emitted or not effective_loop_id:
+                    return
+                await self._emit_turn_stream_end(
+                    effective_loop_id,
+                    reason="cancelled" if turn_cancelled else None,
+                )
+                turn_stream_end_emitted = True
 
             # Observe a pending cancel that arrived during the early-``running``
             # race window (before this task was registered). Abort immediately
@@ -783,6 +818,7 @@ class QueryEngine:
                         effective_loop_id
                     )
                     router = d._message_router
+                    await self._emit_turn_stream_end(effective_loop_id, reason="cancelled")
                     for cid in subscribed_clients:
                         subscription_id = await d._session_manager.get_loop_subscription_id(
                             cid, effective_loop_id
@@ -997,18 +1033,7 @@ class QueryEngine:
                         chunk_count,
                         turn_completed_via_coalescer,
                     )
-                    if effective_loop_id:
-                        from soothe_sdk.core.events import STREAM_END
-
-                        await self._broadcast_loop_message(
-                            effective_loop_id,
-                            {
-                                "type": "event",
-                                "namespace": [],
-                                "mode": "custom",
-                                "data": {"type": STREAM_END, "scope": "turn"},
-                            },
-                        )
+                    await _ensure_turn_stream_end()
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):
@@ -1048,6 +1073,7 @@ class QueryEngine:
                     )
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
+                turn_cancelled = True
                 from soothe.foundation.workspace import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
@@ -1133,6 +1159,7 @@ class QueryEngine:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
                 if effective_loop_id:
+                    await _ensure_turn_stream_end()
                     drain_cfg = self._get_output_streaming_config(d)
                     await d._session_manager.await_loop_delivery_drained(
                         effective_loop_id,
@@ -1168,7 +1195,7 @@ class QueryEngine:
                         await router._send_complete(
                             cid,
                             subscription_id,
-                            reason="stream_end",
+                            reason="cancelled" if turn_cancelled else "stream_end",
                         )
                     await self._broadcast_loop_message(
                         effective_loop_id,

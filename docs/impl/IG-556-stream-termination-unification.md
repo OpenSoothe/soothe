@@ -353,7 +353,7 @@ All changes must pass:
 | Session drain | Ack-based drain unit + integration |
 | SDK | Undroppable terminals; `is_stream_terminal` strict |
 | TUI | Idempotent finalize; `stream.end` scope handling |
-| Contract | Golden wire trace: terminal → stream.end → complete → idle |
+| Contract | Golden wire trace: coalescer (`ig556_minimal_turn_wire_trace.json`) + engine turn (`ig556_engine_turn_wire_trace.json`) |
 
 **Manual smoke**:
 
@@ -453,3 +453,4 @@ docs/wiki/api-reference/daemon-api.md                # P2.4
 - P1 committed: `672fa333`
 - P1 verify passed and post-idle drain reduced to 0.5s.
 - P2 committed: stream termination unification (`soothe.stream.end`, legacy deletion, AsyncAPI `delivery_ack`, golden wire trace, verify green).
+- Hardening: QueryEngine turn `stream.end` on cancel (`reason=cancelled`), engine-level golden trace, ordering tests, TUI `scope=turn` test.

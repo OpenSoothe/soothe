@@ -274,6 +274,7 @@ class StreamEndEvent(LifecycleEvent):
     type: Literal["soothe.stream.end"] = "soothe.stream.end"
     scope: Literal["generation", "phase", "turn"]
     phase: str | None = None
+    reason: str | None = None
 
 
 class StrangeLoopPlanDecisionEvent(LifecycleEvent):
