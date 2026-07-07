@@ -18,7 +18,7 @@ from soothe.foundation.sloop.engine.predecessor_branch_context import (
     predecessor_execute_messages_for_branch,
     transitive_dependency_step_ids,
 )
-from soothe.protocols.planner import planner_outcome_text_preview
+from soothe.foundation.sloop.utils.outcome_preview import planner_outcome_text_preview
 
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction

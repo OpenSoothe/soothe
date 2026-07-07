@@ -2,14 +2,6 @@
 
 from soothe.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
 from soothe.utils.path import expand_path
-from soothe.utils.path_display import (
-    abbreviate_path,
-    convert_and_abbreviate_path,
-    convert_display_path,
-    get_workspace_root,
-    is_path_argument,
-    set_workspace_root,
-)
 from soothe.utils.progress import emit_progress
 from soothe.utils.token_counting import ComplexityLevel, count_tokens
 
@@ -17,13 +9,7 @@ __all__ = [
     "CircuitBreaker",
     "CircuitBreakerOpenError",
     "ComplexityLevel",
-    "abbreviate_path",
-    "convert_and_abbreviate_path",
-    "convert_display_path",
     "count_tokens",
     "emit_progress",
     "expand_path",
-    "get_workspace_root",
-    "is_path_argument",
-    "set_workspace_root",
 ]

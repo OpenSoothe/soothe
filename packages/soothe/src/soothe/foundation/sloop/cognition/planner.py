@@ -29,7 +29,6 @@ from soothe.foundation.sloop.state.schemas import (
 )
 from soothe.foundation.sloop.utils.json_parsing import (
     _extract_balanced_json_object,
-    _load_llm_json_dict,
     _repair_truncated_json,
     _strip_markdown_json_fence,
     _try_parse_json_dict,
@@ -39,15 +38,8 @@ from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_t
 from soothe.foundation.sloop.utils.reflection import (
     _default_agent_decision,
     _extract_text_content,
-    reflect_heuristic,
 )
-from soothe.protocols.planner import (
-    GoalContext,
-    Plan,
-    PlanContext,
-    Reflection,
-    StepResult,
-)
+from soothe.protocols.planner import PlanContext
 from soothe.utils.llm.invoke_policy import await_with_llm_call_policy
 from soothe.utils.llm.structured import invoke_structured_chat_typed
 from soothe.utils.network_errors import calculate_network_backoff, is_transient_network_error
@@ -81,13 +73,6 @@ def _plan_phase_chat_model(model: Any) -> Any:
 
 
 _invoke_plan_structured_output = invoke_structured_chat_typed
-
-
-_SIMPLE_PLANNER_HINT_MAP = {
-    "search": "tool",
-    "web": "tool",
-    "api": "tool",
-}
 
 
 def _parse_status_assessment_from_raw_message(response: Any) -> Any:
@@ -299,167 +284,6 @@ class LLMPlanner:
             thread_id=thread_id,
         )
 
-    async def create_plan(self, goal: str, context: PlanContext) -> Plan:
-        """Create plan via LLM structured output."""
-        # Direct LLM call - no template fallback
-        plan = await self._create_plan_via_llm(goal, context)
-
-        # Override execution hints when the user explicitly requested a subagent
-        preferred = (
-            getattr(context.routing_classification, "preferred_subagent", None)
-            if context.routing_classification
-            else None
-        )
-        if preferred:
-            plan = self._apply_preferred_subagent(plan, preferred)
-
-        return plan
-
-    async def revise_plan(
-        self,
-        plan: Plan,
-        reflection: str,
-        *,
-        thread_id: str | None = None,
-    ) -> Plan:
-        """Revise plan based on reflection feedback."""
-        prompt = self._build_revision_prompt(plan, reflection)
-        messages = [HumanMessage(content=prompt)]
-
-        try:
-            lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="revise-plan")
-            revised = await self._invoke_structured(
-                self._model, messages, Plan, config=lf_cfg, thread_id=thread_id
-            )
-            revised.status = "revised"
-            return self._normalize_hints(revised)
-        except Exception as e:
-            logger.warning("Plan revision failed: %s", e)
-            return plan
-
-    async def reflect(
-        self,
-        plan: Plan,
-        step_results: list[StepResult],
-        goal_context: GoalContext | None = None,
-        sloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult
-    ) -> Reflection:
-        """Reflection with StrangeLoop integration support (IG-154).
-
-        When sloop_result is provided (from StrangeLoop delegation), uses
-        StrangeLoop's evidence and judgment for reflection instead of step_results.
-
-        Args:
-            plan: The plan (None when StrangeLoop handles execution).
-            step_results: Step execution results (empty when StrangeLoop handles execution).
-            goal_context: Goal DAG context for autonomous goal management.
-            sloop_result: GoalResult from StrangeLoop delegation (when delegating).
-
-        Returns:
-            Reflection with assessment and goal directives for DAG restructuring.
-        """
-        # IG-154: StrangeLoop integration - use GoalResult when available
-        if sloop_result:
-            logger.info(
-                "Using StrangeLoop result for reflection (status=%s, progress=%s)",
-                sloop_result.status,
-                sloop_result.goal_progress,
-            )
-
-            # Build assessment from StrangeLoop evidence
-            evidence_preview = (
-                sloop_result.evidence_summary[:300] if sloop_result.evidence_summary else ""
-            )
-            assessment = f"StrangeLoop achieved {sloop_result.goal_progress} progress. "
-
-            if sloop_result.status == "completed":
-                assessment += f"Goal successfully completed. {evidence_preview}"
-            elif sloop_result.status == "failed":
-                assessment += f"Goal execution failed. {evidence_preview}"
-            else:
-                assessment += f"Goal execution in progress. {evidence_preview}"
-
-            # Determine if revision needed
-            should_revise = sloop_result.status == "failed" or (
-                isinstance(sloop_result.goal_progress, str)
-                and sloop_result.goal_progress in ["none", "low"]
-            )
-
-            # Generate feedback
-            if sloop_result.status == "completed":
-                feedback = "Goal achieved successfully via StrangeLoop execution."
-            elif sloop_result.status == "failed":
-                feedback = "Goal not achieved. Consider alternative approach or create dependency prerequisites."
-            else:
-                feedback = "Goal partially achieved. May need continuation or alternative strategy."
-
-            # Generate goal directives based on StrangeLoop outcome
-            from soothe.protocols.planner import GoalDirective
-
-            directives = []
-
-            if sloop_result.status == "failed" and goal_context:
-                # Failed goal: try alternative approach or decompose
-                logger.info("StrangeLoop goal failed, generating recovery directives")
-
-                # Create alternative goal with lower priority
-                directives.append(
-                    GoalDirective(
-                        action="create",
-                        description=f"Alternative approach for: {goal_context.current_goal_id}",
-                        priority=max(
-                            goal_context.current_goal_id.priority - 10
-                            if hasattr(goal_context.current_goal_id, "priority")
-                            else 40,
-                            10,
-                        ),
-                        reason="Primary approach failed via StrangeLoop",
-                    )
-                )
-
-                # Or decompose into smaller sub-goals
-                if sloop_result.goal_progress in ("none", "low"):
-                    directives.append(
-                        GoalDirective(
-                            action="decompose",
-                            goal_id=goal_context.current_goal_id,
-                            description="Decompose failed goal into simpler subtasks",
-                            reason="Very low progress suggests goal too complex for current approach",
-                        )
-                    )
-
-            elif sloop_result.status == "completed" and sloop_result.goal_progress in (
-                "high",
-                "complete",
-            ):
-                # Successfully completed: mark goal complete
-                directives.append(
-                    GoalDirective(
-                        action="complete",
-                        goal_id=goal_context.current_goal_id if goal_context else None,
-                        description="Goal completed successfully",
-                        reason="StrangeLoop achieved high/complete progress",
-                    )
-                )
-
-            return Reflection(
-                assessment=assessment,
-                should_revise=should_revise,
-                feedback=feedback,
-                goal_directives=directives,
-            )
-
-        # Fallback: Use heuristic reflection for step_results-based analysis
-        failure_cfg = None
-        if self._config and hasattr(self._config, "optimization"):
-            failure_cfg = self._config.optimization.failure_intent
-        return reflect_heuristic(
-            plan,
-            step_results,
-            goal_context,
-            failure_config=failure_cfg,
-        )
-
     async def _invoke_messages(self, messages: list[Any]) -> str:
         """Invoke the LLM with a message list and return the response (RFC-207).
 
@@ -513,191 +337,6 @@ class LLMPlanner:
             logger.warning("LLMPlanner._invoke failed: %s", e)
             return ""
 
-    async def _create_plan_via_llm(self, goal: str, context: PlanContext) -> Plan:
-        """Create plan via LLM structured output with fallback parsing."""
-        prompt = self._build_plan_prompt(goal, context)
-        messages = [HumanMessage(content=prompt)]
-
-        try:
-            lf_cfg = self._planner_langfuse_run_config(
-                thread_id=context.thread_id, phase="create-plan-structured"
-            )
-            plan = await self._invoke_structured(
-                self._model,
-                messages,
-                Plan,
-                config=lf_cfg,
-                thread_id=context.thread_id,
-            )
-            return self._normalize_hints(plan)
-        except Exception as e:
-            logger.warning("Structured output failed, trying manual parse: %s", e)
-            return await self._fallback_parse(goal, prompt, thread_id=context.thread_id)
-
-    async def _fallback_parse(
-        self, goal: str, prompt: str, *, thread_id: str | None = None
-    ) -> Plan:
-        """Fallback plan parsing from raw LLM response."""
-        try:
-            lf_cfg = self._planner_langfuse_run_config(
-                thread_id=thread_id, phase="create-plan-fallback"
-            )
-            if lf_cfg is not None:
-                response = await self._ainvoke_bounded(
-                    self._model, prompt, config=lf_cfg, thread_id=thread_id
-                )
-            else:
-                response = await self._ainvoke_bounded(self._model, prompt, thread_id=thread_id)
-            content = getattr(response, "content", str(response))
-            return self._parse_json_from_response(_extract_text_content(content), goal)
-        except Exception as e:
-            logger.warning("Fallback parsing failed: %s", e)
-            return Plan(
-                goal=goal or "Unnamed goal",
-                steps=[{"id": "S_1", "description": goal or "Execute task"}],
-            )
-
-    def _parse_json_from_response(self, content: str, fallback_goal: str) -> Plan:
-        """Parse Plan from JSON content, optionally wrapped in markdown.
-
-        Args:
-            content: JSON string, optionally wrapped in ```json``` markdown block
-            fallback_goal: Goal to use if parsing fails
-
-        Returns:
-            Parsed Plan object or fallback single-step plan
-        """
-        try:
-            data = _load_llm_json_dict(content)
-            return Plan(**self._normalize_hints_in_dict(data))
-        except Exception as e:
-            logger.warning("JSON parsing failed: %s", e)
-            return Plan(
-                goal=fallback_goal or "Unnamed goal",
-                steps=[{"id": "S_1", "description": fallback_goal or "Execute task"}],
-            )
-
-    def _build_plan_prompt(self, goal: str, context: PlanContext) -> str:
-        """Build unified planning prompt with XML sections (RFC-104 alignment)."""
-        from soothe.foundation.sloop.prompts.context_xml import (
-            build_shared_environment_workspace_prefix,
-        )
-
-        sections = []
-
-        # Goal section
-        sections.append(f"<PLANNING_GOAL>\n{goal}\n</PLANNING_GOAL>")
-
-        # Workspace context as XML section
-        if context.workspace:
-            workspace_content = [
-                f"Primary working directory: {context.workspace}",
-                "",
-                "<TOOL_ROUTING_RULES>",
-                "- listing files/directories → list_files tool or run_command with 'ls'",
-                "- reading files → read_file tool",
-                "- searching files → search_files tool",
-                "- shell commands (pwd, ls, cat) → run_command tool",
-                "- web URLs/sites → search_web / crawl_web tools (or a browsing-capable subagent if listed in capabilities)",
-                "</TOOL_ROUTING_RULES>",
-                "",
-                "<FORBIDDEN_ACTIONS>",
-                "- delegating research or other subagents for trivial local file ops (use direct file tools)",
-                "- searching system directories (/etc, /Library, /usr, /System, /Applications)",
-                "- listing root filesystem (/)",
-                "</FORBIDDEN_ACTIONS>",
-            ]
-            sections.append(
-                "<PLANNING_WORKSPACE>\n" + "\n".join(workspace_content) + "\n</PLANNING_WORKSPACE>"
-            )
-
-        # Available capabilities
-        if context.available_capabilities:
-            caps = ", ".join(context.available_capabilities)
-            sections.append(f"<PLANNING_CAPABILITIES>\n{caps}\n</PLANNING_CAPABILITIES>")
-
-        # Completed steps context
-        if context.completed_steps:
-            completed_lines = []
-            for step in context.completed_steps:
-                status = "✓" if step.success else "✗"
-                # RFC-211: Use outcome metadata instead of output
-                output_preview = step.to_evidence_string(truncate=True)[:80]
-                completed_lines.append(f"{step.step_id}: {status} {output_preview}")
-            sections.append(
-                "<PLANNING_COMPLETED>\n" + "\n".join(completed_lines) + "\n</PLANNING_COMPLETED>"
-            )
-
-        # Output format specification
-        output_spec = [
-            "Return JSON with this structure:",
-            "{",
-            '  "goal": "<goal text>",',
-            '  "is_plan_only": false,',
-            '  "reasoning": "<brief classification>",',
-            '  "steps": [',
-            "    {",
-            '      "id": "S_1",',
-            '      "description": "<brief summary, under 20 words for TUI display>",',
-            '      "full_description": "<detailed execution prompt with file paths, identifiers, key inputs (50-150 words)>",',
-            '      "expected_output": "<expected result>",',
-            '      "execution_hint": "tool",',
-            '      "subagent": null',
-            "    }",
-            "  ]",
-            "}",
-            "",
-            "<PLANNING_RULES>",
-            "- Return 1 step for trivial tasks, 2-3 for normal, 4-5 only if essential",
-            "- Each step must be independently executable",
-            "- description: Brief summary for TUI display (under 20 words)",
-            "- full_description: Detailed execution context (50-150 words) including key file paths, identifiers, parameters, and context needed to execute without referencing the original goal",
-            "- When dependencies is set: full_description is REQUIRED and must instruct using predecessor output without repeating predecessor discovery",
-            "- execution_hint: 'tool' (direct tools on execute-step thread), 'subagent' (delegate to named capability), 'auto' (LLM reasoning)",
-            "- When execution_hint='subagent', set subagent to a listed capability (e.g. deep_research, browser_use, planner)",
-            "- If user requests specific subagent, set execution_hint='subagent' and subagent accordingly",
-            "- Return ONLY valid JSON (no markdown blocks)",
-            "</PLANNING_RULES>",
-            "",
-            "<EFFICIENCY_RULES>",
-            "- Trivial local skim: one step (list_files + selective read_file); heavy readonly recon: one step with scoped paths in full_description (execute thread uses file tools)",
-            "- For project structure: single step listing top-level directories",
-            "- Avoid duplicate paths; combine related reads in one step when safe—independent readonly probes may stay separate steps",
-            "- Name likely subtrees (e.g. docs/, packages/) in full_description so execute-step search stays scoped",
-            "</EFFICIENCY_RULES>",
-        ]
-        sections.append("<PLANNING_OUTPUT>\n" + "\n".join(output_spec) + "\n</PLANNING_OUTPUT>")
-
-        body = "\n\n".join(sections)
-        if self._config is not None:
-            prefix = build_shared_environment_workspace_prefix(
-                self._config,
-                context.workspace,
-                include_workspace_extras=True,
-            )
-            return f"{prefix}{body}"
-        return body
-
-    def _build_revision_prompt(self, plan: Plan, reflection: str) -> str:
-        """Build plan revision prompt."""
-        return (
-            f"Revise this plan based on feedback.\n\n"
-            f"Goal: {plan.goal}\n"
-            f"Current steps: {[s.description for s in plan.steps]}\n"
-            f"Feedback: {reflection}\n\n"
-            f"Return a revised plan with the same JSON structure."
-        )
-
-    def _normalize_hints(self, plan: Plan) -> Plan:
-        """Normalize execution_hint values to valid options."""
-        for step in plan.steps:
-            if step.execution_hint not in ("tool", "subagent", "remote", "auto"):
-                original = step.execution_hint
-                step.execution_hint = _SIMPLE_PLANNER_HINT_MAP.get(original, "auto")
-                logger.warning("Normalized hint '%s' to '%s'", original, step.execution_hint)
-
-        return plan
-
     @staticmethod
     def _preferred_subagent_step_description(description: str, subagent_name: str) -> str:
         """User-facing step text when wiring an explicit subagent (IG-349, shared with Plan path)."""
@@ -706,35 +345,6 @@ class LLMPlanner:
             return f"Using the {subagent_name} subagent."
         lowered = f"{desc[0].lower()}{desc[1:]}"
         return f"Using the {subagent_name} subagent, {lowered}"
-
-    @staticmethod
-    def _apply_preferred_subagent(plan: Plan, subagent_name: str) -> Plan:
-        """Override plan execution hints to route through an explicitly requested subagent.
-
-        Action steps (same skip rule as ``_apply_preferred_subagent_to_decision``: skip the
-        first step when the plan has more than one step) get ``PlanStep.subagent`` set so the
-        delegate is explicit. Tool/auto hints become ``execution_hint=subagent`` with rewritten
-        descriptions. DeepAgents surfaces delegation as the ``task`` tool; Act streaming turns
-        those completions into RFC-211 outcomes that ``PlanPhase`` feeds back like other tools
-        (IG-352).
-
-        Args:
-            plan: Plan to modify (mutated in place and returned).
-            subagent_name: Name of the subagent to delegate to.
-
-        Returns:
-            The modified plan.
-        """
-        action_steps = plan.steps[1:] if len(plan.steps) > 1 else plan.steps
-        for step in action_steps:
-            step.subagent = subagent_name
-            if step.execution_hint in ("tool", "auto"):
-                step.execution_hint = "subagent"
-                step.description = LLMPlanner._preferred_subagent_step_description(
-                    step.description, subagent_name
-                )
-        logger.info("Applied preferred_subagent=%s to %d step(s)", subagent_name, len(action_steps))
-        return plan
 
     @staticmethod
     def _apply_preferred_subagent_to_decision(
@@ -770,16 +380,6 @@ class LLMPlanner:
             n - start,
         )
         return out
-
-    def _normalize_hints_in_dict(self, data: dict) -> dict:
-        """Normalize execution_hint in dict before Plan creation."""
-        if "steps" in data:
-            for step in data["steps"]:
-                if "execution_hint" in step:
-                    hint = step["execution_hint"]
-                    if hint not in ("tool", "subagent", "remote", "auto"):
-                        step["execution_hint"] = _SIMPLE_PLANNER_HINT_MAP.get(hint, "auto")
-        return data
 
     async def _assess_status_with_response(
         self,

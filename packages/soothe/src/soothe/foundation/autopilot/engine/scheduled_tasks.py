@@ -1,4 +1,4 @@
-"""RFC-204: schedule math for CronService and legacy SchedulerService.
+"""RFC-204: schedule math for CronService.
 
 Supports delayed execution (``--delay``), specific time (``--at``),
 simple recurrence (``--every``), and cron expressions (``--cron``).
@@ -10,36 +10,15 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, tzinfo
-from pathlib import Path
-from typing import Any
 
 from soothe.foundation.autopilot.engine.schedule_timezone import (
     normalize_schedule_datetime,
     resolve_schedule_timezone,
 )
-from soothe.utils.text_preview import preview_first
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class ScheduledTask:
-    """A task waiting for its scheduled time."""
-
-    id: str
-    description: str
-    schedule: ScheduleSpec
-    priority: int = 50
-    created_at: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
-    next_run: datetime | None = None
-    status: str = "pending"  # pending, due, running, completed, failed, cancelled
-
-    def __post_init__(self) -> None:
-        """Compute next run time if not already set."""
-        if self.next_run is None:
-            self.next_run = self.schedule.next_after(datetime.now(tz=UTC))
 
 
 @dataclass
@@ -86,208 +65,6 @@ class ScheduleSpec:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=schedule_tz)
         return normalize_schedule_datetime(dt, schedule_tz)
-
-
-class SchedulerService:
-    """Manages scheduled tasks and schedule math for CronService.
-
-    Args:
-        persist_path: Path to persistence file for surviving restarts.
-    """
-
-    def __init__(self, persist_path: str | Path | None = None) -> None:
-        """Initialize scheduler.
-
-        Args:
-            persist_path: Optional path to persistence file.
-        """
-        self._tasks: dict[str, ScheduledTask] = {}
-        self._persist_path = Path(persist_path) if persist_path else None
-        self._load_persisted()
-
-    async def add_task(
-        self,
-        description: str,
-        *,
-        schedule_kind: str,
-        schedule_value: str,
-        priority: int = 50,
-        task_id: str | None = None,
-    ) -> ScheduledTask:
-        """Add a scheduled task.
-
-        Args:
-            description: Task/goal description.
-            schedule_kind: One of "once", "delay", "at", "every", "cron".
-            schedule_value: Time/duration/cron string.
-            priority: Goal priority.
-            task_id: Override default ID.
-
-        Returns:
-            The created ScheduledTask.
-        """
-        import uuid
-
-        tid = task_id or uuid.uuid4().hex[:8]
-        spec = ScheduleSpec(kind=schedule_kind, value=schedule_value)
-        task = ScheduledTask(
-            id=tid,
-            description=description,
-            schedule=spec,
-            priority=priority,
-        )
-        self._tasks[tid] = task
-        logger.info(
-            "Scheduled task %s: %s (%s=%s)",
-            tid,
-            preview_first(description, 50),
-            schedule_kind,
-            schedule_value,
-        )
-        self._save_persisted()
-        return task
-
-    def get_due_tasks(self, now: datetime | None = None) -> list[ScheduledTask]:
-        """Get tasks that are due for execution.
-
-        Args:
-            now: Current time. Defaults to now.
-
-        Returns:
-            List of due tasks, ordered by next_run then creation time.
-        """
-        now = now or datetime.now(tz=UTC)
-        due = []
-        for task in self._tasks.values():
-            if task.status != "pending":
-                continue
-            if task.next_run and task.next_run <= now:
-                due.append(task)
-        due.sort(key=lambda t: (t.next_run or datetime.max.replace(tzinfo=UTC), t.created_at))
-        return due
-
-    def mark_running(self, task_id: str) -> None:
-        """Mark a task as running.
-
-        Args:
-            task_id: Task to mark.
-        """
-        task = self._tasks.get(task_id)
-        if task:
-            task.status = "running"
-
-    def mark_completed(self, task_id: str) -> None:
-        """Mark a one-shot task as completed.
-
-        Args:
-            task_id: Task to mark.
-        """
-        task = self._tasks.get(task_id)
-        if task:
-            task.status = "completed"
-
-    def schedule_next(self, task_id: str) -> None:
-        """Reschedule a recurring task for its next run.
-
-        Args:
-            task_id: Task to reschedule.
-        """
-        task = self._tasks.get(task_id)
-        if task:
-            now = datetime.now(tz=UTC)
-            task.next_run = task.schedule.next_after(now)
-            if task.next_run:
-                task.status = "pending"
-                logger.info("Rescheduled task %s for %s", task_id, task.next_run.isoformat())
-            else:
-                task.status = "completed"
-                logger.info("Task %s completed (no more runs)", task_id)
-
-    def cancel_task(self, task_id: str) -> bool:
-        """Cancel a scheduled task.
-
-        Args:
-            task_id: Task to cancel.
-
-        Returns:
-            True if task was found and cancelled.
-        """
-        task = self._tasks.get(task_id)
-        if task:
-            task.status = "cancelled"
-            return True
-        return False
-
-    def list_tasks(self) -> list[dict[str, Any]]:
-        """List all scheduled tasks.
-
-        Returns:
-            List of task info dicts.
-        """
-        return [
-            {
-                "id": t.id,
-                "description": t.description,
-                "schedule_kind": t.schedule.kind,
-                "schedule_value": t.schedule.value,
-                "priority": t.priority,
-                "status": t.status,
-                "next_run": t.next_run.isoformat() if t.next_run else None,
-            }
-            for t in self._tasks.values()
-        ]
-
-    def _load_persisted(self) -> None:
-        """Load tasks from persisted state."""
-        if not self._persist_path or not self._persist_path.exists():
-            return
-        try:
-            import json
-
-            data = json.loads(self._persist_path.read_text())
-            for item in data.get("tasks", []):
-                spec = ScheduleSpec(kind=item["schedule_kind"], value=item["schedule_value"])
-                task = ScheduledTask(
-                    id=item["id"],
-                    description=item["description"],
-                    schedule=spec,
-                    priority=item.get("priority", 50),
-                    created_at=datetime.fromisoformat(item["created_at"]),
-                    next_run=datetime.fromisoformat(item["next_run"])
-                    if item.get("next_run")
-                    else None,
-                    status=item.get("status", "pending"),
-                )
-                self._tasks[task.id] = task
-            logger.info("Restored %d scheduled tasks", len(self._tasks))
-        except Exception:
-            logger.debug("Failed to load persisted scheduler state", exc_info=True)
-
-    def _save_persisted(self) -> None:
-        """Save tasks to persisted state."""
-        if not self._persist_path:
-            return
-        try:
-            import json
-
-            data = {
-                "tasks": [
-                    {
-                        "id": t.id,
-                        "description": t.description,
-                        "schedule_kind": t.schedule.kind,
-                        "schedule_value": t.schedule.value,
-                        "priority": t.priority,
-                        "status": t.status,
-                        "created_at": t.created_at.isoformat(),
-                        "next_run": t.next_run.isoformat() if t.next_run else None,
-                    }
-                    for t in self._tasks.values()
-                ]
-            }
-            self._persist_path.write_text(json.dumps(data, indent=2))
-        except Exception:
-            logger.debug("Failed to persist scheduler state", exc_info=True)
 
 
 # ---------------------------------------------------------------------------

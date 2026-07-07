@@ -6,26 +6,8 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from soothe.foundation.sloop.utils.outcome_preview import planner_outcome_text_preview
 from soothe.protocols.concurrency import ConcurrencyPolicy
-
-
-def planner_outcome_text_preview(outcome: dict[str, Any]) -> str | None:
-    """Resolve bounded planner-facing text from an RFC-211 outcome dict (IG-357).
-
-    Precedence:
-
-    1. ``wave_join_preview`` — Execute wave join excerpt on wave-level ``StepResult``.
-    2. ``task_return_preview`` — single ``task`` tool return excerpt from metadata registry.
-    3. ``output_summary`` — generic truncated summary.
-
-    Returns:
-        First non-empty string, or ``None``.
-    """
-    for key in ("wave_join_preview", "task_return_preview", "output_summary"):
-        val = outcome.get(key)
-        if isinstance(val, str) and val.strip():
-            return val.strip()
-    return None
 
 
 class PlanStep(BaseModel):
@@ -236,26 +218,6 @@ class GoalDirective(BaseModel):
     rationale: str = ""
 
 
-class GoalContext(BaseModel):
-    """Context about goal state for reflection (RFC-0007 §5.4).
-
-    Args:
-        current_goal_id: ID of the goal being executed.
-        all_goals: List of all goals in the engine (serialized).
-        completed_goals: Goal IDs that have completed.
-        failed_goals: Goal IDs that have failed.
-        ready_goals: Goal IDs ready for execution.
-        max_parallel_goals: Concurrency limit.
-    """
-
-    current_goal_id: str
-    all_goals: list[dict[str, Any]] = Field(default_factory=list)
-    completed_goals: list[str] = Field(default_factory=list)
-    failed_goals: list[str] = Field(default_factory=list)
-    ready_goals: list[str] = Field(default_factory=list)
-    max_parallel_goals: int = 1
-
-
 class Reflection(BaseModel):
     """Planner's assessment of plan progress (RFC-0010 enhanced, RFC-0007 §5.4).
 
@@ -276,94 +238,6 @@ class Reflection(BaseModel):
     goal_directives: list[GoalDirective] = Field(default_factory=list)
 
 
-class CheckpointEnvelope(BaseModel):
-    """Progressive checkpoint for crash recovery (RFC-0010).
-
-    Stored in ``$SOOTHE_HOME/data/threads/{thread_id}/checkpoint.json`` via
-    ``RunArtifactStore.save_checkpoint``.
-
-    Args:
-        version: Schema version for forward compatibility.
-        timestamp: ISO-8601 checkpoint time.
-        mode: Execution mode when checkpoint was created.
-        last_query: The user's original query.
-        thread_id: Thread identifier.
-        goals: GoalEngine snapshot (autonomous mode).
-        active_goal_id: Currently executing goal.
-        plan: Serialized Plan for the active goal.
-        completed_step_ids: Steps already completed in the active plan.
-        total_iterations: Iteration counter (autonomous mode).
-        status: Whether execution is still in progress.
-    """
-
-    version: int = 1
-    timestamp: str = ""
-    mode: Literal["single_pass", "autonomous"] = "single_pass"
-    last_query: str = ""
-    thread_id: str = ""
-    goals: list[dict[str, Any]] = Field(default_factory=list)
-    active_goal_id: str | None = None
-    plan: dict[str, Any] | None = None
-    completed_step_ids: list[str] = Field(default_factory=list)
-    total_iterations: int = 0
-    status: Literal["in_progress", "completed", "failed"] = "in_progress"
-
-
 @runtime_checkable
 class PlannerProtocol(Protocol):
-    """Protocol for goal decomposition, plan creation, reflection, and revision."""
-
-    async def create_plan(self, goal: str, context: PlanContext) -> Plan:
-        """Decompose a goal into a structured plan.
-
-        Args:
-            goal: The goal to decompose.
-            context: Available context for planning.
-
-        Returns:
-            A structured plan with steps.
-        """
-        ...
-
-    async def revise_plan(
-        self,
-        plan: Plan,
-        reflection: str,
-        *,
-        thread_id: str | None = None,
-    ) -> Plan:
-        """Revise a plan based on reflection feedback.
-
-        Args:
-            plan: The current plan.
-            reflection: Feedback from the reflection step.
-            thread_id: Optional thread id for Langfuse session correlation.
-
-        Returns:
-            A revised plan.
-        """
-        ...
-
-    async def reflect(
-        self,
-        plan: Plan,
-        step_results: list[StepResult],
-        goal_context: GoalContext | None = None,
-        sloop_result: Any | None = None,  # IG-154: StrangeLoop GoalResult integration
-    ) -> Reflection:
-        """Evaluate plan progress and recommend goal changes.
-
-        Args:
-            plan: The current plan (None when StrangeLoop handles execution).
-            step_results: Results from completed steps (empty when StrangeLoop handles execution).
-            goal_context: Goal DAG context for autonomous goal management.
-            sloop_result: GoalResult wrapper from StrangeLoop delegation (IG-154).
-
-        Returns:
-            Reflection with assessment and goal directives for DAG restructuring.
-            goal_context: Optional context about goal state.
-
-        Returns:
-            A reflection with assessment, revision recommendation, and goal directives.
-        """
-        ...
+    """Marker protocol for planner implementations attached to CoreAgent."""

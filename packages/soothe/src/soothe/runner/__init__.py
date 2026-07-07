@@ -17,10 +17,9 @@ single-goal worker path.
 
 Implementation is decomposed into mixins:
 
-- `PhasesMixin`     -- pre-stream helpers (threads, policy, memory, plan bootstrap)
+- `PhasesMixin`     -- chitchat fast path and checkpointer initialization
 - `StrangeLoopMixin` -- StrangeLoop execution (RFC-0008)
 - `AutopilotWorkerMixin` -- single-goal worker entry (RFC-222 revised)
-- `CheckpointMixin` -- progressive checkpoint, artifacts, reports (RFC-0010)
 """
 
 from __future__ import annotations
@@ -35,7 +34,6 @@ from soothe.protocols.planner import Plan, PlannerProtocol
 from soothe.protocols.policy import PolicyProtocol
 
 from ._runner_autopilot_worker import AutopilotWorkerMixin
-from ._runner_checkpoint import CheckpointMixin
 from ._runner_phases import PhasesMixin
 from ._runner_shared import StreamChunk
 from ._runner_strange_loop import StrangeLoopMixin
@@ -64,7 +62,6 @@ logger = logging.getLogger(__name__)
 
 
 class SootheRunner(
-    CheckpointMixin,
     AutopilotWorkerMixin,
     StrangeLoopMixin,
     PhasesMixin,
@@ -207,9 +204,6 @@ class SootheRunner(
 
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
-        self._artifact_store: Any | None = (
-            None  # Last-known store for CLI/debug; authoritative copy is on RunnerState
-        )
         _concurrency_cfg = self._config.agent.loop.concurrency
         self._concurrency = ConcurrencyController(
             ConcurrencyPolicy(
@@ -286,12 +280,11 @@ class SootheRunner(
     def _clear_query_scoped_runner_state(self) -> None:
         """Clear per-query mirrors on this singleton runner (IG-110).
 
-        Authoritative plan and artifact data live on ``RunnerState`` per call;
+        Authoritative plan data lives on ``RunnerState`` per call;
         this resets CLI/debug pointers so cancelled or completed runs do not
         leak into the next ``astream`` invocation.
         """
         self._current_plan = None
-        self._artifact_store = None
 
     def thread_context_manager(self) -> Any:
         """Return ``ThreadContextManager`` for durability/thread operations (IG-110).
@@ -566,34 +559,6 @@ class SootheRunner(
                 close_method()
         except Exception:
             logger.debug("Failed to close resource %s", type(obj).__name__, exc_info=True)
-
-    # -- query classification helpers (RFC-0008, RFC-0012) -----------------
-
-    async def _pre_stream_parallel_memory_context(
-        self,
-        user_input: str,
-        complexity: str,
-    ) -> tuple[list[Any], Any | None]:
-        """Run memory and context operations in parallel for medium/complex queries (RFC-0008 Phase 2).
-
-        Args:
-            user_input: User query text.
-            complexity: Query complexity level.
-
-        Returns:
-            Tuple of (memory_items, None).
-        """
-        if complexity not in ("medium", "complex"):
-            return ([], None)
-
-        if self._memory:
-            try:
-                memory_items = await self._memory.recall(user_input, limit=5)
-                return memory_items, None
-            except Exception:
-                logger.debug("Memory recall failed", exc_info=True)
-                return ([], None)
-        return ([], None)
 
     # -- main stream --------------------------------------------------------
 
