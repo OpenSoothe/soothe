@@ -315,6 +315,15 @@ class TextualUIAdapter:
         self._last_plan_execution_mode: str | None = None
         """Execution mode from the latest ``plan_decision`` (``dependency`` / ``parallel``)."""
 
+        self._plan_step_order: list[str] = []
+        """Step ids from the latest plan wave in planner list order."""
+
+        self._plan_step_ids: set[str] = set()
+        """Step ids declared in the latest plan wave."""
+
+        self._plan_step_dependencies: dict[str, tuple[str, ...]] = {}
+        """Normalized dependency lists keyed by in-wave step id."""
+
         self._goal_tree_message: CognitionGoalTreeMessage | None = None
         """In-memory goal→steps state for the Ctrl+t plan quick view (not mounted in #messages)."""
 
@@ -1499,6 +1508,58 @@ def _pop_step_card_from_adapter(
     return widget
 
 
+def _record_plan_step_dag(adapter: TextualUIAdapter, raw_steps: list[Any]) -> None:
+    """Capture in-wave step order and dependency edges from ``plan_decision``."""
+    order: list[str] = []
+    dep_map: dict[str, tuple[str, ...]] = {}
+    in_plan: set[str] = set()
+    for raw in raw_steps:
+        if not isinstance(raw, dict):
+            continue
+        sid = str(raw.get("id", "")).strip()
+        if not sid:
+            continue
+        order.append(sid)
+        in_plan.add(sid)
+        raw_deps = raw.get("dependencies")
+        if isinstance(raw_deps, list):
+            dep_map[sid] = tuple(str(dep).strip() for dep in raw_deps if str(dep).strip())
+    adapter._plan_step_order = order
+    adapter._plan_step_ids = in_plan
+    adapter._plan_step_dependencies = dep_map
+
+
+def _dependency_stuck_predecessor_ids(
+    adapter: TextualUIAdapter,
+    next_step_id: str,
+) -> set[str]:
+    """Return in-plan predecessors that may be finalized when ``next_step_id`` starts."""
+    next_id = str(next_step_id or "").strip()
+    if not next_id:
+        return set()
+
+    in_plan = set(adapter._plan_step_ids)
+    if next_id in adapter._plan_step_dependencies:
+        declared = adapter._plan_step_dependencies[next_id]
+        if declared:
+            return {dep for dep in declared if dep in in_plan}
+
+    if adapter._last_plan_execution_mode != "dependency":
+        return set()
+
+    order = adapter._plan_step_order
+    try:
+        idx = order.index(next_id)
+    except ValueError:
+        return set()
+    if idx <= 0:
+        return set()
+    predecessor = order[idx - 1]
+    if predecessor in in_plan:
+        return {predecessor}
+    return set()
+
+
 def _finalize_stuck_dependency_predecessors(
     adapter: TextualUIAdapter,
     router: StepTaskRouter,
@@ -1512,9 +1573,14 @@ def _finalize_stuck_dependency_predecessors(
     next_id = str(next_step_id or "").strip()
     if not next_id:
         return
+    stuck_predecessors = _dependency_stuck_predecessor_ids(adapter, next_id)
+    if not stuck_predecessors:
+        return
     for sid, widget in list(adapter._current_step_messages.items()):
         card_id = str(getattr(widget, "_step_id", "") or sid).strip()
         if card_id == next_id:
+            continue
+        if card_id not in stuck_predecessors:
             continue
         if getattr(widget, "_status", "") != "running":
             continue
@@ -3755,6 +3821,7 @@ async def execute_task_textual(
                                 if isinstance(raw_steps, list):
                                     execution_mode = str(data.get("execution_mode", "")).strip()
                                     adapter._last_plan_execution_mode = execution_mode or None
+                                    _record_plan_step_dag(adapter, raw_steps)
                                     adapter._execute_wave_total = len(raw_steps)
                                     done_steps = int(data.get("done_steps", 0) or 0)
                                     adapter._execute_wave_completed = min(

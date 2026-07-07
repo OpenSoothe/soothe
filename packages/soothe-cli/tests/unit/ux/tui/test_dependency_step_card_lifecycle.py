@@ -42,6 +42,8 @@ def test_finalize_stuck_dependency_predecessor_on_step_two_start() -> None:
     """When step 2 starts in dependency mode, step 1 must not stay running in the UI."""
     adapter = TextualUIAdapter(mount_message=AsyncMock(), update_status=AsyncMock())
     adapter._last_plan_execution_mode = "dependency"
+    adapter._plan_step_order = ["THQ-01", "THQ-02"]
+    adapter._plan_step_ids = {"THQ-01", "THQ-02"}
     router = StepTaskRouter()
 
     step_one = CognitionStepMessage("THQ-01", "Review RFC gaps", id="step-one")
@@ -63,6 +65,63 @@ def test_finalize_stuck_dependency_predecessor_on_step_two_start() -> None:
     assert "THQ-01" not in adapter._current_step_messages
     assert "THQ-02" in adapter._current_step_messages
     assert "THQ-01" not in router.active_step_ids
+
+
+def test_finalize_stuck_skips_sibling_parallel_steps() -> None:
+    """Sibling steps in one dependency wave must not force-complete each other."""
+    adapter = TextualUIAdapter(mount_message=AsyncMock(), update_status=AsyncMock())
+    adapter._last_plan_execution_mode = "dependency"
+    adapter._plan_step_order = ["AAV-03", "AAV-04"]
+    adapter._plan_step_ids = {"AAV-03", "AAV-04"}
+    adapter._plan_step_dependencies = {
+        "AAV-03": ("FKB-01", "FKB-02"),
+        "AAV-04": ("FKB-01", "FKB-02"),
+    }
+    router = StepTaskRouter()
+
+    step_three = CognitionStepMessage("AAV-03", "Fix cross-ref conflicts", id="step-three")
+    step_three.set_running()
+    step_four = CognitionStepMessage("AAV-04", "Fix protocols pages", id="step-four")
+    adapter._current_step_messages["AAV-03"] = step_three
+    adapter._current_step_messages["AAV-04"] = step_four
+    router.on_step_started("AAV-03")
+
+    _finalize_stuck_dependency_predecessors(
+        adapter,
+        router,
+        next_step_id="AAV-04",
+        ns_key=(),
+    )
+
+    assert step_three._status == "running"
+    assert "AAV-03" in adapter._current_step_messages
+    assert "AAV-03" in router.active_step_ids
+
+
+def test_finalize_stuck_honors_explicit_in_plan_dependency() -> None:
+    adapter = TextualUIAdapter(mount_message=AsyncMock(), update_status=AsyncMock())
+    adapter._last_plan_execution_mode = "dependency"
+    adapter._plan_step_order = ["THQ-01", "THQ-02"]
+    adapter._plan_step_ids = {"THQ-01", "THQ-02"}
+    adapter._plan_step_dependencies = {"THQ-02": ("THQ-01",)}
+    router = StepTaskRouter()
+
+    step_one = CognitionStepMessage("THQ-01", "Review", id="step-one")
+    step_one.set_running()
+    step_two = CognitionStepMessage("THQ-02", "Implement", id="step-two")
+    adapter._current_step_messages["THQ-01"] = step_one
+    adapter._current_step_messages["THQ-02"] = step_two
+    router.on_step_started("THQ-01")
+
+    _finalize_stuck_dependency_predecessors(
+        adapter,
+        router,
+        next_step_id="THQ-02",
+        ns_key=(),
+    )
+
+    assert step_one._status == "success"
+    assert "THQ-01" not in adapter._current_step_messages
 
 
 def test_finalize_stuck_skipped_in_parallel_mode() -> None:
