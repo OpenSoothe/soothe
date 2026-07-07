@@ -137,3 +137,24 @@ def render_plan_coverage(state: LoopState) -> str:
         "note: Plan remaining ≠ goal complete; judge GOAL against evidence.",
     ]
     return "\n".join(lines)
+
+
+def assess_may_route_complete(
+    state: LoopState,
+    assessment: StatusAssessment,
+    intake_label: IntakeLabel | None,
+) -> bool:
+    """Return False when routing ``goal_progress=complete`` would be premature."""
+    if assessment.goal_progress != "complete":
+        return True
+
+    if intake_label != IntakeLabel.COMPLEX:
+        return True
+
+    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        _current_goal_has_execute_ledger,
+    )
+
+    if not state.step_results and not _current_goal_has_execute_ledger(state):
+        return False
+    return not state.has_remaining_steps()

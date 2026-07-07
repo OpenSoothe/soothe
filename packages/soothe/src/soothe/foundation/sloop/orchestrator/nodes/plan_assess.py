@@ -14,6 +14,7 @@ import random
 from typing import Any, Literal
 
 from soothe.foundation.sloop.cognition.plan_step_safety import (
+    assess_may_route_complete,
     intake_label_from_state,
     plan_has_minimum_steps_for_intake,
 )
@@ -455,6 +456,14 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
                 "[Plan] Reject goal_progress=complete: undersized plan (%d step) "
                 "for complex intake at iter=0, forcing replan",
                 len(state.current_decision.steps) if state.current_decision else 0,
+            )
+            assessment.goal_progress = "medium"
+            return {"assess_route": "continue_generate"}
+
+        if not assess_may_route_complete(state, assessment, intake_label):
+            logger.warning(
+                "[Plan] Reject goal_progress=complete: insufficient execution evidence (iter=%d)",
+                state.iteration,
             )
             assessment.goal_progress = "medium"
             return {"assess_route": "continue_generate"}
