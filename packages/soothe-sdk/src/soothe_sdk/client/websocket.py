@@ -145,6 +145,61 @@ def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
     return _DROP_PRIORITY_NORMAL
 
 
+def _extract_loop_id_from_inbound(event: dict[str, Any]) -> str | None:
+    """Return ``loop_id`` from a protocol-1 or legacy inbound frame."""
+    lid = event.get("loop_id")
+    if isinstance(lid, str) and lid.strip():
+        return lid.strip()
+    if event.get("type") == "next":
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            data = payload.get("data")
+            if isinstance(data, dict):
+                inner = data.get("loop_id")
+                if isinstance(inner, str) and inner.strip():
+                    return inner.strip()
+    return None
+
+
+def _inbound_needs_delivery_ack(event: dict[str, Any]) -> bool:
+    """True when the client should bump delivery ack sequence for ``event``."""
+    if event.get("type") == "complete":
+        return True
+    if event.get("type") == "next":
+        payload = event.get("payload")
+        if not isinstance(payload, dict):
+            return False
+        inner = payload.get("data")
+        if not isinstance(inner, dict):
+            return False
+        mode = payload.get("mode", "")
+        if mode == "event":
+            inner_mode = inner.get("mode", "")
+            data = inner.get("data")
+            if inner_mode == "messages" and isinstance(data, (tuple, list)) and data:
+                body = data[0]
+                return isinstance(body, dict) and is_stream_terminal_wire_dict(body)
+            if inner_mode == "custom" and isinstance(data, dict):
+                ctype = data.get("type", "")
+                return ctype in (
+                    "soothe.cognition.strange_loop.completed",
+                    "soothe.stream.end",
+                )
+    if event.get("type") == "event":
+        mode = event.get("mode", "")
+        data = event.get("data")
+        if mode == "messages" and isinstance(data, (tuple, list)) and data:
+            body = data[0]
+            return isinstance(body, dict) and is_stream_terminal_wire_dict(body)
+        if mode == "custom" and isinstance(data, dict):
+            ctype = data.get("type", "")
+            return ctype in (
+                "soothe.cognition.strange_loop.completed",
+                "soothe.stream.end",
+            )
+    return False
+
+
 # Align with soothe_daemon.config.models.WebSocketConfig.max_frame_size (default 10 MiB).
 # The websockets library defaults max_size to 1 MiB, which closes the connection (1009)
 # when the daemon streams larger JSON events to the client.
@@ -220,6 +275,9 @@ class WebSocketClient:
         self._heartbeat_timeout_ms: int = 10000
         self._heartbeat_task: asyncio.Task[None] | None = None
         self._last_pong_monotonic: float = 0.0
+        # IG-556 P1.3: delivery ack sequence per loop for daemon drain gating.
+        self._delivery_recv_seq: dict[str, int] = {}
+        self._delivery_acked_seq: dict[str, int] = {}
 
     async def connect(self) -> None:
         """Connect to the daemon.
@@ -415,6 +473,54 @@ class WebSocketClient:
                             self._inbound_queue.put_nowait(item)
 
         await self._inbound_queue.put(event)
+        if isinstance(event, dict):
+            self._track_inbound_delivery_ack(event)
+
+    def _track_inbound_delivery_ack(self, event: dict[str, Any]) -> None:
+        """Bump recv seq and schedule a delivery ack for terminal stream frames."""
+        if event.get("type") == "event_batch":
+            sub_events = event.get("events")
+            if isinstance(sub_events, list):
+                for sub in sub_events:
+                    if isinstance(sub, dict):
+                        self._track_inbound_delivery_ack(sub)
+            return
+        if not _inbound_needs_delivery_ack(event):
+            return
+        loop_id = _extract_loop_id_from_inbound(event)
+        if not loop_id:
+            return
+        self._delivery_recv_seq[loop_id] = self._delivery_recv_seq.get(loop_id, 0) + 1
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(self._send_delivery_ack(loop_id))
+
+    async def _send_delivery_ack(self, loop_id: str) -> None:
+        """Notify daemon that terminal frames through ``seq`` were received."""
+        seq = self._delivery_recv_seq.get(loop_id, 0)
+        if seq <= self._delivery_acked_seq.get(loop_id, 0):
+            return
+        self._delivery_acked_seq[loop_id] = seq
+        if not self._connected or self._ws is None:
+            return
+        try:
+            await self.send(
+                {
+                    "proto": "1",
+                    "type": "notification",
+                    "method": "delivery_ack",
+                    "params": {"loop_id": loop_id, "seq": seq},
+                }
+            )
+        except Exception:
+            logger.debug(
+                "[Client:%s] delivery_ack failed for loop %s",
+                self._client_id,
+                loop_id[:16],
+                exc_info=True,
+            )
 
     async def close(self, *, handshake_timeout: float = 2.0) -> None:
         """Close the connection with timeout to prevent exit hangs.

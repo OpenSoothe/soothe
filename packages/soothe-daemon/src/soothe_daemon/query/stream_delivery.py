@@ -223,6 +223,20 @@ def _chunk_position_last(msg: Any) -> bool:
     return body.get("chunk_position") == "last"
 
 
+def _stamp_stream_terminal_wire_data(wire_data: Any) -> Any:
+    """Attach ``stream_terminal=true`` to a passthrough messages wire pair."""
+    if not isinstance(wire_data, (tuple, list)) or not wire_data:
+        return wire_data
+    msg_wire = wire_data[0]
+    if not isinstance(msg_wire, dict):
+        return wire_data
+    stamped = dict(msg_wire)
+    stamped["chunk_position"] = "last"
+    stamped[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
+    meta = wire_data[1] if len(wire_data) > 1 else {}
+    return prepare_stream_data_for_wire((stamped, meta))
+
+
 def _updates_has_interrupt(data: Any) -> bool:
     if not isinstance(data, dict):
         return False
@@ -402,16 +416,20 @@ class StreamDeliveryCoalescer:
             out.extend(self._flush_tool_batch(ns, force=True))
             if not self.should_skip_tool_message_wire(msg):
                 out.append((ns, mode, data))
-            return out_prefix + out
+            return out_prefix + self._finish_messages_ingest(ns, msg, out)
 
         phase = assistant_output_phase(msg)
         if phase == "goal_completion":
             out = self._flush_text_buffer(ns, final=False)
             out.extend(self._ingest_goal_completion(ns, msg, metadata))
-            return out_prefix + out
+            return out_prefix + self._finish_messages_ingest(ns, msg, out)
 
         if not self._message_coalesce_enabled:
-            return out_prefix + [(ns, mode, data)]
+            wire = (ns, mode, data)
+            if _chunk_position_last(msg):
+                stamped = prepare_stream_data_for_wire((msg, metadata))
+                wire = (ns, mode, stamped)
+            return out_prefix + self._finish_messages_ingest(ns, msg, [wire])
 
         if _wire_has_tool_invocation(_msg_to_wire_dict(msg) or {}):
             out = self._flush_text_buffer(ns, final=False)
@@ -435,9 +453,9 @@ class StreamDeliveryCoalescer:
                         has_phase = bool(flat.get("phase"))
                         if text or has_phase:
                             out.append((ns, mode, wire_data))
-                    return out_prefix + out
+                    return out_prefix + self._finish_messages_ingest(ns, msg, out)
             out.append((ns, mode, data))
-            return out_prefix + out
+            return out_prefix + self._finish_messages_ingest(ns, msg, out)
 
         if _plain_text_ai_message(msg):
             out: list[tuple[tuple[str, ...], str, Any]] = []
@@ -465,11 +483,27 @@ class StreamDeliveryCoalescer:
                 out.extend(self._flush_text_buffer(ns, final=True))
             elif interval_due:
                 out.extend(self._flush_text_buffer(ns, final=False))
-            return out_prefix + out
+            return out_prefix + self._finish_messages_ingest(ns, msg, out)
 
         out = self._flush_text_buffer(ns, final=False)
         out.append((ns, mode, data))
-        return out_prefix + out
+        return out_prefix + self._finish_messages_ingest(ns, msg, out)
+
+    def _finish_messages_ingest(
+        self,
+        namespace: tuple[str, ...],
+        msg: Any,
+        out: list[tuple[tuple[str, ...], str, Any]],
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Flush deferred buffers when upstream marks ``chunk_position=last``."""
+        if not _chunk_position_last(msg):
+            return out
+        tail: list[tuple[tuple[str, ...], str, Any]] = []
+        if namespace in self._text_buffers:
+            tail.extend(self._flush_text_buffer(namespace, final=True))
+        if self._gc is not None and self._gc.parts:
+            tail.extend(self._flush_goal_completion(final=True))
+        return out + tail if tail else out
 
     def _flush_due_tool_batches(self, now: float) -> list[tuple[tuple[str, ...], str, Any]]:
         out: list[tuple[tuple[str, ...], str, Any]] = []
@@ -647,6 +681,8 @@ class StreamDeliveryCoalescer:
         # buffering, no threshold-based transition, never enters
         # chunked_streaming. The phase tracker stays in "streaming" forever.
         if self._mode == "streaming":
+            if _chunk_position_last(msg):
+                wire_data = _stamp_stream_terminal_wire_data(wire_data)
             return [(namespace, "messages", wire_data)]
 
         chunk_chars = len("".join(extract_text_from_ai_message(msg_wire)))
@@ -660,6 +696,8 @@ class StreamDeliveryCoalescer:
             if projected_chars < self._adaptive_threshold_chars:
                 # Phase 1: low-latency passthrough.
                 self._gc_streamed_chars += chunk_chars
+                if _chunk_position_last(msg):
+                    wire_data = _stamp_stream_terminal_wire_data(wire_data)
                 return [(namespace, "messages", wire_data)]
             # Threshold crossed → enter chunked-streaming phase. Buffer this
             # chunk and let the threshold check below decide whether to flush

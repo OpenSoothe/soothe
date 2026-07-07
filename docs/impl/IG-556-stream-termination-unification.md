@@ -2,7 +2,7 @@
 
 **RFCs**: [RFC-614](../specs/RFC-614-unified-streaming-messaging.md) (messages + `phase`), [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) (subscription `complete` / `idle` ordering)
 **Created**: 2026-07-07
-**Status**: In progress (P0)
+**Status**: In progress (P1)
 **Related**: [IG-533](IG-533-goal-completion-tui-worker-lifecycle-fixes.md), [IG-441](IG-441-goal-completion-stream-delivery-modes.md) (code comments / stream_delivery), [IG-436](IG-436-daemon-delivery-priority.md) (session drain priority), [IG-535](IG-535-phase4-hidden-bottleneck-optimizations.md) (undroppable terminal frames)
 **Supersedes (partial)**: IG-533 §1.2 post-idle 30s drain workaround; IG-533 §1.3 turn-end flush safety nets
 
@@ -378,11 +378,11 @@ All changes must pass:
 
 ### P1 — Ordering
 
-- [ ] **P1.1** Immediate namespace flush on `chunk_position=last`
-- [ ] **P1.2** `stream_terminal` stamped in `streaming` passthrough
-- [ ] **P1.3** Ack-based `await_loop_delivery_drained`
-- [ ] **P1.3** SDK sends delivery acks for CRITICAL frames
-- [ ] **P1.4** `_POST_IDLE_DRAIN_DEADLINE_S = 0.5` (CLI + headless)
+- [x] **P1.1** Immediate namespace flush on `chunk_position=last`
+- [x] **P1.2** `stream_terminal` stamped in `streaming` passthrough
+- [x] **P1.3** Ack-based `await_loop_delivery_drained`
+- [x] **P1.3** SDK sends delivery acks for CRITICAL frames
+- [x] **P1.4** `_POST_IDLE_DRAIN_DEADLINE_S = 0.5` (CLI + headless)
 
 ### P2 — Cleanup
 

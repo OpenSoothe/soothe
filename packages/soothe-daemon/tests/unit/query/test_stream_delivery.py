@@ -511,3 +511,26 @@ def test_adaptive_chunked_streaming_with_file_output_uses_pure_batch() -> None:
     )
     assert len(done) == 2
     assert done[0][2][0]["content"] == "abcdefgh"
+
+
+def test_streaming_mode_stamps_stream_terminal_on_last_chunk() -> None:
+    """IG-556 P1.2: streaming passthrough stamps stream_terminal on final chunk."""
+    coalescer = StreamDeliveryCoalescer("streaming")
+    out = coalescer.ingest(*_gc_chunk("final", last=True))
+    assert len(out) == 1
+    msg = out[0][2][0]
+    assert msg.get("stream_terminal") is True
+    assert msg.get("chunk_position") == "last"
+
+
+def test_chunk_position_last_flushes_goal_completion_without_completed_event() -> None:
+    """IG-556 P1.1: chunk_position=last forces immediate namespace flush."""
+    coalescer = StreamDeliveryCoalescer("batch")
+    assert coalescer.ingest(*_gc_chunk("a")) == []
+    out = coalescer.ingest(*_gc_chunk("b", last=True))
+    msgs = [item for item in out if item[1] == "messages"]
+    assert len(msgs) == 1
+    body = msgs[0][2][0]
+    assert body["content"] == "ab"
+    assert body.get("stream_terminal") is True
+    assert body.get("chunk_position") == "last"

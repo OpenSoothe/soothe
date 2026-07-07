@@ -411,6 +411,13 @@ class DisconnectParams(EmptyParams):
     """Params for type=disconnect / type=detach (no required fields)."""
 
 
+class DeliveryAckParams(ParamsBase):
+    """Params for method=delivery_ack, type=notification (IG-556 stream drain)."""
+
+    loop_id: str = Field(..., min_length=1)
+    seq: int = Field(..., ge=0)
+
+
 class PingParams(EmptyParams):
     """Params for type=ping (no required fields)."""
 
@@ -509,6 +516,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "rpc_command"): CommandRequestParams,
     ("notification", "slash_command"): CommandParams,
     ("notification", "disconnect"): DisconnectParams,
+    ("notification", "delivery_ack"): DeliveryAckParams,
     ("subscribe", "loop_events"): SubscribeParams,
     ("subscribe", "autopilot_events"): AutopilotSubscribeParams,
     ("unsubscribe", None): AutopilotUnsubscribeParams,
