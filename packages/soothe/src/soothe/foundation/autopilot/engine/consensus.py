@@ -30,8 +30,6 @@ async def evaluate_goal_completion(
     evidence_summary: str = "",
     success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
-    *,
-    soothe_config: Any | None = None,
 ) -> tuple[ConsensusDecision, str]:
     """RFC-204: Holistic evaluation of goal completion via LLM.
 
@@ -60,33 +58,45 @@ async def evaluate_goal_completion(
         goal_description, response_text, evidence_summary, success_criteria
     )
     try:
+        from soothe.middleware._utils import create_llm_call_metadata
         from soothe.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        invoke_config = SootheLangfuse(soothe_config).traced_llm(
-            purpose="consensus_vote",
-            component="cognition.consensus",
-            phase="post-loop",
-            run_name="soothe:consensus-vote",
-        )
+        invoke_config = {
+            "metadata": create_llm_call_metadata(
+                purpose="consensus_vote",
+                component="cognition.consensus",
+                phase="post-loop",
+            )
+        }
 
         async def _invoke() -> Any:
             return await model.ainvoke(prompt, config=invoke_config)
 
         response = await await_with_llm_call_policy(
             _invoke,
-            config=llm_rate_limit_config_from(soothe_config),
+            config=llm_rate_limit_config_from(None),
         )
         content = response.content.strip().lower() if hasattr(response, "content") else ""
 
         if "send_back" in content:
-            return "send_back", _extract_reasoning(content)
-        if "suspend" in content:
-            return "suspend", _extract_reasoning(content)
-        return "accept", _extract_reasoning(content)
+            decision: ConsensusDecision = "send_back"
+            reasoning = _extract_reasoning(content)
+        elif "suspend" in content:
+            decision = "suspend"
+            reasoning = _extract_reasoning(content)
+        else:
+            decision = "accept"
+            reasoning = _extract_reasoning(content)
+
+        logger.info(
+            "Consensus evaluation: decision=%s reasoning=%s",
+            decision,
+            preview(reasoning),
+        )
+        return decision, reasoning
     except ConsensusEvaluationError:
         raise
     except Exception as exc:

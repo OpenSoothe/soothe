@@ -9,6 +9,7 @@ Migrated to monitor module per RFC-625. Works with GoalNode from ContextEngine.
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
@@ -16,9 +17,12 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.foundation.autopilot.engine.models import BackoffDecision, EvidenceBundle
 from soothe.foundation.context.models import GoalNode
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
+
+logger = logging.getLogger(__name__)
 
 
 # RFC-200 §205-541: Backoff reasoning prompt template
@@ -147,18 +151,19 @@ class GoalBackoffReasoner:
             HumanMessage(content=prompt),
         ]
 
+        from soothe.middleware._utils import create_llm_call_metadata
         from soothe.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        invoke_config = SootheLangfuse(self._soothe_config).traced_llm(
-            purpose="backoff_reasoning",
-            component="goal_engine.backoff_reasoner",
-            phase="post-loop",
-            run_name="soothe:backoff-reason",
-        )
+        invoke_config = {
+            "metadata": create_llm_call_metadata(
+                purpose="backoff_reasoning",
+                component="goal_engine.backoff_reasoner",
+                phase="post-loop",
+            )
+        }
 
         async def _invoke() -> Any:
             return await self._model.ainvoke(messages, config=invoke_config)
@@ -197,6 +202,13 @@ class GoalBackoffReasoner:
                 f"Backoff target goal {decision.backoff_to_goal_id} not found in current DAG"
             )
 
+        logger.info(
+            "Backoff reasoning: goal=%s backoff_to=%s directives=%d reason=%s",
+            goal_id,
+            decision.backoff_to_goal_id,
+            len(decision.new_directives),
+            preview_first(decision.reason),
+        )
         return decision
 
     def _format_goal_dag_state(self, goals: dict[str, GoalNode]) -> str:
