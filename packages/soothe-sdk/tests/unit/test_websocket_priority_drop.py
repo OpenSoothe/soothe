@@ -158,6 +158,49 @@ class TestInboundFrameDropPriority:
         }
         assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_CRITICAL
 
+    def test_stream_terminal_messages_is_critical(self) -> None:
+        event = {
+            "type": "event",
+            "mode": "messages",
+            "data": (
+                {
+                    "type": "AIMessageChunk",
+                    "content": "done",
+                    "stream_terminal": True,
+                    "chunk_position": "last",
+                },
+                {},
+            ),
+        }
+        assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_CRITICAL
+
+    def test_chunk_position_last_plain_text_is_critical(self) -> None:
+        event = {
+            "type": "event",
+            "mode": "messages",
+            "data": ({"type": "AIMessageChunk", "content": "done", "chunk_position": "last"}, {}),
+        }
+        assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_CRITICAL
+
+    def test_strange_loop_completed_is_critical(self) -> None:
+        event = {
+            "type": "event",
+            "mode": "custom",
+            "data": {"type": "soothe.cognition.strange_loop.completed", "status": "done"},
+        }
+        assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_CRITICAL
+
+    def test_stream_end_event_is_critical(self) -> None:
+        event = {
+            "type": "event",
+            "mode": "custom",
+            "data": {"type": "soothe.stream.end", "scope": "turn"},
+        }
+        assert _inbound_frame_drop_priority(event) == _DROP_PRIORITY_CRITICAL
+
+    def test_complete_envelope_is_critical(self) -> None:
+        assert _inbound_frame_drop_priority({"type": "complete"}) == _DROP_PRIORITY_CRITICAL
+
 
 @pytest.mark.asyncio
 class TestPriorityAwareInboundQueue:

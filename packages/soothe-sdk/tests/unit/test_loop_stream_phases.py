@@ -11,6 +11,7 @@ from soothe_sdk.ux.loop_stream import (
     assistant_output_phase,
     build_goal_completion_stream_terminal_message,
     is_goal_completion_stream_terminal,
+    is_stream_terminal_wire_dict,
 )
 
 
@@ -45,6 +46,12 @@ def test_assistant_output_phase_recognizes_direct_model_after_wire_roundtrip() -
 def test_assistant_output_phase_on_plain_dict() -> None:
     msg = {"type": "ai", "content": "x", "phase": "direct_model"}
     assert assistant_output_phase(msg) == "direct_model"
+
+
+def test_is_stream_terminal_wire_dict() -> None:
+    assert is_stream_terminal_wire_dict({"stream_terminal": True})
+    assert is_stream_terminal_wire_dict({"chunk_position": "last"})
+    assert not is_stream_terminal_wire_dict({"content": "x"})
 
 
 def test_is_goal_completion_stream_terminal_prefers_stream_terminal_flag() -> None:

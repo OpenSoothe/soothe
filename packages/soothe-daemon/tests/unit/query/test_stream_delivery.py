@@ -55,6 +55,22 @@ def test_batch_mode_suppresses_goal_completion_until_completed() -> None:
     assert coalescer.turn_complete_pending
 
 
+def test_consume_turn_complete_pending_returns_and_clears() -> None:
+    """IG-556: QueryEngine uses consume_turn_complete_pending after stream end."""
+    coalescer = StreamDeliveryCoalescer("batch")
+    coalescer.ingest(*_gc_chunk("tail"))
+    coalescer.ingest(
+        (),
+        "custom",
+        {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
+    )
+    assert coalescer.turn_complete_pending is True
+    assert coalescer.consume_turn_complete_pending() is True
+    assert coalescer.turn_complete_pending is False
+    assert coalescer.consume_turn_complete_pending() is False
+    assert coalescer.flush() == []
+
+
 def test_adaptive_small_goal_completion_passthrough() -> None:
     coalescer = StreamDeliveryCoalescer("adaptive")
     chunk = _gc_chunk("passthrough")
@@ -345,12 +361,11 @@ def test_adaptive_chunked_streaming_emits_size_based_blocks() -> None:
         "custom",
         {"type": STRANGE_LOOP_COMPLETED, "status": "done"},
     )
-    # Buffer was empty after the block flush, but we still emit a terminal
-    # marker so clients can finalize goal_completion streaming state.
+    # Buffer was empty after the block flush; terminal re-stamps last content block.
     assert len(done) == 2
     marker = done[0][2][0]
     assert marker["phase"] == "goal_completion"
-    assert marker["content"] == ""
+    assert marker["content"] == "defghijklmnopqr"
     assert marker["chunk_position"] == "last"
     assert marker.get("stream_terminal") is True
     assert done[1][2]["type"] == STRANGE_LOOP_COMPLETED

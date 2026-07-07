@@ -16,14 +16,31 @@ import websockets.exceptions
 
 from soothe_sdk.client.intent_hints import validate_loop_input_intent_hint
 from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
+from soothe_sdk.ux.loop_stream import is_stream_terminal_wire_dict
 
 logger = logging.getLogger(__name__)
 
 # IG-535 Optimization 1: Priority-aware drop policy for inbound queue.
 # Lower values = keep, higher values = drop candidate.
-_DROP_PRIORITY_CRITICAL = 0  # Never drop: goal_completion, terminal status, errors
+_DROP_PRIORITY_CRITICAL = 0  # Never drop: terminal frames, goal_completion, status, errors
 _DROP_PRIORITY_HIGH = 1  # Prefer keep: tool call updates, step events
 _DROP_PRIORITY_NORMAL = 2  # Default drop candidate: streaming text, updates
+
+
+def _wire_message_dict_from_event_data(data: Any) -> dict[str, Any] | None:
+    """Extract the first message wire dict from an event ``data`` payload."""
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, (tuple, list)) and data:
+        first = data[0]
+        return first if isinstance(first, dict) else None
+    return None
+
+
+def _event_messages_wire_terminal(data: Any) -> bool:
+    """Return True when a messages-mode payload is a stream terminal frame."""
+    body = _wire_message_dict_from_event_data(data)
+    return is_stream_terminal_wire_dict(body) if body is not None else False
 
 
 def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
@@ -59,12 +76,22 @@ def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
 
             # Check for goal_completion in inner messages frame
             if inner_mode == "messages" and isinstance(inner_data, (tuple, list)):
+                if _event_messages_wire_terminal(inner_data):
+                    return _DROP_PRIORITY_CRITICAL
                 if inner_data and isinstance(inner_data[0], dict):
                     if inner_data[0].get("phase") == "goal_completion":
                         return _DROP_PRIORITY_CRITICAL
 
+            # Protocol-1 complete envelope
+            if inner_type == "complete":
+                return _DROP_PRIORITY_CRITICAL
+
             # Recurse with inner frame type
             event_type = inner_type
+
+    # Subscription complete — never drop
+    if event_type == "complete":
+        return _DROP_PRIORITY_CRITICAL
 
     # Terminal frames - never drop
     if event_type == "status":
@@ -87,6 +114,10 @@ def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
             data = event.get("data")
             if isinstance(data, dict):
                 custom_type = data.get("type", "")
+                if custom_type == "soothe.stream.end":
+                    return _DROP_PRIORITY_CRITICAL
+                if custom_type == "soothe.cognition.strange_loop.completed":
+                    return _DROP_PRIORITY_CRITICAL
                 # Cognition events (step started/completed) - prefer keep
                 if custom_type.startswith("soothe.cognition."):
                     return _DROP_PRIORITY_HIGH
@@ -100,9 +131,11 @@ def _inbound_frame_drop_priority(event: dict[str, Any] | None) -> int:
                 if custom_type == "soothe.ux.stream_tool_wire.tool_call_updates_batch":
                     return _DROP_PRIORITY_HIGH
 
-        # Messages mode - check for goal_completion phase in unwrapped data
+        # Messages mode - terminal or goal_completion phase
         if mode == "messages":
             data = event.get("data")
+            if _event_messages_wire_terminal(data):
+                return _DROP_PRIORITY_CRITICAL
             if isinstance(data, (tuple, list)) and data:
                 first = data[0]
                 if isinstance(first, dict) and first.get("phase") == "goal_completion":
