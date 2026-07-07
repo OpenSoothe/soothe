@@ -10,7 +10,7 @@ This module provides:
 - Helper functions for event emission
 - Event registration logic
 
-Base event classes are defined in soothe.core.base_events.
+Base event classes are defined in soothe.foundation.base_events.
 Module-specific events (subagents, tools) are defined in their respective modules
 and imported here for registry.
 

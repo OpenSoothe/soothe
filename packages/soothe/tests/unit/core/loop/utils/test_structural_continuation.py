@@ -78,5 +78,7 @@ def test_has_active_running_goal() -> None:
 
 def test_chitchat_finalize_allowed_only_on_idle_checkpoint() -> None:
     assert chitchat_may_finalize_checkpoint(_checkpoint(status="idle", goal_status="completed"))
-    assert not chitchat_may_finalize_checkpoint(_checkpoint(status="running", goal_status="running"))
+    assert not chitchat_may_finalize_checkpoint(
+        _checkpoint(status="running", goal_status="running")
+    )
     assert not chitchat_may_finalize_checkpoint(None)

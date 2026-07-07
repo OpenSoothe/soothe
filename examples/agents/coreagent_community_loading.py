@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 async def main() -> None:
     """Demonstrate community plugin loading and subagent resolution."""
     from soothe.config.settings import SootheConfig
-    from soothe.core.resolver._resolver_tools import resolve_subagents
+    from soothe.runner.resolver._resolver_tools import resolve_subagents
 
     # 1. Create config
     config = SootheConfig()

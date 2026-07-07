@@ -323,8 +323,7 @@ class StrangeLoop:
 
                     if should_bypass_pass1_social_fast_path(checkpoint, execution_goal):
                         logger.info(
-                            "[StrangeLoop] Structural loop-control bypasses "
-                            "Pass1 social fast-path"
+                            "[StrangeLoop] Structural loop-control bypasses Pass1 social fast-path"
                         )
                         pass1_result = IntakePass1LLMResult(
                             is_task=True,
@@ -338,8 +337,7 @@ class StrangeLoop:
                             pass1_result, execution_goal
                         )
                         logger.info(
-                            "[StrangeLoop] Pre-graph social fast-path "
-                            "(Pass1 confidence=%s)",
+                            "[StrangeLoop] Pre-graph social fast-path (Pass1 confidence=%s)",
                             pass1_result.confidence,
                         )
                         yield (

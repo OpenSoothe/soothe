@@ -248,7 +248,7 @@ def _decide_visibility(
         logger.warning(
             "Unknown daemon wire envelope shape suppressed (type=%s mode=%s). "
             "Update WireEnvelopeKind + _decide_visibility in "
-            "soothe.core.events.visibility if this is a new wire shape.",
+            "soothe.foundation.events.visibility if this is a new wire shape.",
             msg.get("type"),
             msg.get("mode"),
         )

@@ -50,7 +50,7 @@ EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", st
 
 # ---------------------------------------------------------------------------
 # System prompts and response-length guides
-# (consumed by ``soothe.core.prompts.system_templates``).
+# (consumed by ``soothe.foundation.sloop.prompts.system_templates``).
 # Byte-for-byte preserved from previous Python literals — do not ``.strip()``.
 # ---------------------------------------------------------------------------
 

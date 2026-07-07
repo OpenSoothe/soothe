@@ -24,7 +24,7 @@ def register_subagent_wire_event_types(*event_types: str) -> None:
     """Register ``soothe.subagent.*`` wire types for emission allowlisting.
 
     Subagents call this from their ``events`` module (or rely on
-    ``soothe.core.events.register_event`` to register automatically).
+    ``soothe.foundation.events.register_event`` to register automatically).
     """
     for et in event_types:
         if isinstance(et, str) and et.startswith("soothe.subagent."):
