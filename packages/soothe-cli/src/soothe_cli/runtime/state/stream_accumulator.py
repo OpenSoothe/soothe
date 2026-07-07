@@ -139,6 +139,3 @@ class StreamingTextAccumulator:
     def clear(self) -> None:
         """Clear all accumulated state (call after finalizing)."""
         self.streams.clear()
-
-
-StreamAccumulator = StreamingTextAccumulator

@@ -47,9 +47,3 @@ APPROVAL_WARNING_TEXT_TRUNCATE_CHARS: Final[int] = 220
 
 # --- Unified diff snippets in chat (`file_ops`, DiffMessage) ---
 APPROVAL_DIFF_MAX_LINES: Final[int] = 15
-
-# --- Autopilot dashboard (`autopilot_dashboard`) ---
-AUTOPILOT_GOAL_DESCRIPTION_PREVIEW_CHARS: Final[int] = 50
-AUTOPILOT_FINDING_LINE_PREVIEW_CHARS: Final[int] = 80
-AUTOPILOT_FINDINGS_VISIBLE_COUNT: Final[int] = 20
-AUTOPILOT_GRAPH_EDGE_PREVIEW_COUNT: Final[int] = 3

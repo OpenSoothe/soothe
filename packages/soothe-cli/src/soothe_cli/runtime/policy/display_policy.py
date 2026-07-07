@@ -143,24 +143,9 @@ class DisplayPolicy:
         return event_type in INTERNAL_EVENT_TYPES or event_type.startswith("soothe.internal.")
 
 
-# =============================================================================
-# Factory Function
-# =============================================================================
-
-
-def create_display_policy() -> DisplayPolicy:
-    """Create the shared display policy instance (single fixed UX tier)."""
-    return DisplayPolicy()
-
-
-# =============================================================================
-# Exports
-# =============================================================================
-
 __all__ = [
     "INTERNAL_EVENT_TYPES",
     "SKIP_EVENT_TYPES",
     "DisplayPolicy",
     "VerbosityTier",
-    "create_display_policy",
 ]
