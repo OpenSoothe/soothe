@@ -6,7 +6,6 @@ This package owns plan-phase *reasoning* only.
 
 from soothe.foundation.sloop.cognition.ledger_compaction import (
     compact_execute_human_content,
-    compact_plan_assess_ai_dump,
     compact_planning_human_content,
 )
 from soothe.foundation.sloop.cognition.parser import parse_plan_from_text
@@ -20,7 +19,6 @@ __all__ = [
     "PlanPhase",
     "build_trivial_plan",
     "compact_execute_human_content",
-    "compact_plan_assess_ai_dump",
     "compact_planning_human_content",
     "parse_plan_from_text",
     "parse_plan_with_config",

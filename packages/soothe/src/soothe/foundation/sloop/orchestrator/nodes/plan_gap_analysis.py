@@ -29,4 +29,4 @@ async def node_plan_gap_analysis(ctx: LoopRuntimeContext, _state: dict[str, Any]
         context_engine=ctx.ce,
     )
     ctx.scratch.plan_gap = gap
-    return {"gap_route": "plan_assess"}
+    return {}

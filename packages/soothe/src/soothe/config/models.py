@@ -908,10 +908,6 @@ class PlanPromptLedgerConfig(BaseModel):
 class PlanAssessPromptConfig(BaseModel):
     """Assess-specific prompt assembly knobs (mid-goal accuracy, IG-557)."""
 
-    enabled: bool = Field(
-        default=True,
-        description="Use assess-only ledger projection and v2 task envelope",
-    )
     ledger_max_messages: int = Field(
         default=24,
         ge=0,
