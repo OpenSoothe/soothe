@@ -47,6 +47,7 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
     _last_tool_result_block,
     _outcome_summary_text,
     compute_act_wave_finalize,
+    is_error_tool_result_text,
     provenance_is_task_delegate,
 )
 from soothe.foundation.sloop.engine.continuation_context import (
@@ -84,6 +85,7 @@ from soothe.foundation.sloop.engine.step_wave_types import (
     _ParallelStepDone,
     _PendingInterruptFetch,
     _StreamCollectChunk,
+    all_tool_outcomes_failed,
     max_tool_calls_for_step,
 )
 from soothe.foundation.sloop.engine.thread_selection import (
@@ -972,10 +974,8 @@ class Executor:
         hit_cap = any(r.hit_subagent_cap for r in step_results)
         hit_tool_budget = any(r.hit_tool_budget for r in step_results)
 
-        # Count execution failures and recoverable tool errors (planner wave signal)
-        from soothe.foundation.sloop.engine.step_wave_types import step_had_tool_error
-
-        error_count = sum(1 for r in step_results if not r.success or step_had_tool_error(r))
+        # Count execution failures only (recoverable per-tool errors stay in logs).
+        error_count = sum(1 for r in step_results if not r.success)
 
         # Measure output length
         output_length = len(output) if output else 0
@@ -1353,7 +1353,7 @@ class Executor:
                     excerpt_src = _outcome_summary_text(result.step_result.outcome)
                 if not excerpt_src and result.delegate_final:
                     excerpt_src = (result.delegate_final or "").strip()
-                if excerpt_src:
+                if excerpt_src and not is_error_tool_result_text(excerpt_src):
                     excerpt = excerpt_src[:200]
                     if status == "completed" or not outcome_preview:
                         outcome_preview = excerpt
@@ -1782,7 +1782,7 @@ class Executor:
             messages: list[BaseMessage] = []
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
-            has_tool_error = False  # Track tool errors for planner/outcome metadata
+            has_tool_error = False  # Track recoverable tool errors for logging only.
             async for chunk in self._stream_and_collect(
                 stream,
                 budget=budget,
@@ -1834,13 +1834,25 @@ class Executor:
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
             primary_outcome["output_summary"] = create_output_summary(output)  # Truncated findings
 
-            # Step success reflects overall CoreAgent run completion, not individual
-            # tool failures — agents may recover from tool errors and still finish.
-            step_success = True
-            step_error = _first_tool_error_message(stream_outcomes) if has_tool_error else None
-
-            if has_tool_error:
-                primary_outcome["has_tool_error"] = True
+            # Step success: fail only when every tool call errored; otherwise a step
+            # may recover from individual tool failures and still finish.
+            all_tools_failed = all_tool_outcomes_failed(stream_outcomes)
+            step_success = not all_tools_failed
+            step_error: str | None = None
+            step_error_type: (
+                Literal["execution", "tool", "timeout", "policy", "unknown", "fatal"] | None
+            ) = None
+            if all_tools_failed:
+                step_error = _first_tool_error_message(stream_outcomes) or "All tool calls failed"
+                step_error_type = "tool"
+                logger.warning(
+                    "Step %s failed: all %d tool call(s) returned errors in %dms",
+                    step.id,
+                    len(stream_outcomes),
+                    duration_ms,
+                )
+            elif has_tool_error:
+                step_error = _first_tool_error_message(stream_outcomes)
                 logger.warning(
                     "Step %s completed with recoverable tool errors in %dms "
                     "(main_tools=%d, subgraph_tools=%d)",
@@ -1867,6 +1879,7 @@ class Executor:
                     success=step_success,
                     outcome=primary_outcome,  # RFC-211: outcome metadata
                     error=step_error,
+                    error_type=step_error_type,
                     duration_ms=duration_ms,
                     thread_id=thread_id,
                     tool_call_count=main_tool_call_count,

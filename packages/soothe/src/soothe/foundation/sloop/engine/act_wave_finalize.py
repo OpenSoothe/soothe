@@ -35,6 +35,22 @@ DELEGATE_FINAL_WAVE_CAP = 120_000
 # tool output rather than only the AI's prose summary.
 LAST_TOOL_RESULT_HEAD_CHARS = 500
 
+_ERROR_TOOL_RESULT_MARKERS = (
+    "timed out",
+    "timeout after",
+    "command timed out",
+    "error:",
+    "tool error",
+)
+
+
+def is_error_tool_result_text(text: str) -> bool:
+    """Return True when tool output text is dominated by a failure message."""
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    return any(marker in low for marker in _ERROR_TOOL_RESULT_MARKERS)
+
 
 def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
     """Return a compact head string for a single AIMessage tool-call (RFC-227).
@@ -167,6 +183,8 @@ def _last_tool_result_block(messages: list[BaseMessage]) -> str:
         text = extract_text_from_message_content(getattr(msg, "content", None))
         if not text or not text.strip():
             continue
+        if is_error_tool_result_text(text):
+            continue
         name = getattr(msg, "name", None) or "tool"
         head = preview_first(text, LAST_TOOL_RESULT_HEAD_CHARS)
         return (
@@ -279,6 +297,7 @@ __all__ = [
     "_full_tool_output_text",
     "_last_tool_result_block",
     "_outcome_summary_text",
+    "is_error_tool_result_text",
     "LAST_TOOL_RESULT_HEAD_CHARS",
     "provenance_is_task_delegate",
 ]

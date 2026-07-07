@@ -130,6 +130,34 @@ def test_last_tool_result_block_uses_most_recent_tool_message() -> None:
     assert "first older" not in block
 
 
+def test_last_tool_result_block_skips_error_tool_messages() -> None:
+    messages = [
+        ToolMessage(
+            content="Error: Command timed out after 60s. The process group was terminated.",
+            tool_call_id="a",
+            name="run_command",
+        ),
+        ToolMessage(
+            content="found: /Users/me/.soothe/logs/soothe.log", tool_call_id="b", name="glob"
+        ),
+    ]
+    block = _last_tool_result_block(messages)
+    assert "<LAST_TOOL_RESULT" in block
+    assert "soothe.log" in block
+    assert "timed out" not in block
+
+
+def test_last_tool_result_block_empty_when_only_errors() -> None:
+    messages = [
+        ToolMessage(
+            content="Error: Command timed out after 60s.",
+            tool_call_id="a",
+            name="run_command",
+        ),
+    ]
+    assert _last_tool_result_block(messages) == ""
+
+
 def test_last_tool_result_block_caps_long_tool_output() -> None:
     long_body = "x" * (LAST_TOOL_RESULT_HEAD_CHARS * 4)
     block = _last_tool_result_block(

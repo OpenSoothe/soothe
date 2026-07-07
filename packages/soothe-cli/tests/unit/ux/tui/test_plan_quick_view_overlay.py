@@ -42,6 +42,23 @@ def test_plan_quick_view_content_shows_pending_and_running() -> None:
     assert "STEP-2" in content.plain
 
 
+def test_plan_quick_view_hides_tool_error_summary_on_successful_step() -> None:
+    tree = CognitionGoalTreeMessage(goal="Analyze logs", id="gt-3")
+    tree.complete_step(
+        "ELR-01",
+        True,
+        120_000,
+        61,
+        "Error: Command timed out after 60s. The process group was terminated.",
+    )
+
+    content = tree.plan_quick_view_content()
+
+    assert "ELR-01" in content.plain
+    assert "61 tools" in content.plain
+    assert "timed out" not in content.plain
+
+
 def test_overlay_toggle_expands_and_collapses() -> None:
     """Ctrl+t target toggles expanded state and refresh timer."""
     overlay = PlanQuickViewOverlay()
