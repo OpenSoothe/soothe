@@ -28,6 +28,7 @@ from soothe.foundation.autopilot.monitor.dreaming_prompts import (
     format_ledger_summary,
     format_successful_goals,
 )
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -251,7 +252,13 @@ class DreamingDistillationReasoner:
             system_prompt="You are an expert at analyzing goal execution and extracting memorable episodes for future reference.",
         )
 
-        return self._parse_episodic_response(response_text)
+        result = self._parse_episodic_response(response_text)
+        logger.info(
+            "Dreaming episodic distillation: episodes=%d reasoning=%s",
+            len(result.episodes),
+            preview_first(result.reasoning),
+        )
+        return result
 
     async def distill_procedure(
         self,
@@ -279,7 +286,13 @@ class DreamingDistillationReasoner:
             system_prompt="You are an expert at identifying reusable procedures from successful execution patterns.",
         )
 
-        return self._parse_procedure_response(response_text)
+        result = self._parse_procedure_response(response_text)
+        logger.info(
+            "Dreaming procedure distillation: procedures=%d reasoning=%s",
+            len(result.procedures),
+            preview_first(result.reasoning),
+        )
+        return result
 
     async def distill_semantic(
         self,
@@ -307,7 +320,14 @@ class DreamingDistillationReasoner:
             system_prompt="You are an expert at updating project documentation with actionable knowledge from execution.",
         )
 
-        return self._parse_semantic_response(response_text)
+        result = self._parse_semantic_response(response_text)
+        logger.info(
+            "Dreaming semantic distillation: additions=%d modifications=%d reasoning=%s",
+            len(result.additions),
+            len(result.modifications),
+            preview_first(result.reasoning),
+        )
+        return result
 
     async def distill_profile(
         self,
@@ -335,7 +355,14 @@ class DreamingDistillationReasoner:
             system_prompt="You are an expert at analyzing user interaction patterns to extract preferences.",
         )
 
-        return self._parse_profile_response(response_text)
+        result = self._parse_profile_response(response_text)
+        logger.info(
+            "Dreaming profile distillation: style=%s expertise=%s reasoning=%s",
+            result.communication_style,
+            result.expertise_level,
+            preview_first(result.reasoning),
+        )
+        return result
 
     # ── LLM invocation ──────────────────────────────────────────────────────────────
 
@@ -354,18 +381,19 @@ class DreamingDistillationReasoner:
             HumanMessage(content=prompt),
         ]
 
+        from soothe.middleware._utils import create_llm_call_metadata
         from soothe.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        invoke_config = SootheLangfuse(self._soothe_config).traced_llm(
-            purpose="dreaming_distillation",
-            component="autopilot.monitor.dreaming_reasoner",
-            phase="dreaming",
-            run_name="soothe:dreaming-distill",
-        )
+        invoke_config = {
+            "metadata": create_llm_call_metadata(
+                purpose="dreaming_distillation",
+                component="autopilot.monitor.dreaming_reasoner",
+                phase="dreaming",
+            )
+        }
 
         async def _invoke() -> Any:
             return await self._model.ainvoke(messages, config=invoke_config)

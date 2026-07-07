@@ -25,6 +25,7 @@ from soothe.foundation.autopilot.monitor.verifier_prompts import (
     format_goals_detail,
     format_step_progress,
 )
+from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -270,9 +271,21 @@ class DagVerificationReasoner:
         response_text = await self._invoke_llm(
             prompt,
             system_prompt="You are an expert at analyzing goal DAGs and identifying optimization opportunities.",
+            operation="health",
         )
 
-        return self._parse_health_response(response_text)
+        result = self._parse_health_response(response_text)
+        logger.info(
+            "DAG health verification: reset=%d remove=%d merge=%d decompose=%d "
+            "priority_adjust=%d reasoning=%s",
+            len(result.reset_goals),
+            len(result.remove_goals),
+            len(result.merge_goals),
+            len(result.decompose_goals),
+            len(result.priority_adjustments),
+            preview_first(result.reasoning),
+        )
+        return result
 
     async def verify_post_completion(
         self,
@@ -304,9 +317,21 @@ class DagVerificationReasoner:
         response_text = await self._invoke_llm(
             prompt,
             system_prompt="You are an expert at analyzing goal completion outcomes and determining follow-up actions.",
+            operation="post_completion",
         )
 
-        return self._parse_completion_response(response_text, context.completed_goal_id)
+        result = self._parse_completion_response(response_text, context.completed_goal_id)
+        logger.info(
+            "DAG post-completion verification: goal=%s new_goals=%d redundant=%d ready=%d "
+            "decomposition=%s reasoning=%s",
+            context.completed_goal_id,
+            len(result.new_goals),
+            len(result.redundant_goals),
+            len(result.ready_goals),
+            result.decomposition is not None,
+            preview_first(result.reasoning),
+        )
+        return result
 
     async def analyze_placement(
         self,
@@ -334,18 +359,37 @@ class DagVerificationReasoner:
         response_text = await self._invoke_llm(
             prompt,
             system_prompt="You are an expert at analyzing goal placement in existing DAGs for optimal scheduling.",
+            operation="placement",
         )
 
-        return self._parse_placement_response(response_text)
+        result = self._parse_placement_response(response_text)
+        logger.info(
+            "DAG placement analysis: priority=%d depends_on=%d informs=%d merge_with=%s "
+            "complexity=%s reasoning=%s",
+            result.priority,
+            len(result.depends_on),
+            len(result.informs),
+            result.merge_with,
+            result.complexity,
+            preview_first(result.reasoning),
+        )
+        return result
 
     # ── LLM invocation ──────────────────────────────────────────────────────────────
 
-    async def _invoke_llm(self, prompt: str, system_prompt: str) -> str:
+    async def _invoke_llm(
+        self,
+        prompt: str,
+        system_prompt: str,
+        *,
+        operation: str,
+    ) -> str:
         """Invoke LLM with prompt and return response text.
 
         Args:
             prompt: User prompt content.
             system_prompt: System message for LLM role.
+            operation: Verification operation name for internal metadata.
 
         Returns:
             Raw response text from LLM.
@@ -355,18 +399,20 @@ class DagVerificationReasoner:
             HumanMessage(content=prompt),
         ]
 
+        from soothe.middleware._utils import create_llm_call_metadata
         from soothe.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import SootheLangfuse
 
-        invoke_config = SootheLangfuse(self._soothe_config).traced_llm(
-            purpose="dag_verification",
-            component="autopilot.monitor.verifier_reasoner",
-            phase="background",
-            run_name="soothe:dag-verify",
-        )
+        invoke_config = {
+            "metadata": create_llm_call_metadata(
+                purpose="dag_verification",
+                component="autopilot.monitor.verifier_reasoner",
+                phase="background",
+                operation=operation,
+            )
+        }
 
         async def _invoke() -> Any:
             return await self._model.ainvoke(messages, config=invoke_config)

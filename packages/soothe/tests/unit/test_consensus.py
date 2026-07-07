@@ -1,5 +1,8 @@
 """Tests for the consensus loop (soothe.cognition.consensus)."""
 
+import logging
+from unittest.mock import MagicMock
+
 import pytest
 
 from soothe.foundation.autopilot.engine.consensus import (
@@ -159,3 +162,51 @@ class TestEvaluateGoalCompletion:
                 response_text="I completed the task successfully with detailed results.",
                 model=None,
             )
+
+    async def test_invoke_config_uses_metadata_only(self) -> None:
+        from unittest.mock import AsyncMock
+
+        captured: dict[str, object] = {}
+
+        async def capture_invoke(_prompt: object, config: dict | None = None) -> MagicMock:
+            captured["config"] = config
+            response = MagicMock()
+            response.content = "DECISION: accept\nREASONING: Good."
+            return response
+
+        mock_model = AsyncMock()
+        mock_model.ainvoke = capture_invoke
+
+        await evaluate_goal_completion(
+            goal_description="Write a report",
+            response_text="Done.",
+            model=mock_model,
+        )
+
+        config = captured.get("config")
+        assert isinstance(config, dict)
+        assert not config.get("callbacks")
+        metadata = config.get("metadata")
+        assert isinstance(metadata, dict)
+        assert metadata.get("soothe_call_purpose") == "consensus_vote"
+
+    async def test_logs_consensus_decision(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from unittest.mock import AsyncMock
+
+        mock_model = AsyncMock()
+        mock_model.ainvoke.return_value.content = (
+            "DECISION: accept\nREASONING: Response is comprehensive."
+        )
+
+        with caplog.at_level(logging.INFO):
+            await evaluate_goal_completion(
+                goal_description="Write a report",
+                response_text="Done.",
+                model=mock_model,
+            )
+
+        assert any("Consensus evaluation" in record.message for record in caplog.records)
+        assert any("accept" in record.message for record in caplog.records)
