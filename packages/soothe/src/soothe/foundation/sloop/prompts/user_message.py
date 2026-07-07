@@ -195,6 +195,21 @@ def _render_prior_progress_for_assess(
     return rendered
 
 
+def _render_previous_assessment(last_assessment: dict[str, Any] | None) -> str:
+    """Compact prior assess continuity from CE ``GoalNode.last_assessment`` (IG-557)."""
+    if not last_assessment:
+        return ""
+    status = str(last_assessment.get("status") or "unknown").strip()
+    progress = str(last_assessment.get("goal_progress") or "none").strip()
+    reasoning = str(last_assessment.get("assessment_reasoning") or "").strip()
+    if len(reasoning) > 120:
+        reasoning = reasoning[:119].rstrip() + "…"
+    lines = [f"Status: {status}, Progress: {progress}"]
+    if reasoning:
+        lines.append(f"Reasoning: {reasoning}")
+    return "\n".join(lines)
+
+
 def _should_inject_goal_lineage(
     goal: str,
     goal_lineage: str,
@@ -442,6 +457,7 @@ class UserMessageBuilder:
         plan_coverage: str | None = None,
         omit_prior_progress_hint: bool = True,
         include_plan_coverage: bool = True,
+        last_assessment: dict[str, Any] | None = None,
     ) -> str:
         """Build assess task envelope (allowlist-only, IG-557).
 
@@ -465,6 +481,7 @@ class UserMessageBuilder:
             plan_coverage=plan_coverage,
             omit_prior_progress_hint=omit_prior_progress_hint,
             include_plan_coverage=include_plan_coverage,
+            last_assessment=last_assessment,
         )
 
     def build_plan_assess_message_v2(
@@ -477,8 +494,9 @@ class UserMessageBuilder:
         plan_coverage: str | None = None,
         omit_prior_progress_hint: bool = True,
         include_plan_coverage: bool = True,
+        last_assessment: dict[str, Any] | None = None,
     ) -> str:
-        """Assess allowlist envelope: GOAL, PRIOR PROGRESS, PLAN COVERAGE, TASK."""
+        """Assess allowlist envelope: GOAL, PRIOR PROGRESS, PREVIOUS ASSESSMENT, PLAN COVERAGE, TASK."""
         sections: list[tuple[str, str]] = [("GOAL", _goal_text(goal))]
 
         mode = projection_mode or "mid_goal"
@@ -498,6 +516,10 @@ class UserMessageBuilder:
                     ),
                 )
             )
+
+        previous = _render_previous_assessment(last_assessment)
+        if previous:
+            sections.append(("PREVIOUS ASSESSMENT", previous))
 
         if include_plan_coverage and (plan_coverage or "").strip():
             sections.append(("PLAN COVERAGE", plan_coverage.strip()))

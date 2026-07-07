@@ -469,10 +469,14 @@ class PromptBuilder:
         )
 
         if kind == "assess":
+            last_assessment = None
+            if context_bundle is not None and context_bundle.active_goal is not None:
+                last_assessment = context_bundle.active_goal.last_assessment
             return builder.build_plan_assess_message(
                 **common_kwargs,
                 plan_coverage=plan_coverage,
                 omit_prior_progress_hint=omit_prior_progress_hint,
+                last_assessment=last_assessment,
             )
         generate_kwargs: dict[str, Any] = {
             **common_kwargs,
