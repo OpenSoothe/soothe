@@ -16,7 +16,7 @@ Minimal echo subagent for testing soothe-plugins integration. See [CONTRIBUTING.
 
 ### Skillify (core)
 
-Skill warehouse indexing and semantic retrieval — **built into `soothe`** (`soothe.subagents.skillify`), not this package. Enable via `subagents.skillify` in config.
+Skill warehouse indexing and semantic retrieval — **built into `soothe`** (`soothe.foundation.skillify`), not this package. Enable via top-level `skillify:` in config.
 
 ### Weaver
 

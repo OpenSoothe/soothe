@@ -126,6 +126,11 @@ def warmup_worker_runner_on_loop(
 
     materialize_start = time.perf_counter()
     try:
+        if config.skillify.enabled:
+            from soothe.foundation.skillify import start_skillify_service
+
+            loop.run_until_complete(start_skillify_service(config))
+
         loop.run_until_complete(
             _warmup_worker_core_agent(
                 cached_runner,

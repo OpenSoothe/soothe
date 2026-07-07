@@ -40,7 +40,9 @@ The critical contract: **state must include `messages: Annotated[list, add_messa
 
 ## Built-in Subagents
 
-The core `soothe` package ships six built-in subagents: **planner**, **deep_research**, **academic_research**, **browser_use**, **skillify**, and **veritas**. Each is registered via the `@plugin` + `@subagent` decorator pattern (except veritas, which is a direct structured-output call invoked by `AutoClarificationPolicy`).
+The core `soothe` package ships five built-in subagents: **planner**, **deep_research**, **academic_research**, **browser_use**, and **veritas**. Each is registered via the `@plugin` + `@subagent` decorator pattern (except veritas, which is a direct structured-output call invoked by `AutoClarificationPolicy`).
+
+Semantic skill search is provided by the daemon-shared **SkillifyService** (`foundation/skillify/`), not a subagent. Agents discover deferred skills via the `search_skills` tool when `progressive_skills.semantic_search_enabled` is true.
 
 ### Planner (RFC-618): Structured Planning with Iterative Refinement
 
@@ -74,10 +76,6 @@ Veritas is unique — it's not a general-purpose subagent but a **single structu
 
 If veritas cannot answer with sufficient confidence, it sets `defer=True` and the loop transitions the goal to `awaiting_clarification` for out-of-band human resolution. This is the autonomous-mode safety valve: the system attempts self-resolution before blocking on human input.
 
-### Skillify: Semantic Skill Retrieval
-
-Skillify is the skill warehouse subagent — it indexes and retrieves skills using semantic search. It provides a `SkillRetriever` that builds an incremental, mtime-cached index of user skills, enabling the agent to discover relevant skills by semantic similarity rather than keyword matching.
-
 ### Browser Use (Opt-in)
 
 **browser_use**: Browser automation (navigate, click, fill, extract, screenshot). Ships with base `soothe` dependencies but `on_load` verifies runtime deps.
@@ -92,7 +90,6 @@ Subagents use specific model roles, not the main agent's model. This is a cost o
 | deep_research | `fast` | Query generation and summarization are fast-model tasks |
 | academic_research | `fast` | Same fast-model profile as deep_research |
 | browser_use | `default` | Browser step planning uses the default model |
-| skillify | `default` | Skill retrieval uses the default model |
 
 The planner subagent's primary model always uses the router's `think` role — planning quality directly determines execution quality. Note that `subagents.<name>.model` config overrides are **ignored** for built-in subagents; the role is fixed by design.
 

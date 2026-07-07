@@ -31,7 +31,7 @@ This RFC replaces deepagents' always-emit-all skill listing with a progressive d
 
 **Changes**:
 
-1. **`search_skills`** — when `progressive_skills.semantic_search_enabled`, substring results are supplemented by Skillify vector retrieval (`subagents/skillify/runtime.py` shared retriever).
+1. **`search_skills`** — when `progressive_skills.semantic_search_enabled`, substring results are supplemented by Skillify vector retrieval (`foundation/skillify` daemon-shared service).
 2. **Turn-0 intent prefetch** — when `progressive_skills.intent_prefetch_enabled`, `SkillActivationMiddleware.abefore_agent` matches deferred skill names in the first user message (corpus match) and optionally semantic top-K; sets `intent_prefetched` so prefetch runs once per thread.
 3. **Config** — `semantic_search_enabled`, `semantic_search_min_score`, `intent_prefetch_enabled`, `intent_prefetch_top_k`, `intent_prefetch_min_query_chars`.
 

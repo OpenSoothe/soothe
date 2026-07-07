@@ -53,11 +53,9 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     from soothe.subagents.browser_use import create_browser_use_subagent
     from soothe.subagents.deep_research import create_deep_research_subagent
     from soothe.subagents.plan import create_plan_subagent
-    from soothe.subagents.skillify import create_skillify_subagent
 
     return {
         "planner": create_plan_subagent,
-        "skillify": create_skillify_subagent,
         "deep_research": create_deep_research_subagent,
         "academic_research": create_academic_research_subagent,
         "browser_use": create_browser_use_subagent,
@@ -595,10 +593,6 @@ def resolve_subagents(
         if name in ("deep_research", "academic_research"):
             # Research YAML options live in ``config.subagents[name].config`` only.
             # Factories accept ``model``, ``SootheConfig``, and ``context``.
-            extra_kwargs.clear()
-            extra_kwargs["config"] = config
-            extra_kwargs["context"] = {"work_dir": resolved_cwd}
-        elif name == "skillify":
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}

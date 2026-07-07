@@ -178,22 +178,22 @@ async def search_deferred_skills(
     if len(substring) >= limit:
         return substring[:limit]
 
+    service = None
     try:
-        from soothe.config import SootheConfig
-        from soothe.subagents.skillify.runtime import get_skillify_retriever
+        from soothe.foundation.skillify import start_skillify_service
 
         if not isinstance(config, SootheConfig):
             return substring
-        retriever = get_skillify_retriever(config)
+        service = await start_skillify_service(config)
     except Exception:
         logger.debug("[Skill] Skillify import failed", exc_info=True)
         return substring
 
-    if retriever is None:
+    if service is None:
         return substring
 
     try:
-        bundle = await retriever.retrieve(query, top_k=limit)
+        bundle = await service.retrieve(query, top_k=limit)
     except Exception:
         logger.debug("[Skill] Skillify retrieve failed", exc_info=True)
         return substring

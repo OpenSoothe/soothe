@@ -288,7 +288,7 @@ Subagents are specialized helper agents:
 - `academic_research` - Academic literature research
 - `browser_use` - Browser automation
 - `veritas` - Clarification auto-answerer in autonomous mode
-- `skillify` - Semantic skill retrieval
+- `SkillifyService` - Semantic skill search (daemon-shared; configure via `skillify:`)
 
 **Configure**:
 ```yaml

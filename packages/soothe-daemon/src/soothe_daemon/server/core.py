@@ -726,6 +726,15 @@ class SootheDaemon(DaemonHandlersMixin):
                     exc_info=True,
                 )
 
+            if self._config.skillify.enabled:
+                try:
+                    from soothe.foundation.skillify import start_skillify_service
+
+                    if await start_skillify_service(self._config) is not None:
+                        logger.info("[Skillify] Daemon service started")
+                except Exception:
+                    logger.warning("Failed to start Skillify service at startup", exc_info=True)
+
             if self._persistence_manager is None:
                 if self._config.persistence.default_backend == "postgresql":
                     self._persistence_manager = (
@@ -1640,6 +1649,15 @@ class SootheDaemon(DaemonHandlersMixin):
                 logger.info("[MCP] Registry shutdown complete")
             except Exception:
                 logger.warning("[MCP] Registry shutdown error", exc_info=True)
+
+        if self._config.skillify.enabled:
+            try:
+                from soothe.foundation.skillify import stop_skillify_service
+
+                await stop_skillify_service()
+                logger.info("[Skillify] Service shutdown complete")
+            except Exception:
+                logger.warning("[Skillify] Service shutdown error", exc_info=True)
 
         try:
             from soothe_daemon.persistence import reap_stale_soothe_worker_processes

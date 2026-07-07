@@ -1,10 +1,10 @@
-"""Tests for Skillify runtime warehouse path resolution."""
+"""Tests for Skillify service warehouse path resolution."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.subagents.skillify.runtime import _default_warehouse_paths, resolve_warehouse_paths
+from soothe.foundation.skillify.service import _default_warehouse_paths, resolve_warehouse_paths
 
 
 def test_default_warehouse_paths_include_user_skill_dirs(tmp_path: Path) -> None:

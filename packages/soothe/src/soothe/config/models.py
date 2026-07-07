@@ -2403,6 +2403,22 @@ class VeritasConfig(BaseModel):
     """How many recent step outputs to include in the veritas user prompt."""
 
 
+class SkillifyConfig(BaseModel):
+    """Configuration for the daemon-shared Skillify semantic skill search service."""
+
+    enabled: bool = True
+    warehouse_paths: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Extra SKILL.md roots for vector indexing. "
+            "Defaults (~/.soothe/skills and ~/.agents/skills) are always prepended when absent."
+        ),
+    )
+    index_collection: str = "soothe_skillify"
+    index_interval_seconds: int = 300
+    retrieval_top_k: int = 10
+
+
 class CronConfig(BaseModel):
     """RFC-229: configuration for the cron service.
 

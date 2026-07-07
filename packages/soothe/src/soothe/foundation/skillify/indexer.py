@@ -70,7 +70,6 @@ class SkillIndexer:
         self._embedding_dims = embedding_dims
         self._hash_cache: dict[str, str] = {}
         self._task: asyncio.Task[None] | None = None
-        self._start_task: asyncio.Task[None] | None = None
         self._initialized = False
         self._total_indexed = 0
         self._ready_event: asyncio.Event | None = None
@@ -110,10 +109,12 @@ class SkillIndexer:
         self._task = None
 
         if hasattr(self._vector_store, "close"):
-            try:
-                await self._vector_store.close()
-            except Exception:
-                logger.debug("Failed to close vector store", exc_info=True)
+            owns_pool = getattr(self._vector_store, "_owns_pool", True)
+            if owns_pool:
+                try:
+                    await self._vector_store.close()
+                except Exception:
+                    logger.debug("Failed to close vector store", exc_info=True)
 
         logger.info("Skillify background indexer stopped")
 

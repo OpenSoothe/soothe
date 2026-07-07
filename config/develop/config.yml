@@ -189,3 +189,13 @@ progressive_skills:
   core_intent_auto_invoke_enabled: true
   intent_prefetch_top_k: 2
   intent_prefetch_min_query_chars: 4
+
+# ============================================================
+# SKILLIFY (daemon-shared semantic skill search)
+# ============================================================
+skillify:
+  enabled: true
+  warehouse_paths: []
+  index_collection: soothe_skillify
+  index_interval_seconds: 300
+  retrieval_top_k: 10

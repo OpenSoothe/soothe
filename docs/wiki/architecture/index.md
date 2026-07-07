@@ -72,7 +72,8 @@ ContextEngine manages the goal DAG (priorities, dependencies, decomposition). St
 | **protocols/** | Protocol definitions | memory, planner, policy, durability, vector_store, loop_planner, loop_working_memory, core_agent, operation_security |
 | **backends/** | Protocol implementations | memory, durability, vector_store, persistence |
 | **middleware/** | Soothe middleware stack | identity, policy, system_prompt, llm_rate_limit, workspace_context, per_turn_model, filesystem, code_interpreter, mcp_tool_search, tool_timeout |
-| **subagents/** | Built-in subagents | planner, deep_research, academic_research, browser_use, skillify, veritas |
+| **subagents/** | Built-in subagents | planner, deep_research, academic_research, browser_use, veritas |
+| **foundation/skillify/** | Daemon-shared skill search | SkillifyService indexer + retriever |
 | **skills/** | Agent skills | builtin_skills, registry, budget |
 | **mcp/** | MCP integration | server management, tool discovery |
 | **config/** | Configuration | SootheConfig, model routing |

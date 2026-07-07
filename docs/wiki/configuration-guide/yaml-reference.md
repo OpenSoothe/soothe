@@ -43,7 +43,8 @@ The full set of sections:
 | `router` | `ModelRouter` | **Derived** (not in YAML) — role → `provider:model` mapping |
 | `embedding_dims` | int | **Derived** from active profile; must match embedding model |
 | `agent` | `AgentConfig` | Identity, loop, autonomous mode, protocols |
-| `subagents` | `SubagentConfig` (dict) | planner / deep_research / academic_research / browser_use / skillify / veritas |
+| `subagents` | `SubagentConfig` (dict) | planner / deep_research / academic_research / browser_use / veritas |
+| `skillify` | `SkillifyConfig` | Daemon-shared semantic skill warehouse indexing and retrieval |
 | `tools` | `ToolsConfig` | Tool group enable/disable + config |
 | `mcp_servers` | `MCPServerConfig` (list) | External MCP server connections |
 | `observability` | `ObservabilityConfig` | Logging, verbosity, Langfuse |
@@ -116,7 +117,7 @@ The `default` sentinel in durability lets you set the backend once in `persisten
 
 A dict of `SubagentConfig` entries. Each has `enabled`, `model` (null → falls back to `fast` role), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. `deep_research` and `academic_research` take `config.effort` (`normal` | `thorough`); `planner` takes `config.routing` (auto/always_direct/always_planner).
 
-Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `skillify`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Claude Code runs via `agent.core_agent_backend`, not as a subagent.
+Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Semantic skill search uses top-level `skillify:` (not a subagent). Claude Code runs via `agent.core_agent_backend`, not as a subagent.
 
 ## Tools
 

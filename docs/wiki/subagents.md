@@ -13,7 +13,7 @@ audience: user
 > role resolution of subagents, see
 > **[Subagents Architecture](capabilities/subagents.md)**.
 
-Core Soothe ships six built-in subagents: **planner**, **deep_research**, **academic_research**, **browser_use**, **veritas**, and **skillify**. Additional optional delegated agents (e.g. **weaver** and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.
+Core Soothe ships five built-in subagents: **planner**, **deep_research**, **academic_research**, **browser_use**, and **veritas**. Semantic skill discovery uses the daemon-shared **Skillify** service via the `search_skills` tool (see `skillify` in config). Additional optional delegated agents (e.g. **weaver** and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.
 
 ## Overview
 
@@ -23,8 +23,9 @@ Core Soothe ships six built-in subagents: **planner**, **deep_research**, **acad
 | Academic Research | `/academic_research <query>` | Papers, literature reviews, citations |
 | Planner | `/plan` or `/plan <prompt>` | Plan-mode routing |
 | Browser Use | `/browser_use <url>` | Browser automation and web interaction |
-| Skillify | `/skillify <query>` | Semantic skill retrieval |
 | Veritas | (auto-invoked) | Clarification auto-answerer in autonomous mode |
+
+Semantic skill search is **not** a subagent — use the `search_skills` tool or ask the agent to search deferred skills. Configure via top-level `skillify:` (see [YAML reference](configuration-guide/yaml-reference.md)).
 
 **Local codebase analysis** uses the main agent's file tools (`read_file`, `grep`, `glob`) — not the research subagents.
 
@@ -93,29 +94,6 @@ subagents:
 
 Requires DeepXiv credentials (`DEEPXIV_API_KEY` / `DEEPXIV_TOKEN`) when configured.
 
-## Skillify Agent
-
-Semantic skill warehouse indexing and retrieval agent.
-
-**Capabilities**:
-- Index and retrieve skills from the local skill warehouse
-- Semantic search over skill metadata and descriptions
-- Return structured skill bundles for execution
-- Supports incremental index updates (mtime-cached)
-
-**Usage**:
-```bash
-/skillify Find skills related to code review
-/skillify Show me skills for git operations
-```
-
-**Configuration**:
-```yaml
-subagents:
-  skillify:
-    enabled: true
-```
-
 ## Browser Use Agent
 
 Browser automation specialist for web navigation and interaction.
@@ -155,7 +133,6 @@ Planning and task decomposition for complex multi-step tasks.
 /academic_research <query>  # Academic literature research
 /plan <prompt>              # Planner
 /browser_use <url>          # Browser automation
-/skillify <query>           # Skill retrieval
 ```
 
 Without a slash command, queries go to the main agent.

@@ -95,14 +95,31 @@ class TestSootheConfig:
         assert "deep_research" in cfg.subagents
         assert "academic_research" in cfg.subagents
         assert "browser_use" in cfg.subagents
-        assert "skillify" in cfg.subagents
+        assert "skillify" not in cfg.subagents
         assert "claude" not in cfg.subagents
         assert "explore" not in cfg.subagents
         assert "scout" not in cfg.subagents
-        for name in ("planner", "deep_research", "academic_research", "skillify"):
+        for name in ("planner", "deep_research", "academic_research"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
         assert cfg.subagents["browser_use"].enabled is True
         assert cfg.subagents["browser_use"].model_role == "default"
+
+    def test_default_skillify_config(self) -> None:
+        cfg = SootheConfig()
+        assert cfg.skillify.enabled is True
+        assert cfg.skillify.retrieval_top_k == 10
+
+    def test_legacy_subagents_skillify_is_stripped(self) -> None:
+        cfg = SootheConfig(
+            subagents={
+                "skillify": {
+                    "enabled": False,
+                    "config": {"retrieval_top_k": 5},
+                }
+            }
+        )
+        assert "skillify" not in cfg.subagents
+        assert cfg.skillify.enabled is True
 
     def test_assistant_name_default(self) -> None:
         cfg = SootheConfig()
