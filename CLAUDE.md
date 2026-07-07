@@ -36,6 +36,16 @@ Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests
 ### 7. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
 
+### 8. No Keyword Heuristics (RFC-630)
+Prefer **structured light-LLM fields** or **declarative config rules** over keyword/regex content-judgment heuristics.
+
+- **Content judgment** (intent, identity, routing hints, failure classification): use Pass 1/2 structured output or a dedicated fast-model call — not keyword lists or regex on user text.
+- **Structural controls** (e.g. `continue`/`resume`, checkpoint gates, status vocabulary): deterministic rules are fine.
+- **Thresholds and banned patterns**: put in config (`agent.loop.rules`, etc.), not magic numbers or inline regex in module bodies.
+- **If a keyword/regex heuristic seems required**: stop and ask the user to confirm before implementing. Propose the LLM or config-rules alternative first.
+
+See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLoop migration pattern.
+
 ---
 
 ## 📁 Structure
