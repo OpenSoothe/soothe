@@ -49,9 +49,9 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "dashscope:glm-5.2"
+      default: "coding-plan:glm-5"
       fast: "coding-plan:kimi-k2.5"
-      think: "dashscope:glm-5.2"
+      think: "coding-plan:glm-5"
       image: "coding-plan:kimi-k2.5"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
       embedding: "omlx:nomicai-modernbert-embed-base-bf16"
