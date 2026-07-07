@@ -274,7 +274,11 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
   - Status: Draft
   - Kind: Architecture Design
 
-- **2026-05-21**: RFC-619 - Tacitus Subagent
+- **2026-07-07**: RFC-619 revised — Deep Research Subagent (`deep_research` web-only + `academic_research`; adaptive report)
+  - Status: Accepted (revised)
+  - Kind: Architecture Design
+
+- **2026-05-21**: RFC-619 - Deep Research Subagent (superseded by 2026-07-07 revision)
   - Status: Accepted
   - Kind: Architecture Design
   - Authors: Soothe Team
@@ -672,7 +676,7 @@ RFCs are organized into numbered series by category:
 - RFC-616: Scenario-Driven Goal Completion Synthesis
 - RFC-901: OperationSecurityProtocol: Unified Workspace and Tool Operation Security
 - RFC-618: Plan Subagent — Structured Planning with Explore Delegation
-- RFC-619: Tacitus Subagent
+- RFC-619: Deep Research Subagent
 - RFC-620: Unified Channel Architecture for Extensible Communication Endpoints
 - RFC-621: Workspace Host Convention: Path Mapping for Containerized Daemon
 - RFC-622: CoreAgent Clarification Relay

@@ -121,15 +121,17 @@ Subagents inherit the `fast` router role by default. Override per-subagent when 
 
 ```yaml
 subagents:
-  tacitus:
-    model: anthropic:claude-sonnet-4-20250514
+  deep_research:
     config:
       effort: thorough
-  plan:
+  academic_research:
+    config:
+      effort: normal
+  planner:
     model: think  # uses the think router role
 ```
 
-**Rule of thumb:** `tacitus` wants quality (strong model, thorough effort); `plan` wants reasoning (use the `think` role); `browser_use` wants vision-capable models. Disabling all three puts you in single-agent mode — simpler but no parallelism or specialized planning.
+**Rule of thumb:** research subagents use the `fast` role by default; `planner` wants reasoning (use the `think` role); `browser_use` wants vision-capable models. Disabling all subagents puts you in single-agent mode — simpler but no parallelism or specialized planning.
 
 ## MCP Servers
 

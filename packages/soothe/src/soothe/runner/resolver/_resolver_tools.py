@@ -49,15 +49,17 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
 
     This avoids importing heavy subagent modules at module load time.
     """
+    from soothe.subagents.academic_research import create_academic_research_subagent
     from soothe.subagents.browser_use import create_browser_use_subagent
+    from soothe.subagents.deep_research import create_deep_research_subagent
     from soothe.subagents.plan import create_plan_subagent
     from soothe.subagents.skillify import create_skillify_subagent
-    from soothe.subagents.tacitus import create_tacitus_subagent
 
     return {
         "planner": create_plan_subagent,
         "skillify": create_skillify_subagent,
-        "tacitus": create_tacitus_subagent,
+        "deep_research": create_deep_research_subagent,
+        "academic_research": create_academic_research_subagent,
         "browser_use": create_browser_use_subagent,
     }
 
@@ -153,7 +155,7 @@ def resolve_tools(
     import time
 
     # Get list of enabled tool group names
-    # Note: "tacitus" is a subagent, not a tool group - handled in resolve_subagents()
+    # Note: "deep_research" is a subagent, not a tool group - handled in resolve_subagents()
     _tool_groups = [
         "execution",
         "file_ops",
@@ -562,7 +564,7 @@ def resolve_subagents(
 
         if name == "claude":
             model_override = None
-        elif name == "tacitus":
+        elif name in ("deep_research", "academic_research"):
             model_override = sub_cfg.model or config.create_chat_model("fast")
         elif name == "planner":
             # Built-in: always the router ``think`` role (ignore ``subagents.planner.model``).
@@ -590,9 +592,9 @@ def resolve_subagents(
             continue
 
         extra_kwargs: dict = dict(sub_cfg.config)
-        if name == "tacitus":
-            # Tacitus YAML options live in ``config.subagents["tacitus"].config`` only.
-            # ``create_tacitus_subagent`` accepts ``model``, ``SootheConfig``, and ``context``.
+        if name in ("deep_research", "academic_research"):
+            # Research YAML options live in ``config.subagents[name].config`` only.
+            # Factories accept ``model``, ``SootheConfig``, and ``context``.
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}

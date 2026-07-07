@@ -8,13 +8,13 @@
 
 ## Executive Summary
 
-The TUI does not display arguments for tool calls made by subagents (explore, tacitus, etc.). The root cause is a bug in `filter_redundant_stream_tool_updates()` that incorrectly filters ALL tool updates when they have complete args, not just redundant ones. This breaks the display contract for task delegations and subgraph tool activity.
+The TUI does not display arguments for tool calls made by subagents (explore, deep_research, etc.). The root cause is a bug in `filter_redundant_stream_tool_updates()` that incorrectly filters ALL tool updates when they have complete args, not just redundant ones. This breaks the display contract for task delegations and subgraph tool activity.
 
 ---
 
 ## Problem Statement
 
-When a subagent (explore, tacitus) executes and makes tool calls:
+When a subagent (explore, deep_research) executes and makes tool calls:
 
 - ✅ The subagent's `task` delegation card shows `Explore(description)` or similar
 - ❌ **Missing**: Individual tool calls like `grep(pattern=...)`, `ls(path=...)` are not shown

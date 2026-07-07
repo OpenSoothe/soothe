@@ -35,7 +35,7 @@ The critical contract: **state must include `messages: Annotated[list, add_messa
 
 ## Built-in Subagents
 
-The core `soothe` package ships five built-in subagents: **planner**, **tacitus**, **browser_use**, **skillify**, and **veritas**. Each is registered via the `@plugin` + `@subagent` decorator pattern (except veritas, which is a direct structured-output call invoked by `AutoClarificationPolicy`).
+The core `soothe` package ships six built-in subagents: **planner**, **deep_research**, **academic_research**, **browser_use**, **skillify**, and **veritas**. Each is registered via the `@plugin` + `@subagent` decorator pattern (except veritas, which is a direct structured-output call invoked by `AutoClarificationPolicy`).
 
 ### Planner (RFC-618): Structured Planning with Iterative Refinement
 
@@ -47,15 +47,21 @@ Planner is a multi-round planning subagent: it iteratively refines a markdown ex
 - **Bounded cost** — explicit cap on `max_plan_rounds` prevents runaway refinement loops.
 - **Registered as `name="planner"`** — the subagent directory is `plan/` but the plugin and subagent name is `planner`. Triggers include `planner`, `decompose`, `roadmap`, `break down`.
 
-### Tacitus (RFC-619): Public-Domain Research
+### Deep Research (RFC-619): Public Web Research
 
-Tacitus is the research subagent for public-domain sources: web search, Wikipedia, academic papers, and URL crawling. Its architecture is analyze → generate_queries → gather → summarize → reflect → (iterate or synthesize).
+`deep_research` is the built-in subagent for **iterative public web research**: plan → web search → crawl top URLs → summarize → reflect → adaptive report. Local repository analysis stays on the main agent file tools.
 
 **Key design decisions:**
-- **Public-only boundary** — tacitus deliberately restricts itself to public information sources. This is a trust boundary: research results don't access private data, making the subagent safe for autonomous use.
-- **Semantic routing** — a `PublicSemanticRouter` uses sentence-transformer embeddings to select which sources to query based on semantic similarity between the query and each capability's description. This is smarter than keyword matching — it routes "climate change effects" to academic search even without the word "paper."
-- **Fast-paths** — URL regex patterns trigger `url_crawl` inclusion; arXiv ID patterns boost `academic_search`. These heuristics shortcut the semantic router for obvious cases.
-- **Domain profiles** — `public` (all sources), `web`, `academic` — restricts the source set for focused research.
+- **Web-only boundary** — never reads local repository files; may research public docs about a stack or topic.
+- **Crawl-on-discovery** — after each search, crawls the top-N result URLs via shared `url_crawl`.
+- **Adaptive report** — research-native scenario classifier (RFC-616 pattern) with mandatory Scope banner.
+- **Effort** — `normal` | `thorough` (loop depth and crawl breadth).
+
+### Academic Research (RFC-619 §11): Academic Literature
+
+`academic_research` mirrors the same engine pattern for **academic sources only** (DeepXiv) plus shared `url_crawl` for paper URLs. Scenarios include literature review, paper comparison, and method survey.
+
+Use `deep_research` for general web/industry facts; use `academic_research` for papers and citations.
 
 ### Veritas (RFC-622): Intent-Grounded Clarification
 
@@ -78,7 +84,8 @@ Subagents use specific model roles, not the main agent's model. This is a cost o
 | Subagent | Model Role | Rationale |
 |----------|------------|-----------|
 | planner | `think` | Plan design needs the strongest reasoning model |
-| tacitus | `fast` | Query generation and summarization are fast-model tasks |
+| deep_research | `fast` | Query generation and summarization are fast-model tasks |
+| academic_research | `fast` | Same fast-model profile as deep_research |
 | browser_use | `default` | Browser step planning uses the default model |
 | skillify | `default` | Skill retrieval uses the default model |
 
@@ -136,7 +143,7 @@ The factory function builds a `StateGraph`, adds nodes and conditional edges, an
 | [RFC-600](../../specs/RFC-600-plugin-extension-system.md) | Plugin Extension System |
 | [RFC-601](../../specs/RFC-601-built-in-agents.md) | Built-in Plugin Agents |
 | [RFC-618](../../specs/RFC-618-plan-subagent-delegation.md) | Plan Subagent |
-| [RFC-619](../../specs/RFC-619-tacitus-subagent.md) | Tacitus Subagent |
+| [RFC-619](../../specs/RFC-619-deep-research-subagent.md) | Deep Research Subagent |
 | [RFC-622](../../specs/RFC-622-coreagent-clarification-relay.md) | Veritas Auto-Clarification |
 
 ---

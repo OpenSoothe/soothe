@@ -57,7 +57,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 ### 🤖 Core Capabilities
 
 - **[Autonomous Mode](autonomous-mode.md)** - Multi-step autonomous task execution
-- **[Subagents](subagents.md)** - Specialized subagents (planner, tacitus, veritas, etc.)
+- **[Subagents](subagents.md)** - Specialized subagents (planner, deep_research, academic_research, veritas, etc.)
 - **[Thread Management](thread-management.md)** - Conversation threads and session resumption
 
 ### 🔧 Configuration & Management

@@ -97,7 +97,7 @@ ModelRole = Literal["default", "fast", "think", "image", "ocr", "embedding"]
 
 - ``default``: Main orchestrator reasoning (CoreAgent, failure analysis, system context).
 - ``fast``: Cheap/fast operations (intent classification, routing, scenario classification,
-  tacitus subagents, memory extraction, document/audio tooling).
+  deep_research subagents, memory extraction, document/audio tooling).
 - ``think``: Stronger reasoning (planning, consensus validation, backoff reasoning).
 - ``image``: Vision-capable model (image analysis, daemon vision preflight).
 - ``ocr``: Dedicated OCR / document text extraction model.

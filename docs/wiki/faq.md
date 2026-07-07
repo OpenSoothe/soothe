@@ -284,21 +284,22 @@ Subagents are specialized helper agents:
 
 **Built-in** (always available):
 - `planner` - Planning delegate
-- `tacitus` - Deep public-domain research
+- `deep_research` - Public web research
+- `academic_research` - Academic literature research
 - `browser_use` - Browser automation
-- `veritas` - Verification and fact-checking
-
-**Community** (requires `soothe-plugins`):
-- `claude` - Anthropic Claude delegation
+- `veritas` - Clarification auto-answerer in autonomous mode
+- `skillify` - Semantic skill retrieval
 
 **Configure**:
 ```yaml
 subagents:
-  tacitus:
+  deep_research:
     enabled: true
     config:
-      llm_role: fast
-      synthesis_role: think
+      effort: normal  # normal | thorough
+  academic_research:
+    enabled: true
+    config:
       effort: normal
 ```
 

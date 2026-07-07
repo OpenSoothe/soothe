@@ -111,7 +111,7 @@ def iter_messages_for_delegate_task_scan(chunk: Any) -> Iterator[ToolMessage]:
     """Yield ``task`` tool messages from **namespaced** ``messages`` stream chunks only.
 
     Root-graph chunks are handled by :func:`iter_messages_for_act_aggregation`. Compiled
-    subgraphs (e.g. Tacitus) may emit the parent delegation's ``ToolMessage`` only under a
+    subgraphs (e.g. Deep Research) may emit the parent delegation's ``ToolMessage`` only under a
     non-empty LangGraph namespace; those must still contribute delegate-final text (IG-355).
 
     Args:

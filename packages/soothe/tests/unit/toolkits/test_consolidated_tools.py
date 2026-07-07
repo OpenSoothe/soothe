@@ -340,7 +340,7 @@ class TestDomainScopedPrompts:
         assert "run_command" in _SHELL_GUIDE or "execute" in _SHELL_GUIDE.lower()
         assert "data" in _DATA_GUIDE.lower()
         assert "planner" in _SUBAGENT_GUIDE.lower()
-        assert "tacitus" in _SUBAGENT_GUIDE.lower()
+        assert "deep_research" in _SUBAGENT_GUIDE.lower()
 
     def test_orchestration_guide_has_all_domains(self) -> None:
         from soothe.foundation.sloop.prompts import _TOOL_ORCHESTRATION_GUIDE

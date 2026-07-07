@@ -5,12 +5,13 @@ from __future__ import annotations
 # Display names for known soothe core subagents (IG-517).
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "planner": "Planner",
-    "tacitus": "Tacitus",
+    "deep_research": "Deep Research",
+    "academic_research": "Academic Research",
     "browser_use": "Browser",
 }
 
 # Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
-SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("tacitus",)
+SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("deep_research", "academic_research")
 
 BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_SLASH_ROUTE_IDS)
 
@@ -33,7 +34,7 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/tacitus``)
+    Detects subagent routing commands (e.g. ``/deep_research``)
     and extracts the subagent name along with the cleaned input text.
 
     Args:
@@ -45,7 +46,7 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
         The subcommand is removed from ``cleaned_text``.
 
     Examples:
-        ``"/tacitus check this"`` -> ``("tacitus", "check this")``
+        ``"/deep_research check this"`` -> ``("deep_research", "check this")``
         ``"hello world"`` -> ``(None, "hello world")``
     """
     first_match: tuple[int, str] | None = None

@@ -114,8 +114,13 @@ COMMANDS: tuple[SlashCommand, ...] = (
         hidden_keywords="continue history sessions loops",
     ),
     SlashCommand(
-        name="/tacitus",
-        description="Route prompt to Tacitus subagent (usage: /tacitus <query>)",
+        name="/deep_research",
+        description="Route prompt to deep_research subagent (usage: /deep_research <query>)",
+        bypass_tier=BypassTier.QUEUED,
+    ),
+    SlashCommand(
+        name="/academic_research",
+        description="Route prompt to academic_research subagent (usage: /academic_research <query>)",
         bypass_tier=BypassTier.QUEUED,
     ),
     SlashCommand(

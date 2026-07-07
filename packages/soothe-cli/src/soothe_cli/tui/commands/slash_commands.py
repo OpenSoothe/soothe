@@ -274,10 +274,16 @@ COMMANDS: dict[str, dict[str, Any]] = {
     },
     # Daemon routing commands (3)
     "/plan": {"location": "daemon", "type": "routing", "description": "Trigger plan mode"},
-    "/tacitus": {
+    "/deep_research": {
         "location": "daemon",
         "type": "routing",
-        "description": "Route query to Tacitus subagent",
+        "description": "Route query to Deep Research subagent",
+        "requires_query": True,
+    },
+    "/academic_research": {
+        "location": "daemon",
+        "type": "routing",
+        "description": "Route query to Academic Research subagent",
         "requires_query": True,
     },
 }

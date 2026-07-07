@@ -25,13 +25,13 @@ _BUILTIN_WIRE_SUBAGENTS = frozenset(
         "planner",
         "skillify",
         "browser_use",
-        "tacitus",
+        "deep_research",
     }
 )
 
 _EXPLICIT_SUBAGENT_GOAL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bbrowser[_\s-]?use\b", re.IGNORECASE), "browser_use"),
-    (re.compile(r"\btacitus\b", re.IGNORECASE), "tacitus"),
+    (re.compile(r"\bdeep[_\s-]?research\b", re.IGNORECASE), "deep_research"),
     (re.compile(r"\b(?:/plan|planner)\b", re.IGNORECASE), "planner"),
     (re.compile(r"\bskillify\b", re.IGNORECASE), "skillify"),
 )
@@ -90,7 +90,7 @@ class PlanGenerateStep(BaseModel):
         kind: ``action`` (normal) or ``ask_user`` (clarification relay).
         questions: Questions for ``ask_user`` steps.
         execution_hint: Preferred execution routing from the planner.
-        subagent: Subagent name when ``execution_hint='subagent'`` (e.g. ``tacitus``).
+        subagent: Subagent name when ``execution_hint='subagent'`` (e.g. ``deep_research``).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])

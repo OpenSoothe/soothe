@@ -15,13 +15,13 @@ def _ensure_task_tool_patch() -> None:
 
 
 def _sample_subagents() -> list[dict[str, object]]:
-    tacitus_runnable = MagicMock()
+    deep_research_runnable = MagicMock()
     gp_runnable = MagicMock()
     return [
         {
-            "name": "tacitus",
+            "name": "deep_research",
             "description": "Research and evidence gathering",
-            "runnable": tacitus_runnable,
+            "runnable": deep_research_runnable,
         },
         {
             "name": patch_mod.GENERAL_PURPOSE_SUBAGENT_NAME,
@@ -38,7 +38,7 @@ def test_build_task_tool_hides_general_purpose_when_disabled() -> None:
         tool = sm._build_task_tool(_sample_subagents())
 
     assert patch_mod.GENERAL_PURPOSE_SUBAGENT_NAME not in tool.description
-    assert "tacitus" in tool.description
+    assert "deep_research" in tool.description
     assert "general-purpose agent is provided" not in tool.description
 
 
@@ -49,14 +49,14 @@ def test_build_task_tool_includes_general_purpose_when_enabled() -> None:
         tool = sm._build_task_tool(_sample_subagents())
 
     assert patch_mod.GENERAL_PURPOSE_SUBAGENT_NAME in tool.description
-    assert "tacitus" in tool.description
+    assert "deep_research" in tool.description
 
 
 def test_filter_general_purpose_subagents() -> None:
     specs = _sample_subagents()
     filtered = patch_mod._filter_general_purpose_subagents(specs)
     assert len(filtered) == 1
-    assert filtered[0]["name"] == "tacitus"
+    assert filtered[0]["name"] == "deep_research"
 
 
 def test_task_tool_description_template_strips_general_purpose_section() -> None:

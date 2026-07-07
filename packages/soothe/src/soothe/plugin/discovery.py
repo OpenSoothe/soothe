@@ -217,7 +217,8 @@ def discover_all_plugins(
     # Built-in subagent plugins (new module structure)
     for subagent_name, module_suffix in (
         ("planner", "plan"),
-        ("tacitus", "tacitus"),
+        ("deep_research", "deep_research"),
+        ("academic_research", "academic_research"),
     ):
         module_path = f"soothe.subagents.{module_suffix}"
         discovered[subagent_name] = (module_path, {}, "built-in")

@@ -132,11 +132,12 @@ soothe loop delete <thread-id>
 
 | Subagent | Purpose | When Used |
 |----------|---------|-----------|
-| **Explore** | Filesystem search and analysis | Finding files, exploring codebases |
-| **Plan** | Task planning and decomposition | Complex multi-step tasks |
-| **Tacitus** | Academic research | Finding papers, literature reviews |
+| **Planner** | Task planning and decomposition | Complex multi-step tasks |
+| **Deep Research** | Public web research | Comparisons, how-tos, industry facts |
+| **Academic Research** | Academic literature | Papers, literature reviews, citations |
 | **Browser Use** | Web automation | Interacting with websites |
-| **Veritas** | Research synthesis and verification | Fact-checking, validation |
+| **Skillify** | Skill retrieval | Finding and loading skills |
+| **Veritas** | Clarification auto-answerer | Autonomous mode `ask_user` handling |
 
 > **Note**: Community subagents (e.g. `weaver`) are available via the
 > `soothe-plugins` package, not as core subagents.
@@ -525,9 +526,11 @@ observability:
 
 # Subagents (core defaults; optional from soothe-plugins)
 subagents:
-  plan:
+  planner:
     enabled: true
-  tacitus:
+  deep_research:
+    enabled: true
+  academic_research:
     enabled: true
   browser_use:
     enabled: true
@@ -554,7 +557,7 @@ Step 1: Explore codebase for auth module
     ↓
 Step 2: Research OAuth2 best practices
     ↓
-    Tacitus Subagent finds papers
+    Deep Research Subagent finds papers
     ↓
 Step 3: Create implementation plan
     ↓

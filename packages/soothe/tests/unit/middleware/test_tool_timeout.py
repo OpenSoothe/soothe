@@ -263,7 +263,7 @@ class TestTimeoutCategories:
         """Subagent tool names should be categorized."""
         assert "browser_use" in SUBAGENT_TOOL_NAMES
         assert "planner" in SUBAGENT_TOOL_NAMES
-        assert "tacitus" in SUBAGENT_TOOL_NAMES
+        assert "deep_research" in SUBAGENT_TOOL_NAMES
         assert "delegate" in SUBAGENT_TOOL_NAMES
         assert "task" in SUBAGENT_TOOL_NAMES  # Deepagents task tool for subagent invocation
 
