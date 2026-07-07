@@ -665,9 +665,34 @@ class SootheConfig(BaseSettings):
             elif self.persistence.postgres_base_dsn:
                 kwargs["dsn"] = self.resolve_postgres_dsn_for_database("vectors")
 
-            kwargs["pool_size"] = provider.pool_size
+            kwargs["pool_size"] = self.persistence.vectors_pool_size
             kwargs["index_type"] = provider.index_type
             kwargs["vector_size"] = self.embedding_dims
+
+            if self.persistence.default_backend == "postgresql":
+                try:
+                    from soothe.foundation.persistence.postgres_pool_lifecycle import (
+                        postgres_pool_timing_from_config,
+                    )
+                    from soothe.foundation.persistence.postgres_pool_registry import (
+                        PostgresPoolRegistry,
+                    )
+
+                    registry = PostgresPoolRegistry.try_get_instance()
+                    if registry is not None:
+                        vectors_pool = registry.try_get_pool("vectors")
+                        if vectors_pool is not None:
+                            kwargs["shared_pool"] = vectors_pool
+                            kwargs["pool_size"] = 0
+                    kwargs["pool_timing"] = postgres_pool_timing_from_config(
+                        self,
+                        max_size=kwargs["pool_size"] or self.persistence.vectors_pool_size,
+                    )
+                except Exception:
+                    logging.getLogger(__name__).debug(
+                        "PGVector registry pool unavailable",
+                        exc_info=True,
+                    )
 
         elif provider_type == "weaviate":
             if provider.url:

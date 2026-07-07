@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.persistence.postgres_pool_lifecycle import (
     apply_row_factory,
-    close_async_pool,
     postgres_pool_timing_from_config,
     release_idle_pool_connections,
 )
+from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
 
 if TYPE_CHECKING:
     from psycopg_pool import AsyncConnectionPool
@@ -28,8 +28,16 @@ class SharedMetadataPool:
     """Singleton ``AsyncConnectionPool`` for ``soothe_metadata`` durability stores."""
 
     @classmethod
+    def _register_pool(cls, pool: AsyncConnectionPool) -> None:
+        """Bind the registry metadata pool to this shim (daemon pre-open)."""
+        global _shared_metadata_pool
+
+        with _sync_lock:
+            _shared_metadata_pool = pool
+
+    @classmethod
     def get_or_create_pool(cls, config: SootheConfig) -> AsyncConnectionPool | None:
-        """Return the shared metadata pool (``open=False`` until daemon pre-open)."""
+        """Return the shared metadata pool (registry-backed when pre-opened)."""
         global _shared_metadata_pool
 
         if config.persistence.default_backend != "postgresql":
@@ -40,6 +48,15 @@ class SharedMetadataPool:
         with _sync_lock:
             if _shared_metadata_pool is not None:
                 return _shared_metadata_pool
+
+            try:
+                registry = PostgresPoolRegistry.get_instance(config)
+                reg_pool = registry.try_get_pool("metadata")
+                if reg_pool is not None:
+                    _shared_metadata_pool = reg_pool
+                    return reg_pool
+            except RuntimeError:
+                pass
 
             try:
                 from psycopg_pool import AsyncConnectionPool
@@ -53,7 +70,7 @@ class SharedMetadataPool:
 
             ensure_postgres_databases(config)
             dsn = config.resolve_postgres_dsn_for_database("metadata")
-            max_size = config.persistence.metadata_pool_size
+            max_size = PostgresPoolRegistry.resolve_metadata_pool_size(config)
             timing = postgres_pool_timing_from_config(config, max_size=max_size)
             pool_kwargs: dict[str, Any] = {
                 "max_size": max_size,
@@ -80,14 +97,11 @@ class SharedMetadataPool:
 
     @classmethod
     async def close_shared_instance(cls) -> None:
-        """Close the singleton at daemon shutdown."""
+        """Clear shim reference (registry owns pool lifecycle)."""
         global _shared_metadata_pool
 
         with _sync_lock:
-            pool_to_close = _shared_metadata_pool
             _shared_metadata_pool = None
-
-        await close_async_pool(pool_to_close, label="metadata")
 
 
 __all__ = ["SharedMetadataPool"]

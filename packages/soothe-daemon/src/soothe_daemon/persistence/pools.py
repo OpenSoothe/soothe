@@ -26,45 +26,45 @@ async def preopen_shared_postgres_pools(
     config: SootheConfig,
     daemon_config: DaemonConfig,
 ) -> None:
-    """Pre-open shared StrangeLoop, checkpointer, and metadata pools in thread_pool mode."""
+    """Pre-open shared PostgreSQL pools via PostgresPoolRegistry (thread_pool mode)."""
     if not uses_postgresql_persistence(config):
         return
-
-    from soothe.foundation.persistence.postgres_provisioning import (
-        ensure_postgres_databases_async,
-    )
-
-    await ensure_postgres_databases_async(config)
 
     if not daemon_config.thread_pool.enabled:
         return
 
+    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+    from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
     from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
     from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
-    await SharedPostgreSQLPool.get_shared_instance(config)
-    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+    registry = PostgresPoolRegistry.get_instance(config)
+    await registry.open_all()
+
+    checkpoints_pool = registry.get_pool("checkpoints")
+    SharedCheckpointerPool._register_pool(checkpoints_pool)
+    await SharedPostgreSQLPool.bind_registry_pool(config, checkpoints_pool)
+
+    metadata_pool = registry.get_pool("metadata")
+    SharedMetadataPool._register_pool(metadata_pool)
 
     await LoopPersistenceWriter.get_shared_instance(config)
-    cp_pool = SharedCheckpointerPool.get_or_create_pool(config)
-    if cp_pool is not None:
-        await cp_pool.open()
 
-    metadata_pool = SharedMetadataPool.get_or_create_pool(config)
-    if metadata_pool is not None:
-        await metadata_pool.open()
-        from soothe.foundation.persistence.db_init import initialize_database
-
-        await initialize_database(metadata_pool, "soothe_metadata")
-        logger.info("Shared metadata PostgreSQL pool opened and schema initialized")
+    logger.info("PostgresPoolRegistry pre-open complete")
 
 
 async def release_idle_shared_postgres_pools() -> None:
     """Release idle connections on process-wide shared PostgreSQL pools."""
+    from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
     from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
     from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+
+    registry = PostgresPoolRegistry.try_get_instance()
+    if registry is not None:
+        await registry.release_idle_all()
+        return
 
     await SharedPostgreSQLPool.release_idle_shared()
     await SharedCheckpointerPool.release_idle()
@@ -72,8 +72,10 @@ async def release_idle_shared_postgres_pools() -> None:
 
 
 async def close_shared_postgres_pools() -> None:
-    """Close shared StrangeLoop and checkpointer pools at daemon shutdown."""
+    """Close shared PostgreSQL pools at daemon shutdown."""
     try:
+        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+        from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
         from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
         from soothe.foundation.sloop.state.persistence.shared_pool import (
             SharedPostgreSQLPool,
@@ -82,20 +84,22 @@ async def close_shared_postgres_pools() -> None:
         from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
         try:
-            from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
-
             await LoopPersistenceWriter.close_shared_instance()
             logger.info("Shared loop persistence writer closed")
         except ImportError:
             pass
+
         await SharedPostgreSQLPool.close_shared_instance()
-        logger.info("Shared StrangeLoop PostgreSQL pool closed")
         await SharedCheckpointerPool.close_shared_instance()
-        logger.info("Shared checkpointer PostgreSQL pool closed")
         await SharedMetadataPool.close_shared_instance()
-        logger.info("Shared metadata PostgreSQL pool closed")
+
+        registry = PostgresPoolRegistry.try_get_instance()
+        if registry is not None:
+            await registry.close_all()
+            logger.info("PostgresPoolRegistry closed")
+
         await close_shared_sqlite_backend_instance()
-        logger.info("Shared StrangeLoop SQLite backend closed")
+        logger.info("Shared persistence pools closed")
     except ImportError:
         pass
     except Exception:
@@ -113,9 +117,26 @@ async def periodic_postgres_pool_maintenance(
         await asyncio.sleep(interval_s)
         try:
             await release_idle_shared_postgres_pools()
+            if config is not None and uses_postgresql_persistence(config):
+                _log_pool_stats(config)
             await _reconcile_degraded_checkpoints_if_configured(config)
         except Exception:
             logger.debug("PostgreSQL pool maintenance failed", exc_info=True)
+
+
+def _log_pool_stats(config: SootheConfig) -> None:
+    """Log pool utilization from the registry when available."""
+    try:
+        from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
+
+        registry = PostgresPoolRegistry.try_get_instance()
+        if registry is None:
+            return
+        stats = registry.pool_stats()
+        if stats:
+            logger.info("PostgreSQL pool stats: %s", stats)
+    except Exception:
+        logger.debug("Pool stats unavailable", exc_info=True)
 
 
 async def _reconcile_degraded_checkpoints_if_configured(

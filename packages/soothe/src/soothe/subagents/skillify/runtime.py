@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 from soothe.config import SOOTHE_HOME, SubagentConfig
 
 from .indexer import SkillIndexer
-from .retriever import SkillRetriever
+from .retriever import SkillRetriever, configure_vector_search_concurrency
 from .schemas import SkillifySubagentConfig
 from .warehouse import SkillWarehouse
 
@@ -88,11 +88,16 @@ def get_skillify_retriever(
             )
             _start_background_indexer(_INDEXER)
 
+        configure_vector_search_concurrency(
+            config.progressive_skills.max_concurrent_vector_searches
+        )
+
         return SkillRetriever(
             vector_store=vector_store,
             embeddings=embeddings_factory,
             top_k=skillify_opts.retrieval_top_k,
             ready_event=_INDEXER.ready_event if _INDEXER else None,
+            total_indexed_fn=(lambda: _INDEXER.total_indexed if _INDEXER else 0),
         )
     except Exception:
         logger.debug("[Skillify] retriever unavailable", exc_info=True)

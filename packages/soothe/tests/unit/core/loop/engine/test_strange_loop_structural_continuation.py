@@ -111,7 +111,7 @@ async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
         patch("soothe.skills.catalog.parse_slash_skill_user_line", return_value=None),
         patch("soothe.skills.catalog.try_expand_slash_skill_user_line", return_value=None),
     ):
-        anchor_cls.return_value.close = AsyncMock()
+        anchor_cls.create = AsyncMock(return_value=MagicMock(close=AsyncMock()))
         runtime_ctx = MagicMock()
         runtime_ctx.emit = _capture_emit
         runtime_ctx_cls.return_value = runtime_ctx

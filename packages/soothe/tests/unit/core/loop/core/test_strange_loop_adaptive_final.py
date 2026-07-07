@@ -126,9 +126,9 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor_mgr,
-        ),
+        ) as am_cls,
     ):
+        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
@@ -190,14 +190,14 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor_mgr,
-        ),
+        ) as am_cls,
         patch.object(
             SynthesisGenerator,
             "generate_synthesis",
             side_effect=empty_gen,
         ),
     ):
+        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
         # IG-476: Mock generate_from_assessment to return done status directly
@@ -246,14 +246,14 @@ async def test_completed_payload_for_summary_path() -> None:
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor_mgr,
-        ),
+        ) as am_cls,
         patch.object(
             SynthesisGenerator,
             "generate_synthesis",
             side_effect=empty_gen,
         ),
     ):
+        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         loop._fast_llm = None  # Prevent synthesis LLM calls
         # IG-476: Mock generate_from_assessment to return done status directly
@@ -298,9 +298,9 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor_mgr,
-        ),
+        ) as am_cls,
     ):
+        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())

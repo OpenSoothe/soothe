@@ -126,7 +126,7 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
 
         am = MagicMock()
         am.close = AsyncMock()  # Fix: must be AsyncMock for cleanup path
-        am_cls.return_value = am
+        am_cls.create = AsyncMock(return_value=am)
 
         # Drive run_with_progress one step: it yields events; we just need the
         # gather block to run. Consume the generator briefly.

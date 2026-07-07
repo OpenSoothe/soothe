@@ -21,7 +21,7 @@ def postgres_pool_timing_from_config(
     """Shared psycopg pool timing options from ``PersistenceConfig`` (caller sets max_size).
 
     When *max_size* is given, ``min_size`` is capped so psycopg's ``max_size >= min_size`` holds
-    (e.g. small ``checkpointer_pool_size`` in tests or worker_pool tuning).
+    (e.g. small ``checkpoints_pool_size`` in tests or worker_pool tuning).
     """
     p = config.persistence
     min_size = p.postgres_pool_min_size

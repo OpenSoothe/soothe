@@ -27,15 +27,37 @@ logger = logging.getLogger(__name__)
 class CheckpointAnchorManager:
     """Manager for iteration checkpoint anchor capture."""
 
-    def __init__(self, loop_id: str, config: SootheConfig | None = None) -> None:
+    def __init__(
+        self,
+        loop_id: str,
+        config: SootheConfig | None = None,
+        *,
+        persistence_manager: StrangeLoopCheckpointPersistenceManager | None = None,
+    ) -> None:
         """Initialize anchor manager.
 
         Args:
             loop_id: StrangeLoop identifier.
             config: SootheConfig for backend selection. If None, defaults to SQLite.
+            persistence_manager: Optional pre-built manager (shared pool mode).
         """
         self.loop_id = loop_id
-        self.persistence_manager = StrangeLoopCheckpointPersistenceManager(config=config)
+        if persistence_manager is not None:
+            self.persistence_manager = persistence_manager
+        else:
+            self.persistence_manager = StrangeLoopCheckpointPersistenceManager(config=config)
+
+    @classmethod
+    async def create(
+        cls, loop_id: str, config: SootheConfig | None = None
+    ) -> CheckpointAnchorManager:
+        """Build an anchor manager using the process-wide checkpoint pool when on PostgreSQL."""
+        if config is not None and config.persistence.default_backend == "postgresql":
+            manager = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(
+                config
+            )
+            return cls(loop_id, config, persistence_manager=manager)
+        return cls(loop_id, config)
 
     async def capture_iteration_start_anchor(
         self,

@@ -33,7 +33,7 @@ def test_get_or_create_returns_same_pool_instance() -> None:
         persistence={
             "default_backend": "postgresql",
             "postgres_base_dsn": "postgresql://postgres:postgres@127.0.0.1:6432",
-            "checkpointer_pool_size": 3,
+            "checkpoints_pool_size": 3,
         }
     )
     p1 = SharedCheckpointerPool.get_or_create_pool(cfg)
@@ -124,7 +124,7 @@ async def test_reset_shared_instance_from_different_event_loop() -> None:
         persistence={
             "default_backend": "postgresql",
             "postgres_base_dsn": "postgresql://postgres:postgres@127.0.0.1:6432",
-            "checkpointer_pool_size": 2,
+            "checkpoints_pool_size": 2,
         }
     )
     old_pool = MagicMock()

@@ -29,6 +29,7 @@ from soothe.foundation.persistence.postgres_pool_lifecycle import (
     postgres_pool_timing_from_config,
     release_idle_pool_connections,
 )
+from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
 from soothe.foundation.sloop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
@@ -61,7 +62,7 @@ class SharedPostgreSQLPool:
     """Shared PostgreSQL connection pool for StrangeLoop state persistence.
 
     IG-406: High-concurrency architecture with 200+ thread support.
-    Pool size is config-driven (``persistence.sloop_pool_size``); default suits
+    Pool size is config-driven (``persistence.checkpoints_pool_size``); default suits
     one active run per process (e.g. pool workers) without multiplying connections by 30×N workers.
 
     Usage:
@@ -96,6 +97,7 @@ class SharedPostgreSQLPool:
         self._pool: AsyncConnectionPool | None = None
         self._init_lock = asyncio.Lock()
         self._initialized = False
+        self._registry_backed = False
 
     async def open(self) -> AsyncConnectionPool:
         """Open the shared connection pool with schema initialization.
@@ -143,7 +145,11 @@ class SharedPostgreSQLPool:
         await release_idle_pool_connections(self._pool, label="StrangeLoop")
 
     async def close(self) -> None:
-        """Close the shared connection pool."""
+        """Close the shared connection pool (skipped when registry-backed)."""
+        if self._registry_backed:
+            self._pool = None
+            self._initialized = False
+            return
         if self._pool is not None:
             await close_async_pool(self._pool, label="StrangeLoop")
             self._pool = None
@@ -189,6 +195,25 @@ class SharedPostgreSQLPool:
         return self._pool
 
     @classmethod
+    async def bind_registry_pool(
+        cls,
+        config: SootheConfig,
+        pool: AsyncConnectionPool,
+    ) -> SharedPostgreSQLPool:
+        """Wrap the registry checkpoints pool for StrangeLoop consumers."""
+        global _shared_pool
+
+        async with _pool_lock:
+            if _shared_pool is None:
+                dsn = config.resolve_postgres_dsn_for_database("checkpoints")
+                wrapper = cls(dsn, pool_size=0, pool_timing=None)
+                wrapper._pool = pool
+                wrapper._initialized = True
+                wrapper._registry_backed = True
+                _shared_pool = wrapper
+            return _shared_pool
+
+    @classmethod
     async def get_shared_instance(cls, config: SootheConfig) -> SharedPostgreSQLPool | None:
         """Get or create the singleton shared pool instance.
 
@@ -207,22 +232,32 @@ class SharedPostgreSQLPool:
             return None
 
         async with _pool_lock:
-            if _shared_pool is None:
-                from soothe.foundation.persistence.postgres_provisioning import (
-                    ensure_postgres_databases_async,
-                )
+            if _shared_pool is not None:
+                return _shared_pool
 
-                await ensure_postgres_databases_async(config)
-                dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-                pool_size = config.persistence.sloop_pool_size
-                timing = postgres_pool_timing_from_config(config, max_size=pool_size)
-                _shared_pool = SharedPostgreSQLPool(
-                    dsn,
-                    pool_size=pool_size,
-                    pool_timing=timing,
-                )
-                await _shared_pool.open()
-                logger.info("Created singleton shared PostgreSQL pool (size=%d)", pool_size)
+            try:
+                registry = PostgresPoolRegistry.get_instance(config)
+                reg_pool = registry.try_get_pool("checkpoints")
+                if reg_pool is not None:
+                    return await cls.bind_registry_pool(config, reg_pool)
+            except RuntimeError:
+                pass
+
+            from soothe.foundation.persistence.postgres_provisioning import (
+                ensure_postgres_databases_async,
+            )
+
+            await ensure_postgres_databases_async(config)
+            dsn = config.resolve_postgres_dsn_for_database("checkpoints")
+            pool_size = PostgresPoolRegistry.resolve_checkpoints_pool_size(config)
+            timing = postgres_pool_timing_from_config(config, max_size=pool_size)
+            _shared_pool = SharedPostgreSQLPool(
+                dsn,
+                pool_size=pool_size,
+                pool_timing=timing,
+            )
+            await _shared_pool.open()
+            logger.info("Created singleton shared PostgreSQL pool (size=%d)", pool_size)
 
             return _shared_pool
 

@@ -125,8 +125,12 @@ class SootheDaemon(DaemonHandlersMixin):
         self._daemon_config = daemon_config or SootheDaemonConfig()
         self._handle_sigint_shutdown = handle_sigint_shutdown
 
-        # Shared persistence manager (avoids per-RPC pool creation/teardown)
-        self._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=self._config)
+        # Shared persistence manager — PostgreSQL deferred until start() after pool pre-open
+        self._persistence_manager: StrangeLoopCheckpointPersistenceManager | None = None
+        if self._config.persistence.default_backend != "postgresql":
+            self._persistence_manager = StrangeLoopCheckpointPersistenceManager(
+                config=self._config
+            )
 
         # Resolve daemon workspace (ephemeral TEMP unless SOOTHE_WORKSPACE set)
         self._daemon_workspace = resolve_daemon_workspace()
@@ -596,16 +600,25 @@ class SootheDaemon(DaemonHandlersMixin):
                 dur_cfg = self._config.agent.protocols.durability
                 persist_dir = dur_cfg.persist_dir or str(SOOTHE_DATA_DIR)
                 if dur_backend == "postgresql":
+                    from soothe.foundation.persistence.shared_metadata_pool import (
+                        SharedMetadataPool,
+                    )
+
                     dsn = self._config.resolve_postgres_dsn_for_database("metadata")
+                    metadata_pool = SharedMetadataPool.get_or_create_pool(self._config)
                     goal_persist_store = create_persist_store(
                         backend="postgresql",
                         dsn=dsn,
                         namespace="autopilot_goals",
+                        config=self._config,
+                        shared_pool=metadata_pool,
                     )
                     context_persist_store = create_persist_store(
                         backend="postgresql",
                         dsn=dsn,
                         namespace="autopilot_context",
+                        config=self._config,
+                        shared_pool=metadata_pool,
                     )
                 else:
                     goal_persist_store = create_persist_store(
@@ -714,6 +727,18 @@ class SootheDaemon(DaemonHandlersMixin):
                     "Failed to pre-open shared PostgreSQL pools at startup",
                     exc_info=True,
                 )
+
+            if self._persistence_manager is None:
+                if self._config.persistence.default_backend == "postgresql":
+                    self._persistence_manager = (
+                        await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(
+                            self._config
+                        )
+                    )
+                else:
+                    self._persistence_manager = StrangeLoopCheckpointPersistenceManager(
+                        config=self._config
+                    )
 
             # RFC-221: pre-warm runner pool (worker_pool or thread_pool).
             if self._daemon_config.worker_pool.enabled or self._daemon_config.thread_pool.enabled:
@@ -1626,8 +1651,9 @@ class SootheDaemon(DaemonHandlersMixin):
             logger.debug("Stale worker cleanup on shutdown skipped", exc_info=True)
 
         # Close shared persistence manager
-        with contextlib.suppress(Exception):
-            await self._persistence_manager.close()
+        if self._persistence_manager is not None:
+            with contextlib.suppress(Exception):
+                await self._persistence_manager.close()
 
         try:
             from soothe.foundation.sloop.state.persistence.directory_manager import (

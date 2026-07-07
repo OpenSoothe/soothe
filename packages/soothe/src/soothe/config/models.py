@@ -71,7 +71,6 @@ class VectorStoreProviderConfig(BaseModel):
         name: Provider identifier (used in router).
         provider_type: Backend type (pgvector, weaviate, in_memory).
         dsn: PostgreSQL DSN (pgvector). Supports ${ENV_VAR}.
-        pool_size: Connection pool size (pgvector).
         index_type: Index type (pgvector): hnsw, ivfflat, none.
         url: Weaviate server URL. Supports ${ENV_VAR}.
         api_key: Weaviate Cloud API key. Supports ${ENV_VAR}.
@@ -83,7 +82,6 @@ class VectorStoreProviderConfig(BaseModel):
 
     # pgvector options
     dsn: str | None = None
-    pool_size: int = 48
     index_type: Literal["hnsw", "ivfflat", "none"] = "hnsw"
 
     # Weaviate options
@@ -415,43 +413,45 @@ class PersistenceConfig(BaseModel):
     default_backend: Literal["postgresql", "sqlite"] = "sqlite"
 
     postgres_pool_min_size: int = Field(
-        default=8,
+        default=4,
         ge=1,
         le=32,
         description=(
-            "psycopg ``AsyncConnectionPool`` min_size for shared LangGraph, StrangeLoop, "
-            "and metadata pools. Keeps warm connections ready under thread_pool load."
+            "psycopg ``AsyncConnectionPool`` min_size for shared PostgreSQL pools. "
+            "Keeps warm connections ready under thread_pool load."
         ),
     )
-    checkpointer_pool_size: int = Field(
-        default=64,
+    checkpoints_pool_size: int = Field(
+        default=32,
         ge=1,
         le=128,
         description=(
-            "LangGraph PostgreSQL checkpointer pool max_size per process. "
-            "Worker pool mode: each worker process has its own pool (N workers × pool_size connections). "
-            "Thread pool mode: pool is shared across threads (daemon-level singleton via IG-406). "
-            "Default 64 with postgres_pool_min_size=8 suits 50–100 concurrent loops behind PgBouncer."
-        ),
-    )
-    sloop_pool_size: int = Field(
-        default=64,
-        ge=1,
-        le=128,
-        description=(
-            "Shared StrangeLoop persistence pool max_size per process (checkpoints DB). "
-            "Thread pool mode: single daemon-level singleton shared by all threads (IG-406). "
-            "Worker pool mode: each worker process creates its own singleton (not cross-process shared). "
-            "Default 64; tune with thread_pool.max_pool_size for 50–100 concurrent loops."
+            "Shared PostgreSQL pool max_size for the checkpoints database per process. "
+            "Used by LangGraph checkpointer, StrangeLoop persistence, ContextEngine, "
+            "and anchor manager (single pool via PostgresPoolRegistry)."
         ),
     )
     metadata_pool_size: int = Field(
-        default=32,
+        default=16,
         ge=1,
         le=128,
         description=(
             "Shared metadata/durability PostgreSQL pool max_size per process. "
             "Singleton in thread_pool mode — not multiplied by runner count."
+        ),
+    )
+    vectors_pool_size: int = Field(
+        default=16,
+        ge=1,
+        le=128,
+        description=("Shared pgvector PostgreSQL pool max_size per process (vectors database)."),
+    )
+    postgres_connection_budget_warn: int = Field(
+        default=120,
+        ge=16,
+        le=512,
+        description=(
+            "Log a warning when checkpoints + metadata + vectors pool max sizes exceed this sum."
         ),
     )
     postgres_pool_max_idle_seconds: float = Field(
@@ -2100,6 +2100,12 @@ class ProgressiveSkillsConfig(BaseModel):
         default=4,
         ge=0,
         description="Skip intent prefetch when the user message is shorter than this.",
+    )
+    max_concurrent_vector_searches: int = Field(
+        default=4,
+        ge=1,
+        le=32,
+        description=("Process-wide limit on concurrent pgvector searches from Skillify retrieval."),
     )
 
 

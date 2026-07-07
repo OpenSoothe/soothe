@@ -136,13 +136,13 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor_mgr,
-        ),
+        ) as am_cls,
         patch(
             "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):
+        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())
@@ -194,13 +194,13 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor_mgr,
-        ),
+        ) as am_cls,
         patch(
             "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):
+        am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
         loop = StrangeLoop(mock_core, AsyncMock(), SootheConfig())
         # IG-476: Mock generate_from_assessment to return done status directly
         loop.plan_phase.generate_from_assessment = AsyncMock(return_value=_make_done_plan_result())

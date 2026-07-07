@@ -219,6 +219,46 @@ def _check_disk_space() -> CheckResult:
         )
 
 
+def _check_postgres_pool_registry(config: SootheConfig | None) -> CheckResult:
+    """Report registry pool stats when the daemon has pre-opened shared pools."""
+    if config is None:
+        return CheckResult(
+            name="postgres_pool_registry",
+            status=CheckStatus.SKIPPED,
+            message="Skipped (no config loaded)",
+        )
+    if config.persistence.default_backend != "postgresql":
+        return CheckResult(
+            name="postgres_pool_registry",
+            status=CheckStatus.INFO,
+            message="PostgreSQL pool registry not active (sqlite backend)",
+        )
+
+    try:
+        from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
+
+        registry = PostgresPoolRegistry.try_get_instance()
+        if registry is None:
+            return CheckResult(
+                name="postgres_pool_registry",
+                status=CheckStatus.INFO,
+                message="Postgres pool registry not initialized",
+            )
+        stats = registry.pool_stats()
+        return CheckResult(
+            name="postgres_pool_registry",
+            status=CheckStatus.OK,
+            message="Postgres pool registry active",
+            details={"pools": stats},
+        )
+    except Exception as exc:
+        return CheckResult(
+            name="postgres_pool_registry",
+            status=CheckStatus.WARNING,
+            message=f"Could not read pool registry stats: {exc}",
+        )
+
+
 async def check_persistence(config: SootheConfig | None = None) -> CategoryResult:
     """Check persistence layer (PostgreSQL, filesystem).
 
@@ -231,6 +271,7 @@ async def check_persistence(config: SootheConfig | None = None) -> CategoryResul
     checks = [
         _check_postgresql_import(),
         _check_postgresql_connection(config),
+        _check_postgres_pool_registry(config),
         _check_filesystem_permissions(),
         _check_disk_space(),
     ]

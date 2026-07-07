@@ -244,8 +244,11 @@ class StrangeLoop:
                 main_thread_id,
             )
 
-        # Initialize checkpoint anchor manager for execution synchronization (IG-055: pass config)
-        anchor_manager = CheckpointAnchorManager(state_manager.loop_id, config=self.config)
+        # Initialize checkpoint anchor manager (shared checkpoint pool in daemon/thread_pool mode)
+        anchor_manager = await CheckpointAnchorManager.create(
+            state_manager.loop_id,
+            config=self.config,
+        )
 
         runtime_ctx: LoopRuntimeContext | None = None
         try:
