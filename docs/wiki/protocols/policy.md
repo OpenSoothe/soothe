@@ -171,6 +171,7 @@ Named profiles (`readonly`, `standard`, `privileged`) are far more intuitive tha
 
 ## Related Documentation
 
+- **[Policy Backends](../backends/policy-backends.md)** — Backend implementations
 - [Loop Protocols](loop-protocols.md) — `OperationSecurityProtocol` wraps policy
 - [Durability Protocol](durability.md) — `policy_profile` in thread metadata
 - [Execution Protocols](execution-protocols.md) — enforcement during runs

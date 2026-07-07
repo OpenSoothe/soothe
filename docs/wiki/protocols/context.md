@@ -1,18 +1,18 @@
 ---
-title: "ContextProtocol"
+title: "ContextProtocol (Not Implemented)"
 parent: Protocols
 grand_parent: Wiki
 nav_order: 3
-description: Within-thread context and working memory protocol — currently draft status, not yet implemented.
+description: Within-thread context and working memory — planned protocol design. Context is currently managed by ContextEngine, not a protocol.
 ---
 
-# ContextProtocol
+# ContextProtocol (Not Implemented)
 
-**RFC**: 302 (Protocol Specifications series)
-**Status**: Draft — not yet implemented
-**Supersedes**: RFC-300 (archived)
+**RFC**: 302 (Protocol Specifications series, draft)
+**Status**: **Not implemented** — `ContextProtocol` class does not exist in the codebase
+**Supersedes**: [RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md) (archived)
 
-> ⚠️ ContextProtocol is defined in RFC-302 (draft) but **not implemented**. This article describes the planned design and explains how context is managed today.
+> ⚠️ `ContextProtocol` is defined in RFC-302 (draft) but was **never implemented**. The `ContextProtocol` class does not exist in `packages/soothe/src/soothe/protocols/`. Context management is handled by `ContextEngine` (`soothe.foundation.context`), a concrete engine class — not a protocol abstraction. This article describes the *planned* protocol design and explains how context works today.
 
 ## What ContextProtocol Is
 
@@ -70,27 +70,23 @@ This is why `project()` and `project_for_subagent()` are separate operations rat
 
 Subagents receive projections, not ledger access. They get a bounded, goal-scoped slice and return only results. The orchestrator ingests those results back into the ledger. This enforces a clean information boundary — delegated agents cannot accumulate or leak context beyond their scope.
 
-## Current Context Management (Until Implemented)
+## Current Context Management
 
-While ContextProtocol remains in draft, Soothe uses these mechanisms:
+`ContextProtocol` was never implemented. Context management is handled by **`ContextEngine`** (`packages/soothe/src/soothe/foundation/context/`), a concrete engine class that manages within-thread knowledge. It is not a protocol abstraction — it's a direct implementation with its own ledger, projection, and persistence logic.
 
-1. **Conversation history** — managed by deepagents `SummarizationMiddleware`, which compresses older messages.
-2. **LoopWorkingMemory** — a bounded in-memory scratchpad (`max_entries`, truncated previews) that renders into Plan-phase prompts. See [loop-protocols.md](loop-protocols.md).
-3. **MemoryProtocol** — cross-thread persistent knowledge, explicitly populated. See [memory.md](memory.md).
+`ContextEngine` uses these mechanisms:
 
-### Migration Path
-
-When ContextProtocol ships, it slots in alongside existing mechanisms rather than replacing them:
-
-- Conversation history → `SummarizationMiddleware` (unchanged)
-- Working memory → `LoopWorkingMemoryProtocol` (unchanged — still the bounded Plan-phase scratchpad)
-- **New**: `ContextProtocol` as the unbounded within-thread ledger
+1. **Context ledger** — an append-only store (`engine.py`, `ledger.py`) that ingests tool outputs, subagent results, and reflections. Unlike the planned `ContextProtocol`, this is a concrete implementation, not a swappable interface.
+2. **Projection** — bounded, relevance-ranked views via `projection.py` and `semantic.py`.
+3. **Planning integration** — `planning/` submodule integrates context with goal decomposition.
+4. **Persistence** — `persistence/` submodule saves/restores the ledger via durability backends.
 
 ## Gotchas
 
-- **Not implemented** — don't depend on `ContextProtocol` in code yet. Track RFC-302 status.
-- **Retrieval algorithm is pluggable** — the retrieval module's version tag means two deployments could use different ranking strategies. Don't assume a specific ordering guarantee.
-- **Persistence backend undecided** — RFC-302 has not finalized whether the ledger uses `AsyncPersistStore`, a dedicated database, or its own storage. The `persist`/`restore` contract assumes a durability backend exists.
+- **Not implemented** — `ContextProtocol` does not exist in code. Context is managed by `ContextEngine`, a concrete class, not a protocol. Do not depend on `ContextProtocol` in code.
+- **No swappable backends** — unlike `MemoryProtocol` or `DurabilityProtocol`, context has no protocol→backend separation. `ContextEngine` is the sole implementation.
+- **Retrieval algorithm is internal** — `semantic.py` implements the current retrieval strategy. There is no version tag or pluggable retrieval module as the draft RFC proposed.
+- **Persistence via durability** — the ledger persists through `persistence/` using durability backends, not a dedicated protocol.
 
 ## Relationship to Other Protocols
 
@@ -98,12 +94,12 @@ When ContextProtocol ships, it slots in alongside existing mechanisms rather tha
 |----------|-------------|
 | [MemoryProtocol](memory.md) | Memory is *cross-thread* and explicitly populated; Context is *within-thread* and auto-ingested. Different scopes, different retrieval strategies. |
 | [DurabilityProtocol](durability.md) | Provides thread IDs that key context ledgers. Context persistence piggybacks on the thread lifecycle. |
-| [LoopWorkingMemoryProtocol](loop-protocols.md) | The bounded scratchpad that ContextProtocol would eventually feed richer projections into. |
+| [LoopWorkingMemoryProtocol](loop-protocols.md) | The bounded scratchpad for Plan-phase prompts. `ContextEngine` provides the richer, persistent ledger that working memory complements. |
 
 ## Specification Reference
 
 - **RFC-302**: ContextProtocol: Unbounded Knowledge & Goal-Centric Retrieval (draft)
-- **RFC-300**: Context and Memory Architecture Design (superseded by RFC-302)
+- **[RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md)**: Context and Memory Architecture Design (archived, superseded by RFC-302)
 
 ## Related Documentation
 

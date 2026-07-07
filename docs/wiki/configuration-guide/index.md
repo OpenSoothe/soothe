@@ -6,6 +6,7 @@ nav_order: 5
 description: >-
   YAML reference, environment variables, providers, and common patterns.
 permalink: /wiki/configuration-guide/
+canonical: configuration-guide/index.md
 ---
 
 # Configuration Guide
@@ -102,3 +103,4 @@ These wiki articles capture *knowledge* — design intent, decision guides, and 
 - **Picking a provider:** read [Provider Setup](provider-setup.md).
 - **Need a specific field:** jump to [YAML Reference](yaml-reference.md).
 - **Managing secrets:** see [Environment Variables](environment-variables.md).
+- **Quick reference:** the legacy [Configuration (Quick Reference)](../configuration.md) page retains a minimal config snippet.

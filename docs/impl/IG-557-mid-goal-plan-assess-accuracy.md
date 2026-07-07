@@ -1,6 +1,6 @@
 # IG-557: Mid-Goal Plan-Assess Accuracy
 
-**RFCs**: RFC-214 (ledger projection), RFC-220 (loop graph), RFC-227 (prior progress digest), RFC-630 (intake routing)
+**RFCs**: RFC-206 (prompt tiers), RFC-214 (ledger + planner assembly), RFC-220 (loop graph), RFC-225 (goal record / continuation), RFC-226 (continuation assess), RFC-227 (prior-progress digest), RFC-604 (`StatusAssessment`), RFC-624 (CE `GoalNode` / ledger), RFC-630 (intake routing)
 **Created**: 2026-07-07
 **Status**: Draft
 **Related**: IG-555 (iter=0 prior-completion bias), IG-538 (unified planner assembly), IG-542 (execute Slice A), IG-551 (continuation coordination)
@@ -8,18 +8,45 @@
 
 ---
 
+## RFC Alignment
+
+IG-557 implements mid-goal assess accuracy on the existing planner stack (RFC-214 §4 / IG-538). Where assess behavior diverges from RFC-214 defaults, this IG is the **amendment source** — update RFC-214 §3 and §4.3–§4.5 when IG-557 lands.
+
+| RFC | Relationship | IG-557 change |
+|-----|--------------|---------------|
+| **RFC-214 §3, G7** | **Amends** | `plan_assess` H/A pairs are **not** appended to CE `LedgerManager`; audit on `GoalNode.last_assessment` (RFC-624) |
+| **RFC-214 §4.3** | **Amends** (`call_kind=assess` only) | Strict phase allowlist: current-goal `execute_step` **AI only**; no Slice A, no `plan_generate` / `intent_classify` |
+| **RFC-214 §4.4** | **Amends** (`call_kind=assess` only) | Task envelope allowlist/denylist; full `GOAL:` text (no description preview truncation); no `PRIOR GOALS` / lineage / `DAG STATUS` at mid_goal assess |
+| **RFC-214 §4.5** | **Supersedes** mid_goal assess example | Assess stack excludes plan-phase ledger rows (by Phase G + assess projection) |
+| **RFC-206** | Implements | Assess system tier: `plan_assess_instructions.xml` + language hint only |
+| **RFC-220** | Amends (Phase E) | Optional skippable `plan_gap_analysis` node on complex spine |
+| **RFC-225** | Unchanged | Continuation seeding, goal enrichment; assess reads CE, not duplicated `GoalExecutionRecord` fields |
+| **RFC-226** | Unchanged | `call_kind=continuation` keeps `project_continuation_assess_ledger` and continuation envelope |
+| **RFC-227** | Extends render | `<PRIOR_PROGRESS>` de-noised for assess; digest production unchanged; **RFC-227 §4 P4 preserved** (telemetry only, no code override of `StatusAssessment`) |
+| **RFC-604** | Unchanged | `StatusAssessment` schema and assess instruction contract |
+| **RFC-624** | Extends model | `GoalNode.last_assessment`, `last_assessment_iteration`; optional `last_gap_analysis` |
+| **RFC-630** | Unchanged | Intake routing; complex spine unchanged except optional gap insert |
+
+**Superseded patterns (do not implement):**
+
+- RFC-214 §3 rationale item 1 (assess ledger rows for prompt-cache prefix) — replaced by CE `last_assessment` inline continuity (Phase C/G)
+- RFC-214 §4.3 mid_goal “all phases included” for `call_kind=assess` — replaced by assess-only filter (Phase A)
+- RFC-214 §4.4 mid_goal envelope blocks (`PRIOR GOALS`, `DAG STATUS`, etc.) for `call_kind=assess` — replaced by allowlist (Phase A)
+- Pre-CE `GoalExecutionRecord.loop_messages` mirroring — RFC-624 CE ledger is sole write path (`ce.ledger.record_message`)
+
+---
+
 ## Executive Summary
 
-IG-555 mitigated prior-goal completion anchoring at **iter=0** (boundary marker + complex undersized-plan guardrail). The same failure mode persists at **mid-goal** (`iteration ≥ 1`, or iter=0 with `step_results`): assess sees prior goal completion in Slice A, strips its own prior assess ledger, and may prematurely declare the current goal complete.
+IG-555 mitigated prior-goal completion anchoring at **iter=0** (boundary marker + complex undersized-plan guardrail). The same failure mode persists at **mid-goal** (`iteration ≥ 1`, or iter=0 with `step_results`): under RFC-214 default mid_goal projection, assess sees prior goal completion in Slice A and non-evidence plan phases, while prior assess turns are excluded from projection — producing premature `goal_progress="complete"`.
 
-**Solution** (phased):
+**Solution** (phased, RFC-aligned):
 
-1. **Assess prompt noise optimization** — dedicated assess-only projection + minimal task envelope (see § High-Accuracy Prompt Architecture)
-2. **Assess-specific ledger projection** — omit Slice A and non-evidence phases for `call_kind=assess`
-3. **Mid-goal execution-evidence guard** — reject `goal_progress=complete` when complex intake lacks sufficient current-goal execution evidence
-4. **Inline last-assessment envelope** — compact routing continuity without prior assess ledger pairs
-5. **Plan-gap-analysis (Phase E)** — optional pre-assess pass mapping evidence → goal components → distance from goal
-6. **Optional**: hint-vs-LLM disagreement override (telemetry today only)
+1. **Phase A** — Assess-only ledger projection + task envelope per RFC-214 §4 amendment (execute AI only; denylist envelope sections)
+2. **Phase G** — Amend RFC-214 §3: no `plan_assess` ledger pairs; audit on **`GoalNode.last_assessment`** (RFC-624)
+3. **Phase B** — Structural guard before `goal_progress=complete` routing (all iterations)
+4. **Phase C** — `PREVIOUS ASSESSMENT` inline from CE `last_assessment` (replaces ledger replay / cache-prefix rationale)
+5. **Phase E** — Optional `plan_gap_analysis` node (RFC-220); CE `last_gap_analysis` audit, no ledger pair
 
 ---
 
@@ -49,56 +76,44 @@ After assess, routing (`route_after_assess`):
 
 ---
 
-## Background: Messages Projected into Plan-Assess
+## Normative Baseline and IG-557 Delta
 
-Built by `PromptBuilder.build_plan_messages(..., plan_phase="assess")` → `LLMPlanner.assess_status()`.
+### Assembly (RFC-214 §4, IG-538)
 
-### Prompt assembly order
+`PromptBuilder.build_plan_messages(..., plan_phase="assess")` → `assemble_planner_prompt(call_kind="assess", ...)`:
 
 ```
-1. SystemMessage     — plan_assess_instructions.xml (+ memory, follow-up policy)
-2. Projected ledger  — native Human/AI turns (phase-filtered, tail-capped)
-3. Task envelope     — LoopHumanMessage: GOAL / CONTEXT sections / TASK
+1. SystemMessage  — RFC-206 static tier (assess instructions; see Phase A system filter)
+2. Projected ledger — CE `LedgerManager` messages, read-side caps (RFC-214 §4.3)
+3. Task envelope — LoopHumanMessage (RFC-214 §4.4 plain-text sections + TASK)
 ```
 
-### Projection mode
+Projection mode unchanged: `new_goal` if `iteration == 0 and not step_results`, else `mid_goal` (`resolve_planner_projection_mode`).
 
-```python
-# resolve_planner_projection_mode(state)
-new_goal  if iteration == 0 and not step_results
-mid_goal  otherwise
-```
+### RFC-214 default vs IG-557 assess contract
 
-### Mid-goal ledger (`_project_planner_ledger_mid_goal_isolated`)
+| Aspect | RFC-214 default (`call_kind=assess`) | IG-557 assess contract |
+|--------|--------------------------------------|-------------------------|
+| **Mid_goal ledger phases** | All phases (plan + execute) | `execute_step` **AI only**, current-goal segment |
+| **Slice A** (`goal_completion`) | Included (IG-542 planner path) | **Excluded** |
+| **Task envelope (mid_goal)** | `PRIOR PROGRESS`, `DAG STATUS`, optional bundle sections | Allowlist only (§ Assess Prompt Contract) |
+| **Post-call persistence** | H/A pairs → CE ledger (`phase=plan_assess`) | **`GoalNode.last_assessment`** only (Phase G) |
+| **Cross-wave assess continuity** | Prior assess in ledger (excluded from projection today) | **`PREVIOUS ASSESSMENT`** from CE (Phase C) |
+| **Same-wave routing to generate** | `scratch.plan_assessment` → inline `ASSESSMENT:` | Unchanged |
 
-| Slice | Content | Phases |
-|-------|---------|--------|
-| **Slice A** | Up to `cross_goal_completion_tail` (default 3) prior **goal** completions | `goal_completion` H/A, compacted + IG-555 boundary on human |
-| **Current segment** | From after last prior `goal_completion` AI | `intent_classify`, `plan_generate`, `execute_step` |
+**Unchanged paths:** `call_kind=generate` (RFC-214 mid_goal all phases + Slice A), `call_kind=continuation` (RFC-226), execute Slice A/B (IG-542 / RFC-214 §3.1).
 
-**Excluded from all plan-assess projections**:
+### Post-call persistence (Phase G — RFC-214 §3 amendment)
 
-- All `plan_assess` pairs (assess never sees prior assess reasoning in ledger)
-- Prior goal `execute_step` rows (isolated to current goal segment)
+| Store | Where | Purpose |
+|-------|-------|---------|
+| **`last_assessment`** | `GoalNode` (RFC-624) | Audit, debug, Phase C inline |
+| **`scratch.plan_assessment`** | `LoopPhaseScratch` | Same-iteration routing → plan-generate `ASSESSMENT:` |
+| **`assess` wire event** | TUI / observability | Existing assessment card |
 
-**Caps**: `plan_prompt_ledger.plan_ledger_max_messages` (default 40 tail messages).
+**Remove:** `ce.ledger.record_message(..., phase="plan_assess")` from `LLMPlanner.assess_status()`.
 
-### Task envelope sections (`build_plan_assess_message`)
-
-| Section | Mid-goal behavior |
-|---------|-------------------|
-| `GOAL` | Full goal text |
-| `PRIOR GOALS` | Compact metadata from ContextBundle |
-| `GOAL LINEAGE` | When not redundant and no completion in ledger |
-| `PRIOR PROGRESS` | RFC-227 per-wave digest from executor; omitted if stale (`prior_progress.iteration < current_iteration - 1`) |
-| `DAG STATUS` / `STEP LINEAGE` / `SKILL` | When present |
-| `TASK` | Assess status / goal_progress / assessment_reasoning |
-
-Unlike plan-generate, assess does **not** receive an inline `ASSESSMENT:` block from the current wave's prior assess call.
-
-### Post-call ledger write
-
-Assess records compacted human + full `StatusAssessment` AI dump with `phase=plan_assess`. These rows are excluded from subsequent projections.
+Checkpoints may contain historical `plan_assess` ledger rows from pre-IG-557 runs; assess projection continues to exclude them. No backfill.
 
 ---
 
@@ -128,9 +143,9 @@ Multi-part goal terminates early
 | Cause | Detail |
 |-------|--------|
 | **Slice A at assess** | Prior goal completion AI retains completion semantics; IG-555 boundary is on human envelope only |
-| **Assess amnesia** | Prior `plan_assess` pairs stripped; model cannot see its own prior assessment chain |
+| **Assess amnesia (by design)** | Prior assess ledger pairs excluded from projection; continuity via CE **`last_assessment`** + inline `PREVIOUS ASSESSMENT` (Phase C/G) |
 | **Guardrail gap** | IG-555 guards only `iteration == 0` + complex intake before `goal_progress=complete` routing |
-| **Hint ignored** | `_log_prior_progress_disagreement` is telemetry-only |
+| **Hint ignored** | RFC-227 §4 P4: telemetry-only disagreement logging; no code override of `StatusAssessment` |
 | **Ledger tail loss** | Default 40-message cap may drop early-wave execute evidence on long goals |
 
 ### Why IG-555 is insufficient
@@ -143,9 +158,9 @@ Multi-part goal terminates early
 
 ---
 
-## High-Accuracy Plan-Assess Prompt Architecture (Design View)
+## Assess Prompt Contract (RFC-214 §4 amendment)
 
-Design target: **one routing decision** (`StatusAssessment`) grounded on **current-goal evidence only**. Everything else is either excluded or reduced to a compact, non-directive summary.
+Design target: **one routing decision** (`StatusAssessment`, RFC-604) grounded on **current-goal evidence only**. Everything else is either excluded or reduced to a compact, non-directive summary. Applies only to `call_kind=assess`; generate and continuation paths remain RFC-214 / RFC-226 normative.
 
 ### Design principles
 
@@ -158,6 +173,7 @@ Design target: **one routing decision** (`StatusAssessment`) grounded on **curre
 | P5 | **Structured continuity** | Prior routing via compact inline blocks, not replayed assess ledger pairs |
 | P6 | **Explicit denylist** | Blocks that are “usually absent” today remain **hard excluded** even when `ContextBundle` / `dag_context` are available |
 | P7 | **Gap before route** (Phase E) | Optional `PlanGapAnalysis` inline block is the only “prior work” narrative besides evidence |
+| P8 | **No assess ledger pairs** | Assess audit on CE `GoalNode.last_assessment` only; never replay assess H/A in prompts |
 
 ### Target message stack
 
@@ -178,7 +194,7 @@ Design target: **one routing decision** (`StatusAssessment`) grounded on **curre
 │   GOAL              (always full text)                          │
 │   GAP ANALYSIS      (Phase E; when mid_goal)                   │
 │   PRIOR PROGRESS    (refined digest; mid_goal only)             │
-│   PREVIOUS ASSESSMENT (Phase C; when previous_plan present)     │
+│   PREVIOUS ASSESSMENT (Phase C; when CE last_assessment present) │
 │   PLAN COVERAGE     (deterministic: remaining steps vs GOAL)    │
 │   TASK              (routing instruction only)                  │
 │   ✗ all other sections (explicit denylist below)                │
@@ -240,7 +256,7 @@ def _compact_execute_ai_for_assess(msg: BaseMessage) -> BaseMessage:
 
 ```text
 GOAL:
-<full goal text — never truncated preview>
+<full goal text — RFC-214 §4.4 preview truncation waived for assess>
 
 GAP ANALYSIS:          # Phase E; omitted when gap node skipped
 <inline PlanGapAnalysis render>
@@ -248,10 +264,10 @@ GAP ANALYSIS:          # Phase E; omitted when gap node skipped
 PRIOR PROGRESS:        # mid_goal only; omitted at first assess
 <refined digest — see below>
 
-PREVIOUS ASSESSMENT:   # Phase C; omitted when no previous_plan
+PREVIOUS ASSESSMENT:   # Phase C; from CE GoalNode.last_assessment (not ledger)
 Status: continue | replan | done
 Progress: none | low | medium | high | complete
-Reasoning: <one line from previous_plan, ≤120 chars>
+Reasoning: <assessment_reasoning truncated ≤120 chars>
 
 PLAN COVERAGE:         # deterministic code block; always when current_decision exists
 completed_steps: 2/5
@@ -367,8 +383,8 @@ agent:
 ### Implementation mapping
 
 | Architecture piece | Phase | Primary file |
-|---------------------|-------|--------------|
-| Assess ledger filter (AI-only, no Slice A) | A | `plan_ledger_projection.py` |
+|-----|-------|--------------|
+| Assess ledger filter (RFC-214 §4.3 amend) | A | `plan_ledger_projection.py` |
 | Envelope allowlist / denylist builder | A | `user_message.py` |
 | System tier suppress bundle memory | A | `builder.py` |
 | `PLAN COVERAGE` deterministic block | A | `plan_step_safety.py` or `user_message.py` |
@@ -377,6 +393,7 @@ agent:
 | `PREVIOUS ASSESSMENT` inline | C | `user_message.py` |
 | `GAP ANALYSIS` inline | E | `user_message.py` |
 | Guardrails respect gap + plan coverage | B, E | `plan_assess.py`, `plan_step_safety.py` |
+| CE assess audit + no ledger pair | G | `context/models.py`, `context/engine.py`, `planner.py` |
 
 ### Success criteria (prompt quality)
 
@@ -390,42 +407,13 @@ agent:
 
 ---
 
-## Target Design (implementation phases)
+## Implementation Design
 
-Implementation of the prompt architecture above.
+### Phase A — Assess-specific projection
 
-### 1. Assess-specific projection (P0)
+Wire `project_planner_ledger(..., call_kind="assess")` → `project_planner_ledger_for_assess` (see § Assess Prompt Contract). **Do not** change `call_kind=generate` or RFC-226 continuation projection.
 
-Replace shared mid-goal planner projection for assess with `project_planner_ledger_for_assess`:
-
-```python
-def project_planner_ledger_for_assess(
-    loop_messages: list[BaseMessage],
-    state: LoopState,
-    ledger_cfg: PlanPromptLedgerConfig | None,
-) -> list[BaseMessage]:
-    """Assess-only ledger: current-goal execute_step AI rows, compacted."""
-    seg_start = _current_goal_segment_start(loop_messages)
-    segment = [
-        _compact_execute_ai_for_assess(_deep_copy_message(m))
-        for m in loop_messages[seg_start:]
-        if getattr(m, "phase", None) == "execute_step" and _is_loop_ai_message(m)
-    ]
-    # head+tail when over cap; never inject Slice A or plan phases
-    return project_loop_messages_for_plan(segment, ledger_cfg)
-```
-
-Wire via `project_planner_ledger(..., call_kind="assess")` → delegates to function above.
-
-**Rationale**: Mid-goal assess judges **current goal execution evidence** only. Prior goal completion, intake, and plan drafts are excluded per § High-Accuracy Prompt Architecture.
-
-**Preserve Slice A for**:
-
-- `call_kind=generate` (decomposition may need prior recommendations)
-- `call_kind=continuation` (unchanged — uses `project_continuation_assess_ledger`)
-- Execute-step Slice A (IG-542 — executor needs prior grounding)
-
-### 2. Mid-goal execution-evidence guard (P0)
+### Phase B — Mid-goal execution-evidence guard
 
 Extend `node_plan_assess` before `goal_progress == "complete"` routing:
 
@@ -453,9 +441,9 @@ On rejection: downgrade `goal_progress` to `medium` or `high`, set `assess_route
 
 **Scope**: All iterations (not just iter=0). Complements IG-555 without replacing it.
 
-### 3. Inline last-assessment envelope (P1)
+### Phase C — Inline last-assessment envelope
 
-Inject compact continuity from `state.previous_plan` into assess human text:
+Inject compact continuity from **CE `GoalNode.last_assessment`** (prior assess on this goal):
 
 ```
 PREVIOUS ASSESSMENT (continuity):
@@ -463,26 +451,9 @@ PREVIOUS ASSESSMENT (continuity):
 - Reasoning: I checked X; more work needed on Y.
 ```
 
-Wire in `UserMessageBuilder.build_plan_assess_message` (partially exists in `_build_human_message` for non-plan paths; not currently on assess envelope).
+Wire in `UserMessageBuilder.build_plan_assess_message_v2()` — read via CE goal node, not ledger replay. Replaces RFC-214 §3 assess ledger continuity rationale.
 
-**Rationale**: Restores assess continuity without re-injecting full prior assess ledger pairs (which would bloat prompts and create self-anchoring).
-
-### 4. Prior-progress hint override (P2, optional)
-
-When `prior_progress.derived_progress_hint` and LLM `goal_progress` differ by >1 bucket **and** LLM says `complete`:
-
-```python
-if hint_idx <= medium and llm_idx >= complete_idx:
-    assessment.goal_progress = "high"  # or force continue_generate
-```
-
-Log override for observability. Start as shadow mode (log only) before enabling.
-
-### 5. Assess phase filter tightening (P2, optional)
-
-Mid-goal current segment for assess: `execute_step` + **last** `plan_generate` pair only (drop older plan_generate history).
-
-Reduces plan-decomposition anchoring; assess should judge evidence, not re-read every plan draft.
+**Same-wave routing:** `scratch.plan_assessment` → plan-generate inline `ASSESSMENT:` (unchanged).
 
 ---
 
@@ -513,6 +484,113 @@ A dedicated **plan-gap-analysis** phase separates tasks 1–2 from task 3. Asses
 | **IG-555 boundary marker** | De-bias prior completion tone | Current-goal evidence ↔ goal distance |
 
 **Conclusion**: RFC-227 solved *evidence starvation*; IG-557 Phase A–D reduce *projection bias* and add *structural guards*. None produce an explicit **goal coverage map** that assess must respect. Gap analysis fills that hole.
+
+### Relationship to `bounded_evidence_gather`
+
+Today there is **no functional overlap** — the nodes sit adjacent on the graph but do different jobs:
+
+| | `bounded_evidence_gather` (today) | `plan_gap_analysis` (proposed) |
+|--|-----------------------------------|--------------------------------|
+| **Implementation** | Routing stub (IG-476 fresh-loop detect only) | Structured LLM read of existing ledger |
+| **LLM** | No | Yes (~200–350 output tokens) |
+| **Tools / CoreAgent** | No (placeholder for IG-394) | **No (by design — see below)** |
+| **Output** | `evidence_gather_route` + optional synthetic `StatusAssessment` | `PlanGapAnalysis` on scratch |
+| **When** | Every complex-spine iteration | Mid-goal only (after execute evidence exists) |
+
+**Future IG-394** (`bounded_evidence_gather` as ledger-driven bounded tool rounds) is the **correct** place for pre-assess **evidence acquisition** when the ledger is empty at iter=0 complex intake. Gap analysis must **not** absorb that role.
+
+**Sequential complement** (when IG-394 lands):
+
+```
+bounded_evidence_gather
+  ├─ fresh-loop → plan_generate (IG-476, unchanged)
+  ├─ thin ledger + complex → optional bounded tool rounds (IG-394) → re-enter gather or proceed
+  └─ evidence present → plan_gap_analysis → plan_assess
+```
+
+Gap `remaining_gaps` may **inform** whether IG-394 rounds run in a later iteration, but gap itself never executes tools.
+
+**Do not** implement option E3 (extend `bounded_evidence_gather` with gap LLM + tools) — mixes routing, acquisition, and interpretation in one misleading node.
+
+### Non-goals: no tool execution in plan-gap-analysis
+
+**Decision (locked):** `plan_gap_analysis` is **read-only**. It interprets evidence already recorded by execute; it does **not** run tools, invoke CoreAgent, or append new `execute_step` ledger rows.
+
+#### Rationale
+
+| Concern | Why tools belong elsewhere |
+|---------|---------------------------|
+| **Phase contract** | Gap = evidence ↔ GOAL mapping. Tool runs = fact acquisition → execute / IG-394. |
+| **Ledger authority** | New facts must flow through execute (budgets, stamping, step cards, CE feedback, RFC-214 ledger rules). |
+| **Assess grounding** | If gap ran tools mid-spine, assess would judge gap-produced evidence — circular and hard to debug. |
+| **Latency envelope** | Gap targets one cheap structured call; tool rounds are unbounded. |
+| **Failure semantics** | Tool failures need clarification, rate limits, `record_iteration` — execute pipeline only. |
+| **IG-394 boundary** | Pre-assess tool rounds stay in `bounded_evidence_gather`; post-wave gap stays analytic. |
+
+#### Allowed inputs (read-only)
+
+- Compacted **execute_step AI** ledger (assess projection filter)
+- **`PriorProgressDigest`** (RFC-227)
+- Full **GOAL** + optional `intent.goal_description`
+- **`PLAN COVERAGE`** (deterministic code block from `current_decision` / CE step state)
+- Optional **component seeds** from code (delimiter parse of `goal_description`) — not tool calls
+
+#### Explicitly forbidden in `node_plan_gap_analysis`
+
+- `CoreAgent` / executor invocation
+- `@tool` / MCP / shell / file reads
+- Writing `execute_step` ledger pairs
+- Mutating `state.step_results` or CE step execution records
+- Side-effecting CE or workspace operations
+
+#### Thin-ledger behavior (no tool fallback)
+
+| Situation | Gap behavior | Tools? |
+|-----------|--------------|--------|
+| First assess, no execution | **Skip** gap node | No |
+| Mid-goal, empty execute ledger | **Skip** gap; assess/replan decides | No |
+| Mid-goal, partial evidence | Run gap on available evidence; open components → assess → `replan` → **execute** gathers more | No (execute next wave) |
+| iter=0 complex, empty ledger, need context before first plan | Skip gap | **IG-394 only** (future), in `bounded_evidence_gather` |
+
+When gap reports `distance_from_goal: far` with large `remaining_gaps`, the pipeline response is **assess → replan → execute**, not gap self-healing via tools.
+
+#### Allowed deterministic enrichment (not tools)
+
+Code may compute and inject without LLM tool use:
+
+- `PLAN COVERAGE` (completed / remaining step ids)
+- CE step status summaries already on `ContextBundle` (read-only projection)
+- `state.has_remaining_steps()` / dependency closure
+
+These are **inputs** to the gap prompt, not actions taken by the gap node.
+
+#### Phase separation (locked)
+
+| Phase | Responsibility | Tools? |
+|-------|----------------|--------|
+| **execute** | Acquire facts | ✅ Yes (primary) |
+| **bounded_evidence_gather** | Route (IG-476); optional acquire when ledger thin (IG-394) | Future: bounded yes |
+| **plan_gap_analysis** | Interpret evidence vs GOAL | ❌ **Never** |
+| **plan_assess** | Route (`StatusAssessment`) | ❌ Never |
+| **plan_generate** | Plan steps (LLM only) | ❌ Never |
+
+#### Fragment contract (`plan_gap_analysis_instructions.xml`)
+
+Must include:
+
+```xml
+<CONSTRAINT>
+You MUST NOT request, simulate, or perform tool calls. Analyze ONLY the ledger
+and PRIOR PROGRESS provided. If evidence is insufficient, list remaining_gaps
+and set distance_from_goal accordingly — do not attempt to gather more data.
+</CONSTRAINT>
+```
+
+#### Verification
+
+- Unit: `node_plan_gap_analysis` does not import or call executor / CoreAgent
+- Integration: mid-goal gap run produces zero new `execute_step` ledger rows
+- Lint/guard (optional): assert `call_kind="gap"` planner path has empty tools list if shared invoke helper exists
 
 ### Feasibility: yes, with constraints
 
@@ -588,23 +666,24 @@ class PlanGapAnalysis(BaseModel):
 
 - `GOAL:` / `intent.goal_description`
 - `PRIOR PROGRESS:` digest (RFC-227)
-- Current-goal `execute_step` ledger segment (assess-only projection)
-- Optional: last `plan_generate` steps as *hypothesis* ("plan claimed these steps; verify against evidence")
+- Current-goal `execute_step` **AI** ledger segment (assess-only projection)
+- `PLAN COVERAGE:` deterministic block (plan step ids — not full plan_generate JSON)
 
-**Explicit non-goals for gap schema**:
+**Explicit non-goals for gap schema and node**:
 
 - No `status` (continue/replan/done) — reserved for assess
 - No `goal_progress` bucket — assess maps from `distance_from_goal` + guards
 - No prior goal completion in projection
+- **No tool execution, CoreAgent invoke, or new execute ledger rows** (see § Non-goals: no tool execution)
 
 ### Prompt and projection for gap analysis
 
 Reuse unified planner assembly (IG-538) with new `call_kind="gap"`:
 
 ```
-1. SystemMessage  — plan_gap_analysis_instructions.xml (new fragment)
-2. Projected ledger — same as assess mid_goal: execute_step + last plan_generate; NO Slice A
-3. Task envelope  — GOAL / PRIOR PROGRESS / GAP TASK
+1. SystemMessage  — plan_gap_analysis_instructions.xml (new fragment; includes no-tools CONSTRAINT)
+2. Projected ledger — same as assess: current-goal execute_step AI only; NO Slice A, NO plan_generate
+3. Task envelope  — GOAL / PRIOR PROGRESS / PLAN COVERAGE / GAP TASK
 ```
 
 **GAP TASK** (example):
@@ -615,7 +694,7 @@ the ledger and PRIOR PROGRESS. List remaining_gaps and distance_from_goal.
 Do NOT decide continue/replan/done — assessment follows separately.
 ```
 
-**Ledger phase**: record human/AI pair with `phase=plan_gap_analysis`, `iteration=state.iteration`. Exclude from assess projection (same as `plan_assess` pairs) — assess receives gap via inline envelope only.
+**Ledger phase**: assess and gap results are **not** recorded in `loop_messages`. Audit on CE goal node; assess receives gap via inline envelope only.
 
 ### Feed-forward into plan-assess
 
@@ -676,17 +755,17 @@ Mitigations:
 
 Expected accuracy gain: reduces premature `complete` on multi-part goals where one wave succeeded; gap forces explicit enumeration before routing.
 
-### Relationship to Phase A–D
+### Relationship to Phases A–C, E
 
 | Phase | Role | Gap analysis interaction |
 |-------|------|--------------------------|
-| **A** Assess projection | Remove Slice A bias | Gap uses **same** assess-only projection |
+| **A** Assess projection | RFC-214 §4.3 amend — remove Slice A / plan phases | Gap uses **same** assess-only projection |
 | **B** Execution guard | Structural fail-safe | Guard extended to check `PlanGapAnalysis` |
-| **C** Previous assessment | Assess continuity | Orthogonal — assess sees prior routing + gap |
-| **D** Hint override | Telemetry → override | Gap `distance_from_goal` can supersede hint disagreement |
+| **C** Previous assessment | CE `last_assessment` inline | Orthogonal — prior routing + gap |
+| **G** No assess ledger | RFC-214 §3 amend | Gap also CE-only audit (`last_gap_analysis`) |
 | **E** Gap analysis | Explicit coverage map | **Primary accuracy lever for mid-goal** |
 
-Phase E is **additive** to A–B; implement A–B first (no extra latency), then E for complex/mid-goal paths.
+Phase E is **additive** to A + G + B; implement A + G + B first (no extra latency), then C and E.
 
 ---
 
@@ -708,7 +787,7 @@ Phase E is **additive** to A–B; implement A–B first (no extra latency), then
 
 - Assess prompt contains **zero** rows with phase ∈ `{goal_completion, intent_classify, plan_generate, plan_assess}`
 - Assess prompt contains **zero** `execute_step` Human rows
-- Exactly **one** `GOAL:` in task envelope; full goal text at new_goal (no 120-char preview)
+- Exactly **one** `GOAL:` in task envelope; full goal text (RFC-214 §4.4 preview waived for assess)
 - `PRIOR GOALS`, `GOAL LINEAGE`, `STEP LINEAGE`, `DAG STATUS`, `SKILL REFERENCE` absent even when `ContextBundle` populated
 - `PLAN COVERAGE` present when `state.current_decision` has steps
 - Generate projection unchanged (still includes Slice A + plan_generate)
@@ -731,29 +810,112 @@ Phase E is **additive** to A–B; implement A–B first (no extra latency), then
 
 | File | Change |
 |------|--------|
-| `prompts/user_message.py` | Add `PREVIOUS ASSESSMENT` section to `build_plan_assess_message` when `state.previous_plan` present |
-| `prompts/builder.py` | Pass `state.previous_plan` into assess message builder |
-| `tests/unit/core/prompts/test_builder_plan_assess_continuity.py` | Assert section present/absent correctly |
+| `prompts/user_message.py` | `PREVIOUS ASSESSMENT` section in `build_plan_assess_message_v2()` from CE `last_assessment` |
+| `prompts/builder.py` | Pass `last_assessment` (from CE goal or scratch) into assess message builder |
+| `tests/unit/core/prompts/test_builder_plan_assess_continuity.py` | Assert section from CE `last_assessment`; absent when None |
 
-### Phase D — Hint override + phase filter (P2, optional)
+**Depends on:** Phase G (`last_assessment` populated before second assess on same goal).
+
+### Phase G — Remove plan-assess ledger pairs; CE audit (P0)
+
+**Decision (locked):** Stop appending `plan_assess` Human/AI pairs to CE `LedgerManager`. Persist **`StatusAssessment`** on the active **`GoalNode`** (RFC-624) for audit and Phase C continuity.
+
+#### Schema (`GoalNode`)
+
+```python
+# context/models.py — GoalNode
+last_assessment: dict[str, Any] | None = None
+"""Serialized StatusAssessment from the most recent plan-assess on this goal."""
+
+last_assessment_iteration: int | None = None
+"""Loop iteration when last_assessment was written (debug/audit)."""
+```
+
+Store full `StatusAssessment.model_dump(mode="json")` including `assessment_reasoning` for audit. **Do not** project this into assess prompts except via truncated `PREVIOUS ASSESSMENT` inline block (Phase C).
+
+Optional mirror on `LoopState` for same-turn reads is **not** required — use `scratch.plan_assessment` for in-flight routing.
+
+#### ContextEngine API
+
+```python
+def set_last_assessment(
+    self,
+    goal_id: str,
+    assessment: StatusAssessment,
+    *,
+    iteration: int,
+) -> None:
+    """Overwrite per-goal assess audit snapshot (RFC-624, IG-557)."""
+    goal = self._dag.get_goal(goal_id)
+    if goal is not None:
+        goal.last_assessment = assessment.model_dump(mode="json")
+        goal.last_assessment_iteration = iteration
+```
+
+Call from `LLMPlanner.assess_status()` **instead of** `ce.ledger.record_message(..., phase="plan_assess")`.
+
+#### Remove from planner
+
+```python
+# DELETE in assess_status() after LLM call:
+ce.ledger.record_message(recorded_human, phase="plan_assess")
+ce.ledger.record_message(ai_msg, phase="plan_assess")
+```
+
+Compaction helpers (`compact_planning_human_content`, `compact_plan_assess_ai_dump`) are **not required** when ledger recording is removed.
+
+#### Fix goal-boundary marker (same phase)
+
+Replace `_goal_segment_start()` dependency on iter=0 `plan_assess` ledger rows (RFC-214 G7 pre-amendment artifact). Use `_current_goal_segment_start()` (after last `goal_completion` AI) or first `intent_classify` in segment.
+
+#### Gap analysis (Phase E alignment)
+
+Apply the same policy to `plan_gap_analysis`:
+
+| | plan_assess | plan_gap_analysis |
+|--|-------------|-------------------|
+| Ledger H/A pair | **No** | **No** |
+| CE audit field | `last_assessment` | `last_gap_analysis` (optional dict) |
+| Prompt feed-forward | `PREVIOUS ASSESSMENT` | `GAP ANALYSIS` inline |
+
+#### Persistence
+
+`last_assessment` serializes with CE goal node (SQLite backend). Survives checkpoint/resume within the goal. Cleared or preserved on goal completion per existing goal lifecycle (preserve for completed goal audit).
 
 | File | Change |
 |------|--------|
-| `cognition/planner.py` | Optional hint override after assess LLM call |
-| `prompts/plan_ledger_projection.py` | Optional assess-only phase filter for plan_generate history |
-| Config | `agent.loop.plan_assess_hint_override: bool` (default false, shadow first) |
+| `context/models.py` | Add `last_assessment`, `last_assessment_iteration` on `GoalNode`; optional `last_gap_analysis` |
+| `context/engine.py` | `set_last_assessment()`; optional `set_last_gap_analysis()` |
+| `cognition/planner.py` | Remove assess ledger recording; call `set_last_assessment` |
+| `prompts/plan_ledger_projection.py` | Fix `_goal_segment_start`; delete dead `current_iteration_plan_assess_in_ledger` if unused |
+| `tests/unit/context/test_goal_last_assessment_ig557.py` | CE round-trip, overwrite semantics |
+| `tests/unit/core/loop/planning/test_planner_ledger_recording.py` | Assert **no** ledger append; assert CE updated |
+| `tests/unit/core/loop/utils/test_ledger_ce_sole_source.py` | Update assess recording expectations |
+
+**Acceptance**:
+
+- After `assess_status()`, `len(ce.get_messages())` unchanged (no new ledger rows)
+- `goal.last_assessment["status"]` matches returned `StatusAssessment`
+- Second assess on same goal shows `PREVIOUS ASSESSMENT` from CE (Phase C)
+- `scratch.plan_assessment` still feeds same-wave `plan_generate` inline `ASSESSMENT:`
+- Cross-goal Slice A collection works in fixtures **without** `plan_assess` rows
+- Resume/reload restores `last_assessment` on CE goal node
+
+### Phase D — ~~Hint override + phase filter~~ (removed)
+
+Superseded by Phase A assess-only projection (no `plan_generate` in assess ledger at all). Hint-vs-LLM disagreement remains **telemetry only** per RFC-227 §4 P4 — no code-side rewrite of `StatusAssessment`.
 
 ### Phase E — Plan-gap-analysis node (P1, recommended for mid-goal)
 
 | File | Change |
 |------|--------|
 | `state/schemas.py` | Add `PlanGapAnalysis`, `GoalComponentStatus`; `LoopState.plan_gap: PlanGapAnalysis \| None` |
-| `orchestrator/nodes/plan_gap_analysis.py` | New node: build gap messages, invoke structured LLM, record ledger, set scratch |
+| `orchestrator/nodes/plan_gap_analysis.py` | New node: build gap messages, invoke structured LLM, set scratch + CE audit (no ledger) |
 | `orchestrator/builder.py` | Insert node; conditional edges from `bounded_evidence_gather` and to `plan_assess` |
 | `orchestrator/routing.py` | Add `route_after_evidence_gather` gap branch; `route_after_gap`; clarification origin |
 | `orchestrator/phase_scratch.py` | `plan_gap: PlanGapAnalysis \| None` |
 | `orchestrator/state.py` | `GapAnalysisRoute`, graph state keys |
-| `cognition/planner.py` | `analyze_plan_gap()` method; ledger recording |
+| `cognition/planner.py` | `analyze_plan_gap()` method; CE `set_last_gap_analysis` (no ledger) |
 | `cognition/phase.py` | Delegate to planner |
 | `prompts/planner_assembly.py` | Extend `PlannerCallKind` with `"gap"` |
 | `prompts/builder.py` | `build_plan_messages(..., call_kind="gap")`; assess-only projection |
@@ -770,8 +932,10 @@ Phase E is **additive** to A–B; implement A–B first (no extra latency), then
 - iter=0, no execution → `bounded_evidence_gather → plan_assess` (gap skipped)
 - iter=1, complex goal, partial wave → gap runs; assess human contains `GAP ANALYSIS` block
 - Gap returns `distance_from_goal=moderate` with open components → assess `complete` rejected by guard
-- Gap ledger recorded with `phase=plan_gap_analysis`; excluded from next assess projection
+- **No** `plan_gap_analysis` ledger rows; `goal.last_gap_analysis` set on CE when enabled
 - Latency: +1 LLM call only on mid-goal paths
+- **Gap node produces zero new `execute_step` rows and never invokes CoreAgent/executor**
+- **`plan_gap_analysis_instructions.xml` contains no-tools CONSTRAINT**
 
 ### Phase F — Gap-informed plan-generate (P2, optional)
 
@@ -793,8 +957,8 @@ When assess routes `continue_generate`, pass `PlanGapAnalysis.remaining_gaps` in
 | Gap analysis skipped | `[Plan] gap analysis skipped (reason=iter0_no_execution)` |
 | Gap analysis completed | `[Plan] gap distance=%s open_components=%d` |
 | Assess rejected vs gap | `[Plan] Reject assessment: contradicts gap analysis (distance=%s)` |
-| Hint override (shadow) | `[Plan] prior_progress hint=%s vs LLM goal_progress=%s — would override` |
-| Hint override (active) | `[Plan] prior_progress override: complete → high` |
+| CE last_assessment written | `[Plan] CE last_assessment iter=%d status=%s progress=%s` |
+| Prior-progress disagreement (RFC-227 telemetry) | `[Plan] prior_progress hint=%s vs LLM goal_progress=%s` |
 
 Extend `_log_prior_progress_disagreement` metrics for tuning. Emit TUI `plan_phase_status` during gap call ("Analyzing goal coverage").
 
@@ -813,7 +977,9 @@ Extend `_log_prior_progress_disagreement` metrics for tuning. Emit TUI `plan_pha
 | Assess respects gap (guard) | `complete` rejected when gap shows open components |
 | Continuation reference resolution at generate/execute | Unchanged (Slice A preserved for non-assess paths) |
 | Simple/trivial single-wave completion | Still routes to goal_done when evidence supports it |
-| Latency | Phase A–D: no extra LLM calls; Phase E: +1 call mid-goal only (~2–4s) |
+| **No plan_assess ledger rows** | `assess_status()` never appends to `loop_messages` |
+| **CE last_assessment audit** | Every assess overwrites goal snapshot; survives CE persist |
+| Latency | Phase A/B/G: no extra LLM calls; Phase E: +1 call mid-goal only (~2–4s) |
 
 ---
 
@@ -822,9 +988,13 @@ Extend `_log_prior_progress_disagreement` metrics for tuning. Emit TUI `plan_pha
 - Changing execute-step Slice A projection (IG-542)
 - Intake Pass 2 prior projection (IG-554 / IG-540)
 - Replacing `PRIOR PROGRESS` digest with gap analysis (digest remains; gap builds on it)
+- **Tool execution inside `plan_gap_analysis`** (locked non-goal; IG-394 owns pre-assess gather)
+- **Re-injecting plan-assess / plan_gap ledger into prompts** (continuity via CE + inline blocks only)
 - Fine-tuning or model changes
 - Wire protocol / TUI changes (except `plan_phase_status` label for gap)
 - RFC-220 topology changes beyond inserting one skippable node (Phase E)
+- **Code-side `derived_progress_hint` override** (conflicts with RFC-227 §4 P4)
+- **Partial assess ledger retention** (e.g. last `plan_generate` pair only — superseded by Phase A execute-AI-only filter)
 
 ---
 
@@ -832,18 +1002,24 @@ Extend `_log_prior_progress_disagreement` metrics for tuning. Emit TUI `plan_pha
 
 1. **Continuation assess-only goals at iter=0 with step_results** — Should assess omit Slice A when `continue_loop` and `step_results` present (forced mid_goal)?
 2. **Complex guard threshold** — Require ≥1 wave vs require all plan steps complete before `complete`?
-3. **Separate `cross_goal_completion_tail` for assess** — Config knob vs hard-coded omission?
-4. **Shadow period** — How many integration runs before enabling hint override?
+3. **Separate `cross_goal_completion_tail` for assess** — N/A under Phase A (Slice A hard-off for assess); generate path keeps RFC-214 / IG-555 config.
+4. ~~**Shadow period for hint override**~~ — **Removed** (RFC-227 telemetry-only).
 5. **Gap decomposition source** — LLM-only vs seed components from `intent.goal_description` + delimiter heuristics (`then`, `and`, numbered lists)?
 6. **Gap skip for simple intake** — Always run on mid_goal, or only `complex`?
 7. **E1 vs E2** — Ship graph node first, or prototype as two-call inside `plan_assess` for faster validation?
 8. **Phase F timing** — Feed gaps to plan-generate on every replan, or only when assess returns `replan`?
+9. ~~**Tools in gap**~~ — **Closed:** gap is read-only; IG-394 owns bounded pre-assess tool rounds.
+10. ~~**Plan-assess ledger pairs**~~ — **Closed:** amend RFC-214 §3; audit on `GoalNode.last_assessment` (Phase G).
+11. **RFC-214 doc update** — Land §3 / §4.3–§4.5 amendments when IG-557 ships?
 
 ---
 
 ## Files (expected)
 
 ```
+packages/soothe/src/soothe/foundation/context/models.py
+packages/soothe/src/soothe/foundation/context/engine.py
+packages/soothe/tests/unit/context/test_goal_last_assessment_ig557.py
 packages/soothe/src/soothe/foundation/sloop/prompts/plan_ledger_projection.py
 packages/soothe/src/soothe/foundation/sloop/prompts/builder.py
 packages/soothe/src/soothe/foundation/sloop/prompts/user_message.py
@@ -869,6 +1045,8 @@ packages/soothe/tests/unit/core/prompts/test_plan_ledger_projection_ig380.py
 packages/soothe/tests/unit/core/loop/orchestrator/nodes/test_plan_assess_ig557_guardrail.py
 packages/soothe/tests/unit/core/loop/orchestrator/nodes/test_plan_gap_analysis_ig557.py
 packages/soothe/tests/unit/core/prompts/test_builder_plan_assess_continuity.py
+packages/soothe/tests/unit/core/loop/planning/test_planner_ledger_recording.py
+packages/soothe/tests/unit/core/loop/utils/test_ledger_ce_sole_source.py
 packages/soothe/tests/integration/core/test_loop_agent_continuation_planning.py
 ```
 
@@ -877,26 +1055,28 @@ packages/soothe/tests/integration/core/test_loop_agent_continuation_planning.py
 ## Recommended implementation order
 
 ```
-Phase A (prompt v2 + projection) ──┐
-Phase B (guard)                    ──┼── P0: accuracy foundation
-                                   │
-Phase C (continuity)               ──┘
-Phase E (gap analysis)             ─── P1: explicit coverage map
-Phase D (hint override)            ── P2: optional tuning
-Phase F (gap → generate)           ── P2: replan targeting
+Phase A (assess projection + envelope) ──┐
+Phase G (RFC-214 §3 amend + CE audit)  ──┼── P0
+Phase B (guard)                        ──┘
+Phase C (PREVIOUS ASSESSMENT)          ─── P1: after G
+Phase E (gap analysis, CE audit)       ─── P1
+Phase F (gap → generate)               ── P2: replan targeting
 ```
 
 ---
 
 ## References
 
-- RFC-214: Loop Message Surface (ledger phases, projection)
-- RFC-220: StrangeLoop graph topology
-- RFC-227: Prior Progress Digest (wave evidence; gap builds on this)
-- RFC-604: Reason-phase split (StatusAssessment schema)
-- RFC-630: Start-Phase LLM Intake and Branch Routing
-- IG-555: Plan-Assess Prior Goal Completion Bias Mitigation (iter=0)
-- IG-538: Unified Planner Prompt Assembly
-- IG-542: Execute-Step Ledger Projection (Slice A/B)
-- IG-551: Mid-Loop Continuation Planning Coordination
-- Draft: `docs/drafts/2026-07-07-plan-assess-prior-goal-bias-mitigation.md`
+- RFC-206: Prompt architecture (static / semi-static / volatile tiers)
+- RFC-214: Loop message surface — **§3, §4.3–§4.5 amended by IG-557 for `call_kind=assess`**
+- RFC-220: LangGraph agent loop orchestrator
+- RFC-225: Loop continuity and goal record enrichment
+- RFC-226: Continuation-aware plan_assess (unchanged path)
+- RFC-227: Plan-assess prior-progress digest
+- RFC-604: Reason-phase split (`StatusAssessment`)
+- RFC-624: Context Engine (`GoalNode`, `LedgerManager`)
+- RFC-630: Start-phase LLM intake and branch routing
+- IG-555: Plan-assess prior goal completion bias mitigation (iter=0)
+- IG-538: Unified planner prompt assembly
+- IG-542: Execute-step ledger projection (Slice A/B)
+- IG-551: Mid-loop continuation planning coordination

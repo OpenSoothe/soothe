@@ -9,7 +9,7 @@ description: >-
 
 # VectorStoreProtocol & AsyncPersistStore
 
-**RFCs**: RFC-000 Module 8 (VectorStore), RFC-300 (PersistStore)
+**RFCs**: RFC-000 Module 8 (VectorStore), [RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md) (PersistStore, archived)
 **Locations**:
 - `packages/soothe-sdk/src/soothe_sdk/protocols/vector_store.py`
 - `packages/soothe-sdk/src/soothe_sdk/protocols/persistence.py`
@@ -71,7 +71,7 @@ PostgreSQL deployments use **dedicated databases** per concern:
 | Database | Purpose | Protocol |
 |----------|---------|----------|
 | `soothe_metadata` | Thread lifecycle state | DurabilityProtocol |
-| `soothe_context` | Context ledger (future) | ContextProtocol |
+| `soothe_context` | Context ledger (not implemented) | ContextProtocol (draft, never implemented) |
 | `soothe_vectors` | Vector storage | VectorStoreProtocol |
 | `soothe_checkpoints` | LangGraph checkpoints | (LangGraph) |
 
@@ -117,14 +117,9 @@ get_thread()     → persist_store.load(f"thread:{thread_id}") → ThreadInfo.mo
 
 The key convention (`thread:<id>`) provides namespacing without explicit namespace parameters.
 
-### PersistStore ↔ Context (Future)
+### PersistStore ↔ Context
 
-When ContextProtocol is implemented, its ledger will persist via PersistStore:
-
-```
-persist()  → persist_store.save(f"context:{thread_id}", ledger.model_dump())
-restore()  → persist_store.load(f"context:{thread_id}")
-```
+ContextProtocol is not implemented. Context management uses `ContextEngine`, which persists its ledger via its own `persistence/` submodule using durability backends — not directly via `AsyncPersistStore`. The planned `ContextProtocol` would have used PersistStore, but this design was never realized.
 
 ## Design Rationale
 
@@ -173,12 +168,14 @@ Resolved via `resolve_vector_store(config)` and `resolve_persist_store(config, n
 ## Specification Reference
 
 - **RFC-000**: System Conceptual Design (Module 8: VectorStore)
-- **RFC-300**: Context and Memory Architecture Design (PersistStore)
+- **[RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md)**: Context and Memory Architecture Design (PersistStore, archived)
 - **RFC-802**: Persistence Architecture Refactor (multi-database)
 - **RFC-801**: SQLite Backend
 
 ## Related Documentation
 
+- **[Vector Store Backends](../backends/vector-store-backends.md)** — Vector store implementations
+- **[Persistence Backends](../backends/persistence-backends.md)** — PersistStore implementations
 - [Memory Protocol](memory.md) — uses VectorStore for semantic recall
 - [Durability Protocol](durability.md) — uses PersistStore for thread storage
-- [Context Protocol](context.md) — future PersistStore consumer
+- [ContextProtocol](context.md) — not implemented; context managed by ContextEngine

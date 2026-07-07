@@ -184,7 +184,7 @@ Memory backends (MemUMemory) use vector stores indirectly — MemU maintains its
 
 ## Related Documentation
 
+- **[VectorStoreProtocol & AsyncPersistStore](../protocols/vector-store-persistence.md)** — Protocol interface definitions
 - **[Backends Overview](index.md)** — Backend layer introduction
 - **[Memory Backends](memory-backends.md)** — Memory semantic search integration
-- **[Context Protocol](../protocols/index.md)** — Context semantic search
 - **[RFC-001](../../specs/RFC-001-core-modules-architecture.md)** — Vector store protocol spec

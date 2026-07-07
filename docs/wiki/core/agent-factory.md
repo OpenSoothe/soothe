@@ -4,18 +4,18 @@ parent: Core Modules
 grand_parent: Wiki
 nav_order: 1
 description: >-
-  CoreAgent construction and the Layer 1 runtime foundation, covering the builder pipeline and compiled graph.
+  CoreAgent construction and the runtime foundation, covering the builder pipeline and compiled graph.
 ---
 
 # Agent Factory
 
-CoreAgent construction and the Layer 1 runtime foundation.
+CoreAgent construction and the runtime foundation.
 
 ---
 
 ## What This Module Is
 
-The agent factory (`soothe.foundation.core.agent`) builds Soothe's CoreAgent — a thin wrapper around a LangGraph `CompiledStateGraph` with typed protocol properties and a streaming execution interface. CoreAgent is **Layer 1** of the three-level execution model: a pure execution runtime for tools, subagents, and middlewares with **no goal infrastructure** (that's Layer 2/3's job).
+The agent factory (`soothe.foundation.core.agent`) builds Soothe's CoreAgent — a thin wrapper around a LangGraph `CompiledStateGraph` with typed protocol properties and a streaming execution interface. CoreAgent is the **execution tier** of the three-level model: a pure execution runtime for tools, subagents, and middlewares with **no goal infrastructure** (that's StrangeLoop/ContextEngine's job).
 
 The central entry point is `create_soothe_agent(config)`, which delegates to an `AgentBuilder` that resolves protocols, assembles tools/subagents, wires middlewares, compiles the LangGraph, and attaches protocol instances as typed properties.
 
@@ -42,7 +42,7 @@ The builder assembles components in a deliberate order:
 1. **Config propagation** — `config.propagate_env()` applies environment overrides before anything reads config values.
 2. **Protocol resolution** — delegates to `soothe.runner.resolver` for memory (MemU), planner (LLMPlanner), and policy (ConfigDrivenPolicy). Each can return `None` if disabled.
 3. **Tool/subagent assembly** — built-in tools (execution, websearch, research) plus configured subagents (planner, deep_research, academic_research, browser_use, skillify, veritas) plus plugin and MCP tools.
-4. **Middleware wiring** — `build_soothe_middleware_stack()` produces the five Soothe middlewares (policy, system prompt, execution hints, workspace context, subagent context).
+4. **Middleware wiring** — `build_soothe_middleware_stack()` assembles the Soothe middleware stack (identity, policy, system prompt, rate limiting, workspace context, per-turn model, filesystem, code interpreter, MCP tool search, tool timeout — see [Core Modules](index.md) for the full list).
 5. **Graph compilation** — calls `create_deep_agent()` with the assembled model, tools, subagents, middlewares, and checkpointer.
 6. **Protocol attachment** — protocol instances are attached as typed properties on the resulting `CoreAgent`.
 
@@ -50,22 +50,22 @@ A key design decision: protocol resolution is **delegated to the resolver module
 
 ---
 
-## The Layer 1 / Layer 2 Contract
+## The CoreAgent / StrangeLoop Contract
 
-CoreAgent is designed for a specific integration pattern with Layer 2 (StrangeLoop/Runner):
+CoreAgent is designed for a specific integration pattern with StrangeLoop (the middle tier):
 
-**Layer 2 provides** (via `config.configurable`):
+**StrangeLoop provides** (via `config.configurable`):
 - `thread_id` — for persistence and state isolation
 - `workspace` — thread-specific workspace path (RFC-103)
 - `soothe_step_subagent` — when set, the first model hop delegates via `task` tool only (IG-386)
 - `soothe_step_expected_output` — advisory text describing the expected result
 
-**Layer 1 provides**:
+**CoreAgent provides**:
 - `astream(input, config)` — streaming execution
 - Typed protocol property access (`agent.memory`, `agent.planner`, `agent.policy`)
 - Thread-aware execution via checkpointer
 
-The hints are **advisory** — CoreAgent doesn't enforce goals or planning. It just executes prompts, optionally honoring a suggested subagent or expected-output hint. This keeps Layer 1 reusable for direct CLI usage and tests.
+The hints are **advisory** — CoreAgent doesn't enforce goals or planning. It just executes prompts, optionally honoring a suggested subagent or expected-output hint. This keeps CoreAgent reusable for direct CLI usage and tests.
 
 ---
 
@@ -126,7 +126,7 @@ For protocol-orchestrated execution (policy validation, memory persistence, even
 
 ## Integration Points
 
-- **StrangeLoop** — delegates step execution to `agent.astream()` or `agent.execution_astream()`, passing Layer 2 hints via `config.configurable`.
+- **StrangeLoop** — delegates step execution to `agent.astream()` or `agent.execution_astream()`, passing hints via `config.configurable`.
 - **SootheRunner** — calls `create_soothe_agent()` internally (lazily, if `lazy_core_agent` is enabled in config) and wires the checkpointer.
 - **CLI/Daemon** — direct factory usage for one-shot execution; daemon wraps in WebSocket event delivery.
 
@@ -144,5 +144,5 @@ For protocol-orchestrated execution (policy validation, memory persistence, even
 
 - **[SootheRunner](runner.md)** — protocol orchestration around CoreAgent
 - **[Protocol Resolver](resolver.md)** — how protocols are resolved from config
-- **[StrangeLoop](strangeloop.md)** — Layer 2 that delegates to CoreAgent
+- **[StrangeLoop](strangeloop.md)** — the middle tier that delegates to CoreAgent
 - **[RFC-100](../../specs/RFC-100-coreagent-runtime.md)** — full specification

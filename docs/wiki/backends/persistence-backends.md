@@ -146,6 +146,7 @@ Persistence backends are the foundation other backends build on:
 
 ## Related Documentation
 
+- **[VectorStoreProtocol & AsyncPersistStore](../protocols/vector-store-persistence.md)** — Protocol interface definition
 - **[Backends Overview](index.md)** — Backend layer introduction
 - **[Durability Backends](durability-backends.md)** — Composes on top of PersistStore
 - **[Memory Backends](memory-backends.md)** — Memory storage patterns

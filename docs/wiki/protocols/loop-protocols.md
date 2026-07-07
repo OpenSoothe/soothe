@@ -48,7 +48,7 @@ Execute phase: record_step_result(...) → memory grows (bounded)
 Plan phase:    render_for_reason(max_chars=2000) → bounded slice injected into prompt
 ```
 
-This bounded approach contrasts with `ContextProtocol` (future), which would provide *unbounded* accumulation with relevance-based projection. Working memory is the pragmatic, always-available scratchpad; Context would be the richer, persistent ledger.
+This bounded approach contrasts with `ContextEngine` (`soothe.foundation.context`), which provides *unbounded* accumulation with relevance-based projection. Working memory is the pragmatic, always-available scratchpad; ContextEngine is the richer, persistent ledger. `ContextProtocol` was planned (RFC-302 draft) but never implemented — context is managed by `ContextEngine` directly, not a protocol.
 
 ### Workspace Spill
 
@@ -137,4 +137,4 @@ agent:
 - [Planner Protocol](planner.md) — `LoopPlannerProtocol` consumes working memory
 - [Policy Protocol](policy.md) — `PolicyProtocol` backs operation security decisions
 - [Execution Protocols](execution-protocols.md) — `LoopRunnerProtocol` orchestrates the loop
-- [Context Protocol](context.md) — future unbounded ledger
+- [ContextProtocol](context.md) — not implemented; context managed by ContextEngine

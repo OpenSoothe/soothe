@@ -196,7 +196,8 @@ Resolved via `resolve_planner(config)` and `resolve_loop_planner(config)` — bo
 - **RFC-604**: Two-phase architecture (Reason Phase Robustness)
 - **RFC-226**: Continuation-Aware Plan Assessment
 - **RFC-211**: Layer2 Tool Result Optimization (outcome metadata)
-- **RFC-200**: Autonomous Goal Management
+- **RFC-624**: Context Engine (Autonomous Goal Management)
+- **RFC-200**: Autonomous Goal Management (archived, superseded by RFC-624)
 
 ## Related Documentation
 

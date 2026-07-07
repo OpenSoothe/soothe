@@ -21,7 +21,7 @@ This is explicitly distinct from two other "memory" concepts in Soothe:
 | Concept | Scope | Population | Retrieval |
 |---------|-------|------------|-----------|
 | **MemoryProtocol** | Cross-thread | Explicit (manual `remember()`) | Semantic + tag-based |
-| **ContextProtocol** (future) | Within-thread | Auto-ingested | Relevance projection |
+| **ContextProtocol** (not implemented) | Within-thread | Auto-ingested | Relevance projection |
 | **MemoryMiddleware** | Static files | Authored AGENTS.md | File reads |
 
 MemoryProtocol is *explicitly populated* — not every tool result gets memorized. Callers decide what's worth remembering, which keeps the store curated and noise-free.
@@ -83,7 +83,7 @@ Thread B (new, related task):
   → memory.remember(new_findings)  ← stored with source_thread="B"
 ```
 
-When ContextProtocol is implemented, recalled memories would be ingested into the current thread's context ledger. Today, recalled items are injected directly into planning prompts.
+Recalled memories are injected directly into planning prompts. If `ContextProtocol` were ever implemented, recalled memories would be ingested into the context ledger — but this is not the case today.
 
 ### Memory ↔ Durability
 
@@ -139,11 +139,12 @@ Resolved via `resolve_memory(config)` → returns a `MemoryProtocol` instance (c
 
 - **RFC-303**: Memory Protocol Architecture
 - **RFC-000**: System Conceptual Design (Principle 4: unbounded context, bounded projection)
-- **RFC-300**: Context and Memory Architecture Design (superseded)
+- **[RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md)**: Context and Memory Architecture Design (archived, superseded by RFC-302)
 
 ## Related Documentation
 
-- [Context Protocol](context.md) — future within-thread ledger
+- **[Memory Backends](../backends/memory-backends.md)** — Backend implementations
+- [ContextProtocol](context.md) — not implemented; context managed by ContextEngine
 - [Durability Protocol](durability.md) — thread lifecycle (archive triggers memory consolidation)
 - [Vector Store & Persistence](vector-store-persistence.md) — underlying vector search
 - [Planner Protocol](planner.md) — consumes recalled memories in planning

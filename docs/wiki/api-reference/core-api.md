@@ -15,17 +15,17 @@ The `soothe` package is the heart of the system — it provides the configuratio
 
 ---
 
-## Architectural Layers
+## Architectural Tiers
 
-Soothe separates concerns into three layers, each with a strict contract:
+Soothe separates concerns into three tiers, each with a strict contract:
 
-| Layer | Responsibility | Key Class |
-|-------|---------------|-----------|
-| **Layer 1** | Pure agent execution — tools, subagents, middleware, LangGraph runtime | `CoreAgent` |
-| **Layer 2** | Goal-driven orchestration — planning, strange-loop iteration, thread management | `SootheRunner` |
-| **Layer 3** | Daemon infrastructure — IPC, multi-transport, background scheduling | `SootheDaemon` |
+| Tier | Responsibility | Key Class |
+|------|---------------|-----------|
+| **CoreAgent** | Pure agent execution — tools, subagents, middleware, LangGraph runtime | `CoreAgent` |
+| **SootheRunner** | Goal-driven orchestration — planning, strange-loop iteration, thread management | `SootheRunner` |
+| **SootheDaemon** | Daemon infrastructure — IPC, multi-transport, background scheduling | `SootheDaemon` |
 
-Layer 1 knows nothing about goals or the daemon. Layer 2 wraps Layer 1 with protocol orchestration. Layer 3 (documented in [daemon-api.md](daemon-api.md)) hosts Layer 2 as a long-running server.
+CoreAgent knows nothing about goals or the daemon. SootheRunner wraps CoreAgent with protocol orchestration. SootheDaemon (documented in [daemon-api.md](daemon-api.md)) hosts SootheRunner as a long-running server.
 
 This separation is intentional: `CoreAgent` can be used standalone for embedding in any async Python process, while `SootheRunner` adds the agentic loop and protocol pre/post-processing.
 
@@ -95,9 +95,9 @@ The protocols use `typing.Protocol` (structural subtyping) rather than `abc.ABC`
 
 > **Source**: `packages/soothe/src/soothe/foundation/core/agent/`
 
-### CoreAgent (Layer 1)
+### CoreAgent
 
-`CoreAgent` is a thin typed wrapper around LangGraph's `CompiledStateGraph`. It exposes protocol instances (memory, planner, policy) as typed properties and provides the `astream()` execution interface. It deliberately contains **no goal infrastructure** — that's Layer 2's job.
+`CoreAgent` is a thin typed wrapper around LangGraph's `CompiledStateGraph`. It exposes protocol instances (memory, planner, policy) as typed properties and provides the `astream()` execution interface. It deliberately contains **no goal infrastructure** — that's SootheRunner's job.
 
 A key design detail: `CoreAgent` can hold a *twin* execute graph (`execute_graph`) compiled without a checkpointer, used for ephemeral execute-phase streaming (IG-477). This avoids checkpoint pollution from the StrangeLoop's ACT phase.
 
@@ -125,7 +125,7 @@ For custom protocol injection (e.g., a test-memory backend), use `AgentBuilder` 
 
 ---
 
-## Agent Execution (Layer 2)
+## Agent Execution (SootheRunner)
 
 > **Source**: `packages/soothe/src/soothe/runner/`
 
@@ -183,7 +183,7 @@ The resolver functions (`resolve_memory`, `resolve_durability`, `resolve_planner
 
 ## See Also
 
-- [Daemon API](daemon-api.md) — Layer 3 server infrastructure
+- [Daemon API](daemon-api.md) — SootheDaemon server infrastructure
 - [SDK API](sdk-api.md) — Client and plugin development
 - [Protocols Layer](../protocols/index.md) — Protocol specifications
 - [Configuration Guide](../configuration-guide/index.md) — Full config reference

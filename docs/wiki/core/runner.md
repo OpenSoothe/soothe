@@ -51,7 +51,7 @@ When you call `runner.run(query)`, execution flows through three phases:
 
 ### Agentic Loop Phase
 
-Delegates to StrangeLoop (RFC-201) for the Plan → Execute iterative refinement loop. The runner passes Layer 2 hints (workspace, intent, routing classification) through `config.configurable`. StrangeLoop yields progress events; the runner forwards them as `soothe.*` custom events.
+Delegates to StrangeLoop (RFC-201) for the Plan → Execute iterative refinement loop. The runner passes execution hints (workspace, intent, routing classification) through `config.configurable`. StrangeLoop yields progress events; the runner forwards them as `soothe.*` custom events.
 
 ### Post-Stream Phase
 

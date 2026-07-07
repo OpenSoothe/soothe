@@ -59,15 +59,15 @@ For detailed setup, continue with the guides above.
 
 ## 📚 Additional Resources
 
-- **[Configuration Guide](../configuration.md)** - Customize Soothe for your needs
+- **[Configuration Guide](../configuration-guide/index.md)** - Customize Soothe for your needs
 - **[CLI Reference](../cli-reference.md)** - Complete command documentation
 - **[TUI Guide](../tui-guide.md)** - Terminal UI usage
-- **[Troubleshooting](../troubleshooting.md)** - Solve common issues
+- **[Troubleshooting](../troubleshooting/index.md)** - Solve common issues
 
 ---
 
 ## 🆘 Getting Help
 
 - **Documentation**: Browse the [wiki](../index.md)
-- **Issues**: Check [troubleshooting](../troubleshooting.md) first
+- **Issues**: Check [troubleshooting](../troubleshooting/index.md) first
 - **Architecture**: See [architecture overview](../architecture/index.md)

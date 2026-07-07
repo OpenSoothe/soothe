@@ -3,10 +3,15 @@ title: Subagents
 parent: User Guides
 nav_order: 4
 description: >-
-  Built-in specialized subagents and community plugin agents.
+  User-facing guide to built-in specialized subagents and community plugin agents.
+audience: user
 ---
 
 # Specialized Subagents
+
+> **User guide.** For the architectural design, protocol contracts, and model
+> role resolution of subagents, see
+> **[Subagents Architecture](capabilities/subagents.md)**.
 
 Core Soothe ships six built-in subagents: **planner**, **deep_research**, **academic_research**, **browser_use**, **veritas**, and **skillify**. Additional optional delegated agents (e.g. **weaver** and other community plugins) are maintained in the **`soothe-plugins`** package—see that project's README and docs.
 
@@ -170,5 +175,6 @@ The `soothe-plugins` package provides additional delegate subagents (e.g. **weav
 ## Related Guides
 
 - [TUI Guide](tui-guide.md) - Slash commands and routing
-- [Configuration Guide](configuration.md) - Subagent configuration
-- [Troubleshooting](troubleshooting.md) - Common subagent issues
+- [Configuration Guide](configuration-guide/index.md) - Subagent configuration
+- [Troubleshooting](troubleshooting/index.md) - Common subagent issues
+- [Subagents Architecture](capabilities/subagents.md) - Architecture and protocol design

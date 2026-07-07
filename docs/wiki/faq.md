@@ -658,13 +658,12 @@ See [Architecture Overview](architecture/index.md).
 
 | Protocol | Purpose |
 |----------|---------|
-| ContextProtocol | Context injection (KeywordContext, VectorContext) |
-| MemoryProtocol | Semantic memory (KeywordMemory, VectorMemory) |
-| PlannerProtocol | Planning strategy (Simple, Subagent, model-specific) |
+| MemoryProtocol | Semantic memory (MemUMemory) |
+| PlannerProtocol | Planning strategy (LLMPlanner) |
 | PolicyProtocol | Security policies (ConfigDrivenPolicy) |
-| DurabilityProtocol | Thread lifecycle and checkpoints |
-| PersistenceProtocol | Key-value storage (SQLite, PostgreSQL) |
-| VectorStoreProtocol | Embedding storage (`PGVectorStore`, `WeaviateVectorStore`) |
+| DurabilityProtocol | Thread lifecycle (SQLite, PostgreSQL) |
+| AsyncPersistStore | Key-value storage (SQLite, PostgreSQL) |
+| VectorStoreProtocol | Embedding storage (PGVector, SQLiteVec, Weaviate) |
 | WorkspaceProtocol | Workspace resolution and validation |
 
 See [Architecture Overview - Protocols](architecture/index.md#protocols).
