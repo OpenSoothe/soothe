@@ -234,6 +234,27 @@ def _render_gap_analysis_block(gap: PlanGapAnalysis | dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _render_open_gaps_block(gap: PlanGapAnalysis | dict[str, Any]) -> str:
+    """Render gap remaining work for plan-generate targeting (IG-557 Phase F)."""
+    if isinstance(gap, dict):
+        gap_obj = PlanGapAnalysis.model_validate(gap)
+    else:
+        gap_obj = gap
+    lines: list[str] = []
+    for item in gap_obj.remaining_gaps:
+        text = str(item).strip()
+        if text:
+            lines.append(f"- {text}")
+    if not lines:
+        for component in gap_obj.components:
+            if component.status not in ("not_started", "partial", "blocked"):
+                continue
+            text = (component.gap or component.component).strip()
+            if text:
+                lines.append(f"- {text}")
+    return "\n".join(lines)
+
+
 def _should_inject_goal_lineage(
     goal: str,
     goal_lineage: str,
@@ -624,6 +645,7 @@ class UserMessageBuilder:
         prior_goals_override: list[PriorGoalSummary] | None = None,
         assessment_status: str | None = None,
         assessment_progress: str | None = None,
+        plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -637,6 +659,7 @@ class UserMessageBuilder:
             context_bundle: Optional ContextBundle from ContextEngine.project().
             assessment_status: Assess ``status`` (inline envelope; not in projected ledger).
             assessment_progress: Assess ``goal_progress`` (inline envelope).
+            plan_gap: Optional gap analysis for ``OPEN GAPS`` replan targeting (IG-557 Phase F).
 
         Returns:
             Structured text message for the plan-generate LoopHumanMessage.
@@ -670,6 +693,11 @@ class UserMessageBuilder:
                     ),
                 )
             )
+
+        if plan_gap is not None:
+            open_gaps = _render_open_gaps_block(plan_gap)
+            if open_gaps.strip():
+                sections.append(("OPEN GAPS", open_gaps))
 
         sections.append(
             (

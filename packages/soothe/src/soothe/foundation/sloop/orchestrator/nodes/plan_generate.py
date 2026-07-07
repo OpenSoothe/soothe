@@ -69,6 +69,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             context_engine=ctx.ce,
             checkpoint=ctx.checkpoint,
             exclude_goal_id=exclude_goal_id,
+            plan_gap=ctx.scratch.plan_gap,
         )
     else:
         plan_result = await strange_loop.plan_phase.generate_from_assessment(
@@ -80,6 +81,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             context_engine=ctx.ce,
             checkpoint=ctx.checkpoint,
             exclude_goal_id=exclude_goal_id,
+            plan_gap=ctx.scratch.plan_gap,
         )
 
     ctx.scratch.plan_result = plan_result
