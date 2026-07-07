@@ -597,12 +597,17 @@ class LocalFilesystem(UnifiedFilesystem):
 
                 # Check for matches
                 if old_string not in content:
-                    raise FilesystemError(f"String not found in file: {old_string!r}", path=path)
+                    raise FilesystemError(
+                        f"String not found in file: {old_string!r}. Re-read the file with "
+                        "read_file and retry with exact surrounding context including whitespace.",
+                        path=path,
+                    )
 
                 count = content.count(old_string)
                 if count > 1:
                     raise FilesystemError(
-                        f"Multiple matches ({count}) found for string: {old_string!r}",
+                        f"Multiple matches ({count}) found for string: {old_string!r}. "
+                        "Add more surrounding context to old_string or set replace_all=true.",
                         path=path,
                     )
 
@@ -681,12 +686,17 @@ class LocalFilesystem(UnifiedFilesystem):
 
                 # Check for matches
                 if old_string not in content:
-                    raise FilesystemError(f"String not found in file: {old_string!r}", path=path)
+                    raise FilesystemError(
+                        f"String not found in file: {old_string!r}. Re-read the file with "
+                        "read_file and retry with exact surrounding context including whitespace.",
+                        path=path,
+                    )
 
                 count = content.count(old_string)
                 if count > 1:
                     raise FilesystemError(
-                        f"Multiple matches ({count}) found for string: {old_string!r}",
+                        f"Multiple matches ({count}) found for string: {old_string!r}. "
+                        "Add more surrounding context to old_string or set replace_all=true.",
                         path=path,
                     )
 

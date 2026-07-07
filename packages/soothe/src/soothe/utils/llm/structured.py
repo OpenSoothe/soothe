@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any, TypeVar
 from weakref import WeakKeyDictionary
 
@@ -235,6 +236,7 @@ async def invoke_structured_chat(
     schema_name: str | None = None,
     strict: bool = True,
     config: dict[str, Any] | None = None,
+    normalize: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Invoke chat with strict structured output enforced by ``json_schema``.
 
@@ -245,6 +247,7 @@ async def invoke_structured_chat(
         schema_name: Optional provider schema name override.
         strict: When True, post-validate with jsonschema after parsing.
         config: Optional RunnableConfig (Langfuse tracing, etc.).
+        normalize: Optional pre-validation dict normalizer (e.g. coerce missing fields).
 
     Returns:
         Parsed and validated output as a dict.
@@ -305,6 +308,8 @@ async def invoke_structured_chat(
             last_exc = StructuredOutputError(f"method={method!r} returned None")
             continue
         data = normalize_structured_result(result)
+        if normalize is not None:
+            data = normalize(data)
         if strict:
             post_validate_structured_dict(data, schema)
         return data

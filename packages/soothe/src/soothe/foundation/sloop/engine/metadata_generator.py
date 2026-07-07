@@ -86,6 +86,13 @@ def generate_outcome_metadata(
     elif content_str.startswith("Error:"):
         outcome["has_error"] = True
         outcome["error_preview"] = content_str[:100]
+    elif (
+        "EDIT_OLD_STRING_NOT_FOUND" in content_str
+        or "EDIT_MULTIPLE_MATCHES" in content_str
+        or "0 replacement(s)" in content_str
+    ):
+        outcome["has_error"] = True
+        outcome["error_preview"] = content_str[:100]
 
     return outcome
 
@@ -131,6 +138,8 @@ def _extract_file_write_metadata(result: Any) -> dict[str, Any]:
     success = (
         "success" in content.lower() or "wrote" in content.lower() or "written" in content.lower()
     )
+    if "0 replacement(s)" in content or "EDIT_OLD_STRING_NOT_FOUND" in content:
+        success = False
 
     entities = _extract_file_paths(content)
 

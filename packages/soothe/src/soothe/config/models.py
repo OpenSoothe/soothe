@@ -1484,6 +1484,13 @@ class StrangeLoopConfig(BaseModel):
         le=500,
     )
 
+    max_plan_steps_per_wave: int = Field(
+        default=10,
+        description="Maximum plan-generate steps emitted per planning wave (all iterations)",
+        ge=1,
+        le=50,
+    )
+
     max_subagent_tasks_per_wave: int = Field(
         default=4,
         description="Max completed subagent ``task`` tool results per Execute wave (0 = no limit)",

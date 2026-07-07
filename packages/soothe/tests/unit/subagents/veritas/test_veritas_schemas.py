@@ -89,3 +89,22 @@ def test_schema_rejects_empty_rationale() -> None:
     }
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(instance=payload, schema=schema)
+
+
+def test_coerce_veritas_response_fills_metadata_for_answers_only() -> None:
+    from soothe.subagents.veritas.schemas import coerce_veritas_response
+
+    raw = {"answers": ["pkg-a", "yes"]}
+    coerced = coerce_veritas_response(raw, 2)
+    jsonschema.validate(instance=coerced, schema=build_veritas_response_schema(2))
+    assert coerced["defer"] is False
+    assert coerced["confidence"] == 0.7
+    assert coerced["rationale"]
+
+
+def test_coerce_veritas_response_does_not_coerce_empty_answers() -> None:
+    from soothe.subagents.veritas.schemas import coerce_veritas_response
+
+    raw = {"answers": ["", "x"]}
+    coerced = coerce_veritas_response(raw, 2)
+    assert "defer" not in coerced

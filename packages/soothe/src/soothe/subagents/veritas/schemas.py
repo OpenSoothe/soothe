@@ -29,6 +29,36 @@ class VeritasAnswerSchema(BaseModel):
     rationale: str = ""
 
 
+def coerce_veritas_response(data: dict[str, Any], question_count: int) -> dict[str, Any]:
+    """Fill missing metadata when the model returns answers-only JSON (RFC-623).
+
+    Args:
+        data: Raw structured-output dict from the LLM.
+        question_count: Number of questions in the originating request.
+
+    Returns:
+        Coerced dict suitable for jsonschema / Pydantic validation.
+    """
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    answers = out.get("answers")
+    if not isinstance(answers, list) or len(answers) != question_count:
+        return out
+    if not all(isinstance(a, str) and a.strip() for a in answers):
+        return out
+    if out.get("defer") is True:
+        return out
+    if out.get("defer") is None:
+        out["defer"] = False
+    if out.get("confidence") is None:
+        out["confidence"] = 0.7
+    rationale = out.get("rationale")
+    if not isinstance(rationale, str) or not rationale.strip():
+        out["rationale"] = "auto-coerced from answers-only response"
+    return out
+
+
 def build_veritas_response_schema(question_count: int) -> dict[str, Any]:
     """Return the per-request JSON Schema veritas sends to the LLM (RFC-623).
 
@@ -78,4 +108,4 @@ def build_veritas_response_schema(question_count: int) -> dict[str, Any]:
     }
 
 
-__all__ = ["VeritasAnswerSchema", "build_veritas_response_schema"]
+__all__ = ["VeritasAnswerSchema", "build_veritas_response_schema", "coerce_veritas_response"]

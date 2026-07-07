@@ -2,8 +2,7 @@
 **Milestone steps**: ``description`` = executor-owned checkpoint (&lt;20 words), not a procedure.
 
 **Step count**:
-- First wave (iteration 1, empty ledger): **1–2 steps** (never 3+). Runtime truncates extras.
-- Later waves (iteration 2+): **1–3 steps**.
+- At most **10 steps per plan wave** (runtime truncates extras). Prefer fewer, focused steps.
 - Progress-aware: ``high`` → 1–2 closing steps; ``none/low/medium`` → stage within cap.
 
 **Execution mode** (plan field): only ``parallel`` or ``dependency`` — never ``sequential``.
