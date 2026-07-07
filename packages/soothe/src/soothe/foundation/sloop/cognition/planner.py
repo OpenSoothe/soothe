@@ -1507,6 +1507,7 @@ class LLMPlanner:
         context_engine: Any | None = None,
         checkpoint: Any | None = None,
         exclude_goal_id: str | None = None,
+        plan_gap: Any | None = None,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow, RFC-214).
 
@@ -1602,6 +1603,7 @@ class LLMPlanner:
             checkpoint=checkpoint,
             exclude_goal_id=exclude_goal_id,
             inline_assessment=assessment,
+            plan_gap=plan_gap,
         )
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
@@ -1701,6 +1703,7 @@ class LLMPlanner:
         context_engine: Any | None = None,
         checkpoint: Any | None = None,
         exclude_goal_id: str | None = None,
+        plan_gap: Any | None = None,
     ) -> Any:
         """Cheaper plan-generate for the ``simple`` intake branch (RFC-630).
 
@@ -1724,6 +1727,7 @@ class LLMPlanner:
             context_engine=context_engine,
             checkpoint=checkpoint,
             exclude_goal_id=exclude_goal_id,
+            plan_gap=plan_gap,
         )
 
     async def plan(

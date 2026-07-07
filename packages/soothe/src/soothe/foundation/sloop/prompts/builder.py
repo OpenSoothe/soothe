@@ -508,4 +508,6 @@ class PromptBuilder:
             generate_kwargs["assessment_progress"] = getattr(
                 inline_assessment, "goal_progress", None
             )
+        if plan_gap is not None:
+            generate_kwargs["plan_gap"] = plan_gap
         return builder.build_plan_generate_message(**generate_kwargs)
