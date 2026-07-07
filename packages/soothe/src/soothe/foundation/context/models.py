@@ -282,6 +282,7 @@ class GoalNode(BaseModel):
     # Plan-assess audit (IG-557; not replayed into assess prompts except Phase C inline)
     last_assessment: dict[str, Any] | None = None
     last_assessment_iteration: int | None = None
+    last_gap_analysis: dict[str, Any] | None = None
 
     def touch(self) -> None:
         """Update updated_at timestamp."""

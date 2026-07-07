@@ -30,6 +30,10 @@ def _read(relative: str, *, strip: bool = False) -> str:
 # Plan-assess only: matches StatusAssessment schema (IG-372)
 PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = _read("instructions/plan_assess_instructions.xml", strip=True)
 
+PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT = _read(
+    "instructions/plan_gap_analysis_instructions.xml", strip=True
+)
+
 # Plan-generate only: matches PlanGeneration schema (IG-329)
 PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read(
     "instructions/plan_generate_instructions.xml", strip=True
@@ -85,6 +89,7 @@ __all__ = [
     "LOOP_CONTINUATION_GUIDE_FRAGMENT",
     "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
+    "PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT",
     "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
     "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",

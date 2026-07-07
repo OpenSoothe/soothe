@@ -103,7 +103,7 @@ def last_ledger_ai_content(state: LoopState) -> str:
     Returns:
         Content of the last non-planning AI message, or empty string if none found.
     """
-    planning_phases = {"plan_assess", "plan_generate", "intent_classify"}
+    planning_phases = {"plan_assess", "plan_generate", "plan_gap_analysis", "intent_classify"}
     for msg in reversed(state.loop_messages):
         if (
             isinstance(msg, LoopAIMessage)
@@ -171,6 +171,7 @@ class LoopHumanMessage(HumanMessage):
             "intent_classify",  # IG-540: Pre-stream intake classification
             "plan_assess",  # RFC-214: Plan assess phase
             "plan_generate",  # RFC-214: Plan generate phase
+            "plan_gap_analysis",  # IG-557: Read-only gap map before plan-assess
             "execute_wave",  # Parallel execution wave
             "execute_step",  # Single step execution
             "goal_completion",  # Goal completion phase

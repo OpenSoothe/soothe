@@ -20,6 +20,7 @@ from .nodes.intent_classify import node_intent_classify
 from .nodes.iteration_gate import node_iteration_gate
 from .nodes.iteration_start import node_iteration_start
 from .nodes.plan_assess import node_plan_assess
+from .nodes.plan_gap_analysis import node_plan_gap_analysis
 from .nodes.plan_generate import node_plan_generate
 from .nodes.record_iteration import node_record_iteration
 from .nodes.resolve_decision import node_resolve_decision
@@ -29,6 +30,7 @@ from .routing import (
     route_after_clarification,
     route_after_evidence_gather,
     route_after_execute,
+    route_after_gap_analysis,
     route_after_iteration_gate,
     route_after_plan,
     route_after_record_iteration,
@@ -86,6 +88,9 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     async def plan_assess(state: dict[str, Any]) -> dict[str, Any]:
         return await node_plan_assess(ctx, state)
 
+    async def plan_gap_analysis(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_plan_gap_analysis(ctx, state)
+
     async def goal_completion(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
 
@@ -110,6 +115,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_node("iteration_gate", iteration_gate)
     graph.add_node("iteration_start", iteration_start)
     graph.add_node("bounded_evidence_gather", bounded_evidence_gather)
+    graph.add_node("plan_gap_analysis", plan_gap_analysis)
     graph.add_node("plan_assess", plan_assess)
     graph.add_node("plan_generate", plan_generate)
     graph.add_node("goal_completion", goal_completion)
@@ -142,7 +148,16 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph.add_conditional_edges(
         "bounded_evidence_gather",
         route_after_evidence_gather,
-        {"plan_assess": "plan_assess", "plan_generate": "plan_generate"},
+        {
+            "plan_assess": "plan_assess",
+            "plan_gap_analysis": "plan_gap_analysis",
+            "plan_generate": "plan_generate",
+        },
+    )
+    graph.add_conditional_edges(
+        "plan_gap_analysis",
+        route_after_gap_analysis,
+        {"plan_assess": "plan_assess"},
     )
     graph.add_conditional_edges(
         "plan_assess",
@@ -201,6 +216,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             "execute": "execute",
             "plan_generate": "plan_generate",
             "plan_assess": "plan_assess",
+            "plan_gap_analysis": "plan_gap_analysis",
             END: END,
         },
     )

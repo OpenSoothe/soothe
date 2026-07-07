@@ -12,6 +12,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.sloop.intention.models import IntakeLabel
+from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    _current_goal_has_execute_ledger,
+    resolve_planner_projection_mode,
+)
 from soothe.foundation.sloop.state.schemas import StatusAssessment
 
 from ..runtime_context import LoopRuntimeContext
@@ -62,6 +67,31 @@ def _create_fresh_loop_assessment() -> StatusAssessment:
     )
 
 
+def _gap_analysis_enabled(ctx: LoopRuntimeContext) -> bool:
+    strange_loop = ctx.strange_loop
+    if strange_loop.config is None:
+        return True
+    return bool(strange_loop.config.agent.loop.plan_gap_analysis_enabled)
+
+
+def _should_run_gap_analysis(ctx: LoopRuntimeContext) -> bool:
+    state = ctx.loop_state
+    if not _gap_analysis_enabled(ctx):
+        return False
+    intake = getattr(state.intent, "intake_label", None) if state.intent is not None else None
+    if intake == IntakeLabel.TRIVIAL:
+        return False
+    mode = resolve_planner_projection_mode(state)
+    if (
+        mode == "new_goal"
+        and not state.step_results
+        and not _current_goal_has_execute_ledger(state)
+    ):
+        logger.info("[Plan] gap analysis skipped (reason=iter0_no_execution)")
+        return False
+    return True
+
+
 async def node_bounded_evidence_gather(
     ctx: LoopRuntimeContext, _state: dict[str, Any]
 ) -> dict[str, Any]:
@@ -74,4 +104,6 @@ async def node_bounded_evidence_gather(
         logger.info("[EvidenceGather] Fresh-loop detected, skipping plan_assess")
         ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
         return {"evidence_gather_route": "plan_generate_skip_assess"}
+    if _should_run_gap_analysis(ctx):
+        return {"evidence_gather_route": "plan_gap_analysis"}
     return {"evidence_gather_route": "plan_assess"}

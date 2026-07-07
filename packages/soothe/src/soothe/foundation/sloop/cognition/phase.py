@@ -106,6 +106,7 @@ class PlanPhase:
         context: PlanContext,
         *,
         context_engine: Any | None = None,
+        plan_gap: Any | None = None,
     ) -> StatusAssessment:
         """Run assess-only planner call for the current iteration."""
         self._prepare_state_evidence(state)
@@ -117,6 +118,29 @@ class PlanPhase:
             len(state.step_results),
         )
         return await self._loop_planner.assess_status(
+            goal=goal,
+            state=state,
+            context=context,
+            context_engine=context_engine,
+            plan_gap=plan_gap,
+        )
+
+    async def analyze_plan_gap(
+        self,
+        goal: str,
+        state: LoopState,
+        context: PlanContext,
+        *,
+        context_engine: Any | None = None,
+    ) -> Any:
+        """Run read-only gap analysis before assess on mid-goal paths."""
+        self._prepare_state_evidence(state)
+        logger.info(
+            "[Plan] iter=%d calling gap analysis (results=%d)",
+            state.iteration,
+            len(state.step_results),
+        )
+        return await self._loop_planner.analyze_plan_gap(
             goal=goal,
             state=state,
             context=context,

@@ -15,6 +15,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.context.projection import PriorGoalSummary
+from soothe.foundation.sloop.state.schemas import PlanGapAnalysis
 
 if TYPE_CHECKING:
     from soothe.foundation.context.projection import ContextBundle
@@ -207,6 +208,29 @@ def _render_previous_assessment(last_assessment: dict[str, Any] | None) -> str:
     lines = [f"Status: {status}, Progress: {progress}"]
     if reasoning:
         lines.append(f"Reasoning: {reasoning}")
+    return "\n".join(lines)
+
+
+def _render_gap_analysis_block(gap: PlanGapAnalysis | dict[str, Any]) -> str:
+    """Render PlanGapAnalysis for assess feed-forward (IG-557)."""
+    if isinstance(gap, dict):
+        gap_obj = PlanGapAnalysis.model_validate(gap)
+    else:
+        gap_obj = gap
+    lines = [
+        f"distance_from_goal: {gap_obj.distance_from_goal}",
+        f"evidence_summary: {gap_obj.evidence_summary}",
+        "components:",
+    ]
+    for component in gap_obj.components:
+        row = f"  - [{component.status}] {component.component}"
+        if component.evidence:
+            row += f" — evidence: {component.evidence}"
+        if component.gap:
+            row += f" — gap: {component.gap}"
+        lines.append(row)
+    if gap_obj.remaining_gaps:
+        lines.append(f"remaining_gaps: {', '.join(gap_obj.remaining_gaps)}")
     return "\n".join(lines)
 
 
@@ -458,6 +482,7 @@ class UserMessageBuilder:
         omit_prior_progress_hint: bool = True,
         include_plan_coverage: bool = True,
         last_assessment: dict[str, Any] | None = None,
+        plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
     ) -> str:
         """Build assess task envelope (allowlist-only, IG-557).
 
@@ -482,6 +507,7 @@ class UserMessageBuilder:
             omit_prior_progress_hint=omit_prior_progress_hint,
             include_plan_coverage=include_plan_coverage,
             last_assessment=last_assessment,
+            plan_gap=plan_gap,
         )
 
     def build_plan_assess_message_v2(
@@ -495,9 +521,13 @@ class UserMessageBuilder:
         omit_prior_progress_hint: bool = True,
         include_plan_coverage: bool = True,
         last_assessment: dict[str, Any] | None = None,
+        plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
     ) -> str:
-        """Assess allowlist envelope: GOAL, PRIOR PROGRESS, PREVIOUS ASSESSMENT, PLAN COVERAGE, TASK."""
+        """Assess allowlist envelope: GOAL, GAP ANALYSIS, PRIOR PROGRESS, PREVIOUS ASSESSMENT, PLAN COVERAGE, TASK."""
         sections: list[tuple[str, str]] = [("GOAL", _goal_text(goal))]
+
+        if plan_gap is not None:
+            sections.append(("GAP ANALYSIS", _render_gap_analysis_block(plan_gap)))
 
         mode = projection_mode or "mid_goal"
         if (
@@ -533,6 +563,48 @@ class UserMessageBuilder:
             )
         )
 
+        return _render_sections(sections)
+
+    def build_plan_gap_message(
+        self,
+        goal: str,
+        *,
+        prior_progress: PriorProgressDigest | None = None,
+        current_iteration: int | None = None,
+        projection_mode: str | None = None,
+        plan_coverage: str | None = None,
+        omit_prior_progress_hint: bool = True,
+        include_plan_coverage: bool = True,
+    ) -> str:
+        """Build user message for plan-gap-analysis (read-only evidence mapping)."""
+        sections: list[tuple[str, str]] = [("GOAL", _goal_text(goal))]
+        mode = projection_mode or "mid_goal"
+        if (
+            prior_progress is not None
+            and mode != "new_goal"
+            and not (
+                current_iteration is not None and prior_progress.iteration < current_iteration - 1
+            )
+        ):
+            sections.append(
+                (
+                    "PRIOR PROGRESS",
+                    _render_prior_progress_for_assess(
+                        prior_progress,
+                        omit_hint=omit_prior_progress_hint,
+                    ),
+                )
+            )
+        if include_plan_coverage and (plan_coverage or "").strip():
+            sections.append(("PLAN COVERAGE", plan_coverage.strip()))
+        sections.append(
+            (
+                "TASK",
+                "Decompose GOAL into explicit components (2–8). For each component, classify "
+                "evidence from the ledger and PRIOR PROGRESS. List remaining_gaps and "
+                "distance_from_goal. Do NOT decide continue/replan/done.",
+            )
+        )
         return _render_sections(sections)
 
     def build_plan_generate_message(

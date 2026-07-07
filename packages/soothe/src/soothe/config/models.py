@@ -1668,6 +1668,11 @@ class StrangeLoopConfig(BaseModel):
         ),
     )
 
+    plan_gap_analysis_enabled: bool = Field(
+        default=True,
+        description="Run plan-gap-analysis before plan-assess on mid-goal paths (IG-557).",
+    )
+
     plan_generate_model_role: ModelRole = Field(
         default="think",
         description="Router model role for plan-generate structured LLM calls.",

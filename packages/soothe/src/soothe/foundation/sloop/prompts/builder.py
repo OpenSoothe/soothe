@@ -127,6 +127,7 @@ class PromptBuilder:
         checkpoint: Any | None = None,
         exclude_goal_id: str | None = None,
         inline_assessment: Any | None = None,
+        plan_gap: Any | None = None,
     ) -> list[BaseMessage]:
         """Build SystemMessage + projected ledger + task envelope (RFC-214 §4, IG-538)."""
         from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -139,7 +140,7 @@ class PromptBuilder:
         )
         if kind == "continuation":
             projected = project_continuation_assess_ledger(state.loop_messages, ledger_cfg)
-        elif kind == "assess":
+        elif kind in ("assess", "gap"):
             projected = project_planner_ledger_for_assess(
                 state.loop_messages,
                 projection_mode,
@@ -169,10 +170,10 @@ class PromptBuilder:
             context,
             state,
             call_kind=kind,
-            context_bundle=None if kind == "assess" else context_bundle,
+            context_bundle=None if kind in ("assess", "gap") else context_bundle,
         )
         plan_coverage = None
-        if kind == "assess":
+        if kind in ("assess", "gap"):
             from soothe.foundation.sloop.cognition.plan_step_safety import render_plan_coverage
 
             include_coverage = (
@@ -197,6 +198,7 @@ class PromptBuilder:
                 if assess_prompt_cfg is not None
                 else True
             ),
+            plan_gap=plan_gap,
         )
 
         out: list[BaseMessage] = [SystemMessage(content=system_content)]
@@ -210,7 +212,7 @@ class PromptBuilder:
                 projection_mode,
             )
 
-        if context.recent_messages and kind != "assess":
+        if context.recent_messages and kind not in ("assess", "gap"):
             for msg_xml in context.recent_messages:
                 parsed = _parse_prior_conversation_xml(msg_xml)
                 if parsed is None:
@@ -236,7 +238,11 @@ class PromptBuilder:
                     )
 
         if human_content.strip():
-            phase = "plan_assess" if kind in ("assess", "continuation") else "plan_generate"
+            phase = (
+                "plan_gap_analysis"
+                if kind == "gap"
+                else ("plan_assess" if kind in ("assess", "continuation") else "plan_generate")
+            )
             out.append(
                 LoopHumanMessage(
                     content=human_content,
@@ -285,6 +291,7 @@ class PromptBuilder:
             EXECUTION_POLICIES_FRAGMENT,
             PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
             PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
+            PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT,
             PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
         )
         from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
@@ -296,6 +303,8 @@ class PromptBuilder:
             parts.append(PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT + "\n")
         elif kind == "assess":
             parts.append(PLAN_ASSESS_INSTRUCTIONS_FRAGMENT + "\n")
+        elif kind == "gap":
+            parts.append(PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT + "\n")
         else:
             parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
             parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
@@ -305,7 +314,7 @@ class PromptBuilder:
 
         # RFC-624: Supplementary instructions from ContextBundle (plan cache-stable:
         # agent/project rules stay on execute-type system prompts only).
-        if context_bundle is not None and kind != "assess":
+        if context_bundle is not None and kind not in ("assess", "gap"):
             if context_bundle.memory_instructions:
                 parts.append(
                     "<MEMORY_INSTRUCTIONS>\n"
@@ -314,7 +323,7 @@ class PromptBuilder:
                 )
 
         # Prior conversation follow-up policy (static when prior conversation exists)
-        if context.recent_messages and kind != "assess":
+        if context.recent_messages and kind not in ("assess", "gap"):
             parts.append(
                 "<FOLLOW_UP_POLICY>\n"
                 'Prior-thread goals: status MUST NOT be "done" until execution produced the '
@@ -395,6 +404,7 @@ class PromptBuilder:
         inline_assessment: Any | None = None,
         plan_coverage: str | None = None,
         omit_prior_progress_hint: bool = True,
+        plan_gap: Any | None = None,
     ) -> str:
         """Construct plan-context human text without ledger (RFC-214).
 
@@ -477,6 +487,16 @@ class PromptBuilder:
                 plan_coverage=plan_coverage,
                 omit_prior_progress_hint=omit_prior_progress_hint,
                 last_assessment=last_assessment,
+                plan_gap=plan_gap,
+            )
+        if kind == "gap":
+            return builder.build_plan_gap_message(
+                goal=goal,
+                prior_progress=getattr(state, "prior_progress", None),
+                current_iteration=state.iteration,
+                projection_mode=mode,
+                plan_coverage=plan_coverage,
+                omit_prior_progress_hint=omit_prior_progress_hint,
             )
         generate_kwargs: dict[str, Any] = {
             **common_kwargs,

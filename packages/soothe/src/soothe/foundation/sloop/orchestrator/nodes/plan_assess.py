@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     assess_may_route_complete,
+    assess_respects_gap_analysis,
     intake_label_from_state,
     plan_has_minimum_steps_for_intake,
 )
@@ -366,6 +367,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         state=state,
         context=context,
         context_engine=ctx.ce,
+        plan_gap=ctx.scratch.plan_gap,
     )
     ctx.scratch.plan_assessment = assessment
 
@@ -464,6 +466,15 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             logger.warning(
                 "[Plan] Reject goal_progress=complete: insufficient execution evidence (iter=%d)",
                 state.iteration,
+            )
+            assessment.goal_progress = "medium"
+            return {"assess_route": "continue_generate"}
+
+        if not assess_respects_gap_analysis(assessment, ctx.scratch.plan_gap):
+            gap = ctx.scratch.plan_gap
+            logger.warning(
+                "[Plan] Reject assessment: contradicts gap analysis (distance=%s)",
+                gap.distance_from_goal if gap is not None else "n/a",
             )
             assessment.goal_progress = "medium"
             return {"assess_route": "continue_generate"}
