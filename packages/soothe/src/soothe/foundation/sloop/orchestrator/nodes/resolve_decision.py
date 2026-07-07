@@ -101,6 +101,7 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
                 {
                     "id": s.id,
                     "description": (s.description or "").strip().replace("\n", " "),
+                    **({"dependencies": list(s.dependencies)} if s.dependencies else {}),
                 }
                 for s in decision.steps
             ],
