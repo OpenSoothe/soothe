@@ -1262,6 +1262,33 @@ class Executor:
 
     _PROGRESS_HINT_KEYWORDS = ("done", "completed", "total", "count", "finished")
     _PROGRESS_HINT_GLYPHS = ("|",)
+    _STRUCTURED_PROGRESS_KEYS = (
+        "progress",
+        "completed",
+        "total",
+        "count",
+        "finished",
+        "done",
+    )
+
+    @classmethod
+    def _excerpt_has_progress_signal(cls, excerpt: str) -> bool:
+        """Return True when excerpt carries structured or textual progress evidence."""
+        stripped = excerpt.strip()
+        if not stripped:
+            return False
+        if any(g in stripped for g in cls._PROGRESS_HINT_GLYPHS):
+            return True
+        if any(c.isdigit() for c in stripped):
+            return True
+        lowered = stripped.lower()
+        if any(k in lowered for k in cls._PROGRESS_HINT_KEYWORDS):
+            return True
+        if any(
+            f"{key}:" in lowered or f'"{key}"' in lowered for key in cls._STRUCTURED_PROGRESS_KEYS
+        ):
+            return True
+        return False
 
     def _update_prior_progress(
         self,
@@ -1415,12 +1442,7 @@ class Executor:
             return "none"
         if tool_calls and evidence_excerpts:
             for excerpt in evidence_excerpts:
-                low = excerpt.lower()
-                if any(g in excerpt for g in cls._PROGRESS_HINT_GLYPHS):
-                    return "high"
-                if any(c.isdigit() for c in excerpt):
-                    return "high"
-                if any(k in low for k in cls._PROGRESS_HINT_KEYWORDS):
+                if cls._excerpt_has_progress_signal(excerpt):
                     return "high"
         return "medium"
 

@@ -220,6 +220,7 @@ class IntentClassifier:
             reasoning=pass1_result.reasoning,
             goal_description=query,
             chitchat_response=response,
+            social_kind=pass1_result.social_kind,
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
         )
 
@@ -250,6 +251,8 @@ class IntentClassifier:
             reasoning=pass2_result.reasoning,
             goal_description=pass2_result.goal_description,
             chitchat_response=None,
+            multi_phase=pass2_result.multi_phase,
+            wire_subagent=pass2_result.wire_subagent,
             task_complexity=derive_task_complexity_from_intake(intake_label),
         )
         return self._patch_missing_fields(intent, query)

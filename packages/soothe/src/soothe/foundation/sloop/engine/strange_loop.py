@@ -349,6 +349,7 @@ class StrangeLoop:
                                 "intent_type": "agentic",
                                 "classification": social_intent,
                                 "chitchat_response": social_intent.chitchat_response,
+                                "social_kind": social_intent.social_kind,
                                 "context_engine": None,
                                 "ce_goal_id": None,
                                 "thread_id": main_thread_id,

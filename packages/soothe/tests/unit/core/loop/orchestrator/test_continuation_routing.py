@@ -5,19 +5,10 @@ from __future__ import annotations
 from soothe.foundation.sloop.engine.continuation_context import build_continue_bootstrap_step_briefs
 from soothe.foundation.sloop.orchestrator.continuation_routing import (
     bootstrap_terminal_after_execute,
-    goal_has_explicit_multi_step_markers,
 )
 from soothe.foundation.sloop.orchestrator.nodes.plan_assess import (
     build_continue_loop_bootstrap_plan,
 )
-
-
-def test_goal_has_explicit_multi_step_markers() -> None:
-    assert goal_has_explicit_multi_step_markers(
-        "run make docker-build then start docker components and run e2e"
-    )
-    assert not goal_has_explicit_multi_step_markers("create git commit")
-    assert not goal_has_explicit_multi_step_markers("continue")
 
 
 def test_bootstrap_uses_goal_description() -> None:
@@ -33,6 +24,17 @@ def test_bootstrap_terminal_after_execute_for_refined_intent() -> None:
         bootstrap_terminal_after_execute(
             raw_user_goal="create git commit",
             goal_description="Create git commit for the completed fixes",
+        )
+        is False
+    )
+
+
+def test_bootstrap_terminal_after_execute_respects_multi_phase() -> None:
+    assert (
+        bootstrap_terminal_after_execute(
+            raw_user_goal="create git commit",
+            goal_description="create git commit",
+            multi_phase=True,
         )
         is False
     )

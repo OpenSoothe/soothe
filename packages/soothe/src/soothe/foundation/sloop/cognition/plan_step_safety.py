@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from soothe.config.models import PlanSafetyRulesConfig
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -19,13 +20,20 @@ if TYPE_CHECKING:
 # IG-555: max plan_generate retries when complex iter=0 plans stay undersized.
 MAX_UNDERSIZED_PLAN_REPLANS = 2
 
-_FILLER_STEP_RE = re.compile(
-    r"^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|"
-    r"finish up|complete process|final step|last step|the end)$",
-    re.IGNORECASE,
+_DEFAULT_PLAN_SAFETY_RULES = PlanSafetyRulesConfig()
+_FILLER_STEP_RES = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in _DEFAULT_PLAN_SAFETY_RULES.banned_step_patterns
 )
 
-_SIMPLE_EVIDENCE_MIN_CHARS = 200
+_SIMPLE_EVIDENCE_MIN_CHARS = _DEFAULT_PLAN_SAFETY_RULES.simple_evidence_min_chars
+
+
+def _filler_patterns(plan_rules: PlanSafetyRulesConfig | None) -> tuple[re.Pattern[str], ...]:
+    rules = plan_rules or _DEFAULT_PLAN_SAFETY_RULES
+    if rules is _DEFAULT_PLAN_SAFETY_RULES:
+        return _FILLER_STEP_RES
+    return tuple(re.compile(pattern, re.IGNORECASE) for pattern in rules.banned_step_patterns)
 
 
 def intake_label_from_state(state: LoopState) -> IntakeLabel | None:
@@ -51,22 +59,7 @@ def plan_has_minimum_steps_for_intake(
     *,
     treat_missing_as_undersized: bool = True,
 ) -> bool:
-    """Return True when a plan satisfies the complex-intake minimum step count (IG-555).
-
-    Complex intake at iter=0 must produce at least two steps before execution.
-    Simple/trivial intake may legitimately use a single step. After execution
-    (iter>0), replan may consolidate to fewer steps.
-
-    Args:
-        decision: Current or generated plan decision.
-        intake_label: Intake classification from intent_classify.
-        iteration: Current loop iteration.
-        treat_missing_as_undersized: When False, a missing decision passes the
-            guard (used after plan_generate when no executable plan was returned).
-
-    Returns:
-        True when the plan satisfies the minimum step requirement.
-    """
+    """Return True when a plan satisfies the complex-intake minimum step count (IG-555)."""
     if intake_label != IntakeLabel.COMPLEX:
         return True
     if iteration > 0:
@@ -82,8 +75,11 @@ def plan_has_minimum_steps_for_intake(
 def simple_intake_should_force_done(
     state: LoopState,
     assessment: StatusAssessment,
+    *,
+    plan_rules: PlanSafetyRulesConfig | None = None,
 ) -> bool:
     """True when a ``simple`` goal has enough evidence to skip another plan wave."""
+    rules = plan_rules or _DEFAULT_PLAN_SAFETY_RULES
     if intake_label_from_state(state) != IntakeLabel.SIMPLE:
         return False
     if assessment.status != "continue":
@@ -95,7 +91,7 @@ def simple_intake_should_force_done(
     if digest is not None and digest.derived_progress_hint in ("high", "medium"):
         return True
 
-    if len((state.evidence_summary or "").strip()) >= _SIMPLE_EVIDENCE_MIN_CHARS:
+    if len((state.evidence_summary or "").strip()) >= rules.simple_evidence_min_chars:
         return True
 
     return any(
@@ -104,10 +100,17 @@ def simple_intake_should_force_done(
     )
 
 
-def filter_filler_plan_steps(steps: list[StepAction]) -> list[StepAction]:
-    """Drop obvious no-op tail steps such as ``Stop`` / ``The end``."""
+def filter_filler_plan_steps(
+    steps: list[StepAction],
+    *,
+    plan_rules: PlanSafetyRulesConfig | None = None,
+) -> list[StepAction]:
+    """Drop configured no-op tail steps such as ``Stop`` / ``The end``."""
+    patterns = _filler_patterns(plan_rules)
     filtered = [
-        step for step in steps if not _FILLER_STEP_RE.match((step.description or "").strip())
+        step
+        for step in steps
+        if not any(pattern.match((step.description or "").strip()) for pattern in patterns)
     ]
     return filtered if filtered else steps
 

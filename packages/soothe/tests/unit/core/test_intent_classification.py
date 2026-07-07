@@ -81,8 +81,11 @@ class TestTwoPassPrompts:
     def test_pass2_prompt_requires_first_person_reasoning(self) -> None:
         prompt = INTAKE_PASS2_SYSTEM_PROMPT
         assert "first-person" in prompt
-        assert "I'll list the files in src/." in prompt
-        assert "Let me plan the OAuth2 migration steps." in prompt
+        assert "I'll / Let me" in prompt
+        assert "multi_phase" in prompt
+        assert "wire_subagent" in prompt
+        assert "first scan the repo and then run tests" in prompt
+        assert "use browser_use for weather" in prompt
 
 
 @pytest.mark.asyncio

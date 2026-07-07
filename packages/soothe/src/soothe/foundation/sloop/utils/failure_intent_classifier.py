@@ -34,7 +34,7 @@ SuggestedAction = Literal["create_prerequisite", "retry", "escalate", "skip"]
 
 
 class FailureKeywordRule(NamedTuple):
-    """Static keyword rule for fast failure intent classification."""
+    """Static keyword rule for offline failure intent fallback."""
 
     category: FailureCategory
     keywords: frozenset[str]
@@ -115,7 +115,7 @@ def _extract_entities(text: str) -> list[str]:
 
 
 def classify_failure_intent_keyword(text: str) -> FailureIntent:
-    """Fast keyword-based failure intent classification."""
+    """Offline keyword-based failure intent fallback when LLM is unavailable."""
     lowered = (text or "").lower()
     best_category: FailureCategory = "unknown"
     best_confidence = 0.4
@@ -143,15 +143,10 @@ async def classify_failure_intent_async(
     config: FailureIntentConfig | None = None,
     soothe_config: Any | None = None,
 ) -> FailureIntent:
-    """Classify failure intent with keyword fast-path and optional LLM refinement."""
+    """Classify failure intent with LLM-first policy and keyword offline fallback."""
     cfg = config or FailureIntentConfig()
-    keyword_result = classify_failure_intent_keyword(text)
-
-    if not cfg.enabled:
-        return keyword_result
-
-    if keyword_result.confidence >= cfg.llm_confidence_threshold or model is None:
-        return keyword_result
+    if not cfg.enabled or model is None:
+        return classify_failure_intent_keyword(text)
 
     try:
         from langchain_core.messages import HumanMessage
@@ -183,8 +178,10 @@ async def classify_failure_intent_async(
             config=llm_rate_limit_config_from(soothe_config),
         )
     except Exception:
-        logger.debug("LLM failure intent classification failed", exc_info=True)
-        return keyword_result
+        logger.debug(
+            "LLM failure intent classification failed; using keyword fallback", exc_info=True
+        )
+        return classify_failure_intent_keyword(text)
 
 
 def is_missing_prerequisite_intent(intent: FailureIntent) -> bool:

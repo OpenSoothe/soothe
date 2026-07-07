@@ -1436,6 +1436,46 @@ class ToolTimeoutConfig(BaseModel):
     )
 
 
+class CompletionRulesConfig(BaseModel):
+    """Declarative completion heuristics (RFC-624)."""
+
+    dag_dependency_threshold: int = Field(default=3, ge=1)
+    low_success_rate_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
+    simple_ledger_direct_max_steps: int = Field(default=2, ge=1)
+    structured_payload_min_lines: int = Field(default=6, ge=1)
+    rich_text_min_chars: int = Field(default=100, ge=1)
+    ledger_overlap_min_token_len: int = Field(default=4, ge=1)
+
+
+class ScenarioRulesConfig(BaseModel):
+    """Declarative scenario classifier fast-path rules."""
+
+    skip_llm_when_single_step: bool = True
+    skip_llm_when_all_failed: bool = True
+    high_step_count_threshold: int = Field(default=4, ge=2)
+    low_evidence_volume_threshold: int = Field(default=2000, ge=0)
+
+
+class PlanSafetyRulesConfig(BaseModel):
+    """Declarative plan step safety rules."""
+
+    banned_step_patterns: list[str] = Field(
+        default_factory=lambda: [
+            r"^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|"
+            r"finish up|complete process|final step|last step|the end)$"
+        ]
+    )
+    simple_evidence_min_chars: int = Field(default=200, ge=0)
+
+
+class StrangeLoopRulesConfig(BaseModel):
+    """Declarative StrangeLoop routing and completion rules."""
+
+    completion: CompletionRulesConfig = Field(default_factory=CompletionRulesConfig)
+    scenario: ScenarioRulesConfig = Field(default_factory=ScenarioRulesConfig)
+    plan_safety: PlanSafetyRulesConfig = Field(default_factory=PlanSafetyRulesConfig)
+
+
 class StrangeLoopConfig(BaseModel):
     """Configuration for agent loop execution mode (RFC-201, IG-407: unified config).
 
@@ -1691,6 +1731,11 @@ class StrangeLoopConfig(BaseModel):
         description="Context Engine integration",
     )
 
+    rules: StrangeLoopRulesConfig = Field(
+        default_factory=StrangeLoopRulesConfig,
+        description="Declarative completion, scenario, and plan-safety thresholds",
+    )
+
 
 class FileLoggingConfig(BaseModel):
     """File logging configuration.
@@ -1913,13 +1958,18 @@ class FailureIntentConfig(BaseModel):
     """Failure intent classification for reflection (IG-433)."""
 
     enabled: bool = True
-    llm_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    llm_confidence_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Deprecated: LLM is primary when enabled; keyword path is offline fallback only.",
+    )
 
 
 class StructuredPlanConfig(BaseModel):
     """Structured LLM plan parsing (IG-433)."""
 
-    enabled: bool = False
+    enabled: bool = True
 
 
 class OptimizationConfig(BaseModel):

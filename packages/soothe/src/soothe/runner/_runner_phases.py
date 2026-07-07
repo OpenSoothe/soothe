@@ -42,24 +42,33 @@ class PhasesMixin:
         ce_goal_id: str | None = None,
         loop_id: str | None = None,
         defer_persistence: bool = False,
+        finalized_response: str | None = None,
+        social_kind: Any | None = None,
     ) -> AsyncGenerator[StreamChunk]:
         """Fast path for chitchat intake: emit piggybacked response directly.
 
         When ``defer_persistence`` is true, only the wire response is emitted; the
         caller must invoke ``_save_chitchat_to_state`` after the StrangeLoop graph
         finishes so checkpoint finalize does not race ``run_with_progress`` teardown.
+
+        When ``finalized_response`` is set, identity enforcement was already applied
+        by the caller and is emitted as-is.
         """
         main_thread_id = (loop_id or self._client_loop_id_for_stream or thread_id or "").strip()
         if not main_thread_id:
             main_thread_id = thread_id
 
-        from soothe.foundation.sloop.prompts.identity import finalize_chitchat_response
+        if finalized_response is not None:
+            response = finalized_response
+        else:
+            from soothe.foundation.sloop.prompts.identity import finalize_chitchat_response
 
-        response = finalize_chitchat_response(
-            user_input,
-            chitchat_response,
-            assistant_name=self._config.agent.name,
-        )
+            response = finalize_chitchat_response(
+                user_input,
+                chitchat_response,
+                assistant_name=self._config.agent.name,
+                social_kind=social_kind,
+            )
 
         logger.info("Chitchat: %s (main_thread=%s)", user_input[:50], main_thread_id)
 

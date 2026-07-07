@@ -202,74 +202,77 @@ async def test_low_confidence_is_still_valid() -> None:
 # -- Field validation tests ------------------------------------------------
 
 
-async def test_missing_social_response_retries_once() -> None:
-    """Pass1 retries once when social verdict omits social_response."""
+async def test_missing_social_response_generates_dedicated_reply() -> None:
+    """Pass1 calls dedicated social-reply LLM when social_response stays empty."""
     mock_model = MagicMock()
-    mock_model.with_structured_output = MagicMock(return_value=mock_model)
-    mock_model.ainvoke = AsyncMock(
-        side_effect=[
-            {
-                "is_task": False,
-                "confidence": "high",
-                "social_response": "",
-                "reasoning": "greeting",
-            },
-            {
-                "is_task": False,
-                "confidence": "high",
-                "social_response": "Hi!",
-                "reasoning": "greeting",
-            },
-        ]
-    )
     classifier = IntakePass1Classifier(model=mock_model)
-    result = await classifier.classify("hi")
+    with patch(
+        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            return_value={
+                "is_task": False,
+                "confidence": "high",
+                "social_kind": "greeting",
+                "reasoning": "greeting",
+            }
+        ),
+    ):
+        with patch.object(
+            classifier,
+            "_generate_social_response",
+            new=AsyncMock(return_value="Hi!"),
+        ) as mock_generate:
+            result = await classifier.classify("hi")
     assert result.is_task is False
     assert result.social_response == "Hi!"
-    assert mock_model.ainvoke.await_count == 2
+    mock_generate.assert_awaited_once()
 
 
-async def test_salvage_from_reasoning_avoids_extra_llm_calls() -> None:
+async def test_empty_social_response_uses_dedicated_reply() -> None:
     mock_model = MagicMock()
-    mock_model.with_structured_output = MagicMock(return_value=mock_model)
-    mock_model.ainvoke = AsyncMock(
-        return_value={
-            "is_task": False,
-            "confidence": "high",
-            "reasoning": "Identity. Requested social_response: I'm Soothe!",
-        }
-    )
     classifier = IntakePass1Classifier(model=mock_model)
-    result = await classifier.classify("who are u")
+    with patch(
+        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            return_value={
+                "is_task": False,
+                "confidence": "high",
+                "social_kind": "identity",
+                "reasoning": "Identity question.",
+            }
+        ),
+    ):
+        with patch.object(
+            classifier,
+            "_generate_social_response",
+            new=AsyncMock(return_value="I'm Soothe!"),
+        ) as mock_generate:
+            result = await classifier.classify("who are u")
     assert "Soothe" in (result.social_response or "")
-    assert mock_model.ainvoke.await_count == 1
+    mock_generate.assert_awaited_once()
 
 
-async def test_generate_social_response_after_failed_retry() -> None:
+async def test_generate_social_response_after_empty_first_call() -> None:
     mock_model = MagicMock()
-    mock_model.with_structured_output = MagicMock(return_value=mock_model)
-    mock_model.ainvoke = AsyncMock(
-        side_effect=[
-            {
-                "is_task": False,
-                "confidence": "high",
-                "reasoning": "Social question, not a work request.",
-            },
-            {
-                "is_task": False,
-                "confidence": "high",
-                "social_response": "",
-                "reasoning": "Still missing reply field.",
-            },
-        ]
-    )
     classifier = IntakePass1Classifier(model=mock_model)
-    with patch.object(
-        classifier,
-        "_generate_social_response",
-        new=AsyncMock(return_value="Dr. Xiaming Chen invented me."),
-    ) as mock_generate:
-        result = await classifier.classify("who is your daddy")
+    with patch(
+        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            return_value={
+                "is_task": False,
+                "confidence": "high",
+                "social_kind": "identity",
+                "social_response": "",
+                "reasoning": "Social question, not a work request.",
+            }
+        ),
+    ):
+        with patch.object(
+            classifier,
+            "_generate_social_response",
+            new=AsyncMock(return_value="Dr. Xiaming Chen invented me."),
+        ) as mock_generate:
+            result = await classifier.classify("who is your daddy")
     assert result.is_task is False
     assert result.social_response == "Dr. Xiaming Chen invented me."
     mock_generate.assert_awaited_once()

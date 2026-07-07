@@ -156,6 +156,13 @@ class IntakePass2Classifier:
         if not (result_dict.get("goal_description") or "").strip():
             result_dict["goal_description"] = query
 
+        if result_dict.get("multi_phase") not in (True, False):
+            result_dict["multi_phase"] = False
+
+        wire = result_dict.get("wire_subagent")
+        if wire is not None and not str(wire).strip():
+            result_dict["wire_subagent"] = None
+
         return IntakePass2LLMResult(**result_dict)
 
     def _fallback(
@@ -171,6 +178,8 @@ class IntakePass2Classifier:
             scope=IntakeScope.COMPLEX,
             goal_description=query,
             reasoning="Let me run the full agent loop to work through this goal.",
+            multi_phase=False,
+            wire_subagent=None,
         )
 
     def _build_invoke_config(

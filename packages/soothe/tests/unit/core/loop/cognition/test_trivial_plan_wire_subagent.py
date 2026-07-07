@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
-from soothe.foundation.sloop.state.schemas import infer_explicit_wire_subagent_from_goal
+from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
 
 
-def test_infer_explicit_wire_subagent_from_goal_browser_use() -> None:
-    assert (
-        infer_explicit_wire_subagent_from_goal("use browser_use to get weather at beijing")
-        == "browser_use"
+def test_resolve_wire_subagent_accepts_pass2_hint() -> None:
+    assert resolve_wire_subagent(wire_subagent="browser_use") == "browser_use"
+    assert resolve_wire_subagent(wire_subagent="unknown") is None
+
+
+def test_build_trivial_plan_wires_browser_use_from_pass2() -> None:
+    plan = build_trivial_plan(
+        "get weather at beijing",
+        wire_subagent="browser_use",
     )
-
-
-def test_build_trivial_plan_wires_browser_use_when_named_in_goal() -> None:
-    plan = build_trivial_plan("use browser_use to get weather at beijing")
     step = plan.decision.steps[0]
     assert step.wire_subagent == "browser_use"
     assert step.execution_hint == "subagent"

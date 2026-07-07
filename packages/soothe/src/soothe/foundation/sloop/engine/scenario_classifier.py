@@ -22,7 +22,11 @@ if TYPE_CHECKING:
 
     from soothe.foundation.sloop.state.schemas import LoopState
 
+from soothe.config.models import ScenarioRulesConfig
+
 logger = logging.getLogger(__name__)
+
+_DEFAULT_SCENARIO_RULES = ScenarioRulesConfig()
 
 # Built-in scenario templates with descriptions
 BUILTIN_SCENARIOS: dict[str, list[str]] = {
@@ -316,19 +320,17 @@ def _heuristic_classify(
     goal: str,
     intent_type: str,
     execution_summary: dict,
+    *,
+    scenario_rules: ScenarioRulesConfig | None = None,
 ) -> ScenarioClassification | None:
-    """Fast-path heuristic classification that skips the LLM call.
-
-    Returns ``None`` when the heuristic cannot confidently classify (caller
-    should fall through to the LLM path).
-    """
+    """Config-driven fast-path classification that skips the LLM call."""
+    rules = scenario_rules or _DEFAULT_SCENARIO_RULES
     total_steps = execution_summary["total_steps"]
     successful_steps = execution_summary["successful_steps"]
     step_types = execution_summary["step_types"]
     evidence_volume = execution_summary["evidence_volume"]
 
-    # Single-step execution → general_summary is sufficient
-    if total_steps <= 1:
+    if rules.skip_llm_when_single_step and total_steps <= 1:
         return ScenarioClassification(
             scenario="general_summary",
             sections=list(BUILTIN_SCENARIOS["general_summary"]),
@@ -336,8 +338,7 @@ def _heuristic_classify(
             evidence_emphasis="Present the single step outcome directly",
         )
 
-    # No successful steps (all failed) → investigation_summary
-    if successful_steps == 0 and total_steps > 0:
+    if rules.skip_llm_when_all_failed and successful_steps == 0 and total_steps > 0:
         return ScenarioClassification(
             scenario="investigation_summary",
             sections=list(BUILTIN_SCENARIOS["investigation_summary"]),
@@ -345,9 +346,8 @@ def _heuristic_classify(
             evidence_emphasis="Group error patterns; highlight root causes",
         )
 
-    # High step count + mixed step types → analysis_report
     has_tool = any(t not in ("unknown", "llm_call") for t in step_types)
-    if total_steps >= 4 and has_tool:
+    if total_steps >= rules.high_step_count_threshold and has_tool:
         return ScenarioClassification(
             scenario="analysis_report",
             sections=list(BUILTIN_SCENARIOS["analysis_report"]),
@@ -358,8 +358,7 @@ def _heuristic_classify(
             evidence_emphasis="Summarize tool outputs by concern, not chronologically",
         )
 
-    # Low evidence volume + agentic intent → general_summary
-    if evidence_volume < 2000 and intent_type == "agentic":
+    if evidence_volume < rules.low_evidence_volume_threshold and intent_type == "agentic":
         return ScenarioClassification(
             scenario="general_summary",
             sections=list(BUILTIN_SCENARIOS["general_summary"]),
@@ -405,8 +404,22 @@ async def classify_synthesis_scenario(
     # Extract execution summary
     execution_summary = _extract_execution_summary(state)
 
-    # Heuristic fast-path: skip LLM for obvious cases
-    heuristic = _heuristic_classify(goal, intent_type, execution_summary)
+    scenario_rules = None
+    if soothe_config is not None:
+        scenario_rules = getattr(
+            getattr(getattr(soothe_config, "agent", None), "loop", None),
+            "rules",
+            None,
+        )
+        if scenario_rules is not None:
+            scenario_rules = scenario_rules.scenario
+
+    heuristic = _heuristic_classify(
+        goal,
+        intent_type,
+        execution_summary,
+        scenario_rules=scenario_rules,
+    )
     if heuristic is not None:
         logger.info(
             "Scenario classifier (heuristic): scenario=%s steps=%d",
