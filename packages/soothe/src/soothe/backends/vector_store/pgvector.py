@@ -29,34 +29,57 @@ class PGVectorStore:
         self,
         collection: str = "soothe_vectors",
         dsn: str = "postgresql://localhost/soothe",
-        pool_size: int = 48,
+        pool_size: int = 16,
         index_type: str = "hnsw",
         vector_size: int = 1536,
+        *,
+        shared_pool: Any | None = None,
+        pool_timing: dict[str, Any] | None = None,
     ) -> None:
         """Initialize PGVectorStore.
 
         Args:
             collection: Table name for storing vectors.
             dsn: PostgreSQL connection string.
-            pool_size: Connection pool size.
+            pool_size: Connection pool size (ignored when ``shared_pool`` is set).
             index_type: Index type (``hnsw``, ``ivfflat``, or ``none``).
             vector_size: Dimension of vectors (default: 1536).
+            shared_pool: Externally managed registry pool (``pool_size=0`` mode).
+            pool_timing: Optional psycopg pool timing kwargs.
         """
         self._collection = collection
         self._dsn = dsn
         self._pool_size = pool_size
         self._index_type = index_type
         self._vector_size = vector_size
-        self._pool: Any = None
+        self._pool: Any = shared_pool
+        self._pool_timing = pool_timing
+        self._owns_pool = shared_pool is None
 
     async def _ensure_pool(self) -> Any:
-        if self._pool is None:
-            from psycopg_pool import AsyncConnectionPool
+        pool = self._pool
+        if pool is not None:
+            if getattr(pool, "closed", False) is True:
+                self._pool = None
+            else:
+                return pool
 
-            self._pool = AsyncConnectionPool(
-                self._dsn, min_size=1, max_size=self._pool_size, open=False
-            )
-            await self._pool.open()
+        if not self._owns_pool:
+            msg = "PGVectorStore shared pool is closed or unavailable"
+            raise RuntimeError(msg)
+
+        from psycopg_pool import AsyncConnectionPool
+
+        pool_kwargs: dict[str, Any] = {
+            "max_size": self._pool_size,
+            "open": False,
+        }
+        if self._pool_timing:
+            pool_kwargs.update(self._pool_timing)
+        else:
+            pool_kwargs["min_size"] = min(1, self._pool_size)
+        self._pool = AsyncConnectionPool(self._dsn, **pool_kwargs)
+        await self._pool.open()
         return self._pool
 
     async def _table_vector_dimension(self) -> int | None:
@@ -306,6 +329,9 @@ class PGVectorStore:
 
     async def close(self) -> None:
         """Close the connection pool and release resources."""
+        if not self._owns_pool:
+            self._pool = None
+            return
         if self._pool is not None:
             await self._pool.close()
             self._pool = None

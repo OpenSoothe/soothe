@@ -35,7 +35,7 @@ class TestPGVectorStoreUnit:
             # Check defaults
             assert init_sig.parameters["collection"].default == "soothe_vectors"
             assert init_sig.parameters["dsn"].default == "postgresql://localhost/soothe"
-            assert init_sig.parameters["pool_size"].default == 48
+            assert init_sig.parameters["pool_size"].default == 16
             assert init_sig.parameters["index_type"].default == "hnsw"
 
         except ImportError:
@@ -84,7 +84,7 @@ class TestPGVectorStoreUnit:
             assert store._dsn == "postgresql://localhost/test"
             assert store._pool_size == 5
             assert store._index_type == "hnsw"
-            assert store._pool is None  # Lazy connection
+            assert store._pool is None  # Lazy connection (unless shared_pool injected)
 
         except ImportError:
             pytest.skip("pgvector dependencies not installed")

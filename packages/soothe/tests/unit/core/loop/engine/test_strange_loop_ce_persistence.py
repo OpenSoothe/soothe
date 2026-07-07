@@ -72,6 +72,7 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
         sm.close = AsyncMock()
         sm_cls.return_value = sm
         am_cls.return_value = MagicMock(close=AsyncMock())
+        am_cls.create = AsyncMock(return_value=am_cls.return_value)
 
         gen = sl.run_with_progress(
             goal="test goal",

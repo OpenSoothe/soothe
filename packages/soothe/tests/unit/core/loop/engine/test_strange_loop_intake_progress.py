@@ -90,8 +90,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
         ),
         patch(
             "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
-            return_value=mock_anchor,
-        ),
+        ) as am_cls,
         patch(
             "soothe.foundation.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
@@ -109,6 +108,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
         runtime_ctx = MagicMock()
         runtime_ctx.emit = _capture_emit
         runtime_ctx_cls.return_value = runtime_ctx
+        am_cls.create = AsyncMock(return_value=mock_anchor)
 
         events: list[tuple[str, object]] = []
         gen = sl.run_with_progress(

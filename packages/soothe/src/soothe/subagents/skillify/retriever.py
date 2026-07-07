@@ -24,6 +24,21 @@ logger = logging.getLogger(__name__)
 _INDEXING_WAIT_TIMEOUT = 10.0
 _VECTOR_SEARCH_MAX_ATTEMPTS = 3
 _VECTOR_SEARCH_BACKOFF_BASE = 0.5
+_vector_search_semaphore: asyncio.Semaphore | None = None
+
+
+def configure_vector_search_concurrency(limit: int) -> None:
+    """Set the process-wide Skillify vector search concurrency limit."""
+    global _vector_search_semaphore
+
+    _vector_search_semaphore = asyncio.Semaphore(max(1, limit))
+
+
+def _get_vector_search_semaphore() -> asyncio.Semaphore:
+    if _vector_search_semaphore is None:
+        configure_vector_search_concurrency(4)
+    assert _vector_search_semaphore is not None
+    return _vector_search_semaphore
 
 
 class LazyEmbeddings:
@@ -57,6 +72,8 @@ class SkillRetriever:
         ready_event: asyncio.Event | None = None,
         policy: Any | None = None,
         policy_profile: str = "standard",
+        total_indexed: int | None = None,
+        total_indexed_fn: Callable[[], int] | None = None,
     ) -> None:
         self._vector_store = vector_store
         if callable(embeddings):
@@ -67,6 +84,8 @@ class SkillRetriever:
         self._ready_event = ready_event
         self._policy = policy
         self._policy_profile = policy_profile
+        self._total_indexed = total_indexed
+        self._total_indexed_fn = total_indexed_fn
 
     @property
     def is_ready(self) -> bool:
@@ -144,13 +163,15 @@ class SkillRetriever:
     ) -> list[Any]:
         """Search vector store with backoff when the connection pool is saturated."""
         last_exc: Exception | None = None
+        sem = _get_vector_search_semaphore()
         for attempt in range(_VECTOR_SEARCH_MAX_ATTEMPTS):
             try:
-                return await self._vector_store.search(
-                    query=query,
-                    vector=vector,
-                    limit=limit,
-                )
+                async with sem:
+                    return await self._vector_store.search(
+                        query=query,
+                        vector=vector,
+                        limit=limit,
+                    )
             except Exception as exc:
                 last_exc = exc
                 exc_name = type(exc).__name__
@@ -193,8 +214,8 @@ class SkillRetriever:
             raise ValueError(msg)
 
     async def _count_indexed(self) -> int:
-        try:
-            all_records = await self._vector_store.list_records(limit=10000)
-            return len(all_records)
-        except Exception:
-            return 0
+        if self._total_indexed_fn is not None:
+            return self._total_indexed_fn()
+        if self._total_indexed is not None:
+            return self._total_indexed
+        return 0

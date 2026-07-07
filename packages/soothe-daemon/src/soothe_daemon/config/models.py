@@ -127,8 +127,8 @@ class WorkerPoolConfig(BaseModel):
     - Shrinks back to min_pool_size when workers idle out
 
     PostgreSQL Pool Considerations (multiprocessing spawn isolation):
-    Each worker process has its OWN PostgreSQL connection pools (checkpointer + sloop).
-    Total PG connections = active_workers × (checkpointer_pool_size + sloop_pool_size).
+    Each worker process has its OWN PostgreSQL connection pools (checkpoints + metadata + vectors).
+    Total PG connections = active_workers × (checkpoints_pool_size + metadata_pool_size + vectors_pool_size).
     Use small pool sizes in persistence config (2-4) to avoid connection exhaustion.
     For high-concurrency scenarios, consider PGBouncer as external connection proxy.
 

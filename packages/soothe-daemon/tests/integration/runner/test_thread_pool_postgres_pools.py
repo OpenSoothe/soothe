@@ -42,8 +42,7 @@ async def _probe_config() -> SootheConfig:
         persistence={
             "default_backend": "postgresql",
             "postgres_base_dsn": base,
-            "checkpointer_pool_size": 3,
-            "sloop_pool_size": 6,
+            "checkpoints_pool_size": 6,
             "postgres_pool_acquire_timeout_seconds": 5,
         },
         agent={"protocols": {"memory": memory_config}},
