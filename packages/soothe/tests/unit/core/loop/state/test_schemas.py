@@ -22,12 +22,12 @@ from soothe.foundation.sloop.state.schemas import (
     apply_step_wire_subagents,
     assign_plan_step_ids,
     composite_step_id,
-    infer_explicit_wire_subagent_from_goal,
     max_goal_step_numeric_suffix,
     next_goal_local_step_id_start,
     plan_generate_steps_to_step_actions,
     renumber_decision_local_step_ids_for_goal_continuation,
     resolve_step_wire_subagent,
+    resolve_wire_subagent,
     trailing_numeric_suffix_from_step_id,
 )
 
@@ -476,9 +476,9 @@ class TestPlanGeneration:
         wired = apply_step_wire_subagents(steps)
         assert wired[0].wire_subagent == "deep_research"
 
-    def test_infer_explicit_wire_subagent_from_goal(self) -> None:
-        assert infer_explicit_wire_subagent_from_goal("use browser_use for this") == "browser_use"
-        assert infer_explicit_wire_subagent_from_goal("list files") is None
+    def test_resolve_wire_subagent_from_pass2(self) -> None:
+        assert resolve_wire_subagent(wire_subagent="browser_use") == "browser_use"
+        assert resolve_wire_subagent(wire_subagent="list files") is None
 
     def test_resolve_wire_subagent_for_step_prefers_planner_hint(self) -> None:
         step = StepAction(

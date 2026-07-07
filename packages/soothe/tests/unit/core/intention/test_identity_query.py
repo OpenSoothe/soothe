@@ -1,4 +1,4 @@
-"""Tests for assistant identity query detection and replies."""
+"""Tests for assistant identity replies and chitchat finalization."""
 
 from __future__ import annotations
 
@@ -9,25 +9,14 @@ from soothe.foundation.sloop.chitchat_fallbacks import (
     GENERIC_CHITCHAT_FALLBACKS_ZH,
     pick_generic_chitchat_fallback,
 )
+from soothe.foundation.sloop.intention.models import IntakePass1SocialKind
 from soothe.foundation.sloop.prompts.identity import (
     build_identity_reply,
     claims_wrong_vendor_identity,
     finalize_chitchat_response,
-    is_identity_query,
     prepend_assistant_identity,
+    strip_vendor_identity_markers,
 )
-
-
-def test_is_identity_query_matches_who_are_u() -> None:
-    assert is_identity_query("who are u")
-
-
-def test_is_identity_query_matches_where_are_u_from() -> None:
-    assert is_identity_query("where are u from")
-
-
-def test_is_identity_query_rejects_task() -> None:
-    assert not is_identity_query("list files in this directory")
 
 
 def test_build_identity_reply_english() -> None:
@@ -44,7 +33,6 @@ def test_build_identity_reply_origin_english() -> None:
 
 
 def test_build_identity_reply_inventor_english() -> None:
-    assert is_identity_query("who invented you")
     reply = build_identity_reply("Soothe", "who invented you")
     assert "invented by Dr. Xiaming Chen" in reply
 
@@ -71,6 +59,7 @@ def test_finalize_chitchat_response_overrides_identity_query() -> None:
         "what is your name",
         "I'm Claude, an AI assistant made by Anthropic. Nice to meet you!",
         assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.IDENTITY,
     )
     assert "Soothe" in reply
     assert "Dr. Xiaming Chen" in reply
@@ -78,9 +67,54 @@ def test_finalize_chitchat_response_overrides_identity_query() -> None:
     assert "Anthropic" not in reply
 
 
+def test_finalize_chitchat_response_loop_5d36_slang_name() -> None:
+    reply = finalize_chitchat_response(
+        "what is ur name",
+        "I'm Claude, an AI assistant made by Anthropic.",
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.IDENTITY,
+    )
+    assert "Soothe" in reply
+    assert "Dr. Xiaming Chen" in reply
+    assert "Claude" not in reply
+
+
+def test_finalize_chitchat_response_loop_5d36_playful_identity() -> None:
+    reply = finalize_chitchat_response(
+        "who is your daddy",
+        "I'm an AI assistant created by Anthropic.",
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.IDENTITY,
+    )
+    assert "Soothe" in reply
+    assert "Dr. Xiaming Chen" in reply
+    assert "Anthropic" not in reply
+
+
+def test_finalize_chitchat_response_preserves_valid_playful_identity_llm() -> None:
+    playful = "I was invented by Dr. Xiaming Chen — that's the closest thing I have to a 'daddy'!"
+    reply = finalize_chitchat_response(
+        "who is your daddy",
+        playful,
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.IDENTITY,
+    )
+    assert reply == playful
+
+
 def test_finalize_chitchat_response_is_idempotent_for_identity_query() -> None:
-    first = finalize_chitchat_response("who are u", "I'm Claude", assistant_name="Soothe")
-    second = finalize_chitchat_response("who are u", first, assistant_name="Soothe")
+    first = finalize_chitchat_response(
+        "who are u",
+        "I'm Claude",
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.IDENTITY,
+    )
+    second = finalize_chitchat_response(
+        "who are u",
+        first,
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.IDENTITY,
+    )
     assert first == second
 
 
@@ -109,14 +143,29 @@ def test_generic_chitchat_fallback_alias() -> None:
 
 
 def test_finalize_chitchat_response_random_fallback_on_empty() -> None:
-    reply = finalize_chitchat_response("thanks", None, assistant_name="Soothe")
+    reply = finalize_chitchat_response(
+        "thanks",
+        None,
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.THANKS,
+    )
     assert reply in GENERIC_CHITCHAT_FALLBACKS_EN
 
 
-def test_finalize_chitchat_response_random_fallback_on_wrong_vendor() -> None:
+def test_finalize_chitchat_response_strips_vendor_on_non_identity() -> None:
     reply = finalize_chitchat_response(
         "how are you",
         "I'm Claude from Anthropic.",
         assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.GREETING,
     )
-    assert reply in GENERIC_CHITCHAT_FALLBACKS_EN
+    assert "Claude" not in reply
+    assert "Anthropic" not in reply
+    assert reply
+
+
+def test_strip_vendor_identity_markers() -> None:
+    stripped = strip_vendor_identity_markers("I'm Claude from Anthropic.")
+    assert "Claude" not in stripped
+    assert "Anthropic" not in stripped
+    assert stripped

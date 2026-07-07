@@ -42,7 +42,7 @@ This RFC defines:
 - Speculative first-task emission before the full plan completes (future "aggressive" variant).
 - Plan-token streaming to the user as a draft.
 - Embedding-based pre-filter of intent.
-- Post-execution failure-intent classification (`failure_intent_classifier.py`).
+- Post-execution failure-intent keyword fast-path as primary classifier (migrated to LLM-first in IG-567; keyword path remains offline fallback).
 - Changes to the wire protocol, event envelopes, or daemon transport.
 - Changes to the continuation discriminator (`RFC-226`) or clarification relay (`RFC-622`) — both preserved unchanged.
 - A feature flag or staged rollout — two-pass replaces one-pass outright.

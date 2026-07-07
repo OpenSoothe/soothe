@@ -514,11 +514,15 @@ class StrangeLoopMixin:
                         event_data.get("ce_goal_id") if isinstance(event_data, dict) else None
                     )
                     chitchat_response = ""
+                    social_kind = None
                     if isinstance(event_data, dict):
                         chitchat_response = str(
                             event_data.get("chitchat_response")
                             or getattr(classification, "chitchat_response", "")
                             or ""
+                        )
+                        social_kind = event_data.get("social_kind") or getattr(
+                            classification, "social_kind", None
                         )
                     from soothe.foundation.sloop.prompts.identity import finalize_chitchat_response
 
@@ -526,6 +530,7 @@ class StrangeLoopMixin:
                         user_input,
                         chitchat_response,
                         assistant_name=self._config.agent.name,
+                        social_kind=social_kind,
                     )
                     main_thread_id = (strange_loop_id or tid or "").strip() or tid
                     async for chunk in self._run_chitchat(
@@ -536,6 +541,7 @@ class StrangeLoopMixin:
                         ce_goal_id=ce_goal_id,
                         loop_id=strange_loop_id,
                         defer_persistence=True,
+                        finalized_response=resolved_response,
                     ):
                         yield chunk
                     pending_chitchat_persist = {

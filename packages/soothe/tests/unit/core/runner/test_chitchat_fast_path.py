@@ -72,6 +72,7 @@ async def test_run_chitchat_finalizes_identity_query() -> None:
             chitchat_response="I'm Claude, an AI assistant made by Anthropic.",
             loop_id="loop-chitchat-identity",
             defer_persistence=True,
+            social_kind="identity",
         )
     ]
 

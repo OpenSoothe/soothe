@@ -133,6 +133,23 @@ agent:
     plan_gap_analysis_enabled: true
     plan_generate_model_role: think
     goal_synthesis_model_role: think
+    rules:
+      completion:
+        dag_dependency_threshold: 3
+        low_success_rate_threshold: 0.6
+        simple_ledger_direct_max_steps: 2
+        structured_payload_min_lines: 6
+        rich_text_min_chars: 100
+        ledger_overlap_min_token_len: 4
+      scenario:
+        skip_llm_when_single_step: true
+        skip_llm_when_all_failed: true
+        high_step_count_threshold: 4
+        low_evidence_volume_threshold: 2000
+      plan_safety:
+        banned_step_patterns:
+          - "^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|finish up|complete process|final step|last step|the end)$"
+        simple_evidence_min_chars: 200
     # Output delivery: batch | adaptive | streaming (OutputStreamingConfig)
     output_streaming:
       mode: adaptive
@@ -591,4 +608,4 @@ optimization:
     enabled: true
     llm_confidence_threshold: 0.7
   structured_plan:
-    enabled: false
+    enabled: true

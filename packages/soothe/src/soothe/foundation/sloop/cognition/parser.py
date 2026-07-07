@@ -5,10 +5,13 @@ Extracts structured Plan objects from markdown text with step formatting.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from soothe.protocols.planner import Plan, PlanStep
+
+logger = logging.getLogger(__name__)
 
 _MIN_STEP_DESCRIPTION_LENGTH = 5
 
@@ -63,6 +66,7 @@ def parse_plan_from_text(goal: str, text: str) -> Plan:
                 steps.append(PlanStep(id=f"S_{i}", description=cleaned))
 
     if not steps:
+        logger.warning("Regex plan parse fallback used; enable structured_plan for LLM extraction")
         steps = [PlanStep(id="S_1", description=goal)]
 
     return Plan(goal=goal, steps=steps)

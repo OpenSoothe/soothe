@@ -28,21 +28,15 @@ _BUILTIN_WIRE_SUBAGENTS = frozenset(
     }
 )
 
-_EXPLICIT_SUBAGENT_GOAL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\bbrowser[_\s-]?use\b", re.IGNORECASE), "browser_use"),
-    (re.compile(r"\bdeep[_\s-]?research\b", re.IGNORECASE), "deep_research"),
-    (re.compile(r"\b(?:/plan|planner)\b", re.IGNORECASE), "planner"),
-)
 
-
-def infer_explicit_wire_subagent_from_goal(goal: str) -> str | None:
-    """Infer wired subagent when the user explicitly names one in the goal text."""
-    text = (goal or "").strip()
-    if not text:
-        return None
-    for pattern, subagent_name in _EXPLICIT_SUBAGENT_GOAL_PATTERNS:
-        if pattern.search(text) and subagent_name in _BUILTIN_WIRE_SUBAGENTS:
-            return subagent_name
+def resolve_wire_subagent(
+    *,
+    wire_subagent: str | None = None,
+) -> str | None:
+    """Return wired subagent name when Pass 2 intake named one explicitly."""
+    name = (wire_subagent or "").strip()
+    if name and name in _BUILTIN_WIRE_SUBAGENTS:
+        return name
     return None
 
 

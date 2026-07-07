@@ -19,7 +19,7 @@ from soothe.utils.llm.invoke_policy import (
 )
 from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat
 
-from .models import IntakePass1Confidence, IntakePass1LLMResult
+from .models import IntakePass1Confidence, IntakePass1LLMResult, IntakePass1SocialKind
 from .pass1_social_response import (
     Pass1SocialReplyLLMResult,
     coalesce_pass1_dict,
@@ -94,8 +94,8 @@ class IntakePass1Classifier:
     ) -> IntakePass1LLMResult:
         """Classify query as social or task.
 
-        Social replies are recovered via reasoning salvage and, if needed, a
-        dedicated reply-only LLM call before falling back to task routing.
+        Social replies use a dedicated reply-only LLM call when the first
+        structured call omits ``social_response`` before falling back to task routing.
 
         Args:
             query: User input text.
@@ -115,15 +115,8 @@ class IntakePass1Classifier:
                 query,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
+                require_social_response=True,
             )
-            if not result.is_task and not (result.social_response or "").strip():
-                logger.warning("Pass1 social verdict missing social_response; retrying once")
-                result = await self._classify_llm(
-                    query,
-                    observability_metadata=observability_metadata,
-                    goal_trace=goal_trace,
-                    require_social_response=True,
-                )
             if not result.is_task and not (result.social_response or "").strip():
                 logger.warning(
                     "Pass1 social verdict still missing social_response; generating reply"
@@ -238,6 +231,9 @@ class IntakePass1Classifier:
         ):
             result_dict["confidence"] = IntakePass1Confidence.MEDIUM
 
+        if result_dict.get("is_task") is True:
+            result_dict.setdefault("social_kind", IntakePass1SocialKind.OTHER)
+
         result_dict = coalesce_pass1_dict(result_dict)
         return IntakePass1LLMResult(**result_dict)
 
@@ -300,6 +296,7 @@ class IntakePass1Classifier:
             is_task=True,
             confidence=IntakePass1Confidence.LOW,
             social_response=None,
+            social_kind=IntakePass1SocialKind.OTHER,
             reasoning=f"Fail-safe: {reason}",
         )
 

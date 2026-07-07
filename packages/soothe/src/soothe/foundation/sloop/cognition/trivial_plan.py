@@ -13,32 +13,37 @@ from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
-    infer_explicit_wire_subagent_from_goal,
+    resolve_wire_subagent,
 )
 
 
-def build_trivial_plan(goal: str) -> PlanResult:
+def build_trivial_plan(
+    goal: str,
+    *,
+    wire_subagent: str | None = None,
+) -> PlanResult:
     """Build a minimal 1-step plan for the ``trivial`` intake label (RFC-630).
 
     Args:
         goal: The user's goal (intake LLM's ``goal_description`` or raw goal).
+        wire_subagent: Pass 2 wired subagent hint when user named one explicitly.
 
     Returns:
         A ``PlanResult`` with a single execute step whose action is the goal
         itself, no synthetic reasoning prose, and the ``## Result`` evidence
         contract as the step's ``expected_output``.
     """
-    wire_subagent = infer_explicit_wire_subagent_from_goal(goal)
+    resolved_wire = resolve_wire_subagent(wire_subagent=wire_subagent)
     step = StepAction(
         description=goal,
         expected_output=SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT,
-        wire_subagent=wire_subagent,
+        wire_subagent=resolved_wire,
     )
-    if wire_subagent:
+    if resolved_wire:
         step = step.model_copy(
             update={
                 "execution_hint": "subagent",
-                "subagent": wire_subagent,
+                "subagent": resolved_wire,
             }
         )
 

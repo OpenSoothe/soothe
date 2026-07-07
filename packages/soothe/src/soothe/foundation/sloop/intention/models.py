@@ -128,6 +128,18 @@ class IntentClassification(BaseModel):
         default=None,
         description="Direct friendly reply when intake_label is chitchat",
     )
+    social_kind: IntakePass1SocialKind | None = Field(
+        default=None,
+        description="Pass 1 social sub-kind when intake_label is chitchat",
+    )
+    multi_phase: bool = Field(
+        default=False,
+        description="Pass 2: goal implies multiple ordered execution phases",
+    )
+    wire_subagent: str | None = Field(
+        default=None,
+        description="Pass 2: explicit wired subagent when user names one",
+    )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity derived from intake_label"
     )
@@ -179,6 +191,16 @@ class IntakePass1Confidence(StrEnum):
     LOW = "low"
 
 
+class IntakePass1SocialKind(StrEnum):
+    """Social sub-kind from Pass 1 (RFC-630 heuristic migration)."""
+
+    GREETING = "greeting"
+    THANKS = "thanks"
+    IDENTITY = "identity"
+    BANTER = "banter"
+    OTHER = "other"
+
+
 class IntakePass1LLMResult(BaseModel):
     """Structured output from Pass 1: social vs task (RFC-630 IG-554).
 
@@ -202,6 +224,13 @@ class IntakePass1LLMResult(BaseModel):
     social_response: str | None = Field(
         default=None,
         description="Required when is_task=False: friendly direct reply to the user",
+    )
+    social_kind: IntakePass1SocialKind = Field(
+        default=IntakePass1SocialKind.OTHER,
+        description=(
+            "When is_task=False: greeting, thanks, identity, banter, or other. "
+            "When is_task=True: other."
+        ),
     )
     reasoning: str = Field(
         description="Brief reasoning for the classification (≤15 words)",
@@ -244,6 +273,17 @@ class IntakePass2LLMResult(BaseModel):
         description=(
             "First-person agent line for the TUI cognition card (I'll / Let me …), "
             "≤15 words; not third-person scope commentary"
+        ),
+    )
+    multi_phase: bool = Field(
+        default=False,
+        description="True when the goal implies multiple ordered execution phases",
+    )
+    wire_subagent: str | None = Field(
+        default=None,
+        description=(
+            "Explicit wired subagent when user names one: planner, browser_use, "
+            "deep_research, or null"
         ),
     )
 

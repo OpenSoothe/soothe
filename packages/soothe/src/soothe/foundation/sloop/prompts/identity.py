@@ -24,26 +24,6 @@ _WRONG_VENDOR_IDENTITY_MARKERS = re.compile(
     r")\b"
 )
 
-_IDENTITY_QUERY_MARKERS = re.compile(
-    r"^(?:"
-    r"who\s+are\s+(?:you|u)|"
-    r"what\s+are\s+(?:you|u)|"
-    r"what(?:'s|\s+is)\s+your\s+name|"
-    r"what\s+do\s+(?:you|u)\s+call\s+(?:yourself|yourselves)|"
-    r"introduce\s+(?:yourself|yourselves)|"
-    r"where\s+are\s+(?:you|u)\s+from|"
-    r"where\s+do\s+(?:you|u)\s+come\s+from|"
-    r"where\s+(?:were\s+)?(?:you|u)\s+born|"
-    r"who\s+(?:invented|created|made|built|developed)\s+(?:you|u)|"
-    r"who\s+is\s+your\s+(?:creator|inventor|author|developer|maker)|"
-    r"你\s*是\s*谁|你是谁|介绍一下\s*你|你\s*叫\s*什么|"
-    r"你\s*从\s*哪\s*来|你\s*是\s*哪\s*里\s*人|"
-    r"谁\s*(?:发明|创造|开发|设计|做)\s*了?\s*(?:你|您)|"
-    r"你的\s*(?:发明者|创造者|开发者|作者)\s*是\s*谁"
-    r")[!.?\s]*$",
-    re.IGNORECASE,
-)
-
 
 def normalize_assistant_name(assistant_name: str) -> str:
     """Return a non-empty configured assistant display name."""
@@ -51,12 +31,10 @@ def normalize_assistant_name(assistant_name: str) -> str:
     return name or "Soothe"
 
 
-def is_identity_query(query: str) -> bool:
-    """Return True when the user is asking who the assistant is."""
-    text = query.strip()
-    if not text:
-        return False
-    return _IDENTITY_QUERY_MARKERS.match(text) is not None
+def _normalize_social_kind(social_kind: str | None) -> str:
+    if isinstance(social_kind, str) and social_kind.strip():
+        return social_kind.strip().lower()
+    return "other"
 
 
 def build_identity_reply(assistant_name: str, query: str) -> str:
@@ -83,6 +61,13 @@ def build_identity_reply(assistant_name: str, query: str) -> str:
             "I don't have a physical location. How can I help you today?"
         )
     return f"I'm {name}, an AI assistant {_INVENTOR_ATTRIBUTION_EN}. How can I help you today?"
+
+
+def strip_vendor_identity_markers(text: str) -> str:
+    """Remove third-party vendor model names from chitchat text."""
+    cleaned = _WRONG_VENDOR_IDENTITY_MARKERS.sub("", text)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip(" ,.-")
+    return cleaned.strip()
 
 
 def build_assistant_identity_block(assistant_name: str) -> str:
@@ -130,30 +115,40 @@ def finalize_chitchat_response(
     *,
     assistant_name: str = "Soothe",
     generic_fallback: str | None = None,
+    social_kind: str | None = None,
 ) -> str:
     """Normalize any user-facing chitchat text to the configured assistant identity.
 
-    Single enforcement point for social fast-path replies: identity questions get
-    deterministic answers; vendor-default model names are replaced.
+    Pass 1 ``social_kind`` drives identity enforcement.
 
     Args:
         query: Original user message.
-        response: LLM or salvaged reply text (may be empty).
+        response: LLM reply text (may be empty).
         assistant_name: Configured assistant display name.
-        generic_fallback: Reply when text is missing or uses wrong vendor identity.
-            When omitted, a random language-matched fallback is chosen.
+        generic_fallback: Reply when text is missing for non-identity social turns.
+        social_kind: Pass 1 social sub-kind (identity, greeting, etc.).
 
     Returns:
         User-facing chitchat string.
     """
     name = normalize_assistant_name(assistant_name)
     fallback = generic_fallback or pick_generic_chitchat_fallback(query)
-    if is_identity_query(query):
-        return build_identity_reply(name, query)
+    kind = _normalize_social_kind(social_kind)
+    is_identity = kind == "identity"
 
     text = (response or "").strip()
+    if is_identity:
+        if not text or claims_wrong_vendor_identity(text):
+            if text and claims_wrong_vendor_identity(text):
+                logger.info("Chitchat identity reply used wrong vendor identity; applying rewrite")
+            return build_identity_reply(name, query)
+        return text
+
     if text and claims_wrong_vendor_identity(text):
-        logger.info("Chitchat reply used wrong vendor identity; applying fallback")
+        logger.info("Chitchat reply used wrong vendor identity; stripping vendor markers")
+        stripped = strip_vendor_identity_markers(text)
+        if stripped:
+            return stripped
         return fallback
     if text:
         return text
@@ -167,8 +162,8 @@ __all__ = [
     "build_identity_reply",
     "claims_wrong_vendor_identity",
     "finalize_chitchat_response",
-    "is_identity_query",
     "normalize_assistant_name",
     "pick_generic_chitchat_fallback",
     "prepend_assistant_identity",
+    "strip_vendor_identity_markers",
 ]

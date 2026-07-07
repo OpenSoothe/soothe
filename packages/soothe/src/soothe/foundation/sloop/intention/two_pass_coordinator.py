@@ -62,6 +62,8 @@ class TwoPassIntakeResult:
                 reasoning=pass2_result.reasoning,
                 goal_description=pass2_result.goal_description,
                 chitchat_response=None,
+                multi_phase=pass2_result.multi_phase,
+                wire_subagent=pass2_result.wire_subagent,
                 task_complexity=derive_task_complexity_from_intake(intake_label),
             )
         else:

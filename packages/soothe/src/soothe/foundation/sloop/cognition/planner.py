@@ -125,9 +125,6 @@ def _detect_stuck_loop(state: LoopState) -> str | None:
 def _apply_continuation_intake_guardrails(result: Any, state: LoopState) -> Any:
     """Override bootstrap when intake complexity or empty reasoning forbids it."""
     from soothe.foundation.sloop.intention.models import IntakeLabel
-    from soothe.foundation.sloop.orchestrator.continuation_routing import (
-        goal_has_explicit_multi_step_markers,
-    )
 
     if getattr(result, "action", None) != "bootstrap":
         return result
@@ -153,7 +150,8 @@ def _apply_continuation_intake_guardrails(result: Any, state: LoopState) -> Any:
             }
         )
 
-    if goal_has_explicit_multi_step_markers(state.goal):
+    multi_phase = getattr(state.intent, "multi_phase", None) if state.intent else None
+    if multi_phase:
         return result.model_copy(
             update={
                 "action": "plan_generate",

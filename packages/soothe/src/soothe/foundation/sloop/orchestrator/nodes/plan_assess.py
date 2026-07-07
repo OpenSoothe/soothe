@@ -28,7 +28,6 @@ from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.orchestrator.continuation_routing import (
     bootstrap_terminal_after_execute,
     continuation_forced_plan_generate_assessment,
-    goal_has_explicit_multi_step_markers,
 )
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -121,6 +120,7 @@ def build_continue_loop_bootstrap_plan(
     raw_user_goal: str | None = None,
     goal_description: str | None = None,
     terminal_after_execute: bool | None = None,
+    multi_phase: bool | None = None,
     reasoning: str = "",
     goal_progress: Literal["none", "low", "medium", "high", "complete"] = "low",
 ) -> PlanResult:
@@ -152,6 +152,7 @@ def build_continue_loop_bootstrap_plan(
         terminal_after_execute = bootstrap_terminal_after_execute(
             raw_user_goal=user_goal,
             goal_description=goal_description,
+            multi_phase=multi_phase,
         )
     default_reasoning = (
         ""
@@ -269,7 +270,8 @@ async def _handle_continuation_first_plan(
         ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
         return {"assess_route": "continue_generate"}
 
-    if goal_has_explicit_multi_step_markers(state.goal):
+    multi_phase = getattr(state.intent, "multi_phase", None) if state.intent else None
+    if multi_phase:
         logger.info("[Plan] continuation guardrail: multi-step goal forced plan_generate")
         ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
         return {"assess_route": "continue_generate"}
@@ -317,6 +319,7 @@ async def _handle_continuation_first_plan(
             raw_user_goal=state.goal,
             goal_description=goal_description,
             terminal_after_execute=None,
+            multi_phase=getattr(state.intent, "multi_phase", None) if state.intent else None,
             reasoning=reason_text,
             goal_progress=assessment.goal_progress,
         )
