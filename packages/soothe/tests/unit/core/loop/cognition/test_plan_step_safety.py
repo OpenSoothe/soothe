@@ -10,20 +10,19 @@ from pydantic import ValidationError
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
-    max_plan_steps_for_state,
     plan_has_minimum_steps_for_intake,
     simple_intake_should_force_done,
 )
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import (
-    FIRST_WAVE_MAX_STEPS,
+    DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     LoopState,
     PlanGenerateStep,
     PriorProgressDigest,
     StatusAssessment,
     StepAction,
     StepResult,
-    plan_generation_model_for_iteration,
+    capped_plan_generation_model,
 )
 
 
@@ -46,20 +45,11 @@ def test_plan_has_minimum_steps_missing_decision_behavior() -> None:
     )
 
 
-def test_max_plan_steps_caps_simple_intake_on_later_iterations() -> None:
-    state = LoopState(goal="g", thread_id="t1", iteration=2)
-    state.intent = SimpleNamespace(intake_label=IntakeLabel.SIMPLE)
-    assert max_plan_steps_for_state(state) == FIRST_WAVE_MAX_STEPS
-
-    state.intent = SimpleNamespace(intake_label=IntakeLabel.COMPLEX)
-    assert max_plan_steps_for_state(state) is None
-
-
-def test_simple_intake_schema_caps_steps_at_iteration_one() -> None:
-    schema = plan_generation_model_for_iteration(1, intake_label=IntakeLabel.SIMPLE)
+def test_capped_plan_schema_rejects_over_max_steps() -> None:
+    schema = capped_plan_generation_model()
     steps = [
         PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
-        for i in range(3)
+        for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE + 1)
     ]
     with pytest.raises(ValidationError):
         schema(type="execute_steps", execution_mode="parallel", steps=steps)

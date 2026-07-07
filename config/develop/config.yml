@@ -88,6 +88,7 @@ agent:
     max_parallel_goals: 6
     max_loops: 8
   loop:
+    max_plan_steps_per_wave: 10
     concurrency:
       max_parallel_goals: 8
       max_parallel_steps: 8

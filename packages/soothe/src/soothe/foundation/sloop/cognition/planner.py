@@ -14,16 +14,16 @@ from soothe.config.models import LLMRateLimitConfig
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
-    max_plan_steps_for_state,
     simple_intake_should_force_done,
 )
 from soothe.foundation.sloop.state.schemas import (
+    DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     AgentDecision,
     LoopState,
     PlanGeneration,
     StepAction,
+    capped_plan_generation_model,
     plan_generate_steps_to_step_actions,
-    plan_generation_model_for_iteration,
     renumber_decision_local_step_ids_for_goal_continuation,
     step_actions_to_plan_generate_steps,
 )
@@ -222,6 +222,12 @@ class LLMPlanner:
         self._config = config
         self._loop_id = loop_id
         self._prompt_builder = PromptBuilder(config)
+
+    def _max_plan_steps_per_wave(self) -> int:
+        """Configured cap on plan-generate steps per wave."""
+        if self._config is None:
+            return DEFAULT_MAX_PLAN_STEPS_PER_WAVE
+        return self._config.agent.loop.max_plan_steps_per_wave
 
     def _planner_langfuse_run_config(
         self,
@@ -1006,7 +1012,6 @@ class LLMPlanner:
         iteration: int,
         *,
         thread_id: str | None,
-        intake_label: Any | None = None,
     ) -> Any:
         """PlanGeneration call: generate execution plan when goal incomplete (RFC-604).
 
@@ -1029,7 +1034,6 @@ class LLMPlanner:
             goal,
             iteration,
             thread_id=thread_id,
-            intake_label=intake_label,
         )
         from soothe.foundation.sloop.cognition.plan_step_briefs import (
             populate_plan_generate_full_descriptions,
@@ -1045,7 +1049,6 @@ class LLMPlanner:
         iteration: int,
         *,
         thread_id: str | None,
-        intake_label: Any | None = None,
     ) -> tuple[Any, Any]:
         """PlanGeneration call with raw response for ledger recording (RFC-214).
 
@@ -1062,7 +1065,7 @@ class LLMPlanner:
         Returns:
             Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
         """
-        plan_schema = plan_generation_model_for_iteration(iteration, intake_label=intake_label)
+        plan_schema = capped_plan_generation_model(max_steps=self._max_plan_steps_per_wave())
 
         model = _plan_phase_chat_model(self._plan_generate_model)
 
@@ -1130,6 +1133,16 @@ class LLMPlanner:
                                     "Your previous plan had type=execute_steps but an empty "
                                     "steps array. Return execute_steps with at least one step "
                                     "(id + description)."
+                                )
+                            ),
+                        ]
+                    elif "steps" in detail and "object" in detail:
+                        attempt_messages = [
+                            *attempt_messages,
+                            HumanMessage(
+                                content=(
+                                    "execution_mode is a top-level field, not a steps[] element. "
+                                    "Each step must be an object with id and description."
                                 )
                             ),
                         ]
@@ -1308,8 +1321,8 @@ class LLMPlanner:
                     }
                 )
 
-            max_steps = max_plan_steps_for_state(state)
-            if max_steps is not None and len(result.decision.steps) > max_steps:
+            max_steps = self._max_plan_steps_per_wave()
+            if len(result.decision.steps) > max_steps:
                 logger.warning(
                     "[PlanGen] Truncated plan steps from %d to %d",
                     len(result.decision.steps),
@@ -1611,7 +1624,6 @@ class LLMPlanner:
             goal,
             state.iteration,
             thread_id=state.thread_id,
-            intake_label=intake_label_from_state(state),
         )
 
         from soothe.foundation.sloop.cognition.plan_step_briefs import (
@@ -1878,7 +1890,6 @@ class LLMPlanner:
                         goal,
                         state.iteration,
                         thread_id=state.thread_id,
-                        intake_label=intake_label_from_state(state),
                     )
                     plan_gen_ms = (time.perf_counter() - t_plan) * 1000
                     llm_calls = 2

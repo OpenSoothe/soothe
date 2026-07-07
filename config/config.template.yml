@@ -117,6 +117,7 @@ agent:
   loop:
     enabled: true
     max_iterations: 99
+    max_plan_steps_per_wave: 10
     max_tool_calls_per_step: 999
     max_subagent_tasks_per_wave: 4
     strange_loop_output_contract_enabled: true

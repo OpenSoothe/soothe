@@ -9,7 +9,7 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
 ``steps[].description``, ``steps[].expected_output``, and ``reasoning``.
 Do not switch language unless requested; keep paths, identifiers, and quoted literals unchanged.
 
-**Step count**: Follow EXECUTION_POLICIES (first wave: 1–2 only; later: 1–3).
+**Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
 
 **type**:
 - ``execute_steps``: Required at iteration 0 or when step_results empty.

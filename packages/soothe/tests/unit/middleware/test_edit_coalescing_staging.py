@@ -273,8 +273,8 @@ class TestStagingBufferCoalescing:
             assert isinstance(r, ToolMessage)
 
     @pytest.mark.asyncio
-    async def test_single_edit_file_coalesced(self, tmp_path: object) -> None:
-        """Single edit_file call should still be coalesced and applied."""
+    async def test_single_edit_file_passes_through_handler(self, tmp_path: object) -> None:
+        """Single edit_file call should pass through to the direct handler."""
         file_path = str(tmp_path / "single.txt")  # type: ignore[operator]
         with open(file_path, "w") as f:
             f.write("hello world\n")
@@ -282,17 +282,26 @@ class TestStagingBufferCoalescing:
         middleware = EditCoalescingMiddleware(
             config=EditCoalescingConfig(detection_window_ms=30),
         )
+        handler_calls = 0
+
+        async def tracking_handler(request: Any) -> ToolMessage:
+            nonlocal handler_calls
+            handler_calls += 1
+            return ToolMessage(
+                content="direct handler result",
+                tool_call_id=request.tool_call["id"],
+                name=request.tool_call["name"],
+            )
 
         request = _make_edit_file_request(file_path, "hello", "HELLO", call_id="call-single")
 
-        result = await middleware.awrap_tool_call(request, _make_async_handler())
+        result = await middleware.awrap_tool_call(request, tracking_handler)
 
+        assert handler_calls == 1
         assert isinstance(result, ToolMessage)
-        assert "HELLO" in result.content or "replacement" in result.content.lower()
-
+        assert result.content == "direct handler result"
         with open(file_path) as f:
-            content = f.read()
-        assert "HELLO world" in content
+            assert f.read() == "hello world\n"
 
     @pytest.mark.asyncio
     async def test_staging_buffer_accumulates_entries(self) -> None:
@@ -494,19 +503,12 @@ class TestStagingBufferFlush:
 
         request = _make_edit_file_request(file_path, "line1", "LINE1", call_id="call-flush")
 
-        await middleware.awrap_tool_call(request, _make_async_handler())
+        await middleware.awrap_tool_call(request, _make_async_handler("pass-through"))
 
-        # After the call returns, the buffer should be flushed
         assert (
             file_path not in middleware._staging_buffer
             or len(middleware._staging_buffer.get(file_path, [])) == 0
         )
-
-        # File should be modified
-        with open(file_path) as f:
-            content = f.read()
-        assert "LINE1" in content
-        assert "line1" not in content
 
     @pytest.mark.asyncio
     async def test_buffer_cleared_on_flush(self) -> None:
@@ -515,20 +517,33 @@ class TestStagingBufferFlush:
             config=EditCoalescingConfig(detection_window_ms=10),
         )
 
-        # Manually populate staging buffer and pending edits
-        middleware._staging_buffer["/fake.txt"] = [StringReplacement("old", "new", False, "call-1")]
+        # Manually populate staging buffer and pending edits (two edits → batch path)
+        middleware._staging_buffer["/fake.txt"] = [
+            StringReplacement("old", "new", False, "call-1"),
+            StringReplacement("other", "OTHER", False, "call-2"),
+        ]
         loop = asyncio.get_running_loop()
-        future: asyncio.Future = loop.create_future()
+        future1: asyncio.Future = loop.create_future()
+        future2: asyncio.Future = loop.create_future()
         middleware._pending_edits["/fake.txt"] = [
             MagicMock(
                 tool_call_id="call-1",
                 tool_name="edit_file",
                 file_path="/fake.txt",
                 args={"old_string": "old", "new_string": "new"},
-                result_future=future,
+                result_future=future1,
                 handler=_make_async_handler(),
-                request=_make_edit_file_request("/fake.txt", "old", "new"),
-            )
+                request=_make_edit_file_request("/fake.txt", "old", "new", call_id="call-1"),
+            ),
+            MagicMock(
+                tool_call_id="call-2",
+                tool_name="edit_file",
+                file_path="/fake.txt",
+                args={"old_string": "other", "new_string": "OTHER"},
+                result_future=future2,
+                handler=_make_async_handler(),
+                request=_make_edit_file_request("/fake.txt", "other", "OTHER", call_id="call-2"),
+            ),
         ]
 
         # Run the window processor (mock _dispatch_string_replacements to avoid FS)
@@ -576,15 +591,12 @@ class TestStagingBufferFlush:
         req_a = _make_edit_file_request(file_a, "content_a", "CONTENT_A", call_id="a-1")
         req_b = _make_edit_file_request(file_b, "content_b", "CONTENT_B", call_id="b-1")
 
-        await asyncio.gather(
-            middleware.awrap_tool_call(req_a, _make_async_handler()),
-            middleware.awrap_tool_call(req_b, _make_async_handler()),
+        results = await asyncio.gather(
+            middleware.awrap_tool_call(req_a, _make_async_handler("ok-a")),
+            middleware.awrap_tool_call(req_b, _make_async_handler("ok-b")),
         )
 
-        with open(file_a) as f:
-            assert "CONTENT_A" in f.read()
-        with open(file_b) as f:
-            assert "CONTENT_B" in f.read()
+        assert all(isinstance(r, ToolMessage) for r in results)
 
 
 # ---------------------------------------------------------------------------
@@ -734,17 +746,16 @@ class TestFileEditLockRegistryIntegration:
     """Tests that FileEditLockRegistry serializes batch dispatch."""
 
     @pytest.mark.asyncio
-    async def test_lock_registry_used_in_dispatch(self, tmp_path: object) -> None:
+    async def test_lock_registry_used_in_batch_dispatch(self, tmp_path: object) -> None:
         """Batch dispatch should acquire the per-file lock from the registry."""
         file_path = str(tmp_path / "locked.txt")  # type: ignore[operator]
         with open(file_path, "w") as f:
-            f.write("hello\n")
+            f.write("alpha\nbeta\n")
 
         middleware = EditCoalescingMiddleware(
             config=EditCoalescingConfig(detection_window_ms=30),
         )
 
-        # Spy on the lock registry's acquire method
         acquire_called = False
         original_acquire = middleware._lock_registry.acquire
 
@@ -759,13 +770,19 @@ class TestFileEditLockRegistryIntegration:
 
         middleware._lock_registry.acquire = spy_acquire  # type: ignore[assignment]
 
-        request = _make_edit_file_request(file_path, "hello", "HELLO", call_id="lock-1")
-        await middleware.awrap_tool_call(request, _make_async_handler())
+        request1 = _make_edit_file_request(file_path, "alpha", "ALPHA", call_id="lock-1")
+        request2 = _make_edit_file_request(file_path, "beta", "BETA", call_id="lock-2")
+        await asyncio.gather(
+            middleware.awrap_tool_call(request1, _make_async_handler()),
+            middleware.awrap_tool_call(request2, _make_async_handler()),
+        )
 
         assert acquire_called is True
 
         with open(file_path) as f:
-            assert "HELLO" in f.read()
+            content = f.read()
+        assert "ALPHA" in content
+        assert "BETA" in content
 
     @pytest.mark.asyncio
     async def test_external_lock_registry_accepted(self) -> None:
@@ -775,3 +792,29 @@ class TestFileEditLockRegistryIntegration:
         registry = FileEditLockRegistry()
         middleware = EditCoalescingMiddleware(lock_registry=registry)
         assert middleware._lock_registry is registry
+
+
+class TestBatchEditErrorSignals:
+    """Tests for per-edit error signaling in batched string replacement."""
+
+    @pytest.mark.asyncio
+    async def test_batch_partial_miss_returns_per_edit_errors(self, tmp_path: object) -> None:
+        file_path = str(tmp_path / "partial.txt")  # type: ignore[operator]
+        with open(file_path, "w") as f:
+            f.write("alpha beta\n")
+
+        middleware = EditCoalescingMiddleware(
+            config=EditCoalescingConfig(detection_window_ms=30),
+        )
+        req_ok = _make_edit_file_request(file_path, "alpha", "ALPHA", call_id="ok-1")
+        req_bad = _make_edit_file_request(file_path, "missing", "X", call_id="bad-1")
+        ok_result, bad_result = await asyncio.gather(
+            middleware.awrap_tool_call(req_ok, _make_async_handler()),
+            middleware.awrap_tool_call(req_bad, _make_async_handler()),
+        )
+        assert isinstance(ok_result, ToolMessage)
+        assert isinstance(bad_result, ToolMessage)
+        assert bad_result.status == "error"
+        assert "EDIT_OLD_STRING_NOT_FOUND" in str(bad_result.content)
+        with open(file_path) as f:
+            assert "ALPHA" in f.read()

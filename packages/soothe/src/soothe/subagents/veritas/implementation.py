@@ -16,6 +16,7 @@ from soothe.subagents.veritas.prompts import (
 from soothe.subagents.veritas.schemas import (
     VeritasAnswerSchema,
     build_veritas_response_schema,
+    coerce_veritas_response,
 )
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
@@ -118,6 +119,7 @@ async def answer(
                 schema_name="VeritasAnswer",
                 strict=True,
                 config=invoke_config,
+                normalize=lambda data: coerce_veritas_response(data, n),
             )
 
         data = await await_with_llm_call_policy(

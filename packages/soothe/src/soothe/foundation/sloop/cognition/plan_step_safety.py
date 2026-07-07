@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import (
-    FIRST_WAVE_MAX_STEPS,
     AgentDecision,
     PlanGapAnalysis,
     StatusAssessment,
@@ -78,13 +77,6 @@ def plan_has_minimum_steps_for_intake(
     if not steps:
         return not treat_missing_as_undersized
     return len(steps) >= 2
-
-
-def max_plan_steps_for_state(state: LoopState) -> int | None:
-    """Return the per-wave step cap for plan-generate, if any."""
-    if state.iteration == 0 or intake_label_from_state(state) == IntakeLabel.SIMPLE:
-        return FIRST_WAVE_MAX_STEPS
-    return None
 
 
 def simple_intake_should_force_done(

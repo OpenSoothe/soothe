@@ -57,6 +57,22 @@ _PATH_ARG_KEYS: tuple[str, ...] = ("path", "file_path", "filepath", "file")
 # Valid eviction policies for the staging buffer
 _VALID_EVICTION_POLICIES: frozenset[str] = frozenset({"reject_newest", "evict_oldest"})
 
+_EDIT_RETRY_HINT = " Re-read the file with read_file and retry with exact surrounding context including whitespace."
+
+
+def _edit_old_string_not_found_message(file_path: str, old_string: str) -> str:
+    return (
+        f"Error: EDIT_OLD_STRING_NOT_FOUND in {file_path}. "
+        f"old_string not found (len={len(old_string)}).{_EDIT_RETRY_HINT}"
+    )
+
+
+def _edit_multiple_matches_message(file_path: str, count: int) -> str:
+    return (
+        f"Error: EDIT_MULTIPLE_MATCHES in {file_path} ({count} matches). "
+        "Add more surrounding context to old_string or set replace_all=true."
+    )
+
 
 @dataclass
 class PendingEdit:
@@ -440,12 +456,29 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
             # Dispatch string-replacement batch if any
             if string_edits:
-                replacements = staging.get(file_path, [])
-                await self._dispatch_string_replacements(file_path, string_edits, replacements)
+                if len(string_edits) == 1:
+                    await self._dispatch_single_string_edit(string_edits[0])
+                else:
+                    replacements = staging.get(file_path, [])
+                    await self._dispatch_string_replacements(file_path, string_edits, replacements)
 
             # Dispatch line-based batch if any
             if line_edits:
                 await self._dispatch_batched_edits(file_path, line_edits)
+
+    async def _dispatch_single_string_edit(self, edit: PendingEdit) -> None:
+        """Pass a lone edit_file call through to the direct handler."""
+        try:
+            result = await edit.handler(edit.request)
+        except Exception as e:
+            logger.warning("Single edit_file pass-through failed for %s: %s", edit.file_path, e)
+            result = ToolMessage(
+                content=f"Error: {e}",
+                tool_call_id=edit.tool_call_id,
+                name=edit.tool_name,
+                status="error",
+            )
+        _resolve_edit_future(edit, result)
 
     async def _dispatch_string_replacements(
         self,
@@ -507,35 +540,64 @@ class EditCoalescingMiddleware(AgentMiddleware):
                 # Re-read under the lock to get the authoritative content
                 content = await self._read_file_for_batch(file_path)
 
-                # Apply replacements sequentially in memory
-                applied_count = 0
+                outcomes: dict[str, tuple[bool, str]] = {}
+                applied_any = False
                 for replacement in replacements:
                     old_string = replacement.old_string
                     new_string = replacement.new_string
                     replace_all = replacement.replace_all
+                    call_id = replacement.tool_call_id or ""
                     if old_string not in content:
-                        # String not found — skip this replacement but continue
+                        outcomes[call_id] = (
+                            False,
+                            _edit_old_string_not_found_message(file_path, old_string),
+                        )
+                        continue
+                    count = content.count(old_string)
+                    if count > 1 and not replace_all:
+                        outcomes[call_id] = (
+                            False,
+                            _edit_multiple_matches_message(file_path, count),
+                        )
                         continue
                     if replace_all:
                         content = content.replace(old_string, new_string)
                     else:
                         content = content.replace(old_string, new_string, 1)
-                    applied_count += 1
+                    applied_any = True
+                    outcomes[call_id] = (
+                        True,
+                        f"String replacement applied to {file_path}.",
+                    )
 
-                # Single atomic write via the backend's write path
-                await self._atomic_write(file_path, content)
+                if applied_any:
+                    await self._atomic_write(file_path, content)
 
-            # All edits succeed together
+            replacement_by_call_id = {r.tool_call_id: r for r in replacements}
             for edit in edits:
+                call_id = edit.tool_call_id
+                if call_id in outcomes:
+                    ok, message = outcomes[call_id]
+                elif call_id in replacement_by_call_id:
+                    ok, message = (
+                        False,
+                        _edit_old_string_not_found_message(
+                            file_path,
+                            replacement_by_call_id[call_id].old_string,
+                        ),
+                    )
+                else:
+                    ok, message = (
+                        False,
+                        f"Error: EDIT_OLD_STRING_NOT_FOUND in {file_path}. No replacement staged.",
+                    )
                 _resolve_edit_future(
                     edit,
                     ToolMessage(
-                        content=(
-                            f"String replacement applied to {file_path}. "
-                            f"{applied_count} replacement(s) in batched write."
-                        ),
+                        content=message,
                         tool_call_id=edit.tool_call_id,
                         name=edit.tool_name,
+                        status="error" if not ok else "success",
                     ),
                 )
 
