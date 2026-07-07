@@ -19,9 +19,6 @@ from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.protocol import MessageRouter
 
 
-from soothe_daemon.protocol import MessageRouter
-
-
 def _mark_handshake(daemon: SootheDaemon, client_id: str = "client-1") -> None:
     """Mark protocol-1 handshake complete for unit tests."""
     daemon._message_router._handshake_state[client_id] = ("1", [])
