@@ -117,3 +117,23 @@ def filter_filler_plan_steps(steps: list[StepAction]) -> list[StepAction]:
         step for step in steps if not _FILLER_STEP_RE.match((step.description or "").strip())
     ]
     return filtered if filtered else steps
+
+
+def render_plan_coverage(state: LoopState) -> str:
+    """Render deterministic plan step coverage for assess prompts (IG-557)."""
+    decision = state.current_decision
+    if decision is None or not decision.steps:
+        return ""
+    completed = state.dependency_completion_ids()
+    total = len(decision.steps)
+    completed_count = sum(1 for step in decision.steps if step.id in completed)
+    remaining = [step.id for step in decision.steps if step.id not in completed]
+    ready = decision.get_ready_steps(completed)
+    ready_ids = [step.id for step in ready]
+    lines = [
+        f"completed_steps: {completed_count}/{total}",
+        f"remaining_step_ids: {', '.join(remaining) if remaining else '(none)'}",
+        f"ready_steps: {', '.join(ready_ids) if ready_ids else '(none)'}",
+        "note: Plan remaining ≠ goal complete; judge GOAL against evidence.",
+    ]
+    return "\n".join(lines)

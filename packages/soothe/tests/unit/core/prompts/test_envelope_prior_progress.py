@@ -52,7 +52,8 @@ def test_message_renders_prior_progress_when_fresh() -> None:
         current_iteration=2,
     )
     assert "PRIOR PROGRESS:" in out
-    assert "iter=1 wave=0 completed=2 failed=0 progress_hint=high" in out
+    assert "iter=1 wave=0 completed=2 failed=0" in out
+    assert "progress_hint=high" not in out
     assert "- run_command:" not in out
     assert "- STEP [s1] count .py files (completed)" in out
     assert "  - outcome: Counted .py: 1139" in out

@@ -210,17 +210,14 @@ def test_plan_assess_message_omits_response_language_hint() -> None:
     assert "RESPONSE_LANGUAGE_HINT" not in msg
 
 
-def test_plan_assess_message_skill_reference_when_provided() -> None:
+def test_plan_assess_message_skill_reference_excluded_ig557() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_plan_assess_message(
         goal="shanghai tomorrow",
         skill_context="Skill: weather\nSkill folder: /skills/weather\n\nWeather skill body here",
     )
-    assert "SKILL REFERENCE:" in msg
-    assert "Weather skill body here" in msg
-    goal_idx = msg.index("GOAL:")
-    skill_idx = msg.index("SKILL REFERENCE:")
-    assert goal_idx < skill_idx
+    assert "SKILL REFERENCE:" not in msg
+    assert "Weather skill body here" not in msg
 
 
 def test_plan_assess_message_no_skill_reference_when_absent() -> None:
