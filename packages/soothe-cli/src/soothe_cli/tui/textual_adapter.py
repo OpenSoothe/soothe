@@ -1743,7 +1743,7 @@ def _tui_effective_ai_blocks(
     """Build content blocks for TUI streaming (text + tool calls).
 
     Tool kwargs are merged in
-    :func:`soothe_cli.shared.tool_call_resolution.materialize_ai_blocks_with_resolved_tools`.
+    :func:`soothe_cli.runtime.parse.tool_call_resolution.materialize_ai_blocks_with_resolved_tools`.
     """
     from langchain_core.messages import AIMessageChunk
 

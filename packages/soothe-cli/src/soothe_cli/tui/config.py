@@ -1242,51 +1242,6 @@ class Settings:
             return None
         return self.project_root / ".agents" / "skills"
 
-    @staticmethod
-    def get_user_claude_skills_dir() -> Path:
-        """Get user-level `~/.claude/skills/` directory (experimental).
-
-        Convenience bridge for cross-tool skill sharing with Claude Code.
-        This is experimental and may be removed.
-
-        Returns:
-            Path to `~/.claude/skills/`
-        """
-        return Path.home() / ".claude" / "skills"
-
-    def get_project_claude_skills_dir(self) -> Path | None:
-        """Get project-level `.claude/skills/` directory (experimental).
-
-        Convenience bridge for cross-tool skill sharing with Claude Code.
-        This is experimental and may be removed.
-
-        Returns:
-            Path to `{project_root}/.claude/skills/`, or `None` if not in a project.
-        """
-        if not self.project_root:
-            return None
-        return self.project_root / ".claude" / "skills"
-
-    @staticmethod
-    def get_built_in_skills_dir() -> Path:
-        """Get the directory containing built-in skills that ship with the CLI.
-
-        Returns:
-            Path to the `built_in_skills/` directory within the package.
-        """
-        return Path(__file__).parent / "built_in_skills"
-
-    def get_extra_skills_dirs(self) -> list[Path]:
-        """Get user-configured extra skill directories.
-
-        Set via `SOOTHE_EXTRA_SKILLS_DIRS` (colon-separated paths) or
-        `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/config.yml`.
-
-        Returns:
-            List of extra skill directory paths, or empty list if not configured.
-        """
-        return self.extra_skills_dirs or []
-
 
 class SessionState:
     """Mutable session state shared across the app, adapter, and agent."""

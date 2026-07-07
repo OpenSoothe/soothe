@@ -28,7 +28,7 @@ from soothe_cli.tui.config import get_glyphs, is_ascii_mode
 logger = logging.getLogger(__name__)
 _REFRESH_INTERVAL_S = 1.0
 
-# Status color mapping (mirrors autopilot_dashboard.py conventions)
+# Status color mapping for goal/context display
 STATUS_COLORS: dict[str, str] = {
     "pending": "dim",
     "active": "yellow",

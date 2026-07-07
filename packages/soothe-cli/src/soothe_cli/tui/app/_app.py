@@ -23,7 +23,6 @@ from textual.message import Message
 
 from soothe_cli.runtime.state.session_stats import SessionStats
 from soothe_cli.tui import theme
-from soothe_cli.tui.app._commands import _CommandsMixin
 from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._history import _HistoryMixin
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
@@ -55,7 +54,6 @@ class SootheApp(
     App,
     _StartupMixin,
     _HistoryMixin,
-    _CommandsMixin,
     _ModelMixin,
     _ExecutionMixin,
     _UIMixin,
