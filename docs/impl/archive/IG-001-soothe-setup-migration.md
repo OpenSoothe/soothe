@@ -58,7 +58,7 @@ soothe/
     config.py                     # SootheConfig (Pydantic Settings)
     subagents/
       __init__.py                 # Subagent registry and exports
-      research.py                 # Tacitus migration (CompiledSubAgent)
+      research.py                 # Deep Research migration (CompiledSubAgent)
       planner.py                  # PlanAgent migration (SubAgent)
       scout.py                    # ExploreAgent migration, renamed (SubAgent)
       browser.py                  # BrowserUseAgent migration (CompiledSubAgent)
@@ -188,10 +188,10 @@ All implemented as langchain `BaseTool` subclasses with `_run()` and `_arun()`.
 
 All subagents are compatible with deepagents' `task` tool via `SubAgent` or `CompiledSubAgent`.
 
-### 1. Research (from Tacitus)
+### 1. Research (from Deep Research)
 
 - **Type**: `CompiledSubAgent` with custom LangGraph `StateGraph`
-- **Source**: `noesium/src/noesium/subagents/tacitus/`
+- **Source**: `noesium/src/noesium/subagents/deep_research/`
 - **Workflow**: query generation -> multi-engine search -> reflection -> synthesis -> citations
 - **Migration**:
   - Port iterative research loop as LangGraph `StateGraph`

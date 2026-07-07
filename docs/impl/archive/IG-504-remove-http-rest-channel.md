@@ -60,9 +60,9 @@ WebSocket is the primary and required transport. HTTP REST adds maintenance over
 | Package | File | Reason |
 |---------|------|--------|
 | soothe | `toolkits/http_requests.py` | Agent HTTP tools for external APIs (not daemon transport) |
-| soothe | `subagents/tacitus/polite_http.py` | HTTP client for external APIs (not daemon transport) |
+| soothe | `subagents/deep_research/polite_http.py` | HTTP client for external APIs (not daemon transport) |
 | soothe | `tests/unit/toolkits/test_http_requests_toolkit.py` | Tests for agent HTTP tools |
-| soothe | `tests/unit/subagents/tacitus/test_polite_http.py` | Tests for external HTTP client |
+| soothe | `tests/unit/subagents/deep_research/test_polite_http.py` | Tests for external HTTP client |
 | soothe-daemon | `channels/msteams.py` | MS Teams channel uses BaseHTTPRequestHandler (separate) |
 
 ---

@@ -67,7 +67,7 @@ def _emit_subagent_timeout_completion_event(
             ).to_dict(),
             logger,
         )
-        # For other subagent types (planner, tacitus), no specific completion event exists
+        # For other subagent types (planner, deep_research), no specific completion event exists
     # The timeout error ToolMessage will still mark the step as failed in executor
     logger.debug(
         "Subagent %s timeout completion event emitted (tool_call_id=%s)",
@@ -110,7 +110,7 @@ SUBAGENT_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "browser_use",
         "planner",
-        "tacitus",
+        "deep_research",
         "delegate",
         "task",  # Deepagents task tool invokes subagents dynamically
     }
@@ -150,7 +150,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
             default_timeout_seconds=60.0,
             per_tool_timeout={
                 "grep": 30.0,
-                "tacitus": 180.0,
+                "deep_research": 180.0,
             },
         )
         ```
@@ -294,7 +294,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         strategy rather than crashing the entire request.
 
         IG-516: When task tool times out, emit subagent completion event to
-        close the TUI subagent card (tacitus, browser_use, etc).
+        close the TUI subagent card (deep_research, browser_use, etc).
 
         IG-517: Skip timeout for batched operations (fast path).
 

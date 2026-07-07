@@ -102,14 +102,14 @@ def _register_main_tool_on_step_card(...):
 **File**: `packages/soothe-cli/src/soothe_cli/tui/commands/subagent_routing.py`
 
 Update `SUBAGENT_DISPLAY_NAMES` to include only valid soothe core subagents:
-- **Built-in** (registered in `SUBAGENT_FACTORIES`): `explore`, `plan`, `tacitus`
+- **Built-in** (registered in `SUBAGENT_FACTORIES`): `explore`, `plan`, `deep_research`
 - **Plugin-based** (registered via `@plugin` decorator): `browser_use`
 
 ```python
 SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "explore": "Explore",
     "plan": "Plan",
-    "tacitus": "Tacitus",
+    "deep_research": "Deep Research",
     "browser_use": "Browser",
 }
 ```

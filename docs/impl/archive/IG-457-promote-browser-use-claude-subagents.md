@@ -15,7 +15,7 @@ Move the `browser_use` and `claude` subagents from `soothe-plugins` into the cor
 - Edit (CHANGELOG): note the move under the `0.5.25` `Changed` section.
 
 ## Decisions
-- **Form**: kept `@plugin` / `@subagent` decorators with `trust_level="built-in"`. Matches `ExplorePlugin` / `TacitusPlugin`. Loaded through `soothe.plugins` entry points declared in `packages/soothe/pyproject.toml`, so the existing plugin lifecycle (`on_load` dep guards, registry, etc.) keeps working.
+- **Form**: kept `@plugin` / `@subagent` decorators with `trust_level="built-in"`. Matches `ExplorePlugin` / `Deep ResearchPlugin`. Loaded through `soothe.plugins` entry points declared in `packages/soothe/pyproject.toml`, so the existing plugin lifecycle (`on_load` dep guards, registry, etc.) keeps working.
 - **Deps (historical at the time)**: `browser-use>=0.11.0,<0.13.0` and (`anthropic>=0.96.0,<1.0.0`, `claude-agent-sdk>=0.1.0,<1.0.0`) were moved behind opt-in extras and folded into `soothe[all]`. `on_load` raises `PluginError` with the install hint when the runtime dep is missing; the lifecycle disables the plugin gracefully.
 - **Old copies**: deleted from `community/`. Single source of truth in `soothe`. The community `RFC-601-community-agents.md` still documents the historical state — left untouched as a community-side history note.
 - **Path helper**: `soothe_plugins._paths.expand_path` → `soothe.utils.path.expand_path` (the helper was a verbatim mirror of that utility).

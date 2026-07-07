@@ -67,7 +67,7 @@ def test_status_tool_stats_suffix_ignores_server_count_for_task_delegated_step()
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     suffix = card._status_tool_stats_suffix(fallback_count=8)
@@ -92,7 +92,7 @@ def test_stats_same_unified_id_not_double_counted() -> None:
 def test_route_pending_subgraph_tools_attaches_to_step_card() -> None:
     router = StepTaskRouter()
     router.on_step_started("YKF-01")
-    router.register_task_spawn("YKF_01:s:task:0", "tacitus", step_id="YKF-01")
+    router.register_task_spawn("YKF_01:s:task:0", "deep_research", step_id="YKF-01")
     router.on_subgraph_namespace(("tools:sub",))
 
     step = MagicMock()
@@ -120,7 +120,7 @@ def test_stats_include_main_tools_and_task_delegations() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     card.add_tool_call(
@@ -148,7 +148,7 @@ def test_route_pending_main_tools_single_active_step_without_unified_id() -> Non
 
 def test_running_animation_includes_tool_stats_in_status_line() -> None:
     """Stats appear in the running status line during animation, not just in _stats_title_suffix()."""
-    card = CognitionStepMessage("RUN-01", "Tacitus workspace", id="step-run")
+    card = CognitionStepMessage("RUN-01", "Deep Research workspace", id="step-run")
 
     card.add_tool_call("RUN_01:s:grep:0", "grep", {"pattern": "TODO"})
     card.add_tool_call("RUN_01:s:grep:1", "grep", {"pattern": "FIXME"})
@@ -301,7 +301,7 @@ def test_no_duplicate_tool_rows_in_activity_preview() -> None:
     card.add_tool_call(
         "DUP_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
 

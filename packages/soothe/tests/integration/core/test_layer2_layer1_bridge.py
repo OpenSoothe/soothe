@@ -31,7 +31,7 @@ class TestExecutionGuidanceEnvelopeIntegration:
 
     def test_envelope_includes_subagent_and_expected_output(self) -> None:
         """Executor-format guidance appears in EXPECTED OUTPUT and INSTRUCTIONS sections."""
-        body = _envelope_body(subagent="tacitus", expected_output="Page summary")
+        body = _envelope_body(subagent="deep_research", expected_output="Page summary")
         builder = UserMessageBuilder()
         envelope = builder.build_execute_step_message(
             "Open the page",
@@ -43,7 +43,7 @@ class TestExecutionGuidanceEnvelopeIntegration:
         assert "EXECUTION HINTS:" not in envelope
         assert "EXPECTED OUTPUT:" in envelope
         assert "INSTRUCTIONS:" in envelope
-        assert "Suggested subagent: tacitus" in envelope
+        assert "Suggested subagent: deep_research" in envelope
         assert "Page summary" in envelope
         assert "EXECUTION METADATA:" in envelope
         assert "step_id: 01" in envelope

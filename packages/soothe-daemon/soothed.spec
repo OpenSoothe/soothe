@@ -96,7 +96,7 @@ a = Analysis(
         # ── Subagent plugins (discovered by discovery.py) ──
         "soothe.subagents.explore",
         "soothe.subagents.plan",
-        "soothe.subagents.tacitus",
+        "soothe.subagents.deep_research",
         # ── Toolkit plugins (discovered by discovery.py) ──
         "soothe.toolkits.execution",
         "soothe.toolkits.file_ops",

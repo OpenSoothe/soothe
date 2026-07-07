@@ -194,7 +194,7 @@ def test_execution_hints_extracted_to_state():
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(task_complexity="medium")
     hint_body = (
-        "Suggested subagent: tacitus. Expected output: paths under src/. "
+        "Suggested subagent: deep_research. Expected output: paths under src/. "
         "Consider using the suggested approach first."
     )
     request = MockModelRequest(
@@ -285,7 +285,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="tacitus",
+        preferred_subagent="deep_research",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -310,7 +310,7 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="tacitus",
+        preferred_subagent="deep_research",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -344,13 +344,13 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "tacitus"}}
+    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "deep_research"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         modified = middleware.modify_request(request)
     assert len(modified.tools) == 1
     assert getattr(modified.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
-    assert "tacitus" in modified.system_message.content
+    assert "deep_research" in modified.system_message.content
 
 
 def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
@@ -388,7 +388,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="tacitus",
+        preferred_subagent="deep_research",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -400,11 +400,11 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"soothe_step_subagent": "tacitus"}}
+    lg_config = {"configurable": {"soothe_step_subagent": "deep_research"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         modified = middleware.modify_request(request)
     content = modified.system_message.content
-    assert "subagent_type='tacitus'" in content
+    assert "subagent_type='deep_research'" in content
 
 
 def test_goal_synthesis_disables_all_tools() -> None:

@@ -39,7 +39,7 @@ def test_resolve_token_target_card_routes_subgraph_to_subagent_only() -> None:
     ns_key = ("tools:explore",)
     adapter._step_by_namespace[ns_key] = step
     router.on_step_started("YKF-01")
-    router.register_task_spawn("YKF_01:s:task:0", "tacitus", step_id="YKF-01")
+    router.register_task_spawn("YKF_01:s:task:0", "deep_research", step_id="YKF-01")
     router.on_subgraph_namespace(ns_key)
     router.try_route_subgraph_tool(
         ns_key=ns_key,
@@ -54,7 +54,7 @@ def test_resolve_token_target_card_routes_subgraph_to_subagent_only() -> None:
     subagent = create_subagent_card(
         step_id="YKF-01",
         description="scan",
-        subagent_type="tacitus",
+        subagent_type="deep_research",
         parent_step_id="YKF-01",
         parent_task_key="YKF_01:s:task:0",
         task_idx=0,
@@ -75,7 +75,7 @@ def test_step_card_excludes_subgraph_token_stream() -> None:
     ns_key = ("tools:explore",)
     adapter._step_by_namespace[ns_key] = step
     router.on_step_started("YKF-01")
-    router.register_task_spawn("YKF_01:s:task:0", "tacitus", step_id="YKF-01")
+    router.register_task_spawn("YKF_01:s:task:0", "deep_research", step_id="YKF-01")
     router.on_subgraph_namespace(ns_key)
     router.try_route_subgraph_tool(
         ns_key=ns_key,

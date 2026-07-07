@@ -29,7 +29,7 @@ Guides for daily usage of Soothe — CLI commands, the TUI, autonomous mode, sub
 - Plan-execute-reflect loop configuration
 
 ### 4. [Subagents](../subagents.md)
-- Built-in specialized subagents (planner, tacitus, browser_use, veritas, skillify)
+- Built-in specialized subagents (planner, deep_research, academic_research, browser_use, veritas, skillify)
 - Delegated community plugins
 
 ### 5. [Thread Management](../thread-management.md)

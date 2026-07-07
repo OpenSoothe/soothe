@@ -92,13 +92,14 @@ class TestSootheConfig:
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
         assert "planner" in cfg.subagents
-        assert "tacitus" in cfg.subagents
+        assert "deep_research" in cfg.subagents
+        assert "academic_research" in cfg.subagents
         assert "browser_use" in cfg.subagents
         assert "skillify" in cfg.subagents
         assert "claude" not in cfg.subagents
         assert "explore" not in cfg.subagents
         assert "scout" not in cfg.subagents
-        for name in ("planner", "tacitus", "skillify"):
+        for name in ("planner", "deep_research", "academic_research", "skillify"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
         assert cfg.subagents["browser_use"].enabled is True
         assert cfg.subagents["browser_use"].model_role == "default"
@@ -242,11 +243,11 @@ class TestLoggingConfig:
         cfg = SootheConfig(
             subagents={
                 "scout": SubagentConfig(enabled=True),
-                "tacitus": SubagentConfig(enabled=False),
+                "deep_research": SubagentConfig(enabled=False),
             }
         )
         assert cfg.subagents["scout"].enabled is True
-        assert cfg.subagents["tacitus"].enabled is False
+        assert cfg.subagents["deep_research"].enabled is False
 
     def test_mcp_server_config_stdio(self) -> None:
         cfg = MCPServerConfig(name="my-server", command="npx", args=["-y", "@my/server"])

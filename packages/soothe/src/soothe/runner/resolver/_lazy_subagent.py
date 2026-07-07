@@ -19,7 +19,7 @@ _BUILTIN_DESCRIPTIONS: dict[str, str] = {
         "returning one report. Use when the main thread needs structured recon-plus-plan "
         "without doing every recon and rewrite itself."
     ),
-    "tacitus": ("Public-domain research subagent for web, academic, and URL sources."),
+    "deep_research": ("Public-domain research subagent for web, academic, and URL sources."),
 }
 
 

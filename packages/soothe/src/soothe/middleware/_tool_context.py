@@ -49,8 +49,9 @@ BUILTIN_TOOL_TRIGGERS: dict[str, list[str]] = {
     "extract_text": ["WORKSPACE"],
     "get_data_info": ["WORKSPACE"],
     "ask_about_file": ["WORKSPACE"],
-    # Subagents (task tool targets — core: plan, tacitus; plugins add more)
-    "tacitus": ["TACITUS_RULES", "context"],
+    # Subagents (task tool targets — core: plan, deep_research, academic_research; plugins add more)
+    "deep_research": ["DEEP_RESEARCH_RULES", "context"],
+    "academic_research": ["ACADEMIC_RESEARCH_RULES", "context"],
     # Datetime
     "datetime": [],
 }

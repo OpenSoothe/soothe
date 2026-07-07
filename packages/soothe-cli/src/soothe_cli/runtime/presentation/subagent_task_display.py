@@ -1,6 +1,6 @@
 """Format subagent Task-scope assistant blobs for CLI/TUI.
 
-Tacitus emits structured JSON in subgraph assistant streams. Clients show
+Deep Research emits structured JSON in subgraph assistant streams. Clients show
 user-facing summaries only; internal planning JSON is suppressed.
 """
 
@@ -11,8 +11,8 @@ from collections.abc import Iterator
 from typing import Any
 
 
-def _is_tacitus_internal_json_object(obj: dict[str, Any]) -> bool:
-    """True when ``obj`` is Tacitus engine scratch (not a user-facing report)."""
+def _is_deep_research_internal_json_object(obj: dict[str, Any]) -> bool:
+    """True when ``obj`` is Deep Research engine scratch (not a user-facing report)."""
     keys = set(obj.keys())
     if "sub_questions" in keys:
         return True
@@ -89,21 +89,24 @@ def format_subagent_task_assistant_for_display(
 
     Args:
         raw: Full assistant text from a subgraph namespace.
-        subagent_type: Built-in subagent id when known (``tacitus``, …).
+        subagent_type: Built-in subagent id when known (``deep_research``, …).
 
     Returns:
         Scrubbed one-line text, or ``""`` when only internal payloads remain.
     """
     agent = (subagent_type or "").strip().lower()
     text = raw
-    if agent == "tacitus":
+    if agent in ("deep_research", "academic_research"):
         stripped = text.strip()
         internal_present = any(
-            _is_tacitus_internal_json_object(obj) for obj in _iter_embedded_json_objects(stripped)
+            _is_deep_research_internal_json_object(obj)
+            for obj in _iter_embedded_json_objects(stripped)
         )
         if internal_present:
             return ""
-        text = _strip_concatenated_json_objects(text, predicate=_is_tacitus_internal_json_object)
+        text = _strip_concatenated_json_objects(
+            text, predicate=_is_deep_research_internal_json_object
+        )
     return (text or "").strip()
 
 

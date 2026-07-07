@@ -19,7 +19,7 @@ def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
     card.add_tool_call(
         "PGY_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan both trees"},
+        {"subagent_type": "deep_research", "description": "scan both trees"},
         is_task_row=True,
     )
     card.add_tool_call(
@@ -28,7 +28,7 @@ def test_no_blank_line_between_task_branch_and_main_step_tools() -> None:
         {"path": "~/Workspace/Longan"},
     )
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan both trees)" in text
+    assert "Deep Research(scan both trees)" in text
     assert "ListFiles" in text
     assert "\n\n" not in text
     lines = text.split("\n")
@@ -43,14 +43,14 @@ def test_task_delegation_label_collapses_multiline_description() -> None:
         "MLN_01:s:task:0",
         "task",
         {
-            "subagent_type": "tacitus",
+            "subagent_type": "deep_research",
             "description": "Line one\nLine two\n  Line three",
         },
         is_task_row=True,
     )
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(Line one Line two Line three)" in text
-    assert "\n" not in text.split("Tacitus(", 1)[-1].split(")", 1)[0]
+    assert "Deep Research(Line one Line two Line three)" in text
+    assert "\n" not in text.split("Deep Research(", 1)[-1].split(")", 1)[0]
 
 
 def test_task_activity_tree_shows_name_desc_flat_marker() -> None:
@@ -59,13 +59,13 @@ def test_task_activity_tree_shows_name_desc_flat_marker() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan the repository"},
+        {"subagent_type": "deep_research", "description": "scan the repository"},
         is_task_row=True,
     )
     # IG-513: Subgraph tools no longer appear nested under step card
 
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan the repository)" in text
+    assert "Deep Research(scan the repository)" in text
     # IG-513: No nested tool count under task marker on step card
     # (SubAgent card shows tool count)
 
@@ -76,13 +76,13 @@ def test_task_activity_links_children_by_unified_task_index() -> None:
     card.add_tool_call(
         "YKF_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "find docs"},
+        {"subagent_type": "deep_research", "description": "find docs"},
         is_task_row=True,
     )
     # IG-513: read_file tool would route to SubAgent card, not nested here
 
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(find docs)" in text
+    assert "Deep Research(find docs)" in text
 
 
 def test_append_subagent_activity_attaches_to_task_branch() -> None:
@@ -90,13 +90,13 @@ def test_append_subagent_activity_attaches_to_task_branch() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     card.append_subagent_activity("Found 3 modules", task_tool_call_id="ABC_01:s:task:0")
 
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan)" in text
+    assert "Deep Research(scan)" in text
     assert "Found 3 modules" in text
 
 
@@ -115,12 +115,12 @@ def test_task_branch_child_line_shows_flat_marker_only() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     # IG-513: Subgraph tools route to SubAgent card, not nested here
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan)" in text
+    assert "Deep Research(scan)" in text
 
 
 def test_task_branch_with_empty_args_shows_marker() -> None:
@@ -129,11 +129,11 @@ def test_task_branch_with_empty_args_shows_marker() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan)" in text
+    assert "Deep Research(scan)" in text
 
 
 def test_pending_step_shows_no_activity_without_rows() -> None:
@@ -156,7 +156,7 @@ def test_pending_step_with_task_delegation_shows_marker() -> None:
     card.add_tool_call(
         "WAA_03:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan later"},
+        {"subagent_type": "deep_research", "description": "scan later"},
         is_task_row=True,
     )
     router.maybe_promote_step_to_running(
@@ -166,102 +166,102 @@ def test_pending_step_with_task_delegation_shows_marker() -> None:
     )
     assert card._status == "pending"
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan later)" in text
+    assert "Deep Research(scan later)" in text
 
 
 def test_duplicate_task_rows_dedupe_to_one_marker() -> None:
     """IG-513: Duplicate task rows dedupe to one marker."""
-    card = CognitionStepMessage("JIY-01", "Tacitus root", id="stp-dedupe")
+    card = CognitionStepMessage("JIY-01", "Deep Research root", id="stp-dedupe")
     card.add_tool_call(
         "JIY_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan repo"},
+        {"subagent_type": "deep_research", "description": "scan repo"},
         is_task_row=True,
     )
     card.add_tool_call(
         "call_provider_task_0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan repo"},
+        {"subagent_type": "deep_research", "description": "scan repo"},
         is_task_row=True,
     )
     rows = card._iter_task_delegation_rows()
     assert len(rows) == 1
     text = _plain(card._step_task_activity_content())
-    assert text.count("Tacitus(scan repo)") == 1
+    assert text.count("Deep Research(scan repo)") == 1
 
 
 def test_subgraph_task_level_id_does_not_overwrite_main_delegation() -> None:
     """Regression: ``FHG_01:t0:task:0`` must not replace ``FHG_01:s:task:0`` args."""
-    card = CognitionStepMessage("FHG-01", "Tacitus soothe-sdk", id="stp-overwrite")
+    card = CognitionStepMessage("FHG-01", "Deep Research soothe-sdk", id="stp-overwrite")
     card.add_tool_call(
         "FHG_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "Tacitus soothe-sdk package"},
+        {"subagent_type": "deep_research", "description": "Deep Research soothe-sdk package"},
         is_task_row=True,
     )
     card.add_tool_call(
         "FHG_01:t0:task:0",
         "task",
-        {"description": "Check soothe-cli dependencies", "subagent_type": "tacitus"},
+        {"description": "Check soothe-cli dependencies", "subagent_type": "deep_research"},
     )
     rows = card._iter_task_delegation_rows()
     assert len(rows) == 1
     assert "soothe-sdk" in str(rows[0].args.get("description", ""))
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(Tacitus soothe-sdk package)" in text
+    assert "Deep Research(Deep Research soothe-sdk package)" in text
 
 
 def test_task_branch_hides_redundant_opaque_task_metadata_row() -> None:
     """IG-513: Opaque task metadata row not shown on step card."""
-    card = CognitionStepMessage("FHG-01", "Tacitus soothe-sdk", id="stp-hide-opaque-task")
+    card = CognitionStepMessage("FHG-01", "Deep Research soothe-sdk", id="stp-hide-opaque-task")
     card.add_tool_call(
         "FHG_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "Count all file types"},
+        {"subagent_type": "deep_research", "description": "Count all file types"},
         is_task_row=True,
     )
     card.add_tool_call(
         "tool-49EA56F8116423E97FF19695B55Cca1",
         "tool-49EA56F8116423E97FF19695B55Cca1",
         {
-            "subagent_type": "tacitus",
+            "subagent_type": "deep_research",
             "description": "Count all file types",
         },
     )
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(Count all file types)" in text
+    assert "Deep Research(Count all file types)" in text
     assert "Tool-49" not in text
 
 
 def test_step_shows_main_tools_after_task_marker() -> None:
     """IG-513: Main-agent tools shown after task marker (flat layout)."""
-    card = CognitionStepMessage("JIY-01", "Tacitus", id="stp-parent-norm")
+    card = CognitionStepMessage("JIY-01", "Deep Research", id="stp-parent-norm")
     card.add_tool_call(
         "JIY_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     card.add_tool_call("JIY_01:s:grep:0", "grep", {"pattern": "x"})
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan)" in text
+    assert "Deep Research(scan)" in text
     assert "Grep(x)" in text
 
 
 def test_successful_step_shows_task_marker() -> None:
     """IG-513: Completed step shows task marker (status syncs from SubAgent)."""
-    card = CognitionStepMessage("ABC-01", "Tacitus codebase", id="stp-done-task")
+    card = CognitionStepMessage("ABC-01", "Deep Research codebase", id="stp-done-task")
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "find files"},
+        {"subagent_type": "deep_research", "description": "find files"},
         is_task_row=True,
     )
     card.set_running()
     card.set_complete(True, 83_000, 23, "Done")
 
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(find files)" in text
+    assert "Deep Research(find files)" in text
 
 
 def test_failed_step_shows_task_marker() -> None:
@@ -270,14 +270,14 @@ def test_failed_step_shows_task_marker() -> None:
     card.add_tool_call(
         "ABC_02:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     card.set_running()
     card.set_complete(False, 1000, 1, "failed")
 
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan)" in text
+    assert "Deep Research(scan)" in text
 
 
 def test_footer_stats_include_all_step_tools() -> None:
@@ -287,7 +287,7 @@ def test_footer_stats_include_all_step_tools() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan"},
+        {"subagent_type": "deep_research", "description": "scan"},
         is_task_row=True,
     )
     suffix = card._stats_title_suffix()
@@ -325,13 +325,13 @@ def test_combined_task_and_main_tools() -> None:
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
-        {"subagent_type": "tacitus", "description": "scan repo"},
+        {"subagent_type": "deep_research", "description": "scan repo"},
         is_task_row=True,
     )
     for i in range(3):
         card.add_tool_call(f"ABC_01:s:read_file:{i}", "read_file", {"file_path": f"/a{i}.py"})
     card.set_running()
     text = _plain(card._step_task_activity_content())
-    assert "Tacitus(scan repo)" in text
+    assert "Deep Research(scan repo)" in text
     assert "ReadFile" in text
-    assert text.index("Tacitus(scan repo)") < text.index("ReadFile")
+    assert text.index("Deep Research(scan repo)") < text.index("ReadFile")

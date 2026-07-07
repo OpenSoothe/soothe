@@ -350,7 +350,7 @@ tools:
     timeout: 60
     max_retries: 3
 
-# SubagentConfig — overrides merge with builtin planner/tacitus/browser_use/skillify
+# SubagentConfig — overrides merge with builtin planner/deep_research/academic_research/browser_use/skillify
 subagents:
   planner:
     enabled: true
@@ -359,7 +359,14 @@ subagents:
     url: null
     config: {}
     runtime_dir: ''
-  tacitus:
+  deep_research:
+    enabled: true
+    model: null
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  academic_research:
     enabled: true
     model: null
     transport: local

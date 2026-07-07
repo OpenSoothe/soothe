@@ -229,7 +229,7 @@ Research synthesis and fact-checking:
 soothe -p "Verify the security claims in our authentication implementation against OWASP guidelines"
 ```
 
-### Tacitus Subagent
+### Deep Research Subagent
 
 Academic research:
 
@@ -481,10 +481,9 @@ Let Soothe choose the right tool:
 ```
 
 Soothe will:
-1. Use **Tacitus** to research best practices
-2. Use **Plan** to design the implementation
-3. Use **Explore** to find relevant code
-4. Use **Core Agent** to implement changes
+1. Use **Deep Research** (`deep_research`) to research best practices on the public web
+2. Use **Planner** to design the implementation
+3. Use **Core Agent** file tools to find relevant code and implement changes
 
 ---
 
