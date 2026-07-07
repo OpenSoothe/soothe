@@ -439,6 +439,24 @@ class ContextEngine:
                 plan.model_dump(mode="json") if hasattr(plan, "model_dump") else plan
             )
 
+    def set_last_assessment(
+        self,
+        goal_id: str,
+        assessment: Any,
+        *,
+        iteration: int,
+    ) -> None:
+        """Overwrite per-goal assess audit snapshot (RFC-624, IG-557)."""
+        goal = self._dag.get_goal(goal_id)
+        if goal is not None:
+            goal.last_assessment = (
+                assessment.model_dump(mode="json")
+                if hasattr(assessment, "model_dump")
+                else assessment
+            )
+            goal.last_assessment_iteration = iteration
+            goal.touch()
+
     # ── RFC-625: Monitor-required methods ────────────────────────────────
 
     async def remove_goal(self, goal_id: str) -> bool:

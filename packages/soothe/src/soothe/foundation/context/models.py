@@ -279,6 +279,10 @@ class GoalNode(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    # Plan-assess audit (IG-557; not replayed into assess prompts except Phase C inline)
+    last_assessment: dict[str, Any] | None = None
+    last_assessment_iteration: int | None = None
+
     def touch(self) -> None:
         """Update updated_at timestamp."""
         self.updated_at = datetime.now(UTC)

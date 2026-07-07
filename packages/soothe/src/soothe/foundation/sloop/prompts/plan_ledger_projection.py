@@ -509,22 +509,6 @@ def project_continuation_assess_ledger(
     return project_last_goal_completion_for_intake(loop_messages, ledger_cfg, include_boundary=True)
 
 
-def current_iteration_plan_assess_in_ledger(
-    loop_messages: list[BaseMessage],
-    iteration: int,
-) -> bool:
-    """Return True when a ``plan_assess`` human/AI pair exists for ``iteration``."""
-    for msg in reversed(loop_messages):
-        if getattr(msg, "phase", None) != "plan_assess":
-            continue
-        msg_iter = getattr(msg, "iteration", None)
-        if msg_iter == iteration:
-            return True
-        if isinstance(msg_iter, int) and msg_iter < iteration:
-            return False
-    return False
-
-
 def _is_loop_human_message(msg: BaseMessage) -> bool:
     name = type(msg).__name__
     return name.endswith("HumanMessage")
@@ -707,14 +691,17 @@ def _execute_plan_tail_index(loop_messages: list[BaseMessage]) -> int:
 
 
 def _goal_segment_start(loop_messages: list[BaseMessage], unit_start: int) -> int:
-    """Return index of the ``plan_assess`` (iteration=0) that opened the goal for ``unit_start``."""
-    for i in range(unit_start, -1, -1):
-        if getattr(loop_messages[i], "phase", None) != "plan_assess":
-            continue
-        iteration = getattr(loop_messages[i], "iteration", None)
-        if iteration == 0:
+    """Return index where the goal segment containing ``unit_start`` began."""
+    seg_after_prev_gc = 0
+    for i in range(unit_start - 1, -1, -1):
+        msg = loop_messages[i]
+        if getattr(msg, "phase", None) == "goal_completion" and _is_loop_ai_message(msg):
+            seg_after_prev_gc = i + 1
+            break
+    for i in range(seg_after_prev_gc, unit_start):
+        if getattr(loop_messages[i], "phase", None) == "intent_classify":
             return i
-    return 0
+    return seg_after_prev_gc
 
 
 def _find_last_phase_pair_indices(
