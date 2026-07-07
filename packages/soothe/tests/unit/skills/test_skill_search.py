@@ -8,6 +8,7 @@ import pytest
 from langchain_core.messages import HumanMessage
 
 from soothe.config import SootheConfig
+from soothe.foundation.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 from soothe.middleware.skill_activation import SkillActivationMiddleware
 from soothe.skills.index import SkillIndexEntry
 from soothe.skills.registry import ProgressiveSkillRegistry
@@ -16,7 +17,6 @@ from soothe.skills.search import (
     prefetch_core_skills_from_corpus,
     search_deferred_skills,
 )
-from soothe.subagents.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 
 
 def _entry(name: str, *, source: str = "user") -> SkillIndexEntry:
@@ -67,12 +67,12 @@ class TestSemanticSearch:
             query="deploy database",
             results=[SkillSearchResult(record=record, score=0.88)],
         )
-        mock_retriever = AsyncMock()
-        mock_retriever.retrieve.return_value = bundle
+        mock_service = MagicMock()
+        mock_service.retrieve = AsyncMock(return_value=bundle)
 
         with patch(
-            "soothe.subagents.skillify.runtime.get_skillify_retriever",
-            return_value=mock_retriever,
+            "soothe.foundation.skillify.start_skillify_service",
+            return_value=mock_service,
         ):
             matches = await search_deferred_skills(
                 "deploy",
@@ -114,13 +114,13 @@ class TestSemanticSearch:
             query="北京今天的天气",
             results=[SkillSearchResult(record=record, score=0.92)],
         )
-        mock_retriever = AsyncMock()
-        mock_retriever.retrieve.return_value = bundle
+        mock_service = MagicMock()
+        mock_service.retrieve = AsyncMock(return_value=bundle)
 
         catalog = {core_weather.name: core_weather, deferred_only.name: deferred_only}
         with patch(
-            "soothe.subagents.skillify.runtime.get_skillify_retriever",
-            return_value=mock_retriever,
+            "soothe.foundation.skillify.start_skillify_service",
+            return_value=mock_service,
         ):
             matches = await search_deferred_skills(
                 "北京今天的天气",
@@ -195,7 +195,7 @@ class TestSemanticSearch:
         config = MagicMock()
         config.progressive_skills.semantic_search_enabled = False
 
-        with patch("soothe.subagents.skillify.runtime.get_skillify_retriever") as mock_get:
+        with patch("soothe.foundation.skillify.start_skillify_service") as mock_get:
             matches = await search_deferred_skills(
                 "vector-only",
                 deferred,

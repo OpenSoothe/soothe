@@ -15,6 +15,7 @@ from soothe.config.models import (
     AgentConfig,
     ConsoleLoggingConfig,
     CronConfig,
+    SkillifyConfig,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
     MCPServerConfig,
@@ -428,6 +429,19 @@ class SootheConfig(BaseSettings):
                 raise ValueError(f"MCP server names must be unique. Duplicates: {set(duplicates)}")
         return self
 
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_legacy_skillify_subagent_config(cls, data: Any) -> Any:
+        """Drop removed ``subagents.skillify`` entries from YAML (use top-level ``skillify``)."""
+        if not isinstance(data, dict):
+            return data
+        subagents = data.get("subagents")
+        if isinstance(subagents, dict) and "skillify" in subagents:
+            data["subagents"] = {
+                key: value for key, value in subagents.items() if key != "skillify"
+            }
+        return data
+
     @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
@@ -438,7 +452,6 @@ class SootheConfig(BaseSettings):
             "deep_research": SubagentConfig(),
             "academic_research": SubagentConfig(),
             "browser_use": SubagentConfig(enabled=True, model_role="default"),
-            "skillify": SubagentConfig(enabled=True),
         }
 
         # Import here to avoid circular dependency
@@ -513,6 +526,9 @@ class SootheConfig(BaseSettings):
 
     cron: CronConfig = Field(default_factory=CronConfig)
     """RFC-229: Cron service configuration for natural language scheduled jobs."""
+
+    skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
+    """Daemon-shared Skillify semantic skill warehouse indexing and retrieval."""
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""

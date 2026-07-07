@@ -36,7 +36,7 @@ Plugins declare a `trust_level` that determines their permission envelope:
 
 | Level | Use Case | Permissions |
 |-------|----------|-------------|
-| `built-in` | Core capabilities (planner, deep_research, academic_research, browser_use, skillify, veritas) | Full — can request any permission |
+| `built-in` | Core capabilities (planner, deep_research, academic_research, browser_use, veritas) | Full — can request any permission |
 | `trusted` | Verified third-party plugins | Elevated |
 | `standard` | Most third-party plugins (default) | Default permissions |
 | `untrusted` | Experimental/plugins under review | Restricted |
@@ -145,7 +145,7 @@ Run `./scripts/verify_finally.sh` after changes — this is Soothe's standard ve
 
 ## Gotchas
 
-- **Built-in plugins are immutable**: you cannot override `planner`, `deep_research`, `academic_research`, `browser_use`, `skillify`, `veritas`, etc. with a lower-priority plugin of the same name. Use a different name.
+- **Built-in plugins are immutable**: you cannot override `planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`, etc. with a lower-priority plugin of the same name. Use a different name.
 - **`extra="forbid"` on manifests**: the `PluginManifest` Pydantic model forbids extra fields. Passing an unrecognized argument to `@plugin()` raises a validation error.
 - **Event registration is import-dependent**: if `events.py` isn't imported, events don't register. Always include the side-effect import in `__init__.py`.
 - **Graceful degradation is mandatory**: a plugin that raises in `on_load()` is disabled, but a plugin that crashes during tool execution can disrupt the agent loop. Wrap risky operations in try/except and return error messages rather than raising.

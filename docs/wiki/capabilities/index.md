@@ -29,7 +29,7 @@ Subagents are specialized autonomous agents that perform multi-step, stateful wo
 - **deep_research** (RFC-619): Public web research with crawl-on-discovery
 - **academic_research** (RFC-619): Academic literature research (DeepXiv)
 - **browser_use**: Browser automation (included in base dependencies)
-- **skillify**: Semantic skill retrieval and discovery
+- **SkillifyService** (`skillify:` config): Semantic skill retrieval via `search_skills`
 - **veritas** (RFC-622): Intent-grounded clarification auto-answerer
 
 → See [Subagents Architecture](subagents.md) for design philosophy and extension patterns.

@@ -90,7 +90,7 @@ def _build_weaver_graph(
     composer: AgentComposer,
     generator: AgentGenerator,
     registry: GeneratedAgentRegistry,
-    skillify_retriever: Any | None,
+    skillify_service: Any | None,
     model: BaseChatModel,
     policy: Any | None = None,
     policy_profile: str = "standard",
@@ -179,20 +179,21 @@ def _build_weaver_graph(
         _emit_event(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict(), logger)
 
         # Fetch skills (with indexing-not-ready tolerance)
-        from soothe.subagents.skillify.models import SkillBundle
+        from soothe.foundation.skillify.models import SkillBundle
 
         skill_bundle = SkillBundle(query=capability.description)
-        if skillify_retriever:
-            if hasattr(skillify_retriever, "is_ready") and not skillify_retriever.is_ready:
+        if skillify_service is not None:
+            retriever = skillify_service.retriever
+            if not skillify_service.is_ready:
                 _emit_event(WeaverSkillifyPendingEvent().to_dict(), logger)
-                ready_event = getattr(skillify_retriever, "_ready_event", None)
+                ready_event = getattr(retriever, "_ready_event", None)
                 if ready_event is not None:
                     try:
                         await asyncio.wait_for(ready_event.wait(), timeout=30.0)
                     except TimeoutError:
                         logger.warning("Skillify index not ready after 30s, proceeding best-effort")
             try:
-                skill_bundle = await skillify_retriever.retrieve(capability.description)
+                skill_bundle = await skillify_service.retrieve(capability.description)
                 if skill_bundle.query.startswith("[Indexing in progress]"):
                     logger.warning("Skillify still indexing; Weaver proceeding with empty skills")
                     skill_bundle = SkillBundle(query=capability.description)
@@ -369,7 +370,7 @@ class WeaverPlugin:
         import soothe_plugins.weaver.events  # noqa: F401
 
         try:
-            from soothe.subagents.skillify.models import SkillBundle  # noqa: F401
+            from soothe.foundation.skillify.models import SkillBundle  # noqa: F401
 
             context.logger.info("Weaver plugin loaded (Skillify available)")
         except ImportError:
@@ -471,18 +472,15 @@ class WeaverPlugin:
         generator_inst = AgentGenerator(model=resolved_model)
         registry_inst = GeneratedAgentRegistry(base_dir=Path(generated_agents_dir))
 
-        # Try to create skillify retriever from plugin config
-        skillify_retriever = None
-        skillify_cfg = plugin_cfg.get("skillify") or {}
-        if skillify_cfg.get("enabled", False):
+        # Shared Skillify service for skill harmonization
+        skillify_service = None
+        if soothe_cfg.skillify.enabled:
             try:
-                from soothe.subagents.skillify.retriever import SkillRetriever
+                from soothe.foundation.skillify import start_skillify_service
 
-                vs = soothe_cfg.create_vector_store_for_role("skillify")
-                skill_embeddings = soothe_cfg.create_embedding_model()
-                skillify_retriever = SkillRetriever(vector_store=vs, embeddings=skill_embeddings)
+                skillify_service = await start_skillify_service(soothe_cfg)
             except Exception:
-                logger.debug("Failed to create Skillify retriever for Weaver", exc_info=True)
+                logger.debug("Failed to create Skillify service for Weaver", exc_info=True)
 
         runnable = _build_weaver_graph(
             analyzer=analyzer_inst,
@@ -490,7 +488,7 @@ class WeaverPlugin:
             composer=composer_inst,
             generator=generator_inst,
             registry=registry_inst,
-            skillify_retriever=skillify_retriever,
+            skillify_service=skillify_service,
             model=resolved_model,
         )
 

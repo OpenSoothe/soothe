@@ -81,7 +81,7 @@ Browse the complete Soothe documentation organized by user journey.
 
 ### 📖 User Guides
 
-- [Specialized Subagents](subagents.md) - Core planner, deep_research, academic_research, browser_use, skillify, and veritas; optional agents from soothe-plugins
+- [Specialized Subagents](subagents.md) - Core planner, deep_research, academic_research, browser_use, and veritas; optional agents from soothe-plugins. Semantic skill search via `search_skills` / `skillify:` config.
 - [Autonomous Mode](autonomous-mode.md) - Enable autonomous iteration for complex tasks
 - [Thread Management](thread-management.md) - Work with conversation threads and maintain context
 - [MCP Servers](capabilities/mcp.md) - Extend capabilities with Model Context Protocol servers

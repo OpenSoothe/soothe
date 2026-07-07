@@ -23,7 +23,6 @@ ExecutionMode = Literal["parallel", "dependency"]
 _BUILTIN_WIRE_SUBAGENTS = frozenset(
     {
         "planner",
-        "skillify",
         "browser_use",
         "deep_research",
     }
@@ -33,7 +32,6 @@ _EXPLICIT_SUBAGENT_GOAL_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bbrowser[_\s-]?use\b", re.IGNORECASE), "browser_use"),
     (re.compile(r"\bdeep[_\s-]?research\b", re.IGNORECASE), "deep_research"),
     (re.compile(r"\b(?:/plan|planner)\b", re.IGNORECASE), "planner"),
-    (re.compile(r"\bskillify\b", re.IGNORECASE), "skillify"),
 )
 
 

@@ -41,7 +41,7 @@ The builder assembles components in a deliberate order:
 
 1. **Config propagation** — `config.propagate_env()` applies environment overrides before anything reads config values.
 2. **Protocol resolution** — delegates to `soothe.runner.resolver` for memory (MemU), planner (LLMPlanner), and policy (ConfigDrivenPolicy). Each can return `None` if disabled.
-3. **Tool/subagent assembly** — built-in tools (execution, websearch, research) plus configured subagents (planner, deep_research, academic_research, browser_use, skillify, veritas) plus plugin and MCP tools.
+3. **Tool/subagent assembly** — built-in tools (execution, websearch, research) plus configured subagents (planner, deep_research, academic_research, browser_use, veritas) plus plugin and MCP tools. Semantic skill search uses the daemon `SkillifyService` via `search_skills`.
 4. **Middleware wiring** — `build_soothe_middleware_stack()` assembles the Soothe middleware stack (identity, policy, system prompt, rate limiting, workspace context, per-turn model, filesystem, code interpreter, MCP tool search, tool timeout — see [Core Modules](index.md) for the full list).
 5. **Graph compilation** — calls `create_deep_agent()` with the assembled model, tools, subagents, middlewares, and checkpointer.
 6. **Protocol attachment** — protocol instances are attached as typed properties on the resulting `CoreAgent`.

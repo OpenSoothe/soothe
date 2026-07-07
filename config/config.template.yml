@@ -359,7 +359,7 @@ tools:
     timeout: 60
     max_retries: 3
 
-# SubagentConfig — overrides merge with builtin planner/deep_research/academic_research/browser_use/skillify
+# SubagentConfig — overrides merge with builtin planner/deep_research/academic_research/browser_use
 subagents:
   planner:
     enabled: true
@@ -389,13 +389,14 @@ subagents:
     url: null
     config: {}
     runtime_dir: ''
-  skillify:
-    enabled: true
-    model: null
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
+
+# SkillifyConfig — daemon-shared semantic skill warehouse indexing and retrieval
+skillify:
+  enabled: true
+  warehouse_paths: []
+  index_collection: soothe_skillify
+  index_interval_seconds: 300
+  retrieval_top_k: 10
 
 # MCPServerConfig — unique name per server; defer=true for progressive disclosure
 mcp_servers: []

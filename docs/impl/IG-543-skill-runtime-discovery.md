@@ -48,7 +48,7 @@ LoopState snapshot field names are unchanged (`activated_skill_names` = discover
 | `skills/catalog.py` | Modify — expose `core` in metadata parse |
 | `skills/discovery_tools.py` | **Create** — `create_search_skills_tool`, `create_invoke_skill_tool` |
 | `skills/search.py` | **Create** — unified substring + Skillify semantic search |
-| `subagents/skillify/runtime.py` | **Create** — shared Skillify retriever for subagent + search |
+| `subagents/skillify/runtime.py` | **Removed** — replaced by `foundation/skillify/service.py` (IG-562) |
 | `middleware/skill_activation.py` | Modify — handle search/invoke; path uses `discover` |
 | `middleware/system_prompt.py` | Modify — core/deferred in `_compose_skills_block` |
 | `foundation/core/agent/_builder.py` | Modify — register discovery tools when enabled |
@@ -150,7 +150,7 @@ pytest packages/soothe/tests/unit/skills/test_skill_search.py -q
 
 | Item | Implementation |
 |------|----------------|
-| P1: Skillify vector backend in `search_skills` | `skills/search.py` merges substring + `get_skillify_retriever()` when `semantic_search_enabled` |
+| P1: Skillify vector backend in `search_skills` | `skills/search.py` merges substring + `start_skillify_service()` when `semantic_search_enabled` |
 | P2: Turn-0 intent prefetch | `SkillActivationMiddleware.abefore_agent` calls `search_deferred_skills` on first user message; `intent_prefetched` in activation state |
 
 Config (`progressive_skills`): `semantic_search_enabled`, `semantic_search_min_score`, `intent_prefetch_enabled`, `intent_prefetch_top_k`, `intent_prefetch_min_query_chars`.
