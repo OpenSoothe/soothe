@@ -44,7 +44,6 @@ from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED
 from soothe_sdk.ux.loop_stream import (
     GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
     assistant_output_phase,
-    build_goal_completion_stream_terminal_message,
 )
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
@@ -291,6 +290,8 @@ class StreamDeliveryCoalescer:
         self._gc_streamed_chars: int = 0
         # Last monotonic time we emitted a chunked-streaming block (for interval flush)
         self._gc_last_block_monotonic: float = 0.0
+        # Last emitted goal_completion block text (for terminal re-stamp without empty marker)
+        self._gc_last_emitted_content: str = ""
 
     @property
     def turn_complete_pending(self) -> bool:
@@ -313,7 +314,12 @@ class StreamDeliveryCoalescer:
         return self._gc_phase
 
     def consume_turn_complete_pending(self) -> bool:
-        """Return and clear the turn-complete flag."""
+        """Return and clear the turn-complete flag.
+
+        Set when ``strange_loop.completed`` is ingested and final flush tuples
+        were queued. QueryEngine calls this after the worker stream ends to
+        avoid treating a second ``flush()`` as the authoritative turn boundary.
+        """
         pending = self._turn_complete_pending
         self._turn_complete_pending = False
         return pending
@@ -715,6 +721,7 @@ class StreamDeliveryCoalescer:
         msg.setdefault("type", "AIMessageChunk")
         msg["content"] = text
         msg["phase"] = "goal_completion"
+        self._gc_last_emitted_content = text
         if final:
             msg["chunk_position"] = "last"
             msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
@@ -791,20 +798,27 @@ class StreamDeliveryCoalescer:
         to a file-summary message regardless of phase.
         """
         if self._gc is None or not self._gc.parts:
-            emit_terminal_marker = (
+            if (
                 final
                 and self._gc is not None
-                and self._gc_phase == "chunked_streaming"
                 and self._gc_block_flush_count > 0
-            )
-            terminal: list[tuple[tuple[str, ...], str, Any]] = []
-            if emit_terminal_marker:
-                terminal = self._emit_goal_completion_terminal_marker()
+                and self._gc_last_emitted_content
+            ):
+                terminal = self._emit_goal_completion_content_terminal(
+                    self._gc_last_emitted_content
+                )
+                self._gc = None
+                self._gc_streamed_chars = 0
+                self._gc_phase = "batch" if self._mode == "batch" else "streaming"
+                self._gc_last_block_monotonic = 0.0
+                self._gc_last_emitted_content = ""
+                return terminal
             self._gc = None
             self._gc_streamed_chars = 0
             self._gc_phase = "batch" if self._mode == "batch" else "streaming"
             self._gc_last_block_monotonic = 0.0
-            return terminal
+            self._gc_last_emitted_content = ""
+            return []
 
         text = self._joined_gc_text()
 
@@ -813,20 +827,23 @@ class StreamDeliveryCoalescer:
 
         return self._emit_goal_completion_block(time.monotonic(), final=final)
 
-    def _emit_goal_completion_terminal_marker(self) -> list[tuple[tuple[str, ...], str, Any]]:
-        """Emit a final ``chunk_position=last`` marker when buffered text is empty.
-
-        In adaptive chunked-streaming, a large one-shot message can emit an
-        intermediate block and leave the goal_completion buffer empty before
-        ``strange_loop.completed`` arrives. Clients still need a terminal marker
-        to finalize streaming state.
-        """
+    def _emit_goal_completion_content_terminal(
+        self,
+        text: str,
+    ) -> list[tuple[tuple[str, ...], str, Any]]:
+        """Re-emit last goal_completion content with terminal flags (no empty marker)."""
         if self._gc is None:
             return []
         namespace = self._gc.namespace
-        msg = build_goal_completion_stream_terminal_message(self._gc.template_msg)
-        meta = dict(self._gc.template_meta or {})
-        wire = prepare_stream_data_for_wire((msg, meta))
+        template_msg = dict(self._gc.template_msg or {})
+        template_meta = dict(self._gc.template_meta or {})
+        msg = dict(template_msg)
+        msg.setdefault("type", "AIMessageChunk")
+        msg["content"] = text
+        msg["phase"] = "goal_completion"
+        msg["chunk_position"] = "last"
+        msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True
+        wire = prepare_stream_data_for_wire((msg, template_meta))
         return [(namespace, "messages", wire)]
 
     def _emit_file_output_message(self, text: str) -> list[tuple[tuple[str, ...], str, Any]]:

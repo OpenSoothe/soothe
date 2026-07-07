@@ -40,6 +40,7 @@ async def test_empty_stream_terminal_finalizes_inflight_card() -> None:
     stream_msg.append_content = AsyncMock()
     stream_msg.stop_stream = AsyncMock()
     stream_msg._content = "Full report already streamed."
+    stream_msg._streaming_active = True
     stream_msg.id = "asst-test"
 
     ns_key = ()
@@ -72,3 +73,37 @@ async def test_empty_stream_terminal_finalizes_inflight_card() -> None:
         "Thinking",
         turn_start_mono=start,
     )
+
+
+@pytest.mark.asyncio
+async def test_duplicate_goal_completion_finalize_is_idempotent() -> None:
+    """Second finalize call must not invoke stop_stream again."""
+    adapter = TextualUIAdapter(MagicMock(), MagicMock(), set_spinner=AsyncMock())
+    stream_msg = MagicMock()
+    stream_msg.append_content = AsyncMock()
+    stream_msg.stop_stream = AsyncMock()
+    stream_msg._content = "Full report."
+    stream_msg._streaming_active = True
+    stream_msg.id = "asst-test"
+
+    ns_key = ()
+    goal_completion_stream_by_namespace = {ns_key: stream_msg}
+
+    await _finalize_goal_completion_stream(
+        adapter,
+        stream_msg,
+        ns_key=ns_key,
+        goal_completion_stream_by_namespace=goal_completion_stream_by_namespace,
+        assistant_message_by_namespace={},
+        extra_text="",
+    )
+    stream_msg._streaming_active = False
+    await _finalize_goal_completion_stream(
+        adapter,
+        stream_msg,
+        ns_key=ns_key,
+        goal_completion_stream_by_namespace={ns_key: stream_msg},
+        assistant_message_by_namespace={},
+        extra_text="",
+    )
+    stream_msg.stop_stream.assert_awaited_once()

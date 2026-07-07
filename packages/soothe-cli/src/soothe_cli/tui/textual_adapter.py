@@ -2222,6 +2222,8 @@ async def _finalize_goal_completion_stream(
     turn_start_monotonic: float | None = None,
 ) -> None:
     """Stop the goal_completion ``AssistantMessage`` stream and record it under ``ns_key``."""
+    if not getattr(stream_msg, "_streaming_active", False):
+        return
     if extra_text and extra_text not in getattr(stream_msg, "_content", ""):
         await stream_msg.append_content(extra_text)
     await stream_msg.stop_stream()
@@ -3111,7 +3113,9 @@ async def execute_task_textual(
                                     await adapter._mount_message(stream_msg)
                                     goal_completion_stream_by_namespace[ns_key] = stream_msg
 
-                                if output_text:
+                                if output_text and output_text not in getattr(
+                                    stream_msg, "_content", ""
+                                ):
                                     await stream_msg.append_content(output_text)
                                 if is_gc_terminal or not is_gc_chunk:
                                     await _finalize_goal_completion_stream(

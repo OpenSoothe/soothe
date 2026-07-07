@@ -991,7 +991,12 @@ class QueryEngine:
                             coalescer=coalescer,
                         )
 
-                    logger.debug("runner.astream() completed, total chunks: %d", chunk_count)
+                    turn_completed_via_coalescer = coalescer.consume_turn_complete_pending()
+                    logger.debug(
+                        "runner.astream() completed, total chunks: %d, turn_completed=%s",
+                        chunk_count,
+                        turn_completed_via_coalescer,
+                    )
 
                 if timeout_enabled:
                     async with asyncio.timeout(timeout_seconds):

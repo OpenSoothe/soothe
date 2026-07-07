@@ -66,6 +66,15 @@ def _wire_str_field(msg: Any, field: str) -> str | None:
     return raw if isinstance(raw, str) else None
 
 
+def is_stream_terminal_wire_dict(msg: dict[str, Any]) -> bool:
+    """Return True when a wire message dict marks the end of an LLM stream."""
+    if not msg:
+        return False
+    if msg.get(GOAL_COMPLETION_STREAM_TERMINAL_FIELD) is True:
+        return True
+    return msg.get("chunk_position") == "last"
+
+
 def is_goal_completion_stream_terminal(msg: Any) -> bool:
     """Return True when a ``goal_completion`` message ends the synthesis stream.
 
@@ -99,4 +108,5 @@ __all__ = [
     "assistant_output_phase",
     "build_goal_completion_stream_terminal_message",
     "is_goal_completion_stream_terminal",
+    "is_stream_terminal_wire_dict",
 ]
