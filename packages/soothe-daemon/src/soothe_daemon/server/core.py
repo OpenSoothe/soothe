@@ -128,9 +128,7 @@ class SootheDaemon(DaemonHandlersMixin):
         # Shared persistence manager — PostgreSQL deferred until start() after pool pre-open
         self._persistence_manager: StrangeLoopCheckpointPersistenceManager | None = None
         if self._config.persistence.default_backend != "postgresql":
-            self._persistence_manager = StrangeLoopCheckpointPersistenceManager(
-                config=self._config
-            )
+            self._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=self._config)
 
         # Resolve daemon workspace (ephemeral TEMP unless SOOTHE_WORKSPACE set)
         self._daemon_workspace = resolve_daemon_workspace()
