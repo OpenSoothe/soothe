@@ -185,10 +185,16 @@ def _try_create_structured_runnable(
 
 def _is_retriable_structured_invoke_error(exc: Exception) -> bool:
     """Return True when another structured-output method may succeed (e.g. thinking models)."""
+    import json as _json
+
+    if isinstance(exc, _json.JSONDecodeError):
+        return True
     msg = str(exc).lower()
     if "tool_choice" in msg and "thinking mode" in msg:
         return True
-    return "json_object" in msg and "must contain" in msg and "json" in msg
+    if "json_object" in msg and "must contain" in msg and "json" in msg:
+        return True
+    return "jsondecodeerror" in msg or "unterminated string" in msg
 
 
 def _create_structured_runnable(

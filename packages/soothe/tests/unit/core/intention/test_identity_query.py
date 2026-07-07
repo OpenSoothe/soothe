@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from soothe.foundation.sloop.chitchat_fallbacks import (
+    GENERIC_CHITCHAT_FALLBACK,
+    GENERIC_CHITCHAT_FALLBACKS,
+    GENERIC_CHITCHAT_FALLBACKS_EN,
+    GENERIC_CHITCHAT_FALLBACKS_ZH,
+    pick_generic_chitchat_fallback,
+)
 from soothe.foundation.sloop.prompts.identity import (
     build_identity_reply,
     claims_wrong_vendor_identity,
@@ -75,3 +82,41 @@ def test_finalize_chitchat_response_is_idempotent_for_identity_query() -> None:
     first = finalize_chitchat_response("who are u", "I'm Claude", assistant_name="Soothe")
     second = finalize_chitchat_response("who are u", first, assistant_name="Soothe")
     assert first == second
+
+
+def test_pick_generic_chitchat_fallback_english_pool() -> None:
+    for _ in range(20):
+        reply = pick_generic_chitchat_fallback("hello")
+        assert reply in GENERIC_CHITCHAT_FALLBACKS_EN
+
+
+def test_pick_generic_chitchat_fallback_chinese_pool() -> None:
+    for _ in range(20):
+        reply = pick_generic_chitchat_fallback("你好")
+        assert reply in GENERIC_CHITCHAT_FALLBACKS_ZH
+
+
+def test_pick_generic_chitchat_fallback_varies() -> None:
+    replies = {pick_generic_chitchat_fallback("hi") for _ in range(30)}
+    assert len(replies) > 1
+
+
+def test_generic_chitchat_fallback_alias() -> None:
+    assert GENERIC_CHITCHAT_FALLBACK == GENERIC_CHITCHAT_FALLBACKS_EN[0]
+    assert len(GENERIC_CHITCHAT_FALLBACKS) == len(GENERIC_CHITCHAT_FALLBACKS_EN) + len(
+        GENERIC_CHITCHAT_FALLBACKS_ZH
+    )
+
+
+def test_finalize_chitchat_response_random_fallback_on_empty() -> None:
+    reply = finalize_chitchat_response("thanks", None, assistant_name="Soothe")
+    assert reply in GENERIC_CHITCHAT_FALLBACKS_EN
+
+
+def test_finalize_chitchat_response_random_fallback_on_wrong_vendor() -> None:
+    reply = finalize_chitchat_response(
+        "how are you",
+        "I'm Claude from Anthropic.",
+        assistant_name="Soothe",
+    )
+    assert reply in GENERIC_CHITCHAT_FALLBACKS_EN

@@ -839,21 +839,24 @@ def compose_paste_into_input(
     return f"{existing_text[:start]}{pasted_text}{existing_text[end:]}"
 
 
-def abbreviate_pasted_input_display(text: str) -> str:
-    """Build a compact one-line preview for a large pasted payload.
+def abbreviate_pasted_input_display(text: str, *, paste_index: int = 1) -> str:
+    """Build a compact paste token for large pasted payloads.
 
     The full ``text`` is retained separately for submission; this string is
     only for on-screen display in the input widget.
 
     Args:
         text: Full pasted content.
+        paste_index: 1-based counter for multiple pastes in the same input.
 
     Returns:
-        Abbreviated display text containing only a summary header.
+        Abbreviated display token (e.g. ``[Pasted text #1 +35 lines]``).
     """
     lines = text.splitlines()
     if not lines and text:
         lines = [text]
     n_lines = len(lines) if lines else 1
-    n_chars = len(text)
-    return f"[pasted {n_lines} lines, {n_chars} characters]"
+    if n_lines > 1:
+        extra = n_lines - 1
+        return f"[Pasted text #{paste_index} +{extra} lines]"
+    return f"[Pasted text #{paste_index}]"

@@ -11,15 +11,13 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.foundation.sloop.prompts.identity import (
-    GENERIC_CHITCHAT_FALLBACK,
-    prepend_assistant_identity,
-)
+from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
+from soothe.foundation.sloop.prompts.identity import prepend_assistant_identity
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe.utils.llm.structured import invoke_structured_chat
+from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat
 
 from .models import IntakePass1Confidence, IntakePass1LLMResult
 from .pass1_social_response import (
@@ -113,7 +111,7 @@ class IntakePass1Classifier:
             return fallback
 
         try:
-            result = await self._classify_llm(
+            result = await self._classify_llm_with_output_retry(
                 query,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
@@ -141,7 +139,7 @@ class IntakePass1Classifier:
                         "Pass1 dedicated social reply failed; using generic fallback",
                         exc_info=True,
                     )
-                    reply = GENERIC_CHITCHAT_FALLBACK
+                    reply = pick_generic_chitchat_fallback(query)
                 result = result.model_copy(update={"social_response": reply})
             _log_pass1_result(result)
             return result
@@ -154,6 +152,31 @@ class IntakePass1Classifier:
             fallback = self._fallback(query, error_context=exc)
             _log_pass1_result(fallback)
             return fallback
+
+    async def _classify_llm_with_output_retry(
+        self,
+        query: str,
+        *,
+        observability_metadata: dict[str, str] | None = None,
+        goal_trace: Any | None = None,
+        require_social_response: bool = False,
+    ) -> IntakePass1LLMResult:
+        """Run Pass 1 LLM classification with one retry on structured-output failure."""
+        try:
+            return await self._classify_llm(
+                query,
+                observability_metadata=observability_metadata,
+                goal_trace=goal_trace,
+                require_social_response=require_social_response,
+            )
+        except StructuredOutputError:
+            logger.warning("Pass1 structured output failed; retrying classification once")
+            return await self._classify_llm(
+                query,
+                observability_metadata=observability_metadata,
+                goal_trace=goal_trace,
+                require_social_response=require_social_response,
+            )
 
     async def _classify_llm(
         self,

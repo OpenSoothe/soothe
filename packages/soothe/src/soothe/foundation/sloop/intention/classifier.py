@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
-from soothe.foundation.sloop.prompts.identity import GENERIC_CHITCHAT_FALLBACK
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_last_goal_completion_for_intake,
 )
@@ -214,7 +213,7 @@ class IntentClassifier:
         """Convert Pass 1 social result to IntentClassification for fast-path."""
         response = resolve_pass1_chitchat_response(
             pass1_result,
-            generic_fallback=GENERIC_CHITCHAT_FALLBACK,
+            query=query,
         )
         return IntentClassification(
             intake_label=IntakeLabel.CHITCHAT,
@@ -331,7 +330,7 @@ class IntentClassifier:
                         social_response=None,
                         reasoning=intent.reasoning or "",
                     ),
-                    generic_fallback=GENERIC_CHITCHAT_FALLBACK,
+                    query=query,
                 )
                 logger.debug("Patched missing chitchat_response")
             return intent

@@ -27,11 +27,22 @@ def test_should_not_abbreviate_short_paste() -> None:
     assert should_abbreviate_pasted_input("fix the websocket bug") is False
 
 
-def test_abbreviate_shows_header_only() -> None:
-    display = abbreviate_pasted_input_display(_TRACE_SAMPLE)
-    expected = f"[pasted {len(_TRACE_SAMPLE.splitlines())} lines, {len(_TRACE_SAMPLE)} characters]"
-    assert display == expected
+def test_abbreviate_shows_paste_token_with_extra_lines() -> None:
+    display = abbreviate_pasted_input_display(_TRACE_SAMPLE, paste_index=1)
+    n_lines = len(_TRACE_SAMPLE.splitlines())
+    assert display == f"[Pasted text #1 +{n_lines - 1} lines]"
     assert len(display) < len(_TRACE_SAMPLE)
+
+
+def test_abbreviate_single_long_line_omits_line_suffix() -> None:
+    long_line = "x" * 300
+    assert abbreviate_pasted_input_display(long_line, paste_index=2) == "[Pasted text #2]"
+
+
+def test_abbreviate_increments_paste_index() -> None:
+    assert abbreviate_pasted_input_display(_TRACE_SAMPLE, paste_index=3).startswith(
+        "[Pasted text #3 "
+    )
 
 
 def test_abbreviate_preserves_full_text_separately() -> None:

@@ -5,13 +5,17 @@ from __future__ import annotations
 import logging
 import re
 
+from soothe.foundation.sloop.chitchat_fallbacks import (
+    GENERIC_CHITCHAT_FALLBACK,
+    GENERIC_CHITCHAT_FALLBACKS,
+    pick_generic_chitchat_fallback,
+)
 from soothe.foundation.sloop.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
 
 logger = logging.getLogger(__name__)
 
 _INVENTOR_ATTRIBUTION_EN = "invented by Dr. Xiaming Chen"
 _INVENTOR_ATTRIBUTION_ZH = "由 Dr. Xiaming Chen 博士发明"
-GENERIC_CHITCHAT_FALLBACK = "Hello! How can I help you today?"
 
 _WRONG_VENDOR_IDENTITY_MARKERS = re.compile(
     r"(?i)\b("
@@ -125,7 +129,7 @@ def finalize_chitchat_response(
     response: str | None,
     *,
     assistant_name: str = "Soothe",
-    generic_fallback: str = GENERIC_CHITCHAT_FALLBACK,
+    generic_fallback: str | None = None,
 ) -> str:
     """Normalize any user-facing chitchat text to the configured assistant identity.
 
@@ -137,30 +141,34 @@ def finalize_chitchat_response(
         response: LLM or salvaged reply text (may be empty).
         assistant_name: Configured assistant display name.
         generic_fallback: Reply when text is missing or uses wrong vendor identity.
+            When omitted, a random language-matched fallback is chosen.
 
     Returns:
         User-facing chitchat string.
     """
     name = normalize_assistant_name(assistant_name)
+    fallback = generic_fallback or pick_generic_chitchat_fallback(query)
     if is_identity_query(query):
         return build_identity_reply(name, query)
 
     text = (response or "").strip()
     if text and claims_wrong_vendor_identity(text):
         logger.info("Chitchat reply used wrong vendor identity; applying fallback")
-        return generic_fallback
+        return fallback
     if text:
         return text
-    return generic_fallback
+    return fallback
 
 
 __all__ = [
     "GENERIC_CHITCHAT_FALLBACK",
+    "GENERIC_CHITCHAT_FALLBACKS",
     "build_assistant_identity_block",
     "build_identity_reply",
     "claims_wrong_vendor_identity",
     "finalize_chitchat_response",
     "is_identity_query",
     "normalize_assistant_name",
+    "pick_generic_chitchat_fallback",
     "prepend_assistant_identity",
 ]

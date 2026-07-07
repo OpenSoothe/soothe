@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from soothe.foundation.sloop.prompts.identity import GENERIC_CHITCHAT_FALLBACK
+from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
 
 from .models import IntakePass1LLMResult
 
@@ -68,7 +68,8 @@ def coalesce_pass1_dict(result_dict: dict[str, Any]) -> dict[str, Any]:
 def resolve_pass1_chitchat_response(
     pass1_result: IntakePass1LLMResult,
     *,
-    generic_fallback: str = GENERIC_CHITCHAT_FALLBACK,
+    query: str | None = None,
+    generic_fallback: str | None = None,
 ) -> str:
     """Resolve chitchat text from Pass 1 (salvage + fallback only).
 
@@ -80,7 +81,7 @@ def resolve_pass1_chitchat_response(
     salvaged = salvage_social_response_from_reasoning(pass1_result.reasoning or "")
     if salvaged:
         return salvaged
-    return generic_fallback
+    return generic_fallback or pick_generic_chitchat_fallback(query)
 
 
 __all__ = [
