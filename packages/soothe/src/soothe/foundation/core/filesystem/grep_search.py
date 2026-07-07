@@ -1,4 +1,4 @@
-"""Fast grep via The Silver Searcher (``ag``) with Python fallback."""
+"""Fast grep via ``ag`` (The Silver Searcher) or ``rg`` (ripgrep)."""
 
 from __future__ import annotations
 
@@ -15,64 +15,87 @@ from .protocol import GrepMatch, GrepResult
 
 logger = logging.getLogger(__name__)
 
-_AG_GREP_TIMEOUT_S = 120
+_GREP_TIMEOUT_S = 120
 _AG_ENV_VAR = "SOOTHE_AG_PATH"
-# Well-known install locations when ``ag`` is not on the daemon's PATH.
+_RG_ENV_VAR = "SOOTHE_RG_PATH"
 _AG_COMMON_PATHS: tuple[str, ...] = (
-    "/opt/homebrew/bin/ag",  # macOS Apple Silicon Homebrew
-    "/usr/local/bin/ag",  # macOS Intel Homebrew / manual install
-    "/usr/bin/ag",  # Linux distro packages
+    "/opt/homebrew/bin/ag",
+    "/usr/local/bin/ag",
+    "/usr/bin/ag",
+)
+_RG_COMMON_PATHS: tuple[str, ...] = (
+    "/opt/homebrew/bin/rg",
+    "/usr/local/bin/rg",
+    "/usr/bin/rg",
 )
 _ag_bin_cache: str | None = None
 _ag_bin_resolved: bool = False
+_rg_bin_cache: str | None = None
+_rg_bin_resolved: bool = False
+
+GREP_UNAVAILABLE_ERROR = (
+    "grep requires 'ag' (The Silver Searcher) or 'rg' (ripgrep). "
+    "Install one: brew install ripgrep the_silver_searcher"
+)
 
 
 def get_ag_bin() -> str | None:
     """Return cached path to the ``ag`` binary, or ``None`` when unavailable."""
     global _ag_bin_cache, _ag_bin_resolved
     if not _ag_bin_resolved:
-        _ag_bin_cache = _resolve_ag_bin()
+        _ag_bin_cache = _resolve_executable("ag", _AG_ENV_VAR, _AG_COMMON_PATHS)
         _ag_bin_resolved = True
     return _ag_bin_cache
 
 
-def is_ag_available() -> bool:
-    """Return whether ``ag`` is available (cached after first lookup)."""
-    return get_ag_bin() is not None
+def get_rg_bin() -> str | None:
+    """Return cached path to the ``rg`` binary, or ``None`` when unavailable."""
+    global _rg_bin_cache, _rg_bin_resolved
+    if not _rg_bin_resolved:
+        _rg_bin_cache = _resolve_executable("rg", _RG_ENV_VAR, _RG_COMMON_PATHS)
+        _rg_bin_resolved = True
+    return _rg_bin_cache
 
 
-def reset_ag_availability_cache() -> None:
-    """Clear cached ``ag`` path (for tests)."""
-    global _ag_bin_cache, _ag_bin_resolved
+def is_grep_available() -> bool:
+    """Return whether ``ag`` or ``rg`` is available."""
+    return get_ag_bin() is not None or get_rg_bin() is not None
+
+
+def reset_grep_backend_cache() -> None:
+    """Clear cached search-binary paths (for tests)."""
+    global _ag_bin_cache, _ag_bin_resolved, _rg_bin_cache, _rg_bin_resolved
     _ag_bin_cache = None
     _ag_bin_resolved = False
+    _rg_bin_cache = None
+    _rg_bin_resolved = False
 
 
-def _resolve_ag_bin() -> str | None:
-    """Resolve ``ag`` across hosts: env override, PATH, then common locations."""
-    env_path = os.environ.get(_AG_ENV_VAR)
+def _resolve_executable(name: str, env_var: str, common_paths: tuple[str, ...]) -> str | None:
+    """Resolve a search binary across env override, PATH, and common locations."""
+    env_path = os.environ.get(env_var)
     if env_path:
-        resolved = _normalize_ag_executable(env_path)
+        resolved = _normalize_executable(env_path)
         if resolved is not None:
             return resolved
-        logger.debug("%s is set but not an executable ag binary: %s", _AG_ENV_VAR, env_path)
+        logger.debug("%s is set but not an executable %s binary: %s", env_var, name, env_path)
 
-    which_path = shutil.which("ag")
+    which_path = shutil.which(name)
     if which_path:
-        resolved = _normalize_ag_executable(which_path)
+        resolved = _normalize_executable(which_path)
         if resolved is not None:
             return resolved
 
-    for candidate in _AG_COMMON_PATHS:
-        resolved = _normalize_ag_executable(candidate)
+    for candidate in common_paths:
+        resolved = _normalize_executable(candidate)
         if resolved is not None:
-            logger.debug("Resolved ag via common path: %s", resolved)
+            logger.debug("Resolved %s via common path: %s", name, resolved)
             return resolved
 
     return None
 
 
-def _normalize_ag_executable(path: str) -> str | None:
+def _normalize_executable(path: str) -> str | None:
     """Return ``path`` when it points to an executable file."""
     candidate = Path(path).expanduser()
     if candidate.is_file() and os.access(candidate, os.X_OK):
@@ -80,30 +103,64 @@ def _normalize_ag_executable(path: str) -> str | None:
     return None
 
 
-def grep_with_ag(
+def run_grep(
     *,
     workspace: Path,
     search_path: Path,
     pattern: str,
     glob: str | None,
     output_mode: str,
-    timeout_s: float = _AG_GREP_TIMEOUT_S,
+    timeout_s: float = _GREP_TIMEOUT_S,
 ) -> GrepResult | list[str] | str | None:
-    """Run ``ag`` when available.
+    """Run ``ag`` or ``rg`` when available.
 
     Returns:
-        Parsed grep output, or ``None`` when ``ag`` is unavailable or fails.
+        Parsed grep output, or ``None`` when both backends are unavailable or fail.
     """
     ag_bin = get_ag_bin()
-    if not ag_bin:
-        return None
+    if ag_bin is not None:
+        return _grep_with_backend(
+            backend="ag",
+            bin_path=ag_bin,
+            workspace=workspace,
+            search_path=search_path,
+            pattern=pattern,
+            glob=glob,
+            output_mode=output_mode,
+            timeout_s=timeout_s,
+        )
 
-    # ag self-manages its worker FD pool and honors .gitignore; no proactive
-    # file-count gate. If FD exhaustion ever occurs in practice, the EMFILE
-    # (errno 24) branch in _run_ag_subprocess logs guidance and falls back.
+    rg_bin = get_rg_bin()
+    if rg_bin is not None:
+        return _grep_with_backend(
+            backend="rg",
+            bin_path=rg_bin,
+            workspace=workspace,
+            search_path=search_path,
+            pattern=pattern,
+            glob=glob,
+            output_mode=output_mode,
+            timeout_s=timeout_s,
+        )
+
+    return None
+
+
+def _grep_with_backend(
+    *,
+    backend: str,
+    bin_path: str,
+    workspace: Path,
+    search_path: Path,
+    pattern: str,
+    glob: str | None,
+    output_mode: str,
+    timeout_s: float,
+) -> GrepResult | list[str] | str | None:
     if output_mode == "files_with_matches":
-        return _grep_with_ag_files(
-            ag_bin=ag_bin,
+        return _grep_files_with_backend(
+            backend=backend,
+            bin_path=bin_path,
             workspace=workspace,
             search_path=search_path,
             pattern=pattern,
@@ -112,8 +169,9 @@ def grep_with_ag(
         )
 
     if output_mode == "count":
-        return _grep_with_ag_count(
-            ag_bin=ag_bin,
+        return _grep_count_with_backend(
+            backend=backend,
+            bin_path=bin_path,
             workspace=workspace,
             search_path=search_path,
             pattern=pattern,
@@ -122,8 +180,9 @@ def grep_with_ag(
         )
 
     if search_path.is_file():
-        return _grep_with_ag_content_paths(
-            ag_bin=ag_bin,
+        return _grep_content_paths_with_backend(
+            backend=backend,
+            bin_path=bin_path,
             workspace=workspace,
             pattern=pattern,
             glob=glob,
@@ -131,11 +190,9 @@ def grep_with_ag(
             paths=[search_path],
         )
 
-    # Directory content search: ``ag -n`` on a tree root often returns nothing while
-    # ``ag -l`` still finds files (observed on macOS ag 2.2). List matches first,
-    # then fetch line content from those files only.
-    files = _grep_with_ag_files(
-        ag_bin=ag_bin,
+    files = _grep_files_with_backend(
+        backend=backend,
+        bin_path=bin_path,
         workspace=workspace,
         search_path=search_path,
         pattern=pattern,
@@ -147,12 +204,13 @@ def grep_with_ag(
     if not files:
         return GrepResult(matches=[], files_searched=0, total_matches=0)
 
-    abs_paths = _resolve_ag_paths(workspace, files)
+    abs_paths = _resolve_search_paths(workspace, files)
     if not abs_paths:
         return GrepResult(matches=[], files_searched=0, total_matches=0)
 
-    return _grep_with_ag_content_paths(
-        ag_bin=ag_bin,
+    return _grep_content_paths_with_backend(
+        backend=backend,
+        bin_path=bin_path,
         workspace=workspace,
         pattern=pattern,
         glob=glob,
@@ -161,26 +219,34 @@ def grep_with_ag(
     )
 
 
-def _grep_with_ag_files(
+def _grep_files_with_backend(
     *,
-    ag_bin: str,
+    backend: str,
+    bin_path: str,
     workspace: Path,
     search_path: Path,
     pattern: str,
     glob: str | None,
     timeout_s: float,
 ) -> list[str] | None:
-    cmd = [ag_bin, "--nocolor", "--noheading", "-l"]
-    if glob:
-        cmd.extend(["-G", _glob_to_ag_file_regex(glob)])
-    cmd.extend([pattern, str(search_path)])
+    if backend == "ag":
+        cmd = [bin_path, "--nocolor", "--noheading", "-l"]
+        if glob:
+            cmd.extend(["-G", _glob_to_ag_file_regex(glob)])
+        cmd.extend([pattern, str(search_path)])
+    else:
+        cmd = [bin_path, "--no-heading", "-l"]
+        if glob:
+            cmd.extend(["--glob", glob])
+        cmd.extend(["--", pattern, str(search_path)])
 
-    completed = _run_ag_subprocess(cmd, timeout_s=timeout_s)
+    completed = _run_grep_subprocess(cmd, backend=backend, timeout_s=timeout_s)
     if completed is None:
         return None
     if completed.returncode not in (0, 1):
         logger.warning(
-            "ag grep exited %s: %s; falling back to Python walk",
+            "%s grep exited %s: %s",
+            backend,
             completed.returncode,
             (completed.stderr or completed.stdout or "").strip()[:200],
         )
@@ -194,66 +260,102 @@ def _grep_with_ag_files(
     ]
 
 
-def _grep_with_ag_count(
+def _grep_count_with_backend(
     *,
-    ag_bin: str,
+    backend: str,
+    bin_path: str,
     workspace: Path,
     search_path: Path,
     pattern: str,
     glob: str | None,
     timeout_s: float,
 ) -> str | None:
-    cmd = [ag_bin, "--nocolor", "--noheading", "--stats"]
-    if glob:
-        cmd.extend(["-G", _glob_to_ag_file_regex(glob)])
-    cmd.extend([pattern, str(search_path)])
+    if backend == "ag":
+        cmd = [bin_path, "--nocolor", "--noheading", "--stats"]
+        if glob:
+            cmd.extend(["-G", _glob_to_ag_file_regex(glob)])
+        cmd.extend([pattern, str(search_path)])
 
-    completed = _run_ag_subprocess(cmd, timeout_s=timeout_s)
+        completed = _run_grep_subprocess(cmd, backend=backend, timeout_s=timeout_s)
+        if completed is None:
+            return None
+        if completed.returncode not in (0, 1):
+            logger.warning(
+                "%s grep exited %s: %s",
+                backend,
+                completed.returncode,
+                (completed.stderr or completed.stdout or "").strip()[:200],
+            )
+            return None
+
+        total = _parse_match_count_stats(completed.stdout or "")
+        return None if total is None else str(total)
+
+    cmd = [bin_path, "--no-heading", "-c"]
+    if glob:
+        cmd.extend(["--glob", glob])
+    cmd.extend(["--", pattern, str(search_path)])
+
+    completed = _run_grep_subprocess(cmd, backend=backend, timeout_s=timeout_s)
     if completed is None:
         return None
     if completed.returncode not in (0, 1):
         logger.warning(
-            "ag grep exited %s: %s; falling back to Python walk",
+            "%s grep exited %s: %s",
+            backend,
             completed.returncode,
             (completed.stderr or completed.stdout or "").strip()[:200],
         )
         return None
 
-    stdout = completed.stdout or ""
-    total = _parse_ag_stats_match_count(stdout)
-    if total is None:
-        return None
+    total = 0
+    for line in (completed.stdout or "").splitlines():
+        if not line.strip():
+            continue
+        try:
+            total += int(line.rsplit(":", 1)[-1])
+        except ValueError:
+            continue
     return str(total)
 
 
-def _grep_with_ag_content_paths(
+def _grep_content_paths_with_backend(
     *,
-    ag_bin: str,
+    backend: str,
+    bin_path: str,
     workspace: Path,
     pattern: str,
     glob: str | None,
     timeout_s: float,
     paths: list[Path],
 ) -> GrepResult | None:
-    cmd = [ag_bin, "--nocolor", "--noheading", "-n", "--column"]
-    if glob:
-        cmd.extend(["-G", _glob_to_ag_file_regex(glob)])
-    cmd.append(pattern)
-    cmd.extend(str(p) for p in paths)
+    if backend == "ag":
+        cmd = [bin_path, "--nocolor", "--noheading", "-n", "--column"]
+        if glob:
+            cmd.extend(["-G", _glob_to_ag_file_regex(glob)])
+        cmd.append(pattern)
+        cmd.extend(str(p) for p in paths)
+    else:
+        cmd = [bin_path, "--no-heading", "-n"]
+        if glob:
+            cmd.extend(["--glob", glob])
+        cmd.append(pattern)
+        cmd.extend(str(p) for p in paths)
 
-    completed = _run_ag_subprocess(cmd, timeout_s=timeout_s)
+    completed = _run_grep_subprocess(cmd, backend=backend, timeout_s=timeout_s)
     if completed is None:
         return None
     if completed.returncode not in (0, 1):
         logger.warning(
-            "ag grep exited %s: %s; falling back to Python walk",
+            "%s grep exited %s: %s",
+            backend,
             completed.returncode,
             (completed.stderr or completed.stdout or "").strip()[:200],
         )
         return None
 
     stdout = completed.stdout or ""
-    matches = _parse_ag_content_lines(workspace, stdout, pattern)
+    matches = _parse_content_lines(workspace, stdout, pattern)
     return GrepResult(
         matches=matches,
         files_searched=len({m.path for m in matches}),
@@ -261,24 +363,19 @@ def _grep_with_ag_content_paths(
     )
 
 
-def _run_ag_subprocess(
-    cmd: list[str], *, timeout_s: float
+def _run_grep_subprocess(
+    cmd: list[str], *, backend: str, timeout_s: float
 ) -> subprocess.CompletedProcess[str] | None:
-    """Run ``ag`` with explicit FD management and graceful error handling.
-
-    Uses Popen for explicit control over file descriptor lifecycle.
-    On FD exhaustion (errno 24), logs actionable guidance before fallback.
-    """
+    """Run ``ag``/``rg`` with explicit FD management and graceful error handling."""
     stdout_path: str | None = None
     stdout_fh: object | None = None
     stderr_fh: object | None = None
     proc: subprocess.Popen | None = None
 
     try:
-        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".agout") as tmp:
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=f".{backend}out") as tmp:
             stdout_path = tmp.name
 
-        # Open output file explicitly for Popen
         stdout_fh = open(stdout_path, "w", encoding="utf-8")
         proc = subprocess.Popen(
             cmd,
@@ -288,7 +385,6 @@ def _run_ag_subprocess(
         )
         stderr_fh = proc.stderr
 
-        # Wait with timeout
         try:
             proc.wait(timeout=timeout_s)
         except subprocess.TimeoutExpired:
@@ -296,11 +392,10 @@ def _run_ag_subprocess(
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                pass  # Process killed, move on
-            logger.warning("ag grep timed out after %ss; falling back to Python walk", timeout_s)
+                pass
+            logger.warning("%s grep timed out after %ss", backend, timeout_s)
             return None
 
-        # Read captured output
         with open(stdout_path, encoding="utf-8") as f:
             stdout_content = f.read()
 
@@ -319,22 +414,20 @@ def _run_ag_subprocess(
         )
 
     except OSError as exc:
-        # EMFILE (errno 24) = too many open files
         if exc.errno == 24:
             logger.warning(
-                "ag grep hit system FD limit (errno 24); falling back to Python walk. "
-                "Consider increasing: ulimit -n 1024"
+                "%s grep hit system FD limit (errno 24). Consider increasing: ulimit -n 1024",
+                backend,
             )
         else:
-            logger.warning("ag grep failed (%s); falling back to Python walk", exc)
+            logger.warning("%s grep failed (%s)", backend, exc)
         return None
 
     except subprocess.TimeoutExpired:
-        logger.warning("ag grep timed out after %ss; falling back to Python walk", timeout_s)
+        logger.warning("%s grep timed out after %ss", backend, timeout_s)
         return None
 
     finally:
-        # Explicit cleanup order: stderr -> stdout -> process -> temp file
         if stderr_fh is not None:
             try:
                 stderr_fh.close()
@@ -345,14 +438,12 @@ def _run_ag_subprocess(
                 stdout_fh.close()
             except OSError:
                 pass
-        if proc is not None:
-            # Ensure process is terminated
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+        if proc is not None and proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
         if stdout_path is not None:
             try:
                 os.unlink(stdout_path)
@@ -365,22 +456,22 @@ def _glob_to_ag_file_regex(glob: str) -> str:
     return fnmatch.translate(glob)
 
 
-def _resolve_ag_paths(workspace: Path, rel_paths: list[str]) -> list[Path]:
-    """Resolve workspace-relative paths to absolute paths for ``ag``."""
+def _resolve_search_paths(workspace: Path, rel_paths: list[str]) -> list[Path]:
+    """Resolve workspace-relative or host-absolute paths for content search."""
     resolved: list[Path] = []
     workspace_resolved = workspace.resolve()
     for rel in rel_paths:
-        candidate = (workspace_resolved / rel).resolve()
-        try:
-            candidate.relative_to(workspace_resolved)
-        except ValueError:
-            continue
+        candidate = Path(rel)
+        if not candidate.is_absolute():
+            candidate = (workspace_resolved / rel).resolve()
+        else:
+            candidate = candidate.resolve()
         if candidate.is_file():
             resolved.append(candidate)
     return resolved
 
 
-def _parse_ag_stats_match_count(stdout: str) -> int | None:
+def _parse_match_count_stats(stdout: str) -> int | None:
     """Parse ``ag --stats`` output for total match count."""
     for line in stdout.splitlines():
         stripped = line.strip()
@@ -392,17 +483,13 @@ def _parse_ag_stats_match_count(stdout: str) -> int | None:
     return 0
 
 
-def _parse_ag_content_lines(
-    workspace: Path,
-    stdout: str,
-    pattern: str,
-) -> list[GrepMatch]:
-    """Parse ``ag -n --column`` lines into ``GrepMatch`` rows."""
+def _parse_content_lines(workspace: Path, stdout: str, pattern: str) -> list[GrepMatch]:
+    """Parse ``ag``/``rg`` ``-n`` lines into ``GrepMatch`` rows."""
     matches: list[GrepMatch] = []
     for line in stdout.splitlines():
         if not line.strip():
             continue
-        parsed = _parse_ag_match_line(line)
+        parsed = _parse_match_line(line)
         if parsed is None:
             continue
         file_path, line_number, line_content = parsed
@@ -420,7 +507,7 @@ def _parse_ag_content_lines(
     return matches
 
 
-def _parse_ag_match_line(line: str) -> tuple[str, int, str] | None:
+def _parse_match_line(line: str) -> tuple[str, int, str] | None:
     """Parse ``path:line:column:content`` or ``path:line:content``."""
     parts = line.split(":", 3)
     if len(parts) < 3:
@@ -449,7 +536,7 @@ def _match_span(line_content: str, pattern: str) -> tuple[int, int]:
 
 
 def _to_workspace_relative(workspace: Path, file_path: str) -> str:
-    """Normalize ``ag`` output paths to workspace-relative strings."""
+    """Normalize search output paths to workspace-relative or host-absolute strings."""
     path = Path(file_path)
     if not path.is_absolute():
         return str(path)

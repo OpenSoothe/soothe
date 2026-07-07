@@ -24,7 +24,7 @@ Implement edit coalescing middleware to:
 | In Scope | Out of Scope |
 |----------|--------------|
 | EditCoalescingMiddleware (new) | Backend cache synchronization |
-| aiofiles integration in LocalFilesystem | Grep optimization (IG-510) |
+| aiofiles integration in LocalFilesystem | Grep (ag/rg subprocess; see IG-509) |
 | Fast-path marker in downstream middleware | `apply_diff` batch merging |
 | `edit_batched()` method | ToolConcurrency limit tuning |
 

@@ -399,6 +399,23 @@ class _MessagesMixin:
                         )
                     )
 
+    _INTERRUPT_UI_MESSAGE = "Stream cancelled"
+
+    async def _tear_down_interrupt_ui(self, message: str | None = None) -> None:
+        """Immediately stop in-flight step/goal UI when the user interrupts a turn.
+
+        Daemon cancel and worker teardown can take several seconds; without an
+        eager UI pass the thinking spinner and goal-tree running rows stay live.
+        """
+        label = message or self._INTERRUPT_UI_MESSAGE
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is not None:
+            if adapter._tool_to_step or adapter._tool_display_by_call_id:
+                adapter.finalize_pending_tools_with_error(label)
+            if adapter._current_step_messages or adapter._goal_tree_message is not None:
+                adapter.finalize_pending_steps_with_error(label)
+        await self._set_spinner(None)
+
     def _cancel_worker(self, worker: Worker[None] | None, *, discard_queue: bool = True) -> None:
         """Cancel an active worker, optionally discarding the pending message queue.
 
@@ -414,15 +431,17 @@ class _MessagesMixin:
             worker.cancel()
 
     async def _interrupt_daemon_agent_turn(self, *, discard_queue: bool = True) -> None:
-        """Send daemon ``/cancel``, then cancel the local streaming worker.
+        """Stop in-flight UI, send daemon ``/cancel``, then cancel the local worker.
 
-        Awaiting cancel first stops the server-side query; cancelling the worker
-        alone would only detach the TUI from chunks while the daemon kept running.
+        UI teardown runs first so Ctrl+C does not leave the thinking spinner or
+        goal-tree running rows active while the daemon winds down (which can take
+        several seconds on long execute steps).
 
         Args:
             discard_queue: When ``False``, preserve queued user goals so they
                 run after the cancelled turn finishes cleanup.
         """
+        await self._tear_down_interrupt_ui()
         session = self._daemon_session
         worker = self._agent_worker
         if session is not None:
@@ -483,6 +502,11 @@ class _MessagesMixin:
                     group="daemon-interrupt",
                 )
             else:
+                self.run_worker(
+                    self._tear_down_interrupt_ui(),
+                    exclusive=False,
+                    group="interrupt-ui",
+                )
                 self._cancel_worker(self._agent_worker, discard_queue=False)
             self._quit_pending = False
             return

@@ -2,7 +2,7 @@
 
 **RFC**: N/A (Incident analysis from log forensics)
 **Created**: 2026-06-26
-**Status**: Analysis complete — fixes pending
+**Status**: Analysis complete — grep resolved (ag/rg-only, see Resolution below)
 **Logs**: `~/.soothe/logs/soothe.log`, `~/.soothe/logs/daemon.log`, `~/.soothe/data/loops/019f01c8-56e9-73d1-9271-0ca7ba307cba/runner.log`
 
 ## Executive Summary
@@ -13,7 +13,7 @@ Loop `[7cba]` (`019f01c8-56e9-73d1-9271-0ca7ba307cba`) **did not crash**. It **h
 |----------|--------|
 | Did the runner crash? | **No** |
 | Which worker? | `thread-worker-0`, request `49d8bc28a17c4b44` |
-| Where did it hang? | Explore subagent → grep → Python walk fallback |
+| Where did it hang? | Explore subagent → grep (historical: fell back to unbounded Python `os.walk`) |
 | Last activity | 2026-06-26 10:47:25 CST |
 | Daemon state | Alive (PID 45119), ~100% CPU on blocked grep |
 
@@ -41,7 +41,7 @@ This is a meta-analysis task: loop `[7cba]` was created to investigate failures 
 | 10:41:06 | soothe.log | `UZH-01` completed (~283s, 53 tool calls) |
 | 10:41:07 | soothe.log | Execute `UZH-02`: root-cause analysis (stream failure + TUI step count) |
 | 10:46:37 | soothe.log | `explore` subagent launched (TUI adapter, plan_decision, executor code search) |
-| **10:47:25** | soothe.log | **Last `[7cba]` log**: grep on repo root; `ag` skipped (>200 files); Python walk fallback |
+| **10:47:25** | soothe.log | **Last `[7cba]` log**: grep on repo root; `ag` skipped (>200 files); **historical** Python walk fallback |
 | 10:47:50 | daemon.log | Last `event_size_stats` batch to TUI client (512 events) |
 | 10:49:52+ | both logs | Periodic `thread-worker-1` idle timeout / respawn (unrelated spare worker) |
 
@@ -78,7 +78,9 @@ These refer to the **idle spare worker** (`thread-worker-1`), which never receiv
 
 ## Root Cause
 
-### Primary: Unbounded Python grep fallback
+### Primary (historical): Unbounded Python grep fallback
+
+> **Superseded (2026-07):** Builtin `grep` no longer has a Python walk fallback. All searches route through `ag` or `rg` via `run_grep()` in `grep_search.py`. When neither binary is installed, grep returns `GREP_UNAVAILABLE_ERROR` instead of walking the tree.
 
 At 10:47:25, the explore subagent inside step `UZH-02` issued grep operations on the workspace root. Two parallel greps logged:
 
@@ -86,27 +88,9 @@ At 10:47:25, the explore subagent inside step `UZH-02` issued grep operations on
 Directory /Users/chenxm/Workspace/soothe has >200 files, skipping ag to avoid FD exhaustion
 ```
 
-When `ag` is skipped proactively, `grep_with_ag()` returns `None` and `LocalFilesystem.grep()` falls through to `_grep_python_walk()`:
+At the time, when `ag` was skipped proactively, `LocalFilesystem.grep()` fell through to `_grep_python_walk()` — an unbounded `os.walk()` with no timeout and no ignore directories. On a repo containing `.venv` and other large trees, this could run indefinitely and peg CPU.
 
-```python
-# packages/soothe/src/soothe/foundation/core/filesystem/local.py
-if is_ag_available():
-    ag_result = grep_with_ag(...)
-    if ag_result is not None:
-        return ag_result
-return self._grep_python_walk(...)  # unbounded os.walk, no timeout, no ignore dirs
-```
-
-`_grep_python_walk()`:
-
-- Walks the **entire** directory tree with `os.walk()`
-- Does **not** skip `.venv`, `node_modules`, `.git`, etc.
-- Reads every file with `f.read()` (no size cap)
-- Has **no timeout**
-
-On a repo containing `.venv` and other large trees, this can run indefinitely and peg CPU — consistent with daemon at ~100% CPU and complete log silence.
-
-**Irony**: IG-503 added the FD pre-flight check to *prevent* `ag` from exhausting file descriptors, but the fallback path is worse for large workspaces because it performs a synchronous full-tree scan in the worker thread.
+**Irony**: IG-503 added the FD pre-flight check to *prevent* `ag` from exhausting file descriptors, but the fallback path was worse for large workspaces because it performed a synchronous full-tree scan in the worker thread.
 
 ### Secondary: No request-level timeout in thread pool
 
@@ -142,8 +126,8 @@ thread-worker-0  ──►  StrangeLoop iter 0
                            └── UZH-02 (in progress)
                                  └── explore subagent
                                        └── grep(workspace root)
-                                             ├── ag skipped (>200 files)
-                                             └── _grep_python_walk()  ← HUNG
+                                             └── (historical) ag skipped → Python walk ← HUNG
+                                             └── (current) ag/rg subprocess only
 
 thread-worker-1  ──►  idle → 300s timeout → respawn (normal, unrelated)
 ```
@@ -159,14 +143,11 @@ Iteration 0 never completed → TUI showed no further progress.
 
 ## Recommended Fixes
 
-### P0 — Grep fallback safety
+### P0 — Grep (implemented)
 
-1. When `_should_skip_ag_due_to_fd_limit()` returns true, **do not** fall back to unbounded Python walk on large directories. Options:
-   - Return an explicit error telling the agent to narrow scope
-   - Run bounded subprocess grep with ignore patterns (`.venv`, `.git`, `node_modules`)
-   - Cap walk depth / file count / total bytes read
-2. Add timeout to `_grep_python_walk()` (mirror `_AG_GREP_TIMEOUT_S = 120`)
-3. Apply standard ignore directories in Python walk (same as FD pre-flight check)
+1. **Removed Python walk fallback** — `LocalFilesystem.grep()` delegates exclusively to `run_grep()` (`ag` preferred, `rg` fallback).
+2. **No FD pre-flight skip** — `ag`/`rg` run for all directory sizes; EMFILE (errno 24) returns a structured error, not a silent fallback.
+3. **Tool timeout** — `ToolTimeoutMiddleware` caps grep at 30s (see IG-511).
 
 ### P1 — Thread pool request timeout
 
@@ -185,15 +166,27 @@ Iteration 0 never completed → TUI showed no further progress.
 
 Either action frees `thread-worker-0`. The loop checkpoint may remain `running` until explicitly cleared.
 
+## Resolution (2026-07)
+
+Builtin grep is **ag/rg-only**:
+
+| Component | Path |
+|-----------|------|
+| Subprocess backend | `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py` — `run_grep()`, `is_grep_available()` |
+| Filesystem entry | `packages/soothe/src/soothe/foundation/core/filesystem/local.py` — `grep()` / `agrep()` |
+| Tests | `packages/soothe/tests/core/filesystem/test_grep_search.py` |
+
+Removed: `_grep_python_walk()`, incremental batching, `continuation_token`, `is_partial`, per-file 1 MB cap, `_GREP_*` batch constants.
+
 ## Related Work
 
-- [IG-503](IG-503-file-descriptor-leak-and-network-resilience-fixes.md) — FD pre-flight for `ag` (introduced the skip that triggers this fallback)
+- [IG-503](IG-503-file-descriptor-leak-and-network-resilience-fixes.md) — FD subprocess cleanup for `ag`/`rg` (historical FD skip removed with Python fallback)
 - [IG-507](IG-507-loop-3328-log-analysis-fixes.md) — Original loop 3328 issues this meta-loop was investigating
 - [IG-508](IG-508-step-full-description.md) — Step description context loss (relevant to why agent re-grepped instead of using step-01 output)
 
 ## Verification (when fixes land)
 
-1. Unit test: grep on workspace with >200 top-level files returns error or bounded result, not infinite walk
-2. Integration: explore subagent grep on soothe repo completes within timeout
+1. Unit test: grep on large single file and workspace root completes via `ag`/`rg` (no Python walk)
+2. Integration: explore subagent grep on soothe repo completes within tool timeout
 3. Thread pool: hung request triggers timeout and worker recovery within configured deadline
 4. `./scripts/verify_finally.sh` passes

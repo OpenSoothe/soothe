@@ -305,6 +305,7 @@ async def test_interrupt_daemon_turn_preserves_queue_when_requested() -> None:
             self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
             self._queued_widgets = deque()
             self._deferred_actions = []
+            self._set_spinner = AsyncMock()
 
     app = _AppStub()
     await app._interrupt_daemon_agent_turn(discard_queue=False)

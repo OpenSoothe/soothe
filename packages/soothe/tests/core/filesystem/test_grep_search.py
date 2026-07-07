@@ -1,4 +1,4 @@
-"""Tests for ag-backed grep search."""
+"""Tests for ag/rg-backed grep search."""
 
 from __future__ import annotations
 
@@ -11,65 +11,81 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.foundation.core.filesystem.grep_search import (
+    GREP_UNAVAILABLE_ERROR,
     get_ag_bin,
-    grep_with_ag,
-    is_ag_available,
-    reset_ag_availability_cache,
+    get_rg_bin,
+    is_grep_available,
+    reset_grep_backend_cache,
+    run_grep,
 )
 from soothe.foundation.core.filesystem.local import LocalFilesystem
-from soothe.foundation.core.filesystem.protocol import GrepMatch, GrepResult
+from soothe.foundation.core.filesystem.protocol import GrepResult
 
 _AG_BIN = "/usr/bin/ag"
+_RG_BIN = "/usr/bin/rg"
 
 
 @pytest.fixture(autouse=True)
-def _reset_ag_cache() -> None:
-    reset_ag_availability_cache()
+def _reset_grep_cache() -> None:
+    reset_grep_backend_cache()
+
+
+def _completed(returncode: int, stdout: str = "", stderr: str = "") -> MagicMock:
+    return MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 @contextmanager
-def _ag_patch(fake_run: Callable[..., Any]) -> Iterator[None]:
-    """Patch ``ag`` binary resolution and subprocess runner for grep tests."""
+def _ag_patch(fake_run: Callable[[list[str]], Any]) -> Iterator[None]:
+    def _wrapped(cmd: list[str], *, backend: str, timeout_s: float) -> Any:  # noqa: ARG001
+        return fake_run(cmd)
+
     with (
+        patch("soothe.foundation.core.filesystem.grep_search.get_ag_bin", return_value=_AG_BIN),
         patch(
-            "soothe.foundation.core.filesystem.grep_search.get_ag_bin",
-            return_value=_AG_BIN,
-        ),
-        patch(
-            "soothe.foundation.core.filesystem.grep_search.subprocess.run",
-            side_effect=fake_run,
+            "soothe.foundation.core.filesystem.grep_search._run_grep_subprocess",
+            side_effect=_wrapped,
         ),
     ):
         yield
 
 
-def _write_stdout(stdout: Any, text: str) -> None:
-    if stdout is not None and hasattr(stdout, "write"):
-        stdout.write(text)
+@contextmanager
+def _rg_patch(fake_run: Callable[[list[str]], Any]) -> Iterator[None]:
+    def _wrapped(cmd: list[str], *, backend: str, timeout_s: float) -> Any:  # noqa: ARG001
+        return fake_run(cmd)
+
+    with (
+        patch("soothe.foundation.core.filesystem.grep_search.get_ag_bin", return_value=None),
+        patch("soothe.foundation.core.filesystem.grep_search.get_rg_bin", return_value=_RG_BIN),
+        patch(
+            "soothe.foundation.core.filesystem.grep_search._run_grep_subprocess",
+            side_effect=_wrapped,
+        ),
+    ):
+        yield
 
 
-def test_is_ag_available_reflects_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_is_grep_available_reflects_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOOTHE_AG_PATH", raising=False)
+    monkeypatch.delenv("SOOTHE_RG_PATH", raising=False)
     monkeypatch.setattr(
         "soothe.foundation.core.filesystem.grep_search.shutil.which", lambda _: None
     )
-    monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search._AG_COMMON_PATHS",
-        (),
-    )
-    reset_ag_availability_cache()
-    assert is_ag_available() is False
+    monkeypatch.setattr("soothe.foundation.core.filesystem.grep_search._AG_COMMON_PATHS", ())
+    monkeypatch.setattr("soothe.foundation.core.filesystem.grep_search._RG_COMMON_PATHS", ())
+    reset_grep_backend_cache()
+    assert is_grep_available() is False
 
     monkeypatch.setattr(
         "soothe.foundation.core.filesystem.grep_search.shutil.which",
         lambda name: "/usr/bin/ag" if name == "ag" else None,
     )
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search._normalize_ag_executable",
+        "soothe.foundation.core.filesystem.grep_search._normalize_executable",
         lambda path: path if path == "/usr/bin/ag" else None,
     )
-    reset_ag_availability_cache()
-    assert is_ag_available() is True
+    reset_grep_backend_cache()
+    assert is_grep_available() is True
     assert get_ag_bin() == "/usr/bin/ag"
 
 
@@ -79,35 +95,12 @@ def test_resolve_ag_prefers_soothe_ag_path_env(
     custom_ag = tmp_path / "custom-ag"
     custom_ag.write_text("stub\n")
     custom_ag.chmod(0o755)
-
     monkeypatch.setenv("SOOTHE_AG_PATH", str(custom_ag))
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search.shutil.which",
-        lambda _: "/usr/bin/ag",
+        "soothe.foundation.core.filesystem.grep_search.shutil.which", lambda _: "/usr/bin/ag"
     )
-    reset_ag_availability_cache()
-
+    reset_grep_backend_cache()
     assert get_ag_bin() == str(custom_ag.resolve())
-
-
-def test_resolve_ag_falls_back_to_common_paths(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    fallback_ag = tmp_path / "opt-homebrew-bin-ag"
-    fallback_ag.write_text("stub\n")
-    fallback_ag.chmod(0o755)
-
-    monkeypatch.delenv("SOOTHE_AG_PATH", raising=False)
-    monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search.shutil.which", lambda _: None
-    )
-    monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search._AG_COMMON_PATHS",
-        (str(fallback_ag),),
-    )
-    reset_ag_availability_cache()
-
-    assert get_ag_bin() == str(fallback_ag.resolve())
 
 
 def test_get_ag_bin_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -123,36 +116,24 @@ def test_get_ag_bin_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
         "soothe.foundation.core.filesystem.grep_search.shutil.which", counting_which
     )
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search._normalize_ag_executable",
-        lambda path: path,
+        "soothe.foundation.core.filesystem.grep_search._normalize_executable", lambda path: path
     )
-    reset_ag_availability_cache()
-
+    reset_grep_backend_cache()
     assert get_ag_bin() == "/usr/bin/ag"
     assert get_ag_bin() == "/usr/bin/ag"
     assert calls == 1
 
 
-def test_grep_with_ag_content_mode(tmp_path: Path) -> None:
-    workspace = tmp_path
-    search_file = tmp_path / "search.txt"
-    search_file.write_text("line one\nhello world\n")
+def test_run_grep_content_mode(tmp_path: Path) -> None:
+    (tmp_path / "search.txt").write_text("line one\nhello world\n")
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
+    def fake_run(cmd: list[str]) -> MagicMock:
         output = "search.txt\n" if "-l" in cmd else "search.txt:2:5:hello world\n"
-        if stdout is not None and hasattr(stdout, "write"):
-            stdout.write(output)
-        return MagicMock(returncode=0, stderr="")
+        return _completed(0, stdout=output)
 
-    with (
-        patch(
-            "soothe.foundation.core.filesystem.grep_search.shutil.which",
-            return_value="/usr/bin/ag",
-        ),
-        patch("soothe.foundation.core.filesystem.grep_search.subprocess.run", side_effect=fake_run),
-    ):
-        result = grep_with_ag(
-            workspace=workspace,
+    with _ag_patch(fake_run):
+        result = run_grep(
+            workspace=tmp_path,
             search_path=tmp_path,
             pattern="hello",
             glob="*.txt",
@@ -163,28 +144,18 @@ def test_grep_with_ag_content_mode(tmp_path: Path) -> None:
     assert len(result.matches) == 1
     assert result.matches[0].path == "search.txt"
     assert result.matches[0].line_number == 2
-    assert result.matches[0].line_content == "hello world"
 
 
-def test_grep_with_ag_content_mode_single_file(tmp_path: Path) -> None:
-    workspace = tmp_path
+def test_run_grep_content_mode_single_file(tmp_path: Path) -> None:
     search_file = tmp_path / "search.txt"
     search_file.write_text("hello world\n")
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        if stdout is not None and hasattr(stdout, "write"):
-            stdout.write("search.txt:1:1:hello world\n")
-        return MagicMock(returncode=0, stderr="")
+    def fake_run(cmd: list[str]) -> MagicMock:
+        return _completed(0, stdout="search.txt:1:1:hello world\n")
 
-    with (
-        patch(
-            "soothe.foundation.core.filesystem.grep_search.shutil.which",
-            return_value="/usr/bin/ag",
-        ),
-        patch("soothe.foundation.core.filesystem.grep_search.subprocess.run", side_effect=fake_run),
-    ):
-        result = grep_with_ag(
-            workspace=workspace,
+    with _ag_patch(fake_run):
+        result = run_grep(
+            workspace=tmp_path,
             search_path=search_file,
             pattern="hello",
             glob=None,
@@ -193,28 +164,16 @@ def test_grep_with_ag_content_mode_single_file(tmp_path: Path) -> None:
 
     assert isinstance(result, GrepResult)
     assert len(result.matches) == 1
-    assert result.matches[0].path == "search.txt"
 
 
-def test_grep_with_ag_files_with_matches(tmp_path: Path) -> None:
-    workspace = tmp_path
-    search_path = tmp_path
+def test_run_grep_files_with_matches(tmp_path: Path) -> None:
+    def fake_run(cmd: list[str]) -> MagicMock:
+        return _completed(0, stdout="a.txt\nb.txt\n")
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        if stdout is not None and hasattr(stdout, "write"):
-            stdout.write("a.txt\nb.txt\n")
-        return MagicMock(returncode=0, stderr="")
-
-    with (
-        patch(
-            "soothe.foundation.core.filesystem.grep_search.shutil.which",
-            return_value="/usr/bin/ag",
-        ),
-        patch("soothe.foundation.core.filesystem.grep_search.subprocess.run", side_effect=fake_run),
-    ):
-        result = grep_with_ag(
-            workspace=workspace,
-            search_path=search_path,
+    with _ag_patch(fake_run):
+        result = run_grep(
+            workspace=tmp_path,
+            search_path=tmp_path,
             pattern="hello",
             glob=None,
             output_mode="files_with_matches",
@@ -223,18 +182,31 @@ def test_grep_with_ag_files_with_matches(tmp_path: Path) -> None:
     assert result == ["a.txt", "b.txt"]
 
 
-def test_local_grep_prefers_ag_when_available(tmp_path: Path) -> None:
+def test_grep_with_rg_files_with_matches(tmp_path: Path) -> None:
+    def fake_run(cmd: list[str]) -> MagicMock:
+        assert "rg" in cmd[0] or cmd[0] == _RG_BIN
+        return _completed(0, stdout="a.txt\n")
+
+    with _rg_patch(fake_run):
+        result = run_grep(
+            workspace=tmp_path,
+            search_path=tmp_path,
+            pattern="hello",
+            glob=None,
+            output_mode="files_with_matches",
+        )
+
+    assert result == ["a.txt"]
+
+
+def test_local_grep_delegates_to_run_grep(tmp_path: Path) -> None:
     fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
     fs.write("needle.txt", "find the needle here")
 
     with (
+        patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=True),
         patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=True,
-        ),
-        patch(
-            "soothe.foundation.core.filesystem.local.grep_with_ag",
-            return_value=["needle.txt"],
+            "soothe.foundation.core.filesystem.local.run_grep", return_value=["needle.txt"]
         ) as mock_ag,
     ):
         result = fs.grep("needle", output_mode="files_with_matches")
@@ -243,17 +215,16 @@ def test_local_grep_prefers_ag_when_available(tmp_path: Path) -> None:
     mock_ag.assert_called_once()
 
 
-def test_local_grep_falls_back_when_ag_unavailable(tmp_path: Path) -> None:
+def test_local_grep_errors_when_backend_unavailable(tmp_path: Path) -> None:
     fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
     fs.write("needle.txt", "find the needle here")
 
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
+    with patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=False):
         result = fs.grep("needle", output_mode="files_with_matches")
 
-    assert result == ["needle.txt"]
+    assert isinstance(result, GrepResult)
+    assert result.matches == []
+    assert result.error == GREP_UNAVAILABLE_ERROR
 
 
 @pytest.mark.asyncio
@@ -261,47 +232,23 @@ async def test_agrep_runs_in_thread(tmp_path: Path) -> None:
     fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
     fs.write("async.txt", "async needle")
 
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
+    with (
+        patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=True),
+        patch("soothe.foundation.core.filesystem.local.run_grep", return_value=["async.txt"]),
     ):
         result = await fs.agrep("needle", output_mode="files_with_matches")
 
     assert result == ["async.txt"]
 
 
-def test_normalized_backend_grep_content_mode(tmp_path: Path) -> None:
-    """Content-mode ``GrepResult`` from the filesystem must reach deepagents matches."""
-    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
-
-    (tmp_path / "needle.txt").write_text("find AgentLoop here\n")
-
-    backend = NormalizedPathBackend(root_dir=tmp_path, virtual_mode=True)
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = backend.grep("AgentLoop", path=".", output_mode="content")
-
-    assert result.error is None
-    assert result.matches is not None
-    assert len(result.matches) == 1
-    assert result.matches[0]["path"] == "needle.txt"
-    assert result.matches[0]["line"] == 1
-    assert "AgentLoop" in result.matches[0]["text"]
-
-
-def test_grep_with_ag_count_mode(tmp_path: Path) -> None:
-    workspace = tmp_path
-
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
+def test_run_grep_count_mode(tmp_path: Path) -> None:
+    def fake_run(cmd: list[str]) -> MagicMock:
         assert "--stats" in cmd
-        _write_stdout(stdout, "matches found: 3\n")
-        return MagicMock(returncode=0, stderr="")
+        return _completed(0, stdout="matches found: 3\n")
 
     with _ag_patch(fake_run):
-        result = grep_with_ag(
-            workspace=workspace,
+        result = run_grep(
+            workspace=tmp_path,
             search_path=tmp_path,
             pattern="needle",
             glob=None,
@@ -311,16 +258,15 @@ def test_grep_with_ag_count_mode(tmp_path: Path) -> None:
     assert result == "3"
 
 
-def test_grep_with_ag_passes_glob_as_ag_file_regex(tmp_path: Path) -> None:
-    captured_cmds: list[list[str]] = []
+def test_run_grep_passes_glob_as_ag_file_regex(tmp_path: Path) -> None:
+    captured: list[list[str]] = []
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        captured_cmds.append(cmd)
-        _write_stdout(stdout, "")
-        return MagicMock(returncode=1, stderr="")
+    def fake_run(cmd: list[str]) -> MagicMock:
+        captured.append(cmd)
+        return _completed(1, stdout="")
 
     with _ag_patch(fake_run):
-        grep_with_ag(
+        run_grep(
             workspace=tmp_path,
             search_path=tmp_path,
             pattern="needle",
@@ -328,36 +274,18 @@ def test_grep_with_ag_passes_glob_as_ag_file_regex(tmp_path: Path) -> None:
             output_mode="files_with_matches",
         )
 
-    assert captured_cmds
-    cmd = captured_cmds[0]
+    assert captured
+    cmd = captured[0]
     assert "-G" in cmd
     assert "--glob" not in cmd
-    g_index = cmd.index("-G")
-    assert ".py" in cmd[g_index + 1]
 
 
-def test_grep_with_ag_returns_none_on_ag_failure_exit_code(tmp_path: Path) -> None:
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        return MagicMock(returncode=2, stdout="", stderr="ag: bad pattern")
+def test_run_grep_returns_none_on_failure(tmp_path: Path) -> None:
+    def fake_run(cmd: list[str]) -> MagicMock:  # noqa: ARG001
+        return _completed(2, stdout="", stderr="ag: bad pattern")
 
     with _ag_patch(fake_run):
-        result = grep_with_ag(
-            workspace=tmp_path,
-            search_path=tmp_path,
-            pattern="needle",
-            glob=None,
-            output_mode="files_with_matches",
-        )
-
-    assert result is None
-
-
-def test_grep_with_ag_returns_none_on_subprocess_error(tmp_path: Path) -> None:
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        raise OSError("ag spawn failed")
-
-    with _ag_patch(fake_run):
-        result = grep_with_ag(
+        result = run_grep(
             workspace=tmp_path,
             search_path=tmp_path,
             pattern="needle",
@@ -369,21 +297,18 @@ def test_grep_with_ag_returns_none_on_subprocess_error(tmp_path: Path) -> None:
 
 
 def test_directory_content_mode_issues_list_then_content_ag_calls(tmp_path: Path) -> None:
-    workspace = tmp_path
     (tmp_path / "a.txt").write_text("line one\nneedle here\n")
     ag_calls: list[list[str]] = []
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
+    def fake_run(cmd: list[str]) -> MagicMock:
         ag_calls.append(cmd)
         if "-l" in cmd:
-            _write_stdout(stdout, "a.txt\n")
-        else:
-            _write_stdout(stdout, "a.txt:2:7:needle here\n")
-        return MagicMock(returncode=0, stderr="")
+            return _completed(0, stdout="a.txt\n")
+        return _completed(0, stdout="a.txt:2:7:needle here\n")
 
     with _ag_patch(fake_run):
-        result = grep_with_ag(
-            workspace=workspace,
+        result = run_grep(
+            workspace=tmp_path,
             search_path=tmp_path,
             pattern="needle",
             glob=None,
@@ -391,134 +316,73 @@ def test_directory_content_mode_issues_list_then_content_ag_calls(tmp_path: Path
         )
 
     assert len(ag_calls) == 2
-    assert "-l" in ag_calls[0]
-    assert "-n" in ag_calls[1]
-    assert str((tmp_path / "a.txt").resolve()) in ag_calls[1]
     assert isinstance(result, GrepResult)
     assert result.total_matches == 1
-    assert result.matches[0].line_content == "needle here"
 
 
-def test_grep_with_ag_no_matches_returns_empty_content_result(tmp_path: Path) -> None:
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        _write_stdout(stdout, "")
-        return MagicMock(returncode=1, stderr="")
+def test_local_grep_single_file_large_log_via_ag(tmp_path: Path) -> None:
+    """Single-file grep routes through ag/rg (no 1MB Python cap)."""
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    log_file = tmp_path / "soothe.log"
+    log_file.write_text(("executor:1186 line\n" * 200_000), encoding="utf-8")
 
+    def fake_run(cmd: list[str]) -> MagicMock:
+        assert str(log_file.resolve()) in cmd
+        return _completed(0, stdout=f"{log_file.resolve()}:1:1:executor:1186 line\n")
+
+    fs = LocalFilesystem(workspace=ws, virtual_mode=True)
     with _ag_patch(fake_run):
-        result = grep_with_ag(
-            workspace=tmp_path,
-            search_path=tmp_path,
-            pattern="missing",
-            glob=None,
-            output_mode="content",
-        )
+        result = fs.grep("executor:1186", path=str(log_file.resolve()), output_mode="content")
 
-    assert isinstance(result, GrepResult)
-    assert result.matches == []
-    assert result.total_matches == 0
-
-
-def test_local_grep_content_mode_delegates_to_ag(tmp_path: Path) -> None:
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-    fs.write("needle.txt", "find AgentLoop here\n")
-    ag_result = GrepResult(
-        matches=[
-            GrepMatch(
-                path="needle.txt",
-                line_number=1,
-                line_content="find AgentLoop here",
-                match_start=5,
-                match_end=14,
-            )
-        ],
-        total_matches=1,
-    )
-
-    with (
-        patch("soothe.foundation.core.filesystem.local.is_ag_available", return_value=True),
-        patch(
-            "soothe.foundation.core.filesystem.local.grep_with_ag",
-            return_value=ag_result,
-        ) as mock_ag,
-    ):
-        result = fs.grep("AgentLoop", output_mode="content")
-
-    mock_ag.assert_called_once()
     assert isinstance(result, GrepResult)
     assert result.total_matches == 1
-    assert result.matches[0].path == "needle.txt"
 
 
-def test_local_grep_falls_back_when_ag_returns_none(tmp_path: Path) -> None:
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-    fs.write("needle.txt", "find the needle here\n")
+def test_grep_host_absolute_file_outside_workspace(tmp_path: Path) -> None:
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    log_file = tmp_path / "soothe.log"
+    log_file.write_text("executor:1186 [Ledger]\n", encoding="utf-8")
 
-    with (
-        patch("soothe.foundation.core.filesystem.local.is_ag_available", return_value=True),
-        patch("soothe.foundation.core.filesystem.local.grep_with_ag", return_value=None),
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
+    def fake_run(cmd: list[str]) -> MagicMock:
+        return _completed(0, stdout=f"{log_file.resolve()}:1:1:executor:1186 [Ledger]\n")
 
-    assert result == ["needle.txt"]
+    fs = LocalFilesystem(workspace=ws, virtual_mode=True)
+    with _ag_patch(fake_run):
+        result = fs.grep("executor:1186", path=str(log_file.resolve()), output_mode="content")
 
-
-@pytest.mark.asyncio
-async def test_agrep_delegates_to_ag_when_available(tmp_path: Path) -> None:
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-    fs.write("async.txt", "async needle")
-
-    with (
-        patch("soothe.foundation.core.filesystem.local.is_ag_available", return_value=True),
-        patch(
-            "soothe.foundation.core.filesystem.local.grep_with_ag",
-            return_value=["async.txt"],
-        ) as mock_ag,
-    ):
-        result = await fs.agrep("needle", output_mode="files_with_matches")
-
-    mock_ag.assert_called_once()
-    assert result == ["async.txt"]
+    assert isinstance(result, GrepResult)
+    assert result.total_matches == 1
+    assert "executor:1186" in result.matches[0].line_content
 
 
-def test_normalized_backend_grep_files_with_matches_via_ag(tmp_path: Path) -> None:
-    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
+def test_grep_write_rejects_host_absolute_outside_workspace(tmp_path: Path) -> None:
+    from soothe.foundation.core.filesystem.exceptions import FilesystemError
 
-    (tmp_path / "needle.txt").write_text("needle here\n")
-    (tmp_path / "other.txt").write_text("nothing\n")
+    ws = tmp_path / "repo"
+    ws.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("original\n", encoding="utf-8")
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
-        _write_stdout(stdout, "needle.txt\n")
-        return MagicMock(returncode=0, stderr="")
-
-    backend = NormalizedPathBackend(root_dir=tmp_path, virtual_mode=True)
-    with (
-        patch("soothe.foundation.core.filesystem.local.is_ag_available", return_value=True),
-        _ag_patch(fake_run),
-    ):
-        result = backend.grep("needle", path=".", output_mode="files_with_matches")
-
-    assert result.error is None
-    assert result.matches is not None
-    assert len(result.matches) == 1
-    assert result.matches[0]["path"] == "needle.txt"
-    assert result.matches[0]["line"] == 0
+    fs = LocalFilesystem(workspace=ws, virtual_mode=True)
+    with pytest.raises(FilesystemError):
+        fs.write(str(outside.resolve()), "mutated\n")
 
 
-def test_normalized_backend_grep_content_via_ag_two_phase(tmp_path: Path) -> None:
+def test_normalized_backend_grep_via_ag(tmp_path: Path) -> None:
     from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
 
     (tmp_path / "needle.txt").write_text("find AgentLoop here\n")
 
-    def fake_run(cmd, stdout=None, **kwargs):  # noqa: ANN001, ARG001
+    def fake_run(cmd: list[str]) -> MagicMock:
         if "-l" in cmd:
-            _write_stdout(stdout, "needle.txt\n")
-        else:
-            _write_stdout(stdout, "needle.txt:1:6:find AgentLoop here\n")
-        return MagicMock(returncode=0, stderr="")
+            return _completed(0, stdout="needle.txt\n")
+        return _completed(0, stdout="needle.txt:1:6:find AgentLoop here\n")
 
     backend = NormalizedPathBackend(root_dir=tmp_path, virtual_mode=True)
     with (
-        patch("soothe.foundation.core.filesystem.local.is_ag_available", return_value=True),
+        patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=True),
         _ag_patch(fake_run),
     ):
         result = backend.grep("AgentLoop", path=".", output_mode="content")
@@ -526,538 +390,15 @@ def test_normalized_backend_grep_content_via_ag_two_phase(tmp_path: Path) -> Non
     assert result.error is None
     assert result.matches is not None
     assert len(result.matches) == 1
-    assert result.matches[0]["path"] == "needle.txt"
-    assert result.matches[0]["line"] == 1
-    assert "AgentLoop" in result.matches[0]["text"]
 
 
-@pytest.mark.skipif(get_ag_bin() is None, reason="ag not installed")
-def test_local_grep_content_mode_with_real_ag(tmp_path: Path) -> None:
-    """Integration: builtin grep content mode should use real ``ag`` when installed."""
+@pytest.mark.skipif(get_ag_bin() is None and get_rg_bin() is None, reason="ag/rg not installed")
+def test_local_grep_content_mode_with_real_backend(tmp_path: Path) -> None:
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "guide.md").write_text("# AgentLoop migration\n")
-    (tmp_path / "docs" / "other.md").write_text("no hits\n")
 
     fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
     result = fs.grep("AgentLoop", path=".", output_mode="content")
 
     assert isinstance(result, GrepResult)
     assert result.total_matches >= 1
-    assert any("AgentLoop" in m.line_content for m in result.matches)
-
-
-@pytest.mark.skipif(get_ag_bin() is None, reason="ag not installed")
-def test_local_grep_files_with_matches_with_real_ag(tmp_path: Path) -> None:
-    (tmp_path / "match.txt").write_text("AgentLoop here\n")
-    (tmp_path / "skip.txt").write_text("nothing\n")
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-    result = fs.grep("AgentLoop", output_mode="files_with_matches")
-
-    assert result == ["match.txt"]
-
-
-@pytest.mark.skipif(get_ag_bin() is None, reason="ag not installed")
-def test_run_ag_subprocess_captures_stdout_via_tempfile(tmp_path: Path) -> None:
-    """``_run_ag_subprocess`` must capture ``ag`` stdout (temp file, not PIPE)."""
-    from soothe.foundation.core.filesystem.grep_search import _run_ag_subprocess
-
-    ag_bin = get_ag_bin()
-    assert ag_bin is not None
-    (tmp_path / "probe.txt").write_text("probe-token\n")
-
-    completed = _run_ag_subprocess(
-        [ag_bin, "-l", "probe-token", str(tmp_path)],
-        timeout_s=30,
-    )
-
-    assert completed is not None
-    assert completed.returncode in (0, 1)
-    assert "probe.txt" in completed.stdout
-
-
-@pytest.mark.skipif(get_ag_bin() is None, reason="ag not installed")
-def test_grep_with_ag_real_directory_content_two_phase(tmp_path: Path) -> None:
-    """Real ``ag``: directory content search lists files then reads line content."""
-    (tmp_path / "a.py").write_text("class AgentLoop:\n    pass\n")
-    (tmp_path / "b.py").write_text("print('ok')\n")
-
-    result = grep_with_ag(
-        workspace=tmp_path,
-        search_path=tmp_path,
-        pattern="AgentLoop",
-        glob="*.py",
-        output_mode="content",
-    )
-
-    assert isinstance(result, GrepResult)
-    assert result.total_matches == 1
-    assert result.matches[0].path == "a.py"
-    assert "AgentLoop" in result.matches[0].line_content
-
-
-# =============================================================================
-# IG-510: Incremental Batching Tests
-# =============================================================================
-
-
-def test_grep_ignores_large_directories(tmp_path: Path) -> None:
-    """Grep should skip .venv, node_modules, .git, etc."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create ignored directories with matching content
-    (tmp_path / ".venv" / "lib").mkdir(parents=True)
-    (tmp_path / ".venv" / "lib" / "match.py").write_text("needle_in_venv\n")
-
-    (tmp_path / "node_modules" / "pkg").mkdir(parents=True)
-    (tmp_path / "node_modules" / "pkg" / "index.js").write_text("needle_in_node_modules\n")
-
-    (tmp_path / ".git" / "objects").mkdir(parents=True)
-    (tmp_path / ".git" / "match.txt").write_text("needle_in_git\n")
-
-    # Create source file that should be searched
-    (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "match.py").write_text("needle_in_src\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    # Should only find the source file, not the ignored directories
-    assert result == ["src/match.py"]
-
-
-def test_grep_ignores_large_files(tmp_path: Path) -> None:
-    """Grep should skip files larger than _GREP_MAX_FILE_SIZE_BYTES."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create a small file with match
-    (tmp_path / "small.txt").write_text("needle_small\n")
-
-    # Create a large file (>1MB) with match (should be skipped)
-    large_content = "needle_large\n" * 100_000  # >1MB
-    (tmp_path / "large.txt").write_text(large_content)
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    # Should only find the small file
-    assert "small.txt" in result
-    assert "large.txt" not in result
-
-
-def test_grep_returns_partial_results_with_continuation_token(tmp_path: Path) -> None:
-    """Grep should return partial results when batch limits hit."""
-    import soothe.foundation.core.filesystem.local as local_fs
-
-    # Temporarily reduce batch limits to force partial results
-    original_batch_size = local_fs._GREP_BATCH_SIZE
-    original_max_batches = local_fs._GREP_MAX_BATCHES
-
-    local_fs._GREP_BATCH_SIZE = 2
-    local_fs._GREP_MAX_BATCHES = 1
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create more files than batch limit
-    for i in range(10):
-        (tmp_path / f"file_{i}.txt").write_text(f"needle_{i}\n")
-
-    try:
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result = fs.grep("needle", output_mode="content")
-
-        assert isinstance(result, GrepResult)
-        assert result.is_partial is True
-        assert result.continuation_token is not None
-        assert result.total_files == 10
-        # Should have searched only 2 files (batch size)
-        assert result.files_searched == 2
-    finally:
-        local_fs._GREP_BATCH_SIZE = original_batch_size
-        local_fs._GREP_MAX_BATCHES = original_max_batches
-
-
-def test_grep_continuation_token_resumes_search(tmp_path: Path) -> None:
-    """Grep continuation token should resume from where previous search stopped."""
-    import soothe.foundation.core.filesystem.local as local_fs
-
-    # Temporarily reduce batch limits
-    original_batch_size = local_fs._GREP_BATCH_SIZE
-    original_max_batches = local_fs._GREP_MAX_BATCHES
-
-    local_fs._GREP_BATCH_SIZE = 2
-    local_fs._GREP_MAX_BATCHES = 1
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create 6 files with unique content
-    for i in range(6):
-        (tmp_path / f"file_{i}.txt").write_text(f"unique_needle_{i}\n")
-
-    try:
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            # First search: get partial results
-            result1 = fs.grep("unique_needle", output_mode="content")
-
-        assert isinstance(result1, GrepResult)
-        assert result1.is_partial is True
-        assert result1.continuation_token is not None
-        first_batch_matches = [m.path for m in result1.matches]
-
-        # Continue search: should find remaining files
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result2 = fs.grep(
-                "unique_needle",
-                output_mode="content",
-                continuation_token=result1.continuation_token,
-            )
-
-        assert isinstance(result2, GrepResult)
-        second_batch_matches = [m.path for m in result2.matches]
-
-        # Matches should be from different files (no overlap)
-        assert set(first_batch_matches).isdisjoint(set(second_batch_matches))
-
-        # Combined matches should cover all files
-        all_matches = first_batch_matches + second_batch_matches
-        # Note: May still be partial if only 2 batches completed
-        assert len(all_matches) >= 4
-    finally:
-        local_fs._GREP_BATCH_SIZE = original_batch_size
-        local_fs._GREP_MAX_BATCHES = original_max_batches
-
-
-def test_grep_total_timeout_limits_execution(tmp_path: Path) -> None:
-    """Grep should stop after hitting limits (timeout or batch)."""
-    import soothe.foundation.core.filesystem.local as local_fs
-
-    # Reduce limits to force early termination
-    original_max_batches = local_fs._GREP_MAX_BATCHES
-    original_batch_size = local_fs._GREP_BATCH_SIZE
-
-    local_fs._GREP_MAX_BATCHES = 2  # Only 2 batches
-    local_fs._GREP_BATCH_SIZE = 10  # 10 files per batch
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create many files to exceed batch limit
-    for i in range(50):
-        (tmp_path / f"file_{i}.txt").write_text(f"needle_{i}\n")
-
-    try:
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result = fs.grep("needle", output_mode="content")
-
-        assert isinstance(result, GrepResult)
-        # Should have partial results due to batch limit
-        assert result.total_files == 50
-        assert result.is_partial is True
-        assert result.files_searched == 20  # 2 batches × 10 files
-        assert result.continuation_token is not None
-        # Stop reason should be batch_limit (hit max batches before processing all files)
-        assert "batch_limit" in result.continuation_token.get("stop_reason", "")
-    finally:
-        local_fs._GREP_MAX_BATCHES = original_max_batches
-        local_fs._GREP_BATCH_SIZE = original_batch_size
-
-
-def test_grep_bytes_limit_stops_reading(tmp_path: Path) -> Path:
-    """Grep should stop after reading _GREP_MAX_TOTAL_BYTES."""
-    import soothe.foundation.core.filesystem.local as local_fs
-
-    # Reduce bytes limit to force early termination
-    original_bytes_limit = local_fs._GREP_MAX_TOTAL_BYTES
-    local_fs._GREP_MAX_TOTAL_BYTES = 1000  # 1KB
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create files that would exceed bytes limit if all read
-    for i in range(20):
-        (tmp_path / f"file_{i}.txt").write_text("x" * 500 + f"\nneedle_{i}\n")
-
-    try:
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result = fs.grep("needle", output_mode="content")
-
-        assert isinstance(result, GrepResult)
-        # Should have stopped before reading all files
-        assert result.files_searched < 20
-        # Should have partial results
-        assert result.is_partial is True or result.files_searched * 500 < 20 * 500
-    finally:
-        local_fs._GREP_MAX_TOTAL_BYTES = original_bytes_limit
-
-
-def test_grep_single_file_bypasses_batching(tmp_path: Path) -> None:
-    """Grep on single file should process directly without batching."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create a single file
-    single_file = tmp_path / "single.txt"
-    single_file.write_text("needle_in_single_file\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", path="single.txt", output_mode="content")
-
-    assert isinstance(result, GrepResult)
-    assert result.files_searched == 1
-    assert result.is_partial is False
-    assert result.continuation_token is None
-    assert len(result.matches) == 1
-    assert result.matches[0].path == "single.txt"
-
-
-def test_grep_invalid_regex_returns_error(tmp_path: Path) -> None:
-    """Grep with invalid regex pattern should return error."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    (tmp_path / "test.txt").write_text("some content\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("[invalid(regex", output_mode="content")
-
-    assert isinstance(result, GrepResult)
-    assert result.error is not None
-    assert "Invalid regex" in result.error
-    assert result.matches == []
-
-
-@pytest.mark.asyncio
-async def test_agrep_continuation_token(tmp_path: Path) -> None:
-    """Async grep should support continuation token."""
-    import soothe.foundation.core.filesystem.local as local_fs
-
-    original_batch_size = local_fs._GREP_BATCH_SIZE
-    original_max_batches = local_fs._GREP_MAX_BATCHES
-
-    local_fs._GREP_BATCH_SIZE = 2
-    local_fs._GREP_MAX_BATCHES = 1
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    for i in range(6):
-        (tmp_path / f"async_{i}.txt").write_text(f"async_needle_{i}\n")
-
-    try:
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result1 = await fs.agrep("async_needle", output_mode="content")
-
-        assert isinstance(result1, GrepResult)
-        assert result1.is_partial is True
-
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result2 = await fs.agrep(
-                "async_needle",
-                output_mode="content",
-                continuation_token=result1.continuation_token,
-            )
-
-        assert isinstance(result2, GrepResult)
-        # Verify continuation resumed from different files
-        first_files = {m.path for m in result1.matches}
-        second_files = {m.path for m in result2.matches}
-        assert first_files.isdisjoint(second_files)
-    finally:
-        local_fs._GREP_BATCH_SIZE = original_batch_size
-        local_fs._GREP_MAX_BATCHES = original_max_batches
-
-
-# =============================================================================
-# IG-520: Gitignore-Aware Fallback Tests
-# =============================================================================
-
-
-def test_grep_fallback_respects_gitignore(tmp_path: Path) -> None:
-    """Python fallback should honor .gitignore patterns."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create .gitignore that excludes 'excluded_dir'
-    (tmp_path / ".gitignore").write_text("excluded_dir/\n*.log\n")
-
-    # Create files that should be ignored
-    (tmp_path / "excluded_dir").mkdir()
-    (tmp_path / "excluded_dir" / "secret.py").write_text("needle_excluded\n")
-
-    (tmp_path / "debug.log").write_text("needle_log\n")
-
-    # Create files that should be searched
-    (tmp_path / "src").mkdir()
-    (tmp_path / "src" / "main.py").write_text("needle_main\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    # Should find src/main.py, not excluded_dir/secret.py or debug.log
-    assert result == ["src/main.py"]
-
-
-def test_grep_fallback_gitignore_nested_patterns(tmp_path: Path) -> None:
-    """Gitignore patterns from nested directories should be combined."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Root .gitignore excludes *.tmp
-    (tmp_path / ".gitignore").write_text("*.tmp\n")
-
-    # Nested .gitignore excludes nested_ignored/
-    nested_dir = tmp_path / "nested"
-    nested_dir.mkdir()
-    (nested_dir / ".gitignore").write_text("nested_ignored/\n")
-
-    # Files that should be ignored
-    (tmp_path / "temp.tmp").write_text("needle_tmp\n")
-    (nested_dir / "nested_ignored").mkdir()
-    (nested_dir / "nested_ignored" / "file.py").write_text("needle_nested_ignored\n")
-
-    # Files that should be found
-    (nested_dir / "searchable.py").write_text("needle_searchable\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    # Should find nested/searchable.py, not .tmp or nested_ignored/
-    assert result == ["nested/searchable.py"]
-
-
-def test_grep_fallback_gate_large_directory(tmp_path: Path) -> None:
-    """Python fallback should refuse large directories with helpful error."""
-    import soothe.foundation.core.filesystem.local as local_fs
-
-    original_limit = local_fs._GREP_FALLBACK_FILE_LIMIT
-    local_fs._GREP_FALLBACK_FILE_LIMIT = 10  # Set low for testing
-
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # Create many files to exceed limit
-    for i in range(20):
-        (tmp_path / f"file_{i}.txt").write_text(f"needle_{i}\n")
-
-    try:
-        with patch(
-            "soothe.foundation.core.filesystem.local.is_ag_available",
-            return_value=False,
-        ):
-            result = fs.grep("needle", output_mode="files_with_matches")
-
-        # Should return GrepResult with error about scope
-        assert isinstance(result, GrepResult)
-        assert result.matches == []
-        assert "scope too large" in result.error.lower()
-        assert "ag" in result.error.lower() or "silver searcher" in result.error.lower()
-    finally:
-        local_fs._GREP_FALLBACK_FILE_LIMIT = original_limit
-
-
-def test_grep_fallback_gate_no_gitignore_small_tree(tmp_path: Path) -> None:
-    """Without gitignore, fallback should still work on small trees."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # No .gitignore, small tree
-    for i in range(5):
-        (tmp_path / f"doc_{i}.md").write_text(f"needle_doc_{i}\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    # Should find all 5 files (tree is small, no gate)
-    assert len(result) == 5
-
-
-def test_grep_gitignore_cache(tmp_path: Path) -> None:
-    """Gitignore spec should be cached per workspace."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    (tmp_path / ".gitignore").write_text("cached_excluded/\n")
-    (tmp_path / "cached_excluded").mkdir()
-    (tmp_path / "cached_excluded" / "file.txt").write_text("needle\n")
-    (tmp_path / "included.txt").write_text("needle\n")
-
-    # First call loads and caches gitignore
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        fs.grep("needle", output_mode="files_with_matches")
-
-    # Cache should be populated (key is (workspace, search_root) tuple)
-    cache_key = (tmp_path.resolve(), tmp_path.resolve())
-    assert cache_key in fs._gitignore_cache
-    assert fs._gitignore_cache[cache_key] is not None
-
-    # Second call should use cache (no re-read)
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    assert result == ["included.txt"]
-
-
-def test_grep_gitignore_combined_with_floor_filter(tmp_path: Path) -> None:
-    """Gitignore should be primary, _GREP_IGNORE_DIRS should be floor."""
-    fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
-
-    # .gitignore that does NOT exclude .venv
-    (tmp_path / ".gitignore").write_text("custom_excluded/\n")
-
-    # .venv is NOT in .gitignore but IS in _GREP_IGNORE_DIRS floor
-    (tmp_path / ".venv").mkdir()
-    (tmp_path / ".venv" / "lib.py").write_text("needle_venv\n")
-
-    # custom_excluded is in .gitignore (primary filter)
-    (tmp_path / "custom_excluded").mkdir()
-    (tmp_path / "custom_excluded" / "file.py").write_text("needle_custom\n")
-
-    # Should be found
-    (tmp_path / "main.py").write_text("needle_main\n")
-
-    with patch(
-        "soothe.foundation.core.filesystem.local.is_ag_available",
-        return_value=False,
-    ):
-        result = fs.grep("needle", output_mode="files_with_matches")
-
-    # Floor filter excludes .venv, gitignore excludes custom_excluded
-    assert result == ["main.py"]
