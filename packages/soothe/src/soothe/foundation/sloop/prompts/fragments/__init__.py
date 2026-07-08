@@ -34,7 +34,7 @@ PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT = _read(
     "instructions/plan_gap_analysis_instructions.xml", strip=True
 )
 
-# Plan-generate only: matches PlanGeneration schema (IG-329)
+# Plan-generate only: matches PlanGenerationWire schema (IG-568)
 PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read(
     "instructions/plan_generate_instructions.xml", strip=True
 )

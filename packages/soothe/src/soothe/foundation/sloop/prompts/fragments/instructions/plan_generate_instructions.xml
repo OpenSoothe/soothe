@@ -1,5 +1,5 @@
 <PLAN_GENERATE>
-Output: type, steps, execution_mode, reasoning, adaptive_granularity.
+Output wire JSON only: ``reasoning``, ``steps``, optional ``clarify``.
 
 If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; else
 ``ASSESSMENT:`` in the user message. Goal is in GOAL:. When ``Status: continue`` and DAG
@@ -11,43 +11,33 @@ Do not switch language unless requested; keep paths, identifiers, and quoted lit
 
 **Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
 
-**type**:
-- ``execute_steps``: Required at iteration 0 or when step_results empty.
-- ``final``: ONLY after execute_steps produced sufficient evidence. NEVER at iteration 0.
+**Top-level fields** (only these — never put field names inside ``steps[]``):
+- ``reasoning`` (≤500 chars): First-person cognition for the TUI (I'll / Let me …).
+- ``steps``: Non-empty array of step objects when executing work.
+- ``clarify``: Optional ``{ "questions": ["...?"] }`` when user input is required — mutually
+  exclusive with non-empty ``steps`` (at most one clarify wave; no action steps alongside).
 
-**steps** fields:
-- ``id``: Short token (``01``, ``02``) or per STEP ID HINT.
-- ``description``: Milestone line (&lt;20 words). Executor handles fine-grained work.
-- ``full_description``: REQUIRED for every ``kind=action`` step — standalone brief (50–120 words)
-  with concrete scope when known. With ``dependencies``, state how to use predecessor output; forbid
-  repeating predecessor discovery (EXECUTION_POLICIES dependent chains).
+**steps[]** objects (action path):
+- ``description``: Milestone line (&lt;20 words).
+- ``dependencies``: REQUIRED on every step — use ``[]`` when none; sibling ids or cross-wave
+  composite ids from STEP ANCHOR REGISTRY when ordering matters (simple and complex goals).
 - ``expected_output``: Checkable completion signal.
-- ``dependencies``: Optional; in-wave sibling ids or cross-wave composite ids from STEP ANCHOR REGISTRY.
-- ``kind``: ``action`` (default) or ``ask_user``.
-- ``questions``: REQUIRED when ``kind=ask_user`` — non-empty list of plain-text questions,
-  each ending in ``?``; forbidden otherwise.
+- ``id``: Optional short token (``01``, ``02``) or per STEP ID HINT.
+- ``delegate``: Optional subagent name when this step must delegate.
 
-**execution_mode** (required when ``type=execute_steps``): only ``parallel`` or ``dependency``.
-Never output ``sequential`` (removed); invalid values fail validation. Use ``dependency`` when
-any step has ``dependencies`` (EXECUTION_POLICIES).
+Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps,
+else ``parallel``). Do not emit ``type``, ``execution_mode``, ``full_description``, or ``kind``.
 
-**ask_user** (PRIMARY clarification — executor will NOT ask the user for you):
+**clarify** (PRIMARY clarification — executor will NOT ask the user for you):
 - REQUIRED when: goal ambiguous; essential context missing; user preference needed; iteration 0
   and you cannot proceed without answers.
 - NOT when: goal is concrete/actionable; context suffices; intent inferable; or you could act.
-- AT MOST ONE ``ask_user`` step per wave; pair with NO other steps. ``description`` = short
-  third-person summary; put question text in ``questions``. Runtime relays answers next iteration.
-- WRONG: ``kind="action"`` with "ask user…" prose — no one will answer.
-- CORRECT: ``kind="ask_user"`` with non-empty ``questions`` (e.g. "Which format should I use?").
-
-**reasoning** (≤500 chars): First-person cognition for the TUI (I'll / Let me …); one or two
-sentences justifying plan strategy. Make step ``description`` lines concrete milestones.
+- Put question text in ``clarify.questions`` (each ending in ``?``). Do not use action steps to ask.
 
 **On failure**: If prior steps failed, propose a different approach — do not repeat same step text.
 
 **Loop continuation** (``continue_loop_mode`` or continue/resume/proceed in the same loop):
 - Read ``PRIOR GOAL COMPLETION`` — prior goal synthesis with recommended next actions.
 - Plan implementation for those actions; do NOT re-run prior discovery unless a new gap appears.
-- Prefer ``dependency`` when steps build on prior output; use ``full_description`` with concrete
-  modules, files, or design-doc items.
+- Use ``dependencies`` when steps build on prior output; cite concrete modules, files, or design-doc items.
 </PLAN_GENERATE>

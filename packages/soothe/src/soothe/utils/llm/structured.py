@@ -329,6 +329,7 @@ async def invoke_structured_chat_typed(
     *,
     strict: bool = True,
     config: dict[str, Any] | None = None,
+    normalize: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> T:
     """Invoke `invoke_structured_chat` and return a typed Pydantic instance.
 
@@ -342,6 +343,7 @@ async def invoke_structured_chat_typed(
         schema: Pydantic class describing the expected output.
         strict: Post-validate the parsed dict against the wire schema.
         config: Optional RunnableConfig (Langfuse tracing, etc.).
+        normalize: Optional pre-validation dict normalizer.
 
     Returns:
         Validated `schema` instance.
@@ -357,6 +359,7 @@ async def invoke_structured_chat_typed(
         schema_name=schema.__name__,
         strict=strict,
         config=config,
+        normalize=normalize,
     )
     return schema(**result_dict)
 

@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from soothe.foundation.sloop.engine.thread_selection import resolve_wire_subagent_for_step
 from soothe.foundation.sloop.state import schemas as schemas_mod
 from soothe.foundation.sloop.state.schemas import (
-    DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     AgentDecision,
     LoopState,
     PlanGenerateStep,
@@ -394,11 +393,7 @@ class TestPlanGeneration:
     """Tests for flattened PlanGeneration schema."""
 
     def test_plan_generate_step_schema_includes_execution_routing(self) -> None:
-        from soothe.foundation.sloop.state.schemas import capped_plan_generation_model
-
-        props = capped_plan_generation_model().model_json_schema()["$defs"]["PlanGenerateStep"][
-            "properties"
-        ]
+        props = PlanGenerateStep.model_json_schema()["properties"]
         assert "evidence_refs" not in props
         assert {
             "id",
@@ -410,11 +405,9 @@ class TestPlanGeneration:
         } <= set(props.keys())
 
     def test_plan_generation_schema_execution_mode_excludes_sequential(self) -> None:
-        """Structured plan-generate output must not offer sequential to the LLM."""
-        from soothe.foundation.sloop.state.schemas import capped_plan_generation_model
-
+        """Runtime plan model must not offer sequential execution_mode."""
         for _iteration in (0, 1):
-            schema = capped_plan_generation_model().model_json_schema()
+            schema = PlanGeneration.model_json_schema()
             em = schema["properties"]["execution_mode"]
             enum_values: set[str] = set()
             if "enum" in em:
@@ -555,10 +548,8 @@ class TestPlanGeneration:
             )
 
     def test_plan_generation_schema_excludes_plan_action(self) -> None:
-        """plan_action is derived at runtime, not part of the LLM schema."""
-        from soothe.foundation.sloop.state.schemas import capped_plan_generation_model
-
-        props = capped_plan_generation_model().model_json_schema()["properties"]
+        """plan_action is derived at runtime, not part of the runtime plan model."""
+        props = PlanGeneration.model_json_schema()["properties"]
         assert "plan_action" not in props
         assert "next_action" not in props
 
@@ -569,76 +560,6 @@ class TestPlanGeneration:
         assert derive_plan_action(assessment_status="continue", has_remaining_steps=False) == "new"
         assert derive_plan_action(assessment_status="replan", has_remaining_steps=True) == "new"
         assert derive_plan_action(assessment_status="done", has_remaining_steps=True) == "new"
-
-    def test_plan_wave_model_rejects_more_than_ten_steps(self) -> None:
-        from soothe.foundation.sloop.state.schemas import capped_plan_generation_model
-
-        schema = capped_plan_generation_model()
-        steps = [
-            PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
-            for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE + 1)
-        ]
-        with pytest.raises(ValidationError):
-            schema(
-                type="execute_steps",
-                execution_mode="parallel",
-                steps=steps,
-            )
-
-    def test_plan_wave_model_accepts_ten_steps(self) -> None:
-        from soothe.foundation.sloop.state.schemas import capped_plan_generation_model
-
-        schema = capped_plan_generation_model()
-        out = schema(
-            type="execute_steps",
-            execution_mode="parallel",
-            steps=[
-                PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
-                for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE)
-            ],
-        )
-        assert len(out.steps) == DEFAULT_MAX_PLAN_STEPS_PER_WAVE
-
-    def test_later_iteration_model_is_capped_at_ten_steps(self) -> None:
-        from soothe.foundation.sloop.state.schemas import capped_plan_generation_model
-
-        schema = capped_plan_generation_model()
-        out = schema(
-            type="execute_steps",
-            execution_mode="parallel",
-            steps=[
-                PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
-                for i in range(3)
-            ],
-        )
-        assert len(out.steps) == 3
-        with pytest.raises(ValidationError):
-            schema(
-                type="execute_steps",
-                execution_mode="parallel",
-                steps=[
-                    PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
-                    for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE + 1)
-                ],
-            )
-
-    def test_coerce_plan_generation_dict_hoists_execution_mode_str(self) -> None:
-        from soothe.foundation.sloop.state.schemas import (
-            PlanGeneration,
-            coerce_plan_generation_dict,
-        )
-
-        raw = {
-            "type": "execute_steps",
-            "steps": [
-                {"id": "01", "description": "ask", "kind": "ask_user", "questions": ["Which?"]},
-                "execution_mode ",
-            ],
-        }
-        coerced = coerce_plan_generation_dict(raw)
-        plan = PlanGeneration.model_validate(coerced)
-        assert plan.execution_mode == "parallel"
-        assert len(plan.steps) == 1
 
 
 class TestStepResult:
