@@ -493,6 +493,18 @@ class SootheDaemon(DaemonHandlersMixin):
                     logger.exception("PostgreSQL database provisioning failed at daemon startup")
                     raise
 
+            # Open shared PostgreSQL pools before any SootheRunner / persist store
+            # construction so durability metadata stores never borrow ``open=False`` pools.
+            try:
+                from soothe_daemon.persistence.pools import preopen_shared_postgres_pools
+
+                await preopen_shared_postgres_pools(self._config, self._daemon_config)
+            except Exception:
+                logger.warning(
+                    "Failed to pre-open shared PostgreSQL pools at startup",
+                    exc_info=True,
+                )
+
             # RFC-221: keep a utility SootheRunner for non-streaming ops
             # (create_persisted_thread, touch_thread_activity_timestamp, etc.).
             # Streaming is handled per-loop by LoopRunnerFactory — this instance
@@ -685,17 +697,6 @@ class SootheDaemon(DaemonHandlersMixin):
                 reap_stale_soothe_worker_processes()
             except Exception:
                 logger.debug("Stale worker process cleanup skipped", exc_info=True)
-
-            # Pre-open shared PostgreSQL pools before worker warmup (checkpointer attach).
-            try:
-                from soothe_daemon.persistence.pools import preopen_shared_postgres_pools
-
-                await preopen_shared_postgres_pools(self._config, self._daemon_config)
-            except Exception:
-                logger.warning(
-                    "Failed to pre-open shared PostgreSQL pools at startup",
-                    exc_info=True,
-                )
 
             if self._config.skillify.enabled:
                 try:

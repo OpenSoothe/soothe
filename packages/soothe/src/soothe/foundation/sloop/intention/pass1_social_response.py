@@ -6,8 +6,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
-
 from .models import IntakePass1LLMResult, IntakePass1SocialKind
 
 
@@ -42,25 +40,8 @@ def coalesce_pass1_dict(result_dict: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
-def resolve_pass1_chitchat_response(
-    pass1_result: IntakePass1LLMResult,
-    *,
-    query: str | None = None,
-    generic_fallback: str | None = None,
-) -> str:
-    """Resolve chitchat text from Pass 1 (direct field + generic fallback only).
-
-    Identity enforcement runs once at runner emit via ``finalize_chitchat_response``.
-    """
-    direct = (pass1_result.social_response or "").strip()
-    if direct:
-        return direct
-    return generic_fallback or pick_generic_chitchat_fallback(query)
-
-
 __all__ = [
     "Pass1SocialReplyLLMResult",
     "coalesce_pass1_dict",
     "pass1_json_schema",
-    "resolve_pass1_chitchat_response",
 ]

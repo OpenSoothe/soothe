@@ -173,6 +173,37 @@ def _should_mirror_system_prompt_on_chain(name: str | None) -> bool:
     return False
 
 
+class _LangfuseTracePinnedParent:
+    """Inject ``trace_context`` into root LLM observations (Langfuse chain-only gap).
+
+    Langfuse's ``LangchainCallbackHandler`` passes ``trace_context`` for root chains but
+    not for root chat-model generations. Goal-loop intake uses standalone structured LLM
+    calls, so we wrap the client returned by ``_get_parent_observation(None)``.
+    """
+
+    __slots__ = ("_client", "_trace_context")
+
+    def __init__(self, client: Any, trace_context: dict[str, str]) -> None:
+        self._client = client
+        self._trace_context = trace_context
+
+    def start_observation(self, *args: Any, **kwargs: Any) -> Any:
+        if kwargs.get("trace_context") is None:
+            kwargs = {**kwargs, "trace_context": self._trace_context}
+        return self._client.start_observation(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._client, name)
+
+
+def _is_langfuse_root_client(obs: Any) -> bool:
+    try:
+        from langfuse._client.client import Langfuse
+    except ImportError:
+        return False
+    return isinstance(obs, Langfuse)
+
+
 def _patch_chain_input_with_system_message(
     inputs: Any,
     system_prompt: str,
@@ -213,6 +244,15 @@ if LANGFUSE_AVAILABLE:
             super().__init__(*args, **kwargs)
             self._system_hint_by_thread: dict[str, str] = {}
             self._generation_traced_inputs: dict[UUID, list[Any]] = {}
+
+        def _get_parent_observation(self, parent_run_id: UUID | None) -> Any:
+            obs = super()._get_parent_observation(parent_run_id)
+            trace_context = getattr(self, "trace_context", None)
+            if parent_run_id is not None or not trace_context:
+                return obs
+            if _is_langfuse_root_client(obs):
+                return _LangfuseTracePinnedParent(obs, trace_context)
+            return obs
 
         def register_system_prompt_hint_for_config(
             self,

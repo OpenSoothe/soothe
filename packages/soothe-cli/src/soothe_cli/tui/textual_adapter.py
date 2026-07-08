@@ -2256,6 +2256,7 @@ async def _try_mount_instant_loop_assistant_phase(
             await current_msg.append_content(text)
             if adapter._sync_message_content and current_msg.id:
                 adapter._sync_message_content(current_msg.id, current_msg._content)
+        await current_msg.stop_stream()
         if adapter._set_active_message:
             adapter._set_active_message(None)
         await _maybe_set_thinking_spinner(adapter, clarification_pending=clarification_pending)
@@ -2270,6 +2271,7 @@ async def _try_mount_instant_loop_assistant_phase(
     assistant_message_by_namespace[ns_key] = output_widget
     if repaired:
         await output_widget.append_content(repaired)
+    await output_widget.stop_stream()
     if adapter._sync_message_content and output_widget.id:
         adapter._sync_message_content(output_widget.id, output_widget._content)
     if adapter._set_active_message:

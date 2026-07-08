@@ -13,19 +13,18 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
+from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_last_goal_completion_for_intake,
 )
 
 from .models import (
     IntakeLabel,
-    IntakePass1Confidence,
     IntakePass1LLMResult,
     IntakePass2LLMResult,
     IntentClassification,
     derive_task_complexity_from_intake,
 )
-from .pass1_social_response import resolve_pass1_chitchat_response
 from .two_pass_coordinator import TwoPassIntakeCoordinator, TwoPassIntakeResult
 
 if TYPE_CHECKING:
@@ -211,15 +210,11 @@ class IntentClassifier:
         query: str,
     ) -> IntentClassification:
         """Convert Pass 1 social result to IntentClassification for fast-path."""
-        response = resolve_pass1_chitchat_response(
-            pass1_result,
-            query=query,
-        )
         return IntentClassification(
             intake_label=IntakeLabel.CHITCHAT,
             reasoning=pass1_result.reasoning,
             goal_description=query,
-            chitchat_response=response,
+            chitchat_response=(pass1_result.social_response or "").strip(),
             social_kind=pass1_result.social_kind,
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
         )
@@ -327,15 +322,7 @@ class IntentClassifier:
             logger.debug("Patched missing goal_description")
         if intent.intake_label == IntakeLabel.CHITCHAT:
             if not (intent.chitchat_response or "").strip():
-                intent.chitchat_response = resolve_pass1_chitchat_response(
-                    IntakePass1LLMResult(
-                        is_task=False,
-                        confidence=IntakePass1Confidence.HIGH,
-                        social_response=None,
-                        reasoning=intent.reasoning or "",
-                    ),
-                    query=query,
-                )
+                intent.chitchat_response = pick_generic_chitchat_fallback(query)
                 logger.debug("Patched missing chitchat_response")
             return intent
         if not intent.reasoning:
