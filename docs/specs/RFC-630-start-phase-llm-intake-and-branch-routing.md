@@ -318,8 +318,16 @@ IntakePass2Result {
   scope: "trivial" | "simple" | "complex"
   goal_description: string         // imperative summary
   reasoning: string                // ≤15 words
+  multi_phase: bool
+  wire_subagent: string | null
+  requires_tool_use: bool          // IG-569: external/live data needs tools
 }
 ```
+
+`requires_tool_use` is set by Pass 2 when answering needs tool execution or
+external/live data (weather, web lookup, file contents). Pure reasoning/math
+sets `false`. The field propagates to trivial `StepAction.requires_tool_use`
+for the execute deliverable gate.
 
 ### 8.3 Derived fields at routing
 
@@ -345,10 +353,27 @@ PlanResult {
   status: "execute"
   next_action: <goal_description>
   plan_reasoning: null
-  expected_output: SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT  // ## Result contract
-  steps: [ single step ]
+  expected_output: TRIVIAL_DIRECT_EXPECTED_OUTPUT  // soft direct-answer hint
+  steps: [ {
+    description: <goal_description>
+    requires_tool_use: <from Pass 2>
+  } ]
 }
 ```
+
+### 8.6 Execute step deliverable gate (IG-569)
+
+Trivial execute steps no longer require a `## Result` markdown block. Retry is
+governed by a **Step Deliverable Gate**:
+
+1. **Structural** — `requires_tool_use` + tool counts, successful RFC-211 outcomes,
+   minimum final assistant text length (`execute_min_answer_chars`).
+2. **Fast LLM assess** — optional when structural checks are inconclusive
+   (`execute_deliverable_assess`: auto | always | never).
+
+On retry, the executor injects a **failure-mode-specific** nudge (not a generic
+tool prompt) and **replaces** the prior pass output (no concatenation). Goal
+completion remains free-form via `ledger_direct` / synthesis.
 
 ---
 

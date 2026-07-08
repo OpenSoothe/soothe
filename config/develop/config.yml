@@ -102,6 +102,8 @@ agent:
         durable_flush_timeout: 10
     max_tool_calls_per_step: 999
     execute_action_retry_max: 1
+    execute_min_answer_chars: 20
+    execute_deliverable_assess: auto
     max_subagent_tasks_per_wave: 8
     plan_assess_model_role: fast
     plan_generate_model_role: think
