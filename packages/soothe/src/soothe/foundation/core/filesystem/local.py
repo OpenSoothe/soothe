@@ -1532,7 +1532,9 @@ class LocalFilesystem(UnifiedFilesystem):
         include_ignored: bool = False,
     ) -> GlobResult:
         """Async glob pattern matching."""
-        return self.glob(pattern, path=path, include_ignored=include_ignored)
+        return await asyncio.to_thread(
+            self.glob, pattern, path=path, include_ignored=include_ignored
+        )
 
     def grep(
         self,

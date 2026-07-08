@@ -50,12 +50,54 @@ def config_workspace_root(config: Any | None) -> str | None:
     return None
 
 
-def workspace_path_for_tool_resolution(config: Any | None) -> Path:
-    """Workspace root for toolkit path resolution (config override, else daemon default)."""
+def static_tool_workspace_fallback(config: Any | None = None) -> Path:
+    """Static workspace when no stream ContextVar or RunnableConfig is bound."""
     root = config_workspace_root(config)
     if root:
         return Path(root).expanduser().resolve()
     return resolve_daemon_workspace()
+
+
+def resolve_effective_tool_workspace(
+    config: Any | None = None,
+    *,
+    runtime: Any | None = None,
+) -> Path:
+    """Resolve workspace for tool construction and filesystem operations (IG-570).
+
+    Uses the same priority chain as ``resolve_workspace_for_tool_execution``:
+    RunnableConfig / graph state / ContextVar, then config ``workspace_root``,
+    then daemon fallback.
+
+    Args:
+        config: Optional ``SootheConfig`` for static fallback.
+        runtime: Optional LangGraph ``ToolRuntime`` during tool invocation.
+
+    Returns:
+        Absolute workspace path.
+    """
+    from soothe.foundation.workspace.runtime_resolution import (
+        resolve_workspace_for_tool_execution,
+    )
+
+    fallback = static_tool_workspace_fallback(config)
+    resolved = resolve_workspace_for_tool_execution(
+        runtime=runtime,
+        fallback=fallback,
+        use_langgraph_config=True,
+    )
+    if resolved is not None:
+        return resolved.resolve()
+    return fallback
+
+
+def workspace_path_for_tool_resolution(
+    config: Any | None = None,
+    *,
+    runtime: Any | None = None,
+) -> Path:
+    """Workspace root for toolkit path resolution."""
+    return resolve_effective_tool_workspace(config, runtime=runtime)
 
 
 def _posix_first_segment_name(expanded: Path) -> str | None:

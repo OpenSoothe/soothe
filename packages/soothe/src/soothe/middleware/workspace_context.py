@@ -76,8 +76,12 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         workspace_path = resolve_workspace_for_tool_execution(
             config=config or None,
             state=state,
-            use_langgraph_config=False,
+            use_langgraph_config=True,
         )
+        if workspace_path is None and config_workspace:
+            workspace_path = Path(str(config_workspace)).expanduser().resolve()
+        if workspace_path is None and state_workspace:
+            workspace_path = Path(str(state_workspace)).expanduser().resolve()
         if workspace_path is None:
             return None
 
