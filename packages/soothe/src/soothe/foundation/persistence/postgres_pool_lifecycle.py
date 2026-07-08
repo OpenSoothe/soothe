@@ -50,6 +50,28 @@ def apply_row_factory(pool_kwargs: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+async def ensure_async_pool_open(pool: AsyncConnectionPool | None) -> None:
+    """Open a psycopg ``AsyncConnectionPool`` created with ``open=False``.
+
+    Idempotent when the pool is already open. No-op for non-pool stand-ins (tests).
+    Skips closed pools (caller must rebind).
+    """
+    if pool is None:
+        return
+    if getattr(pool, "closed", False):
+        return
+    open_fn = getattr(pool, "open", None)
+    if not callable(open_fn):
+        return
+    try:
+        await open_fn()
+    except Exception as exc:
+        text = str(exc).lower()
+        if "already open" in text:
+            return
+        raise
+
+
 async def release_idle_pool_connections(
     pool: AsyncConnectionPool | None,
     *,
@@ -106,6 +128,7 @@ async def close_async_pool(pool: AsyncConnectionPool | None, *, label: str) -> N
 __all__ = [
     "apply_row_factory",
     "close_async_pool",
+    "ensure_async_pool_open",
     "postgres_pool_timing_from_config",
     "release_idle_pool_connections",
 ]

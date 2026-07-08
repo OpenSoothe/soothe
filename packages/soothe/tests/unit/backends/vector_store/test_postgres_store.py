@@ -4,6 +4,8 @@ import asyncio
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 def _load_postgres_store_class():
     """Load PostgreSQLPersistStore directly from source file.
@@ -209,5 +211,76 @@ class TestPostgreSQLPersistStoreUnit:
             store._schema_initialized = True
             pool = await store._ensure_pool()
             assert pool is shared
+
+        asyncio.run(_async_test())
+
+    def test_ensure_pool_opens_lazy_shared_pool(self) -> None:
+        """Shared pools created with ``open=False`` must open on first use."""
+        postgres_persist_store_cls = _load_postgres_store_class()
+
+        async def _async_test() -> None:
+            open_calls = 0
+
+            class _LazyPool:
+                closed = False
+
+                async def open(self) -> None:
+                    nonlocal open_calls
+                    open_calls += 1
+
+            shared = _LazyPool()
+            store = postgres_persist_store_cls(
+                dsn="postgresql://unused/test",
+                pool_size=0,
+                shared_pool=shared,
+            )
+            store._schema_initialized = True
+            pool = await store._ensure_pool()
+            assert pool is shared
+            assert open_calls == 1
+
+        asyncio.run(_async_test())
+
+    def test_run_with_pool_recovery_retries_pool_closed(self) -> None:
+        """``PoolClosed`` from an unopened pool should reopen and retry once."""
+        postgres_persist_store_cls = _load_postgres_store_class()
+
+        async def _async_test() -> None:
+            try:
+                from psycopg_pool import PoolClosed
+            except ImportError:
+                pytest.skip("psycopg_pool not installed")
+
+            open_calls = 0
+
+            class _LazyPool:
+                closed = False
+
+                async def open(self) -> None:
+                    nonlocal open_calls
+                    open_calls += 1
+
+                def connection(self):
+                    raise AssertionError("connection should not be called on first attempt")
+
+            store = postgres_persist_store_cls(
+                dsn="postgresql://unused/test",
+                pool_size=0,
+                shared_pool=_LazyPool(),
+            )
+            store._schema_initialized = True
+            op_calls = 0
+
+            async def _flaky_op(pool):
+                nonlocal op_calls
+                op_calls += 1
+                if op_calls == 1:
+                    raise PoolClosed("the pool 'pool-2' is not open yet")
+                return "ok"
+
+            result = await store._run_with_pool_recovery("load", _flaky_op)
+            assert result == "ok"
+            assert op_calls == 2
+            assert open_calls >= 1
 
         asyncio.run(_async_test())

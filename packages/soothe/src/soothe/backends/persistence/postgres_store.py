@@ -71,15 +71,45 @@ class PostgreSQLPersistStore:
         self._pool = self._shared_pool
         return self._pool
 
+    def _rebind_shared_pool_from_registry(self) -> Any | None:
+        """Prefer registry-opened metadata pool over a stale local singleton."""
+        if self._shared_pool is None:
+            return None
+        try:
+            from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
+            from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
+
+            registry = PostgresPoolRegistry.try_get_instance()
+            if registry is None:
+                return self._bind_shared_pool()
+            reg_pool = registry.try_get_pool("metadata")
+            if reg_pool is None:
+                return self._bind_shared_pool()
+            self._shared_pool = reg_pool
+            SharedMetadataPool._register_pool(reg_pool)
+            return self._bind_shared_pool()
+        except Exception:
+            logger.debug("Failed to rebind metadata pool from registry", exc_info=True)
+            return self._bind_shared_pool()
+
+    async def _prepare_pool_for_use(self, pool: Any) -> Any:
+        """Ensure *pool* is open before returning it to callers."""
+        from soothe.foundation.persistence.postgres_pool_lifecycle import ensure_async_pool_open
+
+        await ensure_async_pool_open(pool)
+        return pool
+
     async def _reset_pool(self) -> None:
         """Reset pool state after a recoverable connection error.
 
         Owned pools are closed and cleared for lazy re-open. Shared/registry pools
-        must never be closed from this wrapper — only rebind the local reference.
+        must never be closed from this wrapper — rebind and ensure open instead.
         """
         async with self._init_lock:
             if self._uses_shared_pool:
-                self._bind_shared_pool()
+                pool = self._rebind_shared_pool_from_registry()
+                if pool is not None:
+                    await self._prepare_pool_for_use(pool)
                 return
             pool = self._pool
             self._pool = None
@@ -95,6 +125,7 @@ class PostgreSQLPersistStore:
         try:
             import psycopg
             from psycopg import errors as pg_errors
+            from psycopg_pool import PoolClosed
 
             recoverable_classes = (
                 psycopg.OperationalError,
@@ -102,6 +133,7 @@ class PostgreSQLPersistStore:
                 pg_errors.AdminShutdown,
                 pg_errors.CrashShutdown,
                 pg_errors.ConnectionFailure,
+                PoolClosed,
             )
         except Exception:
             recoverable_classes = ()
@@ -117,6 +149,7 @@ class PostgreSQLPersistStore:
                 "terminating connection due to administrator command",
                 "connection is closed",
                 "connection not open",
+                "not open yet",
                 "server closed the connection unexpectedly",
                 "connection failure",
             )
@@ -160,6 +193,7 @@ class PostgreSQLPersistStore:
             if not self._schema_initialized:
                 await self._initialize_schema(self._pool)
                 self._schema_initialized = True
+            await self._prepare_pool_for_use(self._pool)
             return self._pool
 
         if self._pool_size == 0:
@@ -167,6 +201,7 @@ class PostgreSQLPersistStore:
                 if not self._schema_initialized:
                     await self._initialize_schema(self._pool)
                     self._schema_initialized = True
+                await self._prepare_pool_for_use(self._pool)
                 return self._pool
             msg = "PostgreSQL persist store in shared pool mode but pool not set"
             raise RuntimeError(msg)
@@ -209,6 +244,7 @@ class PostgreSQLPersistStore:
                 raise RuntimeError(msg) from exc
 
             self._pool = pool
+            await self._prepare_pool_for_use(pool)
             return self._pool
 
     async def close(self) -> None:

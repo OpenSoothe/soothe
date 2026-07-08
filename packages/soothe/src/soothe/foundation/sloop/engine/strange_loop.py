@@ -173,7 +173,8 @@ class StrangeLoop:
             proposal_queue: Optional ``ProposalQueue`` (RFC-204 Group C) for Layer 2
                 tools to enqueue goal suggestions and findings during execution.
             goal_trace: Optional pre-allocated ``GoalLoopTrace``; when omitted and Langfuse
-                is enabled, one is opened before graph entry classification.
+                is enabled, one is opened before pre-graph intake (Pass 1) so Pass 1,
+                Pass 2, and ``strange-loop-graph`` share one pinned trace.
 
         Yields:
             Tuples of (event_type, event_data) for progress updates
@@ -263,6 +264,20 @@ class StrangeLoop:
             checkpoint: Any = None
             pass1_reasoning_text = ""
 
+            active_goal_trace = goal_trace
+            if (
+                active_goal_trace is None
+                and intent_classifier is not None
+                and not clarification_answer
+                and self.config.observability.langfuse.enabled
+            ):
+                from soothe.utils.observability.langfuse import SootheLangfuse
+
+                active_goal_trace = SootheLangfuse(self.config).begin_goal_loop(
+                    session_id=main_thread_id,
+                    loop_id=state_manager.loop_id,
+                )
+
             # IG-554 Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
             if (
                 preclassified_intent is None
@@ -278,7 +293,7 @@ class StrangeLoop:
                 pass1_task = intent_classifier.classify_pass1(
                     execution_goal,
                     observability_metadata={"thread_id": main_thread_id},
-                    goal_trace=goal_trace,
+                    goal_trace=active_goal_trace,
                 )
                 checkpoint_task = state_manager.load()
                 pass1_raw, checkpoint_raw = await asyncio.gather(
@@ -349,7 +364,6 @@ class StrangeLoop:
                                 "intent_type": "agentic",
                                 "classification": social_intent,
                                 "chitchat_response": social_intent.chitchat_response,
-                                "social_kind": social_intent.social_kind,
                                 "context_engine": None,
                                 "ce_goal_id": None,
                                 "thread_id": main_thread_id,
@@ -633,7 +647,7 @@ class StrangeLoop:
                     loop_messages=ledger_messages,
                     thread_id=main_thread_id,
                     context_engine=ce_instance,
-                    goal_trace=goal_trace,
+                    goal_trace=active_goal_trace,
                     observability_metadata={"thread_id": main_thread_id},
                     observability_phase="pre-stream",
                     observability_component="intake.pass2",
@@ -722,20 +736,6 @@ class StrangeLoop:
                 ce_goal.id,
                 persistence_backend,
             )
-
-            active_goal_trace = goal_trace
-            if (
-                active_goal_trace is None
-                and intent_classifier is not None
-                and not clarification_answer
-                and self.config.observability.langfuse.enabled
-            ):
-                from soothe.utils.observability.langfuse import SootheLangfuse
-
-                active_goal_trace = SootheLangfuse(self.config).begin_goal_loop(
-                    session_id=main_thread_id,
-                    loop_id=state_manager.loop_id,
-                )
 
             ctx = LoopRuntimeContext(
                 strange_loop=self,

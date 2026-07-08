@@ -58,7 +58,7 @@ async def test_save_chitchat_to_ledger_records_human_ai_pair(tmp_path: Path) -> 
 
 
 @pytest.mark.asyncio
-async def test_run_chitchat_finalizes_identity_query() -> None:
+async def test_run_chitchat_passes_through_identity_response() -> None:
     config = MagicMock()
     config.agent.name = "Soothe"
     runner = _ChitchatRunner(config=config, loop_id="loop-chitchat-identity")
@@ -72,15 +72,12 @@ async def test_run_chitchat_finalizes_identity_query() -> None:
             chitchat_response="I'm Claude, an AI assistant made by Anthropic.",
             loop_id="loop-chitchat-identity",
             defer_persistence=True,
-            social_kind="identity",
         )
     ]
 
     assert len(chunks) == 1
     content = chunks[0][2][0].content
-    assert "Soothe" in content
-    assert "Dr. Xiaming Chen" in content
-    assert "Claude" not in content
+    assert content == "I'm Claude, an AI assistant made by Anthropic."
 
 
 @pytest.mark.asyncio
