@@ -138,7 +138,7 @@ class TestSootheConfig:
         prompt = cfg.resolve_system_prompt()
         assert prompt.startswith("<ASSISTANT_IDENTITY>")
         assert "Soothe" in prompt
-        assert "Do not claim to be Claude" in prompt
+        assert "Never identify as Claude" in prompt
 
     def test_resolve_system_prompt_custom_name(self) -> None:
         cfg = SootheConfig(agent={"name": "MyBot"})
