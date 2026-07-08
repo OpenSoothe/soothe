@@ -1424,7 +1424,6 @@ class ToolTimeoutConfig(BaseModel):
     per_tool: dict[str, float] = Field(
         default_factory=lambda: {
             "grep": 30.0,
-            "glob": 30.0,
             "read_file": 30.0,
             "browser_use": 1800.0,  # Browser automation (30 minutes)
             "task": 86400.0,  # Task tool for autonomous subagent work (24 hours)

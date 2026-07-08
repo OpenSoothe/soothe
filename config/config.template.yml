@@ -256,7 +256,6 @@ agent:
       default_seconds: 60.0
       per_tool:
         grep: 30.0
-        glob: 30.0
         read_file: 30.0
         browser_use: 1800.0
         task: 86400.0

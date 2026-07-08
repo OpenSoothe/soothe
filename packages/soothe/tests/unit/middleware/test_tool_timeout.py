@@ -17,6 +17,7 @@ from soothe.middleware.tool_timeout import (
     DEFAULT_TOOL_TIMEOUT_SECONDS,
     FILESYSTEM_TOOL_NAMES,
     SUBAGENT_TOOL_NAMES,
+    TOOLS_WITH_INTERNAL_TIMEOUT,
     ToolTimeoutMiddleware,
 )
 
@@ -144,8 +145,11 @@ class TestToolTimeoutMiddleware:
 
     @pytest.mark.asyncio
     async def test_glob_timeout_includes_discovery_hint(self) -> None:
-        """Glob middleware timeout should steer agents toward grep/ls."""
-        middleware = ToolTimeoutMiddleware(per_tool_timeout={"glob": 0.05})
+        """Glob middleware timeout should steer agents toward grep/ls when wrapping is enabled."""
+        middleware = ToolTimeoutMiddleware(
+            per_tool_timeout={"glob": 0.05},
+            skip_tools_with_internal_timeout=False,
+        )
 
         async def slow_handler(_request: Any) -> ToolMessage:
             await asyncio.sleep(0.2)
@@ -157,6 +161,21 @@ class TestToolTimeoutMiddleware:
         assert isinstance(result, ToolMessage)
         assert result.status == "error"
         assert "grep" in str(result.content)
+
+    @pytest.mark.asyncio
+    async def test_skip_internal_timeout_glob(self) -> None:
+        """glob should bypass middleware timeout wrapper (deepagents internal cap)."""
+        middleware = ToolTimeoutMiddleware(
+            default_timeout_seconds=0.05,
+            skip_tools_with_internal_timeout=True,
+        )
+        request = _make_request("glob")
+
+        result = await middleware.awrap_tool_call(request, _make_slow_async_handler(0.2))
+
+        assert isinstance(result, ToolMessage)
+        assert result.content == "slow result"
+        assert middleware._timeout_count == 0
 
     @pytest.mark.asyncio
     async def test_async_handler_times_out(self) -> None:
@@ -274,6 +293,10 @@ class TestTimeoutCategories:
         assert "grep" in FILESYSTEM_TOOL_NAMES
         assert "glob" in FILESYSTEM_TOOL_NAMES
         assert "write_file" in FILESYSTEM_TOOL_NAMES
+
+    def test_glob_has_internal_timeout(self) -> None:
+        """glob uses deepagents internal timeout; middleware should skip by default."""
+        assert "glob" in TOOLS_WITH_INTERNAL_TIMEOUT
 
     def test_subagent_tool_names(self) -> None:
         """Subagent tool names should be categorized."""
