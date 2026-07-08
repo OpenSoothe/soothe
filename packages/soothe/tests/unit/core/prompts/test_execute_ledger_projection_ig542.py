@@ -252,6 +252,39 @@ def test_execute_step_ids_subsumed_by_cross_goal_completion() -> None:
     assert subsumed == frozenset({"00", "01"})
 
 
+def test_project_execute_step_graph_input_prior_wave_replan_without_deps() -> None:
+    """Replan wave step with no deps receives prior-wave execute ledger (Slice B′)."""
+    step = StepAction(id="AMH-07", description="Check if soothe daemon is running")
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[step],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    ledger = [
+        LoopHumanMessage(content="h1", phase="execute_step", step_id="WLW-01"),
+        LoopAIMessage(content="a1", phase="execute_step", step_id="WLW-01"),
+        LoopHumanMessage(content="plan", phase="plan_generate", iteration=1),
+    ]
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        current_decision=decision,
+        loop_messages=ledger,
+        iteration=1,
+    )
+    result = project_execute_step_graph_input(
+        ledger,
+        state=state,
+        step=step,
+        decision=decision,
+    )
+    assert result.mode == "mid_goal"
+    assert result.predecessor_projected is True
+    assert len(result.messages) == 2
+    assert [getattr(m, "step_id", None) for m in result.messages] == ["WLW-01", "WLW-01"]
+
+
 def test_project_execute_step_graph_input_no_duplicate_when_slice_a_overlaps_predecessor() -> None:
     """Slice A goal_completion must not replay subsumed execute_step rows in Slice B."""
     step_02 = StepAction(id="02", description="Fix", dependencies=["01"])

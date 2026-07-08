@@ -20,8 +20,8 @@ def _needs_full_description(step: PlanGenerateStep) -> bool:
     return len(full.split()) < 12
 
 
-def synthesize_full_description(step: PlanGenerateStep, *, goal: str) -> str:
-    """Build a standalone execution brief from step fields and goal context."""
+def synthesize_full_description(step: PlanGenerateStep) -> str:
+    """Build a step-local execution brief without referencing the overall goal (IG-508)."""
     desc = (step.description or "").strip()
     expected = (step.expected_output or "").strip()
     parts: list[str] = []
@@ -29,9 +29,6 @@ def synthesize_full_description(step: PlanGenerateStep, *, goal: str) -> str:
         parts.append(desc)
     if expected:
         parts.append(f"Deliverable: {expected.rstrip('.')}.")
-    goal_line = (goal or "").strip()
-    if goal_line:
-        parts.append(f"Context: this step advances the goal — {goal_line}")
     deps = step.dependencies or []
     if deps:
         dep_ids = ", ".join(deps)
@@ -46,7 +43,6 @@ def synthesize_full_description(step: PlanGenerateStep, *, goal: str) -> str:
 
 def populate_plan_generate_full_descriptions(
     plan_result: PlanGeneration,
-    goal: str,
 ) -> PlanGeneration:
     """Ensure every action step has a concrete ``full_description``."""
     if not plan_result.steps:
@@ -57,7 +53,7 @@ def populate_plan_generate_full_descriptions(
         if not _needs_full_description(step):
             updated.append(step)
             continue
-        brief = synthesize_full_description(step, goal=goal)
+        brief = synthesize_full_description(step)
         updated.append(step.model_copy(update={"full_description": brief}))
         changed = True
     if not changed:

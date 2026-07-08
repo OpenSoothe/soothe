@@ -649,7 +649,7 @@ class LLMPlanner:
             populate_plan_generate_full_descriptions,
         )
 
-        return populate_plan_generate_full_descriptions(plan_result, goal)
+        return populate_plan_generate_full_descriptions(plan_result)
 
     async def _generate_plan_with_response(
         self,
@@ -1273,7 +1273,7 @@ class LLMPlanner:
             populate_plan_generate_full_descriptions,
         )
 
-        plan_result = populate_plan_generate_full_descriptions(plan_result, goal)
+        plan_result = populate_plan_generate_full_descriptions(plan_result)
         if ai_response is plan_result or (
             hasattr(ai_response, "model_dump") and hasattr(plan_result, "model_dump")
         ):

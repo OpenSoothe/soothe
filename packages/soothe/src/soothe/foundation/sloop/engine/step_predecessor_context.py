@@ -263,19 +263,14 @@ def predecessor_messages_for_step(
 def template_hydrate_step_brief(
     step: StepAction,
     predecessor_evidence: str,
-    *,
-    goal: str | None = None,
 ) -> str:
     """Heuristic brief expansion when LLM hydration is unavailable."""
-    goal_line = (goal or "").strip()
     parts = [
         (step.full_description or step.description or "").strip(),
         "",
         "Use the prior step evidence below as authoritative input.",
         "Do NOT repeat discovery or diagnostic actions already completed.",
     ]
-    if goal_line:
-        parts.extend(["", f"Overall goal: {goal_line}"])
     if predecessor_evidence.strip():
         parts.extend(["", "Prior step evidence:", predecessor_evidence.strip()])
     return "\n".join(parts).strip()
@@ -291,6 +286,7 @@ def build_dependent_execution_hints(
 ) -> ExecuteStepEnvelopeBody:
     """Build EXPECTED OUTPUT and INSTRUCTIONS bodies for an execute-step envelope."""
     instruction_lines = [
+        "- Complete only this step's deliverable; do not execute work assigned to other plan steps",
         "- Execute the step described in EXECUTION TASK above",
         "- Use the suggested approach when provided",
         "- Produce output matching the expected output specification",

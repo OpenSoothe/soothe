@@ -24,6 +24,7 @@ from soothe.foundation.sloop.engine.continuation_context import (
     build_prior_goal_summaries,
     polish_continuation_assess_reasoning,
 )
+from soothe.foundation.sloop.goal_text import resolve_planning_goal
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.orchestrator.continuation_routing import (
     bootstrap_terminal_after_execute,
@@ -222,14 +223,6 @@ async def _emit_continuation_bootstrap_plan(
         )
 
 
-def _intent_goal_description(state: LoopState) -> str | None:
-    intent = state.intent
-    if intent is None:
-        return None
-    desc = getattr(intent, "goal_description", None)
-    return desc.strip() if isinstance(desc, str) and desc.strip() else None
-
-
 async def _handle_continuation_first_plan(
     ctx: LoopRuntimeContext,
     *,
@@ -263,7 +256,7 @@ async def _handle_continuation_first_plan(
         return None
 
     intake_label = intake_label_from_state(state)
-    goal_description = _intent_goal_description(state)
+    goal_description = resolve_planning_goal(state)
 
     if intake_label in (IntakeLabel.SIMPLE, IntakeLabel.COMPLEX):
         logger.info("[Plan] continuation-assess skipped (intake=%s)", intake_label.value)
@@ -366,7 +359,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
 
     await _emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
     assessment = await strange_loop.plan_phase.assess_status(
-        goal=state.goal,
+        goal=resolve_planning_goal(state),
         state=state,
         context=context,
         context_engine=ctx.ce,

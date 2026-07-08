@@ -14,6 +14,7 @@ from soothe.foundation.sloop.cognition.plan_step_safety import (
     MAX_UNDERSIZED_PLAN_REPLANS,
     plan_has_minimum_steps_for_intake,
 )
+from soothe.foundation.sloop.goal_text import resolve_planning_goal
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import StatusAssessment
 from soothe.foundation.sloop.utils.loop_reason_display import is_displayable_plan_reasoning
@@ -61,7 +62,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     if intake_label == IntakeLabel.SIMPLE:
         logger.info("[PlanGenerate] Using lightweight generate for simple intake branch")
         plan_result = await strange_loop.plan_phase.generate_lightweight(
-            goal=state.goal,
+            goal=resolve_planning_goal(state),
             state=state,
             context=context,
             assessment=assessment,
@@ -73,7 +74,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         )
     else:
         plan_result = await strange_loop.plan_phase.generate_from_assessment(
-            goal=state.goal,
+            goal=resolve_planning_goal(state),
             state=state,
             context=context,
             assessment=assessment,

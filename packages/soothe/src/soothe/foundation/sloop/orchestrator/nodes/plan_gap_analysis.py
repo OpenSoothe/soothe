@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.sloop.goal_text import resolve_planning_goal
+
 from ..runtime_context import LoopRuntimeContext
 
 logger = logging.getLogger(__name__)
@@ -23,7 +25,7 @@ async def node_plan_gap_analysis(ctx: LoopRuntimeContext, _state: dict[str, Any]
     context = strange_loop._build_plan_context(state)
     await _emit_plan_phase_status(ctx, label=_PLAN_GAP_STATUS_LABEL)
     gap = await strange_loop.plan_phase.analyze_plan_gap(
-        goal=state.goal,
+        goal=resolve_planning_goal(state),
         state=state,
         context=context,
         context_engine=ctx.ce,
