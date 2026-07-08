@@ -26,17 +26,24 @@ Tests go in package directories: `packages/<pkg>/tests/unit/` or `tests/integrat
 ### 5. Verification Required
 Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests pass.
 
-### 6. Terminology
+### 6. Finish Work: Clean Up, Verify, Fix
+Before marking work done (commit, PR, or handoff), you MUST:
+
+1. **Remove related legacy and dead code** — delete superseded helpers, unused exports, stale tests/docs tied to the change; do not leave parallel old paths.
+2. **Run verification** — `./scripts/verify_finally.sh`
+3. **Fix all errors** — lint, format, tests, vulture; do not stop with a failing verify
+
+### 7. Terminology
 - NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
 - NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors)—internal only
 - IG-XXX/RFC-XXX references are allowed ONLY in internal code: docstrings, comments, and internal documentation. They must never appear in runtime strings visible to users.
 - DO NOT refer to docs/draft in the codebase. Only docs/specs/ (RFCs) and docs/impl/ (IGs) are allowed for reference.
 - When writing log messages, error text, CLI output, config field descriptions, or any user-visible string, omit all IG-/RFC- identifiers.
 
-### 7. DO NOT Cheat Tests
+### 8. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
 
-### 8. No Keyword Heuristics (RFC-630)
+### 9. No Keyword Heuristics (RFC-630)
 Prefer **structured light-LLM fields** or **declarative config rules** over keyword/regex content-judgment heuristics.
 
 - **Content judgment** (intent, identity, routing hints, failure classification): use Pass 1/2 structured output or a dedicated fast-model call — not keyword lists or regex on user text.
@@ -117,8 +124,9 @@ langchain provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, G
 
 1. **Plan**: Explore codebase → ask when alternatives exist → ExitPlanMode for approval
 2. **Implement**: Read existing → check ecosystem → follow patterns → run `make lint`
-3. **Verify**: `./scripts/verify_finally.sh` — must pass before commit
-4. **GitHub Actions**: Use `GITHUB_PAT` env var; `export GH_TOKEN="$GITHUB_PAT"` for `gh` CLI
+3. **Clean up**: Remove related legacy/dead code from the change (see Critical Rule 6)
+4. **Verify**: `./scripts/verify_finally.sh` — must pass; fix all errors before commit
+5. **GitHub Actions**: Use `GITHUB_PAT` env var; `export GH_TOKEN="$GITHUB_PAT"` for `gh` CLI
 
 ---
 
