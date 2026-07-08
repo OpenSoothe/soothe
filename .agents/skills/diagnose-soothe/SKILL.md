@@ -3,10 +3,12 @@ name: diagnose-soothe
 description: >-
   Diagnose Soothe agent loops from ~/.soothe/logs (soothe.log, daemon.log,
   cli.log) and per-loop runner.log. Analyzes StrangeLoop plans, CoreAgent
-  write_todos, tool-call anomalies (errors, latency, repetition), and
-  step failures. Use when debugging loop hangs, failed steps, TUI/daemon
-  mismatches, abnormal tool usage, wasteful plans/todos, or when the user
-  asks to analyze soothe logs or diagnose a specific loop.
+  write_todos, tool-call anomalies (errors, latency, repetition), step
+  failures, and progressive skill loading (discovery, intent prefetch,
+  invoke_skill, /skill: expansion). Use when debugging loop hangs, failed
+  steps, TUI/daemon mismatches, abnormal tool usage, wasteful plans/todos,
+  skills not found or not loaded, or when the user asks to analyze soothe
+  logs or diagnose a specific loop.
 ---
 
 # Diagnose Soothe
@@ -19,6 +21,7 @@ Systematic log forensics for Soothe loops, daemon lifecycle, and CLI/TUI behavio
 - User asks to analyze `~/.soothe/logs/` or a specific loop (by UUID or 4-char suffix)
 - User wants root-cause analysis of tool errors, slow steps, or repetitive tool calls
 - User asks whether a StrangeLoop plan or CoreAgent todo list has waste or failed steps
+- User reports a skill did not load, `/skill:name` failed, or agent ignored skill instructions
 
 ## Log Locations
 
@@ -255,6 +258,96 @@ Each block lists numbered todos: `{n}. [{status}] {content}`.
 
 Correlate todo snapshots with tool calls **between** consecutive `[write_todos]` lines for the same step.
 
+### B5. Skill loading (discovery → activation → body load)
+
+Progressive skills flow: **index** (daemon scan) → **discover** (search, path, intent prefetch, `/skill:`) → **invoke** (body into `SKILL_CONTEXT`). For a specific loop, verify each expected skill was **found** and **loaded** (body present in activation state).
+
+#### Skill index roots (host-level, affects all loops)
+
+| Root | Label | Notes |
+|------|-------|-------|
+| `packages/soothe/.../builtin_skills/` | `builtin` | Shipped with Soothe |
+| `~/.soothe/skills` | `user` | User-installed skills |
+| `~/.agents/skills` | `user` | Community / Cursor-style skills |
+| Loop workspace | runtime | Project-local skills; resolved per loop |
+| `skillify.warehouse_paths` | Skillify | Semantic index only; defaults prepend the two user roots |
+
+Later roots win on name collision (`~/.agents/skills` > `~/.soothe/skills` > built-ins).
+
+#### Loop skill log grep
+
+```bash
+# All skill-related lines for this loop
+rg "\[$SUFFIX\].*(\[Skill\]|\[StrangeLoop\].*skill|skill_activation|search_skills|invoke_skill|/skill:|active_skills=)" \
+  "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
+
+# Failures and misses
+rg "\[$SUFFIX\].*(Skill not found|No deferred skills|did not expand|sync failed|\[Skill\].*failed)" \
+  "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
+
+# Tool-based discovery/load (DEBUG)
+rg "\[$SUFFIX\].*\[Tool#[0-9]+\].*(search_skills|invoke_skill)" \
+  "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
+```
+
+Daemon / host infrastructure (not loop-tagged; check around loop start time):
+
+```bash
+rg "Warehouse path does not exist|Skillify index ready|Failed to parse.*SKILL\.md|\[Middleware\] Skill activation enabled|\[Init\] Progressive search_skills" \
+  ~/.soothe/logs/soothe.log* ~/.soothe/logs/daemon.log* 2>/dev/null | tail -30
+```
+
+#### Log patterns → meaning
+
+| Pattern | Level | Meaning |
+|---------|-------|---------|
+| `[StrangeLoop] /skill: user line did not expand` | W | `/skill:name` submitted but skill missing or unreadable `SKILL.md` on this host |
+| `[Skill] core intent auto-invoked ['x']` | D | Turn-0 prefetch matched core tier; body preloaded into `SKILL_CONTEXT` |
+| `[Skill] intent prefetch discovered deferred ['x']` | D | Deferred skill metadata discovered only — body not loaded until `invoke_skill` |
+| `[Tool#N] search_skills(...)` | D | Agent searched deferred catalog |
+| `[Tool#N] invoke_skill(...)` | D | Agent requested full skill body load |
+| Tool result `Skill not found: 'x'` | — | Name not in catalog (typo, wrong host, or workspace skill not synced) |
+| Tool result `No deferred skills matched query=...` | — | Search returned nothing (query too narrow, already activated, or index empty) |
+| Tool result `Loaded skill 'x'` | — | Body loaded; should appear in `SKILL_CONTEXT` on next hop |
+| Tool result `Discovered N skill(s)` | — | Metadata only; still needs `invoke_skill` unless auto-invoke fired |
+| `Skill instructions are already loaded in SKILL_CONTEXT` | — | Redundant `search_skills`/`search_tools` blocked — skill already active |
+| `[Skill] sync failed for x` | E | Path activation found skill but workspace mirror failed |
+| `Mirrored skill x: ...` | D | Path-triggered skill synced into loop workspace |
+| `active_skills=N` (veritas / execute) | D | `N` activated skill names on that execute hop |
+| `Warehouse path does not exist: ...` | D | Skillify warehouse dir missing (index gap; substring search may still work) |
+| `Skillify index ready (total=N)` | I | Semantic search backend ready with `N` skills |
+
+#### Correctness checklist (per expected skill)
+
+For each skill the user/task implies (e.g. `/skill:github`, intent match, or explicit `invoke_skill`):
+
+1. **Found in index** — skill name appears in catalog for this workspace.
+   - Daemon running: TUI `/skills` or daemon `skills_list` RPC returns the name.
+   - Offline: `ls ~/.agents/skills/<name>/SKILL.md` or `~/.soothe/skills/<name>/SKILL.md`; check `~/.soothe/cache/skill_index.json`.
+2. **Discovered for thread** — one of: `/skill:` expanded (no warning), `[Skill] core intent auto-invoked`, `[Skill] intent prefetch discovered deferred`, `search_skills` hit, or path activation via file op on skill `paths:` patterns.
+3. **Body loaded** — one of: `[Skill] core intent auto-invoked`, `invoke_skill` → `Loaded skill`, or `/skill:` expansion (slash body seeded via executor). Deferred skills discovered but never invoked = **found, not loaded**.
+4. **Used in execution** — `active_skills > 0` on execute hops, or agent follows skill-specific tools/commands after load. Zero `active_skills` with loaded bodies may mean snapshot not propagated or step ran before invoke.
+
+#### Common failure modes
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `/skill:x` warning, raw line in planner | Skill dir missing, bad `SKILL.md` frontmatter, or name typo |
+| `search_skills` + `Skill not found` on invoke | Discovered name ≠ resolvable dir; workspace skill not under scanned roots |
+| Intent prefetch silent, no `[Skill]` lines | `intent_prefetch_enabled: false`, goal shorter than `intent_prefetch_min_query_chars`, or no corpus match |
+| Wrong skill auto-invoked | `core_intent_auto_invoke_enabled` matched unintended core skill; check `progressive_skills.core_skills` |
+| Repeated `search_skills` / `invoke_skill` | Model rediscovering; prior load lost (checkpoint without `skill_activation` bridge) or invoke failed |
+| Skill on laptop, missing in daemon pool | Worker host lacks `~/.agents/skills` install; index differs per machine |
+| `Warehouse path does not exist` only | Harmless if user skills live under `~/.agents/skills`; Skillify semantic search degraded |
+
+#### Config knobs (in `~/.soothe/config/config.yml`)
+
+- `progressive_skills.search_skills_enabled` — registers `search_skills` / `invoke_skill` tools
+- `progressive_skills.intent_prefetch_enabled` — turn-0 corpus match
+- `progressive_skills.core_intent_auto_invoke_enabled` — auto-load matched core bodies
+- `progressive_skills.core_skills` — explicit core tier list (`null` = frontmatter `core: true`)
+- `skillify.enabled` / `warehouse_paths` — semantic supplement for `search_skills`
+
 ## Output Template
 
 Deliver findings in this structure:
@@ -283,6 +376,13 @@ One paragraph: outcome (hang / failed / slow / ok-with-waste), primary root caus
 - Snapshots reviewed: ...
 - Waste signals: ...
 
+### Skill loading assessment
+- Expected skills: ...
+- Found in index: (yes/no per skill, catalog source)
+- Discovery path: (`/skill:`, intent prefetch, `search_skills`, path activation)
+- Body loaded: (yes/no; which log line proves it)
+- Anomalies: (not found, discovered-but-not-invoked, wrong skill, redundant search, sync failures)
+
 ### Recommendations
 Actionable fixes (config, prompt, tool install, daemon restart, code bug reference if known).
 ```
@@ -296,7 +396,7 @@ soothed stop && soothed start
 soothe --log-level DEBUG
 ```
 
-Reproduce minimally, then re-run Workflow B. `[Tool#N]` and `[write_todos]` lines require DEBUG.
+Reproduce minimally, then re-run Workflow B. `[Tool#N]`, `[write_todos]`, and `[Skill]` lines require DEBUG.
 
 ## Guardrails
 
