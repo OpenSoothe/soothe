@@ -7,7 +7,7 @@
 **Created**: 2026-05-29
 **Last Updated**: 2026-05-29
 **Authors**: Platonic brainstorming session
-**Design Draft**: [2026-05-29-mcp-management-design.md](../drafts/2026-05-29-mcp-management-design.md)
+**Design Draft**: [2026-05-29-mcp-management-design.md](../archive/drafts/2026-05-29-mcp-management-design.md)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-101 (Tool Interface), RFC-105 (Progressive Skill Loading), RFC-305 (Policy Protocol Architecture), RFC-600 (Plugin Extension System)
 
 ## Abstract
@@ -782,6 +782,6 @@ soothe daemon start --config /tmp/mcp-test.yml
 - [RFC-214: StrangeLoop Loop Message Surface](RFC-214-strangeloop-loop-message-surface.md)
 - [RFC-305: Policy Protocol Architecture](RFC-305-policy-protocol-architecture.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
-- [Design Draft: MCP Management](../drafts/2026-05-29-mcp-management-design.md)
+- [Design Draft: MCP Management](../archive/drafts/2026-05-29-mcp-management-design.md)
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)

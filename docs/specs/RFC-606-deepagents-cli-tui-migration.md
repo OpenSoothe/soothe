@@ -1275,7 +1275,7 @@ self.command_registry.register("/detach", self.action_detach)
 - **RFC-303**: Unified Thread Management
 - **RFC-600**: Plugin Extension System
 - **deepagents-cli source**: `/Users/xiamingchen/Workspace/mirasurf/deepagents/libs/cli/`
-- **Design draft**: `docs/drafts/2026-04-13-deepagents-cli-migration-design.md`
+- **Design draft**: `docs/archive/drafts/2026-04-13-deepagents-cli-migration-design.md`
 
 ---
 

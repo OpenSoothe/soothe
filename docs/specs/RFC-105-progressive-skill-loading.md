@@ -7,8 +7,8 @@
 **Created**: 2026-05-29
 **Last Updated**: 2026-07-03
 **Authors**: Platonic brainstorming session
-**Design Draft**: [2026-05-29-progressive-skill-loading-design.md](../drafts/2026-05-29-progressive-skill-loading-design.md)
-**Revision Draft**: [2026-07-03-skill-runtime-discovery-design.md](../drafts/2026-07-03-skill-runtime-discovery-design.md) (IG-543)
+**Design Draft**: [2026-05-29-progressive-skill-loading-design.md](../archive/drafts/2026-05-29-progressive-skill-loading-design.md)
+**Revision Draft**: [2026-07-03-skill-runtime-discovery-design.md](../archive/drafts/2026-07-03-skill-runtime-discovery-design.md) (IG-543)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-104 (Dynamic System Context), RFC-214 (StrangeLoop Loop Message Surface), RFC-600 (Plugin Extension System)
 
 ## Abstract
@@ -610,6 +610,6 @@ soothe daemon start --workspace /tmp/soothe-skill-test
 - [RFC-104: Dynamic System Context Injection](RFC-104-dynamic-system-context.md)
 - [RFC-214: StrangeLoop Loop Message Surface](RFC-214-strangeloop-loop-message-surface.md)
 - [RFC-600: Plugin Extension System](RFC-600-plugin-extension-system.md)
-- [Design Draft: Progressive Skill Loading](../drafts/2026-05-29-progressive-skill-loading-design.md)
+- [Design Draft: Progressive Skill Loading](../archive/drafts/2026-05-29-progressive-skill-loading-design.md)
 - [RFC Standard](./rfc-standard.md)
 - [RFC Index](./rfc-index.md)

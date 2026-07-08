@@ -413,5 +413,5 @@ Integration:
 - [RFC-600](./RFC-600-plugin-extension-system.md) — `register_event` used for new event types
 - [RFC-601](./RFC-601-built-in-agents.md) — Built-in subagent registry that gains `veritas`
 - [RFC-403](./RFC-403-unified-event-naming.md) — Event naming for `soothe.loop.clarification_*` and `soothe.subagent.veritas.*`
-- Design draft: `docs/drafts/2026-06-02-clarification-relay-design.md`
+- Design draft: `docs/archive/drafts/2026-06-02-clarification-relay-design.md`
 - Bug trace: `trace-2626ed6b65d86c80845248e42f383bff.json`

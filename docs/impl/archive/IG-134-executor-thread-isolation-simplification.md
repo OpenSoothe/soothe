@@ -366,7 +366,7 @@ However, since this is a simplification, issues are unlikely. The new design is 
 - RFC-100: Layer 1 CoreAgent Runtime
 - IG-131: DEPRECATED - Sequential Act isolated thread
 - IG-133: DEPRECATED - Avoid prior conversation duplication
-- Design draft: `docs/drafts/2026-04-09-thread-isolation-simplification-design.md`
+- Design draft: `docs/archive/drafts/2026-04-09-thread-isolation-simplification-design.md`
 
 ---
 

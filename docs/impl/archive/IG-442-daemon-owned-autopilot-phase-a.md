@@ -2,7 +2,7 @@
 
 **Status**: In Progress
 **RFC**: [RFC-222 (revised 2026-05-28)](../specs/RFC-222-autopilot-goal-engine-architecture.md)
-**Design**: [docs/drafts/2026-05-28-autopilot-loop-unification-design.md](../drafts/2026-05-28-autopilot-loop-unification-design.md)
+**Design**: [docs/archive/drafts/2026-05-28-autopilot-loop-unification-design.md](../archive/drafts/2026-05-28-autopilot-loop-unification-design.md)
 **Created**: 2026-05-28
 **Dependencies**: RFC-221 (LoopRunner protocol), RFC-200, RFC-204
 

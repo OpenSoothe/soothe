@@ -909,7 +909,7 @@ Pure additive feature, opt-in via config. All existing behavior preserved when:
 - RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-203: Layer 2 Unified State Model
 - CoreAgent context briefing mechanism (existing)
-- Design draft: docs/drafts/2026-04-17-goal-context-management-design.md
+- Design draft: docs/archive/drafts/2026-04-17-goal-context-management-design.md
 
 ---
 

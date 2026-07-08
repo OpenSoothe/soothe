@@ -6,7 +6,7 @@
 **Kind**: Implementation Interface Design
 **Created**: 2026-03-31
 **Author**: Platonic brainstorming session
-**Design Draft**: [2026-03-31-dynamic-system-context-design.md](../drafts/2026-03-31-dynamic-system-context-design.md)
+**Design Draft**: [2026-03-31-dynamic-system-context-design.md](../archive/drafts/2026-03-31-dynamic-system-context-design.md)
 **Depends On**: RFC-100 (CoreAgent Runtime), RFC-101 (Tool Interface), RFC-103 (Thread-Aware Workspace)
 
 ## Abstract
@@ -650,7 +650,7 @@ None. All decisions finalized through brainstorming session.
 
 ## References
 
-- Design Draft: [2026-03-31-dynamic-system-context-design.md](../drafts/2026-03-31-dynamic-system-context-design.md)
+- Design Draft: [2026-03-31-dynamic-system-context-design.md](../archive/drafts/2026-03-31-dynamic-system-context-design.md)
 - Claude Code Analysis: `../claude-code/workspace-context-analysis.md`
 - RFC-100: CoreAgent Runtime
 - RFC-101: Tool Interface

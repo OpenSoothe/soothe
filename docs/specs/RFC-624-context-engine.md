@@ -1282,7 +1282,7 @@ Stage 1 (big-bang property migration) shipped with some items deferred. Stage 2 
 | 6 | Delete `sync_loop_messages_from_ce()` |
 | 7 | Update tests; run `verify_finally.sh` |
 
-**Design reference:** `docs/drafts/2026-06-13-ce-phase4-loopstate-backend-design.md` — Stage 2 section.
+**Design reference:** `docs/archive/drafts/2026-06-13-ce-phase4-loopstate-backend-design.md` — Stage 2 section.
 
 ---
 

@@ -249,4 +249,4 @@ packages/soothe/tests/integration/core/test_loop_agent_continuation_planning.py
 - IG-551: Mid-Loop Continuation Planning Coordination
 - IG-540: Intent-Classify Prompt Ledger Optimization
 - IG-554: Two-Pass Intake Classification Implementation
-- Design draft: `docs/drafts/2026-07-07-plan-assess-prior-goal-bias-mitigation.md`
+- Design draft: `docs/archive/drafts/2026-07-07-plan-assess-prior-goal-bias-mitigation.md`

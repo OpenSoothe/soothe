@@ -3,7 +3,7 @@
 **Status**: Completed
 **Created**: 2026-06-15
 **RFC**: RFC-624 Phase 4 Stage 2 Post-Cleanup
-**Design Draft**: `docs/drafts/2026-06-15-ce-phase4-deep-refinement-design.md`
+**Design Draft**: `docs/archive/drafts/2026-06-15-ce-phase4-deep-refinement-design.md`
 
 ## Goal
 

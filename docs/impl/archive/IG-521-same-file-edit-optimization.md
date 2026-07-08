@@ -123,7 +123,7 @@ After this implementation, the following must always hold:
 | File | Action | Purpose |
 |------|--------|---------|
 | `docs/specs/RFC-902-same-file-edit-optimization.md` | **Create** (+1020) | The RFC: motivation, 9-strategy catalog, 3-layer component design, interfaces, error handling, migration plan, edge cases, testing strategy. |
-| `docs/drafts/2026-06-28-same-file-edit-optimization-design.md` | **Create** (+909) | Working design draft that fed into RFC-902. |
+| `docs/archive/drafts/2026-06-28-same-file-edit-optimization-design.md` | **Create** (+909) | Working design draft that fed into RFC-902. |
 | `docs/impl/IG-521-same-file-edit-optimization.md` | **Create** | This document. |
 
 ### Tests

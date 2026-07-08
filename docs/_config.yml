@@ -37,7 +37,7 @@ mermaid:
 exclude:
   - "specs/"
   - "impl/"
-  - "drafts/"
+  - "archive/"
   - "analysis/"
   - "configuration/"
   - "diagrams/"

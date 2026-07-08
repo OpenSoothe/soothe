@@ -37,7 +37,8 @@ Before marking work done (commit, PR, or handoff), you MUST:
 - NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
 - NEVER expose IG-XXX/RFC-XXX in user-facing text (logs, CLI, errors)—internal only
 - IG-XXX/RFC-XXX references are allowed ONLY in internal code: docstrings, comments, and internal documentation. They must never appear in runtime strings visible to users.
-- DO NOT refer to docs/draft in the codebase. Only docs/specs/ (RFCs) and docs/impl/ (IGs) are allowed for reference.
+- Only `docs/specs/` (RFCs) and `docs/impl/` (IGs) are allowed for active reference.
+- Archived content in `docs/archive/` (drafts, completed analysis) is for historical reference only.
 - When writing log messages, error text, CLI output, config field descriptions, or any user-visible string, omit all IG-/RFC- identifiers.
 
 ### 8. DO NOT Cheat Tests
@@ -80,6 +81,7 @@ packages/
 | RFCs | `docs/specs/` |
 | IGs | `docs/impl/` |
 | Debug guide | `docs/wiki/howto_debug.md` |
+| Archived docs | `docs/archive/` (historical reference only) |
 
 ---
 

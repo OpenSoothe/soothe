@@ -408,5 +408,5 @@ Per RFC-630 §14. Tests live in `packages/soothe/tests/unit/` and `tests/integra
 - [RFC-225](../specs/RFC-225-loop-continuity-and-goal-record-enrichment.md) — intent taxonomy (extended)
 - [RFC-220](../specs/RFC-220-langgraph-agent-loop-orchestrator.md) — orchestrator topology (revised)
 - [RFC-226](../specs/RFC-226-continuation-aware-plan-assess.md) — continuation discriminator (preserved)
-- Design draft: `docs/drafts/2026-06-30-start-phase-llm-intake-routing-design.md`
+- Design draft: `docs/archive/drafts/2026-06-30-start-phase-llm-intake-routing-design.md`
 - Predecessor: IG-518 (intent-classify reasoning/perf — heuristic-bypass path superseded)

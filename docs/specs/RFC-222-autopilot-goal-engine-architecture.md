@@ -747,7 +747,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 - RFC-220: LangGraph Loop Orchestrator
 - RFC-221: Loop Runner Protocol and Subprocess Isolation
 - RFC-403: Event System Architecture
-- Design draft: `docs/drafts/2026-05-28-autopilot-loop-unification-design.md`
+- Design draft: `docs/archive/drafts/2026-05-28-autopilot-loop-unification-design.md`
 
 ---
 

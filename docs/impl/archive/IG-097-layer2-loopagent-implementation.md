@@ -579,7 +579,7 @@ agentic:
 - [RFC-201](../specs/RFC-201-agentic-goal-execution-loop.md) - Layer 2 Specification
 - [RFC-200](../specs/RFC-200-autonomous-goal-management-loop.md) - Layer 3 Specification
 - [RFC-100](../specs/RFC-100-coreagent-runtime.md) - Layer 1 Specification
-- [Design Draft](../drafts/2026-03-29-rfc-0008-layer2-implementation-design.md) - Implementation Design
+- [Design Draft](../archive/drafts/2026-03-29-rfc-0008-layer2-implementation-design.md) - Implementation Design
 
 ## Changelog
 

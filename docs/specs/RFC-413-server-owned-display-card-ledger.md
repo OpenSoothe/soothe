@@ -388,7 +388,7 @@ Move binding logic from `_history.py::_convert_messages_to_data`, `_collect_cogn
 * RFC-450 — Daemon Communication Protocol
 * RFC-503 — Loop-First User Experience
 * RFC-505 — Soothe Desktop Client
-* Design draft: `docs/drafts/2026-06-04-resume-loop-display-design.md`
+* Design draft: `docs/archive/drafts/2026-06-04-resume-loop-display-design.md`
 
 ---
 

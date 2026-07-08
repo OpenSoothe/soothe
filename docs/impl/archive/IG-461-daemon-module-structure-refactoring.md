@@ -739,7 +739,7 @@ This is a single-PR refactor. Rollback = revert the PR. No DB migrations, no wir
 - [RFC-610](../specs/RFC-610-sdk-module-structure-refactoring.md) — Companion SDK refactor (same philosophy)
 - [RFC-450](../specs/RFC-450-daemon-communication-protocol.md) — Daemon Communication Protocol
 - [RFC-454](../specs/RFC-454-slash-command-architecture.md) — Slash Command Architecture
-- Brainstorming draft: `docs/drafts/2026-06-02-soothe-daemon-restructure-design.md`
+- Brainstorming draft: `docs/archive/drafts/2026-06-02-soothe-daemon-restructure-design.md`
 
 ---
 

@@ -42,5 +42,5 @@ Key tests:
 
 ## Related
 
-- Design draft: `docs/drafts/2026-07-02-tui-markdown-theme-design.md`
+- Design draft: `docs/archive/drafts/2026-07-02-tui-markdown-theme-design.md`
 - RFC-500 § Markdown rendering (TUI)

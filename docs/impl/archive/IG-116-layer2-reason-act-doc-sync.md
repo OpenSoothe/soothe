@@ -31,5 +31,5 @@ Update all outdated references to the old "PLAN → ACT → JUDGE" architecture 
 
 ### P3: Implementation guides & drafts (add superseded notes or update)
 - `docs/impl/RFC-0008-configuration-guide.md`
-- `docs/drafts/` (mark superseded)
+- `docs/archive/drafts/` (mark superseded)
 - `docs/impl/IG-074-final-summary.md`, `IG-097-layer2-loopagent-implementation.md` (add superseded notes)

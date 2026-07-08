@@ -329,7 +329,7 @@ Use this helper in:
 
 ### Phase 7: Client Disconnect Query Cancellation
 
-**Related Design**: `docs/drafts/2026-03-29-client-disconnect-cancel-design.md`
+**Related Design**: `docs/archive/drafts/2026-03-29-client-disconnect-cancel-design.md`
 
 **Current Behavior**: When client disconnects (Ctrl+C, crash), active query continues running.
 

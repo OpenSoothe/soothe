@@ -4,7 +4,7 @@
 **Title**: Edit Coalescing Middleware + Async File I/O
 **Status**: Implemented
 **Created**: 2026-06-27
-**Design**: `docs/drafts/2026-06-27-edit-coalescing-async-io-design.md`
+**Design**: `docs/archive/drafts/2026-06-27-edit-coalescing-async-io-design.md`
 **Dependencies**: RFC-101 (Tool Interface), RFC-211 (Tool Result Optimization)
 
 ---
@@ -136,6 +136,6 @@ async def awrap_tool_call(self, call, next_handler):
 
 ## References
 
-- Design: `docs/drafts/2026-06-27-edit-coalescing-async-io-design.md`
+- Design: `docs/archive/drafts/2026-06-27-edit-coalescing-async-io-design.md`
 - RFC-101: Tool Interface
 - RFC-211: Tool Result Optimization

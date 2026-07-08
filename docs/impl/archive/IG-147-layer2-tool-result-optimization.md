@@ -666,7 +666,7 @@ All changes in Phase 1-2 are backward compatible, making rollback straightforwar
 - RFC-100: Layer 1 CoreAgent Runtime
 - RFC-205: Layer 2 Unified State Checkpoint
 - RFC-207: Message Type Separation
-- Design draft: `docs/drafts/2026-04-10-layer2-tool-result-optimization-design.md`
+- Design draft: `docs/archive/drafts/2026-04-10-layer2-tool-result-optimization-design.md`
 
 ---
 

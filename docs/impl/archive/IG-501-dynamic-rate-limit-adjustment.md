@@ -2,7 +2,7 @@
 
 **Status**: Completed
 **Depends on**: IG-499 (rate limit retry infrastructure)
-**Related Design**: `docs/drafts/2026-06-19-dynamic-llm-rate-limit-design.md`
+**Related Design**: `docs/archive/drafts/2026-06-19-dynamic-llm-rate-limit-design.md`
 
 ---
 

@@ -549,6 +549,6 @@ This RFC establishes unified semantics for Soothe's event naming:
 
 ## 14. References
 
-* Design draft: `docs/drafts/2026-04-15-event-naming-semantics-unification-design.md`
+* Design draft: `docs/archive/drafts/2026-04-15-event-naming-semantics-unification-design.md`
 * Event catalog: `docs/specs/event-catalog.md`
 * RFC-302: Event Processing & Filtering

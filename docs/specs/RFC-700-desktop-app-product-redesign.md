@@ -478,4 +478,4 @@ LOR is a special view for autopilot loops:
 - RFC-222: Autopilot and Goal Engine Architecture
 - RFC-228: Autopilot Job IPC Commands
 - RFC-450: Daemon Communication Protocol
-- Design Draft: `docs/drafts/2026-06-04-desktop-app-redesign.md`
+- Design Draft: `docs/archive/drafts/2026-06-04-desktop-app-redesign.md`

@@ -275,7 +275,7 @@ No data migration, no breaking changes - safe to enable/disable at any time.
 ## References
 
 - RFC-609: Goal Context Management specification
-- Design draft: docs/drafts/2026-04-17-goal-context-management-design.md
+- Design draft: docs/archive/drafts/2026-04-17-goal-context-management-design.md
 - RFC-608: Multi-Thread Lifecycle (thread_switch_pending integration)
 - RFC-200: Agentic Goal Execution (AgentLoop integration)
 - CoreAgent briefing pattern (soothe_goal_briefing mechanism)

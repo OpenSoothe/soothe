@@ -4,7 +4,7 @@
 **Title**: Filesystem Middleware Extension - Surgical File Operations
 **Status**: Draft
 **Created**: 2026-04-24
-**Design**: docs/drafts/2026-04-24-filesystem-middleware-extension-design.md
+**Design**: docs/archive/drafts/2026-04-24-filesystem-middleware-extension-design.md
 **Related RFCs**: N/A (implementation-driven)
 
 ## Overview

@@ -676,7 +676,7 @@ async def run_iteration(state: LoopState) -> PlanResult:
 
 ## References
 
-- Design Draft: `docs/drafts/2026-04-18-agentloop-goalengine-handoff-refinement-design.md`
+- Design Draft: `docs/archive/drafts/2026-04-18-agentloop-goalengine-handoff-refinement-design.md`
 - RFC-200: Autonomous Goal Management
 - RFC-201: AgentLoop Plan-Execute Loop
 - RFC-609: Goal Context Management

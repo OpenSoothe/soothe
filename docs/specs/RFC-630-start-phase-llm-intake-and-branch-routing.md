@@ -471,5 +471,5 @@ Budget: relaxed (<300ms acceptable). Pass 1 ultra-lean (~50-80 tokens input, ~12
 - [RFC-225](./RFC-225-loop-continuity-and-goal-record-enrichment.md) — Loop Continuity (continuation overlay)
 - [RFC-226](./RFC-226-continuation-aware-plan-assess.md) — Continuation-Aware plan_assess
 - [RFC-503](./RFC-503-loop-first-user-experience.md) — First-message latency
-- Design draft: `docs/drafts/2026-07-06-two-pass-intake-classification.md`
-- Rejected one-pass draft: `docs/drafts/2026-07-06-one-pass-intent-classify-optimization.md`
+- Design draft: `docs/archive/drafts/2026-07-06-two-pass-intake-classification.md`
+- Rejected one-pass draft: `docs/archive/drafts/2026-07-06-one-pass-intent-classify-optimization.md`

@@ -97,7 +97,7 @@ The name "Plan-and-Execute" better captures:
 - `docs/user_guide.md` - User guide
 
 ### Design Drafts (Priority 5)
-- All drafts in `docs/drafts/` with references
+- All drafts in `docs/archive/drafts/` with references
 
 ### Tests (Priority 6)
 - `tests/integration/test_loop_agent.py` - Schema instantiation

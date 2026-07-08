@@ -3,7 +3,7 @@
 **RFC**: 624 (Phase 3a)
 **Status**: Draft
 **Created**: 2026-06-13
-**Depends on**: RFC-624, design draft `docs/drafts/2026-06-12-ce-engine-completeness-design.md`
+**Depends on**: RFC-624, design draft `docs/archive/drafts/2026-06-12-ce-engine-completeness-design.md`
 
 ---
 
