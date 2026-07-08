@@ -149,7 +149,6 @@ def test_template_hydrate_step_brief_embeds_evidence() -> None:
     brief = template_hydrate_step_brief(
         step,
         "Step 01 — verify (completed)\n---\n✗ lint error in foo.py",
-        goal="fix repo",
     )
     assert "Do NOT repeat discovery" in brief
     assert "lint error in foo.py" in brief

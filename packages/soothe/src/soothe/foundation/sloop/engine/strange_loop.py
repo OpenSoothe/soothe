@@ -708,8 +708,10 @@ class StrangeLoop:
                         await ce_instance.cancel_goal(prior.id, reason="continue_keyword")
                 await ce_instance.save()
 
+            from soothe.foundation.sloop.goal_text import resolve_planning_goal
+
             ce_goal = await ce_instance.create_goal(
-                execution_goal,
+                resolve_planning_goal(state) or execution_goal,
                 generating_reasoning="StrangeLoop goal",
                 source="user",
                 max_iterations=max_iterations,

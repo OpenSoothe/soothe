@@ -42,5 +42,5 @@ Symmetric execute-step CoreAgent graph input with planner prompts (IG-538): **pr
 1. At `goal_boundary`, graph input includes up to K prior-goal completion units (synthesized or ledger-direct per goal).
 2. When Slice A is non-empty, envelope omits inline `PRIOR GOAL COMPLETION`.
 3. Dependent steps receive Slice B + `PRIOR STEPS` metadata.
-4. Mid-goal root steps receive neither Slice A nor Slice B.
+4. Mid-goal replan-wave steps with no in-plan dependencies receive Slice B′ (prior-wave execute pairs). Intra-wave deps still use transitive Slice B. Slice A remains cross-goal only.
 5. `./scripts/verify_finally.sh` passes.

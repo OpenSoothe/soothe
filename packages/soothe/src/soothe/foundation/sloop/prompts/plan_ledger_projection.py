@@ -864,6 +864,59 @@ def _plan_prompt_ledger_config(config: Any | None) -> PlanPromptLedgerConfig | N
     return getattr(loop_cfg, "plan_prompt_ledger", None) if loop_cfg is not None else None
 
 
+def _prior_wave_step_ids_in_goal_segment(
+    loop_messages: list[BaseMessage],
+    decision: AgentDecision,
+) -> frozenset[str]:
+    """Step ids with execute ledger rows in the current goal but outside the active plan."""
+    current_ids = {s.id for s in decision.steps}
+    seg_start = _current_goal_segment_start(loop_messages)
+    prior: set[str] = set()
+    for msg in loop_messages[seg_start:]:
+        if getattr(msg, "phase", None) != "execute_step":
+            continue
+        sid = _message_step_id(msg)
+        if sid and sid not in current_ids:
+            prior.add(sid)
+    return frozenset(prior)
+
+
+def project_prior_wave_execute_ledger(
+    loop_messages: list[BaseMessage],
+    decision: AgentDecision,
+    *,
+    max_messages: int | None = None,
+    exclude_step_ids: frozenset[str] | None = None,
+) -> list[BaseMessage]:
+    """Replay execute-step ledger rows from prior plan waves in the same goal (Slice B′).
+
+    Used when a replan wave step has no in-plan dependencies but prior waves already
+    recorded execute evidence for this goal.
+    """
+    from soothe.foundation.sloop.engine.predecessor_branch_context import (
+        DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
+        predecessor_execute_messages_for_branch,
+    )
+
+    prior_ids = _prior_wave_step_ids_in_goal_segment(loop_messages, decision)
+    if not prior_ids:
+        return []
+    cap = max_messages if max_messages is not None else DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES
+    projected = predecessor_execute_messages_for_branch(
+        loop_messages,
+        prior_ids,
+        max_messages=cap,
+        exclude_step_ids=exclude_step_ids,
+    )
+    if projected:
+        logger.debug(
+            "Execute-step prior-wave projection: prior_steps=%d out_msgs=%d",
+            len(prior_ids),
+            len(projected),
+        )
+    return projected
+
+
 def project_execute_step_graph_input(
     loop_messages: list[BaseMessage],
     *,
@@ -899,10 +952,10 @@ def project_execute_step_graph_input(
                 )
 
     predecessor_projected = False
+    cap = exec_cfg.predecessor_max_messages
+    if cap <= 0:
+        cap = None
     if step.dependencies:
-        cap = exec_cfg.predecessor_max_messages
-        if cap <= 0:
-            cap = None
         slice_b = project_predecessor_execute_ledger_for_step(
             loop_messages,
             step,
@@ -912,6 +965,16 @@ def project_execute_step_graph_input(
         )
         if slice_b:
             out.extend(slice_b)
+            predecessor_projected = True
+    elif mode == "mid_goal":
+        slice_prior_wave = project_prior_wave_execute_ledger(
+            loop_messages,
+            decision,
+            max_messages=cap,
+            exclude_step_ids=excluded_step_ids,
+        )
+        if slice_prior_wave:
+            out.extend(slice_prior_wave)
             predecessor_projected = True
 
     if checkpoint_message_ids:

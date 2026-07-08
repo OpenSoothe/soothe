@@ -9,16 +9,16 @@ from soothe.foundation.sloop.cognition.plan_step_briefs import (
 from soothe.foundation.sloop.state.schemas import PlanGenerateStep, PlanGeneration
 
 
-def test_synthesize_full_description_includes_goal_and_expected_output() -> None:
+def test_synthesize_full_description_is_step_local_without_goal() -> None:
     step = PlanGenerateStep(
         id="01",
         description="Discover autopilot RFCs",
         expected_output="List of RFC files and scope areas",
     )
-    brief = synthesize_full_description(step, goal="analyze autopilot toward production")
+    brief = synthesize_full_description(step)
     assert "Discover autopilot RFCs" in brief
     assert "List of RFC files" in brief
-    assert "analyze autopilot toward production" in brief
+    assert "Context: this step advances the goal" not in brief
 
 
 def test_populate_plan_generate_full_descriptions_fills_missing() -> None:
@@ -42,7 +42,7 @@ def test_populate_plan_generate_full_descriptions_fills_missing() -> None:
             ),
         ],
     )
-    out = populate_plan_generate_full_descriptions(plan, goal="autopilot production readiness")
+    out = populate_plan_generate_full_descriptions(plan)
     assert out.steps[0].full_description
     assert "RFC list" in (out.steps[0].full_description or "")
     assert out.steps[1].full_description == plan.steps[1].full_description
@@ -62,5 +62,5 @@ def test_populate_skips_ask_user_steps() -> None:
             )
         ],
     )
-    out = populate_plan_generate_full_descriptions(plan, goal="refine docs")
+    out = populate_plan_generate_full_descriptions(plan)
     assert out.steps[0].full_description is None

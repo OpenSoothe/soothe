@@ -47,7 +47,6 @@ class StepBriefHydrator:
         fallback = template_hydrate_step_brief(
             step,
             predecessor_evidence,
-            goal=goal,
         )
         if self._model is None or not predecessor_evidence.strip():
             return fallback

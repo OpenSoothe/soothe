@@ -115,6 +115,7 @@ from soothe.foundation.sloop.engine.tool_call_id import (
     _rewrite_tool_message_tool_call_id,
     _SubgraphNamespaceTaskBinder,
 )
+from soothe.foundation.sloop.goal_text import resolve_planning_goal
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -445,7 +446,7 @@ class Executor:
                 hydrated = await self._step_brief_hydrator.hydrate(
                     step,
                     predecessor_evidence=evidence,
-                    goal=state.goal or "",
+                    goal=resolve_planning_goal(state),
                 )
             else:
                 from soothe.foundation.sloop.engine.step_predecessor_context import (
@@ -455,7 +456,6 @@ class Executor:
                 hydrated = template_hydrate_step_brief(
                     step,
                     evidence,
-                    goal=state.goal,
                 )
             step.full_description = hydrated.strip()
             logger.info(
@@ -481,7 +481,7 @@ class Executor:
             _render_prior_goals_tree,
         )
 
-        has_predecessor_ledger = bool(step.dependencies or [])
+        has_predecessor_ledger = bool(step.dependencies) or predecessor_projected
         prior_steps = ""
         prior_goals = ""
         exec_cfg = None
