@@ -909,7 +909,7 @@ async def apply_directives(
 - Specified `suggest_goal` and `add_finding` tool implementations with full signatures.
 - Added Runner wiring for ProposalQueue lifecycle, StrangeLoop injection, and daemon-side `_route_chunk` consumer.
 - Defined implementation phases C.1, C.2, C.3 for Group C.
-- Related design draft: `docs/drafts/2026-06-07-goal-directive-proposal-integration-design.md`
+- Related design draft: `docs/archive/drafts/2026-06-07-goal-directive-proposal-integration-design.md`
 
 ### 2026-04-03
 - Initial RFC draft

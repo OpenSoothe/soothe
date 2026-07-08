@@ -1,7 +1,7 @@
 # IG-530: Config Zero-Bootstrap and Slim Template
 
 **Status:** In progress  
-**Design:** `docs/drafts/2026-06-30-config-zero-bootstrap-design.md`
+**Design:** `docs/archive/drafts/2026-06-30-config-zero-bootstrap-design.md`
 
 ## Scope
 

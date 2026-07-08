@@ -510,7 +510,7 @@ This runs:
 - RFC-501: VerbosityTier Unification
 - RFC-203: Autopilot Mode
 - RFC-402: Unified Thread Management
-- Design draft: `docs/drafts/2026-04-13-deepagents-cli-migration-design.md`
+- Design draft: `docs/archive/drafts/2026-04-13-deepagents-cli-migration-design.md`
 
 ---
 

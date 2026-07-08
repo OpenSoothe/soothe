@@ -2,7 +2,7 @@
 
 **Status:** In Progress
 **RFC:** RFC-412
-**Design Draft:** docs/drafts/2026-05-29-mcp-management-design.md
+**Design Draft:** docs/archive/drafts/2026-05-29-mcp-management-design.md
 **Companion:** IG-447 (Progressive Skill Loading — RFC-105, implemented)
 
 ## Goal

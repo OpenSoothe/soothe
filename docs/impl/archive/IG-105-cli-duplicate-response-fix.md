@@ -169,7 +169,7 @@ Found all README files. Here are the project README files...
 - `/Users/xiamingchen/Workspace/mirasurf/Soothe/README.md`
 
 **Documentation:**
-- `/Users/xiamingchen/Workspace/mirasurf/Soothe/docs/drafts/README.md`
+- `/Users/xiamingchen/Workspace/mirasurf/Soothe/docs/archive/drafts/README.md`
 ...
 ```
 

@@ -8,7 +8,7 @@
 **Authors**: xiaming (with Claude)
 **Depends on**: RFC-225 (Goal Record Enrichment), RFC-413 (Display Card Ledger), RFC-450 (Daemon Protocol), RFC-503 (Loop-First UX)
 **Related**: RFC-628 (Step Card Display), RFC-803 (Checkpoint Backend)
-**Design**: [docs/drafts/2026-07-05-goal-display-snapshot-design.md](../drafts/2026-07-05-goal-display-snapshot-design.md)
+**Design**: [docs/archive/drafts/2026-07-05-goal-display-snapshot-design.md](../archive/drafts/2026-07-05-goal-display-snapshot-design.md)
 
 ---
 

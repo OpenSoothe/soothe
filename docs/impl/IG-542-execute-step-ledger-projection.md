@@ -5,7 +5,7 @@
 **Status**: Implemented  
 **Created**: 2026-07-02  
 **RFCs**: RFC-214 §3.1, RFC-225, RFC-226  
-**Draft**: `docs/drafts/2026-07-02-execute-step-ledger-projection-design.md`
+**Draft**: `docs/archive/drafts/2026-07-02-execute-step-ledger-projection-design.md`
 
 ## Overview
 

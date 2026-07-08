@@ -5,7 +5,7 @@
 **Status**: Implemented  
 **Created**: 2026-07-01  
 **RFCs**: RFC-214 §4 / P6, RFC-226  
-**Draft**: `docs/drafts/2026-07-01-unified-planner-prompt-projection-design.md`
+**Draft**: `docs/archive/drafts/2026-07-01-unified-planner-prompt-projection-design.md`
 
 ## Overview
 

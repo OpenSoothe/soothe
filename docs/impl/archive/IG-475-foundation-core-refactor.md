@@ -2,7 +2,7 @@
 
 **Status**: Completed (with known issues)
 **Created**: 2026-06-09
-**Design Draft**: `docs/drafts/2026-06-09-foundation-refactor-design.md`
+**Design Draft**: `docs/archive/drafts/2026-06-09-foundation-refactor-design.md`
 
 ## Goal
 

@@ -4,7 +4,7 @@
 **RFC**: RFC-100 (Layer 1 CoreAgent Runtime Architecture)
 **Status**: Approved
 **Created**: 2026-03-29
-**Design Draft**: [2026-03-29-coreagent-layer1-interface-design.md](../drafts/2026-03-29-coreagent-layer1-interface-design.md)
+**Design Draft**: [2026-03-29-coreagent-layer1-interface-design.md](../archive/drafts/2026-03-29-coreagent-layer1-interface-design.md)
 
 ## Overview
 

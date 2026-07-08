@@ -2,7 +2,7 @@
 
 **Status**: Implemented (2026-06-26)  
 **RFC**: [RFC-628](../specs/RFC-628-step-card-display-refactor.md) — **canonical step card design spec**  
-**Design**: `docs/drafts/2026-06-26-cognition-step-activity-panel-design.md` (historical; RFC-628 supersedes for normative reference)
+**Design**: `docs/archive/drafts/2026-06-26-cognition-step-activity-panel-design.md` (historical; RFC-628 supersedes for normative reference)
 
 ## Objective
 

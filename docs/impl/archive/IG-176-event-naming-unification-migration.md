@@ -225,7 +225,7 @@ After successful migration:
 ## 11. References
 
 - **RFC-402**: `docs/specs/RFC-402-unified-event-naming.md`
-- **Design Draft**: `docs/drafts/2026-04-15-event-naming-semantics-unification-design.md`
+- **Design Draft**: `docs/archive/drafts/2026-04-15-event-naming-semantics-unification-design.md`
 - **Event Catalog**: `docs/specs/event-catalog.md`
 - **RFC-400**: `docs/specs/RFC-400-event-processing.md`
 

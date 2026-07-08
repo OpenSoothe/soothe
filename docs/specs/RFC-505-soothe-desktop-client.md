@@ -8,7 +8,7 @@
 **Last Updated**: 2026-06-04
 **Dependencies**: RFC-403 (Unified Event Naming), RFC-450 (Daemon Communication Protocol), RFC-454 (Slash Commands), RFC-500 (CLI/TUI Architecture), RFC-503 (Loop-First UX), RFC-504 (Loop Management Commands)
 **Supersedes**: ---
-**Author**: brainstormed via platonic-brainstorming, formalized from `docs/drafts/2026-06-04-soothe-desktop-design.md`
+**Author**: brainstormed via platonic-brainstorming, formalized from `docs/archive/drafts/2026-06-04-soothe-desktop-design.md`
 
 ---
 

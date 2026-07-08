@@ -2,7 +2,7 @@
 
 **Status**: Completed
 **RFC**: [RFC-628](../specs/RFC-628-step-card-display-refactor.md) — Part II: SubAgent Card
-**Design**: `docs/drafts/2026-06-26-subagent-card-flattened-display.md`
+**Design**: `docs/archive/drafts/2026-06-26-subagent-card-flattened-display.md`
 
 ## Objective
 

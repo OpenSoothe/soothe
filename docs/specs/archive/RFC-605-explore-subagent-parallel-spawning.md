@@ -563,7 +563,7 @@ sections.append("""
 - RFC-200: StrangeLoop architecture
 - RFC-211: Layer 2 tool result optimization
 - RFC-600: Plugin extension system
-- Design draft: `docs/drafts/2026-04-13-explore-subagent-parallel-spawning-design.md`
+- Design draft: `docs/archive/drafts/2026-04-13-explore-subagent-parallel-spawning-design.md`
 
 ## Changelog
 

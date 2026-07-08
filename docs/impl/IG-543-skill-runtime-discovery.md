@@ -5,7 +5,7 @@
 **Status**: Complete  
 **Created**: 2026-07-03  
 **Dependencies**: RFC-105 (Progressive Skill Loading), IG-519 (middleware caching)  
-**Design Draft**: [2026-07-03-skill-runtime-discovery-design.md](../drafts/2026-07-03-skill-runtime-discovery-design.md)
+**Design Draft**: [2026-07-03-skill-runtime-discovery-design.md](../archive/drafts/2026-07-03-skill-runtime-discovery-design.md)
 
 ---
 
@@ -40,7 +40,7 @@ LoopState snapshot field names are unchanged (`activated_skill_names` = discover
 
 | File | Action |
 |------|--------|
-| `docs/drafts/2026-07-03-skill-runtime-discovery-design.md` | Create |
+| `docs/archive/drafts/2026-07-03-skill-runtime-discovery-design.md` | Create |
 | `docs/specs/RFC-105-progressive-skill-loading.md` | Update — §Revision 2026-07-03 |
 | `docs/impl/IG-543-skill-runtime-discovery.md` | Create — this document |
 | `skills/registry.py` | Modify — core/deferred, search, discover |
@@ -169,5 +169,5 @@ Manual smoke (continued):
 ## Related Documents
 
 - [RFC-105: Progressive Skill Loading](../specs/RFC-105-progressive-skill-loading.md)
-- [Design Draft](../drafts/2026-07-03-skill-runtime-discovery-design.md)
+- [Design Draft](../archive/drafts/2026-07-03-skill-runtime-discovery-design.md)
 - [IG-519: Middleware Efficiency](../impl/IG-519-middleware-efficiency-optimization.md)

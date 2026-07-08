@@ -3,7 +3,7 @@
 **Implementation Guide ID:** IG-143
 **Date:** 2026-04-08
 **Status:** ✅ Completed
-**Design Reference:** `docs/drafts/2026-04-08-cli-display-refactoring-design.md`
+**Design Reference:** `docs/archive/drafts/2026-04-08-cli-display-refactoring-design.md`
 **Priority:** High - Improves core UX for multi-step execution
 
 ---
@@ -325,7 +325,7 @@ Mark IG-143 as **Completed** when:
 
 ## References
 
-- Design Draft: `docs/drafts/2026-04-08-cli-display-refactoring-design.md`
+- Design Draft: `docs/archive/drafts/2026-04-08-cli-display-refactoring-design.md`
 - RFC-0020: CLI Stream Display Pipeline (implied)
 - Event Catalog: `src/soothe/core/event_catalog.py`
 - Loop Agent Events: `src/soothe/cognition/agent_loop/events.py`

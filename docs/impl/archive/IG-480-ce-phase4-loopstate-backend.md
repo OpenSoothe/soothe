@@ -3,7 +3,7 @@
 **Status**: In Progress
 **Created**: 2026-06-15
 **RFC**: RFC-624 Phase 4 (§48–§59)
-**Design Draft**: `docs/drafts/2026-06-13-ce-phase4-loopstate-backend-design.md`
+**Design Draft**: `docs/archive/drafts/2026-06-13-ce-phase4-loopstate-backend-design.md`
 
 ## Goal
 

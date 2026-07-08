@@ -1017,4 +1017,4 @@ Two edit calls use different paths that resolve to the same file (e.g., `./confi
 - RFC-101: Tool interface (middleware chain structure)
 - RFC-102: Security filesystem policy (path validation, permissions)
 - RFC-222: Autopilot goal engine architecture (cross-loop locking)
-- Prior design draft: `docs/drafts/2026-06-27-edit-coalescing-async-io-design.md` (Layer 3 origin)
+- Prior design draft: `docs/archive/drafts/2026-06-27-edit-coalescing-async-io-design.md` (Layer 3 origin)

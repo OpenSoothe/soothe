@@ -1,7 +1,7 @@
 # IG-548: Goal-Bound Display Snapshots
 
 **RFC**: [RFC-631](../specs/RFC-631-goal-display-snapshots.md), [RFC-413](../specs/RFC-413-server-owned-display-card-ledger.md) (amended), [RFC-225](../specs/RFC-225-loop-continuity-and-goal-record-enrichment.md) (amended), [RFC-450](../specs/RFC-450-daemon-communication-protocol.md)  
-**Design**: [docs/drafts/2026-07-05-goal-display-snapshot-design.md](../drafts/2026-07-05-goal-display-snapshot-design.md)  
+**Design**: [docs/archive/drafts/2026-07-05-goal-display-snapshot-design.md](../archive/drafts/2026-07-05-goal-display-snapshot-design.md)  
 **Created**: 2026-07-05  
 **Status**: In progress (P0 + P1 landed)  
 **Priority order**: P0 → P1 → P2

@@ -1,7 +1,7 @@
 # IG-534: Daemon ↔ TUI Performance Isolation
 
 **RFC**: [RFC-614](../specs/RFC-614-unified-streaming-messaging.md), [RFC-450](../specs/RFC-450-daemon-communication-protocol.md)  
-**Design**: [docs/drafts/2026-07-01-daemon-tui-performance-isolation-design.md](../drafts/2026-07-01-daemon-tui-performance-isolation-design.md)  
+**Design**: [docs/archive/drafts/2026-07-01-daemon-tui-performance-isolation-design.md](../archive/drafts/2026-07-01-daemon-tui-performance-isolation-design.md)  
 **Created**: 2026-07-01  
 **Updated**: 2026-07-01  
 **Status**: Phase 3 complete  
