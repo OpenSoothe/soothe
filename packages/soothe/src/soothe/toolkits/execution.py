@@ -45,6 +45,7 @@ from soothe.config.constants import (
 )
 from soothe.foundation.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
+from soothe.toolkits.shell_compat import macos_shell_compatibility_error
 from soothe.utils import expand_path
 
 logger = logging.getLogger(__name__)
@@ -254,6 +255,10 @@ class RunCommandShellTool(ShellTool):
             logger.warning("Operation security denied command: %s (%s)", command, reason)
             return f"Error: {reason}"
 
+        shell_error = macos_shell_compatibility_error(command)
+        if shell_error is not None:
+            return shell_error
+
         actual_timeout = timeout if timeout is not None else self.timeout
         cwd_raw = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(cwd_raw)) if cwd_raw else None
@@ -398,6 +403,10 @@ class RunBackgroundTool(BaseTool):
         verdict, reason = self._security_decision(command, runtime)
         if verdict != "allow":
             return {"pid": None, "status": "error", "message": f"Error: {reason}"}
+
+        shell_error = macos_shell_compatibility_error(command)
+        if shell_error is not None:
+            return {"pid": None, "status": "error", "message": shell_error}
 
         effective = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(effective)) if effective else None
