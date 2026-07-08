@@ -115,7 +115,6 @@ class IntakePass1Classifier:
                 query,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
-                require_social_response=True,
             )
             if not result.is_task and not (result.social_response or "").strip():
                 logger.warning(
@@ -152,7 +151,6 @@ class IntakePass1Classifier:
         *,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
-        require_social_response: bool = False,
     ) -> IntakePass1LLMResult:
         """Run Pass 1 LLM classification with one retry on structured-output failure."""
         try:
@@ -160,7 +158,6 @@ class IntakePass1Classifier:
                 query,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
-                require_social_response=require_social_response,
             )
         except StructuredOutputError:
             logger.warning("Pass1 structured output failed; retrying classification once")
@@ -168,7 +165,6 @@ class IntakePass1Classifier:
                 query,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
-                require_social_response=require_social_response,
             )
 
     async def _classify_llm(
@@ -177,16 +173,8 @@ class IntakePass1Classifier:
         *,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
-        require_social_response: bool = False,
     ) -> IntakePass1LLMResult:
         """Single LLM call for Pass 1 classification."""
-        human_task = INTAKE_PASS1_HUMAN_TASK
-        if require_social_response:
-            human_task = (
-                f"{INTAKE_PASS1_HUMAN_TASK}\n"
-                "Set is_task=false and include a non-empty social_response JSON field "
-                "(not in reasoning)."
-            )
         messages = [
             SystemMessage(
                 content=build_intake_pass1_system_prompt(
@@ -194,7 +182,7 @@ class IntakePass1Classifier:
                     self._assistant_name,
                 )
             ),
-            HumanMessage(content=f"{query}\n\n{human_task}"),
+            HumanMessage(content=f"{query}\n\n{INTAKE_PASS1_HUMAN_TASK}"),
         ]
 
         config = self._build_invoke_config(
@@ -204,7 +192,7 @@ class IntakePass1Classifier:
             goal_trace=goal_trace,
         )
 
-        schema = pass1_json_schema(require_social_response=require_social_response)
+        schema = pass1_json_schema(require_social_response=True)
 
         async def _invoke() -> dict[str, Any]:
             return await invoke_structured_chat(

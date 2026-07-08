@@ -168,3 +168,46 @@ class TestPostgreSQLPersistStoreUnit:
             assert keys == ["a", "b"]
 
         asyncio.run(_async_test())
+
+    def test_reset_pool_does_not_close_shared_pool(self) -> None:
+        """Shared-pool wrappers must rebind, not close the registry-owned pool."""
+        postgres_persist_store_cls = _load_postgres_store_class()
+
+        async def _async_test() -> None:
+            class _PoolWithClose:
+                def __init__(self) -> None:
+                    self.close_calls = 0
+
+                async def close(self) -> None:
+                    self.close_calls += 1
+
+            shared = _PoolWithClose()
+            store = postgres_persist_store_cls(
+                dsn="postgresql://unused/test",
+                pool_size=0,
+                shared_pool=shared,
+            )
+            store._pool = None
+            await store._reset_pool()
+            assert store._pool is shared
+            assert shared.close_calls == 0
+
+        asyncio.run(_async_test())
+
+    def test_ensure_pool_rebinds_shared_pool_when_local_ref_cleared(self) -> None:
+        """Late durability touches recover when a prior reset cleared ``_pool``."""
+        postgres_persist_store_cls = _load_postgres_store_class()
+
+        async def _async_test() -> None:
+            shared = object()
+            store = postgres_persist_store_cls(
+                dsn="postgresql://unused/test",
+                pool_size=0,
+                shared_pool=shared,
+            )
+            store._pool = None
+            store._schema_initialized = True
+            pool = await store._ensure_pool()
+            assert pool is shared
+
+        asyncio.run(_async_test())
