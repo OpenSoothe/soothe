@@ -70,15 +70,23 @@ async def pg_agent_config() -> SootheConfig:
 
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_singletons() -> None:
+    import soothe.foundation.persistence.loop_writer as lw_mod
     import soothe.runner.resolver.shared_checkpointer_pool as cp_mod
+    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
     from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
 
+    await LoopPersistenceWriter.close_shared_instance()
+    LoopPersistenceWriter._bound_loop = None
+    lw_mod._writer_singleton = None
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()
     cp_mod._shared_checkpointer_pool = None
     cp_mod._checkpointer_setup_done = False
     cp_mod._setup_waiter = None
     yield
+    await LoopPersistenceWriter.close_shared_instance()
+    LoopPersistenceWriter._bound_loop = None
+    lw_mod._writer_singleton = None
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()
     cp_mod._shared_checkpointer_pool = None
@@ -128,3 +136,65 @@ async def test_concurrent_thread_workers_share_checkpointer_pool(
     async with asyncio.timeout(5.0):
         async with results[0].connection() as conn:
             await conn.execute("SELECT 1")
+
+
+def _thread_worker_enqueue_checkpoint(config: SootheConfig) -> None:
+    """Simulate thread_pool worker enqueueing via submit bridge."""
+    from datetime import UTC, datetime
+
+    from soothe.foundation.persistence.loop_writer import (
+        LoopPersistenceWriter,
+        PersistWriteMode,
+    )
+    from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
+    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def _run() -> None:
+        await SharedPostgreSQLPool.get_shared_instance(config)
+        writer = LoopPersistenceWriter.existing_instance()
+        assert writer is not None
+        now = datetime.now(UTC)
+        cp = StrangeLoopCheckpoint(
+            loop_id="thread-pool-bridge-test",
+            current_thread_id="thread-pool-bridge-test",
+            status="idle",
+            current_goal_index=-1,
+            thread_health_metrics=ThreadHealthMetrics(
+                thread_id="thread-pool-bridge-test",
+                last_updated=now,
+            ),
+            created_at=now,
+            updated_at=now,
+        )
+        await writer.submit_enqueue(
+            "thread-pool-bridge-test",
+            cp,
+            write_mode=PersistWriteMode.INDEX_ONLY,
+        )
+
+    try:
+        loop.run_until_complete(_run())
+    finally:
+        loop.close()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_thread_workers_submit_to_bound_writer(
+    pg_agent_config: SootheConfig,
+) -> None:
+    """Regression: loop writer submit bridge must work from worker event loops."""
+    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+
+    LoopPersistenceWriter.bind_main_loop(asyncio.get_running_loop())
+    await SharedPostgreSQLPool.get_shared_instance(pg_agent_config)
+    await LoopPersistenceWriter.get_shared_instance(pg_agent_config)
+
+    await asyncio.gather(
+        asyncio.to_thread(_thread_worker_enqueue_checkpoint, pg_agent_config),
+        asyncio.to_thread(_thread_worker_enqueue_checkpoint, pg_agent_config),
+        asyncio.to_thread(_thread_worker_enqueue_checkpoint, pg_agent_config),
+    )

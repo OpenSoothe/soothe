@@ -2,6 +2,10 @@
 
 Process-scoped singleton coalescing checkpoint and ContextEngine writes onto a
 shared PostgreSQL pool with bounded shutdown and goal-boundary transactions.
+
+IG-571: asyncio tasks and loop-bound locks run on a single bound event loop
+(typically the daemon main loop). Worker threads call ``submit_*`` to schedule
+work via ``asyncio.run_coroutine_threadsafe``.
 """
 
 from __future__ import annotations
@@ -9,9 +13,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from soothe.foundation.persistence.checkpoint_split import (
     clear_persist_degraded,
@@ -29,8 +35,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
 _writer_singleton: LoopPersistenceWriter | None = None
-_writer_lock = asyncio.Lock()
+_writer_init_lock = threading.Lock()
 
 
 class PersistWriteMode(StrEnum):
@@ -59,6 +67,8 @@ class _PendingEntry:
 class LoopPersistenceWriter:
     """Coalescing persistence writer keyed by loop_id."""
 
+    _bound_loop: asyncio.AbstractEventLoop | None = None
+
     def __init__(
         self,
         *,
@@ -73,7 +83,7 @@ class LoopPersistenceWriter:
         self._durable_flush_timeout = durable_flush_timeout
 
         self._pending: dict[str, _PendingEntry] = {}
-        self._pending_lock = asyncio.Lock()
+        self._pending_guard = threading.Lock()
         self._durable_event = asyncio.Event()
         self._worker_task: asyncio.Task[None] | None = None
         self._paused = False
@@ -82,6 +92,12 @@ class LoopPersistenceWriter:
         self._inflight_done.set()
         self._write_lock = asyncio.Lock()
         self._released_loops: set[str] = set()
+
+    @classmethod
+    def bind_main_loop(cls, loop: asyncio.AbstractEventLoop) -> None:
+        """Pin writer asyncio primitives to ``loop`` (daemon main loop in thread_pool)."""
+        cls._bound_loop = loop
+        logger.debug("LoopPersistenceWriter bound to event loop %s", loop)
 
     @classmethod
     def existing_instance(cls) -> LoopPersistenceWriter | None:
@@ -104,7 +120,7 @@ class LoopPersistenceWriter:
         if _writer_singleton is not None:
             return _writer_singleton
 
-        async with _writer_lock:
+        with _writer_init_lock:
             if _writer_singleton is not None:
                 return _writer_singleton
 
@@ -124,18 +140,87 @@ class LoopPersistenceWriter:
                 close_timeout_seconds=checkpoint_cfg.close_timeout_seconds,
                 durable_flush_timeout=checkpoint_cfg.durable_flush_timeout,
             )
-            await _writer_singleton._ensure_worker()
-            return _writer_singleton
+
+        await _writer_singleton._run_on_main(_writer_singleton._ensure_worker)
+        return _writer_singleton
 
     @classmethod
     async def close_shared_instance(cls) -> None:
         """Stop shared writer worker at daemon shutdown."""
         global _writer_singleton
-        async with _writer_lock:
-            if _writer_singleton is None:
-                return
-            await _writer_singleton.shutdown()
+        with _writer_init_lock:
+            inst = _writer_singleton
             _writer_singleton = None
+        if inst is None:
+            return
+        await inst._run_on_main(inst.shutdown)
+
+    async def _run_on_main(
+        self,
+        coro_factory: Callable[[], Coroutine[Any, Any, T]],
+    ) -> T:
+        """Run ``coro_factory`` on the bound writer loop; await from any caller loop."""
+        running = asyncio.get_running_loop()
+        bound = type(self)._bound_loop
+        if bound is None:
+            type(self)._bound_loop = running
+            bound = running
+        if bound is running:
+            return await coro_factory()
+        future = asyncio.run_coroutine_threadsafe(coro_factory(), bound)
+        return await asyncio.wrap_future(future)
+
+    async def submit_enqueue(
+        self,
+        loop_id: str,
+        checkpoint: StrangeLoopCheckpoint,
+        *,
+        durable: bool = False,
+        write_mode: PersistWriteMode = PersistWriteMode.INDEX_ONLY,
+    ) -> None:
+        """Thread-safe enqueue from any event loop."""
+        await self._run_on_main(
+            lambda: self.enqueue_checkpoint(
+                loop_id,
+                checkpoint,
+                durable=durable,
+                write_mode=write_mode,
+            )
+        )
+
+    async def submit_flush_durable(self, loop_id: str, *, timeout: float) -> PersistResult:
+        """Thread-safe durable flush from any event loop."""
+        return await self._run_on_main(lambda: self.flush_durable(loop_id, timeout=timeout))
+
+    async def submit_persist_goal_boundary(
+        self,
+        loop_id: str,
+        *,
+        checkpoint: StrangeLoopCheckpoint,
+        dag: GoalStepDAG | None = None,
+        ledger: list[dict[str, Any]] | None = None,
+    ) -> PersistResult:
+        """Thread-safe goal-boundary persist from any event loop."""
+        return await self._run_on_main(
+            lambda: self.persist_goal_boundary(
+                loop_id,
+                checkpoint=checkpoint,
+                dag=dag,
+                ledger=ledger,
+            )
+        )
+
+    async def submit_release_loop(self, loop_id: str, *, timeout: float | None = None) -> None:
+        """Thread-safe bounded loop release from any event loop."""
+        await self._run_on_main(lambda: self.release_loop(loop_id, timeout=timeout))
+
+    async def submit_save_ce_dag(self, loop_id: str, dag: GoalStepDAG) -> None:
+        """Thread-safe CE DAG persist from any event loop."""
+        await self._run_on_main(lambda: self.save_ce_dag(loop_id, dag))
+
+    async def submit_save_ce_ledger(self, loop_id: str, messages: list[dict[str, Any]]) -> None:
+        """Thread-safe CE ledger persist from any event loop."""
+        await self._run_on_main(lambda: self.save_ce_ledger(loop_id, messages))
 
     async def _ensure_worker(self) -> None:
         if self._worker_task is not None and not self._worker_task.done():
@@ -162,11 +247,11 @@ class LoopPersistenceWriter:
         durable: bool = False,
         write_mode: PersistWriteMode = PersistWriteMode.INDEX_ONLY,
     ) -> None:
-        """Enqueue or coalesce a checkpoint write."""
+        """Enqueue or coalesce a checkpoint write (bound writer loop only)."""
         if loop_id in self._released_loops and not durable:
             return
 
-        async with self._pending_lock:
+        with self._pending_guard:
             existing = self._pending.get(loop_id)
             if existing is not None and not durable:
                 existing.checkpoint = checkpoint
@@ -296,7 +381,7 @@ class LoopPersistenceWriter:
         try:
             async with asyncio.timeout(timeout):
                 await self._flush_loop(loop_id, force_full=True)
-                async with self._pending_lock:
+                with self._pending_guard:
                     self._pending.pop(loop_id, None)
         except TimeoutError:
             logger.warning(
@@ -307,15 +392,20 @@ class LoopPersistenceWriter:
 
     async def pause_for_pool_reset(self, *, timeout: float = 15.0) -> None:
         """Pause accepts and drain in-flight writes before pool reset."""
+        await self._run_on_main(lambda: self._pause_for_pool_reset_impl(timeout=timeout))
+
+    async def _pause_for_pool_reset_impl(self, *, timeout: float = 15.0) -> None:
         self._paused = True
         self._durable_event.set()
         try:
             async with asyncio.timeout(timeout):
                 while self._inflight > 0:
                     await self._inflight_done.wait()
-                async with self._pending_lock:
-                    for loop_id in list(self._pending.keys()):
-                        await self._flush_loop(loop_id, force_full=True)
+                with self._pending_guard:
+                    loop_ids = list(self._pending.keys())
+                for loop_id in loop_ids:
+                    await self._flush_loop(loop_id, force_full=True)
+                with self._pending_guard:
                     self._pending.clear()
         except TimeoutError:
             logger.warning("Persist writer pause_for_pool_reset timed out")
@@ -418,11 +508,11 @@ class LoopPersistenceWriter:
                     self._inflight = 0
                     self._inflight_done.set()
 
-        async with self._pending_lock:
+        with self._pending_guard:
             self._pending.pop(loop_id, None)
 
     async def _flush_loop(self, loop_id: str, *, force_full: bool) -> None:
-        async with self._pending_lock:
+        with self._pending_guard:
             entry = self._pending.pop(loop_id, None)
         if entry is None:
             return
@@ -483,13 +573,13 @@ class LoopPersistenceWriter:
                     pass
                 self._durable_event.clear()
 
-                async with self._pending_lock:
+                with self._pending_guard:
                     loop_ids = list(self._pending.keys())
 
                 for loop_id in loop_ids:
                     if loop_id in self._released_loops:
                         continue
-                    async with self._pending_lock:
+                    with self._pending_guard:
                         entry = self._pending.get(loop_id)
                     if entry is None:
                         continue

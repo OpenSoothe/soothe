@@ -3,9 +3,9 @@
 **Guide**: IG-550  
 **Title**: High-Performance StrangeLoop + ContextEngine Persistence  
 **Created**: 2026-07-06  
-**Status**: Complete  
+**Status**: Complete (follow-up: [IG-571](IG-571-main-loop-persistence-writer-bridge.md))  
 **Related RFCs**: RFC-803 (StrangeLoop checkpoint backend), RFC-624 (ContextEngine lifecycle), RFC-225 (loop continuity)  
-**Related IGs**: [IG-523](IG-523-async-checkpoint-writing.md), [IG-529](IG-529-soothe-home-persistence-consolidation.md), [IG-549](IG-549-loop-worker-goal-boundary-hardening.md)  
+**Related IGs**: [IG-523](IG-523-async-checkpoint-writing.md), [IG-529](IG-529-soothe-home-persistence-consolidation.md), [IG-549](IG-549-loop-worker-goal-boundary-hardening.md), [IG-571](IG-571-main-loop-persistence-writer-bridge.md)  
 **Incident loops**: `0b37` (`019f3543-de29-7bb1-9e6a-487262690b37`)  
 **Logs**: `~/.soothe/logs/soothe.log`, `~/.soothe/logs/daemon.log`, `~/.soothe/data/loops/<loop_id>/runner.log`
 
@@ -421,6 +421,34 @@ Run `./scripts/verify_finally.sh` before merge.
 
 ---
 
+## Follow-up: Cross-Event-Loop Writer Bridge (IG-571)
+
+**Discovered**: 2026-07-08 production logs (`soothe.log*`, `daemon.log*`) under thread_pool + concurrent autopilot.
+
+### Gap
+
+Phase 2 shipped `LoopPersistenceWriter` with `asyncio.Lock` / `Event` / `Task` on a process singleton. Daemon preopen initializes the writer on the **main event loop** (`pools.py`). Thread pool workers each have a **dedicated event loop** and call `enqueue_checkpoint()` directly → `RuntimeError: … bound to a different event loop`.
+
+This is an **execution-model** defect, not a rejection of the unified-writer architecture. The shared PostgreSQL pool (`SharedPostgreSQLPool` / IG-561 registry) remains correct.
+
+### Resolution (IG-571)
+
+| Keep | Fix |
+|------|-----|
+| `LoopPersistenceWriter` as write pipeline | Run writer only on main loop |
+| `StrangeLoopStateManager` as domain owner | Route writes via `submit_*` bridge |
+| `SharedPostgreSQLPool` | No change |
+| Single PG write path | No `_do_save_checkpoint()` fallback when writer fails — use `PersistResult` + `mark_persist_degraded()` only |
+
+See [IG-571](IG-571-main-loop-persistence-writer-bridge.md) and [RFC-803 §Unified Write Pipeline](../specs/RFC-803-strangeloop-checkpoint-backend.md).
+
+### Manual verification (re-open until IG-571 lands)
+
+- [ ] Concurrent autopilot goals (8+ workers): no writer cross-loop errors
+- [ ] Thread worker watchdog: no respawn due to `bound to a different event loop`
+
+---
+
 ## Rollback Strategy
 
 | Phase | Rollback |
@@ -435,10 +463,11 @@ All flags in config template + `config/develop/config.yml`.
 
 ## Open Questions
 
-1. **Subprocess pool mode**: Is flush worker daemon-scoped or per worker process? (Each worker process has its own singleton today — document and test both.)
+1. **Subprocess pool mode**: Is flush worker daemon-scoped or per worker process? (Each worker process has its own singleton today — document and test both.) **→ Documented in RFC-803 / IG-571: worker_pool = one loop per process; direct await OK.**
 2. **CE asyncpg removal**: Accept psycopg-only for CE PG backend, or shared asyncpg pool at daemon level?
 3. **Reconciler UX**: When durable flush fails, should daemon expose `persist_degraded` on loop status for TUI badge?
 4. **Blob storage**: Separate table vs partitioned JSONB — preference for ops (VACUUM, backup size)?
+5. **Submit bridge blocking semantics** (IG-571): Should durable `submit_*` block the worker loop until flush completes, or fire-and-forget with `PersistResult` polling? **→ IG-571 Phase A: block on durable/close; background enqueue returns after main-loop schedule.**
 
 ---
 
@@ -483,5 +512,8 @@ packages/soothe/tests/integration/core/persistence/
 - [IG-523](IG-523-async-checkpoint-writing.md) — RFC-803 Phase 6 async queue (implemented; gaps documented here)
 - [IG-549](IG-549-loop-worker-goal-boundary-hardening.md) — goal boundary races; deferred pool consolidation (item 11)
 - [IG-529](IG-529-soothe-home-persistence-consolidation.md) — file/SQLite consolidation (orthogonal; PG path is this IG)
+- [IG-571](IG-571-main-loop-persistence-writer-bridge.md) — thread_pool cross-loop submit bridge (follow-up)
+- [RFC-803 §Unified Write Pipeline](../specs/RFC-803-strangeloop-checkpoint-backend.md) — normative amendment
+- Design draft: [2026-07-08-main-loop-persistence-writer-bridge-design.md](../archive/drafts/2026-07-08-main-loop-persistence-writer-bridge-design.md)
 - Loop `0b37` analysis (2026-07-06): command timeout on e2e step, goal completion OK, checkpoint stale, 7200 s worker timeout
-- Code: `sloop_manager.py`, `goal_completion.py`, `shared_pool.py`, `pgsql_backend.py`, `postgres_backend.py`
+- Code: `sloop_manager.py`, `goal_completion.py`, `shared_pool.py`, `pgsql_backend.py`, `postgres_backend.py`, `loop_writer.py`

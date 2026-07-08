@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Last Updated**: 2026-06-19
+**Last Updated**: 2026-07-08
 **Dependencies**: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
 **Author**: Claude Sonnet 4.6
 **Note**: Moved from 2xx (RFC-215) to 8xx persistence series per RFC-900 reclassification
@@ -715,6 +715,107 @@ Disable async writes for:
 - Debug/diagnostic runs (want exact checkpoint timing)
 - Low-latency environments (network IO is primary bottleneck)
 
+**PostgreSQL note**: When `persistence.default_backend=postgresql` and the unified writer is enabled (IG-550), per-loop `_flush_worker_loop` is **not** used for checkpoint writes. See §Unified Write Pipeline below.
+
+---
+
+## Unified Write Pipeline (Amendment — IG-550 / IG-571)
+
+### Motivation
+
+RFC-803 Phase 6 described per-`StrangeLoopStateManager` async flush workers (FIFO queue, per-request lifecycle). Production thread_pool mode runs **many concurrent loops in one process**, each on a **dedicated worker-thread event loop**. Goals also share one PostgreSQL database (`soothe_checkpoints`) via `SharedPostgreSQLPool` / `PostgresPoolRegistry` (IG-561).
+
+Per-loop flush workers cause:
+
+- Start/stop churn every request (no sustained coalescing)
+- Duplicate write pipelines (StrangeLoop + ContextEngine + goal tail)
+- Goal-boundary races (finalize + `close()` on separate flush paths)
+
+IG-550 introduced a process-scoped **`LoopPersistenceWriter`** for coalesced writes and single-transaction goal boundaries. IG-571 completes the execution model for thread_pool.
+
+### Layered responsibilities
+
+| Layer | Component | Scope | Responsibility |
+|-------|-----------|-------|----------------|
+| Domain | `StrangeLoopStateManager` | per `loop_id` | Checkpoint model, in-memory cache, load/merge, finalize semantics, bounded `close` |
+| Write pipeline | `LoopPersistenceWriter` | per process | Latest-wins coalesce, durable flush, `persist_goal_boundary`, CE dag/ledger submits |
+| Connections | `SharedPostgreSQLPool` | per process | `AsyncConnectionPool` to `soothe_checkpoints`; borrowed by writer and read backends |
+
+**Reads** stay on the caller loop via `PostgreSQLPersistenceBackend` + shared pool. **Writes** go through the writer submit API.
+
+### Data flow
+
+```text
+StrangeLoopStateManager ──┐
+ContextEngine (PG) ───────┼──► submit_* ──► LoopPersistenceWriter (main loop) ──► SharedPostgreSQLPool
+Goal completion tail ─────┘
+```
+
+### Write modes
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| Background | `record_iteration`, iteration `save()` | `submit_enqueue` — latest-wins coalesce; flush on `flush_interval` |
+| Durable | Goal boundary, `close()` | `submit_flush_durable` / `submit_persist_goal_boundary` — single transaction where possible |
+| Release | `state_manager.close()` | `submit_release_loop` — bounded drain; mark loop released in writer |
+
+Hot/cold split (IG-550 Phase 3): iteration writes may update index only; full blob at goal boundary.
+
+### Execution model (thread_pool — IG-571)
+
+**Invariant**: `LoopPersistenceWriter` asyncio tasks and loop-scoped locks run **only on the daemon main event loop**.
+
+Worker-thread loops MUST NOT call `await writer.enqueue_checkpoint()` directly. They call thread-safe **`submit_*`** methods that schedule work on the main loop (e.g. `asyncio.run_coroutine_threadsafe`).
+
+Cross-thread pending-map mutations use **`threading.Lock`**. DB serialization uses **`asyncio.Lock`** on the main loop only.
+
+**Failure mode (pre-IG-571)**: `asyncio.Lock` on a process singleton called from worker loops raises `RuntimeError: … bound to a different event loop`, failing goal init/close and killing thread workers.
+
+**Safe failure (post-IG-571)**: When the writer is active, PostgreSQL checkpoint writes go **only** through `LoopPersistenceWriter`. On durable failure, return `PersistResult.ok=False` and call `mark_persist_degraded()` — **no** bypass to `_do_save_checkpoint()`. SQLite backends continue to use per-manager `_do_save_checkpoint()` when `writer is None`.
+
+### Execution model (worker_pool)
+
+Each subprocess has one event loop. Writer singleton is per process; initialize on that loop at worker startup. Submit bridge is optional; direct `await` on writer methods is safe when caller and writer share the same loop.
+
+### Pool reset protocol
+
+Before `SharedPostgreSQLPool.reset_pool()`:
+
+1. `writer.pause_for_pool_reset()` — stop accepts, drain in-flight
+2. Close old pool
+3. Rebind registry pool; `writer.resume_after_pool_reset()`
+
+Never close the pool while a main-loop flush task holds connections.
+
+### Configuration
+
+Extends Phase 6 checkpoint config (IG-550):
+
+```yaml
+agent:
+  loop:
+    checkpoint:
+      async_write: true
+      flush_interval: 5.0
+      coalesce: true
+      close_timeout_seconds: 30
+      durable_flush_timeout: 10
+```
+
+`persistence.checkpoints_pool_size` (IG-561) caps shared pool size; writer does not add a separate pool.
+
+### Success criteria (amendment)
+
+1. No `bound to a different event loop` from writer under max thread_pool concurrency
+2. Goal boundary: checkpoint + CE tables consistent within durable flush timeout
+3. `close()` bounded by `close_timeout_seconds` (not outer request timeout)
+4. Process connection count to `soothe_checkpoints` ≤ configured pool cap
+
+### Related implementation guides
+
+- [IG-550](../impl/IG-550-high-performance-persistence.md) — writer introduction, coalescing, goal-boundary transaction
+- [IG-571](../impl/IG-571-main-loop-persistence-writer-bridge.md) — main-loop submit bridge (thread_pool fix)
+
 ---
 
 ## Success Criteria
@@ -730,6 +831,7 @@ Disable async writes for:
 9. Metadata.json provides quick access ✓
 10. No data duplication ✓
 11. **Async checkpoint writes reduce peak latency by ~12s** ✓ (Phase 6)
+12. **Unified write pipeline: no cross-event-loop writer errors under thread_pool** (IG-571)
 
 ---
 
@@ -740,6 +842,8 @@ Disable async writes for:
 - RFC-503: Loop-First User Experience
 - RFC-411: Event Stream Replay
 - RFC-801: SQLite Backend (existing)
+- IG-550: High-Performance Persistence Optimization (unified writer)
+- IG-571: Main-Loop Persistence Writer Bridge (thread_pool execution model)
 
 ---
 

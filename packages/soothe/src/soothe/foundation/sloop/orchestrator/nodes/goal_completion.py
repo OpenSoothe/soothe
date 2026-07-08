@@ -111,9 +111,7 @@ async def _goal_completion_tail_persistence(
 ) -> list[str]:
     """Persist CE + checkpoint tail state after the ``completed`` wire event."""
     failures: list[str] = []
-    writer = None
-    with contextlib.suppress(Exception):
-        writer = await state_manager._ensure_loop_writer()
+    unified_pg = getattr(state_manager, "_backend_type", None) == "postgresql"
 
     try:
         await state_manager.finalize_goal(
@@ -131,7 +129,7 @@ async def _goal_completion_tail_persistence(
         )
         return failures
 
-    if writer is not None:
+    if unified_pg:
         dag = None
         ledger: list[dict[str, Any]] | None = None
         if context_engine is not None:
@@ -160,6 +158,7 @@ async def _goal_completion_tail_persistence(
             )
         return failures
 
+    # SQLite: separate CE save and checkpoint flush.
     if context_engine is not None:
         try:
             await context_engine.save()

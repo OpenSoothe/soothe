@@ -14,7 +14,7 @@ from soothe.foundation.sloop.orchestrator.nodes.goal_completion import (
 @pytest.mark.asyncio
 async def test_unified_tail_uses_single_goal_boundary_persist() -> None:
     state_manager = Mock()
-    state_manager._ensure_loop_writer = AsyncMock(return_value=object())
+    state_manager._backend_type = "postgresql"
     state_manager.finalize_goal = AsyncMock()
     state_manager.persist_goal_boundary_durable = AsyncMock(
         return_value=Mock(ok=True, failures=[]),
@@ -43,7 +43,7 @@ async def test_unified_tail_uses_single_goal_boundary_persist() -> None:
 async def test_sqlite_tail_uses_ce_save_and_flush() -> None:
     """SQLite (no persistence writer) still persists CE and checkpoint separately."""
     state_manager = Mock()
-    state_manager._ensure_loop_writer = AsyncMock(return_value=None)
+    state_manager._backend_type = "sqlite"
     state_manager.finalize_goal = AsyncMock()
     state_manager._checkpoint = Mock()
     state_manager.save = AsyncMock()

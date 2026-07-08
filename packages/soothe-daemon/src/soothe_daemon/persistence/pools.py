@@ -49,6 +49,7 @@ async def preopen_shared_postgres_pools(
     metadata_pool = registry.get_pool("metadata")
     SharedMetadataPool._register_pool(metadata_pool)
 
+    LoopPersistenceWriter.bind_main_loop(asyncio.get_running_loop())
     await LoopPersistenceWriter.get_shared_instance(config)
 
     logger.info("PostgresPoolRegistry pre-open complete")
