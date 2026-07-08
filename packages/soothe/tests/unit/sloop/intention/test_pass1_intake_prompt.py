@@ -33,3 +33,14 @@ def test_build_intake_pass1_system_prompt_includes_identity_and_timestamp() -> N
     assert prompt.index("<ASSISTANT_IDENTITY>") < prompt.index("<INTAKE_PASS1>")
     assert prompt.index("<INTAKE_PASS1>") < prompt.index("<PROMPT_TIMESTAMP>")
     assert prompt.endswith("</PROMPT_TIMESTAMP>")
+
+
+def test_build_intake_pass1_system_prompt_formats_assistant_name_in_examples() -> None:
+    prompt = build_intake_pass1_system_prompt(INTAKE_PASS1_SYSTEM_PROMPT, "Soothe")
+
+    assert "I'm Soothe, an AI assistant invented by Dr. Xiaming Chen" in prompt
+    assert "我是Soothe" in prompt
+    assert "FORBIDDEN identity reply" in prompt
+    assert "never output this" in prompt
+    assert "(per ASSISTANT_IDENTITY)" not in prompt
+    assert "{assistant_name}" not in prompt
