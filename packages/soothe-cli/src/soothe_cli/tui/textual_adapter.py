@@ -52,6 +52,11 @@ from soothe_sdk.ux.loop_stream import (
     is_stream_terminal,
 )
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
+from soothe_sdk.ux.subagent_wire_display import (
+    SubagentWireRenderKind,
+    classify_subagent_wire_render,
+    subagent_wire_row_params,
+)
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     is_inner_subgraph_task_tool_id,
@@ -951,34 +956,6 @@ def _ingest_wire_step_on_subagent_card(
         subagent_card.set_tool_success(row_id, "", duration_ms=duration_ms)
 
 
-def _subagent_wire_step_params(
-    event_type: str,
-    data: dict[str, Any],
-) -> tuple[str, dict[str, Any], str, int] | None:
-    """Map curated subagent wire events to SubAgent card row fields."""
-    et = str(event_type or "").strip()
-    if et.endswith(".gather.summary"):
-        query = str(data.get("query_preview", "") or "").strip()
-        rc = int(data.get("result_count", 0) or 0)
-        st = int(data.get("sources_touched", 0) or 0)
-        preview = query
-        if rc or st:
-            tail = f"{rc} hits, {st} sources"
-            preview = f"{query} → {tail}" if query else tail
-        return "WebSearch", {"query": preview or query}, "success", 0
-    if et.endswith(".step.completed"):
-        tool_name = str(data.get("tool_name", "") or "").strip() or "Step"
-        args_preview = str(data.get("args_preview", "") or "").strip()
-        status = str(data.get("status", "done") or "done").strip().lower()
-        phase = "success" if status in ("done", "success", "complete") else "running"
-        if status in ("error", "failed"):
-            phase = "error"
-        duration_ms = int(data.get("duration_ms", 0) or 0)
-        args = {"preview": args_preview} if args_preview else {}
-        return tool_name, args, phase, duration_ms
-    return None
-
-
 def _apply_subagent_wire_step_event(
     adapter: TextualUIAdapter,
     *,
@@ -986,8 +963,8 @@ def _apply_subagent_wire_step_event(
     data: dict[str, Any],
     task_scope: TaskScope,
 ) -> bool:
-    """Render ``*.step.completed`` / ``*.gather.summary`` on the SubAgent (TASK) card."""
-    params = _subagent_wire_step_params(event_type, data)
+    """Render row-style subagent wire events on the SubAgent (TASK) card."""
+    params = subagent_wire_row_params(event_type, data)
     if params is None:
         return False
     tool_name, args, phase, duration_ms = params
@@ -1011,6 +988,29 @@ def _apply_subagent_wire_step_event(
     return True
 
 
+def _apply_subagent_wire_activity_event(
+    adapter: TextualUIAdapter,
+    *,
+    event_type: str,
+    data: dict[str, Any],
+    task_scope: TaskScope,
+) -> bool:
+    """Render note-style subagent wire events on the SubAgent card."""
+    from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
+
+    line = summarize_subagent_wire_activity(str(event_type or "").strip(), data).strip()
+    if not line:
+        return False
+    step_id = task_scope_step_id(task_scope)
+    if not step_id:
+        return True
+    subagent_card = _ensure_subagent_card_for_task_scope(adapter, task_scope)
+    if subagent_card is None:
+        return True
+    subagent_card.append_subagent_activity(line)
+    return True
+
+
 def _apply_subagent_wire_lifecycle_event(
     adapter: TextualUIAdapter,
     *,
@@ -1021,7 +1021,7 @@ def _apply_subagent_wire_lifecycle_event(
     """Handle subagent ``*.completed`` / ``*.failed`` wire events (RFC-628, IG-513)."""
     et = str(event_type or "").strip()
     if not (et.endswith(".completed") or et.endswith(".failed")):
-        return True
+        return False
     step_id = task_scope_step_id(task_scope)
     task_idx = task_scope_task_idx(task_scope, step_id)
     card = adapter._subagent_cards_by_key.get(_subagent_registry_key(step_id, task_idx))
@@ -1046,6 +1046,39 @@ def _apply_subagent_wire_lifecycle_event(
     )
     adapter._subagent_cards_by_key.pop(_subagent_registry_key(step_id, task_idx), None)
     return True
+
+
+def _route_subagent_wire_event(
+    adapter: TextualUIAdapter,
+    *,
+    event_type: str,
+    data: dict[str, Any],
+    task_scope: TaskScope,
+) -> bool:
+    """Route a curated subagent wire event to the unified display protocol handlers."""
+    kind = classify_subagent_wire_render(event_type)
+    if kind is SubagentWireRenderKind.ACTIVITY_ROW:
+        return _apply_subagent_wire_step_event(
+            adapter,
+            event_type=event_type,
+            data=data,
+            task_scope=task_scope,
+        )
+    if kind is SubagentWireRenderKind.ACTIVITY_NOTE:
+        return _apply_subagent_wire_activity_event(
+            adapter,
+            event_type=event_type,
+            data=data,
+            task_scope=task_scope,
+        )
+    if kind is SubagentWireRenderKind.LIFECYCLE_END:
+        return _apply_subagent_wire_lifecycle_event(
+            adapter,
+            event_type=event_type,
+            data=data,
+            task_scope=task_scope,
+        )
+    return False
 
 
 def _route_subgraph_tool_call(
@@ -4172,20 +4205,13 @@ async def execute_task_textual(
                                 and event_type.startswith("soothe.subagent.")
                                 and is_allowlisted_subagent_event_type(event_type)
                             ):
-                                if _apply_subagent_wire_step_event(
+                                if _route_subagent_wire_event(
                                     adapter,
                                     event_type=event_type,
                                     data=data,
                                     task_scope=task_scope,
                                 ):
                                     continue
-                                _apply_subagent_wire_lifecycle_event(
-                                    adapter,
-                                    event_type=event_type,
-                                    data=data,
-                                    task_scope=task_scope,
-                                )
-                                continue
                 finally:
                     await ui_coalesce.after_chunk()
 

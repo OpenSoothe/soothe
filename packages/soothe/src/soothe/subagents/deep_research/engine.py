@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
+from soothe.subagents.research_wire import ResearchWireEmitter
 from soothe.toolkits.url_crawl import crawl_urls, urls_from_search_results
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
@@ -56,6 +57,12 @@ if TYPE_CHECKING:
     from .protocol import WebSearchSourceProtocol
 
 logger = logging.getLogger(__name__)
+
+_research_wire = ResearchWireEmitter(
+    progress_event_type=DeepResearchProgressEvent,
+    step_event_type=DeepResearchStepCompletedEvent,
+    logger=logger,
+)
 
 _shared_pool: ThreadPoolExecutor | None = None
 
@@ -199,21 +206,11 @@ def _references_from_state(state: dict[str, Any]) -> list[ResearchReference]:
 
 
 def _emit_progress(phase: str, message: str, *, loop_count: int = 0, total_loops: int = 0) -> None:
-    emit_subagent_wire_event(
-        DeepResearchProgressEvent(
-            phase=phase, message=message, loop_count=loop_count, total_loops=total_loops
-        ).to_dict(),
-        logger,
-    )
+    _research_wire.progress(phase, message, loop_count=loop_count, total_loops=total_loops)
 
 
 def _emit_step(tool_name: str, args_preview: str, *, duration_ms: int = 0) -> None:
-    emit_subagent_wire_event(
-        DeepResearchStepCompletedEvent(
-            tool_name=tool_name, args_preview=args_preview, duration_ms=duration_ms
-        ).to_dict(),
-        logger,
-    )
+    _research_wire.step(tool_name, args_preview, duration_ms=duration_ms)
 
 
 async def _invoke_llm_with_timeout(
@@ -333,6 +330,7 @@ def build_deep_research_engine(
         ]
 
     def gather_node(state: dict[str, Any]) -> dict[str, Any]:
+        t0 = time.perf_counter()
         query = state.get("_gather_query", "")
         profile = _effort_profile(state, cfg)
         loop_count = state.get("loop_count", 0)
@@ -359,13 +357,18 @@ def build_deep_research_engine(
                 return []
 
         search_results = _run_async(_search())
+        sources_touched = len({r.source_ref for r in search_results if r.source_ref})
         emit_subagent_wire_event(
             DeepResearchGatherSummaryEvent(
-                query_preview=str(query)[:120], result_count=len(search_results)
+                query_preview=str(query)[:120],
+                result_count=len(search_results),
+                sources_touched=sources_touched,
             ).to_dict(),
             logger,
         )
         if not search_results:
+            duration_ms = int((time.perf_counter() - t0) * 1000)
+            _emit_step("WebSearch", f"{query[:80]} → 0 hits", duration_ms=duration_ms)
             return {
                 "search_summaries": [f"No web results for: {query}"],
                 "sources_gathered": [f"empty:{query}"],
@@ -388,6 +391,11 @@ def build_deep_research_engine(
             ).to_dict(),
             logger,
         )
+        duration_ms = int((time.perf_counter() - t0) * 1000)
+        preview = f"{query[:80]} → {len(search_results)} hits"
+        if urls:
+            preview = f"{preview}, {success_count}/{len(urls)} crawled"
+        _emit_step("WebSearch", preview, duration_ms=duration_ms)
 
         summary_parts: list[str] = []
         source_refs: list[str] = []

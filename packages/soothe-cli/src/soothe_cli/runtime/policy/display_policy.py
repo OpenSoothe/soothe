@@ -134,9 +134,9 @@ class DisplayPolicy:
         """Check if this is a plan-related event."""
         return event_type.startswith("soothe.cognition.plan.")
 
-    def is_deep_research_event(self, event_type: str) -> bool:
-        """Check if this is a Deep Research subagent event."""
-        return event_type.startswith("soothe.subagent.deep_research.")
+    def is_subagent_wire_event(self, event_type: str) -> bool:
+        """Check if this is a curated subagent wire event."""
+        return event_type.startswith("soothe.subagent.")
 
     def is_internal_event(self, event_type: str) -> bool:
         """Check if this is an internal (never-shown) event."""

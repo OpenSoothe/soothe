@@ -78,10 +78,6 @@ from .catalog import (
     StreamChunk,
     # Helper functions
     custom_event,
-    make_subagent_tool_completed,
-    make_subagent_tool_failed,
-    # Maker functions
-    make_subagent_tool_started,
     register_event,
 )
 
@@ -274,10 +270,6 @@ __all__ = [
     "GoalDecomposedEvent",
     "GoalRemovedEvent",
     "AutopilotModeSwitchedEvent",
-    # Maker functions
-    "make_subagent_tool_started",
-    "make_subagent_tool_completed",
-    "make_subagent_tool_failed",
 ]
 
 

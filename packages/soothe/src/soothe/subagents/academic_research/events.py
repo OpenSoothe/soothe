@@ -58,6 +58,7 @@ class AcademicResearchGatherSummaryEvent(SootheEvent):
     )
     query_preview: str = ""
     result_count: int = 0
+    sources_touched: int = 0
 
     model_config = ConfigDict(extra="allow")
 
@@ -91,7 +92,7 @@ register_event(
 )
 register_event(
     AcademicResearchProgressEvent,
-    verbosity=VerbosityTier.INTERNAL,
+    verbosity=VerbosityTier.NORMAL,
     summary_template="{phase}: {message}",
 )
 register_event(
