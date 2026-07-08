@@ -328,6 +328,21 @@ class Executor:
             return merge_configs(parent_runnable_config, graph_config)
         return graph_config
 
+    async def _checkpoint_message_ids_for_thread(self, fork_thread_id: str) -> frozenset[str]:
+        """Collect CoreAgent message ids already present on a branch checkpoint."""
+        if getattr(self.core_agent, "can_read_graph_state", None) is not True:
+            return frozenset()
+        from soothe.foundation.sloop.utils.ledger_message_dedup import (
+            collect_core_agent_message_ids,
+        )
+
+        graph_state = await self.core_agent.aget_state(
+            config={"configurable": {"thread_id": fork_thread_id}},
+        )
+        if not graph_state or not graph_state.values:
+            return frozenset()
+        return collect_core_agent_message_ids(list(graph_state.values.get("messages") or []))
+
     async def _claude_runner_config_extras(self, thread_id: str) -> dict[str, Any]:
         """Load Claude session ids + durability handle for subagent resume (IG-202)."""
         if not thread_id or self._config is None:
@@ -1183,6 +1198,11 @@ class Executor:
                 workspace=state.workspace,
                 phase="execute_step",
                 step_id=step.id,
+                core_agent_message_id=(
+                    None
+                    if isinstance(raw, Exception)
+                    else getattr(raw, "human_core_agent_message_id", None)
+                ),
             )
             if isinstance(raw, Exception):
                 ai_err_msg = LoopAIMessage(
@@ -1225,6 +1245,7 @@ class Executor:
                 phase="execute_step",
                 step_id=step.id,
                 response_metadata=meta,
+                core_agent_message_id=result.ai_core_agent_message_id,
             )
             _record_ledger_message(self._context_engine, human_msg, "execute_step")
             _record_ledger_message(self._context_engine, ai_msg, "execute_step")
@@ -1759,6 +1780,8 @@ class Executor:
             if self._config is not None:
                 config = self._executor_langfuse_merge_for_stream(config, thread_id=fork_thread_id)
 
+            checkpoint_message_ids = await self._checkpoint_message_ids_for_thread(fork_thread_id)
+
             # Build graph input: Slice A (cross-goal) + Slice B (intra-goal deps) + envelope.
             graph_input_messages: list[BaseMessage] = []
             cross_goal_projected = False
@@ -1774,6 +1797,7 @@ class Executor:
                     decision=loop_state.current_decision,
                     checkpoint=self._checkpoint,
                     soothe_config=self._config,
+                    checkpoint_message_ids=checkpoint_message_ids,
                 )
                 graph_input_messages.extend(projected.messages)
                 cross_goal_projected = projected.cross_goal_projected
@@ -1790,6 +1814,8 @@ class Executor:
                 predecessor_projected=predecessor_projected,
             )
             logger.debug("[Human Message] %s", log_preview(envelope, chars=150))
+            from uuid import uuid4
+
             human_msg = LoopHumanMessage(
                 content=envelope,
                 thread_id=thread_id,
@@ -1797,7 +1823,9 @@ class Executor:
                 goal_summary=None,
                 workspace=workspace,
                 phase="execute_step",
+                id=str(uuid4()),
             )
+            envelope_human_id = human_msg.id
             graph_input_messages.append(human_msg)
             skill_activation = self._seed_skill_activation(loop_state) if loop_state else None
             mcp_state = self._seed_mcp_state(loop_state) if loop_state else None
@@ -1931,10 +1959,19 @@ class Executor:
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
+            human_core_agent_message_id: str | None = envelope_human_id
+            ai_core_agent_message_id: str | None = None
+            from soothe.foundation.sloop.utils.ledger_message_dedup import (
+                extract_execute_turn_core_agent_message_ids,
+            )
+
             # RFC-105: Snapshot skill_activation from graph state back into LoopState
             # IG-519: Only call aget_state when checkpointer is configured.
             # Without checkpointer, skill_activation lives in LoopState via middleware hooks.
-            if loop_state is not None and self.core_agent.can_read_graph_state:
+            if (
+                loop_state is not None
+                and getattr(self.core_agent, "can_read_graph_state", None) is True
+            ):
                 graph_state = await self.core_agent.aget_state(
                     config={"configurable": {"thread_id": fork_thread_id}},
                 )
@@ -1942,11 +1979,25 @@ class Executor:
                     self._snapshot_skill_activation(graph_state.values, loop_state)
                     self._snapshot_mcp_state(graph_state.values, loop_state)
                     self._snapshot_tool_activation(graph_state.values, loop_state)
+                    human_core_agent_message_id, ai_core_agent_message_id = (
+                        extract_execute_turn_core_agent_message_ids(
+                            graph_messages=list(graph_state.values.get("messages") or []),
+                            stream_ai_messages=messages,
+                            envelope_human_id=envelope_human_id,
+                        )
+                    )
 
                 # Clear skill_context after first execute wave — body now lives in
                 # system prompt <SKILL_CONTEXT> via progressive loading (RFC-105).
                 if loop_state.skill_context:
                     loop_state.skill_context = None
+
+            if ai_core_agent_message_id is None and messages:
+                _, ai_core_agent_message_id = extract_execute_turn_core_agent_message_ids(
+                    graph_messages=None,
+                    stream_ai_messages=messages,
+                    envelope_human_id=envelope_human_id,
+                )
 
             # Note: tool_call_ids are now in unified format within messages chunks
             # No separate binding events needed (IG-416 simplified design)
@@ -2019,6 +2070,8 @@ class Executor:
                 messages=messages,
                 delegate_final=delegate_final,
                 output=output,  # IG-493: accumulated text for ledger fallback
+                human_core_agent_message_id=human_core_agent_message_id,
+                ai_core_agent_message_id=ai_core_agent_message_id,
             )
 
         except asyncio.CancelledError:
