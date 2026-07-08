@@ -638,13 +638,13 @@ class StrangeLoopStateManager:
         self._last_save_checkpoint = checkpoint
 
         writer = await self._ensure_loop_writer()
-        if writer is not None and not self._closed:
+        if writer is not None:
             from soothe.foundation.persistence.loop_writer import PersistWriteMode
 
             write_mode = (
                 PersistWriteMode.FULL if include_goal_history else PersistWriteMode.INDEX_ONLY
             )
-            await writer.enqueue_checkpoint(
+            await writer.submit_enqueue(
                 self.loop_id,
                 checkpoint,
                 durable=False,
@@ -775,7 +775,7 @@ class StrangeLoopStateManager:
 
         writer = await self._ensure_loop_writer()
         if writer is not None:
-            result = await writer.flush_durable(self.loop_id, timeout=timeout)
+            result = await writer.submit_flush_durable(self.loop_id, timeout=timeout)
             if not result.ok:
                 from soothe.foundation.persistence.checkpoint_split import mark_persist_degraded
 
@@ -1042,7 +1042,7 @@ class StrangeLoopStateManager:
             self._goal_boundary_persisted = True
             return PersistResult(ok=True)
 
-        result = await writer.persist_goal_boundary(
+        result = await writer.submit_persist_goal_boundary(
             self.loop_id,
             checkpoint=self._checkpoint,
             dag=dag,
@@ -1322,13 +1322,13 @@ class StrangeLoopStateManager:
                     if not self._goal_boundary_persisted and self._last_save_checkpoint:
                         from soothe.foundation.persistence.loop_writer import PersistWriteMode
 
-                        await writer.enqueue_checkpoint(
+                        await writer.submit_enqueue(
                             self.loop_id,
                             self._last_save_checkpoint,
                             durable=True,
                             write_mode=PersistWriteMode.FULL,
                         )
-                    await writer.release_loop(
+                    await writer.submit_release_loop(
                         self.loop_id,
                         timeout=self._close_timeout_seconds,
                     )

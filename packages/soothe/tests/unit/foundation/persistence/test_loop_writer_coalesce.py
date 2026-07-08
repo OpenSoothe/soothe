@@ -15,6 +15,17 @@ from soothe.foundation.persistence.loop_writer import (
 from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
 
 
+@pytest.fixture(autouse=True)
+def _reset_writer_loop_binding() -> None:
+    import soothe.foundation.persistence.loop_writer as mod
+
+    mod._writer_singleton = None
+    LoopPersistenceWriter._bound_loop = None
+    yield
+    mod._writer_singleton = None
+    LoopPersistenceWriter._bound_loop = None
+
+
 def _checkpoint(loop_id: str, *, status: str = "running") -> StrangeLoopCheckpoint:
     now = datetime.now(UTC)
     return StrangeLoopCheckpoint(
@@ -40,8 +51,8 @@ async def test_enqueue_coalesces_latest_checkpoint() -> None:
     cp1 = _checkpoint("loop-a", status="running")
     cp2 = _checkpoint("loop-a", status="idle")
 
-    await writer.enqueue_checkpoint("loop-a", cp1)
-    await writer.enqueue_checkpoint("loop-a", cp2)
+    await writer.submit_enqueue("loop-a", cp1)
+    await writer.submit_enqueue("loop-a", cp2)
 
     assert writer._pending["loop-a"].checkpoint.status == "idle"
     await writer._flush_loop("loop-a", force_full=False)
@@ -60,7 +71,7 @@ async def test_durable_enqueue_sets_full_write_mode() -> None:
     writer._flush_loop = AsyncMock()
 
     cp = _checkpoint("loop-b")
-    await writer.enqueue_checkpoint(
+    await writer.submit_enqueue(
         "loop-b",
         cp,
         durable=True,
@@ -87,5 +98,5 @@ async def test_release_loop_bounded_on_hung_flush() -> None:
     writer._flush_loop = _hang  # type: ignore[method-assign]
     writer._pending["loop-c"] = MagicMock(checkpoint=_checkpoint("loop-c"), durable=False)
 
-    await writer.release_loop("loop-c", timeout=0.05)
+    await writer.submit_release_loop("loop-c", timeout=0.05)
     assert "loop-c" in writer._released_loops

@@ -82,7 +82,7 @@ class PgsqlContextPersistence:
     async def save_dag(self, dag: GoalStepDAG) -> None:
         writer = await self._ensure_loop_writer()
         try:
-            await writer.save_ce_dag(self._loop_id, dag)
+            await writer.submit_save_ce_dag(self._loop_id, dag)
         except Exception:
             logger.warning("[CE] Failed to save DAG via persistence writer", exc_info=True)
 
@@ -115,7 +115,7 @@ class PgsqlContextPersistence:
     async def save_ledger(self, messages: list[dict[str, Any]]) -> None:
         writer = await self._ensure_loop_writer()
         try:
-            await writer.save_ce_ledger(self._loop_id, messages)
+            await writer.submit_save_ce_ledger(self._loop_id, messages)
         except Exception:
             logger.warning("[CE] Failed to save ledger via persistence writer", exc_info=True)
 
