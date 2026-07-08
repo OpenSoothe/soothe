@@ -100,6 +100,22 @@ jobs:
     - name: Set up Python
       run: uv python install 3.12
 
+    - name: Wait for soothe-sdk on PyPI
+      run: |
+        VERSION=$(cat VERSION)
+        for i in {1..30}; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
+            exit 0
+          fi
+          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+          sleep 10
+        done
+        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
+        exit 1
+
     - name: Sync CLI dependencies
       run: |
         cd packages/soothe-cli
@@ -177,6 +193,22 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y libxml2-dev libxslt-dev
+
+    - name: Wait for soothe-sdk on PyPI
+      run: |
+        VERSION=$(cat VERSION)
+        for i in {1..30}; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
+            exit 0
+          fi
+          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+          sleep 10
+        done
+        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
+        exit 1
 
     - name: Sync soothe core dependencies
       run: |
@@ -256,6 +288,22 @@ jobs:
 
     - name: Set up Python
       run: uv python install 3.12
+
+    - name: Wait for soothe on PyPI
+      run: |
+        VERSION=$(cat VERSION)
+        for i in {1..30}; do
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/soothe/${VERSION}/json" 2>/dev/null || echo "000")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✓ soothe ${VERSION} is available on PyPI"
+            exit 0
+          fi
+          echo "Waiting for soothe ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
+          sleep 10
+        done
+        echo "❌ Timeout: soothe ${VERSION} not found on PyPI after 5 minutes"
+        exit 1
 
     - name: Sync soothe-daemon dependencies
       run: |
