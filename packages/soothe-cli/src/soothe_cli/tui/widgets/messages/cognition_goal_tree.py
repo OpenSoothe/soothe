@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from time import time
 from typing import TYPE_CHECKING, Any
 
 from textual.containers import Vertical
@@ -12,6 +14,7 @@ from textual.widgets import Static
 from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
+from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 if TYPE_CHECKING:
@@ -20,13 +23,35 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MAX_GOAL_HEADER = 100
-_MAX_GOAL_STEP_DESC = 200
+_MAX_GOAL_STEP_DESC = 80
+_MAX_STEP_SUMMARY_TAIL = 80
+_MAX_DEPENDENCY_IDS = 3
+
+_DONE_WITH_TOOLS_RE = re.compile(r"^Done(?:\s*\[\d+\s+tools?\])?$", re.IGNORECASE)
 
 
-def _plan_quick_view_step_summary(success: bool, summary: str) -> str:
+def _dependency_suffix(deps: tuple[str, ...]) -> str:
+    """Return a compact dependency hint for plan quick-view rows."""
+    if not deps:
+        return ""
+    shown = deps[:_MAX_DEPENDENCY_IDS]
+    text = ", ".join(shown)
+    if len(deps) > _MAX_DEPENDENCY_IDS:
+        text += ", …"
+    return f" (→ {text})"
+
+
+def _plan_quick_view_step_summary(
+    success: bool,
+    summary: str,
+    *,
+    tool_call_count: int = 0,
+) -> str:
     """Return a Ctrl+T-safe step summary tail (hide recoverable tool errors)."""
     tail = (summary or "").strip()
     if not tail or tail in ("Done", "Failed"):
+        return ""
+    if success and tool_call_count > 0 and _DONE_WITH_TOOLS_RE.match(tail):
         return ""
     if success:
         try:
@@ -37,6 +62,12 @@ def _plan_quick_view_step_summary(success: bool, summary: str) -> str:
         except Exception:  # noqa: BLE001
             logger.debug("plan quick view summary filter unavailable", exc_info=True)
     return tail
+
+
+def _normalize_step_dependencies(raw_deps: Any) -> tuple[str, ...]:
+    if not isinstance(raw_deps, list):
+        return ()
+    return tuple(str(dep).strip() for dep in raw_deps if str(dep).strip())
 
 
 class _StepLineState:
@@ -50,6 +81,8 @@ class _StepLineState:
         "duration_ms",
         "tool_call_count",
         "summary",
+        "dependencies",
+        "started_at",
     )
 
     def __init__(
@@ -62,6 +95,8 @@ class _StepLineState:
         duration_ms: int = 0,
         tool_call_count: int = 0,
         summary: str = "",
+        dependencies: tuple[str, ...] = (),
+        started_at: float | None = None,
     ) -> None:
         self.step_id = step_id
         self.description = description
@@ -70,6 +105,8 @@ class _StepLineState:
         self.duration_ms = duration_ms
         self.tool_call_count = tool_call_count
         self.summary = summary
+        self.dependencies = dependencies
+        self.started_at = started_at
 
 
 class CognitionGoalTreeMessage(Vertical):
@@ -138,8 +175,12 @@ class CognitionGoalTreeMessage(Vertical):
     @staticmethod
     def _clip(text: str, max_len: int) -> str:
         t = (text or "").strip().replace("\n", " ")
+        if max_len <= 0:
+            return "…"
         if len(t) <= max_len:
             return t
+        if max_len == 1:
+            return "…"
         return t[: max_len - 1].rstrip() + "…"
 
     def _goal_tree_status(self) -> str:
@@ -198,45 +239,111 @@ class CognitionGoalTreeMessage(Vertical):
         g = get_glyphs()
         return f"{g.output_prefix} "
 
-    def _goal_tree_step_line_content(self, st: _StepLineState) -> Content:
-        """One goal→step row: dim tree gutter, foreground body (parity with ``CognitionStepMessage`` tool rows)."""
+    def _step_icon(self, st: _StepLineState) -> str:
         g = get_glyphs()
+        if st.phase == "pending" or st.phase == "queued":
+            return g.circle_empty
+        if st.phase == "running":
+            frames = g.spinner_frames
+            return frames[self._spinner_position % len(frames)]
+        return g.checkmark if st.success else g.error
+
+    def _step_stats_suffix(self, st: _StepLineState) -> str:
+        """Duration and tool-count suffix for running or completed rows."""
+        if st.phase == "running":
+            parts: list[str] = []
+            if st.started_at is not None:
+                elapsed_s = max(0.001, time() - st.started_at)
+                parts.append(format_duration(elapsed_s))
+            if st.tool_call_count > 0:
+                parts.append(f"{st.tool_call_count} tools")
+            if not parts:
+                return ""
+            return " · " + " · ".join(parts)
+        if st.phase not in ("done", "error"):
+            return ""
+        dur_s = max(0.001, st.duration_ms / 1000.0)
+        parts = [format_duration(dur_s)]
+        if st.tool_call_count > 0:
+            parts.append(f"{st.tool_call_count} tools")
+        return " · " + " · ".join(parts)
+
+    def _step_summary_suffix(self, st: _StepLineState) -> str:
+        if st.phase not in ("done", "error"):
+            return ""
+        tail = _plan_quick_view_step_summary(
+            st.success,
+            st.summary,
+            tool_call_count=st.tool_call_count,
+        )
+        if not tail:
+            return ""
+        return f" — {self._clip(tail, _MAX_STEP_SUMMARY_TAIL)}"
+
+    def _fit_step_line(
+        self,
+        st: _StepLineState,
+        *,
+        icon: str,
+        max_line_width: int | None,
+    ) -> str:
+        """Build a single-line step row, clipping description to fit ``max_line_width``."""
+        step_prefix = f"{st.step_id}: " if st.step_id else ""
+        dep_suffix = _dependency_suffix(st.dependencies)
+        queued_suffix = " · queued" if st.phase == "queued" else ""
+        stats_suffix = self._step_stats_suffix(st)
+        summary_suffix = self._step_summary_suffix(st)
+        lead = f"{icon} {step_prefix}"
+
+        def assemble(desc: str, *, include_summary: bool) -> str:
+            summary = summary_suffix if include_summary else ""
+            return f"{lead}{desc}{dep_suffix}{queued_suffix}{stats_suffix}{summary}"
+
+        width = max_line_width or PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
+        desc = self._clip(st.description, _MAX_GOAL_STEP_DESC)
+        line = assemble(desc, include_summary=True)
+        if len(line) <= width:
+            return line
+
+        line = assemble(desc, include_summary=False)
+        if len(line) <= width:
+            return line
+
+        fixed_len = len(f"{lead}{dep_suffix}{queued_suffix}{stats_suffix}")
+        budget = width - fixed_len
+        clipped_desc = self._clip(st.description, budget)
+        return f"{lead}{clipped_desc}{dep_suffix}{queued_suffix}{stats_suffix}"
+
+    def _goal_tree_step_line_content(
+        self,
+        st: _StepLineState,
+        *,
+        max_line_width: int | None = None,
+    ) -> Content:
+        """One goal→step row: dim tree gutter, foreground body (parity with ``CognitionStepMessage`` tool rows)."""
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         gutter = self._indent_prefix()
-        body = self._clip(st.description, _MAX_GOAL_STEP_DESC)
-        label = f"{st.step_id}: {body}" if st.step_id else body
+        icon = self._step_icon(st)
+        rest = self._fit_step_line(st, icon=icon, max_line_width=max_line_width)
+
         if st.phase == "pending":
-            rest = f"{g.circle_empty} {label}"
             return Content.assemble(
                 Content.styled(gutter, "dim"),
                 Content.styled(rest, "dim"),
             )
         if st.phase == "queued":
-            rest = f"{g.circle_empty} {label} · queued"
             return Content.assemble(
                 Content.styled(gutter, "dim"),
                 Content.styled(rest, colors.cognition),
             )
         if st.phase == "running":
-            frames = g.spinner_frames
-            frame = frames[self._spinner_position % len(frames)]
-            rest = f"{frame} {label}"
             return Content.assemble(
                 Content.styled(gutter, "dim"),
                 Content.styled(rest, colors.foreground),
             )
-        icon = g.checkmark if st.success else g.error
-        dur_s = max(0.001, st.duration_ms / 1000.0)
-        dur = format_duration(dur_s)
-        rest = f"{icon} {label} · {dur}"
-        if st.tool_call_count > 0:
-            rest += f" · {st.tool_call_count} tools"
-        tail = _plan_quick_view_step_summary(st.success, st.summary)
-        if tail:
-            rest += f" — {self._clip(tail, 80)}"
         if st.phase == "error" or (st.phase == "done" and not st.success):
             return Content.assemble(
                 Content.styled(gutter, "dim"),
@@ -247,13 +354,15 @@ class CognitionGoalTreeMessage(Vertical):
             Content.styled(rest, colors.foreground),
         )
 
-    def _assemble_steps_content(self) -> Content:
+    def _assemble_steps_content(self, *, max_line_width: int | None = None) -> Content:
         line_contents: list[Content] = []
         for sid in self._step_order:
             st = self._steps.get(sid)
             if st is None:
                 continue
-            line_contents.append(self._goal_tree_step_line_content(st))
+            line_contents.append(
+                self._goal_tree_step_line_content(st, max_line_width=max_line_width)
+            )
         if not line_contents:
             return Content("")
         parts: list[object] = []
@@ -273,15 +382,28 @@ class CognitionGoalTreeMessage(Vertical):
         except Exception:
             pass
 
-    def plan_quick_view_content(self) -> Content:
+    def plan_quick_view_content(self, *, max_line_width: int | None = None) -> Content:
         """Full goal tree snapshot for the sticky plan quick-view overlay."""
         parts: list[object] = [self._goal_header_content()]
-        steps = self._assemble_steps_content()
+        steps = self._assemble_steps_content(max_line_width=max_line_width)
         if steps.plain.strip():
             parts.extend([Content("\n"), steps])
         if self._footer_visible and self._footer_plain:
             parts.extend([Content("\n"), self._goal_footer_styled_content()])
         return Content.assemble(*parts)
+
+    def sync_running_live_stats(
+        self,
+        stats: dict[str, tuple[int, float | None]],
+    ) -> None:
+        """Update in-flight tool counts and started_at from step cards."""
+        for sid, (tool_count, started_at) in stats.items():
+            st = self._steps.get(sid)
+            if st is None or st.phase != "running":
+                continue
+            st.tool_call_count = max(0, int(tool_count))
+            if started_at is not None:
+                st.started_at = started_at
 
     def tick_running_spinner(self) -> None:
         """Advance the running-row spinner when any step is in flight."""
@@ -339,6 +461,8 @@ class CognitionGoalTreeMessage(Vertical):
                     "duration_ms": st.duration_ms,
                     "tool_call_count": st.tool_call_count,
                     "summary": st.summary,
+                    "dependencies": list(st.dependencies),
+                    "started_at": st.started_at,
                 }
             )
         return {
@@ -366,6 +490,8 @@ class CognitionGoalTreeMessage(Vertical):
             sid = str(row.get("id", "")).strip()
             if not sid:
                 continue
+            started_raw = row.get("started_at")
+            started_at = float(started_raw) if started_raw is not None else None
             st = _StepLineState(
                 sid,
                 str(row.get("description", "")),
@@ -374,6 +500,8 @@ class CognitionGoalTreeMessage(Vertical):
                 duration_ms=int(row.get("duration_ms", 0)),
                 tool_call_count=int(row.get("tool_call_count", 0)),
                 summary=str(row.get("summary", "")),
+                dependencies=_normalize_step_dependencies(row.get("dependencies")),
+                started_at=started_at,
             )
             self._step_order.append(sid)
             self._steps[sid] = st
@@ -398,14 +526,23 @@ class CognitionGoalTreeMessage(Vertical):
                 continue
             planned_ids.add(sid)
             desc = str(row.get("description", "")).strip() or "(step)"
+            deps = _normalize_step_dependencies(row.get("dependencies"))
             existing = self._steps.get(sid)
             if existing is None:
                 self._step_order.append(sid)
-                self._steps[sid] = _StepLineState(sid, desc, phase="pending")
+                self._steps[sid] = _StepLineState(
+                    sid,
+                    desc,
+                    phase="pending",
+                    dependencies=deps,
+                )
             elif existing.phase in ("pending", "queued"):
                 existing.description = desc
+                existing.dependencies = deps
             elif existing.phase == "running" and desc:
                 existing.description = desc
+                if deps:
+                    existing.dependencies = deps
         for sid in list(self._step_order):
             st = self._steps.get(sid)
             if st is not None and st.phase == "pending" and sid not in planned_ids:
@@ -440,11 +577,9 @@ class CognitionGoalTreeMessage(Vertical):
             st.phase = phase
             if desc:
                 st.description = desc
+        if phase == "running" and st.started_at is None:
+            st.started_at = time()
         self._refresh_steps_display()
-
-    def add_step_running(self, step_id: str, description: str) -> None:
-        """Register a step in running state and refresh the aggregate."""
-        self.set_step_phase(step_id, "running", description=description)
 
     def complete_step(
         self,
@@ -468,6 +603,7 @@ class CognitionGoalTreeMessage(Vertical):
         st.duration_ms = duration_ms
         st.tool_call_count = tool_call_count
         st.summary = summary or ""
+        st.started_at = None
         self._refresh_steps_display()
 
     def set_loop_finished(
@@ -523,6 +659,7 @@ class CognitionGoalTreeMessage(Vertical):
                 st.success = False
                 st.duration_ms = 0
                 st.summary = msg
+                st.started_at = None
         self._refresh_steps_display()
         self._footer_plain = self._clip(msg, 120)
         self._footer_visible = True

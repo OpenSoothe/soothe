@@ -148,6 +148,7 @@ from soothe_cli.tui.widgets.messages import (
     flush_deferred_tools_refreshes,
     reset_turn_tool_refresh_state,
 )
+from soothe_cli.tui.widgets.messages.cognition_goal_tree import _normalize_step_dependencies
 
 logger = logging.getLogger(__name__)
 
@@ -1522,8 +1523,9 @@ def _record_plan_step_dag(adapter: TextualUIAdapter, raw_steps: list[Any]) -> No
         order.append(sid)
         in_plan.add(sid)
         raw_deps = raw.get("dependencies")
-        if isinstance(raw_deps, list):
-            dep_map[sid] = tuple(str(dep).strip() for dep in raw_deps if str(dep).strip())
+        deps = _normalize_step_dependencies(raw_deps)
+        if deps:
+            dep_map[sid] = deps
     adapter._plan_step_order = order
     adapter._plan_step_ids = in_plan
     adapter._plan_step_dependencies = dep_map

@@ -69,6 +69,15 @@ Replace ad-hoc `RunningStepsOverlay` with a **plan aggregate** quick view.
 | `PlanQuickViewOverlay` | Floating panel above chat input; **Ctrl+t** toggles; snapshots goal tree |
 | Removed | `RunningStepsOverlay`, `running_overlay_content()` on step cards |
 
+### Phase 2 polish — plan tree display ✅
+
+| Enhancement | Behavior |
+|-------------|----------|
+| Step dependencies | Per-row `(→ STEP-1)` suffix from `plan_decision.dependencies` |
+| Running live stats | Elapsed duration + current tool count (synced from step cards) |
+| Completed dedup | Hide `Done [N tools]` summary tail when structured `· N tools` suffix is shown |
+| Single-line width | Clip step description so full row fits terminal width (`PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS`) |
+
 ---
 
 ## Phase 3 — Dependency step visibility (optional) — pending
@@ -100,6 +109,7 @@ Optional follow-up if collapsed previews are insufficient:
 - [x] Add `PlanQuickViewOverlay`; Ctrl+t binding
 - [x] Remove `RunningStepsOverlay` prototype
 - [x] Tests: goal tree plan population, overlay toggle
+- [x] Plan tree polish: dependencies, running duration/tools, deduped summaries, line-width clip
 - [x] `./scripts/verify_finally.sh`
 
 ---

@@ -22,7 +22,7 @@ async def test_interrupt_cleanup_marks_goal_tree_interrupted() -> None:
         set_active_message=MagicMock(),
     )
     tree = CognitionGoalTreeMessage(goal="analyze logs", max_iterations=3)
-    tree.add_step_running("TRA-01", "scan soothe.log")
+    tree.set_step_phase("TRA-01", "running", description="scan soothe.log")
     adapter._goal_tree_message = tree
 
     daemon_session = MagicMock()
