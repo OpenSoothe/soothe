@@ -73,7 +73,9 @@ class TestTwoPassPrompts:
         assert "chitchat" not in INTAKE_PASS2_SYSTEM_PROMPT.lower()
 
     def test_pass1_human_task_is_compact(self) -> None:
-        assert INTAKE_PASS1_HUMAN_TASK == "Classify above. JSON only."
+        assert INTAKE_PASS1_HUMAN_TASK == (
+            "Classify above. Identity replies must use the configured assistant name. JSON only."
+        )
 
     def test_pass2_human_task_mentions_scope(self) -> None:
         assert "scope" in INTAKE_PASS2_HUMAN_TASK.lower()

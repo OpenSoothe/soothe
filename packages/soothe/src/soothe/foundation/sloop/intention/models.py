@@ -231,7 +231,11 @@ class IntakePass1LLMResult(BaseModel):
     )
     social_response: str | None = Field(
         default=None,
-        description="Required when is_task=False: friendly direct reply to the user",
+        description=(
+            "Required when is_task=False: friendly direct reply to the user. "
+            "For identity: name the configured assistant and Dr. Xiaming Chen; "
+            "never Claude, ChatGPT, Gemini, or other vendor models."
+        ),
     )
     social_kind: IntakePass1SocialKind = Field(
         default=IntakePass1SocialKind.OTHER,

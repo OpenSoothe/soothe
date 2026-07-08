@@ -13,7 +13,11 @@ class Pass1SocialReplyLLMResult(BaseModel):
     """Structured output for the dedicated Pass 1 social-reply fallback call."""
 
     social_response: str = Field(
-        description="Direct friendly reply to the user's social message",
+        description=(
+            "Direct friendly reply to the user's social message. "
+            "For identity: name the configured assistant and Dr. Xiaming Chen; "
+            "never Claude, ChatGPT, Gemini, or other vendor models."
+        ),
     )
     social_kind: IntakePass1SocialKind = Field(
         default=IntakePass1SocialKind.OTHER,
