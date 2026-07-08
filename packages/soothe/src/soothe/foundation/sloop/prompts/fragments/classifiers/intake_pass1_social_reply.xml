@@ -1,5 +1,6 @@
 <INTAKE_PASS1_SOCIAL_REPLY>
 Write a short, direct reply to the user's social message.
-Follow ASSISTANT_IDENTITY above. Match the user's language and tone.
+Follow ASSISTANT_IDENTITY above. For date or time questions, use PROMPT_TIMESTAMP below.
+Match the user's language and tone.
 One or two sentences. No markdown.
 </INTAKE_PASS1_SOCIAL_REPLY>

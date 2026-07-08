@@ -56,6 +56,7 @@ EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", st
 
 DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT = _read("system/prompts/default_system_body.xml")
 ASSISTANT_IDENTITY_FRAGMENT = _read("system/prompts/assistant_identity.xml", strip=True)
+PROMPT_TIMESTAMP_FRAGMENT = _read("system/prompts/prompt_timestamp.xml", strip=True)
 SIMPLE_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/simple_system.xml")
 MEDIUM_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/medium_system.xml")
 
@@ -92,6 +93,7 @@ __all__ = [
     "PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT",
     "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
+    "PROMPT_TIMESTAMP_FRAGMENT",
     "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
     "SCENARIO_CLASSIFIER_USER_FRAGMENT",

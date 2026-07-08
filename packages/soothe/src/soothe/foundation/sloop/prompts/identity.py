@@ -5,11 +5,7 @@ from __future__ import annotations
 import logging
 import re
 
-from soothe.foundation.sloop.chitchat_fallbacks import (
-    GENERIC_CHITCHAT_FALLBACK,
-    GENERIC_CHITCHAT_FALLBACKS,
-    pick_generic_chitchat_fallback,
-)
+from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
 from soothe.foundation.sloop.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
 
 logger = logging.getLogger(__name__)
@@ -37,29 +33,27 @@ def _normalize_social_kind(social_kind: str | None) -> str:
     return "other"
 
 
-def build_identity_reply(assistant_name: str, query: str) -> str:
-    """Build a direct user-facing identity answer for chitchat fast path."""
-    name = normalize_assistant_name(assistant_name)
-    lowered = query.strip().lower()
-    is_origin = (
-        "from" in lowered
-        or "born" in lowered
-        or "come" in lowered
-        or "哪" in query
-        or "从" in query
+def _has_configured_inventor_attribution(text: str) -> bool:
+    """Return True when LLM output cites the configured inventor attribution."""
+    lowered = text.lower()
+    return (
+        _INVENTOR_ATTRIBUTION_EN.lower() in lowered
+        or _INVENTOR_ATTRIBUTION_ZH in text
+        or "dr. xiaming chen" in lowered
     )
-    if any("\u4e00" <= ch <= "\u9fff" for ch in query):
-        if is_origin:
-            return (
-                f"我是{name}，{_INVENTOR_ATTRIBUTION_ZH}的云端 AI 助手，"
-                "没有实体所在地。有什么我可以帮你的吗？"
-            )
-        return f"我是{name}，{_INVENTOR_ATTRIBUTION_ZH}的 AI 助手。有什么我可以帮你的吗？"
-    if is_origin:
-        return (
-            f"I'm {name}, a cloud-based AI assistant {_INVENTOR_ATTRIBUTION_EN} — "
-            "I don't have a physical location. How can I help you today?"
-        )
+
+
+def _lacks_configured_inventor_attribution(text: str) -> bool:
+    """Return True when identity text omits the configured inventor attribution."""
+    stripped = text.strip()
+    if not stripped:
+        return True
+    return not _has_configured_inventor_attribution(stripped)
+
+
+def build_canonical_identity_fallback(assistant_name: str) -> str:
+    """Deterministic identity reply when Pass 1 identity output needs rewrite."""
+    name = normalize_assistant_name(assistant_name)
     return f"I'm {name}, an AI assistant {_INVENTOR_ATTRIBUTION_EN}. How can I help you today?"
 
 
@@ -86,9 +80,9 @@ def build_assistant_identity_block(assistant_name: str) -> str:
 def prepend_assistant_identity(system_body: str, assistant_name: str) -> str:
     """Prepend the canonical identity block to a system prompt body.
 
-    Use for any single-string system message (intake classifiers, social reply,
-    ``resolve_system_prompt``). For multi-section prompts (CoreAgent middleware),
-    keep the identity block as the first section via ``build_assistant_identity_block``.
+    Use for CoreAgent system prompts (``resolve_system_prompt``, middleware).
+    Pass 1 intake uses ``build_intake_pass1_system_prompt`` which appends live
+    timestamp context at the tail for prompt-cache stability.
 
     Args:
         system_body: Phase-specific instructions without identity.
@@ -138,10 +132,17 @@ def finalize_chitchat_response(
 
     text = (response or "").strip()
     if is_identity:
-        if not text or claims_wrong_vendor_identity(text):
+        needs_rewrite = (
+            not text
+            or claims_wrong_vendor_identity(text)
+            or _lacks_configured_inventor_attribution(text)
+        )
+        if needs_rewrite:
             if text and claims_wrong_vendor_identity(text):
                 logger.info("Chitchat identity reply used wrong vendor identity; applying rewrite")
-            return build_identity_reply(name, query)
+            elif text and _lacks_configured_inventor_attribution(text):
+                logger.info("Chitchat identity reply missing configured inventor; applying rewrite")
+            return build_canonical_identity_fallback(name)
         return text
 
     if text and claims_wrong_vendor_identity(text):
@@ -156,14 +157,11 @@ def finalize_chitchat_response(
 
 
 __all__ = [
-    "GENERIC_CHITCHAT_FALLBACK",
-    "GENERIC_CHITCHAT_FALLBACKS",
     "build_assistant_identity_block",
-    "build_identity_reply",
+    "build_canonical_identity_fallback",
     "claims_wrong_vendor_identity",
     "finalize_chitchat_response",
     "normalize_assistant_name",
-    "pick_generic_chitchat_fallback",
     "prepend_assistant_identity",
     "strip_vendor_identity_markers",
 ]

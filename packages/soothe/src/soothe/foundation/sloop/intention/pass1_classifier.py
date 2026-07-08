@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
-from soothe.foundation.sloop.prompts.identity import prepend_assistant_identity
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
@@ -30,6 +29,7 @@ from .prompts import (
     INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK,
     INTAKE_PASS1_SOCIAL_REPLY_PROMPT,
     INTAKE_PASS1_SYSTEM_PROMPT,
+    build_intake_pass1_system_prompt,
 )
 
 if TYPE_CHECKING:
@@ -189,7 +189,10 @@ class IntakePass1Classifier:
             )
         messages = [
             SystemMessage(
-                content=prepend_assistant_identity(INTAKE_PASS1_SYSTEM_PROMPT, self._assistant_name)
+                content=build_intake_pass1_system_prompt(
+                    INTAKE_PASS1_SYSTEM_PROMPT,
+                    self._assistant_name,
+                )
             ),
             HumanMessage(content=f"{query}\n\n{human_task}"),
         ]
@@ -245,7 +248,7 @@ class IntakePass1Classifier:
         goal_trace: Any | None = None,
     ) -> str:
         """Dedicated reply-only LLM call when classification omits social_response."""
-        system_prompt = prepend_assistant_identity(
+        system_prompt = build_intake_pass1_system_prompt(
             INTAKE_PASS1_SOCIAL_REPLY_PROMPT,
             self._assistant_name,
         )

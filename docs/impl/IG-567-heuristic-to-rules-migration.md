@@ -16,7 +16,7 @@ light-LLM fields (Pass 1/2) and declarative config rules (`agent.loop.rules`).
 - Added `social_kind` to `IntakePass1LLMResult` and `IntentClassification`.
 - `finalize_chitchat_response` uses `social_kind=identity` for deterministic
   identity rewrite instead of regex-only query matching.
-- Vendor identity leaks rewrite to `build_identity_reply` for identity turns;
+- Vendor identity leaks rewrite to `build_canonical_identity_fallback` for identity turns;
   non-identity turns strip vendor markers instead of generic greeting fallback.
 - Removed reasoning salvage regex from hot path; first Pass 1 call requires
   `social_kind` and retries with required `social_response` when social.
