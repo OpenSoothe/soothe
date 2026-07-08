@@ -14,6 +14,8 @@ from the ledger rather than only narration about tool calls.
 
 from __future__ import annotations
 
+_RESULT_BLOCK_MARKER = "## Result"
+
 SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT = (
     "Final assistant message MUST end with a Markdown block:\n"
     "## Result\n"
@@ -24,7 +26,34 @@ SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT = (
     "(greeting, thanks)."
 )
 
+EXECUTE_ACTION_RETRY_NUDGE = (
+    "You must call the appropriate tool(s) to gather the data before answering. "
+    "Do not respond with narration alone. When done, end with the required "
+    "## Result block including concrete numbers, paths, or names from tool output."
+)
+
+
+def expected_output_requires_result_block(expected_output: str | None) -> bool:
+    """Return True when the step contract references the ``## Result`` deliverable."""
+    return _RESULT_BLOCK_MARKER in (expected_output or "")
+
+
+def output_contains_result_block(output: str | None) -> bool:
+    """Return True when execute output includes a ``## Result`` section."""
+    return _RESULT_BLOCK_MARKER in (output or "")
+
+
+def execute_deliverable_incomplete(output: str | None, expected_output: str | None) -> bool:
+    """Return True when an action step finished without the required ``## Result`` block."""
+    if not expected_output_requires_result_block(expected_output):
+        return False
+    return not output_contains_result_block(output)
+
 
 __all__ = [
+    "EXECUTE_ACTION_RETRY_NUDGE",
     "SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT",
+    "execute_deliverable_incomplete",
+    "expected_output_requires_result_block",
+    "output_contains_result_block",
 ]

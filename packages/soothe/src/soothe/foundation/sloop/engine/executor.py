@@ -50,6 +50,10 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
     is_error_tool_result_text,
     provenance_is_task_delegate,
 )
+from soothe.foundation.sloop.cognition.simple_bypass import (
+    EXECUTE_ACTION_RETRY_NUDGE,
+    execute_deliverable_incomplete,
+)
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continuation_execution_hints,
     ledger_goal_completion_text,
@@ -337,6 +341,22 @@ class Executor:
         if self._config is None:
             return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
+
+    def _execute_action_retry_max(self) -> int:
+        if self._config is None:
+            return 1
+        return max(0, int(self._config.agent.loop.execute_action_retry_max))
+
+    @staticmethod
+    def _merge_execute_pass_output(previous: str, new: str) -> str:
+        """Join execute output from consecutive action-retry passes."""
+        prev = (previous or "").strip()
+        nxt = (new or "").strip()
+        if not prev:
+            return nxt
+        if not nxt:
+            return prev
+        return f"{prev}\n\n{nxt}"
 
     @staticmethod
     async def _maybe_aclose_act_stream(stream: Any, *, reason: str) -> None:
@@ -1779,49 +1799,97 @@ class Executor:
             skill_activation = self._seed_skill_activation(loop_state) if loop_state else None
             mcp_state = self._seed_mcp_state(loop_state) if loop_state else None
             tool_activation = self._seed_tool_activation(loop_state) if loop_state else None
-            stream = self._core_agent_astream_with_interrupt_resume(
-                self._execute_graph_input(
-                    graph_input_messages,
-                    routing_classification=routing_classification,
-                    workspace=workspace,
-                    continue_loop_mode=continue_loop_mode,
-                    skill_activation=skill_activation,
-                    mcp_state=mcp_state,
-                    tool_activation=tool_activation,
-                ),
-                config,
-                detector=self._clarification_detector,
-                capture=self._clarification_capture,
-                loop_state_view=self._clarification_loop_state_view,
-                origin_node="execute",
-                resume_answer_payload=self._clarification_resume_answer_payload,
-                step_id=step.id,  # IG-549: for heartbeat correlation
-            )
+
+            max_action_retries = self._execute_action_retry_max()
+            action_retries_done = 0
+            stream_input_messages: list[Any] = graph_input_messages
 
             # Stream events and collect outcome metadata (RFC-211)
+            output = ""
             main_tool_call_count = 0
             subgraph_tool_call_count = 0
             messages: list[BaseMessage] = []
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
-            has_tool_error = False  # Track recoverable tool errors for logging only.
-            async for chunk in self._stream_and_collect(
-                stream,
-                budget=budget,
-                step_id=step.id,
-                step_description=step.description,
-                step_subagent=wire_subagent,
-            ):
-                if chunk.event is not None:
-                    _append_parallel_stream_event(events, chunk.event, live_event_queue)
-                elif chunk.output is not None:
-                    output = chunk.output
-                    main_tool_call_count = chunk.main_tool_count
-                    subgraph_tool_call_count = chunk.subgraph_tool_count
-                    messages = list(chunk.messages)
-                    delegate_final = chunk.delegate_final
-                    stream_outcomes = list(chunk.outcomes)
-                    has_tool_error = chunk.has_error
+            has_tool_error = False
+
+            while True:
+                stream = self._core_agent_astream_with_interrupt_resume(
+                    self._execute_graph_input(
+                        stream_input_messages,
+                        routing_classification=routing_classification,
+                        workspace=workspace,
+                        continue_loop_mode=continue_loop_mode,
+                        skill_activation=skill_activation,
+                        mcp_state=mcp_state,
+                        tool_activation=tool_activation,
+                    ),
+                    config,
+                    detector=self._clarification_detector,
+                    capture=self._clarification_capture,
+                    loop_state_view=self._clarification_loop_state_view,
+                    origin_node="execute",
+                    resume_answer_payload=self._clarification_resume_answer_payload,
+                    step_id=step.id,  # IG-549: for heartbeat correlation
+                )
+
+                pass_output = ""
+                pass_main_tool_call_count = 0
+                pass_subgraph_tool_call_count = 0
+                pass_messages: list[BaseMessage] = []
+                pass_delegate_final = ""
+                pass_stream_outcomes: list[dict[str, Any]] = []
+                pass_has_tool_error = False
+
+                async for chunk in self._stream_and_collect(
+                    stream,
+                    budget=budget,
+                    step_id=step.id,
+                    step_description=step.description,
+                    step_subagent=wire_subagent,
+                ):
+                    if chunk.event is not None:
+                        _append_parallel_stream_event(events, chunk.event, live_event_queue)
+                    elif chunk.output is not None:
+                        pass_output = chunk.output
+                        pass_main_tool_call_count = chunk.main_tool_count
+                        pass_subgraph_tool_call_count = chunk.subgraph_tool_count
+                        pass_messages = list(chunk.messages)
+                        pass_delegate_final = chunk.delegate_final
+                        pass_stream_outcomes = list(chunk.outcomes)
+                        pass_has_tool_error = chunk.has_error
+
+                output = self._merge_execute_pass_output(output, pass_output)
+                main_tool_call_count += pass_main_tool_call_count
+                subgraph_tool_call_count += pass_subgraph_tool_call_count
+                messages.extend(pass_messages)
+                if pass_delegate_final:
+                    delegate_final = pass_delegate_final
+                stream_outcomes.extend(pass_stream_outcomes)
+                has_tool_error = has_tool_error or pass_has_tool_error
+
+                if action_retries_done >= max_action_retries:
+                    break
+                if not execute_deliverable_incomplete(output, step.expected_output):
+                    break
+
+                action_retries_done += 1
+                logger.info(
+                    "[Execute] action retry %d/%d for step %s (missing ## Result deliverable)",
+                    action_retries_done,
+                    max_action_retries,
+                    step.id,
+                )
+                stream_input_messages = [
+                    LoopHumanMessage(
+                        content=EXECUTE_ACTION_RETRY_NUDGE,
+                        thread_id=thread_id,
+                        iteration=None,
+                        goal_summary=None,
+                        workspace=workspace,
+                        phase="execute_step",
+                    )
+                ]
 
             duration_ms = int((time.perf_counter() - start) * 1000)
 
