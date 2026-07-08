@@ -20,6 +20,10 @@ _WRONG_VENDOR_IDENTITY_MARKERS = re.compile(
     r")\b"
 )
 
+_STALE_DATE_ANNOUNCEMENT = re.compile(
+    r"(?i)\b(?:today is|today's date is|the date is|current date is)\b"
+)
+
 
 def normalize_assistant_name(assistant_name: str) -> str:
     """Return a non-empty configured assistant display name."""
@@ -103,6 +107,16 @@ def claims_wrong_vendor_identity(response: str) -> bool:
     return _WRONG_VENDOR_IDENTITY_MARKERS.search(response.strip()) is not None
 
 
+def _needs_datetime_rewrite(response: str) -> bool:
+    """Return True when a datetime reply omits today's local date."""
+    from soothe.utils.prompt_clock import response_includes_current_local_date
+
+    text = response.strip()
+    if not text:
+        return True
+    return not response_includes_current_local_date(text)
+
+
 def finalize_chitchat_response(
     query: str,
     response: str | None,
@@ -113,7 +127,7 @@ def finalize_chitchat_response(
 ) -> str:
     """Normalize any user-facing chitchat text to the configured assistant identity.
 
-    Pass 1 ``social_kind`` drives identity enforcement.
+    Pass 1 ``social_kind`` drives identity and datetime enforcement.
 
     Args:
         query: Original user message.
@@ -129,8 +143,18 @@ def finalize_chitchat_response(
     fallback = generic_fallback or pick_generic_chitchat_fallback(query)
     kind = _normalize_social_kind(social_kind)
     is_identity = kind == "identity"
+    is_datetime = kind == "datetime"
 
     text = (response or "").strip()
+    if is_datetime:
+        from soothe.utils.prompt_clock import build_canonical_datetime_reply
+
+        if _needs_datetime_rewrite(text):
+            if text:
+                logger.info("Chitchat datetime reply stale or missing; applying rewrite")
+            return build_canonical_datetime_reply()
+        return text
+
     if is_identity:
         needs_rewrite = (
             not text
@@ -151,6 +175,15 @@ def finalize_chitchat_response(
         if stripped:
             return stripped
         return fallback
+    if text and _STALE_DATE_ANNOUNCEMENT.search(text):
+        from soothe.utils.prompt_clock import (
+            build_canonical_datetime_reply,
+            response_includes_current_local_date,
+        )
+
+        if not response_includes_current_local_date(text):
+            logger.info("Chitchat reply announced a stale date; applying rewrite")
+            return build_canonical_datetime_reply()
     if text:
         return text
     return fallback
