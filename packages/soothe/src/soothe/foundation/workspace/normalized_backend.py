@@ -638,7 +638,11 @@ class WorkspaceAwareBackend:
             resolve_workspace_for_tool_execution,
         )
 
-        workspace = resolve_workspace_for_tool_execution(runtime=runtime)
+        workspace = resolve_workspace_for_tool_execution(
+            runtime=runtime,
+            fallback=self._default_backend._root_dir,
+            use_langgraph_config=True,
+        )
         if workspace is not None:
             return get_workspace_backend(
                 workspace=workspace,

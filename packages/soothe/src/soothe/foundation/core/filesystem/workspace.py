@@ -661,10 +661,19 @@ class WorkspaceFilesystem(UnifiedFilesystem):
         results.sort()
         limited_results, truncated = self._apply_glob_limits(results)
 
+        hint: str | None = None
+        if not limited_results:
+            hint = (
+                f"No files matched pattern {pattern!r} under {search_path} "
+                f"(workspace root: {self.workspace}). "
+                "Try a scoped path, grep, or ls on a known directory."
+            )
+
         return GlobResult(
             matches=limited_results,
             truncated=truncated,
             total_count=len(results) if truncated else None,
+            error=hint,
         )
 
     async def aglob(

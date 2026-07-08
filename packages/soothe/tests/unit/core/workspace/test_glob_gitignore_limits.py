@@ -124,3 +124,17 @@ def test_glob_api_output_size_matches_filtered_cap(tmp_path: Path) -> None:
     # WorkspaceFilesystem caps results at DEFAULT_GLOB_MAX_RESULTS (50)
     assert len(paths) <= WorkspaceFilesystem.DEFAULT_GLOB_MAX_RESULTS
     assert result.truncated is True
+
+
+def test_glob_empty_result_includes_workspace_hint(tmp_path: Path) -> None:
+    """Empty glob results include actionable workspace context (IG-570)."""
+    ws = tmp_path / "repo"
+    ws.mkdir()
+
+    fs = WorkspaceFilesystem(workspace=str(ws), virtual_mode=True)
+    result = fs.glob("**/*integration*.test.ts")
+
+    assert result.matches == []
+    assert result.error is not None
+    assert "workspace root" in result.error
+    assert "integration" in result.error

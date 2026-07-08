@@ -207,6 +207,8 @@ class RunCommandShellTool(ShellTool):
         "Parameters: command (required) - the shell command to run. "
         "Optional: timeout (default: 60 seconds). "
         "Returns: command output (stdout + stderr). "
+        "On macOS do not use GNU `timeout`; use the target tool's own timeout flags "
+        "(e.g. go test -timeout) or run_background for long jobs. "
         "For long-running commands (>60s), use run_background instead."
     )
     args_schema: type[BaseModel] = RunCommandInput

@@ -49,9 +49,17 @@ class FrameworkFilesystem:
         """
         from soothe.foundation.workspace.normalized_backend import WorkspaceAwareBackend
         from soothe.foundation.workspace.resolution import resolve_daemon_workspace
+        from soothe.foundation.workspace.tool_path_resolution import (
+            config_workspace_root,
+            max_file_size_mb_for_filesystem_backend,
+        )
 
-        # Use daemon workspace (TEMP unless SOOTHE_WORKSPACE set) as default
-        resolved_workspace = resolve_daemon_workspace()
+        configured_root = config_workspace_root(config)
+        resolved_workspace = (
+            Path(configured_root).expanduser().resolve()
+            if configured_root
+            else resolve_daemon_workspace()
+        )
 
         # virtual_mode semantics (documented clearly, not as a "bug"):
         # - True: All paths treated as virtual under root_dir (sandboxed)
@@ -60,11 +68,7 @@ class FrameworkFilesystem:
         #          Paths like "/etc/passwd" write to real /etc/passwd
         virtual_mode = not config.security.allow_paths_outside_workspace
 
-        max_file_size_mb = 10
-        if hasattr(config, "filesystem_middleware") and hasattr(
-            config.filesystem_middleware, "max_file_size_mb"
-        ):
-            max_file_size_mb = config.filesystem_middleware.max_file_size_mb
+        max_file_size_mb = max_file_size_mb_for_filesystem_backend(config)
 
         # Use workspace-aware backend that reads from ContextVar (RFC-103)
         cls._instance = WorkspaceAwareBackend(

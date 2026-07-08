@@ -7,13 +7,14 @@ protocol and infrastructure resolution.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.foundation.workspace.resolution import resolve_daemon_workspace
 from soothe.foundation.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
+    resolve_effective_tool_workspace,
 )
 
 if TYPE_CHECKING:
@@ -26,22 +27,45 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _get_default_workspace(config: SootheConfig | None = None) -> str:
-    """Get default workspace path for tool resolution.
+def _workspace_backend_factory(
+    *,
+    virtual_mode: bool,
+    max_file_size_mb: int,
+) -> Callable[[str], Any]:
+    """Build a workspace-scoped backend factory for surgical file tools."""
+    from soothe.foundation.workspace.normalized_backend import get_workspace_backend
 
-    Priority:
-    1. ``config.filesystem_middleware.workspace_root`` if set
-    2. ``resolve_daemon_workspace()`` (SOOTHE_WORKSPACE env or TEMP fallback)
+    def factory(workspace: str) -> Any:
+        return get_workspace_backend(
+            Path(workspace).expanduser().resolve(),
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_file_size_mb,
+        )
 
-    Args:
-        config: Optional SootheConfig to check for workspace_root.
+    return factory
 
-    Returns:
-        Default workspace path string.
-    """
-    if config and config.filesystem_middleware.workspace_root:
-        return config.filesystem_middleware.workspace_root
-    return str(resolve_daemon_workspace())
+
+def _build_soothe_file_middleware(config: SootheConfig | None) -> Any:
+    """Create ``SootheFilesystemMiddleware`` bound to the effective workspace."""
+    from soothe.middleware.filesystem import SootheFilesystemMiddleware
+
+    resolved_cwd = str(resolve_effective_tool_workspace(config))
+    virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
+    max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
+    backend = _workspace_backend_factory(
+        virtual_mode=virtual_mode,
+        max_file_size_mb=max_file_size_mb,
+    )(resolved_cwd)
+    return SootheFilesystemMiddleware(
+        backend=backend,
+        backup_enabled=True,
+        workspace_root=resolved_cwd,
+        workspace_backend_factory=_workspace_backend_factory(
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_file_size_mb,
+        ),
+        tool_token_limit_before_evict=20000,
+    )
 
 
 def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubAgent]]:
@@ -324,7 +348,7 @@ def _resolve_single_tool_group_uncached(
     if name == "execution":
         from soothe.toolkits.execution import ExecutionToolkit, _execution_max_output_from_config
 
-        resolved_cwd = _get_default_workspace(config)
+        resolved_cwd = str(resolve_effective_tool_workspace(config))
         toolkit = ExecutionToolkit(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
@@ -343,7 +367,7 @@ def _resolve_single_tool_group_uncached(
         # Host-execution tools do not require a sandbox backend.
         from soothe.toolkits.execution import ExecutionToolkit, _execution_max_output_from_config
 
-        resolved_cwd = _get_default_workspace(config)
+        resolved_cwd = str(resolve_effective_tool_workspace(config))
         toolkit = ExecutionToolkit(
             workspace_root=resolved_cwd,
             security_config=(getattr(config, "security", None) if config else None),
@@ -357,29 +381,7 @@ def _resolve_single_tool_group_uncached(
         return []
 
     if name == "file_ops":
-        from deepagents.backends.filesystem import FilesystemBackend  # noqa: I001
-
-        from soothe.middleware.filesystem import SootheFilesystemMiddleware  # noqa: I001
-
-        resolved_cwd = _get_default_workspace(config)
-
-        virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
-        max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
-
-        # Create filesystem backend
-        backend = FilesystemBackend(
-            root_dir=resolved_cwd or None,
-            virtual_mode=virtual_mode,
-            max_file_size_mb=max_file_size_mb,
-        )
-
-        # Create middleware with surgical file ops
-        middleware = SootheFilesystemMiddleware(
-            backend=backend,
-            backup_enabled=True,
-            workspace_root=resolved_cwd or None,
-            tool_token_limit_before_evict=20000,
-        )
+        middleware = _build_soothe_file_middleware(config)
 
         # Extract surgical tools only (not ls, read_file, etc. from FilesystemMiddleware)
         surgical_tool_names = [
@@ -406,29 +408,7 @@ def _resolve_single_tool_group_uncached(
         "delete_lines",
         "apply_diff",
     ):
-        from deepagents.backends.filesystem import FilesystemBackend  # noqa: I001
-
-        from soothe.middleware.filesystem import SootheFilesystemMiddleware  # noqa: I001
-
-        resolved_cwd = _get_default_workspace(config)
-
-        virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
-        max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
-
-        # Create filesystem backend
-        backend = FilesystemBackend(
-            root_dir=resolved_cwd or None,
-            virtual_mode=virtual_mode,
-            max_file_size_mb=max_file_size_mb,
-        )
-
-        # Create middleware with surgical file ops
-        middleware = SootheFilesystemMiddleware(
-            backend=backend,
-            backup_enabled=True,
-            workspace_root=resolved_cwd or None,
-            tool_token_limit_before_evict=20000,
-        )
+        middleware = _build_soothe_file_middleware(config)
 
         # Extract surgical tools only
         surgical_tool_names = [
@@ -532,7 +512,7 @@ def resolve_subagents(
 
     # Collect (name, factory, kwargs) tuples for enabled subagents
     pending: list[tuple[str, Callable, dict]] = []
-    resolved_cwd = _get_default_workspace(config)
+    resolved_cwd = str(resolve_effective_tool_workspace(config))
 
     for name, sub_cfg in config.subagents.items():
         if not sub_cfg.enabled:

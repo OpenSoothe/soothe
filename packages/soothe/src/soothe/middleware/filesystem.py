@@ -244,35 +244,6 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 resolution without callable backend deprecation.
             **kwargs: Passed to FilesystemMiddleware (backend, system_prompt, etc.)
         """
-        # Ensure backend is not callable to avoid deepagents deprecation warning
-        backend = kwargs.get("backend")
-        if callable(backend) and not isinstance(backend, BackendProtocol):
-            # Store the callable as factory, pass initial backend instance
-            self._backend_factory = backend
-            # Create initial backend by calling factory with None (fallback)
-            import logging
-
-            _logger = logging.getLogger(__name__)
-            try:
-                initial_backend = backend(None)
-            except Exception as e:
-                _logger.debug("Backend factory failed with None: %s", e)
-                # If factory fails with None, we need workspace_root
-                if workspace_root:
-                    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
-
-                    initial_backend = NormalizedPathBackend(
-                        root_dir=Path(workspace_root),
-                        virtual_mode=True,
-                        max_file_size_mb=10,
-                    )
-                else:
-                    msg = "Backend factory requires workspace_root as fallback"
-                    raise RuntimeError(msg) from e
-            kwargs["backend"] = initial_backend
-        else:
-            self._backend_factory = None
-
         super().__init__(**kwargs)
 
         # Override deepagents' default "/large_tool_results" and "/conversation_history"
@@ -301,32 +272,51 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         )
 
     def _get_backend(self, runtime: ToolRuntime | None = None) -> BackendProtocol:
-        """Get backend, handling thread workspace resolution without callable deprecation.
-
-        IG-328: Resolves workspace from runtime.state["workspace"] when available,
-        returning appropriate backend for the thread's workspace.
+        """Get backend, resolving the effective stream workspace when available.
 
         Args:
-            runtime: Tool runtime with state containing potential thread workspace.
+            runtime: Tool runtime with config/state containing potential thread workspace.
 
         Returns:
             BackendProtocol instance for the effective workspace.
         """
-        # Check for thread workspace in runtime state
-        if runtime is not None and hasattr(runtime, "state"):
-            thread_workspace = (
-                runtime.state.get("workspace") if isinstance(runtime.state, dict) else None
-            )
-            if thread_workspace:
-                # Use factory if available for workspace-specific backend
-                if self._workspace_backend_factory:
-                    return self._workspace_backend_factory(thread_workspace)
-                # Or use stored backend factory from callable pattern
-                if self._backend_factory:
-                    return self._backend_factory(runtime)
+        from soothe.foundation.workspace.normalized_backend import get_workspace_backend
+        from soothe.foundation.workspace.runtime_resolution import (
+            resolve_workspace_for_tool_execution,
+        )
 
-        # No thread workspace or factory - return stored backend
-        return self.backend
+        workspace = resolve_workspace_for_tool_execution(
+            runtime=runtime,
+            fallback=self._workspace_root,
+            use_langgraph_config=True,
+        )
+        if workspace is None:
+            return self.backend
+
+        ws_str = str(workspace)
+        if self._workspace_backend_factory is not None:
+            return self._workspace_backend_factory(ws_str)
+
+        virtual_mode = bool(getattr(self.backend, "virtual_mode", False))
+        max_mb = 10
+        if runtime is not None and isinstance(getattr(runtime, "config", None), dict):
+            configurable = runtime.config.get("configurable") or {}
+            if isinstance(configurable, dict):
+                soothe_config = configurable.get("soothe_config")
+                if soothe_config is not None:
+                    from soothe.foundation.workspace.tool_path_resolution import (
+                        filesystem_virtual_mode_from_soothe_config,
+                        max_file_size_mb_for_filesystem_backend,
+                    )
+
+                    virtual_mode = filesystem_virtual_mode_from_soothe_config(soothe_config)
+                    max_mb = max_file_size_mb_for_filesystem_backend(soothe_config)
+
+        return get_workspace_backend(
+            workspace,
+            virtual_mode=virtual_mode,
+            max_file_size_mb=max_mb,
+        )
 
     def wrap_tool_call(
         self,
