@@ -373,3 +373,45 @@ def test_project_execute_step_graph_input_predecessor_includes_non_overlapping_s
     assert len(result.messages) == 4
     assert "a0" in str(result.messages[-1].content)
     assert "a1" not in " ".join(str(getattr(m, "content", "")) for m in result.messages)
+
+
+def test_project_execute_step_graph_input_skips_checkpoint_present_rows() -> None:
+    """RFC-214: do not replay ledger rows already on the CoreAgent branch checkpoint."""
+    step_02 = StepAction(id="02", description="second", dependencies=["01"])
+    decision = AgentDecision(
+        type="execute_steps",
+        steps=[StepAction(id="01", description="first"), step_02],
+        execution_mode="dependency",
+        reasoning="r",
+    )
+    ledger = [
+        LoopHumanMessage(
+            content="h1",
+            phase="execute_step",
+            step_id="01",
+            core_agent_message_id="human-01",
+        ),
+        LoopAIMessage(
+            content="a1",
+            phase="execute_step",
+            step_id="01",
+            core_agent_message_id="ai-01",
+        ),
+    ]
+    state = LoopState(
+        goal="g",
+        thread_id="t",
+        current_decision=decision,
+        loop_messages=ledger,
+        iteration=0,
+        step_results=[],
+    )
+    result = project_execute_step_graph_input(
+        ledger,
+        state=state,
+        step=step_02,
+        decision=decision,
+        checkpoint_message_ids=frozenset({"human-01", "ai-01"}),
+    )
+    assert result.messages == []
+    assert result.predecessor_projected is False

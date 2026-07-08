@@ -40,6 +40,8 @@ class _ExecuteStepResult:
     messages: list[BaseMessage] = field(default_factory=list)
     delegate_final: str = ""
     output: str = ""  # Accumulated text chunks for ledger fallback
+    human_core_agent_message_id: str | None = None
+    ai_core_agent_message_id: str | None = None
 
 
 @dataclass

@@ -872,6 +872,7 @@ def project_execute_step_graph_input(
     decision: AgentDecision,
     checkpoint: StrangeLoopCheckpoint | None = None,
     soothe_config: Any | None = None,
+    checkpoint_message_ids: frozenset[str] | None = None,
 ) -> ProjectedExecuteStepInput:
     """Assemble Slice A + Slice B ledger messages for execute-step CoreAgent input."""
     exec_cfg = _execute_prompt_ledger_config(soothe_config)
@@ -912,6 +913,25 @@ def project_execute_step_graph_input(
         if slice_b:
             out.extend(slice_b)
             predecessor_projected = True
+
+    if checkpoint_message_ids:
+        from soothe.foundation.sloop.utils.ledger_message_dedup import (
+            filter_messages_not_in_checkpoint,
+        )
+
+        before = len(out)
+        out = filter_messages_not_in_checkpoint(out, checkpoint_message_ids)
+        if before != len(out):
+            logger.debug(
+                "Execute-step projection dedup: skipped=%d checkpoint_ids=%d step=%s",
+                before - len(out),
+                len(checkpoint_message_ids),
+                step.id,
+            )
+            if predecessor_projected and not any(
+                getattr(msg, "phase", None) == "execute_step" for msg in out
+            ):
+                predecessor_projected = False
 
     logger.debug(
         "Execute-step graph projection: mode=%s cross_goal=%s predecessor=%s out_msgs=%d step=%s",
