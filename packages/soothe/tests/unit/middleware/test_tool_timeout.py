@@ -143,6 +143,22 @@ class TestToolTimeoutMiddleware:
         assert result.status != "error"
 
     @pytest.mark.asyncio
+    async def test_glob_timeout_includes_discovery_hint(self) -> None:
+        """Glob middleware timeout should steer agents toward grep/ls."""
+        middleware = ToolTimeoutMiddleware(per_tool_timeout={"glob": 0.05})
+
+        async def slow_handler(_request: Any) -> ToolMessage:
+            await asyncio.sleep(0.2)
+            return ToolMessage(content="ok", tool_call_id="call-1", name="glob")
+
+        request = _make_request("glob")
+        result = await middleware.awrap_tool_call(request, slow_handler)
+
+        assert isinstance(result, ToolMessage)
+        assert result.status == "error"
+        assert "grep" in str(result.content)
+
+    @pytest.mark.asyncio
     async def test_async_handler_times_out(self) -> None:
         """Handler that exceeds timeout should return error ToolMessage."""
         middleware = ToolTimeoutMiddleware(default_timeout_seconds=0.1)  # 100ms timeout

@@ -662,7 +662,7 @@ class SystemPromptMiddleware(AgentMiddleware):
             "Builtin tool naming (use exact names; aliases do not exist):\n"
             "- Shell commands and pipelines: run_command (not read_command or shell)\n"
             "- Search text inside files: grep\n"
-            "- Find files by path pattern: glob\n"
+            "- Find files by path pattern: glob (prefer narrow paths; on timeout use grep or ls)\n"
             "- List a directory: ls with path in args (not in the tool name)\n"
             "- Read file contents: read_file with file_path in args\n"
             "</TOOL_SELECTION>"

@@ -34,6 +34,10 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
 
+from soothe.foundation.core.filesystem.discovery_hints import (
+    format_glob_timeout_error,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -225,6 +229,15 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
             return False
         return tool_name in TOOLS_WITH_INTERNAL_TIMEOUT
 
+    def _timeout_error_message(self, tool_name: str, timeout_s: float) -> str:
+        """Build a timeout error message, with tool-specific recovery hints."""
+        if tool_name == "glob":
+            return format_glob_timeout_error(timeout_s)
+        return (
+            f"Error: Tool '{tool_name}' timed out after {timeout_s:.1f}s. "
+            f"Consider narrowing the scope or using a more specific query."
+        )
+
     def wrap_tool_call(
         self,
         request: ToolCallRequest,
@@ -273,8 +286,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
             )
             self._timeout_count += 1
             return ToolMessage(
-                content=f"Error: Tool '{tool_name}' timed out after {timeout_s:.1f}s. "
-                f"Consider narrowing the scope or using a more specific query.",
+                content=self._timeout_error_message(tool_name, timeout_s),
                 tool_call_id=tool_call_id,
                 name=tool_name,
                 status="error",
@@ -344,8 +356,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
                         )
 
             return ToolMessage(
-                content=f"Error: Tool '{tool_name}' timed out after {timeout_s:.1f}s. "
-                f"Consider narrowing the scope or using a more specific query.",
+                content=self._timeout_error_message(tool_name, timeout_s),
                 tool_call_id=tool_call_id,
                 name=tool_name,
                 status="error",

@@ -16,6 +16,7 @@ Independent steps may share a parallel wave when scopes do not conflict (readonl
 - Dependent steps need ``full_description`` with concrete follow-up instructions.
 
 **Discovery**: One recon step + targeted reads beats many shallow parallel scans; narrow ``glob`` patterns.
+After glob timeout or empty results, switch to ``grep`` (with path/glob filter) or ``ls`` on known directories — do not retry broad ``**`` globs.
 
 **On failure**: Different approach; do not repeat same step text.
 </EXECUTION_POLICIES>
