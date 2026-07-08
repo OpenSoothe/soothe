@@ -801,11 +801,10 @@ DEFAULT_MAX_PLAN_STEPS_PER_WAVE = 10
 
 
 class PlanGeneration(BaseModel):
-    """PlanGeneration: generate execution plan when goal incomplete (RFC-604).
+    """Runtime plan-generate result (RFC-604).
 
-    Conditional schema for the plan-generate LLM call (IG-329: minimal fields only).
-    Runtime ``plan_action`` (keep/new) is derived from assess status and loop state,
-    not from this schema.
+    Built server-side from ``PlanGenerationWire`` LLM output (IG-568). Not sent
+    directly as the structured-output schema to plan-generate models.
 
     Attributes:
         type: Decision type for the plan.
@@ -836,11 +835,10 @@ class PlanGeneration(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_and_default_plan_generation(cls, data: Any) -> Any:
-        """Coerce malformed LLM JSON and default execution_mode when typed."""
+    def _default_execution_mode(cls, data: Any) -> Any:
+        """Default execution_mode when typed plan dict omits it."""
         if not isinstance(data, dict):
             return data
-        data = coerce_plan_generation_dict(data)
         if data.get("type") is None:
             return data
         if data.get("execution_mode") is None:
@@ -874,59 +872,6 @@ def derive_plan_action(
     if assessment_status == "continue" and has_remaining_steps:
         return "keep"
     return "new"
-
-
-def coerce_plan_generation_dict(data: dict[str, Any]) -> dict[str, Any]:
-    """Salvage common plan-generate JSON malformations from thinking models.
-
-    Drops non-object entries from ``steps`` and hoists stray ``execution_mode``
-    strings that models sometimes emit as a pseudo step element.
-
-    Args:
-        data: Raw plan-generate dict from structured output.
-
-    Returns:
-        Coerced dict safe for ``PlanGeneration`` validation.
-    """
-    steps_raw = data.get("steps")
-    if not isinstance(steps_raw, list):
-        return data
-
-    kept_steps: list[Any] = []
-    hoisted_execution_mode: str | None = None
-    for item in steps_raw:
-        if isinstance(item, dict):
-            kept_steps.append(item)
-            continue
-        if isinstance(item, str):
-            normalized = item.strip().lower()
-            if normalized == "execution_mode" and hoisted_execution_mode is None:
-                hoisted_execution_mode = "parallel"
-            continue
-        kept_steps.append(item)
-
-    out = {**data, "steps": kept_steps}
-    if hoisted_execution_mode is not None and out.get("execution_mode") is None:
-        out["execution_mode"] = hoisted_execution_mode
-    return out
-
-
-def capped_plan_generation_model(
-    max_steps: int = DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
-) -> type[PlanGeneration]:
-    """Structured-output schema for plan-generate, capped per wave.
-
-    Args:
-        max_steps: Maximum steps the model may emit in one plan-generate call.
-
-    Returns:
-        A ``PlanGeneration`` subclass limited to ``max_steps`` step entries.
-    """
-
-    class PlanGenerationCapped(PlanGeneration):
-        steps: list[PlanGenerateStep] = Field(default_factory=list, max_length=max_steps)
-
-    return PlanGenerationCapped
 
 
 class StepResult(BaseModel):

@@ -7,6 +7,9 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
+from soothe.foundation.sloop.cognition.plan_generation_wire import (
+    capped_plan_generation_wire_model,
+)
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
@@ -17,12 +20,10 @@ from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     LoopState,
-    PlanGenerateStep,
     PriorProgressDigest,
     StatusAssessment,
     StepAction,
     StepResult,
-    capped_plan_generation_model,
 )
 
 
@@ -45,14 +46,18 @@ def test_plan_has_minimum_steps_missing_decision_behavior() -> None:
     )
 
 
-def test_capped_plan_schema_rejects_over_max_steps() -> None:
-    schema = capped_plan_generation_model()
+def test_capped_wire_schema_rejects_over_max_steps() -> None:
+    schema = capped_plan_generation_wire_model()
     steps = [
-        PlanGenerateStep(id=f"{i:02d}", description=f"step {i}", expected_output="ok")
+        {
+            "description": f"step {i}",
+            "expected_output": "ok",
+            "dependencies": [],
+        }
         for i in range(DEFAULT_MAX_PLAN_STEPS_PER_WAVE + 1)
     ]
     with pytest.raises(ValidationError):
-        schema(type="execute_steps", execution_mode="parallel", steps=steps)
+        schema(reasoning="Plan wave.", steps=steps)
 
 
 def test_filter_filler_plan_steps_removes_tail_noise() -> None:

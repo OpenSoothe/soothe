@@ -32,7 +32,9 @@ class TestExecutorActionRetry:
         executor = Executor(mock_agent)
         call_count = 0
 
-        async def fake_stream_and_collect(_stream: Any, **kwargs: Any) -> AsyncIterator[_StreamCollectChunk]:
+        async def fake_stream_and_collect(
+            _stream: Any, **kwargs: Any
+        ) -> AsyncIterator[_StreamCollectChunk]:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -84,7 +86,9 @@ class TestExecutorActionRetry:
         executor = Executor(mock_agent)
         call_count = 0
 
-        async def fake_stream_and_collect(_stream: Any, **kwargs: Any) -> AsyncIterator[_StreamCollectChunk]:
+        async def fake_stream_and_collect(
+            _stream: Any, **kwargs: Any
+        ) -> AsyncIterator[_StreamCollectChunk]:
             nonlocal call_count
             call_count += 1
             yield _StreamCollectChunk.finalized(

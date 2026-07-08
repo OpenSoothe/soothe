@@ -5,12 +5,18 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from soothe.config.models import LLMRateLimitConfig
+from soothe.foundation.sloop.cognition.plan_generation_wire import (
+    capped_plan_generation_wire_model,
+    coerce_plan_generation_wire_dict,
+    plan_generation_wire_to_model,
+)
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
@@ -22,7 +28,6 @@ from soothe.foundation.sloop.state.schemas import (
     LoopState,
     PlanGeneration,
     StepAction,
-    capped_plan_generation_model,
     plan_generate_steps_to_step_actions,
     renumber_decision_local_step_ids_for_goal_continuation,
     step_actions_to_plan_generate_steps,
@@ -41,7 +46,7 @@ from soothe.foundation.sloop.utils.reflection import (
 )
 from soothe.protocols.planner import PlanContext
 from soothe.utils.llm.invoke_policy import await_with_llm_call_policy
-from soothe.utils.llm.structured import invoke_structured_chat_typed
+from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat_typed
 from soothe.utils.network_errors import calculate_network_backoff, is_transient_network_error
 from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe.utils.text_preview import create_output_summary, preview_first
@@ -249,11 +254,18 @@ class LLMPlanner:
         *,
         config: dict[str, Any] | None = None,
         thread_id: str | None = None,
+        normalize: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> Any:
         """Structured planner output with bounded timeout and retry."""
 
         async def _call() -> Any:
-            return await invoke_structured_chat_typed(model, messages, schema, config=config)
+            return await invoke_structured_chat_typed(
+                model,
+                messages,
+                schema,
+                config=config,
+                normalize=normalize,
+            )
 
         return await await_with_llm_call_policy(
             _call,
@@ -663,7 +675,9 @@ class LLMPlanner:
         Returns:
             Tuple of (PlanGeneration, raw_response) or (PlanGeneration, None) on fallback.
         """
-        plan_schema = capped_plan_generation_model(max_steps=self._max_plan_steps_per_wave())
+        plan_wire_schema = capped_plan_generation_wire_model(
+            max_steps=self._max_plan_steps_per_wave()
+        )
 
         model = _plan_phase_chat_model(self._plan_generate_model)
 
@@ -677,13 +691,15 @@ class LLMPlanner:
                 lf_cfg = self._planner_langfuse_run_config(
                     thread_id=thread_id, phase="plan-generate"
                 )
-                plan_result = await self._invoke_structured(
+                plan_wire = await self._invoke_structured(
                     model,
                     attempt_messages,
-                    plan_schema,
+                    plan_wire_schema,
                     config=lf_cfg,
                     thread_id=thread_id,
+                    normalize=coerce_plan_generation_wire_dict,
                 )
+                plan_result = plan_generation_wire_to_model(plan_wire)
 
                 if plan_result is None:
                     if attempt < max_retries:
@@ -723,14 +739,16 @@ class LLMPlanner:
                         attempt + 1,
                         max_retries,
                     )
-                    if "requires non-empty steps" in detail:
+                    if (
+                        "requires non-empty steps" in detail
+                        or "non-empty steps or clarify" in detail
+                    ):
                         attempt_messages = [
                             *attempt_messages,
                             HumanMessage(
                                 content=(
-                                    "Your previous plan had type=execute_steps but an empty "
-                                    "steps array. Return execute_steps with at least one step "
-                                    "(id + description)."
+                                    "Return non-empty steps (each with description and dependencies) "
+                                    "or clarify.questions — not both."
                                 )
                             ),
                         ]
@@ -739,8 +757,33 @@ class LLMPlanner:
                             *attempt_messages,
                             HumanMessage(
                                 content=(
-                                    "execution_mode is a top-level field, not a steps[] element. "
-                                    "Each step must be an object with id and description."
+                                    "steps[] must contain only step objects with description and "
+                                    "dependencies (use [] when none). Do not put field names like "
+                                    "reasoning or execution_mode inside steps[]."
+                                )
+                            ),
+                        ]
+                    continue
+            except StructuredOutputError as e:
+                detail = str(e)
+                logger.warning(
+                    "[LLMPlanner] PlanGeneration structured output failed: %s", detail[:240]
+                )
+                last_error = e
+                if attempt < max_retries:
+                    logger.debug(
+                        "[LLMPlanner] Retrying after structured output error (attempt %d/%d)",
+                        attempt + 1,
+                        max_retries,
+                    )
+                    if "steps" in detail and "object" in detail:
+                        attempt_messages = [
+                            *attempt_messages,
+                            HumanMessage(
+                                content=(
+                                    "steps[] must contain only step objects (description, "
+                                    "dependencies). Top-level fields are reasoning, steps, and "
+                                    "optional clarify only."
                                 )
                             ),
                         ]
@@ -766,14 +809,16 @@ class LLMPlanner:
                             lf_cfg_retry = self._planner_langfuse_run_config(
                                 thread_id=thread_id, phase="plan-generate-retry"
                             )
-                            plan_result = await self._invoke_structured(
+                            plan_wire = await self._invoke_structured(
                                 model,
                                 messages,
-                                plan_schema,
+                                plan_wire_schema,
                                 config=lf_cfg_retry,
                                 thread_id=thread_id,
+                                normalize=coerce_plan_generation_wire_dict,
                             )
-                            if plan_result is not None:
+                            if plan_wire is not None:
+                                plan_result = plan_generation_wire_to_model(plan_wire)
                                 logger.debug(
                                     "[Plan] steps=%d next=%s (after network retry)",
                                     len(plan_result.steps)
@@ -1317,7 +1362,7 @@ class LLMPlanner:
     ) -> Any:
         """Cheaper plan-generate for the ``simple`` intake branch (RFC-630).
 
-        Same ``PlanGeneration`` schema as ``generate_from_assessment``, but with
+        Same wire schema as ``generate_from_assessment``, but with
         a reduced context: only the last 2 step results and no DAG prior-state
         context. Runs the same LLM call with a smaller prompt. Used for
         single-focused-step goals that don't need the full evidence ledger.
@@ -1354,7 +1399,7 @@ class LLMPlanner:
         """Plan execution using two-call architecture (RFC-604).
 
         StatusAssessment call: lightweight status check (compact assess-only system prompt, IG-372)
-        PlanGeneration call: conditional plan generation (execution policies + plan-generate instructions, IG-329)
+        Plan wire call: conditional plan generation (execution policies + plan-generate instructions)
 
         Returns combined PlanResult with evidence-based metrics applied.
         """
