@@ -37,3 +37,39 @@ def test_summarize_deep_research_gather_by_suffix() -> None:
     )
     assert "RFC-619" in line
     assert "3 hits" in line
+
+
+def test_summarize_deep_research_progress() -> None:
+    line = summarize_subagent_wire_activity(
+        "soothe.subagent.deep_research.progress",
+        {"phase": "gather", "message": "Searching web", "loop_count": 1, "total_loops": 3},
+    )
+    assert "gather" in line
+    assert "Searching web" in line
+    assert "1/3" in line
+
+
+def test_summarize_deep_research_crawl_summary() -> None:
+    line = summarize_subagent_wire_activity(
+        "soothe.subagent.deep_research.crawl.summary",
+        {"urls_crawled": 5, "success_count": 4},
+    )
+    assert "4/5 URLs crawled" in line
+
+
+def test_summarize_veritas_requested() -> None:
+    line = summarize_subagent_wire_activity(
+        "soothe.subagent.veritas.requested",
+        {"question_count": 2},
+    )
+    assert "Veritas clarifying" in line
+    assert "2 questions" in line
+
+
+def test_summarize_veritas_answered() -> None:
+    line = summarize_subagent_wire_activity(
+        "soothe.subagent.veritas.answered",
+        {"confidence": 0.85, "defer": False},
+    )
+    assert "Veritas answered" in line
+    assert "0.85" in line

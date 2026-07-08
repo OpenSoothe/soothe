@@ -590,3 +590,92 @@ def test_subagent_card_shows_latest_three_tool_activities() -> None:
     assert "**/0" not in text
     assert "+4 more tools" in text
     assert STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT == 3
+
+
+@pytest.mark.asyncio
+async def test_subagent_wire_activity_event_shows_progress_note() -> None:
+    from soothe_cli.tui.textual_adapter import _apply_subagent_wire_activity_event
+
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    step = CognitionStepMessage("ZCH-01", "Research topic", id="stp-wire-activity")
+    adapter._current_step_messages["ZCH-01"] = step
+    router = StepTaskRouter()
+    router.on_step_started("ZCH-01")
+    await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "ZCH_01:s:task:0",
+            "name": "task",
+            "args": {
+                "subagent_type": "deep_research",
+                "description": "OpenVela architecture",
+            },
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+    scope: tuple[str, str, str] = ("ZCH_01:s:task:0", "deep_research", "ZCH-01")
+
+    handled = _apply_subagent_wire_activity_event(
+        adapter,
+        event_type="soothe.subagent.deep_research.progress",
+        data={
+            "phase": "gather",
+            "message": "Searching web: OpenVela",
+            "loop_count": 1,
+            "total_loops": 3,
+        },
+        task_scope=scope,
+    )
+    assert handled is True
+    subagent_card = adapter._subagent_cards_by_key["ZCH-01:t0"]
+    text = str(subagent_card._step_task_activity_content())
+    assert "gather" in text
+    assert "Searching web" in text
+
+
+@pytest.mark.asyncio
+async def test_subagent_wire_crawl_summary_adds_row() -> None:
+    from soothe_cli.tui.textual_adapter import _apply_subagent_wire_step_event
+
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    step = CognitionStepMessage("ZCH-01", "Research topic", id="stp-wire-crawl")
+    adapter._current_step_messages["ZCH-01"] = step
+    router = StepTaskRouter()
+    router.on_step_started("ZCH-01")
+    await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "ZCH_01:s:task:0",
+            "name": "task",
+            "args": {
+                "subagent_type": "deep_research",
+                "description": "OpenVela architecture",
+            },
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+    scope: tuple[str, str, str] = ("ZCH_01:s:task:0", "deep_research", "ZCH-01")
+
+    handled = _apply_subagent_wire_step_event(
+        adapter,
+        event_type="soothe.subagent.deep_research.crawl.summary",
+        data={"urls_crawled": 5, "success_count": 4},
+        task_scope=scope,
+    )
+    assert handled is True
+    subagent_card = adapter._subagent_cards_by_key["ZCH-01:t0"]
+    text = str(subagent_card._step_task_activity_content())
+    assert "Crawl(" in text
+    assert "4/5 URLs" in text

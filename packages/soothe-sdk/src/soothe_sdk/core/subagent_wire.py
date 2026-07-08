@@ -79,6 +79,7 @@ def clip_wire_event_payload(data: dict[str, Any]) -> dict[str, Any]:
     string_caps: dict[str, int] = {
         "task_preview": _LONG_PREVIEW_LEN,
         "topic": _LONG_PREVIEW_LEN,
+        "topic_preview": _DEFAULT_PREVIEW_LEN,
         "search_target": _TASK_DESCRIPTION_LEN,
         "task": _LONG_PREVIEW_LEN,
         "judgement": _LONG_PREVIEW_LEN,

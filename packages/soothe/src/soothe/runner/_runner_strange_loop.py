@@ -10,6 +10,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.core.subagent_wire import is_curated_subagent_wire_event_type
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
@@ -23,6 +24,7 @@ from soothe.foundation.events import (
     StrangeLoopStepQueuedEvent,
     StrangeLoopStepStartedEvent,
 )
+from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
 from soothe.foundation.sloop.clarification.events import (
     ClarificationAnsweredEvent,
     ClarificationDeferredEvent,
@@ -319,6 +321,21 @@ def _is_subgraph_tool_call_update_chunk(chunk: object) -> bool:
     return bool(namespace) and _is_tool_call_update_chunk(chunk)
 
 
+def _is_subagent_wire_custom_chunk(chunk: object) -> bool:
+    """Return True for namespaced ``custom`` curated ``soothe.subagent.*`` wire events."""
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    _namespace, mode, data = chunk
+    if mode != "custom" or not isinstance(data, dict):
+        return False
+    event_type = data.get("type")
+    if not isinstance(event_type, str):
+        return False
+    if not is_curated_subagent_wire_event_type(event_type):
+        return False
+    return is_custom_stream_payload_client_visible(data)
+
+
 def _forward_messages_chunk(
     chunk: object,
 ) -> bool:
@@ -327,6 +344,7 @@ def _forward_messages_chunk(
     Forwards:
     - ``messages`` mode: ``ToolMessage`` and ``AIMessage`` / ``AIMessageChunk`` (IG-330)
     - ``custom`` mode: ``soothe.stream.tool_call.update`` (main graph and subgraph)
+    - ``custom`` mode: curated ``soothe.subagent.*`` progress (sparse metadata, IG-339)
 
     Args:
         chunk: Deepagents stream chunk ``(namespace, mode, data)``.
@@ -337,15 +355,12 @@ def _forward_messages_chunk(
     if isinstance(chunk, tuple) and len(chunk) == _STREAM_CHUNK_LEN:
         _namespace, mode, data = chunk
         if mode == "custom" and isinstance(data, dict):
-            from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
-
-            if not is_custom_stream_payload_client_visible(data):
-                return False
-    return (
-        _is_tool_stream_chunk(chunk)
-        or _is_ai_messages_stream_chunk(chunk)
-        or _is_tool_call_update_chunk(chunk)
-    )
+            if _is_subagent_wire_custom_chunk(chunk):
+                return True
+            if _is_tool_call_update_chunk(chunk):
+                return is_custom_stream_payload_client_visible(data)
+            return False
+    return _is_tool_stream_chunk(chunk) or _is_ai_messages_stream_chunk(chunk)
 
 
 def _clip_sloop_step_description(

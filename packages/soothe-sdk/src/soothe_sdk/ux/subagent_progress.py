@@ -84,6 +84,28 @@ def _summarize_completed(data: Mapping[str, Any]) -> str:
     return f"{status} ({ms}ms)" if ms else status
 
 
+def _summarize_progress(data: Mapping[str, Any]) -> str:
+    phase = str(data.get("phase", "") or "").strip()
+    msg = preview_first(str(data.get("message", "")), 80)
+    loop_count = int(data.get("loop_count", 0) or 0)
+    total_loops = int(data.get("total_loops", 0) or 0)
+    if phase and msg:
+        base = f"{phase}: {msg}"
+    else:
+        base = phase or msg
+    if total_loops > 0:
+        return (
+            f"{base} ({loop_count}/{total_loops})" if base else f"loop {loop_count}/{total_loops}"
+        )
+    return base
+
+
+def _summarize_crawl(data: Mapping[str, Any]) -> str:
+    urls = int(data.get("urls_crawled", 0) or 0)
+    success = int(data.get("success_count", 0) or 0)
+    return f"{success}/{urls} URLs crawled"
+
+
 def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -> str:
     """One short line for Task tool cards / compact CLI mirroring (metadata-only).
 
@@ -98,6 +120,8 @@ def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -
         return preview_first(str(data.get("message", "")), 120)
     if event_type.endswith(".started"):
         return _summarize_started(data)
+    if event_type.endswith(".progress"):
+        return _summarize_progress(data)
     if event_type.endswith(".step.completed"):
         if any(k in data for k in ("action_preview", "url", "status")):
             action_line = _summarize_action_step(data)
@@ -116,6 +140,19 @@ def summarize_subagent_wire_activity(event_type: str, data: Mapping[str, Any]) -
         qp = preview_first(str(data.get("query_preview", "")), 60)
         tail = f"{rc} hits, {st} sources"
         return f"{qp} → {tail}" if qp else tail
+    if event_type.endswith(".crawl.summary"):
+        return _summarize_crawl(data)
+    if event_type.endswith(".requested"):
+        qc = int(data.get("question_count", 0) or 0)
+        label = "question" if qc == 1 else "questions"
+        return f"Veritas clarifying ({qc} {label})" if qc else "Veritas clarifying"
+    if event_type.endswith(".answered"):
+        conf = float(data.get("confidence", 0) or 0)
+        if data.get("defer"):
+            return f"Veritas defer (conf={conf:.2f})"
+        return f"Veritas answered (conf={conf:.2f})"
+    if event_type.endswith(".deferred"):
+        return preview_first(str(data.get("reason", "")), 120)
     if event_type.endswith(".completed"):
         return _summarize_completed(data)
 

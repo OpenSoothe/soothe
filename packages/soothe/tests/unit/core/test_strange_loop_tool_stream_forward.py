@@ -178,15 +178,40 @@ def test_empty_ai_chunk_with_tool_calls_still_forwarded() -> None:
     assert _forward_messages_chunk(chunk) is True
 
 
-def test_custom_event_non_tool_update_not_forwarded() -> None:
-    """Other custom events (not tool_call_update) should not be forwarded."""
+def test_curated_subagent_wire_custom_forwarded() -> None:
+    """Curated soothe.subagent.* custom events reach WebSocket clients."""
     chunk = (
         ("tools:abc123",),
         "custom",
-        {"type": "soothe.subagent.explore.started"},
+        {
+            "type": "soothe.subagent.deep_research.started",
+            "topic_preview": "OpenVela architecture",
+        },
     )
-    assert _is_subgraph_tool_call_update_chunk(chunk) is False
-    assert _forward_messages_chunk(chunk) is False
+    assert _forward_messages_chunk(chunk) is True
+
+
+def test_subagent_progress_wire_custom_forwarded() -> None:
+    chunk = (
+        ("tools:abc123",),
+        "custom",
+        {
+            "type": "soothe.subagent.deep_research.progress",
+            "phase": "gather",
+            "message": "Searching web",
+        },
+    )
+    assert _forward_messages_chunk(chunk) is True
+
+
+def test_custom_event_non_tool_update_not_forwarded() -> None:
+    """Non-curated custom events should not be forwarded."""
+    internal = (
+        (),
+        "custom",
+        {"type": "soothe.internal.policy.checked", "verdict": "allow"},
+    )
+    assert _forward_messages_chunk(internal) is False
 
 
 def test_internal_custom_event_not_forwarded() -> None:

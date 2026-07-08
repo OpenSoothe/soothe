@@ -535,26 +535,6 @@ class AutopilotModeSwitchedEvent(ProtocolEvent):
 
 
 # ---------------------------------------------------------------------------
-# Subagent tool events (generic for any subagent)
-# ---------------------------------------------------------------------------
-
-
-def make_subagent_tool_started(agent: str, **extra: Any) -> dict[str, Any]:
-    """Build a subagent tool-started event dict."""
-    return {"type": f"soothe.subagent.{agent}.tool_started", **extra}
-
-
-def make_subagent_tool_completed(agent: str, **extra: Any) -> dict[str, Any]:
-    """Build a subagent tool-completed event dict."""
-    return {"type": f"soothe.subagent.{agent}.tool_completed", **extra}
-
-
-def make_subagent_tool_failed(agent: str, **extra: Any) -> dict[str, Any]:
-    """Build a subagent tool-failed event dict."""
-    return {"type": f"soothe.subagent.{agent}.tool_failed", **extra}
-
-
-# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 

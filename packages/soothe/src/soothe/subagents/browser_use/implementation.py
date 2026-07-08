@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from soothe_sdk.core.subagent_wire import emit_subagent_wire_event
 from soothe_sdk.utils.formatting import format_cli_error
 
 from soothe.subagents.browser_use._preview import preview_first
@@ -37,6 +36,7 @@ from soothe.subagents.browser_use.events import (
     BrowserUseStartedEvent,
     BrowserUseStepCompletedEvent,
 )
+from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 logger = logging.getLogger(__name__)
 

@@ -74,13 +74,10 @@ register_event(
     summary_template="Step {step_index}: {action_preview}",
 )
 
-SUBAGENT_BROWSER_USE_DISPATCHED = SUBAGENT_BROWSER_USE_STARTED
-SUBAGENT_BROWSER_USE_STEP = SUBAGENT_BROWSER_USE_STEP_COMPLETED
-
 __all__ = [
     "SUBAGENT_BROWSER_USE_COMPLETED",
-    "SUBAGENT_BROWSER_USE_DISPATCHED",
-    "SUBAGENT_BROWSER_USE_STEP",
+    "SUBAGENT_BROWSER_USE_STARTED",
+    "SUBAGENT_BROWSER_USE_STEP_COMPLETED",
     "BrowserUseCompletedEvent",
     "BrowserUseStartedEvent",
     "BrowserUseStepCompletedEvent",
