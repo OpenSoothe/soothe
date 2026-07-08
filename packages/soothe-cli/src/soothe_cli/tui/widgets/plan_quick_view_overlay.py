@@ -9,6 +9,8 @@ from textual.containers import Vertical, VerticalScroll
 from textual.content import Content
 from textual.widgets import Static
 
+from soothe_cli.tui.config import get_glyphs
+from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.tui.widgets.messages._helpers import _RUNNING_SPINNER_INTERVAL_SECONDS
 
 if TYPE_CHECKING:
@@ -27,6 +29,17 @@ def get_live_goal_tree(app: Any) -> CognitionGoalTreeMessage | None:
         return None
     tree = getattr(adapter, "_goal_tree_message", None)
     return tree
+
+
+def _goal_tree_running_live_stats(adapter: Any) -> dict[str, tuple[int, float | None]]:
+    """Collect live tool counts and start times from running step cards."""
+    stats: dict[str, tuple[int, float | None]] = {}
+    for sid, card in getattr(adapter, "_current_step_messages", {}).items():
+        if card._status != "running":
+            continue
+        idx = card._build_row_index()
+        stats[sid] = (idx.main_tool_count, card._start_time)
+    return stats
 
 
 class PlanQuickViewOverlay(Vertical):
@@ -143,8 +156,21 @@ class PlanQuickViewOverlay(Vertical):
             self._content.update(Content.styled("No active plan.", "dim"))
             return
         try:
+            adapter = getattr(self.app, "_ui_adapter", None)
+            if adapter is not None:
+                tree.sync_running_live_stats(_goal_tree_running_live_stats(adapter))
             tree.tick_running_spinner()
-            self._content.update(tree.plan_quick_view_content())
+            max_line_width = self._plan_quick_view_line_width()
+            self._content.update(tree.plan_quick_view_content(max_line_width=max_line_width))
         except Exception:  # noqa: BLE001
             logger.debug("Failed to render plan quick view", exc_info=True)
             self._content.update(Content.styled("(plan view unavailable)", "dim"))
+
+    def _plan_quick_view_line_width(self) -> int:
+        """Available columns for one plan step row inside the overlay."""
+        overlay_padding = 4
+        gutter_len = len(get_glyphs().output_prefix) + 1
+        width = self.size.width if self.size.width else 0
+        if width > overlay_padding + gutter_len:
+            return max(PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS, width - overlay_padding - gutter_len)
+        return PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS

@@ -10,8 +10,9 @@ from soothe_cli.tui.widgets.messages import CognitionGoalTreeMessage
 def test_cognition_goal_tree_pending_and_queued_phases() -> None:
     """Plan rows show pending and queued phases before execution."""
     w = CognitionGoalTreeMessage(goal="Plan work", id="msg-gt-02")
-    w.sync_plan_steps([{"id": "S1", "description": "First"}])
+    w.sync_plan_steps([{"id": "S1", "description": "First", "dependencies": ["S0"]}])
     assert w._steps["S1"].phase == "pending"
+    assert w._steps["S1"].dependencies == ("S0",)
 
     w.set_step_phase("S1", "queued", description="First")
     assert w._steps["S1"].phase == "queued"
@@ -30,7 +31,7 @@ def test_cognition_goal_tree_message_store_round_trip() -> None:
         max_iterations=8,
         id="msg-gt-01",
     )
-    w.add_step_running("s1", "Read code")
+    w.set_step_phase("s1", "running", description="Read code")
     w.complete_step("s1", True, 1200, 2, "OK")
     w.set_loop_finished(
         status="done",
@@ -46,6 +47,7 @@ def test_cognition_goal_tree_message_store_round_trip() -> None:
     assert snap["goal"] == "Ship the feature"
     assert len(snap["steps"]) == 1
     assert snap["steps"][0]["id"] == "s1"
+    assert snap["steps"][0]["dependencies"] == []
     assert snap["footer_visible"] is True
     assert snap.get("footer_tone") == "success"
 
