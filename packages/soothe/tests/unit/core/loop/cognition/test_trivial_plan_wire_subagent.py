@@ -22,6 +22,11 @@ def test_build_trivial_plan_wires_browser_use_from_pass2() -> None:
     assert step.subagent == "browser_use"
 
 
+def test_build_trivial_plan_propagates_requires_tool_use() -> None:
+    plan = build_trivial_plan("shanghai weather now", requires_tool_use=True)
+    assert plan.decision.steps[0].requires_tool_use is True
+
+
 def test_build_trivial_plan_leaves_wire_subagent_none_for_generic_goal() -> None:
     plan = build_trivial_plan("list files in this directory")
     step = plan.decision.steps[0]

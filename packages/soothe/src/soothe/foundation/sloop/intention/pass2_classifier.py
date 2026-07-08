@@ -159,6 +159,9 @@ class IntakePass2Classifier:
         if result_dict.get("multi_phase") not in (True, False):
             result_dict["multi_phase"] = False
 
+        if result_dict.get("requires_tool_use") not in (True, False):
+            result_dict["requires_tool_use"] = False
+
         wire = result_dict.get("wire_subagent")
         if wire is not None and not str(wire).strip():
             result_dict["wire_subagent"] = None
@@ -180,6 +183,7 @@ class IntakePass2Classifier:
             reasoning="Let me run the full agent loop to work through this goal.",
             multi_phase=False,
             wire_subagent=None,
+            requires_tool_use=False,
         )
 
     def _build_invoke_config(

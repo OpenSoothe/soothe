@@ -876,6 +876,7 @@ class ReportOutputConfig(BaseModel):
 AgenticFinalResponseMode = Literal["adaptive", "always_synthesize"]
 
 AgenticGoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
+ExecuteDeliverableAssessMode = Literal["auto", "always", "never"]
 
 
 class PlanPromptLedgerConfig(BaseModel):
@@ -1487,7 +1488,9 @@ class StrangeLoopConfig(BaseModel):
         max_iterations: Maximum agent loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
         max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
-        execute_action_retry_max: Extra Execute passes when output lacks required ## Result block (0 = disabled).
+        execute_action_retry_max: Extra Execute passes when the step deliverable gate fails (0 = disabled).
+        execute_min_answer_chars: Minimum final assistant text length for deliverable satisfaction.
+        execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
         strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
             assistant text when appropriate, or use adaptive heuristics (IG-199).
@@ -1552,11 +1555,25 @@ class StrangeLoopConfig(BaseModel):
     execute_action_retry_max: int = Field(
         default=1,
         description=(
-            "Extra Execute passes when step output lacks the required ## Result block "
-            "(0 = disabled)"
+            "Extra Execute passes when the step deliverable gate reports incomplete (0 = disabled)"
         ),
         ge=0,
         le=5,
+    )
+
+    execute_min_answer_chars: int = Field(
+        default=20,
+        description="Minimum final assistant text length for execute deliverable satisfaction",
+        ge=0,
+        le=500,
+    )
+
+    execute_deliverable_assess: ExecuteDeliverableAssessMode = Field(
+        default="auto",
+        description=(
+            "Fast LLM step-deliverable assess: auto when structural checks are inconclusive, "
+            "always on incomplete, never (structural only)"
+        ),
     )
 
     strange_loop_output_contract_enabled: bool = Field(

@@ -512,6 +512,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         step_brief_hydrator=step_brief_hydrator,
         checkpoint=checkpoint,
         goal_trace=ctx.goal_trace,
+        fast_model=strange_loop._fast_llm,
     )
     async for item in run_executor.execute(
         decision=decision,

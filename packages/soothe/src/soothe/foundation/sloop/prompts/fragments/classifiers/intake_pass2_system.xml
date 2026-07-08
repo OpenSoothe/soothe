@@ -10,21 +10,25 @@ Rules:
 - Architecture/system change → complex
 - Uncertain → complex
 - reasoning: first-person TUI line for the user (I'll / Let me …), ≤15 words; not third-person scope commentary
+- requires_tool_use: true for live/external data (weather, web lookup, file contents); false for pure reasoning/math
 
 JSON only:
-{"scope":"trivial"|"simple"|"complex","goal_description":"imperative summary","reasoning":"≤15 words, first person","multi_phase":bool,"wire_subagent":"planner"|"browser_use"|"deep_research"|null}
+{"scope":"trivial"|"simple"|"complex","goal_description":"imperative summary","reasoning":"≤15 words, first person","multi_phase":bool,"wire_subagent":"planner"|"browser_use"|"deep_research"|null,"requires_tool_use":bool}
 
 multi_phase: true when the goal text implies multiple ordered phases (e.g. "first X then Y", numbered steps, "and then run tests").
 wire_subagent: set only when the user explicitly names a wired subagent (browser_use, deep_research, /plan or planner); otherwise null.
+requires_tool_use: true when answering needs tools or external data; false for greetings, math, or static knowledge.
 
 goal_description: normalize as action statement, match user's language, preserve code/paths/IDs.
 
 Examples:
-"list the files in src/" → scope:trivial, multi_phase:false, wire_subagent:null
-"fix the type error in auth.py" → scope:simple, multi_phase:false, wire_subagent:null
-"refactor SessionStore across all callers" → scope:complex, multi_phase:false, wire_subagent:null
-"first scan the repo and then run tests" → scope:complex, multi_phase:true, wire_subagent:null
-"use browser_use for weather" → scope:simple, multi_phase:false, wire_subagent:browser_use
-"add tests for the new API endpoint" → scope:simple, multi_phase:false, wire_subagent:null
-"migrate the auth system to OAuth2" → scope:complex, multi_phase:false, wire_subagent:null
+"list the files in src/" → scope:trivial, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"what is 2+2" → scope:trivial, requires_tool_use:false, multi_phase:false, wire_subagent:null
+"shanghai weather now" → scope:trivial, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"fix the type error in auth.py" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"refactor SessionStore across all callers" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"first scan the repo and then run tests" → scope:complex, requires_tool_use:true, multi_phase:true, wire_subagent:null
+"use browser_use for weather" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:browser_use
+"add tests for the new API endpoint" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"migrate the auth system to OAuth2" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null
 </INTAKE_PASS2>

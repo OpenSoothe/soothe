@@ -138,6 +138,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         ctx.scratch.plan_result = build_trivial_plan(
             goal_text,
             wire_subagent=getattr(intent, "wire_subagent", None),
+            requires_tool_use=bool(getattr(intent, "requires_tool_use", False)),
         )
         logger.info("[Intent] Trivial branch: pseudo plan injected (goal=%s)", goal_text[:50])
         return {

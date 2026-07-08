@@ -320,8 +320,8 @@ def test_trivial_plan_has_no_synthetic_reasoning_prefix() -> None:
     assert plan.decision.reasoning == ""
     assert plan.terminal_after_execute is True
     assert plan.require_goal_completion is False
-    # The ## Result evidence contract is retained.
-    assert "## Result" in plan.decision.steps[0].expected_output
+    assert "Direct answer" in plan.decision.steps[0].expected_output
+    assert plan.decision.steps[0].requires_tool_use is False
 
 
 # -- IG-554: Routing guard tests (new_goal_created constraint) --------------

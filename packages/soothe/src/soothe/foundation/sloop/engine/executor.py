@@ -40,6 +40,12 @@ from soothe.foundation.sloop.clarification import (
     ClarificationOrigin,
     LoopStateView,
 )
+from soothe.foundation.sloop.cognition.step_deliverable import (
+    StepDeliverableVerdict,
+    evaluate_step_deliverable,
+    resolve_step_deliverable_spec,
+    step_has_deliverable_gate,
+)
 from soothe.foundation.sloop.engine.act_wave_finalize import (
     DELEGATE_FINAL_WAVE_CAP,
     _aggregate_tool_calls_from_step_messages,
@@ -49,10 +55,6 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
     compute_act_wave_finalize,
     is_error_tool_result_text,
     provenance_is_task_delegate,
-)
-from soothe.foundation.sloop.cognition.simple_bypass import (
-    EXECUTE_ACTION_RETRY_NUDGE,
-    execute_deliverable_incomplete,
 )
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continuation_execution_hints,
@@ -223,6 +225,7 @@ class Executor:
         step_brief_hydrator: Any | None = None,
         checkpoint: Any | None = None,
         goal_trace: Any | None = None,
+        fast_model: Any | None = None,
     ) -> None:
         """Initialize Execute phase.
 
@@ -269,6 +272,17 @@ class Executor:
         self._step_brief_hydrator = step_brief_hydrator
         self._checkpoint = checkpoint
         self._goal_trace = goal_trace
+        self._fast_model = fast_model
+
+    def _execute_min_answer_chars(self) -> int:
+        if self._config is None:
+            return 20
+        return max(0, int(self._config.agent.loop.execute_min_answer_chars))
+
+    def _execute_deliverable_assess_mode(self) -> str:
+        if self._config is None:
+            return "auto"
+        return str(self._config.agent.loop.execute_deliverable_assess)
 
     def _executor_langfuse_merge_for_stream(
         self, base: dict[str, Any], *, thread_id: str | None
@@ -346,17 +360,6 @@ class Executor:
         if self._config is None:
             return 1
         return max(0, int(self._config.agent.loop.execute_action_retry_max))
-
-    @staticmethod
-    def _merge_execute_pass_output(previous: str, new: str) -> str:
-        """Join execute output from consecutive action-retry passes."""
-        prev = (previous or "").strip()
-        nxt = (new or "").strip()
-        if not prev:
-            return nxt
-        if not nxt:
-            return prev
-        return f"{prev}\n\n{nxt}"
 
     @staticmethod
     async def _maybe_aclose_act_stream(stream: Any, *, reason: str) -> None:
@@ -1859,30 +1862,65 @@ class Executor:
                         pass_stream_outcomes = list(chunk.outcomes)
                         pass_has_tool_error = chunk.has_error
 
-                output = self._merge_execute_pass_output(output, pass_output)
-                main_tool_call_count += pass_main_tool_call_count
-                subgraph_tool_call_count += pass_subgraph_tool_call_count
-                messages.extend(pass_messages)
-                if pass_delegate_final:
-                    delegate_final = pass_delegate_final
-                stream_outcomes.extend(pass_stream_outcomes)
-                has_tool_error = has_tool_error or pass_has_tool_error
+                if action_retries_done > 0:
+                    output = pass_output
+                    main_tool_call_count = pass_main_tool_call_count
+                    subgraph_tool_call_count = pass_subgraph_tool_call_count
+                    messages = list(pass_messages)
+                    if pass_delegate_final:
+                        delegate_final = pass_delegate_final
+                    stream_outcomes = list(pass_stream_outcomes)
+                    has_tool_error = pass_has_tool_error
+                else:
+                    output = pass_output
+                    main_tool_call_count = pass_main_tool_call_count
+                    subgraph_tool_call_count = pass_subgraph_tool_call_count
+                    messages.extend(pass_messages)
+                    if pass_delegate_final:
+                        delegate_final = pass_delegate_final
+                    stream_outcomes.extend(pass_stream_outcomes)
+                    has_tool_error = has_tool_error or pass_has_tool_error
+
+                pass_final_ai = self._extract_final_assistant_text_from_step_messages(pass_messages)
+                if step_has_deliverable_gate(step):
+                    deliverable_verdict = await evaluate_step_deliverable(
+                        spec=resolve_step_deliverable_spec(step),  # type: ignore[arg-type]
+                        step_description=step.description,
+                        final_ai_text=pass_final_ai,
+                        main_tool_call_count=pass_main_tool_call_count,
+                        stream_outcomes=pass_stream_outcomes,
+                        all_tools_failed=all_tool_outcomes_failed(pass_stream_outcomes),
+                        hit_tool_budget=budget.hit_tool_budget,
+                        min_answer_chars=self._execute_min_answer_chars(),
+                        assess_mode=self._execute_deliverable_assess_mode(),  # type: ignore[arg-type]
+                        fast_model=self._fast_model,
+                        soothe_config=self._config,
+                        goal_trace=self._goal_trace,
+                    )
+                else:
+                    deliverable_verdict = StepDeliverableVerdict(complete=True)
 
                 if action_retries_done >= max_action_retries:
                     break
-                if not execute_deliverable_incomplete(output, step.expected_output):
+                if deliverable_verdict.complete:
                     break
 
                 action_retries_done += 1
+                retry_instruction = (deliverable_verdict.retry_instruction or "").strip()
+                if not retry_instruction:
+                    retry_instruction = (
+                        "Answer the user directly using available tool output when needed."
+                    )
                 logger.info(
-                    "[Execute] action retry %d/%d for step %s (missing ## Result deliverable)",
+                    "[Execute] action retry %d/%d for step %s (deliverable=%s)",
                     action_retries_done,
                     max_action_retries,
                     step.id,
+                    deliverable_verdict.failure_mode.value,
                 )
                 stream_input_messages = [
                     LoopHumanMessage(
-                        content=EXECUTE_ACTION_RETRY_NUDGE,
+                        content=retry_instruction,
                         thread_id=thread_id,
                         iteration=None,
                         goal_summary=None,

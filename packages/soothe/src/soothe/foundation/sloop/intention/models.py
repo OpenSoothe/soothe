@@ -140,6 +140,13 @@ class IntentClassification(BaseModel):
         default=None,
         description="Pass 2: explicit wired subagent when user names one",
     )
+    requires_tool_use: bool = Field(
+        default=False,
+        description=(
+            "Pass 2: true when answering requires external/live data or tool execution "
+            "(weather, web lookup, file contents); false for pure reasoning/math."
+        ),
+    )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity derived from intake_label"
     )
@@ -285,6 +292,13 @@ class IntakePass2LLMResult(BaseModel):
         description=(
             "Explicit wired subagent when user names one: planner, browser_use, "
             "deep_research, or null"
+        ),
+    )
+    requires_tool_use: bool = Field(
+        default=False,
+        description=(
+            "True when answering requires external/live data or tool execution "
+            "(weather, web lookup, file contents). False for pure reasoning/math."
         ),
     )
 

@@ -120,6 +120,8 @@ agent:
     max_plan_steps_per_wave: 10
     max_tool_calls_per_step: 999
     execute_action_retry_max: 1
+    execute_min_answer_chars: 20
+    execute_deliverable_assess: auto
     max_subagent_tasks_per_wave: 4
     strange_loop_output_contract_enabled: true
     goal_completion_mode: llm_only

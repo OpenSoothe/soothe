@@ -227,6 +227,8 @@ class StepAction(BaseModel):
         execution_hint: Planner routing hint (``subagent`` → delegate via ``task``).
         subagent: Named subagent when ``execution_hint='subagent'``.
         wire_subagent: Resolved executor hint (from planner or wire routing).
+        requires_tool_use: When set, execute deliverable gate requires successful tool use
+            (from Pass 2 intake for trivial steps).
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -245,6 +247,7 @@ class StepAction(BaseModel):
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
     subagent: str | None = None
     wire_subagent: str | None = None
+    requires_tool_use: bool | None = None
 
     @model_validator(mode="after")
     def _validate_ask_user(self) -> StepAction:
