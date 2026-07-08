@@ -12,11 +12,7 @@ from typing import Annotated, Any
 
 from deepagents.backends.protocol import BackendProtocol
 from deepagents.backends.utils import validate_path
-from deepagents.middleware.filesystem import (
-    FilesystemMiddleware,
-    FilesystemState,
-    truncate_if_too_long,
-)
+from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.tools import ToolRuntime
 from langchain.tools.tool_node import ToolCallRequest
 from langchain_core.messages import ToolMessage
@@ -325,55 +321,6 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             workspace,
             virtual_mode=virtual_mode,
             max_file_size_mb=max_mb,
-        )
-
-    def _create_glob_tool(self) -> BaseTool:
-        """Create glob tool without deepagents' 20s internal cap.
-
-        Glob invocation timeout is enforced solely by ``ToolTimeoutMiddleware``
-        (``config.agent.loop.tool_timeout.per_tool.glob``).
-        """
-        tool_description = self._custom_tool_descriptions.get("glob") or GLOB_TOOL_DESCRIPTION
-
-        def sync_glob(
-            pattern: Annotated[
-                str,
-                "Glob pattern to match files (e.g., '**/*.py', '*.txt', '/subdir/**/*.md').",
-            ],
-            runtime: ToolRuntime[None, FilesystemState],
-            path: Annotated[str, "Base directory to search from. Defaults to root '/'."] = "/",
-        ) -> str:
-            resolved_backend = self._get_backend(runtime)
-            try:
-                validated_path = validate_path(path)
-            except ValueError as e:
-                return f"Error: {e}"
-            infos = resolved_backend.glob_info(pattern, path=validated_path)
-            paths = [fi.get("path", "") for fi in infos]
-            return str(truncate_if_too_long(paths))
-
-        async def async_glob(
-            pattern: Annotated[
-                str,
-                "Glob pattern to match files (e.g., '**/*.py', '*.txt', '/subdir/**/*.md').",
-            ],
-            runtime: ToolRuntime[None, FilesystemState],
-            path: Annotated[str, "Base directory to search from. Defaults to root '/'."] = "/",
-        ) -> str:
-            resolved_backend = self._get_backend(runtime)
-            try:
-                validated_path = validate_path(path)
-            except ValueError as e:
-                return f"Error: {e}"
-            infos = await resolved_backend.aglob_info(pattern, path=validated_path)
-            paths = [fi.get("path", "") for fi in infos]
-            return str(truncate_if_too_long(paths))
-
-        return StructuredTool.from_function(
-            name="glob",
-            description=tool_description,
-            func=sync_glob,
-            coroutine=async_glob,
         )
 
     def wrap_tool_call(

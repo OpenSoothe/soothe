@@ -12,7 +12,7 @@ Default timeouts:
     - Standard tools: 60s
     - Subagent tools: 1800s (30 minutes for exploration/browser)
     - Task tool: 86400s (24 hours for autonomous subagent work)
-    - Filesystem tools: 30s (read, glob, grep)
+    - Filesystem tools: 30s (read, grep); glob uses deepagents' internal 20s cap
     - Execution tools: 120s (run_command already has timeout)
 
 Configuration:
@@ -123,6 +123,7 @@ SUBAGENT_TOOL_NAMES: frozenset[str] = frozenset(
 # Tools that already have robust internal timeouts - skip wrapping
 TOOLS_WITH_INTERNAL_TIMEOUT: frozenset[str] = frozenset(
     {
+        "glob",  # deepagents FilesystemMiddleware enforces GLOB_TIMEOUT (20s)
         "run_command",  # subprocess.run(timeout=...) already enforced
         "execute",  # deepagents execute has timeout parameter
     }
@@ -216,7 +217,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
     def _should_skip_timeout(self, tool_name: str) -> bool:
         """Check if tool should skip timeout wrapping.
 
-        Tools with robust internal timeouts (run_command, execute) don't need
+        Tools with robust internal timeouts (glob, run_command, execute) don't need
         middleware wrapping - their internal timeout is more precise.
 
         Args:

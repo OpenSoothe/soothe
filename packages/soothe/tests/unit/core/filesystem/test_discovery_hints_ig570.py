@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from deepagents.backends import FilesystemBackend
+from langchain.tools import ToolRuntime
+from langchain_core.messages import ToolMessage
 
 from soothe.foundation.core.filesystem.discovery_hints import (
     GLOB_DISCOVERY_FALLBACK_HINT,
     GLOB_TOOL_DESCRIPTION,
     format_glob_timeout_error,
 )
+from soothe.foundation.workspace.normalized_backend import get_workspace_backend
 from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
 
@@ -31,3 +35,28 @@ def test_soothe_filesystem_middleware_glob_has_discovery_description(tmp_path: P
     glob_tool = next(t for t in middleware.tools if t.name == "glob")
     assert GLOB_DISCOVERY_FALLBACK_HINT in glob_tool.description
     assert glob_tool.args_schema is not None
+
+
+def test_deepagents_glob_uses_soothe_backend(tmp_path: Path) -> None:
+    """Deepagents built-in glob must call ``backend.glob`` on the resolved workspace backend."""
+    (tmp_path / "alpha.txt").write_text("x", encoding="utf-8")
+
+    def factory(ws: str) -> object:
+        return get_workspace_backend(Path(ws), virtual_mode=True)
+
+    backend = factory(str(tmp_path))
+    middleware = SootheFilesystemMiddleware(
+        backend=backend,
+        workspace_root=str(tmp_path),
+        workspace_backend_factory=factory,
+    )
+    glob_tool = next(t for t in middleware.tools if t.name == "glob")
+    runtime = MagicMock(spec=ToolRuntime)
+    runtime.tool_call_id = "glob-test"
+    runtime.config = {"configurable": {}}
+
+    result = glob_tool.func("*.txt", runtime, "/")
+
+    assert isinstance(result, ToolMessage)
+    assert result.status == "success"
+    assert "alpha.txt" in str(result.content)
