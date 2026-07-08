@@ -59,9 +59,28 @@ class PostgreSQLPersistStore:
         self._init_lock = asyncio.Lock()
         self._schema_initialized = shared_pool is not None
 
+    @property
+    def _uses_shared_pool(self) -> bool:
+        """True when this store borrows an externally managed pool."""
+        return not self._owns_pool and self._shared_pool is not None
+
+    def _bind_shared_pool(self) -> Any | None:
+        """Reattach the borrowed pool reference when local cache was cleared."""
+        if self._shared_pool is None:
+            return None
+        self._pool = self._shared_pool
+        return self._pool
+
     async def _reset_pool(self) -> None:
-        """Close and clear the current pool after a fatal connection error."""
+        """Reset pool state after a recoverable connection error.
+
+        Owned pools are closed and cleared for lazy re-open. Shared/registry pools
+        must never be closed from this wrapper — only rebind the local reference.
+        """
         async with self._init_lock:
+            if self._uses_shared_pool:
+                self._bind_shared_pool()
+                return
             pool = self._pool
             self._pool = None
         if pool is not None:
@@ -144,6 +163,11 @@ class PostgreSQLPersistStore:
             return self._pool
 
         if self._pool_size == 0:
+            if self._bind_shared_pool() is not None:
+                if not self._schema_initialized:
+                    await self._initialize_schema(self._pool)
+                    self._schema_initialized = True
+                return self._pool
             msg = "PostgreSQL persist store in shared pool mode but pool not set"
             raise RuntimeError(msg)
 
