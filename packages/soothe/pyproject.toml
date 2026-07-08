@@ -102,9 +102,6 @@ dev = [
     "langfuse>=3.0.0,<4.0.0",
 ]
 
-[project.entry-points."soothe.plugins"]
-browser_use = "soothe.subagents.browser_use:BrowserUsePlugin"
-
 [project.urls]
 Homepage = "https://github.com/mirasoth/soothe"
 Repository = "https://github.com/mirasoth/soothe"

@@ -64,6 +64,44 @@ def test_resolve_subagents_browser_use_passes_soothe_config_not_model() -> None:
         factory_mock.assert_called_once()
 
 
+def test_resolve_subagents_browser_use_fallback_passes_soothe_config_not_model() -> None:
+    """Built-in factory fallback must receive soothe_config, not model."""
+    cfg = SootheConfig()
+    for name in cfg.subagents:
+        cfg.subagents[name] = SubagentConfig(enabled=(name == "browser_use"))
+
+    inner_runnable = MagicMock()
+    inner_runnable.invoke.return_value = {"messages": []}
+
+    def _fake_call(factory, kwargs):
+        assert "model" not in kwargs
+        assert kwargs["soothe_config"] is cfg
+        return {
+            "name": "browser_use",
+            "description": "browser",
+            "runnable": inner_runnable,
+        }
+
+    with (
+        patch(
+            "soothe.plugin.global_registry.is_plugins_loaded",
+            return_value=False,
+        ),
+        patch(
+            "soothe.runner.resolver._resolver_tools._call_subagent_factory",
+            side_effect=_fake_call,
+        ) as factory_mock,
+    ):
+        specs = resolve_subagents(cfg, lazy=False)
+
+        assert len(specs) == 1
+        assert specs[0].get("name") == "browser_use"
+        factory_mock.assert_not_called()
+
+        specs[0]["runnable"].invoke({"messages": []})
+        factory_mock.assert_called_once()
+
+
 def test_call_subagent_factory_browser_use_plugin_accepts_model_none() -> None:
     """Regression: @subagent wrapper requires model kwarg even when unused."""
     from soothe.runner.resolver._resolver_tools import _call_subagent_factory

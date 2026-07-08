@@ -539,7 +539,7 @@ def _build_browser_use_graph(
     return graph.compile()
 
 
-def _create_browser_use_subagent(
+def create_browser_use_subagent(
     *,
     headless: bool = True,
     max_steps: int | None = None,

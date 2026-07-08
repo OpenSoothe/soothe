@@ -5,16 +5,13 @@ This package provides browser automation capabilities using browser-use library.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from soothe_sdk.plugin import plugin, subagent
 
-if TYPE_CHECKING:
-    from deepagents.middleware.subagents import CompiledSubAgent
-
 from .implementation import (
     _build_browser_use_graph,  # noqa: F401 - needed for tests
-    _create_browser_use_subagent,
+    create_browser_use_subagent,
 )
 
 __all__ = ["BrowserUsePlugin", "create_browser_use_subagent"]
@@ -113,7 +110,7 @@ Capture screenshots at key navigation points for debugging.
         max_steps = kwargs.get("max_steps", browser_cfg.max_steps)
         use_vision = kwargs.get("use_vision", True)
 
-        return _create_browser_use_subagent(
+        return create_browser_use_subagent(
             headless=headless,
             max_steps=max_steps,
             use_vision=use_vision,
@@ -124,34 +121,3 @@ Capture screenshots at key navigation points for debugging.
     def get_subagents(self) -> list[Any]:
         """Get list of subagent factory functions."""
         return [self.create_browser_use]
-
-
-def create_browser_use_subagent(
-    *,
-    headless: bool = True,
-    max_steps: int | None = None,
-    use_vision: bool = True,
-    config: Any = None,
-    soothe_config: Any,
-) -> CompiledSubAgent:
-    """Create a BrowserUse subagent (CompiledSubAgent with browser-use workflow).
-
-    Args:
-        headless: Run browser in headless mode.
-        max_steps: Maximum browser agent steps. When ``None``, uses
-            ``BrowserUseSubagentConfig.max_steps`` (default 10).
-        use_vision: Enable vision/screenshot support.
-        config: BrowserUse subagent configuration object with runtime directories,
-            cleanup settings, and feature flags.
-        soothe_config: SootheConfig used to resolve ``subagents.browser_use.model_role``.
-
-    Returns:
-        `CompiledSubAgent` dict compatible with deepagents.
-    """
-    return _create_browser_use_subagent(
-        headless=headless,
-        max_steps=max_steps,
-        use_vision=use_vision,
-        config=config,
-        soothe_config=soothe_config,
-    )
