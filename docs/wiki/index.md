@@ -215,7 +215,7 @@ class MyPlugin:
 - **[RFC Index](../specs/rfc-index.md)** - All specifications (73 RFCs)
 - **[Implementation Guides](../impl/)** - Implementation tracking
 - **[Debugging Guide](howto_debug.md)** - Debug and diagnostics
-- **[User Guide](user_guide.md)** - Comprehensive user documentation
+- **[User Guides](user-guides/index.md)** - Comprehensive user documentation
 
 ---
 
@@ -246,7 +246,7 @@ class MyPlugin:
 
 ### 📖 Extended Documentation
 
-- **[User Guide](user_guide.md)** - Comprehensive usage guide with detailed examples
+- **[User Guides](user-guides/index.md)** - Comprehensive usage guide with detailed examples
 - **[RFCs & Specifications](../specs/)** - Technical architecture and design documents
 - **[Implementation Guides](../impl/)** - Development documentation
 

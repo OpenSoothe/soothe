@@ -13,10 +13,6 @@ canonical: user-guides/index.md
 
 Guides for daily usage of Soothe — CLI commands, the TUI, autonomous mode, subagents, and thread management.
 
-> **Canonical hub.** The legacy `user_guide.md` redirect page retains
-> consolidated RFC and IG reference tables; this hub links to focused
-> per-topic guides.
-
 ---
 
 ## Guides
@@ -46,6 +42,5 @@ Guides for daily usage of Soothe — CLI commands, the TUI, autonomous mode, sub
 
 ## Reference
 
-- **[Legacy User Guide](../user_guide.md)** — Consolidated RFC and IG reference tables
 - **[Troubleshooting](../troubleshooting/index.md)** — Common issues and solutions
 - **[Configuration Guide](../configuration-guide/index.md)** — Settings and providers

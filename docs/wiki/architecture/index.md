@@ -181,5 +181,5 @@ Protocol (ABC)
 - **[Core Module Overview](../core/index.md)** — Core module architecture details
 - **[RFC Index](../../specs/rfc-index.md)** — Complete RFC catalog
 - **[Implementation Guides](../../impl/)** — Implementation tracking
-- **[User Guide](../user_guide.md)** — End-user documentation
+- **[User Guides](../user-guides/index.md)** — End-user documentation
 - **[Debugging Guide](../howto_debug.md)** — Debug and diagnostics
