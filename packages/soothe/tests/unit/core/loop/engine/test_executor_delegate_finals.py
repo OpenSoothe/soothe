@@ -759,6 +759,52 @@ async def test_stream_and_collect_logs_tool_call_args(caplog: pytest.LogCaptureF
 
 
 @pytest.mark.asyncio
+async def test_stream_and_collect_logs_write_todos_update(caplog: pytest.LogCaptureFixture) -> None:
+    """write_todos tool calls emit a dedicated todo-list debug log during step execution."""
+    todos = [
+        {"content": "Survey docs", "status": "in_progress"},
+        {"content": "Fix errors", "status": "pending"},
+    ]
+    ai = AIMessage(
+        content="",
+        tool_calls=[
+            {
+                "id": "functions.write_todos:0",
+                "name": "write_todos",
+                "args": {"todos": todos},
+            }
+        ],
+    )
+    tool_msg = ToolMessage(
+        content="Updated todo list",
+        tool_call_id="functions.write_todos:0",
+        name="write_todos",
+    )
+
+    async def fake_stream():
+        yield ((), "messages", (ai, {}))
+        yield ((), "messages", (tool_msg, {}))
+
+    executor = Executor(MagicMock())
+    caplog.set_level(logging.DEBUG, logger="soothe.foundation.sloop.engine.executor")
+    async for _row in executor._stream_and_collect(
+        fake_stream(),
+        budget=None,
+        step_id="STP-01",
+    ):
+        pass
+
+    assert any(
+        "[write_todos]" in rec.message
+        and "step=STP-01" in rec.message
+        and "[in_progress] Survey docs" in rec.message
+        and "[pending] Fix errors" in rec.message
+        for rec in caplog.records
+        if rec.levelname == "DEBUG"
+    )
+
+
+@pytest.mark.asyncio
 async def test_stream_and_collect_assigns_task_idx_per_subgraph_namespace() -> None:
     """Parallel ``task:0`` and ``task:1`` subgraphs stamp ``t0`` / ``t1`` inner tool ids."""
     from langchain_core.messages import AIMessageChunk

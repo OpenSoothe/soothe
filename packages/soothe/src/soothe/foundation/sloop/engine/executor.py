@@ -103,6 +103,7 @@ from soothe.foundation.sloop.engine.tool_call_args import (
     enrich_wire_updates_with_collector,
     filter_redundant_stream_tool_updates,
     format_args_for_log,
+    format_todos_for_log,
     wire_updates_from_ai_message,
 )
 from soothe.foundation.sloop.engine.tool_call_enrichment import (
@@ -2288,6 +2289,16 @@ class Executor:
                 outcome.get("type", "unknown"),
                 outcome.get("size_bytes", 0),
             )
+            if tool_name == "write_todos":
+                logger.debug(
+                    "[write_todos] step=%s id=%s todo list (%d items):\n  %s",
+                    step_id or "?",
+                    tool_call_id,
+                    len(logged_args.get("todos") or [])
+                    if isinstance(logged_args.get("todos"), list)
+                    else 0,
+                    format_todos_for_log(logged_args.get("todos")),
+                )
 
             if budget is not None and budget.max_tool_calls_per_step > 0:
                 budget.tool_call_count = tool_call_count
@@ -2491,6 +2502,17 @@ class Executor:
                     unified_tcid,
                     body_preview,
                 )
+                if tname == "write_todos" and not is_execute_ns:
+                    wargs = tool_args.lookup(unified_tcid)
+                    todos_payload = wargs.get("todos") if wargs else None
+                    logger.debug(
+                        "[write_todos] step=%s ns=%s id=%s todo list (%d items):\n  %s",
+                        step_id or "?",
+                        "/".join(ns_tuple) if ns_tuple else "()",
+                        unified_tcid,
+                        len(todos_payload) if isinstance(todos_payload, list) else 0,
+                        format_todos_for_log(todos_payload),
+                    )
                 # Step-level execute tools get wire updates from the AIMessage/ToolMessage
                 # tuple path above; placeholder updates here are for ``tools:`` subgraphs only.
                 if unified_tcid and tname != "task" and not is_execute_ns:

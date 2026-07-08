@@ -239,6 +239,25 @@ def format_args_for_log(args: dict[str, Any], *, max_chars: int = 500) -> str:
     return log_preview(text, chars=max_chars)
 
 
+def format_todos_for_log(todos: Any, *, max_chars: int = 2000) -> str:
+    """Format ``write_todos`` payload for debug logs."""
+    if not isinstance(todos, list):
+        return log_preview(str(todos), chars=max_chars)
+    if not todos:
+        return "(empty)"
+    lines: list[str] = []
+    for idx, item in enumerate(todos, start=1):
+        if isinstance(item, dict):
+            status = str(item.get("status") or "?")
+            content = str(item.get("content") or "")
+        else:
+            status = "?"
+            content = str(item)
+        lines.append(f"{idx}. [{status}] {content}")
+    text = "\n  ".join(lines)
+    return log_preview(text, chars=max_chars)
+
+
 @dataclass
 class ToolCallArgsCollector:
     """Per Act-wave accumulator: provider + unified id → tool kwargs."""
@@ -359,6 +378,7 @@ __all__ = [
     "ToolCallArgsCollector",
     "enrich_wire_updates_with_collector",
     "format_args_for_log",
+    "format_todos_for_log",
     "filter_redundant_stream_tool_updates",
     "wire_updates_from_ai_message",
 ]
