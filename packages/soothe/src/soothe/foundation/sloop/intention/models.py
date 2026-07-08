@@ -197,6 +197,7 @@ class IntakePass1SocialKind(StrEnum):
     GREETING = "greeting"
     THANKS = "thanks"
     IDENTITY = "identity"
+    DATETIME = "datetime"
     BANTER = "banter"
     OTHER = "other"
 
@@ -228,7 +229,7 @@ class IntakePass1LLMResult(BaseModel):
     social_kind: IntakePass1SocialKind = Field(
         default=IntakePass1SocialKind.OTHER,
         description=(
-            "When is_task=False: greeting, thanks, identity, banter, or other. "
+            "When is_task=False: greeting, thanks, identity, datetime, banter, or other. "
             "When is_task=True: other."
         ),
     )

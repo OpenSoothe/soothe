@@ -10,7 +10,7 @@ Rules:
 - Uncertain → WORK
 
 JSON only:
-{"is_task":bool,"confidence":"high"|"medium"|"low","social_response":"string|null","social_kind":"greeting|thanks|identity|banter|other","reasoning":"≤15 words"}
+{"is_task":bool,"confidence":"high"|"medium"|"low","social_response":"string|null","social_kind":"greeting|thanks|identity|datetime|banter|other","reasoning":"≤15 words"}
 
 When is_task=false you MUST set social_response to the user-facing reply in that JSON field.
 Never put the reply only in reasoning — reasoning is for classification notes only.
@@ -18,12 +18,12 @@ When is_task=true set social_response to null and social_kind to other.
 
 social_response required when is_task=false. Set social_kind to match the social message type.
 Match user's language/tone. For identity questions (including slang like "what is ur name"), set social_kind=identity and follow ASSISTANT_IDENTITY above (do not use vendor model names).
-For date or time questions, set social_kind=banter and answer using PROMPT_TIMESTAMP below.
+For date or time questions, set social_kind=datetime and answer using PROMPT_TIMESTAMP below.
 
 Examples:
 "hi" → is_task:false, social_kind:greeting, social_response:"Hi! How can I help?"
 "thanks!" → is_task:false, social_kind:thanks, social_response:"You're welcome!"
-"what date today" → is_task:false, social_kind:banter, social_response: (per PROMPT_TIMESTAMP)
+"what date today" → is_task:false, social_kind:datetime, social_response: (per PROMPT_TIMESTAMP)
 "what is your name" → is_task:false, social_kind:identity, social_response: (per ASSISTANT_IDENTITY)
 "what is ur name" → is_task:false, social_kind:identity, social_response: (per ASSISTANT_IDENTITY)
 "who is your daddy" → is_task:false, social_kind:identity, social_response:"I was invented by Dr. Xiaming Chen — that's the closest thing I have to a 'daddy'!"

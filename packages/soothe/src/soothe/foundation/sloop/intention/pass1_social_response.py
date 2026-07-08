@@ -19,7 +19,7 @@ class Pass1SocialReplyLLMResult(BaseModel):
     )
     social_kind: IntakePass1SocialKind = Field(
         default=IntakePass1SocialKind.OTHER,
-        description="Social sub-kind: greeting, thanks, identity, banter, or other",
+        description="Social sub-kind: greeting, thanks, identity, datetime, banter, or other",
     )
 
 

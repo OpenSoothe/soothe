@@ -17,6 +17,7 @@ from soothe.foundation.sloop.prompts.identity import (
     prepend_assistant_identity,
     strip_vendor_identity_markers,
 )
+from soothe.utils.prompt_clock import build_canonical_datetime_reply
 
 
 def test_build_canonical_identity_fallback() -> None:
@@ -34,6 +35,38 @@ def test_prepend_assistant_identity_adds_block() -> None:
 def test_claims_wrong_vendor_identity_detects_claude() -> None:
     assert claims_wrong_vendor_identity("I'm Claude, an AI assistant made by Anthropic.")
     assert not claims_wrong_vendor_identity("I'm doing well, thanks for asking!")
+
+
+def test_finalize_chitchat_response_rewrites_stale_datetime_for_datetime_kind() -> None:
+    reply = finalize_chitchat_response(
+        "what date today",
+        "Today is June 28, 2025. How can I help you?",
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.DATETIME,
+    )
+    assert reply == build_canonical_datetime_reply()
+    assert "2025" not in reply
+
+
+def test_finalize_chitchat_response_rewrites_stale_date_announcement_on_other_kind() -> None:
+    reply = finalize_chitchat_response(
+        "what date today",
+        "Today is June 28, 2025. How can I help you?",
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.BANTER,
+    )
+    assert reply == build_canonical_datetime_reply()
+
+
+def test_finalize_chitchat_response_preserves_correct_datetime_reply() -> None:
+    correct = build_canonical_datetime_reply()
+    reply = finalize_chitchat_response(
+        "what date today",
+        correct,
+        assistant_name="Soothe",
+        social_kind=IntakePass1SocialKind.DATETIME,
+    )
+    assert reply == correct
 
 
 def test_finalize_chitchat_response_overrides_identity_query() -> None:

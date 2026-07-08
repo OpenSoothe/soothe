@@ -40,3 +40,28 @@ def prompt_datetime_context() -> dict[str, str]:
         "current_time": local_time_str(),
         "schedule_timezone": local_timezone_label(),
     }
+
+
+def format_friendly_local_date() -> str:
+    """Return a user-facing local date (e.g. ``July 8, 2026``)."""
+    now = now_local()
+    return f"{now.strftime('%B')} {now.day}, {now.year}"
+
+
+def build_canonical_datetime_reply() -> str:
+    """Deterministic date reply for Pass 1 datetime social turns."""
+    return f"Today is {format_friendly_local_date()}."
+
+
+def response_includes_current_local_date(text: str) -> bool:
+    """Return True when text cites today's configured local calendar date."""
+    stripped = text.strip()
+    if not stripped:
+        return False
+    iso = local_date_str()
+    if iso in stripped:
+        return True
+    now = now_local()
+    friendly = f"{now.strftime('%B')} {now.day}, {now.year}"
+    padded_day = now.strftime(f"%B {now.day:02d}, %Y")
+    return friendly in stripped or padded_day in stripped
