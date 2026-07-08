@@ -219,6 +219,7 @@ def discover_all_plugins(
         ("planner", "plan"),
         ("deep_research", "deep_research"),
         ("academic_research", "academic_research"),
+        ("browser_use", "browser_use"),
     ):
         module_path = f"soothe.subagents.{module_suffix}"
         discovered[subagent_name] = (module_path, {}, "built-in")

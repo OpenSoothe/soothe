@@ -600,6 +600,16 @@ def resolve_subagents(
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}
+        elif name == "browser_use":
+            from soothe.subagents.browser_use.config_model import BrowserUseSubagentConfig
+
+            extra_kwargs.clear()
+            cfg_dict = dict(sub_cfg.config)
+            if cfg_dict:
+                extra_kwargs["config"] = BrowserUseSubagentConfig(**cfg_dict)
+            extra_kwargs["soothe_config"] = config
+            pending.append((name, factory, extra_kwargs))
+            continue
 
         pending.append((name, factory, {"model": model_override, **extra_kwargs}))
 
