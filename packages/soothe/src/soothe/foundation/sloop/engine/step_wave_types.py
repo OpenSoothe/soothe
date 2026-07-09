@@ -120,6 +120,15 @@ class StepWaveQueued:
 
 
 @dataclass(frozen=True, slots=True)
+class StepCompletionReport:
+    """Display-only step completion summary for TUI cognition cards (no ledger write)."""
+
+    step_id: str
+    summary: str
+    iteration: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class StepWaveStart:
     """Marks the start of a bounded execute batch (``max_parallel_steps`` cap).
 
@@ -202,6 +211,7 @@ __all__ = [
     "_ParallelLiveQueueItem",
     "_TUPLE_LEN",
     "StreamEvent",
+    "StepCompletionReport",
     "StepWaveQueued",
     "StepWaveStart",
     "_append_parallel_stream_event",

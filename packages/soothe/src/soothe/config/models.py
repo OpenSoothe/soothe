@@ -1575,6 +1575,13 @@ class StrangeLoopConfig(BaseModel):
         ),
     )
 
+    step_completion_report_max_words: int = Field(
+        default=30,
+        description="Maximum words for execute-step completion cognition summaries",
+        ge=5,
+        le=100,
+    )
+
     strange_loop_output_contract_enabled: bool = Field(
         default=True,
         description="Instruct CoreAgent not to paste full tool outputs again during StrangeLoop Execute phase",

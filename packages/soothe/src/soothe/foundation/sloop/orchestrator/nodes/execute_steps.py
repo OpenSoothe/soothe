@@ -17,6 +17,7 @@ from soothe.foundation.sloop.clarification import (
 )
 from soothe.foundation.sloop.engine.context_window_manager import ContextWindowManager
 from soothe.foundation.sloop.engine.executor import Executor, StepWaveQueued, StepWaveStart
+from soothe.foundation.sloop.engine.step_wave_types import StepCompletionReport
 from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
@@ -524,6 +525,15 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             await _emit_step_started_for_steps(list(item.steps))
         elif isinstance(item, tuple) and len(item) == _STREAM_CHUNK_LEN:
             await ctx.emit("stream_event", item)
+        elif isinstance(item, StepCompletionReport):
+            await ctx.emit(
+                "step_completion_report",
+                {
+                    "step_id": item.step_id,
+                    "summary": item.summary,
+                    "iteration": item.iteration,
+                },
+            )
         elif isinstance(item, StepResult):
             step_results.append(item)
             await _record_and_emit_step_completed(

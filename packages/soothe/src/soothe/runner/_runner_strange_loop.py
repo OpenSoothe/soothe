@@ -596,6 +596,19 @@ class StrangeLoopMixin:
                         ).to_dict()
                     )
 
+                elif event_type == "step_completion_report":
+                    summary = str(event_data.get("summary", "")).strip()
+                    if summary:
+                        yield _custom(
+                            LoopAgentReasonEvent(
+                                status="",
+                                progress="",
+                                plan_reasoning=summary,
+                                iteration=int(event_data.get("iteration", 0)),
+                                plan_action="",
+                            ).to_dict()
+                        )
+
                 elif event_type == "step_completed":
                     # Level 3: Step result
                     success = event_data["success"]
