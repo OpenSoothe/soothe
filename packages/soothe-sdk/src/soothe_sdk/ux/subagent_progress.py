@@ -66,6 +66,12 @@ def _summarize_tool_step(data: Mapping[str, Any]) -> str:
 
 def _summarize_completed(data: Mapping[str, Any]) -> str:
     ms = int(data.get("duration_ms", 0) or 0)
+    summary = preview_first(str(data.get("summary", "") or "").strip(), 100)
+    report_path = preview_first(str(data.get("report_path", "") or "").strip(), 80)
+    if summary and report_path:
+        return f"{summary} → {report_path}" + (f" ({ms}ms)" if ms else "")
+    if summary:
+        return summary + (f" ({ms}ms)" if ms else "")
     if "cost_usd" in data:
         cost = data.get("cost_usd", 0.0)
         try:

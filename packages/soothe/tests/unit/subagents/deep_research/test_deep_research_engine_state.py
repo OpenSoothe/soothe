@@ -67,4 +67,7 @@ def test_build_deep_research_smoke() -> None:
             )
 
     assert result.get("effort") == "normal"
-    assert "Key Findings" in result.get("answer", "")
+    answer = result.get("answer", "")
+    assert "## Summary" in answer
+    assert "Full report saved to:" in answer
+    assert "Done." in answer

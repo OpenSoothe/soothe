@@ -18,7 +18,7 @@ from soothe.subagents.research_wire import ResearchWireEmitter
 from soothe.toolkits.url_crawl import crawl_urls, urls_from_search_results
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
-from .display_summary import deep_research_report_summary_for_display
+from .display_summary import deep_research_brief_summary_for_display
 from .effort import resolve_effort
 from .events import (
     DeepResearchCompletedEvent,
@@ -35,6 +35,7 @@ from .json_util import (
     llm_response_text,
     parse_json_object,
 )
+from .persistence import format_saved_report_answer, save_deep_research_report
 from .protocol import (
     SCOPE_BANNER,
     DeepResearchConfig,
@@ -566,7 +567,21 @@ def build_deep_research_engine(
         if bib and bib not in report:
             report = f"{report.rstrip()}\n\n{bib}"
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
-        summary = deep_research_report_summary_for_display(report)
+        saved = (
+            save_deep_research_report(
+                report,
+                topic=topic,
+                soothe_config=soothe_config,
+            )
+            if cfg.save_reports
+            else None
+        )
+        summary = (
+            saved.brief_summary
+            if saved is not None
+            else deep_research_brief_summary_for_display(report)
+        )
+        report_path = saved.display_path if saved is not None else ""
         _emit_step("Synthesize", classification.scenario, duration_ms=elapsed_ms)
         emit_subagent_wire_event(
             DeepResearchCompletedEvent(
@@ -574,10 +589,12 @@ def build_deep_research_engine(
                 scenario=classification.scenario,
                 report_length=len(report),
                 summary=summary,
+                report_path=report_path,
             ).to_dict(),
             logger,
         )
-        return {"answer": report}
+        answer = format_saved_report_answer(saved) if saved is not None else report
+        return {"answer": answer}
 
     graph = StateGraph(DeepResearchEngineState)
     graph.add_node("plan_research", plan_research_node)

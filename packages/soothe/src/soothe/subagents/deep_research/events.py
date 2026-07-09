@@ -75,6 +75,7 @@ class DeepResearchCompletedEvent(SootheEvent):
     scenario: str = ""
     report_length: int = 0
     summary: str = ""
+    report_path: str = ""
 
     model_config = ConfigDict(extra="allow")
 
@@ -107,5 +108,5 @@ register_event(
 register_event(
     DeepResearchCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Report done ({report_length} chars)",
+    summary_template="{summary}",
 )
