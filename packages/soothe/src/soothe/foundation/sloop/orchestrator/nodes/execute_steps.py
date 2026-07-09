@@ -52,10 +52,12 @@ def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
         )
     # goal_user_submission holds the original user line (set by strange_loop.continue_goal).
     # Fall back to goal when goal_user_submission is None (e.g. autopilot or legacy paths).
-    user_request = getattr(state, "goal_user_submission", None) or getattr(state, "goal", "")
+    from soothe.foundation.sloop.goal_text import resolve_user_request
+
+    user_request = resolve_user_request(state)
     return LoopStateView(
         goal_id=getattr(goal_record, "goal_id", "") or "",
-        goal_description=getattr(goal_record, "goal_description", "") or getattr(state, "goal", ""),
+        goal_description=user_request,
         user_request=user_request,
         iteration=getattr(state, "iteration", 0),
         intent_classification=getattr(state, "intent_classification", None),

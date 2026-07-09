@@ -35,11 +35,9 @@ class TestIntentClassificationModel:
     def test_model_creation_complex(self) -> None:
         intent = IntentClassification(
             intake_label=IntakeLabel.COMPLEX,
-            goal_description="Build a web scraper",
             task_complexity=TaskComplexity.COMPLEX,
         )
         assert intent.intake_label == IntakeLabel.COMPLEX
-        assert intent.goal_description == "Build a web scraper"
 
 
 class TestDeriveTaskComplexityFromIntake:
@@ -89,12 +87,6 @@ class TestTwoPassPrompts:
         assert "first scan the repo and then run tests" in prompt
         assert "use browser_use for weather" in prompt
 
-    def test_pass2_prompt_requires_preserving_urls_and_links(self) -> None:
-        prompt = INTAKE_PASS2_SYSTEM_PROMPT
-        assert "URLs" in prompt
-        assert "Never drop a URL" in prompt
-        assert "https://github.com/org/repo/actions/runs/123456" in prompt
-
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
@@ -105,7 +97,6 @@ class TestIntakeClassifier:
         *,
         is_task: bool,
         intake_label: IntakeLabel,
-        goal_description: str | None = None,
         reasoning: str | None = None,
         social_response: str | None = None,
     ) -> TwoPassIntakeResult:
@@ -119,7 +110,6 @@ class TestIntakeClassifier:
             return TwoPassIntakeResult(pass1)
         pass2 = IntakePass2LLMResult(
             scope=IntakeScope(intake_label),
-            goal_description=goal_description or "goal",
             reasoning=reasoning if reasoning is not None else "test",
         )
         return TwoPassIntakeResult(pass1, pass2)
@@ -142,7 +132,6 @@ class TestIntakeClassifier:
         mock_result = self._mock_two_pass_result(
             is_task=True,
             intake_label=IntakeLabel.TRIVIAL,
-            goal_description="北京今天的天气",
         )
         with patch.object(
             classifier._two_pass, "classify", new_callable=AsyncMock
@@ -157,7 +146,6 @@ class TestIntakeClassifier:
         mock_result = self._mock_two_pass_result(
             is_task=True,
             intake_label=IntakeLabel.COMPLEX,
-            goal_description="Refactor persistence",
             reasoning="multi-step refactor",
         )
         with patch.object(
@@ -166,7 +154,6 @@ class TestIntakeClassifier:
             mock_classify.return_value = mock_result
             result = await classifier.classify_intake("Refactor the persistence layer")
         assert result.intake_label == IntakeLabel.COMPLEX
-        assert result.goal_description == "Refactor persistence"
 
     async def test_long_query_reaches_llm(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
@@ -219,7 +206,6 @@ class TestIntakeClassifier:
         mock_result = self._mock_two_pass_result(
             is_task=True,
             intake_label=IntakeLabel.SIMPLE,
-            goal_description="summarize readme",
             reasoning="",
         )
         with patch.object(

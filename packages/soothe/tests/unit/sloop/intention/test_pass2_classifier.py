@@ -15,14 +15,12 @@ from soothe.foundation.sloop.intention.pass2_classifier import IntakePass2Classi
 def create_pass2_classifier_with_result(
     *,
     scope: IntakeScope,
-    goal_description: str,
     reasoning: str,
 ) -> IntakePass2Classifier:
     """Create classifier with mock model returning specified result."""
     mock_model = MagicMock()
     result = IntakePass2LLMResult(
         scope=scope,
-        goal_description=goal_description,
         reasoning=reasoning,
     )
     mock_model.with_structured_output = MagicMock(return_value=mock_model)
@@ -59,7 +57,6 @@ async def test_scope_classification(query: str, expected_scope: IntakeScope) -> 
     """Queries should classify to correct scope."""
     classifier = create_pass2_classifier_with_result(
         scope=expected_scope,
-        goal_description=query,
         reasoning="test",
     )
     result = await classifier.classify(query)
@@ -78,7 +75,6 @@ async def test_multi_file_is_complex(query: str) -> None:
     """Multi-file changes should classify as complex."""
     classifier = create_pass2_classifier_with_result(
         scope=IntakeScope.COMPLEX,
-        goal_description=query,
         reasoning="multi-file change",
     )
     result = await classifier.classify(query)
@@ -95,7 +91,6 @@ async def test_prior_projection_passed_to_llm() -> None:
     mock_model.ainvoke = AsyncMock(
         return_value={
             "scope": "simple",
-            "goal_description": "apply the signature change",
             "reasoning": "single file fix",
         }
     )
@@ -111,7 +106,6 @@ async def test_no_prior_projection_works() -> None:
     """Classifier should work without prior projection."""
     classifier = create_pass2_classifier_with_result(
         scope=IntakeScope.SIMPLE,
-        goal_description="fix the bug",
         reasoning="single fix",
     )
     result = await classifier.classify("fix the bug", prior_projection=None)
@@ -139,35 +133,10 @@ async def test_llm_error_fails_safe_to_complex() -> None:
 
 async def test_invalid_scope_fails_safe_to_complex() -> None:
     """Invalid scope value should raise and fail-safe."""
-    classifier = create_pass2_classifier_with_raw_result(
-        {"scope": "invalid", "goal_description": "test", "reasoning": "test"}
-    )
+    classifier = create_pass2_classifier_with_raw_result({"scope": "invalid", "reasoning": "test"})
     # Invalid scope triggers ValueError, which triggers fallback
     result = await classifier.classify("test")
     assert result.scope == IntakeScope.COMPLEX
-
-
-# -- Field validation tests ------------------------------------------------
-
-
-async def test_missing_goal_description_is_patched() -> None:
-    """Missing goal_description should be patched with query."""
-    classifier = create_pass2_classifier_with_raw_result(
-        {"scope": "simple", "goal_description": "", "reasoning": "test"}
-    )
-    result = await classifier.classify("fix the bug in auth.py")
-    assert result.goal_description == "fix the bug in auth.py"
-
-
-async def test_goal_description_preserves_code_paths() -> None:
-    """goal_description should preserve code paths and IDs."""
-    classifier = create_pass2_classifier_with_result(
-        scope=IntakeScope.SIMPLE,
-        goal_description="Fix the type error in src/auth/login.py:42",
-        reasoning="single file fix",
-    )
-    result = await classifier.classify("fix the type error in src/auth/login.py:42")
-    assert "src/auth/login.py:42" in result.goal_description
 
 
 # -- Intake label conversion tests -----------------------------------------
@@ -177,7 +146,6 @@ def test_scope_trivial_to_intake_label() -> None:
     """IntakePass2LLMResult.to_intake_label for trivial."""
     result = IntakePass2LLMResult(
         scope=IntakeScope.TRIVIAL,
-        goal_description="test",
         reasoning="test",
     )
     assert result.to_intake_label().value == "trivial"
@@ -187,7 +155,6 @@ def test_scope_simple_to_intake_label() -> None:
     """IntakePass2LLMResult.to_intake_label for simple."""
     result = IntakePass2LLMResult(
         scope=IntakeScope.SIMPLE,
-        goal_description="test",
         reasoning="test",
     )
     assert result.to_intake_label().value == "simple"
@@ -197,7 +164,6 @@ def test_scope_complex_to_intake_label() -> None:
     """IntakePass2LLMResult.to_intake_label for complex."""
     result = IntakePass2LLMResult(
         scope=IntakeScope.COMPLEX,
-        goal_description="test",
         reasoning="test",
     )
     assert result.to_intake_label().value == "complex"

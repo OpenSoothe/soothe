@@ -298,7 +298,6 @@ async def test_continuation_complex_intake_skips_bootstrap() -> None:
     ctx = _make_ctx(goal=goal)
     ctx.loop_state.intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
-        goal_description="Build image, start components, run e2e tests",
         task_complexity=TaskComplexity.COMPLEX,
     )
 

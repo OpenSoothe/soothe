@@ -506,7 +506,6 @@ class StrangeLoopMixin:
                         yield _custom(
                             IntentClassifiedEvent(
                                 reasoning=reasoning,
-                                goal_description=payload.get("goal_description"),
                             ).to_dict()
                         )
 

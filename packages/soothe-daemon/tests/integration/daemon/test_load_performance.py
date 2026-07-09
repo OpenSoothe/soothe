@@ -63,7 +63,9 @@ class CIMode:
     # Test 1: Input queue burst load
     BURST_CLIENTS = 10 if SOOTHE_CI_MODE else 100
     BURST_INPUTS_PER_CLIENT = 5 if SOOTHE_CI_MODE else 50
-    BURST_QUEUE_SIZE = 20 if SOOTHE_CI_MODE else 1000  # Must be < BURST_CLIENTS * BURST_INPUTS_PER_CLIENT
+    BURST_QUEUE_SIZE = (
+        20 if SOOTHE_CI_MODE else 1000
+    )  # Must be < BURST_CLIENTS * BURST_INPUTS_PER_CLIENT
 
     # Test 2: WebSocket broadcast
     BROADCAST_CLIENTS = 10 if SOOTHE_CI_MODE else 100

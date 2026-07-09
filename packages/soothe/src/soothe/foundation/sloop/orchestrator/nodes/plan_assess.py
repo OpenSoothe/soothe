@@ -119,7 +119,6 @@ def build_continue_loop_bootstrap_plan(
     goal: str,
     *,
     raw_user_goal: str | None = None,
-    goal_description: str | None = None,
     terminal_after_execute: bool | None = None,
     multi_phase: bool | None = None,
     reasoning: str = "",
@@ -136,7 +135,7 @@ def build_continue_loop_bootstrap_plan(
         terminal_after_execute: When True (RFC-226), the plan asserts its single
             step IS the goal completion; ``record_iteration`` routes directly to
             ``goal_completion`` without an iter=1 status check. When None, derived
-            from goal text and intent ``goal_description``.
+            from goal text and Pass 2 ``multi_phase``.
         reasoning: One-sentence assessment reasoning from the discriminator LLM.
         goal_progress: Initial progress estimate.
 
@@ -145,14 +144,10 @@ def build_continue_loop_bootstrap_plan(
     """
     user_goal = (raw_user_goal or goal).strip()
     next_action = random.choice(_CONTINUE_THREAD_DESCRIPTIONS)
-    briefs = build_continue_bootstrap_step_briefs(
-        user_goal=user_goal,
-        goal_description=goal_description,
-    )
+    briefs = build_continue_bootstrap_step_briefs(user_goal=user_goal)
     if terminal_after_execute is None:
         terminal_after_execute = bootstrap_terminal_after_execute(
             raw_user_goal=user_goal,
-            goal_description=goal_description,
             multi_phase=multi_phase,
         )
     default_reasoning = (
@@ -256,7 +251,6 @@ async def _handle_continuation_first_plan(
         return None
 
     intake_label = intake_label_from_state(state)
-    goal_description = resolve_planning_goal(state)
 
     if intake_label in (IntakeLabel.SIMPLE, IntakeLabel.COMPLEX):
         logger.info("[Plan] continuation-assess skipped (intake=%s)", intake_label.value)
@@ -274,7 +268,6 @@ async def _handle_continuation_first_plan(
         plan_result = build_continue_loop_bootstrap_plan(
             state.goal,
             raw_user_goal=state.goal,
-            goal_description=goal_description,
             terminal_after_execute=True,
             reasoning="",
             goal_progress="low",
@@ -310,7 +303,6 @@ async def _handle_continuation_first_plan(
         plan_result = build_continue_loop_bootstrap_plan(
             state.goal,
             raw_user_goal=state.goal,
-            goal_description=goal_description,
             terminal_after_execute=None,
             multi_phase=getattr(state.intent, "multi_phase", None) if state.intent else None,
             reasoning=reason_text,

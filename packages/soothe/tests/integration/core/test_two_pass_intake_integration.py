@@ -32,7 +32,6 @@ def create_mock_coordinator(
     confidence: str = "high",
     social_response: str | None = None,
     scope: str | None = None,
-    goal_description: str | None = None,
     pass1_reasoning: str = "test",
     pass2_reasoning: str = "test",
 ) -> TwoPassIntakeCoordinator:
@@ -53,7 +52,6 @@ def create_mock_coordinator(
     # Always set up pass2 mock so we can track whether it was called
     pass2_result = IntakePass2LLMResult(
         scope=IntakeScope(scope) if scope else IntakeScope.COMPLEX,
-        goal_description=goal_description or "test query",
         reasoning=pass2_reasoning,
     )
     coordinator._pass2_classifier.classify = AsyncMock(return_value=pass2_result)
@@ -80,7 +78,6 @@ async def test_two_pass_pivot_pattern_routes_to_task() -> None:
             is_task=True,
             confidence="high",
             scope="simple",
-            goal_description=query,
             pass1_reasoning="pivot phrase detected",
         )
         result = await coordinator.classify(query)
@@ -146,7 +143,6 @@ async def test_two_pass_scope_trivial_for_simple_query() -> None:
         is_task=True,
         confidence="high",
         scope="trivial",
-        goal_description="list files in src/",
         pass2_reasoning="single obvious action",
     )
     result = await coordinator.classify("list files in src/")
@@ -164,7 +160,6 @@ async def test_two_pass_scope_complex_for_refactor() -> None:
         is_task=True,
         confidence="high",
         scope="complex",
-        goal_description="Refactor SessionStore across all callers",
         pass2_reasoning="multi-file change",
     )
     result = await coordinator.classify("refactor SessionStore across all callers")
@@ -216,7 +211,6 @@ async def test_two_pass_creates_correct_intent_classification() -> None:
         is_task=True,
         confidence="high",
         scope="simple",
-        goal_description="Fix the type error in auth.py",
         pass2_reasoning="single file fix",
     )
     result = await coordinator.classify("fix the type error in auth.py")
@@ -225,7 +219,6 @@ async def test_two_pass_creates_correct_intent_classification() -> None:
     intent = result.intent_classification
 
     assert intent.intake_label == IntakeLabel.SIMPLE
-    assert intent.goal_description == "Fix the type error in auth.py"
     assert intent.reasoning == "single file fix"
     assert intent.task_complexity == TaskComplexity.SIMPLE
     assert intent.chitchat_response is None
@@ -249,7 +242,6 @@ async def test_two_pass_prior_projection_used_for_scope() -> None:
         is_task=True,
         confidence="high",
         scope="simple",
-        goal_description="apply the signature change",
         pass2_reasoning="reference resolution from prior",
     )
 
@@ -295,7 +287,6 @@ async def test_low_confidence_social_overridden_to_task() -> None:
     coordinator._pass2_classifier.classify = AsyncMock(
         return_value=IntakePass2LLMResult(
             scope=IntakeScope.SIMPLE,
-            goal_description="Apply the fix",
             reasoning="work request",
         )
     )
@@ -313,7 +304,6 @@ async def test_two_pass_low_confidence_still_routes_to_task() -> None:
         is_task=True,
         confidence="low",
         scope="complex",
-        goal_description="ambiguous query",
         pass1_reasoning="ambiguous, fail-safe to task",
         pass2_reasoning="fail-safe complex",
     )

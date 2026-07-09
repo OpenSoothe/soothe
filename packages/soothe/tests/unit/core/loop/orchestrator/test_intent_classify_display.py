@@ -17,7 +17,6 @@ def test_intent_classified_reasoning_event_prefers_pass2() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll read the readme first.",
-        goal_description="Summarize readme",
         task_complexity=TaskComplexity.SIMPLE,
     )
     event = intent_classified_reasoning_event(
@@ -32,7 +31,6 @@ def test_intent_classified_reasoning_event_falls_back_to_pass1() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="",
-        goal_description="Summarize readme",
         task_complexity=TaskComplexity.SIMPLE,
     )
     event = intent_classified_reasoning_event(
@@ -47,7 +45,6 @@ def test_intent_classified_reasoning_event_skips_chitchat() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.CHITCHAT,
         reasoning="greeting detected",
-        goal_description="hi",
         chitchat_response="Hello!",
         task_complexity=TaskComplexity.MINIMAL,
     )
@@ -58,7 +55,6 @@ def test_intent_classified_reasoning_event_skips_empty_reasoning() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
         reasoning="",
-        goal_description="refactor",
         task_complexity=TaskComplexity.COMPLEX,
     )
     assert intent_classified_reasoning_event(intent, pass1_reasoning="") is None

@@ -60,7 +60,6 @@ class TwoPassIntakeResult:
             self._intent_classification = IntentClassification(
                 intake_label=intake_label,
                 reasoning=pass2_result.reasoning,
-                goal_description=pass2_result.goal_description,
                 chitchat_response=None,
                 multi_phase=pass2_result.multi_phase,
                 wire_subagent=pass2_result.wire_subagent,
@@ -117,13 +116,6 @@ class TwoPassIntakeResult:
     def pass1_reasoning(self) -> str:
         """Pass 1 reasoning."""
         return self._pass1_result.reasoning
-
-    @property
-    def goal_description(self) -> str | None:
-        """Normalized goal description (task queries)."""
-        if self._pass2_result is None:
-            return None
-        return self._pass2_result.goal_description
 
 
 class TwoPassIntakeCoordinator:

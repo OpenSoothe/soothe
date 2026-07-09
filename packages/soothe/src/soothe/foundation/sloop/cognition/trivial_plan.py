@@ -26,7 +26,7 @@ def build_trivial_plan(
     """Build a minimal 1-step plan for the ``trivial`` intake label (RFC-630).
 
     Args:
-        goal: The user's goal (intake LLM's ``goal_description`` or raw goal).
+        goal: The user's goal text (verbatim submission).
         wire_subagent: Pass 2 wired subagent hint when user named one explicitly.
         requires_tool_use: Pass 2 signal for the execute deliverable gate.
 

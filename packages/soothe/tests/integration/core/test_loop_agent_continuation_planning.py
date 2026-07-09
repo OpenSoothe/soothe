@@ -167,7 +167,6 @@ async def _make_continuation_context(
 
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
-        goal_description="Build airway image, start components, run e2e tests",
         task_complexity=TaskComplexity.COMPLEX,
     )
     loop_state = LoopState(
@@ -353,7 +352,6 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
 
     intent = IntentClassification(
         intake_label=IntakeLabel.TRIVIAL,
-        goal_description="Create git commit for the completed fixes",
         task_complexity=TaskComplexity.MINIMAL,
     )
     loop_state = LoopState(

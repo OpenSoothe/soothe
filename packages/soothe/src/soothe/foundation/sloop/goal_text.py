@@ -1,4 +1,4 @@
-"""Canonical goal text for planning and ContextEngine (Pass 2 normalized when available)."""
+"""Canonical goal text for planning and ContextEngine (verbatim user submission)."""
 
 from __future__ import annotations
 
@@ -14,13 +14,8 @@ def resolve_user_request(state: LoopState) -> str:
 
 
 def resolve_planning_goal(state: LoopState) -> str:
-    """Return Pass 2 ``goal_description`` when present, else ``state.goal``."""
-    intent = getattr(state, "intent", None)
-    if intent is not None:
-        desc = getattr(intent, "goal_description", None)
-        if isinstance(desc, str) and desc.strip():
-            return desc.strip()
-    return (state.goal or "").strip()
+    """Return the user goal text used for planning and CE goal creation."""
+    return resolve_user_request(state)
 
 
 __all__ = ["resolve_planning_goal", "resolve_user_request"]
