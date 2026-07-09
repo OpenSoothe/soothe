@@ -20,12 +20,17 @@ Metrics collected:
 - Event drop rate (zero for CRITICAL/HIGH)
 - Dispatch task count (should stay ≤ 50)
 - Memory usage (bounded, no growth)
+
+CI Mode:
+Set SOOTHE_CI_MODE=1 to reduce test duration and iterations for CI pipelines.
+This scales down load tests while maintaining coverage of core assertions.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
@@ -35,6 +40,57 @@ import pytest
 
 if TYPE_CHECKING:
     pass
+
+
+# ============================================================================
+# CI Mode Configuration
+# ============================================================================
+
+# Detect CI mode from environment
+SOOTHE_CI_MODE = os.environ.get("SOOTHE_CI_MODE", "").lower() in ("1", "true", "yes")
+
+
+class CIMode:
+    """CI-optimized test parameters.
+
+    Production values provide thorough stress testing.
+    CI values reduce iterations/durations for faster pipeline feedback
+    while preserving core assertion coverage.
+
+    Enable CI mode: SOOTHE_CI_MODE=1 pytest ...
+    """
+
+    # Test 1: Input queue burst load
+    BURST_CLIENTS = 10 if SOOTHE_CI_MODE else 100
+    BURST_INPUTS_PER_CLIENT = 5 if SOOTHE_CI_MODE else 50
+    BURST_QUEUE_SIZE = 20 if SOOTHE_CI_MODE else 1000  # Must be < BURST_CLIENTS * BURST_INPUTS_PER_CLIENT
+
+    # Test 2: WebSocket broadcast
+    BROADCAST_CLIENTS = 10 if SOOTHE_CI_MODE else 100
+
+    # Test 3: Task pool semaphore
+    DISPATCH_MESSAGES = 20 if SOOTHE_CI_MODE else 100
+    DISPATCH_SLEEP = 0.02 if SOOTHE_CI_MODE else 0.1
+
+    # Test 4: Event priority overflow
+    EVENT_FLOOD_COUNT = 1200 if SOOTHE_CI_MODE else 12000
+    EVENT_QUEUE_CAPACITY = 1000 if SOOTHE_CI_MODE else 10000
+
+    # Test 5: Sender batching
+    BATCHING_EVENTS = 20 if SOOTHE_CI_MODE else 100
+    BATCHING_WAIT = 0.2 if SOOTHE_CI_MODE else 1.0
+
+    # Test 6: Queue monitoring
+    MONITORING_QUEUE_SIZE = 1000 if SOOTHE_CI_MODE else 1000
+
+    # Test 7: Full integration
+    INTEGRATION_CLIENTS = 10 if SOOTHE_CI_MODE else 50
+    INTEGRATION_QUEUE_SIZE = 200 if SOOTHE_CI_MODE else 1000
+    INTEGRATION_MAX_DISPATCHES = 10 if SOOTHE_CI_MODE else 50
+    INTEGRATION_ROUNDS = 10 if SOOTHE_CI_MODE else 50
+    INTEGRATION_INPUTS_PER_ROUND = 2 if SOOTHE_CI_MODE else 10
+    INTEGRATION_EVENTS_PER_ROUND = 5 if SOOTHE_CI_MODE else 20
+    INTEGRATION_ROUND_DELAY = 0.05 if SOOTHE_CI_MODE else 0.1
 
 
 class MockWebSocketClient:
@@ -211,15 +267,15 @@ async def test_input_queue_bounded_under_burst_load():
 
     agent_config = SootheConfig()
     daemon_config = SootheDaemonConfig()
-    daemon_config.max_input_queue_size = 1000  # Phase 1 limit
+    daemon_config.max_input_queue_size = CIMode.BURST_QUEUE_SIZE
     daemon_config.max_concurrent_dispatches = 50
 
     server = SootheDaemon(agent_config, daemon_config)
     server._running = True  # Enable dispatcher workers
     metrics = LoadTestMetrics()
 
-    # Mock WebSocket transport with 100 clients
-    mock_clients = {f"ws:{i}": MockWebSocketClient(f"ws:{i}") for i in range(100)}
+    # Mock WebSocket transport with CI-scaled client count
+    mock_clients = {f"ws:{i}": MockWebSocketClient(f"ws:{i}") for i in range(CIMode.BURST_CLIENTS)}
 
     # Create a test loop queue via dispatcher
     test_loop_id = "test-loop-1"
@@ -228,8 +284,8 @@ async def test_input_queue_bounded_under_burst_load():
 
     # Simulate burst inputs
     metrics.start_timer()
-    inputs_per_client = 50  # Each client sends 50 inputs
-    total_inputs = 100 * inputs_per_client
+    inputs_per_client = CIMode.BURST_INPUTS_PER_CLIENT
+    total_inputs = CIMode.BURST_CLIENTS * inputs_per_client
 
     async def send_burst_inputs():
         """Send burst inputs from all clients."""
@@ -262,8 +318,8 @@ async def test_input_queue_bounded_under_burst_load():
     summary = metrics.get_summary()
 
     # 1. Input queue bounded at maxsize
-    assert summary["input_queue_depth"]["max"] <= 1000, (
-        f"Input queue exceeded limit: {summary['input_queue_depth']['max']} > 1000"
+    assert summary["input_queue_depth"]["max"] <= daemon_config.max_input_queue_size, (
+        f"Input queue exceeded limit: {summary['input_queue_depth']['max']} > {daemon_config.max_input_queue_size}"
     )
 
     # 2. DAEMON_BUSY rejections occurred (queue reached capacity)
@@ -271,14 +327,18 @@ async def test_input_queue_bounded_under_burst_load():
 
     # 3. Queue stays at or below capacity after burst (no unbounded growth)
     final_depth = test_queue.qsize()
-    assert final_depth <= 1000, f"Queue exceeded capacity after burst: {final_depth} items"
+    assert final_depth <= daemon_config.max_input_queue_size, (
+        f"Queue exceeded capacity after burst: {final_depth} items"
+    )
 
     # Cleanup
     await server._loop_input_dispatcher.cleanup_loop(test_loop_id)
 
-    print("\n=== Test 1: Input Queue Bounded ===")
+    print(f"\n=== Test 1: Input Queue Bounded (CI={SOOTHE_CI_MODE}) ===")
     print(f"Total inputs: {total_inputs}")
-    print(f"Queue max depth: {summary['input_queue_depth']['max']}/1000")
+    print(
+        f"Queue max depth: {summary['input_queue_depth']['max']}/{daemon_config.max_input_queue_size}"
+    )
     print(f"DAEMON_BUSY rejections: {summary['daemon_busy_rejections']}")
     print(f"Final queue depth: {final_depth}")
     print("✅ PASSED: Input queue bounded under burst load")
@@ -291,7 +351,7 @@ async def test_input_queue_bounded_under_burst_load():
 
 @pytest.mark.asyncio
 async def test_websocket_parallel_broadcast_latency():
-    """Test 2: WebSocket broadcast latency < 100ms with 100 clients.
+    """Test 2: WebSocket broadcast latency < 100ms with CI-scaled clients.
 
     Validates:
     - Parallel sends with asyncio.gather
@@ -299,7 +359,7 @@ async def test_websocket_parallel_broadcast_latency():
     - Slow clients don't delay others
     - Dead clients removed on timeout
 
-    Scenario: Broadcast to 100 clients with 10% slow clients (500ms delay)
+    Scenario: Broadcast to CI-scaled clients with 10% slow clients (500ms delay)
     """
     from soothe_daemon.channels.websocket import WebSocketChannel
     from soothe_daemon.config.models import WebSocketConfig
@@ -316,9 +376,10 @@ async def test_websocket_parallel_broadcast_latency():
     # broadcast() returns early when _server is unset; use a truthy placeholder
     transport._server = object()
 
-    # Mock 100 clients (parallel broadcast fan-out)
+    # Mock clients (parallel broadcast fan-out) - CI-scaled count
+    num_clients = CIMode.BROADCAST_CLIENTS
     mock_clients: dict[MockWebSocketClient, dict[str, str]] = {}
-    for i in range(100):
+    for i in range(num_clients):
         client = MockWebSocketClient(f"ws:{i}", delay=0.0)
         mock_clients[client] = {"client_id": f"ws:{i}"}
 
@@ -340,11 +401,13 @@ async def test_websocket_parallel_broadcast_latency():
     )
 
     received_count = sum(1 for client in mock_clients if client.send_count > 0)
-    assert received_count == 100, f"Clients missed broadcasts: {received_count}/100"
+    assert received_count == num_clients, (
+        f"Clients missed broadcasts: {received_count}/{num_clients}"
+    )
 
-    print("\n=== Test 2: WebSocket Parallel Broadcast ===")
+    print(f"\n=== Test 2: WebSocket Parallel Broadcast (CI={SOOTHE_CI_MODE}) ===")
     print(f"Broadcast latency: {broadcast_latency_ms:.2f}ms")
-    print(f"Clients received: {received_count}/100")
+    print(f"Clients received: {received_count}/{num_clients}")
     print("✅ PASSED: Parallel broadcast delivered to all mock clients")
 
 
@@ -355,15 +418,15 @@ async def test_websocket_parallel_broadcast_latency():
 
 @pytest.mark.asyncio
 async def test_task_pool_semaphore_limit():
-    """Test 3: Task pool limits concurrent dispatches to 50.
+    """Test 3: Task pool limits concurrent dispatches.
 
     Validates:
-    - Dispatch semaphore max_concurrent_dispatches=50 enforced
+    - Dispatch semaphore max_concurrent_dispatches enforced
     - Tasks tracked per client
     - Cleanup on client disconnect
     - No stray tasks after disconnect
 
-    Scenario: Burst 100 messages, verify semaphore blocks at 50
+    Scenario: Burst CI-scaled messages, verify semaphore blocks at limit
     """
     from soothe.config import SootheConfig
 
@@ -372,7 +435,8 @@ async def test_task_pool_semaphore_limit():
 
     agent_config = SootheConfig()
     daemon_config = SootheDaemonConfig()
-    daemon_config.max_concurrent_dispatches = 50  # Phase 1 limit
+    semaphore_limit = 10 if SOOTHE_CI_MODE else 50  # Scale semaphore in CI
+    daemon_config.max_concurrent_dispatches = semaphore_limit
 
     server = SootheDaemon(agent_config, daemon_config)
     metrics = LoadTestMetrics()
@@ -388,13 +452,15 @@ async def test_task_pool_semaphore_limit():
             active_dispatches += 1
             max_dispatches_seen = max(max_dispatches_seen, active_dispatches)
             metrics.record_dispatch_task_count(active_dispatches)
-            # Simulate work
-            await asyncio.sleep(0.1)
+            # Simulate work (shorter in CI)
+            await asyncio.sleep(CIMode.DISPATCH_SLEEP)
             active_dispatches -= 1
 
-    # Mock 100 clients sending messages simultaneously
+    # Mock clients sending messages simultaneously - CI-scaled count
+    num_messages = CIMode.DISPATCH_MESSAGES
     messages = [
-        {"type": "input", "thread_id": f"thread-{i}", "content": f"Test {i}"} for i in range(100)
+        {"type": "input", "thread_id": f"thread-{i}", "content": f"Test {i}"}
+        for i in range(num_messages)
     ]
 
     metrics.start_timer()
@@ -403,20 +469,20 @@ async def test_task_pool_semaphore_limit():
     metrics.stop_timer()
 
     # Verify Phase 1 guarantees
-    # 1. Semaphore limited concurrent dispatches to 50
-    assert max_dispatches_seen <= 50, (
-        f"Concurrent dispatches exceeded limit: {max_dispatches_seen} > 50"
+    # 1. Semaphore limited concurrent dispatches
+    assert max_dispatches_seen <= semaphore_limit, (
+        f"Concurrent dispatches exceeded limit: {max_dispatches_seen} > {semaphore_limit}"
     )
 
-    # 2. All 100 messages processed successfully
-    assert len(tasks) == 100, f"Tasks not completed: {len(tasks)}/100"
+    # 2. All messages processed successfully
+    assert len(tasks) == num_messages, f"Tasks not completed: {len(tasks)}/{num_messages}"
 
     # 3. Final dispatch count = 0 (all tasks cleaned up)
     assert active_dispatches == 0, f"Stray tasks remain: {active_dispatches}"
 
-    print("\n=== Test 3: Task Pool Semaphore Limit ===")
-    print(f"Max concurrent dispatches: {max_dispatches_seen}/50")
-    print(f"Total messages processed: {len(tasks)}/100")
+    print(f"\n=== Test 3: Task Pool Semaphore Limit (CI={SOOTHE_CI_MODE}) ===")
+    print(f"Max concurrent dispatches: {max_dispatches_seen}/{semaphore_limit}")
+    print(f"Total messages processed: {len(tasks)}/{num_messages}")
     print(f"Final active tasks: {active_dispatches}")
     print("✅ PASSED: Semaphore limits concurrent dispatches")
 
@@ -436,7 +502,7 @@ async def test_event_priority_overflow_strategy():
     - LOW events dropped first when queue near capacity (80%)
     - Event ordering preserved by priority
 
-    Scenario: Flood 12k events (exceeds 10k queue capacity)
+    Scenario: Flood CI-scaled events (exceeds queue capacity)
 
     CRITICAL events use blocking `queue.put` when the queue is full; without any
     consumer the publisher would deadlock. A tiny helper drains only while the
@@ -449,8 +515,9 @@ async def test_event_priority_overflow_strategy():
     bus = EventBus()
     metrics = LoadTestMetrics()
 
-    # Create queue with maxsize=10000 (Phase 1 default)
-    event_queue: asyncio.Queue = asyncio.Queue(maxsize=10000)
+    # Create queue with CI-scaled capacity
+    queue_capacity = CIMode.EVENT_QUEUE_CAPACITY
+    event_queue: asyncio.Queue = asyncio.Queue(maxsize=queue_capacity)
 
     # Subscribe queue to topic
     await bus.subscribe("loop:test", event_queue)
@@ -466,9 +533,10 @@ async def test_event_priority_overflow_strategy():
 
     unblock_task = asyncio.create_task(drain_one_when_full())
 
-    # Generate event flood with mixed priorities
+    # Generate event flood with mixed priorities - CI-scaled count
+    num_events = CIMode.EVENT_FLOOD_COUNT
     events = []
-    for i in range(12000):  # Exceeds capacity
+    for i in range(num_events):
         # 10% CRITICAL, 20% HIGH, 40% NORMAL, 30% LOW
         if i % 10 == 0:
             priority = EventPriority.CRITICAL
@@ -496,31 +564,30 @@ async def test_event_priority_overflow_strategy():
     metrics.stop_timer()
 
     # Count drops by priority
-    initial_count = 12000
     final_count = event_queue.qsize()
-    drops = initial_count - final_count
+    drops = num_events - final_count
 
     # Verify Phase 1 guarantees
-    # 1. CRITICAL events never dropped (1200 sent, should be 1200 in queue)
+    # 1. CRITICAL events never dropped
     critical_sent = sum(1 for _, meta in events if meta.priority == EventPriority.CRITICAL)
     # Can't directly count in queue, but verify queue didn't drop all events
 
-    # 2. LOW events dropped first (3600 sent, should have highest drop rate)
+    # 2. LOW events dropped first (should have highest drop rate)
     low_sent = sum(1 for _, meta in events if meta.priority == EventPriority.LOW)
 
     # 3. Queue near capacity triggered LOW drops
-    # (Queue should be at maxsize 10000 or close)
-    assert final_count >= 8000, (
-        f"Queue underfilled after flood: {final_count}/10000 (expected ≥ 8000)"
+    threshold = int(queue_capacity * 0.8)
+    assert final_count >= threshold, (
+        f"Queue underfilled after flood: {final_count}/{queue_capacity} (expected ≥ {threshold})"
     )
 
     # 4. No CRITICAL/HIGH events lost (priority overflow protected them)
     # This is verified by queue being at capacity with mixed priorities
-    assert final_count <= 10000, f"Queue overflowed: {final_count} > 10000"
+    assert final_count <= queue_capacity, f"Queue overflowed: {final_count} > {queue_capacity}"
 
-    print("\n=== Test 4: Event Priority Overflow ===")
-    print(f"Events sent: {initial_count}")
-    print("Queue capacity: 10000")
+    print(f"\n=== Test 4: Event Priority Overflow (CI={SOOTHE_CI_MODE}) ===")
+    print(f"Events sent: {num_events}")
+    print(f"Queue capacity: {queue_capacity}")
     print(f"Events dropped: {drops}")
     print(f"Final queue depth: {final_count}")
     print(f"CRITICAL sent: {critical_sent}")
@@ -568,7 +635,8 @@ async def test_sender_loop_batching():
     # `decide_client_wire_visibility` on every dequeued event and drops
     # anything that doesn't classify as CONTROL / EVENT_CATALOG / EVENT_MESSAGES.
     # ``status`` is in _ALWAYS_CLIENT_WIRE_TOP_TYPES, so it always passes.
-    events = [{"type": "status", "state": "tool_call", "seq": i} for i in range(100)]
+    num_events = CIMode.BATCHING_EVENTS
+    events = [{"type": "status", "state": "tool_call", "seq": i} for i in range(num_events)]
 
     metrics.start_timer()
 
@@ -576,8 +644,8 @@ async def test_sender_loop_batching():
     for event in events:
         await session.event_queue.put(event)
 
-    # Wait for sender loop to process all events
-    await asyncio.sleep(1.0)  # Allow batching windows to process
+    # Wait for sender loop to process all events (shorter in CI)
+    await asyncio.sleep(CIMode.BATCHING_WAIT)
 
     metrics.stop_timer()
 
@@ -585,7 +653,7 @@ async def test_sender_loop_batching():
 
     # Batching MUST reduce wire sends below event count — that's the whole
     # point of the coalescing window. Allow == only if the loop never got to
-    # batch (sub-50ms windows); the strict < is the right contract for 100
+    # batch (sub-50ms windows); the strict < is the right contract for
     # back-to-back puts.
     assert 0 < actual_sends < len(events), (
         f"Expected batching to reduce sends below event count: "
@@ -600,7 +668,7 @@ async def test_sender_loop_batching():
         else:
             delivered.append(msg)
 
-    assert len(delivered) == 100, f"Events lost: {len(delivered)}/100"
+    assert len(delivered) == num_events, f"Events lost: {len(delivered)}/{num_events}"
 
     # Event ordering preserved across (possibly batched) frames.
     seqs = [m.get("seq") for m in delivered if "seq" in m]
@@ -608,10 +676,10 @@ async def test_sender_loop_batching():
 
     await session_manager.remove_session(client_id)
 
-    print("\n=== Test 5: Sender Loop Batching ===")
-    print("Events sent: 100")
-    print(f"Send calls: {actual_sends} (one frame per event)")
-    print(f"Events received: {len(mock_client.messages_received)}/100")
+    print(f"\n=== Test 5: Sender Loop Batching (CI={SOOTHE_CI_MODE}) ===")
+    print(f"Events sent: {num_events}")
+    print(f"Send calls: {actual_sends} (batched)")
+    print(f"Events received: {len(mock_client.messages_received)}/{num_events}")
     print("✅ PASSED: Sender loop delivers all events in order")
 
 
@@ -639,7 +707,8 @@ async def test_queue_depth_monitoring_warnings():
 
     agent_config = SootheConfig()
     daemon_config = SootheDaemonConfig()
-    daemon_config.max_input_queue_size = 1000
+    queue_size = CIMode.MONITORING_QUEUE_SIZE
+    daemon_config.max_input_queue_size = queue_size
 
     server = SootheDaemon(agent_config, daemon_config)
     server._running = True  # Enable dispatcher workers
@@ -650,11 +719,12 @@ async def test_queue_depth_monitoring_warnings():
     test_queue = server._loop_input_dispatcher._queues[test_loop_id]
 
     # Fill queue to 90% capacity
-    for i in range(900):
+    fill_count = int(queue_size * 0.9)
+    for i in range(fill_count):
         test_queue.put_nowait({"type": "test", "index": i})
 
     queue_depth = test_queue.qsize()
-    threshold = 800  # 80% of 1000
+    threshold = int(queue_size * 0.8)
 
     # Verify queue at 90%
     assert queue_depth > threshold, f"Queue not filled to threshold: {queue_depth}/{threshold}"
@@ -666,10 +736,10 @@ async def test_queue_depth_monitoring_warnings():
     # but we verify the monitoring infrastructure exists
     # The periodic monitoring task should log warning at this depth
 
-    print("\n=== Test 6: Queue Depth Monitoring ===")
-    print(f"Queue depth: {queue_depth}/1000")
+    print(f"\n=== Test 6: Queue Depth Monitoring (CI={SOOTHE_CI_MODE}) ===")
+    print(f"Queue depth: {queue_depth}/{queue_size}")
     print(f"80% threshold: {threshold}")
-    print(f"Queue fill %: {queue_depth / 1000 * 100:.1f}%")
+    print(f"Queue fill %: {queue_depth / queue_size * 100:.1f}%")
     print("✅ PASSED: Monitoring infrastructure active, queue > 80% threshold")
 
 
@@ -690,7 +760,7 @@ async def test_phase1_full_integration():
     - Sender batching
     - Queue monitoring
 
-    Scenario: 50 clients, sustained 5-second operation with mixed load
+    Scenario: CI-scaled clients, sustained operation with mixed load
     """
     from soothe.config import SootheConfig
     from soothe.foundation.events import EventPriority
@@ -701,19 +771,22 @@ async def test_phase1_full_integration():
 
     agent_config = SootheConfig()
     daemon_config = SootheDaemonConfig()
-    daemon_config.max_input_queue_size = 1000
-    daemon_config.max_concurrent_dispatches = 50
+    daemon_config.max_input_queue_size = CIMode.INTEGRATION_QUEUE_SIZE
+    daemon_config.max_concurrent_dispatches = CIMode.INTEGRATION_MAX_DISPATCHES
 
     server = SootheDaemon(agent_config, daemon_config)
     server._running = True  # Enable dispatcher workers
     bus = EventBus()
     metrics = LoadTestMetrics()
 
-    # Create 50 mock clients
-    mock_clients = {f"ws:{i}": MockWebSocketClient(f"ws:{i}") for i in range(50)}
+    # Create CI-scaled mock clients
+    num_clients = CIMode.INTEGRATION_CLIENTS
+    mock_clients = {f"ws:{i}": MockWebSocketClient(f"ws:{i}") for i in range(num_clients)}
 
     # Create event queues for each client
-    event_queues = {client_id: asyncio.Queue(maxsize=10000) for client_id in mock_clients}
+    event_queues = {
+        client_id: asyncio.Queue(maxsize=CIMode.EVENT_QUEUE_CAPACITY) for client_id in mock_clients
+    }
 
     # Subscribe all queues to broadcast topic
     for client_id, queue in event_queues.items():
@@ -726,12 +799,17 @@ async def test_phase1_full_integration():
 
     metrics.start_timer()
 
-    # Sustained load: inputs + events for 5 seconds
+    # Sustained load: inputs + events for CI-scaled duration
+    num_rounds = CIMode.INTEGRATION_ROUNDS
+    inputs_per_round = CIMode.INTEGRATION_INPUTS_PER_ROUND
+    events_per_round = CIMode.INTEGRATION_EVENTS_PER_ROUND
+    round_delay = CIMode.INTEGRATION_ROUND_DELAY
+
     async def sustained_load():
         """Generate sustained load pattern."""
-        for round_idx in range(50):  # 50 rounds over 5 seconds
-            # Inputs (10 per round)
-            for i in range(10):
+        for round_idx in range(num_rounds):
+            # Inputs (scaled per round)
+            for i in range(inputs_per_round):
                 msg = {
                     "type": "input",
                     "thread_id": f"thread-{round_idx}",
@@ -742,8 +820,8 @@ async def test_phase1_full_integration():
                 except asyncio.QueueFull:
                     metrics.record_daemon_busy()
 
-            # Events (20 per round, mixed priority)
-            for i in range(20):
+            # Events (scaled per round, mixed priority)
+            for i in range(events_per_round):
                 priority = (
                     EventPriority.CRITICAL
                     if i % 10 == 0
@@ -753,14 +831,14 @@ async def test_phase1_full_integration():
                 )
                 event = {"type": "test.event", "round": round_idx, "index": i}
                 event_meta = SimpleNamespace(priority=priority)
-                await bus.publish(f"loop:ws:{i % 50}", event, event_meta)
+                await bus.publish(f"loop:ws:{i % num_clients}", event, event_meta)
 
             # Sample metrics every 5 rounds
             if round_idx % 5 == 0:
                 metrics.record_queue_depths(test_queue, event_queues)
                 metrics.record_dispatch_task_count(len(server._dispatch_tasks))
 
-            await asyncio.sleep(0.1)  # 100ms per round
+            await asyncio.sleep(round_delay)
 
     await sustained_load()
     metrics.stop_timer()
@@ -772,17 +850,17 @@ async def test_phase1_full_integration():
     summary = metrics.get_summary()
 
     # 1. Input queue bounded
-    assert summary["input_queue_depth"]["max"] <= 1000, (
+    assert summary["input_queue_depth"]["max"] <= daemon_config.max_input_queue_size, (
         f"Input queue exceeded limit: {summary['input_queue_depth']['max']}"
     )
 
     # 2. Event queues bounded (no overflow)
-    assert summary["event_queue_depth"]["max"] <= 10000, (
+    assert summary["event_queue_depth"]["max"] <= CIMode.EVENT_QUEUE_CAPACITY, (
         f"Event queue overflow: {summary['event_queue_depth']['max']}"
     )
 
     # 3. Dispatch tasks bounded
-    assert summary["dispatch_tasks"]["max"] <= 50, (
+    assert summary["dispatch_tasks"]["max"] <= daemon_config.max_concurrent_dispatches, (
         f"Dispatch tasks exceeded limit: {summary['dispatch_tasks']['max']}"
     )
 
@@ -791,15 +869,20 @@ async def test_phase1_full_integration():
     # summary["memory_mb"]["growth"] should be < 100 MB
 
     # 5. Test completed successfully
-    assert summary["test_duration_sec"] >= 5.0, (
+    expected_duration = num_rounds * round_delay
+    assert summary["test_duration_sec"] >= expected_duration, (
         f"Test duration too short: {summary['test_duration_sec']}"
     )
 
-    print("\n=== Test 7: Full Phase 1 Integration ===")
+    print(f"\n=== Test 7: Full Phase 1 Integration (CI={SOOTHE_CI_MODE}) ===")
     print(f"Test duration: {summary['test_duration_sec']:.2f}s")
-    print(f"Input queue max: {summary['input_queue_depth']['max']}/1000")
-    print(f"Event queue max: {summary['event_queue_depth']['max']}/10000")
-    print(f"Dispatch tasks max: {summary['dispatch_tasks']['max']}/50")
+    print(
+        f"Input queue max: {summary['input_queue_depth']['max']}/{daemon_config.max_input_queue_size}"
+    )
+    print(f"Event queue max: {summary['event_queue_depth']['max']}/{CIMode.EVENT_QUEUE_CAPACITY}")
+    print(
+        f"Dispatch tasks max: {summary['dispatch_tasks']['max']}/{daemon_config.max_concurrent_dispatches}"
+    )
     print(f"DAEMON_BUSY rejections: {summary['daemon_busy_rejections']}")
     print("✅ PASSED: All Phase 1 optimizations work together")
 
@@ -812,12 +895,12 @@ async def test_phase1_full_integration():
 def test_phase1_validation_summary():
     """Print Phase 1 validation summary after all tests pass."""
     print("\n" + "=" * 80)
-    print("=== Phase 1 Validation Complete ===")
+    print(f"=== Phase 1 Validation Complete (CI={SOOTHE_CI_MODE}) ===")
     print("=" * 80)
     print("\nAll 6 optimizations validated successfully:")
-    print("  1. ✅ Input Queue: Bounded at 1000 items")
-    print("  2. ✅ WebSocket Broadcast: Parallel with timeout (< 100ms)")
-    print("  3. ✅ Task Pool: Semaphore limit 50 concurrent dispatches")
+    print("  1. ✅ Input Queue: Bounded at configured limit")
+    print("  2. ✅ WebSocket Broadcast: Parallel with timeout")
+    print("  3. ✅ Task Pool: Semaphore limit on concurrent dispatches")
     print("  4. ✅ Event Priority: CRITICAL never dropped, LOW dropped first")
     print("  5. ✅ Sender Batching: 50ms window, reduces send calls")
     print("  6. ✅ Queue Monitoring: 80% threshold warnings active")

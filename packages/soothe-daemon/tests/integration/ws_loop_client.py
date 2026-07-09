@@ -18,13 +18,19 @@ from typing import Any
 
 from soothe_sdk.client import WebSocketClient
 
+from tests.integration.test_timeouts import (
+    timeout_default,
+    timeout_delete,
+    timeout_subscribe,
+)
+
 
 async def loop_new(
     client: WebSocketClient,
     *,
     workspace: str | None = None,
     is_ephemeral: bool = False,
-    timeout: float = 60.0,
+    timeout: float | None = None,
 ) -> str:
     """Create a loop and return ``loop_id`` (waits for the protocol-1 response)."""
     params: dict[str, Any] = {}
@@ -32,7 +38,8 @@ async def loop_new(
         params["workspace"] = workspace
     if is_ephemeral:
         params["is_ephemeral"] = True
-    resp = await client.request("loop_new", params, timeout=timeout)
+    effective_timeout = timeout if timeout is not None else timeout_default()
+    resp = await client.request("loop_new", params, timeout=effective_timeout)
     return str(resp["loop_id"])
 
 
@@ -59,7 +66,7 @@ async def subscribe_loop_stream(
     client: WebSocketClient,
     loop_id: str,
     *,
-    timeout: float = 30.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """Subscribe to a loop stream and return the protocol-1 subscribe-ack.
 
@@ -69,12 +76,13 @@ async def subscribe_loop_stream(
     ack (or an error); this helper drains it from the inbound queue so callers
     start a turn with a clean event stream.
     """
+    effective_timeout = timeout if timeout is not None else timeout_subscribe()
     sub_id = await client.subscribe(
         "loop_events",
         {"loop_id": loop_id},
-        timeout=timeout,
+        timeout=effective_timeout,
     )
-    deadline = asyncio.get_running_loop().time() + timeout
+    deadline = asyncio.get_running_loop().time() + effective_timeout
     msg = f"Timed out waiting for subscribe-ack for loop {loop_id!r}"
     while True:
         remaining = deadline - asyncio.get_running_loop().time()
@@ -103,13 +111,14 @@ async def request_loop_list(
     *,
     limit: int = 20,
     exclude_empty: bool = False,
-    timeout: float = 30.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """Return the ``loop_list`` result dict (protocol-1 response ``result``)."""
+    effective_timeout = timeout if timeout is not None else timeout_default()
     return await client.request(
         "loop_list",
         {"limit": limit, "filter": {"exclude_empty": exclude_empty}},
-        timeout=timeout,
+        timeout=effective_timeout,
     )
 
 
@@ -118,13 +127,14 @@ async def request_loop_get(
     loop_id: str,
     *,
     verbose: bool = False,
-    timeout: float = 30.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """Return the ``loop_get`` result dict (protocol-1 response ``result``)."""
+    effective_timeout = timeout if timeout is not None else timeout_default()
     return await client.request(
         "loop_get",
         {"loop_id": loop_id, "verbose": verbose},
-        timeout=timeout,
+        timeout=effective_timeout,
     )
 
 
@@ -132,11 +142,12 @@ async def request_loop_delete(
     client: WebSocketClient,
     loop_id: str,
     *,
-    timeout: float = 120.0,
+    timeout: float | None = None,
 ) -> dict[str, Any]:
     """Return the ``loop_delete`` result dict (protocol-1 response ``result``)."""
+    effective_timeout = timeout if timeout is not None else timeout_delete()
     return await client.request(
         "loop_delete",
         {"loop_id": loop_id},
-        timeout=timeout,
+        timeout=effective_timeout,
     )

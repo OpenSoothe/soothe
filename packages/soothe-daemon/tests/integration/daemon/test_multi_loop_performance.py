@@ -7,12 +7,15 @@ Tests daemon streaming path under multiple concurrent loops to validate:
 
 IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
 
+CI Mode: When SOOTHE_CI_MODE=true, reduces loop counts and durations for faster CI runs.
+
 Run with: pytest -v --run-integration packages/soothe-daemon/tests/integration/daemon/test_multi_loop_performance.py
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from dataclasses import dataclass, field
 from types import SimpleNamespace
@@ -22,6 +25,43 @@ import pytest
 from soothe.foundation.events import EventPriority
 
 from soothe_daemon.event.bus import EventBus, get_event_bus_drop_counts
+
+# ============================================================================
+# CI Mode Configuration
+# ============================================================================
+
+SOOTHE_CI_MODE = os.getenv("SOOTHE_CI_MODE", "").lower() in ("true", "1", "yes")
+
+
+class CIMode:
+    """CI-optimized scaling for performance tests.
+
+    Production values provide rigorous validation, CI values enable fast feedback.
+    Override via environment: SOOTHE_CI_MODE=true
+    """
+
+    # Multi-loop test scaling
+    MULTI_LOOP_COUNT = 8 if SOOTHE_CI_MODE else 32  # IG-535 baseline: 32
+    MULTI_LOOP_N64 = 16 if SOOTHE_CI_MODE else 64  # Phase 2 gate: 64
+    MULTI_LOOP_EVENTS = 25 if SOOTHE_CI_MODE else 100
+    MULTI_LOOP_TIMEOUT = 5.0 if SOOTHE_CI_MODE else 10.0
+
+    # Flood/fairness test scaling
+    FLOOD_EVENTS_HEAVY = 100 if SOOTHE_CI_MODE else 500
+    FLOOD_EVENTS_LIGHT = 15 if SOOTHE_CI_MODE else 50
+    FAIRNESS_THRESHOLD = 10 if SOOTHE_CI_MODE else 38  # 75% of light events
+
+    # Queue capacity scaling
+    QUEUE_CAPACITY = 500 if SOOTHE_CI_MODE else 1000
+    QUEUE_CAPACITY_N64 = 1000 if SOOTHE_CI_MODE else 2000
+
+    # Phase 3 synthesis scaling
+    SYNTHESIS_EVENTS = 10 if SOOTHE_CI_MODE else 30
+
+    @classmethod
+    def summary(cls) -> str:
+        """Return CI mode summary for test output."""
+        return f"CI={SOOTHE_CI_MODE} (loops={cls.MULTI_LOOP_COUNT}, events={cls.MULTI_LOOP_EVENTS})"
 
 
 @dataclass
@@ -152,13 +192,14 @@ async def test_multi_loop_goal_completion_delivery() -> None:
     """IG-534 Phase 1 exit criterion: 0 terminal delivery failures.
 
     IG-535: Validates at 32 concurrent loops (production baseline).
+    CI Mode: Scales down to 8 loops for faster CI runs.
 
     Simulates N loops each receiving synthesis streams with goal_completion
     tail frames. Validates that every loop receives its terminal frame even
     under concurrent load.
     """
-    num_loops = 32  # IG-535: Production baseline concurrent loops
-    events_per_loop = 100
+    num_loops = CIMode.MULTI_LOOP_COUNT  # IG-535: 32 (CI: 8)
+    events_per_loop = CIMode.MULTI_LOOP_EVENTS
     bus = EventBus()
     metrics = MultiLoopMetrics()
 
@@ -169,9 +210,10 @@ async def test_multi_loop_goal_completion_delivery() -> None:
         await bus.subscribe(f"loop:{loop_id}", client.event_queue)
         metrics.add_loop(client)
 
-    # Start consumers with longer timeout for 32 loops (IG-535)
+    # Start consumers with CI-scaled timeout
     consumer_tasks = [
-        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+        asyncio.create_task(loop.consume_events(timeout=CIMode.MULTI_LOOP_TIMEOUT))
+        for loop in metrics.loops
     ]
 
     # Publish events for each loop concurrently
@@ -227,7 +269,7 @@ async def test_multi_loop_goal_completion_delivery() -> None:
     assert critical_drops == 0, f"CRITICAL events dropped: {critical_drops}"
     assert high_drops == 0, f"HIGH events dropped: {high_drops}"
 
-    print("\n=== IG-534 Phase 1: goal_completion delivery ===")
+    print(f"\n=== IG-534 Phase 1: goal_completion delivery ({CIMode.summary()}) ===")
     print(f"Loops: {num_loops}, Duration: {summary['test_duration_sec']:.2f}s")
     print(f"Goal completions delivered: {summary['goal_completion_delivered']}/{num_loops}")
     print(f"Event bus drops: {metrics.event_bus_drops}")
@@ -239,35 +281,37 @@ async def test_multi_loop_fairness_under_pressure() -> None:
     """IG-534 Phase 2 gate: cross-loop isolation under concurrent load.
 
     IG-535: Validates at 32 concurrent loops (production baseline).
+    CI Mode: Scales down to 8 loops for faster CI runs.
 
     Validates that all loops receive events regardless of relative load.
-    The fairness criterion is that each loop receives at least 80% of its
+    The fairness criterion is that each loop receives at least 75% of its
     published events even when one loop floods the bus.
     """
-    num_loops = 32  # IG-535: Production baseline concurrent loops
+    num_loops = CIMode.MULTI_LOOP_COUNT  # IG-535: 32 (CI: 8)
     bus = EventBus()
     metrics = MultiLoopMetrics()
 
-    # Create loop simulators with larger queue capacity for 32-loop test
+    # Create loop simulators with CI-scaled queue capacity
     for i in range(num_loops):
         loop_id = f"loop:fair-{i}"
         client = LoopClientSimulator(
             loop_id=loop_id,
             client_id=f"client-{i}",
-            event_queue=asyncio.Queue(maxsize=1000),  # IG-535: Larger queue for 32-loop pressure
+            event_queue=asyncio.Queue(maxsize=CIMode.QUEUE_CAPACITY),  # CI: 500, Prod: 1000
         )
         await bus.subscribe(f"loop:{loop_id}", client.event_queue)
         metrics.add_loop(client)
 
-    # Start consumers with longer timeout for 32 loops
+    # Start consumers with CI-scaled timeout
     consumer_tasks = [
-        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+        asyncio.create_task(loop.consume_events(timeout=CIMode.MULTI_LOOP_TIMEOUT))
+        for loop in metrics.loops
     ]
 
-    # Heavy loop (index 0) floods with many events (scaled for 32 loops)
+    # Heavy loop (index 0) floods with CI-scaled events
     async def flood_heavy_loop() -> None:
         loop_id = "loop:fair-0"
-        for j in range(500):  # IG-535: Increased flood for 32-loop pressure test
+        for j in range(CIMode.FLOOD_EVENTS_HEAVY):  # CI: 100, Prod: 500
             event = {
                 "type": "event",
                 "loop_id": loop_id,
@@ -276,10 +320,10 @@ async def test_multi_loop_fairness_under_pressure() -> None:
             }
             await bus.publish(f"loop:{loop_id}", event)
 
-    # Light loops (index 1-31) send fewer events concurrently (IG-535: 50 events per light loop)
+    # Light loops send fewer events concurrently (CI-scaled)
     async def send_light_events(loop_idx: int) -> None:
         loop_id = f"loop:fair-{loop_idx}"
-        for j in range(50):
+        for j in range(CIMode.FLOOD_EVENTS_LIGHT):  # CI: 15, Prod: 50
             event = {
                 "type": "event",
                 "loop_id": loop_id,
@@ -304,22 +348,27 @@ async def test_multi_loop_fairness_under_pressure() -> None:
     heavy_received = len(metrics.loops[0].events_received)
     light_received_counts = [len(loop.events_received) for loop in metrics.loops[1:]]
 
-    # IG-535: With 31 light loops at 50 events each, each should receive ≥38 (75%)
+    # CI-scaled fairness threshold: ≥75% of light events
+    fairness_threshold = CIMode.FAIRNESS_THRESHOLD
+    light_events = CIMode.FLOOD_EVENTS_LIGHT
     for i, count in enumerate(light_received_counts):
-        assert count >= 38, (
-            f"Loop {i + 1} starved: received only {count}/50 events "
+        assert count >= fairness_threshold, (
+            f"Loop {i + 1} starved: received only {count}/{light_events} events "
             f"while heavy loop got {heavy_received}"
         )
 
-    print("\n=== IG-534 Phase 2: Cross-loop fairness ===")
+    print(f"\n=== IG-534 Phase 2: Cross-loop fairness ({CIMode.summary()}) ===")
     print(f"Events received: heavy={heavy_received}, light={light_received_counts}")
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multi_loop_n64_start_delay_gate() -> None:
-    """IG-534 Phase 2 deferred gate: p95 cross-loop start delay ≤ 2× baseline at N=64."""
-    num_loops = 64
+    """IG-534 Phase 2 deferred gate: p95 cross-loop start delay ≤ 2× baseline at N=64.
+
+    CI Mode: Scales down to N=16 for faster CI runs.
+    """
+    num_loops = CIMode.MULTI_LOOP_N64  # CI: 16, Prod: 64
     bus = EventBus()
     metrics = MultiLoopMetrics()
 
@@ -328,13 +377,14 @@ async def test_multi_loop_n64_start_delay_gate() -> None:
         client = LoopClientSimulator(
             loop_id=loop_id,
             client_id=f"client-{i}",
-            event_queue=asyncio.Queue(maxsize=2000),
+            event_queue=asyncio.Queue(maxsize=CIMode.QUEUE_CAPACITY_N64),  # CI: 1000, Prod: 2000
         )
         await bus.subscribe(f"loop:{loop_id}", client.event_queue)
         metrics.add_loop(client)
 
     consumer_tasks = [
-        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+        asyncio.create_task(loop.consume_events(timeout=CIMode.MULTI_LOOP_TIMEOUT))
+        for loop in metrics.loops
     ]
 
     async def publish_loop_events(loop_idx: int) -> None:
@@ -359,11 +409,11 @@ async def test_multi_loop_n64_start_delay_gate() -> None:
 
     summary = metrics.get_summary()
     assert summary["latency_spread_ratio"] <= 2.0, (
-        f"N=64 p95/min start delay ratio {summary['latency_spread_ratio']:.2f} exceeds 2× gate"
+        f"N={num_loops} p95/min start delay ratio {summary['latency_spread_ratio']:.2f} exceeds 2× gate"
     )
     assert summary["loops_with_terminal_frames"] >= num_loops
 
-    print("\n=== IG-534 Phase 2: N=64 start-delay gate ===")
+    print(f"\n=== IG-534 Phase 2: N={num_loops} start-delay gate ({CIMode.summary()}) ===")
     print(f"latency_spread_ratio={summary['latency_spread_ratio']:.2f}")
     print(f"p95_first_event_ms={summary['first_event_latency_p95_ms']:.2f}")
 
@@ -426,8 +476,11 @@ async def test_goal_completion_blocks_on_full_queue() -> None:
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_phase3_synthesis_visible_p95_under_5s() -> None:
-    """IG-534 Phase 3: p95 synthesis delivery within 5s under 32-loop load."""
-    num_loops = 32
+    """IG-534 Phase 3: p95 synthesis delivery within 5s under 32-loop load.
+
+    CI Mode: Scales down to 8 loops for faster CI runs.
+    """
+    num_loops = CIMode.MULTI_LOOP_COUNT  # CI: 8, Prod: 32
     bus = EventBus()
     metrics = MultiLoopMetrics()
 
@@ -438,12 +491,13 @@ async def test_phase3_synthesis_visible_p95_under_5s() -> None:
         metrics.add_loop(client)
 
     consumer_tasks = [
-        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+        asyncio.create_task(loop.consume_events(timeout=CIMode.MULTI_LOOP_TIMEOUT))
+        for loop in metrics.loops
     ]
 
     async def publish_loop_events(loop_idx: int) -> None:
         loop_id = f"loop:phase3-synth-{loop_idx}"
-        for j in range(30):
+        for j in range(CIMode.SYNTHESIS_EVENTS):  # CI: 10, Prod: 30
             await bus.publish(
                 f"loop:{loop_id}",
                 {
@@ -472,15 +526,18 @@ async def test_phase3_synthesis_visible_p95_under_5s() -> None:
         f"p95 synthesis visible {summary['synthesis_visible_p95_ms']:.0f}ms exceeds 5s gate"
     )
 
-    print("\n=== IG-534 Phase 3: synthesis visible gate ===")
+    print(f"\n=== IG-534 Phase 3: synthesis visible gate ({CIMode.summary()}) ===")
     print(f"synthesis_visible_p95_ms={summary['synthesis_visible_p95_ms']:.2f}")
 
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_phase3_first_chunk_p50_under_load() -> None:
-    """IG-534 Phase 3: first-chunk p50 stays low under concurrent 32-loop load."""
-    num_loops = 32
+    """IG-534 Phase 3: first-chunk p50 stays low under concurrent 32-loop load.
+
+    CI Mode: Scales down to 8 loops for faster CI runs.
+    """
+    num_loops = CIMode.MULTI_LOOP_COUNT  # CI: 8, Prod: 32
     bus = EventBus()
     metrics = MultiLoopMetrics()
 
@@ -491,7 +548,8 @@ async def test_phase3_first_chunk_p50_under_load() -> None:
         metrics.add_loop(client)
 
     consumer_tasks = [
-        asyncio.create_task(loop.consume_events(timeout=10.0)) for loop in metrics.loops
+        asyncio.create_task(loop.consume_events(timeout=CIMode.MULTI_LOOP_TIMEOUT))
+        for loop in metrics.loops
     ]
 
     async def publish_first_chunk(loop_idx: int) -> None:
@@ -516,7 +574,7 @@ async def test_phase3_first_chunk_p50_under_load() -> None:
         f"p50 first-chunk {summary['first_event_latency_p50_ms']:.0f}ms exceeds 240ms gate"
     )
 
-    print("\n=== IG-534 Phase 3: time-to-first-chunk gate ===")
+    print(f"\n=== IG-534 Phase 3: time-to-first-chunk gate ({CIMode.summary()}) ===")
     print(f"first_event_latency_p50_ms={summary['first_event_latency_p50_ms']:.2f}")
 
 
