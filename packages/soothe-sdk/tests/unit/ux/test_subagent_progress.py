@@ -57,6 +57,20 @@ def test_summarize_deep_research_crawl_summary() -> None:
     assert "4/5 URLs crawled" in line
 
 
+def test_summarize_deep_research_completed_includes_saved_path() -> None:
+    line = summarize_subagent_wire_activity(
+        "soothe.subagent.deep_research.completed",
+        {
+            "summary": "Widgets are growing fast.",
+            "report_path": ".soothe/agents/deep_research/key-findings_20260709.md",
+            "duration_ms": 1200,
+        },
+    )
+    assert "Widgets are growing fast." in line
+    assert ".soothe/agents/deep_research/key-findings_20260709.md" in line
+    assert "1200ms" in line
+
+
 def test_summarize_veritas_requested() -> None:
     line = summarize_subagent_wire_activity(
         "soothe.subagent.veritas.requested",

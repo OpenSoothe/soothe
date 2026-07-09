@@ -60,10 +60,10 @@ class DeepResearchConfig(BaseModel):
     llm_timeout_sec: float = Field(default=30.0, ge=5.0, le=120.0)
     summarize_timeout_sec: float = Field(default=60.0, ge=10.0, le=180.0)
     synthesize_timeout_sec: float = Field(default=60.0, ge=10.0, le=180.0)
+    save_reports: bool = Field(default=True)
     enable_polite_concurrency: bool = Field(default=True)
     polite_retry_max: int = Field(default=3, ge=0, le=10)
     polite_retry_base_delay: float = Field(default=1.0, ge=0.1, le=10.0)
-    enable_polite_concurrency: bool = Field(default=True)
     polite_domain_overrides: dict[str, dict[str, float | int]] = Field(default_factory=dict)
 
 

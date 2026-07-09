@@ -71,6 +71,21 @@ def get_subagent_runtime_dir(subagent_name: str) -> Path:
     return _ensure_dir_with_backend(runtime_dir)
 
 
+def get_workspace_subagent_output_dir(subagent_name: str) -> Path:
+    """Get subagent output directory, preferring ``<workspace>/.soothe/agents/<name>/``.
+
+    Falls back to ``SOOTHE_HOME/agents/<name>/`` when no workspace is active.
+    """
+    from soothe.foundation.workspace.context import get_workspace_context
+
+    ctx = get_workspace_context()
+    if ctx.workspace is not None:
+        target = ctx.workspace / ".soothe" / "agents" / subagent_name.lower()
+    else:
+        target = _get_virtual_home() / "agents" / subagent_name.lower()
+    return _ensure_dir_with_backend(target)
+
+
 def get_browser_runtime_dir() -> Path:
     """Get browser runtime directory under virtual home or SOOTHE_HOME."""
     return get_subagent_runtime_dir("browser")
