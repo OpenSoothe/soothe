@@ -372,12 +372,14 @@ class PromptBuilder:
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
+        from soothe.foundation.sloop.goal_text import resolve_user_request
         from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
         from soothe.foundation.sloop.state.schemas import next_goal_local_step_id_start
 
         builder = UserMessageBuilder()
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
         mode = projection_mode or resolve_planner_projection_mode(state)
+        user_request = resolve_user_request(state)
 
         if kind == "continuation":
             return builder.build_plan_continuation_message(
@@ -386,6 +388,7 @@ class PromptBuilder:
                 display_goal=goal_preview_text(goal) if mode == "new_goal" else None,
                 completion_in_ledger=completion_in_ledger,
                 prior_goals_override=prior_goals_override,
+                user_request=user_request,
             )
 
         step_id_hint = None
@@ -422,6 +425,7 @@ class PromptBuilder:
             projection_mode=mode,
             completion_in_ledger=completion_in_ledger,
             prior_goals_override=prior_goals_override,
+            user_request=user_request,
         )
 
         if kind == "assess":
@@ -443,6 +447,7 @@ class PromptBuilder:
                 projection_mode=mode,
                 plan_coverage=plan_coverage,
                 omit_prior_progress_hint=omit_prior_progress_hint,
+                user_request=user_request,
             )
         generate_kwargs: dict[str, Any] = {
             **common_kwargs,
