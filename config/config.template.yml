@@ -122,6 +122,7 @@ agent:
     execute_action_retry_max: 1
     execute_min_answer_chars: 20
     execute_deliverable_assess: auto
+    step_completion_report_max_words: 30
     max_subagent_tasks_per_wave: 4
     strange_loop_output_contract_enabled: true
     goal_completion_mode: llm_only

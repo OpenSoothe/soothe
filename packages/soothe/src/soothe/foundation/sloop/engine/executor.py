@@ -80,6 +80,7 @@ from soothe.foundation.sloop.engine.step_wave_types import (
     _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     _DELEGATE_FINAL_PER_TASK_CAP,
     _TUPLE_LEN,
+    StepCompletionReport,
     StepWaveQueued,
     StepWaveStart,
     StreamEvent,
@@ -1056,7 +1057,9 @@ class Executor:
         self,
         decision: AgentDecision,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
+    ) -> AsyncGenerator[
+        StreamEvent | StepResult | StepWaveQueued | StepWaveStart | StepCompletionReport, None
+    ]:
         """Execute steps based on execution mode, yielding events and results.
 
         This method yields stream events (custom events from tool execution)
@@ -1143,7 +1146,9 @@ class Executor:
         self,
         ready_steps: list,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
+    ) -> AsyncGenerator[
+        StreamEvent | StepResult | StepWaveQueued | StepWaveStart | StepCompletionReport, None
+    ]:
         """Run parallel mode in waves bounded by ``max_parallel_steps``."""
         idx = 0
         n = len(ready_steps)
@@ -1304,6 +1309,69 @@ class Executor:
     def _finalize_execute_step_ledger_ai_content(content: str) -> str:
         """Finalize execute-step ledger AI content without synthetic fallbacks."""
         return (content or "").strip()
+
+    def _build_step_report_pair_content(
+        self,
+        step: StepAction,
+        result: _ExecuteStepResult,
+        state: LoopState,
+    ) -> tuple[str, str]:
+        """Return compact execute-step human/ai pair for completion reporting."""
+        wire_subagent = resolve_wire_subagent_for_step(
+            step, getattr(state, "routing_classification", None)
+        )
+        envelope = self._compose_execute_step_envelope(
+            step,
+            loop_state=state,
+            wire_subagent=wire_subagent,
+            workspace=state.workspace,
+        )
+        from soothe.foundation.sloop.cognition.ledger_compaction import (
+            compact_execute_human_content,
+        )
+
+        human = compact_execute_human_content(step, envelope=envelope)
+        ai = self._finalize_execute_step_ledger_ai_content(
+            self._resolve_execute_step_ledger_ai_content(
+                step_messages=result.messages,
+                delegate_final=result.delegate_final,
+                output=result.output,
+            )
+        )
+        return human, ai
+
+    async def _summarize_step_completion_report(
+        self,
+        step: StepAction,
+        result: _ExecuteStepResult,
+        state: LoopState,
+    ) -> str | None:
+        """Generate a first-person TUI cognition summary from the step human/ai pair."""
+        if self._fast_model is None or self._config is None:
+            return None
+        human, ai = self._build_step_report_pair_content(step, result, state)
+        if not human.strip() and not ai.strip():
+            return None
+        from soothe.foundation.sloop.cognition.step_completion_report import (
+            summarize_step_completion_report,
+        )
+
+        try:
+            return await summarize_step_completion_report(
+                human_content=human,
+                ai_content=ai,
+                fast_model=self._fast_model,
+                soothe_config=self._config,
+                goal_trace=self._goal_trace,
+                max_words=self._config.agent.loop.step_completion_report_max_words,
+            )
+        except Exception:
+            logger.warning(
+                "Step completion report failed for step %s",
+                step.id,
+                exc_info=True,
+            )
+            return None
 
     _PROGRESS_HINT_KEYWORDS = ("done", "completed", "total", "count", "finished")
     _PROGRESS_HINT_GLYPHS = ("|",)
@@ -1495,7 +1563,7 @@ class Executor:
         self,
         steps: list,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult, None]:
+    ) -> AsyncGenerator[StreamEvent | StepResult | StepCompletionReport, None]:
         """Execute steps in parallel with isolated threads.
 
         Stream events are merged onto a shared queue and yielded as they arrive so
@@ -1592,6 +1660,14 @@ class Executor:
                         if df:
                             wave_delegate_parts.append(df)
                         if res.step_result:
+                            step = steps[wave_i]
+                            summary = await self._summarize_step_completion_report(step, res, state)
+                            if summary:
+                                yield StepCompletionReport(
+                                    step_id=sid,
+                                    summary=summary,
+                                    iteration=state.iteration,
+                                )
                             all_step_results.append(res.step_result)
                             yield res.step_result
                 else:
@@ -1644,7 +1720,9 @@ class Executor:
         self,
         decision: AgentDecision,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult | StepWaveQueued | StepWaveStart, None]:
+    ) -> AsyncGenerator[
+        StreamEvent | StepResult | StepWaveQueued | StepWaveStart | StepCompletionReport, None
+    ]:
         """Execute steps respecting dependency DAG.
 
         Args:
