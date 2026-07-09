@@ -569,6 +569,12 @@ class StrangeLoop:
             async def emit(event_type: str, event_data: Any) -> None:
                 await queue.put((event_type, event_data))
 
+            from soothe.foundation.sloop.clarification.runtime_factory import (
+                bind_clarification_emit,
+            )
+
+            bind_clarification_emit(clarification_policy, emit)
+
             plan_manager: Any
 
             # RFC-624 Phase 4: ContextEngine is always active

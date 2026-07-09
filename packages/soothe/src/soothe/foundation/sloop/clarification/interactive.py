@@ -29,6 +29,10 @@ class InteractiveClarificationPolicy:
     def __init__(self, emit: EmitFn | None = None) -> None:
         self._emit = emit
 
+    def bind_emit(self, emit: EmitFn) -> None:
+        """Attach the runtime emit callback (RFC-623 interactive fallback wiring)."""
+        self._emit = emit
+
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
         if self._emit is not None:
             await self._emit(

@@ -10,6 +10,7 @@ import pytest
 from soothe.foundation.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
 from soothe.foundation.sloop.clarification.runtime_factory import (
+    bind_clarification_emit,
     build_clarification_policy_for_runner,
     resolve_clarification_mode,
 )
@@ -143,3 +144,30 @@ class TestBuildClarificationPolicyForRunner:
             assert kwargs["thread_id"] == "tid-1"
             assert kwargs["loop_id"] == "lid-1"
             assert kwargs["soothe_config"] is config
+
+
+class TestBindClarificationEmit:
+    def test_binds_auto_policy_interactive_fallback(self) -> None:
+        config = _make_config()
+        policy = build_clarification_policy_for_runner(config, mode="auto", human_attached=True)
+        assert isinstance(policy, AutoClarificationPolicy)
+        fallback = policy._interactive_fallback  # noqa: SLF001
+        assert isinstance(fallback, InteractiveClarificationPolicy)
+        assert fallback._emit is None  # noqa: SLF001
+
+        async def _emit(_name: str, _payload: dict) -> None:
+            return None
+
+        bind_clarification_emit(policy, _emit)
+        assert fallback._emit is _emit  # noqa: SLF001
+
+    def test_binds_manual_policy_directly(self) -> None:
+        config = _make_config()
+        policy = build_clarification_policy_for_runner(config, mode="manual")
+        assert isinstance(policy, InteractiveClarificationPolicy)
+
+        async def _emit(_name: str, _payload: dict) -> None:
+            return None
+
+        bind_clarification_emit(policy, _emit)
+        assert policy._emit is _emit  # noqa: SLF001
