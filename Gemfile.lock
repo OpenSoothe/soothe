@@ -311,5 +311,8 @@ DEPENDENCIES
   github-pages
   rake
 
+RUBY VERSION
+  ruby 3.3.11
+
 BUNDLED WITH
   4.0.11
