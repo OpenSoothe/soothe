@@ -12,7 +12,7 @@ from soothe_cli.tui.textual_adapter import (
     _finalize_stuck_dependency_predecessors,
     _lookup_step_card,
     _pop_step_card_from_adapter,
-    sync_pending_step_cards_from_plan,
+    cleanup_stale_plan_step_cards,
 )
 from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
 
@@ -147,24 +147,29 @@ def test_finalize_stuck_skipped_in_parallel_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_plan_decision_then_dependency_unlock_sequence() -> None:
-    """Pending step 2 stays pending until step 1 completes and step 2 starts."""
+    """Step 2 card mounts only when it starts running; plan view tracks both steps."""
     adapter = TextualUIAdapter(mount_message=AsyncMock(), update_status=AsyncMock())
     adapter._last_plan_execution_mode = "dependency"
     steps = [
         {"id": "THQ-01", "description": "Review"},
         {"id": "THQ-02", "description": "Implement"},
     ]
-    await sync_pending_step_cards_from_plan(adapter, steps=steps)
-    assert adapter._current_step_messages["THQ-01"]._status == "pending"
-    assert adapter._current_step_messages["THQ-02"]._status == "pending"
+    await cleanup_stale_plan_step_cards(adapter, steps=steps)
+    assert adapter._current_step_messages == {}
 
-    adapter._current_step_messages["THQ-01"].set_running()
-    assert adapter._current_step_messages["THQ-02"]._status == "pending"
+    step_one = CognitionStepMessage("THQ-01", "Review", id="step-one")
+    await adapter._mount_message(step_one)
+    adapter._current_step_messages["THQ-01"] = step_one
+    step_one.set_running()
+    assert step_one._status == "running"
 
     popped = _pop_step_card_from_adapter(adapter, "THQ-01")
     assert popped is not None
     popped.set_complete(True, 1000, 2, "Done")
     assert popped._status == "success"
 
-    adapter._current_step_messages["THQ-02"].set_running()
-    assert adapter._current_step_messages["THQ-02"]._status == "running"
+    step_two = CognitionStepMessage("THQ-02", "Implement", id="step-two")
+    await adapter._mount_message(step_two)
+    adapter._current_step_messages["THQ-02"] = step_two
+    step_two.set_running()
+    assert step_two._status == "running"

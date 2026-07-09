@@ -458,23 +458,6 @@ class StepCardStatusLine:
             parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
         return Content.assemble(*parts)
 
-    @staticmethod
-    def footer_queued(
-        *,
-        gutter: str,
-        circle_empty: str,
-        stats_suffix: str,
-        token_suffix: str = "",
-        colors: Any,
-    ) -> Content:
-        """Step card footer for ready steps waiting for a concurrency slot."""
-        head = f"{gutter}{circle_empty} Queued..."
-        tail = f"{stats_suffix}{token_suffix}"
-        parts: list[object] = [Content.styled(head, colors.cognition)]
-        if tail:
-            parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
-        return Content.assemble(*parts)
-
 
 # Activity tree renderer
 # ---------------------------------------------------------------------------

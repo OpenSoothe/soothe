@@ -135,7 +135,7 @@ class CognitionStepMessage(Vertical):
         super().__init__(**kwargs)
         self._step_id = step_id
         self._description = description.strip()
-        self._status = "pending"  # pending | queued | running | success | error
+        self._status = "pending"  # pending | running | success | error
         self._spinner_position = 0
         self._start_time: float | None = None
         self._animation_timer: Timer | None = None
@@ -217,7 +217,7 @@ class CognitionStepMessage(Vertical):
             return
         self._input_tokens += input_tokens
         self._output_tokens += output_tokens
-        if self._status in ("running", "pending", "queued"):
+        if self._status in ("running", "pending"):
             self._sync_running_status_line()
 
     def _token_budget_suffix(self) -> str:
@@ -283,8 +283,6 @@ class CognitionStepMessage(Vertical):
             return
         if self._status == "running":
             self._ensure_running_ui()
-        elif self._status == "queued":
-            self._sync_step_card_surface()
         elif self._status == "pending":
             self._sync_step_card_surface()
 
@@ -466,8 +464,6 @@ class CognitionStepMessage(Vertical):
             self._sync_running_status_text(index)
         elif self._status == "pending":
             self._refresh_pending_display(index)
-        elif self._status == "queued":
-            self._refresh_queued_display(index)
 
         if STEP_CARD_SHOW_TOOL_ROW_DETAILS:
             self._refresh_tools_display()
@@ -1155,37 +1151,6 @@ class CognitionStepMessage(Vertical):
             )
         )
         self._status_widget.display = True
-
-    def _refresh_queued_display(self, index: StepRowIndex | None = None) -> None:
-        """Show ready steps waiting for a concurrency slot (``max_parallel_steps``)."""
-        if self._status != "queued" or self._status_widget is None:
-            return
-        if index is None:
-            index = self._build_row_index()
-        try:
-            colors = theme.get_theme_colors(self)
-        except Exception:  # noqa: BLE001
-            colors = theme.DARK_COLORS
-        g = get_glyphs()
-        gutter = f"{g.output_prefix} "
-        self._status_widget.update(
-            StepCardStatusLine.footer_queued(
-                gutter=gutter,
-                circle_empty=g.circle_empty,
-                stats_suffix=stats_title_suffix(index),
-                token_suffix=self._token_budget_suffix(),
-                colors=colors,
-            )
-        )
-        self._status_widget.display = True
-
-    def set_queued(self) -> None:
-        """Mark a ready step as waiting for an execute batch slot."""
-        if self._status in ("running", "success", "error"):
-            return
-        self._status = "queued"
-        self._refresh_header_title()
-        self._sync_step_card_surface()
 
     def _maybe_start_running_timer(self) -> None:
         """Start the spinner timer when the step is running and mounted."""

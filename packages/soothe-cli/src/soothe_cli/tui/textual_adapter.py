@@ -298,9 +298,6 @@ class TextualUIAdapter:
         self._execute_wave_completed: int = 0
         """Completed steps in the current execute batch."""
 
-        self._successful_step_ids: set[str] = set()
-        """Step ids that finished successfully this loop (survives plan=keep replays)."""
-
         self._clarification_input_by_step: dict[str, ClarificationInputMessage] = {}
         """Active inline ``ClarificationInputMessage`` widgets keyed by step id.
 
@@ -406,7 +403,7 @@ def _stream_end_pending_error_message(
     if is_daemon_worker_thread_lost(err_msg) or is_daemon_worker_subprocess_lost(err_msg):
         return "Worker stopped during stream"
     if end_state == "idle" and any(
-        getattr(widget, "_status", "") in {"running", "queued"}
+        getattr(widget, "_status", "") == "running"
         for widget in adapter._current_step_messages.values()
     ):
         return "Stream ended before steps completed"
@@ -1448,12 +1445,16 @@ async def _ensure_goal_tree_message(
     return widget
 
 
-async def sync_pending_step_cards_from_plan(
+async def cleanup_stale_plan_step_cards(
     adapter: TextualUIAdapter,
     *,
     steps: list[dict[str, Any]],
 ) -> None:
-    """Mount step cards in ``pending`` state for planned steps not yet executing."""
+    """Drop stale pending step cards after replan; do not mount future steps.
+
+    Planned and queued steps appear only in the Ctrl+T plan quick view (goal tree).
+    Step cards mount in the message list when ``step_started`` fires.
+    """
     planned_ids = {
         str(row.get("id", "")).strip()
         for row in steps
@@ -1467,23 +1468,6 @@ async def sync_pending_step_cards_from_plan(
             for ns, bound in list(adapter._step_by_namespace.items()):
                 if bound is widget:
                     adapter._step_by_namespace.pop(ns, None)
-
-    for row in steps:
-        if not isinstance(row, dict):
-            continue
-        sid = str(row.get("id", "")).strip()
-        if not sid or sid in adapter._current_step_messages:
-            continue
-        if _is_successful_step_id(adapter, sid):
-            continue
-        desc = str(row.get("description", "")).strip() or "(step)"
-        step_widget = CognitionStepMessage(
-            step_id=sid,
-            description=desc,
-            id=f"step-{uuid.uuid4().hex[:8]}",
-        )
-        await adapter._mount_message(step_widget)
-        adapter._current_step_messages[sid] = step_widget
 
 
 def _step_card_lookup_keys(step_id: str) -> list[str]:
@@ -1499,17 +1483,6 @@ def _step_card_lookup_keys(step_id: str) -> list[str]:
     if dash not in keys:
         keys.append(dash)
     return keys
-
-
-def _register_successful_step_id(adapter: TextualUIAdapter, step_id: str) -> None:
-    """Remember a step that completed successfully so plan=keep does not remount it."""
-    for key in _step_card_lookup_keys(step_id):
-        adapter._successful_step_ids.add(key)
-
-
-def _is_successful_step_id(adapter: TextualUIAdapter, step_id: str) -> bool:
-    """True when this step already succeeded earlier in the current loop."""
-    return any(key in adapter._successful_step_ids for key in _step_card_lookup_keys(step_id))
 
 
 def _lookup_step_card(
@@ -2856,7 +2829,6 @@ async def execute_task_textual(
     router.reset_turn()
     adapter._execute_wave_total = 0
     adapter._execute_wave_completed = 0
-    adapter._successful_step_ids.clear()
     ui_coalesce = TurnToolUiCoalescer()
     adapter._goal_completion_mounted_this_turn = False
     adapter._goal_tree_message = None
@@ -3865,7 +3837,7 @@ async def execute_task_textual(
                                         done_steps,
                                         len(raw_steps),
                                     )
-                                    await sync_pending_step_cards_from_plan(
+                                    await cleanup_stale_plan_step_cards(
                                         adapter,
                                         steps=raw_steps,
                                     )
@@ -3883,26 +3855,13 @@ async def execute_task_textual(
                             if event_type == STRANGE_LOOP_STEP_QUEUED:
                                 step_id = str(data.get("step_id", "")).strip()
                                 description = str(data.get("description", "")).strip()
-                                if step_id:
-                                    step_widget = adapter._current_step_messages.get(step_id)
-                                    if step_widget is None:
-                                        step_widget = CognitionStepMessage(
-                                            step_id=step_id,
-                                            description=description or "(step)",
-                                            id=f"step-{uuid.uuid4().hex[:8]}",
-                                        )
-                                        await adapter._mount_message(step_widget)
-                                        adapter._current_step_messages[step_id] = step_widget
-                                    elif description:
-                                        step_widget.set_description(description)
-                                    step_widget.set_queued()
-                                    if not ns_key:
-                                        _sync_goal_tree_step_phase(
-                                            adapter,
-                                            step_id,
-                                            "queued",
-                                            description=description,
-                                        )
+                                if step_id and not ns_key:
+                                    _sync_goal_tree_step_phase(
+                                        adapter,
+                                        step_id,
+                                        "queued",
+                                        description=description,
+                                    )
                                 continue
 
                             if event_type == STRANGE_LOOP_STEP_STARTED:
@@ -4018,8 +3977,6 @@ async def execute_task_textual(
                                         pending_text_by_namespace[ns_key] = ""
                                         assistant_message_by_namespace.pop(ns_key, None)
                                     success = bool(data.get("success", True))
-                                    if success:
-                                        _register_successful_step_id(adapter, step_id)
                                     duration_ms = int(data.get("duration_ms", 0))
                                     tool_call_count = int(data.get("tool_call_count", 0))
                                     summary = str(
