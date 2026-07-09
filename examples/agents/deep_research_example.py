@@ -119,8 +119,6 @@ async def main() -> None:
         print(
             '     "Research AI agent frameworks in 2024-2025. Compare LangGraph, AutoGen, CrewAI. Be thorough."'
         )
-        print("\n  3. Industry Landscape:")
-        print('     "What are the best practices for LLM prompt engineering in production?"')
         print("\n" + "=" * 60)
         print("Demo completed - structure verified!")
         print("=" * 60)
@@ -155,17 +153,6 @@ async def main() -> None:
         "Focus on architecture patterns, tool integration, and multi-agent coordination. "
         "Be thorough.",
         thread_id="deep-research-example-2",
-    )
-
-    # Example 3: Industry landscape research
-    print("\n" + "=" * 60)
-    print("Query 3: Industry Landscape Research")
-    print("=" * 60)
-
-    await stream_core_agent(
-        agent,
-        "What are the emerging best practices for LLM prompt engineering in production systems?",
-        thread_id="deep-research-example-3",
     )
 
     print("\n" + "=" * 60)

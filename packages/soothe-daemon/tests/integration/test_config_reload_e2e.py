@@ -32,6 +32,7 @@ from tests.integration.daemon_fixtures import (
     force_isolated_home,
     get_base_config,
 )
+from tests.integration.test_timeouts import timeout_config_reload
 
 # ============================================================================
 # Helper Functions
@@ -40,18 +41,19 @@ from tests.integration.daemon_fixtures import (
 
 async def wait_for_config_reload_event(
     client: WebSocketClient,
-    timeout: float = 5.0,
+    timeout: float | None = None,
 ) -> dict[str, Any] | None:
     """Wait for a config_reload event from the daemon.
 
     Args:
         client: WebSocket client connected to daemon.
-        timeout: Maximum wait time in seconds.
+        timeout: Maximum wait time in seconds (uses env var if None).
 
     Returns:
         Config reload event dict, or None if timeout.
     """
-    deadline = asyncio.get_running_loop().time() + timeout
+    effective_timeout = timeout if timeout is not None else timeout_config_reload()
+    deadline = asyncio.get_running_loop().time() + effective_timeout
     while asyncio.get_running_loop().time() < deadline:
         remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:

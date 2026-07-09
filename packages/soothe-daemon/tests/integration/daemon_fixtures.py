@@ -15,6 +15,7 @@ from soothe.config import SootheConfig
 from soothe.runner import SootheRunner
 
 from soothe_daemon.config import SootheDaemonConfig
+from tests.integration.test_timeouts import integration_llm_idle_timeout
 
 
 def pytest_addoption(parser) -> None:
@@ -72,15 +73,6 @@ def _has_valid_api_key() -> bool:
         or os.getenv("ANTHROPIC_API_KEY")
         or (os.getenv("DASHSCOPE_CP_API_KEY") and os.getenv("DASHSCOPE_CP_BASE_URL"))
     )
-
-
-def integration_llm_idle_timeout() -> float:
-    """Seconds to wait for daemon idle after an LLM-backed turn (override via env)."""
-    raw = os.getenv("SOOTHE_INTEGRATION_LLM_IDLE_TIMEOUT", "180").strip()
-    try:
-        return max(10.0, float(raw))
-    except ValueError:
-        return 90.0
 
 
 @pytest.fixture
