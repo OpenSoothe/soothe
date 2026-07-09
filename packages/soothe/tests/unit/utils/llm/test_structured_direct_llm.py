@@ -241,6 +241,34 @@ async def test_json_schema_wrapper_dict_schema() -> None:
     assert out == {"word": "OK"}
 
 
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_applies_normalize_before_validation() -> None:
+    """Answers-only provider payloads reach normalize before jsonschema validation."""
+    from soothe.subagents.veritas.schemas import (
+        build_veritas_response_schema,
+        coerce_veritas_response,
+    )
+
+    schema = build_veritas_response_schema(1)
+    inner = MagicMock()
+    inner.ainvoke = AsyncMock(
+        return_value=AIMessage(content='{"answers": ["pushed commit to origin"]}'),
+    )
+    chat = OpenAICompatModelWrapper(inner, provider_name="test")
+
+    out = await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="Respond in JSON format")],
+        json_schema=schema,
+        schema_name="VeritasAnswer",
+        strict=True,
+        normalize=lambda data: coerce_veritas_response(data, 1),
+    )
+    assert out["defer"] is False
+    assert out["answers"] == ["pushed commit to origin"]
+    assert out["confidence"] == pytest.approx(0.7)
+
+
 def test_limited_provider_wrapper_dict_schema() -> None:
     inner = MagicMock(spec=["with_structured_output"])
     wrapped = OpenAICompatModelWrapper(inner, "lmstudio")

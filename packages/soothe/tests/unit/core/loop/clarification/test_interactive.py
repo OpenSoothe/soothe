@@ -100,3 +100,13 @@ async def test_emits_clarification_requested(monkeypatch: pytest.MonkeyPatch) ->
     assert payload["mode"] == "manual"
     assert payload["origin"] == "execute"
     assert payload["questions"] == ["q0"]
+
+
+async def test_bind_emit_attaches_runtime_callback() -> None:
+    policy = InteractiveClarificationPolicy()
+
+    async def _emit(_name: str, _payload: dict) -> None:
+        return None
+
+    policy.bind_emit(_emit)
+    assert policy._emit is _emit  # noqa: SLF001

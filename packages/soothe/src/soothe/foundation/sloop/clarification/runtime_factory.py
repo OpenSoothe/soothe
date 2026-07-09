@@ -111,7 +111,32 @@ def build_clarification_policy_for_runner(
     )
 
 
+def bind_clarification_emit(
+    policy: ClarificationPolicy | None,
+    emit: EmitFn,
+) -> None:
+    """Wire runtime ``emit`` into interactive clarification legs (RFC-623).
+
+    Runners build the policy before the graph ``emit`` closure exists. Call
+    this once ``emit`` is available so auto-mode veritas failures can re-notify
+    the TUI with ``mode=manual`` before ``interrupt(...)`` pauses the graph.
+    """
+    if policy is None:
+        return
+    from soothe.foundation.sloop.clarification.auto import AutoClarificationPolicy
+    from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
+
+    if isinstance(policy, InteractiveClarificationPolicy):
+        policy.bind_emit(emit)
+        return
+    if isinstance(policy, AutoClarificationPolicy):
+        fallback = policy._interactive_fallback  # noqa: SLF001
+        if isinstance(fallback, InteractiveClarificationPolicy):
+            fallback.bind_emit(emit)
+
+
 __all__ = [
+    "bind_clarification_emit",
     "build_clarification_policy_for_runner",
     "resolve_clarification_mode",
 ]

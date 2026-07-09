@@ -27,6 +27,7 @@ from soothe.foundation.sloop.clarification.protocol import (
     request_to_state,
 )
 from soothe.foundation.sloop.clarification.runtime_factory import (
+    bind_clarification_emit,
     build_clarification_policy_for_runner,
     resolve_clarification_mode,
 )
@@ -46,6 +47,7 @@ __all__ = [
     "LoopStateView",
     "answer_from_state",
     "answer_to_state",
+    "bind_clarification_emit",
     "build_clarification_policy_for_runner",
     "build_default_clarification_policy",
     "request_from_state",

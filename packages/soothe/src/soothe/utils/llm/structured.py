@@ -263,6 +263,10 @@ async def invoke_structured_chat(
     methods = _ordered_structured_methods(chat)
     last_method = methods[-1]
     prepared_messages = ensure_json_keyword_in_messages(messages)
+    # When a normalizer is supplied, defer wire-schema validation until after it
+    # runs — JsonSchemaModelWrapper validates on parse and would reject
+    # answers-only payloads that coerce_veritas_response can repair.
+    bind_strict = strict if normalize is None else False
 
     last_exc: Exception | None = None
     for method in methods:
@@ -271,7 +275,7 @@ async def invoke_structured_chat(
                 chat,
                 schema_with_title,
                 method=method,
-                strict=strict,
+                strict=bind_strict,
             )
         except Exception:
             logger.debug(
