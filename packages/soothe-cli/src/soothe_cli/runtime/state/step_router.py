@@ -174,9 +174,8 @@ class StepTaskRouter:
     ) -> None:
         """Promote a pending step card to running only when it is executing (RFC-628).
 
-        Pre-mounted future steps must stay ``pending`` until ``step.started`` even when
-        tools are stamped with their unified step id. The pre-``step.started`` race for
-        the active step is allowed only while no sibling step card is already running.
+        Future steps are not pre-mounted in the message list; only the active step
+        may transition to ``running`` before ``step.started`` when tools arrive early.
         """
         if getattr(step_w, "_status", "") != "pending":
             return

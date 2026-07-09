@@ -1585,6 +1585,7 @@ class Executor:
         live_queue: asyncio.Queue[_ParallelLiveQueueItem] = asyncio.Queue()
         gather_results: list[Any] = [None] * n_steps
         step_wave_index: dict[str, int] = {step.id: i for i, step in enumerate(steps)}
+        completion_report_tasks: dict[str, asyncio.Task[str | None]] = {}
 
         async def _run_parallel_step(step: StepAction) -> None:
             sid = step.id
@@ -1600,6 +1601,10 @@ class Executor:
                     loop_state=state,
                     live_event_queue=live_queue,
                 )
+                if isinstance(payload, _ExecuteStepResult) and payload.step_result:
+                    completion_report_tasks[sid] = asyncio.create_task(
+                        self._summarize_step_completion_report(step, payload, state)
+                    )
                 live_queue.put_nowait(_ParallelStepDone(sid, payload))
             except asyncio.CancelledError:
                 raise
@@ -1661,7 +1666,13 @@ class Executor:
                             wave_delegate_parts.append(df)
                         if res.step_result:
                             step = steps[wave_i]
-                            summary = await self._summarize_step_completion_report(step, res, state)
+                            report_task = completion_report_tasks.pop(sid, None)
+                            if report_task is not None:
+                                summary = await report_task
+                            else:
+                                summary = await self._summarize_step_completion_report(
+                                    step, res, state
+                                )
                             if summary:
                                 yield StepCompletionReport(
                                     step_id=sid,
@@ -1673,12 +1684,18 @@ class Executor:
                 else:
                     yield item
         except asyncio.CancelledError:
+            for task in completion_report_tasks.values():
+                if not task.done():
+                    task.cancel()
             for task in tasks:
                 if not task.done():
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
             raise
         finally:
+            for task in completion_report_tasks.values():
+                if not task.done():
+                    task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
         results = gather_results
