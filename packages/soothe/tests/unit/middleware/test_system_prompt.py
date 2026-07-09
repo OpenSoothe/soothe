@@ -1,5 +1,6 @@
 """Tests for SystemPromptMiddleware (RFC-214 volatility-tiered architecture)."""
 
+import re
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -10,6 +11,16 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from soothe.config import SootheConfig
 from soothe.foundation.sloop.intention import RoutingClassification
 from soothe.middleware import SystemPromptMiddleware
+
+_VOLATILE_PROMPT_SECTION_RE = re.compile(
+    r"<(?:ENVIRONMENT|TIMESTAMP)>.*?</(?:ENVIRONMENT|TIMESTAMP)>\n?",
+    re.DOTALL,
+)
+
+
+def _stable_prompt_body_length(content: str) -> int:
+    """Length of prompt text excluding platform- and time-volatile XML blocks."""
+    return len(_VOLATILE_PROMPT_SECTION_RE.sub("", content))
 
 
 class MockModelRequest(ModelRequest[dict]):
@@ -101,7 +112,7 @@ def test_simple_query_gets_minimal_prompt():
     # Should have minimal prompt (no date line - date is in user envelope per RFC-214).
     # Threshold accounts for the RESPONSE_LANGUAGE_HINT block now living in the system prompt.
     assert "helpful AI assistant" in content
-    assert len(content) < 900
+    assert _stable_prompt_body_length(content) < 900
     # RFC-214: Date line NOT in system prompt - it's in user message envelope
     assert "Today's date is" not in content
 
@@ -276,7 +287,7 @@ def test_minimal_task_complexity_uses_compact_prompt():
     # Should get simple prompt. Threshold accounts for the RESPONSE_LANGUAGE_HINT
     # block now living in the system prompt.
     assert "helpful AI assistant" in modified.system_message.content
-    assert len(modified.system_message.content) < 900
+    assert _stable_prompt_body_length(modified.system_message.content) < 900
 
 
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
