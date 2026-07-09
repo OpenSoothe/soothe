@@ -89,6 +89,12 @@ class TestTwoPassPrompts:
         assert "first scan the repo and then run tests" in prompt
         assert "use browser_use for weather" in prompt
 
+    def test_pass2_prompt_requires_preserving_urls_and_links(self) -> None:
+        prompt = INTAKE_PASS2_SYSTEM_PROMPT
+        assert "URLs" in prompt
+        assert "Never drop a URL" in prompt
+        assert "https://github.com/org/repo/actions/runs/123456" in prompt
+
 
 @pytest.mark.asyncio
 class TestIntakeClassifier:
