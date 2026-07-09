@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -16,18 +15,11 @@ logger = logging.getLogger(__name__)
 _STEP_COMPLETION_REPORT_SYSTEM = (
     "You write brief step-completion status lines for the user watching progress.\n"
     "Given the execute-step input and assistant output, respond with exactly one "
-    "first-person sentence (I/we) under {max_words} words.\n"
+    "first-person sentence (I/we) of at most {max_words} words.\n"
     "No preamble, quotes, or bullet points."
 )
 
 _CONTENT_CAP = 8000
-
-
-def _enforce_max_words(text: str, max_words: int) -> str:
-    words = re.findall(r"\S+", (text or "").strip())
-    if len(words) <= max_words:
-        return " ".join(words)
-    return " ".join(words[:max_words])
 
 
 async def summarize_step_completion_report(
@@ -37,7 +29,7 @@ async def summarize_step_completion_report(
     fast_model: BaseChatModel,
     soothe_config: SootheConfig | None = None,
     goal_trace: Any | None = None,
-    max_words: int = 30,
+    max_words: int | None = None,
 ) -> str | None:
     """Summarize a completed execute step for TUI cognition display.
 
@@ -49,7 +41,7 @@ async def summarize_step_completion_report(
         fast_model: Fast router model for the summary call.
         soothe_config: Optional config for rate limits and tracing.
         goal_trace: Optional trace context for observability.
-        max_words: Hard cap on summary length.
+        max_words: Optional prompt word target; defaults to config or 50 when omitted.
 
     Returns:
         First-person summary text, or None when input is empty or the call fails.
@@ -66,7 +58,15 @@ async def summarize_step_completion_report(
     if not human and not ai:
         return None
 
-    system = _STEP_COMPLETION_REPORT_SYSTEM.format(max_words=max_words)
+    word_limit = max_words
+    if word_limit is None:
+        word_limit = (
+            soothe_config.agent.loop.step_completion_report_max_words
+            if soothe_config is not None
+            else 50
+        )
+
+    system = _STEP_COMPLETION_REPORT_SYSTEM.format(max_words=word_limit)
     messages = [
         SystemMessage(content=system),
         HumanMessage(content=human or "(no step input)"),
@@ -116,9 +116,7 @@ async def summarize_step_completion_report(
         logger.warning("Step completion report LLM call failed", exc_info=True)
         return None
 
-    if not raw:
-        return None
-    return _enforce_max_words(raw, max_words)
+    return raw or None
 
 
 __all__ = ["summarize_step_completion_report"]

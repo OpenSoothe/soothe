@@ -104,7 +104,7 @@ agent:
     execute_action_retry_max: 1
     execute_min_answer_chars: 20
     execute_deliverable_assess: auto
-    step_completion_report_max_words: 30
+    step_completion_report_max_words: 50
     max_subagent_tasks_per_wave: 8
     plan_assess_model_role: fast
     plan_generate_model_role: think
