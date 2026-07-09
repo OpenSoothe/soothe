@@ -213,7 +213,6 @@ class IntentClassifier:
         return IntentClassification(
             intake_label=IntakeLabel.CHITCHAT,
             reasoning=pass1_result.reasoning,
-            goal_description=query,
             chitchat_response=(pass1_result.social_response or "").strip(),
             social_kind=pass1_result.social_kind,
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
@@ -244,7 +243,6 @@ class IntentClassifier:
         intent = IntentClassification(
             intake_label=intake_label,
             reasoning=pass2_result.reasoning,
-            goal_description=pass2_result.goal_description,
             chitchat_response=None,
             multi_phase=pass2_result.multi_phase,
             wire_subagent=pass2_result.wire_subagent,
@@ -307,7 +305,6 @@ class IntentClassifier:
         return IntentClassification(
             intake_label=IntakeLabel.COMPLEX,
             reasoning="Let me run the full agent loop to work through this goal.",
-            goal_description=query,
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.COMPLEX),
         )
 
@@ -316,10 +313,8 @@ class IntentClassifier:
         intent: IntentClassification,
         query: str,
     ) -> IntentClassification:
-        """Patch missing goal_description and reasoning."""
-        if not intent.goal_description:
-            intent.goal_description = query
-            logger.debug("Patched missing goal_description")
+        """Patch missing reasoning and chitchat fields."""
+        _ = query
         if intent.intake_label == IntakeLabel.CHITCHAT:
             if not (intent.chitchat_response or "").strip():
                 intent.chitchat_response = pick_generic_chitchat_fallback(query)

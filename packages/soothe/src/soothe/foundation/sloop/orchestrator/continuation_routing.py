@@ -20,20 +20,15 @@ def continuation_forced_plan_generate_assessment():
 def bootstrap_terminal_after_execute(
     *,
     raw_user_goal: str,
-    goal_description: str | None,
     multi_phase: bool | None = None,
 ) -> bool:
     """Whether a bootstrap plan should skip iter=1 replan after execute.
 
-    Chat-like and ``continue`` keyword goals remain terminal. Tool-heavy goals
-    with refined intent descriptions or Pass 2 ``multi_phase`` allow replan.
+    Chat-like and ``continue`` keyword goals remain terminal. Pass 2 ``multi_phase``
+    allows replan after the first execute wave.
     """
     if is_continue_keyword(raw_user_goal):
         return True
-    desc = (goal_description or "").strip()
-    raw = raw_user_goal.strip()
-    if desc and desc != raw:
-        return False
     if multi_phase:
         return False
     return True

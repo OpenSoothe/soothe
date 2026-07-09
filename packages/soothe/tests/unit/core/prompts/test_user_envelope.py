@@ -201,42 +201,6 @@ def test_plan_assess_message_uses_goal_label() -> None:
     assert "Execute iteration" not in msg
 
 
-_GHA_URL = "https://github.com/mirasoth/mizar-airway/actions/runs/29004585824"
-_RAW_GHA = f"analyze why this github action failed, fix it: {_GHA_URL}"
-_NORMALIZED_GHA = "Analyze GitHub Actions failure and fix the workflow"
-
-
-def test_plan_assess_message_includes_user_request_when_normalized_differs() -> None:
-    builder = UserMessageBuilder()
-    msg = builder.build_plan_assess_message(
-        goal=_NORMALIZED_GHA,
-        user_request=_RAW_GHA,
-    )
-    assert "USER REQUEST:" in msg
-    assert _GHA_URL in msg
-    assert "GOAL:" in msg
-    assert _NORMALIZED_GHA in msg
-    assert msg.index("USER REQUEST:") < msg.index("GOAL:")
-
-
-def test_plan_generate_message_includes_user_request_when_normalized_differs() -> None:
-    builder = UserMessageBuilder()
-    msg = builder.build_plan_generate_message(
-        goal=_NORMALIZED_GHA,
-        user_request=_RAW_GHA,
-    )
-    assert "USER REQUEST:" in msg
-    assert _GHA_URL in msg
-    assert _NORMALIZED_GHA in msg
-
-
-def test_plan_assess_message_omits_user_request_when_same_as_goal() -> None:
-    builder = UserMessageBuilder()
-    msg = builder.build_plan_assess_message(goal="plain goal", user_request="plain goal")
-    assert "USER REQUEST:" not in msg
-    assert "GOAL:" in msg
-
-
 def test_plan_assess_message_omits_response_language_hint() -> None:
     builder = UserMessageBuilder()
     msg = builder.build_plan_assess_message(

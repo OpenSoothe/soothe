@@ -121,7 +121,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             **graph_intake_fields,
         }
 
-    # RFC-630 trivial branch: pseudo 1-step plan (goal_description), skip
+    # RFC-630 trivial branch: pseudo 1-step plan (user goal), skip
     # plan_assess/plan_generate, execute on a step thread branch, then
     # goal_completion via terminal_after_execute (ledger_direct).
     if (
@@ -131,8 +131,9 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
         and not is_continue_keyword(ctx.loop_state.goal)
     ):
         from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
+        from soothe.foundation.sloop.goal_text import resolve_user_request
 
-        goal_text = (getattr(intent, "goal_description", None) or ctx.loop_state.goal or "").strip()
+        goal_text = resolve_user_request(ctx.loop_state)
         if not goal_text:
             goal_text = ctx.loop_state.goal
         ctx.scratch.plan_result = build_trivial_plan(

@@ -64,7 +64,6 @@ async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
         return_value=MagicMock(
             intake_label=IntakeLabel.SIMPLE,
             reasoning="Resume loop.",
-            goal_description="continue",
             task_complexity=TaskComplexity.SIMPLE,
         )
     )

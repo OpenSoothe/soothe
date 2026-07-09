@@ -26,7 +26,6 @@ class TestIntakeClassifierLedger:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="TestBot")
         pass2 = IntakePass2LLMResult(
             scope=IntakeScope.SIMPLE,
-            goal_description="summarize readme",
             reasoning="I'll read the readme.",
         )
         mock_result = TwoPassIntakeResult(
@@ -71,7 +70,6 @@ class TestIntakeClassifierLedger:
             ),
             IntakePass2LLMResult(
                 scope=IntakeScope.COMPLEX,
-                goal_description="refactor",
                 reasoning="complex",
             ),
         )

@@ -166,7 +166,6 @@ async def test_continuation_assess_guardrail_overrides_bootstrap_for_complex_int
     state = _state(goal="run make docker-build then start docker and run e2e")
     state.intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
-        goal_description="Build image, start components, run e2e",
         task_complexity=TaskComplexity.COMPLEX,
     )
     expected = ContinuationAssessment(

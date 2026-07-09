@@ -108,7 +108,6 @@ class IntentClassification(BaseModel):
     Args:
         intake_label: 4-class intake label for branch routing (RFC-630).
         reasoning: Brief reasoning for classification (IG-518).
-        goal_description: Normalized goal description.
         chitchat_response: Direct reply for ``chitchat`` intake only.
         task_complexity: Routing complexity level (derived from ``intake_label``).
     """
@@ -119,10 +118,6 @@ class IntentClassification(BaseModel):
     reasoning: str | None = Field(
         default=None,
         description="Brief first-person reasoning (I'll / Let me …).",
-    )
-    goal_description: str | None = Field(
-        default=None,
-        description="Normalized goal description for display and ContextEngine",
     )
     chitchat_response: str | None = Field(
         default=None,
@@ -270,16 +265,12 @@ class IntakePass2LLMResult(BaseModel):
 
     Args:
         scope: Work scope: trivial (single action), simple (focused step), complex (multi-step).
-        goal_description: Normalized imperative summary of the goal.
         reasoning: First-person TUI line (I'll / Let me …), ≤15 words.
     """
 
     scope: IntakeScope = Field(
         description="Work scope: trivial (single action, no planning), "
         "simple (focused step, light planning), complex (multi-step, full plan)"
-    )
-    goal_description: str = Field(
-        description="Normalized imperative summary of the goal",
     )
     reasoning: str = Field(
         description=(

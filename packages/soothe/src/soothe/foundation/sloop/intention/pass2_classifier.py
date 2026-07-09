@@ -72,7 +72,7 @@ class IntakePass2Classifier:
             goal_trace: Optional Langfuse trace context.
 
         Returns:
-            IntakePass2LLMResult with scope, goal_description, reasoning.
+            IntakePass2LLMResult with scope and reasoning.
         """
         if not self._fast_model:
             return self._fallback(query)
@@ -87,7 +87,7 @@ class IntakePass2Classifier:
             logger.debug(
                 "Pass2 classified: scope=%s goal=%s",
                 result.scope,
-                preview_goal(result.goal_description),
+                preview_goal(query),
             )
             return result
         except Exception as exc:
@@ -152,10 +152,6 @@ class IntakePass2Classifier:
         ):
             raise ValueError(f"Invalid scope from LLM: {result_dict.get('scope')!r}")
 
-        # Ensure goal_description
-        if not (result_dict.get("goal_description") or "").strip():
-            result_dict["goal_description"] = query
-
         if result_dict.get("multi_phase") not in (True, False):
             result_dict["multi_phase"] = False
 
@@ -179,7 +175,6 @@ class IntakePass2Classifier:
         logger.debug("Pass2 fallback to complex (%s)", reason)
         return IntakePass2LLMResult(
             scope=IntakeScope.COMPLEX,
-            goal_description=query,
             reasoning="Let me run the full agent loop to work through this goal.",
             multi_phase=False,
             wire_subagent=None,

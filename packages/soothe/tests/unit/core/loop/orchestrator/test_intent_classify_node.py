@@ -24,7 +24,6 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll plan a lightweight change.",
-        goal_description="Fix the typo",
         task_complexity=TaskComplexity.SIMPLE,
     )
     classifier.classify_intake = AsyncMock(return_value=intent)
@@ -71,7 +70,6 @@ async def test_intent_classify_skips_when_preclassified() -> None:
     classifier.classify_intake = AsyncMock()
     existing = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
-        goal_description="refactor",
         task_complexity=TaskComplexity.COMPLEX,
     )
     loop_state = SimpleNamespace(

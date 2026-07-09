@@ -1,4 +1,4 @@
-"""Tests for resolve_planning_goal (Pass 2 normalized goal text)."""
+"""Tests for resolve_planning_goal (verbatim user submission)."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ from soothe.foundation.sloop.intention.models import (
 from soothe.foundation.sloop.state.schemas import LoopState
 
 
-def test_resolve_planning_goal_prefers_pass2_description() -> None:
+def test_resolve_planning_goal_prefers_goal_user_submission() -> None:
     state = LoopState(
         goal="using existing daemon. Run all tests",
+        goal_user_submission="Run all Go and TypeScript client tests and fix all errors",
         thread_id="t",
         intent=IntentClassification(
             intake_label=IntakeLabel.COMPLEX,
             task_complexity=TaskComplexity.COMPLEX,
-            goal_description="Run all Go and TypeScript client tests and fix all errors",
         ),
     )
     assert resolve_planning_goal(state) == (

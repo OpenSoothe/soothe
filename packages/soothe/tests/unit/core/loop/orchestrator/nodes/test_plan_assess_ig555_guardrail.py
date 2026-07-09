@@ -63,7 +63,6 @@ def _make_ctx(
     )
     intent = IntentClassification(
         intake_label=intake_label,
-        goal_description="Multi-part operational goal",
         task_complexity=TaskComplexity.COMPLEX,
     )
     loop_state = LoopState(

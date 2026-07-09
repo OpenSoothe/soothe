@@ -44,7 +44,6 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
     preclassified = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="Scope is simple.",
-        goal_description="Summarize readme",
         task_complexity=TaskComplexity.SIMPLE,
     )
 
@@ -162,7 +161,6 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
         return_value=IntentClassification(
             intake_label=IntakeLabel.SIMPLE,
             reasoning="simple",
-            goal_description="goal",
             task_complexity=TaskComplexity.SIMPLE,
         )
     )

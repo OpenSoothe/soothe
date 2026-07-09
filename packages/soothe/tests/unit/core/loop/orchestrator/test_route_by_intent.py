@@ -103,7 +103,6 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
 
     intent = IntentClassification(
         intake_label=IntakeLabel.CHITCHAT,
-        goal_description="where are u from",
         chitchat_response="I'm Soothe, a cloud-based AI assistant.",
         task_complexity=TaskComplexity.MINIMAL,
     )
@@ -151,7 +150,6 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
 
     intent = IntentClassification(
         intake_label=IntakeLabel.TRIVIAL,
-        goal_description="list files in this directory",
         task_complexity=TaskComplexity.MINIMAL,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
@@ -189,7 +187,6 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
     intent = IntentClassification(
         intake_label=IntakeLabel.TRIVIAL,
-        goal_description="continue",
         task_complexity=TaskComplexity.SIMPLE,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
@@ -225,7 +222,6 @@ async def test_init_or_resume_simple_synthesizes_assessment_on_continuation() ->
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        goal_description="upgrade client library",
         task_complexity=TaskComplexity.SIMPLE,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
@@ -261,7 +257,6 @@ async def test_init_or_resume_simple_synthesizes_assessment() -> None:
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        goal_description="summarize RFC-220 topology",
         task_complexity=TaskComplexity.SIMPLE,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)
@@ -288,7 +283,6 @@ async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
 
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
-        goal_description="refactor persistence layer",
         task_complexity=TaskComplexity.COMPLEX,
     )
     scratch = SimpleNamespace(plan_result=None, plan_assessment=None, decision=None)

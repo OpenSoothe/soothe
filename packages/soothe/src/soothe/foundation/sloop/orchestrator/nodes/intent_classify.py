@@ -44,7 +44,6 @@ def intent_classified_reasoning_event(
         {
             "intent_type": "agentic",
             "reasoning": reasoning,
-            "goal_description": intent.goal_description,
         },
     )
 

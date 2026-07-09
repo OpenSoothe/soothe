@@ -42,7 +42,6 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
     preclassified = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll read the readme first.",
-        goal_description="Summarize readme",
         task_complexity=TaskComplexity.SIMPLE,
     )
 

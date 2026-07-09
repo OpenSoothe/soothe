@@ -50,23 +50,6 @@ def _render_execution_metadata(step_id: str | None, short_description: str | Non
     return "\n".join(lines)
 
 
-def _plan_goal_sections(
-    goal: str,
-    *,
-    user_request: str | None = None,
-    display_goal: str | None = None,
-) -> list[tuple[str, str]]:
-    """Build USER REQUEST (verbatim) + GOAL (intake-normalized) plan envelope sections."""
-    sections: list[tuple[str, str]] = []
-    request = (user_request or "").strip()
-    normalized = _goal_text(goal)
-    goal_line = display_goal if display_goal is not None else normalized
-    if request and request != normalized:
-        sections.append(("USER REQUEST", request))
-    sections.append(("GOAL", goal_line))
-    return sections
-
-
 def _goal_text(goal: str | None) -> str:
     """Normalize goal string (strip iteration suffix)."""
     raw = (goal or "").strip()
@@ -521,7 +504,6 @@ class UserMessageBuilder:
         include_plan_coverage: bool = True,
         last_assessment: dict[str, Any] | None = None,
         plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
-        user_request: str | None = None,
     ) -> str:
         """Build assess task envelope (allowlist-only, IG-557).
 
@@ -547,7 +529,6 @@ class UserMessageBuilder:
             include_plan_coverage=include_plan_coverage,
             last_assessment=last_assessment,
             plan_gap=plan_gap,
-            user_request=user_request,
         )
 
     def build_plan_assess_message_v2(
@@ -562,10 +543,9 @@ class UserMessageBuilder:
         include_plan_coverage: bool = True,
         last_assessment: dict[str, Any] | None = None,
         plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
-        user_request: str | None = None,
     ) -> str:
-        """Assess allowlist envelope: USER REQUEST, GOAL, GAP ANALYSIS, …, TASK."""
-        sections: list[tuple[str, str]] = _plan_goal_sections(goal, user_request=user_request)
+        """Assess allowlist envelope: GOAL, GAP ANALYSIS, PRIOR PROGRESS, PREVIOUS ASSESSMENT, PLAN COVERAGE, TASK."""
+        sections: list[tuple[str, str]] = [("GOAL", _goal_text(goal))]
 
         if plan_gap is not None:
             sections.append(("GAP ANALYSIS", _render_gap_analysis_block(plan_gap)))
@@ -598,10 +578,9 @@ class UserMessageBuilder:
         sections.append(
             (
                 "TASK",
-                "Assess goal completion for GOAL. When USER REQUEST is present, it is the "
-                "verbatim user line — use it for URLs, links, and IDs not repeated in GOAL. "
-                "Return status, goal_progress, assessment_reasoning. Cite execute evidence if "
-                "present. Do not treat plan step count or prior goals as completion proof.",
+                "Assess goal completion for GOAL only. Return status, goal_progress, "
+                "assessment_reasoning. Cite execute evidence if present. "
+                "Do not treat plan step count or prior goals as completion proof.",
             )
         )
 
@@ -617,10 +596,9 @@ class UserMessageBuilder:
         plan_coverage: str | None = None,
         omit_prior_progress_hint: bool = True,
         include_plan_coverage: bool = True,
-        user_request: str | None = None,
     ) -> str:
         """Build user message for plan-gap-analysis (read-only evidence mapping)."""
-        sections: list[tuple[str, str]] = _plan_goal_sections(goal, user_request=user_request)
+        sections: list[tuple[str, str]] = [("GOAL", _goal_text(goal))]
         mode = projection_mode or "mid_goal"
         if (
             prior_progress is not None
@@ -668,7 +646,6 @@ class UserMessageBuilder:
         assessment_status: str | None = None,
         assessment_progress: str | None = None,
         plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
-        user_request: str | None = None,
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -687,11 +664,9 @@ class UserMessageBuilder:
         Returns:
             Structured text message for the plan-generate LoopHumanMessage.
         """
-        sections: list[tuple[str, str]] = _plan_goal_sections(
-            goal,
-            user_request=user_request,
-            display_goal=display_goal,
-        )
+        sections: list[tuple[str, str]] = [
+            ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
+        ]
 
         _append_plan_context_sections(
             sections,
@@ -728,9 +703,7 @@ class UserMessageBuilder:
             (
                 "TASK",
                 "Generate the execution plan: steps (with full_description for actions), "
-                "execution_mode, and first-person reasoning (about 10~20 words). When USER "
-                "REQUEST is present, carry its URLs, links, and IDs into relevant step "
-                "full_description fields.",
+                "execution_mode, and first-person reasoning (about 10~20 words).",
             )
         )
 
@@ -744,14 +717,11 @@ class UserMessageBuilder:
         display_goal: str | None = None,
         completion_in_ledger: bool = False,
         prior_goals_override: list[PriorGoalSummary] | None = None,
-        user_request: str | None = None,
     ) -> str:
         """Build task envelope for RFC-226 continuation discriminator (IG-538)."""
-        sections: list[tuple[str, str]] = _plan_goal_sections(
-            goal,
-            user_request=user_request,
-            display_goal=display_goal,
-        )
+        sections: list[tuple[str, str]] = [
+            ("GOAL", display_goal if display_goal is not None else _goal_text(goal)),
+        ]
         _append_plan_context_sections(
             sections,
             goal=goal,
