@@ -1356,22 +1356,13 @@ class Executor:
             summarize_step_completion_report,
         )
 
-        try:
-            return await summarize_step_completion_report(
-                human_content=human,
-                ai_content=ai,
-                fast_model=self._fast_model,
-                soothe_config=self._config,
-                goal_trace=self._goal_trace,
-                max_words=self._config.agent.loop.step_completion_report_max_words,
-            )
-        except Exception:
-            logger.warning(
-                "Step completion report failed for step %s",
-                step.id,
-                exc_info=True,
-            )
-            return None
+        return await summarize_step_completion_report(
+            human_content=human,
+            ai_content=ai,
+            fast_model=self._fast_model,
+            soothe_config=self._config,
+            goal_trace=self._goal_trace,
+        )
 
     _PROGRESS_HINT_KEYWORDS = ("done", "completed", "total", "count", "finished")
     _PROGRESS_HINT_GLYPHS = ("|",)
@@ -1665,14 +1656,8 @@ class Executor:
                         if df:
                             wave_delegate_parts.append(df)
                         if res.step_result:
-                            step = steps[wave_i]
                             report_task = completion_report_tasks.pop(sid, None)
-                            if report_task is not None:
-                                summary = await report_task
-                            else:
-                                summary = await self._summarize_step_completion_report(
-                                    step, res, state
-                                )
+                            summary = await report_task if report_task is not None else None
                             if summary:
                                 yield StepCompletionReport(
                                     step_id=sid,

@@ -5,7 +5,7 @@
 
 ## Goal
 
-On execute-step completion, emit a fast-LLM first-person summary (&lt;30 words) as a cognition reason card on the TUI. Source context is only the single-step human/ai pair (compact execute input + final assistant output). No message ledger mutation.
+On execute-step completion, emit a fast-LLM first-person summary (≤50 words via prompt; no post-LLM truncation) as a cognition reason card on the TUI. Source context is only the single-step human/ai pair (compact execute input + final assistant output). No message ledger mutation.
 
 ## Implementation
 

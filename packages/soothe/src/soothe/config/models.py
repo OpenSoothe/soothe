@@ -1576,8 +1576,8 @@ class StrangeLoopConfig(BaseModel):
     )
 
     step_completion_report_max_words: int = Field(
-        default=30,
-        description="Maximum words for execute-step completion cognition summaries",
+        default=50,
+        description="Target word limit for execute-step completion cognition summaries (LLM prompt only)",
         ge=5,
         le=100,
     )
