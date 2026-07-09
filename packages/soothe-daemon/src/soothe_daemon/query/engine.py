@@ -149,6 +149,7 @@ class AsyncCancelOrchestrator:
                                 await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
                             except (TimeoutError, asyncio.CancelledError):
                                 pass
+                    self._query_engine._clear_loop_cancel_armed_state(loop_id)
                     return  # Success
 
                 # Update tasks list (some may have completed)
@@ -172,6 +173,7 @@ class AsyncCancelOrchestrator:
 
         # Cleanup bookkeeping
         self._query_engine._active_runners.pop(loop_id, None)
+        self._query_engine._clear_loop_cancel_armed_state(loop_id)
 
     async def _get_execution_pool(self) -> Any | None:
         """Return the shared thread/process execution pool."""
@@ -247,6 +249,45 @@ class QueryEngine:
         # aborts immediately, emitting ``idle`` so the client observes the
         # cancellation.
         self._pending_cancels: set[str] = set()
+        # Loop ids with an early ``running`` broadcast before ``run_query`` admits.
+        self._loops_turn_starting: set[str] = set()
+
+    def mark_loop_turn_starting(self, loop_id: str) -> None:
+        """Record that a loop turn is starting (pre-``run_query`` race window).
+
+        Called when the loop worker emits early ``running`` so a concurrent
+        ``/cancel`` can arm ``_pending_cancels`` without treating idle cancels as
+        pre-start aborts.
+        """
+        lid = str(loop_id or "").strip()
+        if lid:
+            self._loops_turn_starting.add(lid)
+
+    def is_cancel_in_progress(self, loop_id: str) -> bool:
+        """Return whether a background cancel task is still running for ``loop_id``."""
+        orchestrator = self._cancel_orchestrator
+        if orchestrator is None:
+            return False
+        task = orchestrator._active_cancel_tasks.get(loop_id)
+        return task is not None and not task.done()
+
+    def _should_arm_pending_cancel(self, loop_id: str) -> bool:
+        """Return True only for the genuine pre-registration cancel race window."""
+        if self.collect_active_tasks_for_loop(loop_id):
+            return False
+        if loop_id in self._active_runners:
+            return False
+        if self.is_cancel_in_progress(loop_id):
+            return False
+        d = self._daemon
+        if loop_id in d._loops_with_active_query:
+            return True
+        return loop_id in self._loops_turn_starting
+
+    def _clear_loop_cancel_armed_state(self, loop_id: str) -> None:
+        """Drop pre-start cancel bookkeeping once cancel completes or turn ends."""
+        self._pending_cancels.discard(loop_id)
+        self._loops_turn_starting.discard(loop_id)
 
     def collect_active_tasks_for_loop(self, loop_id: str) -> list[tuple[str, asyncio.Task]]:
         """Return in-flight query asyncio tasks bound to ``loop_id``."""
@@ -343,6 +384,7 @@ class QueryEngine:
         d = self._daemon
         async with d._query_state_lock:
             d._loops_with_active_query.discard(effective_loop_id)
+        self._loops_turn_starting.discard(effective_loop_id)
 
     async def _register_query_task(self, thread_id: str, task: asyncio.Task[Any]) -> None:
         """Register a background query task under ``_query_state_lock``."""
@@ -831,13 +873,13 @@ class QueryEngine:
                 if client_id:
                     await d._session_manager.release_loop_ownership(client_id)
                 await self._release_query_admission(effective_loop_id)
-                self._pending_cancels.discard(effective_loop_id)
+                self._clear_loop_cancel_armed_state(effective_loop_id)
                 return
 
             # Once the stream has started (past the race window), a recorded
             # pending cancel is obsolete — the orchestrator will cancel the
             # now-registered asyncio task directly.
-            self._pending_cancels.discard(effective_loop_id)
+            self._clear_loop_cancel_armed_state(effective_loop_id)
 
             chunk_count = 0
             timeout_minutes = d._daemon_config.max_query_duration_minutes
@@ -1474,11 +1516,23 @@ class QueryEngine:
             logger.warning("cancel_loop called with empty loop_id; ignoring (no cancellation)")
             return
 
-        # Record the cancel only when no asyncio task is registered yet (the
-        # early-``running`` race window). When a task already exists, cancel it
-        # directly — leaving ``_pending_cancels`` set would poison the next
-        # submit after Ctrl+C (consumed as ``cancelled_before_start``).
-        if not self.collect_active_tasks_for_loop(lidq):
+        if self.is_cancel_in_progress(lidq):
+            logger.debug(
+                "Duplicate cancel for loop %s while cancel in progress; ignoring",
+                lidq[:16],
+            )
+            return
+
+        active_tasks = self.collect_active_tasks_for_loop(lidq)
+        has_runner = lidq in self._active_runners
+        if not active_tasks and not has_runner and not self._should_arm_pending_cancel(lidq):
+            logger.debug("Cancel for idle loop %s; no work to stop", lidq[:16])
+            return
+
+        # Arm ``_pending_cancels`` only during the pre-registration race window
+        # (early ``running`` or admitted query, before the asyncio task exists).
+        # Duplicate post-cancel ``/cancel`` must not poison the next submit.
+        if self._should_arm_pending_cancel(lidq):
             self._pending_cancels.add(lidq)
 
         # RFC-221: signal the pool/local subprocess runner *before* return.
@@ -1511,40 +1565,6 @@ class QueryEngine:
         orchestrator = self._cancel_orchestrator
         await orchestrator.start_async_cancel(lidq, already_signaled=True)
         # Returns immediately - retry/force-kill runs in background
-
-    async def cancel_thread(self, checkpoint_thread_id: str) -> None:
-        """Cancel a specific query task keyed by LangGraph checkpoint id."""
-        d = self._daemon
-        query_state_lock = getattr(d, "_query_state_lock", None)
-        if query_state_lock:
-            async with query_state_lock:
-                await self._cancel_thread_locked(checkpoint_thread_id)
-        else:
-            await self._cancel_thread_locked(checkpoint_thread_id)
-
-    async def _cancel_thread_locked(self, checkpoint_thread_id: str) -> None:
-        d = self._daemon
-        task = d._active_threads.get(checkpoint_thread_id)
-        if task is not None and not task.done():
-            logger.info("Cancelled query task for checkpoint %s", checkpoint_thread_id[:16])
-            task.cancel()
-            await self._await_cancel_after_signal(task, checkpoint_thread_id)
-            return
-
-        if d._current_query_task and not d._current_query_task.done():
-            current_thread = d._runner.current_thread_id if d._runner else None
-            if current_thread == checkpoint_thread_id:
-                logger.info(
-                    "Cancelled current query (legacy single-threaded, checkpoint=%s)",
-                    checkpoint_thread_id[:16],
-                )
-                d._current_query_task.cancel()
-                await self._await_cancel_after_signal(d._current_query_task, checkpoint_thread_id)
-                return
-
-        logger.debug("Checkpoint %s not found or already complete", checkpoint_thread_id[:16])
-        if d._runner and d._runner.current_thread_id == checkpoint_thread_id:
-            d._runner.set_current_thread_id(None)
 
     async def ensure_active_checkpoint_thread_id(self) -> str:
         """Ensure the runner has a concrete LangGraph checkpoint id."""

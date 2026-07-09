@@ -145,6 +145,8 @@ class DaemonHandlersMixin:
 
         # Emit running status early so client doesn't timeout waiting for query start.
         # run_query emits another status later but this unblocks headless CLI immediately.
+        if self._query_engine is not None:
+            self._query_engine.mark_loop_turn_starting(loop_id)
         await self._broadcast(
             self._query_engine._loop_scoped_client_message(
                 loop_id,

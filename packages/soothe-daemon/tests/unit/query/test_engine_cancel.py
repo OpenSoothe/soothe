@@ -569,9 +569,59 @@ async def test_cancel_loop_without_active_task_records_pending_cancel() -> None:
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
     engine = QueryEngine(daemon)
 
+    engine.mark_loop_turn_starting("loop-a")
     await engine.cancel_loop("loop-a")
 
     assert "loop-a" in engine._pending_cancels
+
+
+@pytest.mark.asyncio
+async def test_idle_cancel_does_not_arm_pending_cancel() -> None:
+    """``/cancel`` on an idle loop must not poison the next submit."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _ChunkedRunner(chunk_count=3, chunk_delay=0.02)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
+    engine = QueryEngine(daemon)
+
+    await engine.cancel_loop("loop-a")
+
+    assert "loop-a" not in engine._pending_cancels
+    assert not any(m.get("type") == "command_response" for m in broadcasts)
+
+    await engine.run_query("after idle cancel", loop_id="loop-a")
+    await asyncio.sleep(0.15)
+    assert runner.chunks_yielded >= 1
+
+
+@pytest.mark.asyncio
+async def test_duplicate_cancel_does_not_poison_immediate_resubmit() -> None:
+    """Multiple ``/cancel`` during Ctrl+C must not leave a stale ``_pending_cancels`` token."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _ChunkedRunner(chunk_count=20, chunk_delay=0.03)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("first", loop_id="loop-a")
+    await asyncio.sleep(0.05)
+    assert runner.chunks_yielded >= 1
+    task1 = daemon._current_query_task
+    assert task1 is not None
+
+    await engine.cancel_loop("loop-a")
+    await engine.cancel_loop("loop-a")
+    await engine.cancel_loop("loop-a")
+    assert "loop-a" not in engine._pending_cancels
+
+    with suppress(asyncio.CancelledError):
+        await task1
+
+    runner.chunks_yielded = 0
+    await engine.run_query("second", loop_id="loop-a")
+    await asyncio.sleep(0.2)
+
+    assert runner.chunks_yielded >= 1, "resubmit should stream, not hit cancelled_before_start"
 
 
 @pytest.mark.asyncio
