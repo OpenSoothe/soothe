@@ -64,3 +64,47 @@ async def test_cancel_orchestrator_unknown_worker_is_not_idle() -> None:
 
     assert await orchestrator._get_worker_id_for_loop("missing") is None
     assert await orchestrator._is_worker_idle(None) is False
+
+
+@pytest.mark.asyncio
+async def test_cancel_orchestrator_force_kill_releases_query_admission() -> None:
+    """Verify force kill path releases query admission so loop accepts future queries.
+
+    Bug: after force kill, _loops_with_active_query still contained the loop_id,
+    causing all subsequent queries to be rejected as LOOP_BUSY.
+    """
+    pool = _FakeExecutionPool()
+    pool._idle["thread-worker-1"] = False  # Simulate busy worker (won't go idle)
+
+    daemon = SimpleNamespace(
+        _runner_factory=_FakeRunnerFactory(pool),
+        _daemon_config=SootheDaemonConfig(
+            cancel_retry_count=1,  # Minimize retries for faster test
+            cancel_retry_interval_seconds=0.01,
+            cancel_force_kill_timeout_seconds=0.01,
+        ),
+        _query_state_lock=AsyncMock(),
+        _loops_with_active_query={"loop-a"},  # Simulate admission held
+    )
+    # Mock lock context
+    daemon._query_state_lock.__aenter__ = AsyncMock()
+    daemon._query_state_lock.__aexit__ = AsyncMock()
+
+    query_engine = MagicMock(spec=QueryEngine)
+    query_engine._active_runners = {}
+    query_engine._clear_loop_cancel_armed_state = MagicMock()
+    # Create async mock for _release_query_admission
+    release_mock = AsyncMock()
+    query_engine._release_query_admission = release_mock
+    query_engine.collect_active_tasks_for_loop = MagicMock(return_value=[])
+
+    orchestrator = AsyncCancelOrchestrator(daemon, query_engine)
+
+    # Execute cancel - should hit force kill path
+    await orchestrator._cancel_with_retry_and_force("loop-a")
+
+    # Verify force_cancel_worker was called
+    pool.force_cancel_worker.assert_called_once()
+
+    # Critical: verify admission was released
+    release_mock.assert_called_once_with("loop-a")
