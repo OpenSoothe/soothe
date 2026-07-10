@@ -439,7 +439,7 @@ def test_main_only_step_activity_has_no_running_line() -> None:
     card._status = "running"
     card._start_time = 0.0
     content = str(card._step_task_activity_content())
-    # Preview shows the latest tools (up to 3); both fit without overflow.
+    # Preview shows the latest tools (up to 2); both fit without overflow.
     assert "Glob" in content
     assert "Grep" in content
     assert "+1 more tool" not in content
