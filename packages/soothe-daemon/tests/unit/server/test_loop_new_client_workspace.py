@@ -2,8 +2,8 @@
 
 The CLI passes the user's CWD on bootstrap so the agent's filesystem tools default
 to the user's project directory. ``_handle_loop_new`` must validate the value and
-persist it in the database; ``bind_execution_thread_for_loop`` must prefer it
-over the per-loop daemon scratch dir created by ``resolve_loop_daemon_workspace``.
+persist it in the database; ``bind_execution_thread_for_loop`` must prefer
+``current_workspace`` (or mapped ``client_workspace``) over the persisted ``ws_*`` layout.
 """
 
 from __future__ import annotations

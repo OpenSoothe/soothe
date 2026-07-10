@@ -216,16 +216,14 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         status = checkpoint_data["status"]
 
         from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
-            load_preserved_daemon_metadata,
-            merge_daemon_loop_metadata,
+            merge_checkpoint_with_preserved_metadata,
         )
 
         async def _checkpoint_data_with_daemon_metadata(
             cur: Any,
             data: dict[str, Any],
         ) -> dict[str, Any]:
-            preserved = await load_preserved_daemon_metadata(cur, loop_id)
-            return merge_daemon_loop_metadata(data, preserved)
+            return await merge_checkpoint_with_preserved_metadata(cur, loop_id, data)
 
         if write_mode == "index_only" and hot_cold_enabled:
             from soothe.foundation.persistence.checkpoint_split import extract_hot_index
@@ -248,8 +246,9 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                                 (thread_id, status, hot_json, loop_id),
                             )
                             if cur.rowcount == 0:
-                                preserved = await load_preserved_daemon_metadata(cur, loop_id)
-                                merged = merge_daemon_loop_metadata(checkpoint_data, preserved)
+                                merged = await merge_checkpoint_with_preserved_metadata(
+                                    cur, loop_id, checkpoint_data
+                                )
                                 data_json = json.dumps(merged)
                                 await cur.execute(
                                     """

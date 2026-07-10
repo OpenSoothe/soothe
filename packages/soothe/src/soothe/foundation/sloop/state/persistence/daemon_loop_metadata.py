@@ -57,9 +57,20 @@ async def load_preserved_daemon_metadata(cur: Any, loop_id: str) -> dict[str, An
     return preserved
 
 
+async def merge_checkpoint_with_preserved_metadata(
+    cur: Any,
+    loop_id: str,
+    checkpoint_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Overlay preserved daemon metadata onto a StrangeLoop checkpoint payload."""
+    preserved = await load_preserved_daemon_metadata(cur, loop_id)
+    return merge_daemon_loop_metadata(checkpoint_data, preserved)
+
+
 __all__ = [
     "DAEMON_LOOP_METADATA_KEYS",
     "extract_daemon_loop_metadata",
     "load_preserved_daemon_metadata",
+    "merge_checkpoint_with_preserved_metadata",
     "merge_daemon_loop_metadata",
 ]

@@ -110,20 +110,16 @@ def _workspace_mount_from_config() -> tuple[str | None, str | None]:
 
 def _resolve_mount_roots(
     *,
-    host_root: str | Path | None = None,
-    container_root: str | Path | None = None,
     workspace_mapping: dict[str, Any] | None = None,
 ) -> tuple[str | None, str | None]:
-    """Resolve RFC-621 mount roots from explicit args, metadata, or config."""
-    hr = str(host_root).strip() if host_root else None
-    cr = str(container_root).strip() if container_root else None
+    """Resolve RFC-621 mount roots from loop metadata or config."""
+    hr: str | None = None
+    cr: str | None = None
     if workspace_mapping:
-        if not hr:
-            raw = workspace_mapping.get("host_root")
-            hr = str(raw).strip() if raw else None
-        if not cr:
-            raw = workspace_mapping.get("container_root")
-            cr = str(raw).strip() if raw else None
+        raw = workspace_mapping.get("host_root")
+        hr = str(raw).strip() if raw else None
+        raw = workspace_mapping.get("container_root")
+        cr = str(raw).strip() if raw else None
     if not hr or not cr:
         cfg_hr, cfg_cr = _workspace_mount_from_config()
         hr = hr or cfg_hr
@@ -134,8 +130,6 @@ def _resolve_mount_roots(
 def resolve_client_workspace_on_host(
     client_workspace: str | Path,
     *,
-    host_root: str | Path | None = None,
-    container_root: str | Path | None = None,
     workspace_mapping: dict[str, Any] | None = None,
 ) -> Path | None:
     """Resolve a client workspace hint to a usable path on this host/container.
@@ -144,11 +138,7 @@ def resolve_client_workspace_on_host(
     """
     path = validate_client_workspace(client_workspace)
 
-    hr, cr = _resolve_mount_roots(
-        host_root=host_root,
-        container_root=container_root,
-        workspace_mapping=workspace_mapping,
-    )
+    hr, cr = _resolve_mount_roots(workspace_mapping=workspace_mapping)
     if hr and cr:
         try:
             translated = translate_client_path_to_container(
@@ -180,8 +170,6 @@ def resolve_loop_workspace(
     client_workspace_id: str | None = None,
     soothe_home: Path | None = None,
     create: bool = True,
-    host_root: str | Path | None = None,
-    container_root: str | Path | None = None,
     workspace_mapping: dict[str, Any] | None = None,
 ) -> Path:
     """Resolve the workspace directory for a loop run.
@@ -199,8 +187,6 @@ def resolve_loop_workspace(
     if client_ws:
         resolved = resolve_client_workspace_on_host(
             client_ws,
-            host_root=host_root,
-            container_root=container_root,
             workspace_mapping=workspace_mapping,
         )
         if resolved is not None:
