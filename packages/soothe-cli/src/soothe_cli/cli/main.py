@@ -6,12 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from importlib.metadata import version  # noqa: E402
 from pathlib import Path  # noqa: E402
 from typing import Annotated  # noqa: E402
 
 import typer  # noqa: E402
 from soothe_sdk.client.config import SOOTHE_HOME  # noqa: E402
+
+from soothe_cli.tui._version import __version__  # noqa: E402
 
 from soothe_cli.config.cli_config import CLIConfig  # noqa: E402
 from soothe_cli.config.loader import set_runtime_config  # noqa: E402
@@ -177,7 +178,7 @@ def main(
 
     # Handle --version flag
     if show_version:
-        typer.echo(f"soothe {version('soothe-cli')}")
+        typer.echo(f"soothe {__version__}")
         raise typer.Exit
 
     home_path = Path(soothe_home).expanduser() if soothe_home else Path(SOOTHE_HOME)

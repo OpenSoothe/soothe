@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib
-import json
 import logging
 import os
 import re
@@ -11,14 +10,15 @@ import sys
 import threading
 from dataclasses import dataclass
 from enum import StrEnum
-from importlib.metadata import PackageNotFoundError, distribution
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from urllib.parse import unquote, urlparse
 
 from soothe_sdk.client.config import SOOTHE_HOME
 
-from soothe_cli.tui._version import __version__
+from soothe_cli.tui._version import (
+    __version__,
+    is_editable_install as _is_editable_install,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -330,67 +330,6 @@ ASCII_GLYPHS = Glyphs(
 _glyphs_cache: Glyphs | None = None
 """Module-level cache for detected glyphs."""
 
-_editable_cache: tuple[bool, str | None] | None = None
-"""Module-level cache for editable install info: (is_editable, source_path)."""
-
-
-def _resolve_editable_info() -> tuple[bool, str | None]:
-    """Parse PEP 610 `direct_url.json` once and cache both results.
-
-    Returns:
-        Tuple of (is_editable, contracted_source_path). The path is
-        `~`-contracted when it falls under the user's home directory, or
-        `None` when the install is non-editable or the path is unavailable.
-    """
-    global _editable_cache  # noqa: PLW0603  # Module-level cache requires global statement
-    if _editable_cache is not None:
-        return _editable_cache
-
-    editable = False
-    path: str | None = None
-
-    try:
-        dist = distribution("Soothe")
-        raw = dist.read_text("direct_url.json")
-        if raw:
-            data = json.loads(raw)
-            editable = data.get("dir_info", {}).get("editable", False)
-            if editable:
-                url = data.get("url", "")
-                if url.startswith("file://"):
-                    path = unquote(urlparse(url).path)
-                    home = str(Path.home())
-                    if path.startswith(home):
-                        path = "~" + path[len(home) :]
-    except (PackageNotFoundError, FileNotFoundError, json.JSONDecodeError, TypeError):
-        logger.debug(
-            "Failed to read editable install info from PEP 610 metadata",
-            exc_info=True,
-        )
-
-    _editable_cache = (editable, path)
-    return _editable_cache
-
-
-def _is_editable_install() -> bool:
-    """Check if Soothe is installed in editable mode.
-
-    Uses PEP 610 `direct_url.json` metadata to detect editable installs.
-
-    Returns:
-        `True` if installed in editable mode, `False` otherwise.
-    """
-    return _resolve_editable_info()[0]
-
-
-def _get_editable_install_path() -> str | None:
-    """Return the `~`-contracted source directory for an editable install.
-
-    Returns `None` for non-editable installs or when the path cannot be
-    determined.
-    """
-    return _resolve_editable_info()[1]
-
 
 def _detect_charset_mode() -> CharsetMode:
     """Auto-detect terminal charset capabilities.
@@ -544,19 +483,10 @@ def build_stream_config(
 ) -> RunnableConfig:
     """Build the LangGraph stream config dict.
 
-    Injects CLI and SDK versions into `metadata["versions"]` so runs can be
-    correlated with specific releases.
-
-    Why the CLI sets *both* versions:
-
-    * `create_deep_agent` bakes `versions: {"Soothe": "X.Y.Z"}` into the
-        compiled graph via `with_config`. At stream time, LangGraph merges
-        the graph config with the runtime config passed here. Because the
-        metadata merge is shallow (effectively `{**graph_meta, **runtime_meta}`
-        for top-level keys), both configs containing a `versions` key means
-        the runtime dict **replaces** the graph dict entirely — the SDK
-        version would be lost.
-    * Including the SDK version here ensures it survives the merge.
+    Injects the resolved Soothe version into ``metadata["versions"]`` so runs
+    can be correlated with specific releases. The runtime config replaces the
+    graph config's ``versions`` key at stream time, so this must carry the
+    canonical release string.
 
     Args:
         loop_id: Active StrangeLoop id (stored under LangGraph ``configurable.thread_id``).
@@ -571,8 +501,6 @@ def build_stream_config(
     Returns:
         Config dict with `configurable` and `metadata` keys.
     """
-    import contextlib
-    import importlib.metadata as importlib_metadata
     from datetime import UTC, datetime
 
     try:
@@ -581,13 +509,8 @@ def build_stream_config(
         logger.warning("Could not determine working directory", exc_info=True)
         cwd = ""
 
-    # Include SDK version alongside CLI version — see docstring for why.
-    versions: dict[str, str] = {"Soothe": __version__}
-    with contextlib.suppress(importlib_metadata.PackageNotFoundError):
-        versions["Soothe"] = importlib_metadata.version("Soothe")
-
     metadata: dict[str, Any] = {
-        "versions": versions,
+        "versions": {"Soothe": __version__},
     }
     from soothe_cli.tui._env_vars import USER_ID
 

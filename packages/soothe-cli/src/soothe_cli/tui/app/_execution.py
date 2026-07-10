@@ -533,36 +533,9 @@ class _ExecutionMixin:
             await self._open_url_command(command, cmd)
         elif cmd == "/version":
             await self._mount_message(UserMessage(command))
-            # Show CLI and SDK package versions
-            try:
-                from soothe_cli.tui._version import (
-                    __version__ as cli_version,
-                )
+            from soothe_cli.tui._version import __version__ as cli_version
 
-                cli_line = f"Soothe version: {cli_version}"
-            except ImportError:
-                logger.debug("soothe._version module not found")
-                cli_line = "Soothe version: unknown"
-            except Exception:
-                logger.warning("Unexpected error looking up CLI version", exc_info=True)
-                cli_line = "Soothe version: unknown"
-            try:
-                from importlib.metadata import (
-                    PackageNotFoundError,
-                )
-                from importlib.metadata import (
-                    version as _pkg_version,
-                )
-
-                sdk_version = _pkg_version("Soothe")
-                sdk_line = f"Soothe (SDK) version: {sdk_version}"
-            except PackageNotFoundError:
-                logger.debug("Soothe SDK package not found in environment")
-                sdk_line = "Soothe (SDK) version: unknown"
-            except Exception:
-                logger.warning("Unexpected error looking up SDK version", exc_info=True)
-                sdk_line = "Soothe (SDK) version: unknown"
-            await self._mount_message(AppMessage(f"{cli_line}\n{sdk_line}"))
+            await self._mount_message(AppMessage(f"Soothe version: {cli_version}"))
         elif cmd == "/clear":
             self._pending_messages.clear()
             self._queued_widgets.clear()
