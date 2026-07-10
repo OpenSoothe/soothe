@@ -1929,7 +1929,7 @@ class MessageRouter:
         Create fresh loop with new loop_id for new query/conversation. If the client
         provides a ``workspace`` field (e.g., user's CWD), validate it and record it
         as the loop's filesystem workspace. If client provides ``user`` field, store
-        for workspace isolation (per-user workspace under $SOOTHE_HOME/workspaces/).
+        for workspace isolation (per-user workspace under ``$SOOTHE_HOME/data/workspaces/``).
 
         Args:
             client_id: Client connection identifier.
@@ -2011,6 +2011,13 @@ class MessageRouter:
         if isinstance(raw_client_ws_id, str) and raw_client_ws_id.strip():
             client_workspace_id = raw_client_ws_id.strip()
 
+        workspace_mapping: dict[str, str] | None = None
+        if host_root is not None and container_root is not None:
+            workspace_mapping = {
+                "host_root": host_root,
+                "container_root": container_root,
+            }
+
         try:
             if client_workspace is not None and host_root is not None:
                 effective_workspace = translate_client_path_to_container(
@@ -2024,6 +2031,7 @@ class MessageRouter:
                     client_workspace=client_workspace,
                     user_id=user,
                     client_workspace_id=client_workspace_id,
+                    workspace_mapping=workspace_mapping,
                 )
         except ValueError as e:
             if client_workspace is not None and host_root is not None:

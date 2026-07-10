@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
     extract_daemon_loop_metadata,
     merge_daemon_loop_metadata,
@@ -50,3 +52,30 @@ def test_merge_daemon_loop_metadata_overlays_preserved_fields() -> None:
 def test_merge_daemon_loop_metadata_noop_when_empty() -> None:
     checkpoint_data = {"loop_id": "loop-1", "status": "idle"}
     assert merge_daemon_loop_metadata(checkpoint_data, {}) is checkpoint_data
+
+
+@pytest.mark.asyncio
+async def test_merge_checkpoint_with_preserved_metadata_overlays_existing_row() -> None:
+    from unittest.mock import AsyncMock
+
+    from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
+        merge_checkpoint_with_preserved_metadata,
+    )
+
+    cur = AsyncMock()
+    cur.fetchone = AsyncMock(
+        return_value={
+            "checkpoint_data": {
+                "current_workspace": "/var/lib/soothe/workspaces/project",
+                "client_workspace": "/Users/me/project",
+            },
+            "client_workspace": None,
+        }
+    )
+    merged = await merge_checkpoint_with_preserved_metadata(
+        cur,
+        "loop-1",
+        {"loop_id": "loop-1", "status": "running", "goal_history": []},
+    )
+    assert merged["current_workspace"] == "/var/lib/soothe/workspaces/project"
+    assert merged["goal_history"] == []

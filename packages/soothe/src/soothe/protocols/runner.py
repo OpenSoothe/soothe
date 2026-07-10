@@ -55,8 +55,9 @@ class LoopRunRequest:
     via ``bind_execution_thread_for_loop()``.
 
     Workspace resolution (``resolve_workspace_path()``):
-        - ``client_workspace`` set → use that path directly in the runner.
-        - else → ``$SOOTHE_HOME/workspaces/<normalized_user_id>/ws_<hash>`` where
+        - ``client_workspace`` set → use that path directly, or map via
+          ``workspace_mapping`` / config ``workspace_mount`` when absent locally.
+        - else → ``$SOOTHE_HOME/data/workspaces/<normalized_user_id>/ws_<hash>`` where
           ``normalized_user_id`` is ``anonymous`` when ``user_id`` is empty, and
           hash uses ``user_id`` (or ``""``) with ``client_workspace_id`` or ``loop_id``.
 
