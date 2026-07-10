@@ -1197,6 +1197,10 @@ class LoopState(BaseModel):
         description="Skill body from /skill: expansion; seeded into skill_activation by executor.",
     )
     intent: Any | None = None  # IG-268: Intent classification for response length intelligence
+    response_language: Any | None = Field(
+        default=None,
+        description="Pass 1 detected language for user-facing prose (en|zh|ja|ko|other).",
+    )
     routing_classification: Any | None = Field(
         default=None,
         description="RoutingClassification for Plan + Execute.",

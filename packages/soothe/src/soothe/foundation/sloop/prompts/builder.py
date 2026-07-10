@@ -294,7 +294,7 @@ class PromptBuilder:
             PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT,
             PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
         )
-        from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
+        from soothe.foundation.sloop.prompts.system_templates import build_response_language_hint
 
         parts: list[str] = []
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
@@ -309,8 +309,8 @@ class PromptBuilder:
             parts.append(EXECUTION_POLICIES_FRAGMENT + "\n")
             parts.append(PLAN_GENERATE_INSTRUCTIONS_FRAGMENT + "\n")
 
-        # Language directive: cache-stable, applies to all phases.
-        parts.append(RESPONSE_LANGUAGE_HINT_FRAGMENT + "\n")
+        language = getattr(state, "response_language", None) if state is not None else None
+        parts.append(build_response_language_hint(language) + "\n")
 
         # RFC-624: Supplementary instructions from ContextBundle (plan cache-stable:
         # agent/project rules stay on execute-type system prompts only).

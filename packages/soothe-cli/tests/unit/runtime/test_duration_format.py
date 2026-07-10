@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from soothe_cli.runtime.presentation.duration_format import format_duration_ms, format_running_elapsed
+from soothe_cli.runtime.presentation.duration_format import (
+    format_duration_ms,
+    format_running_elapsed,
+)
 
 
 def test_format_duration_ms_subsecond() -> None:

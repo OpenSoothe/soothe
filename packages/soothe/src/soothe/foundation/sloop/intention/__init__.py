@@ -19,9 +19,11 @@ from .models import (
     IntakePass2LLMResult,
     IntakeScope,
     IntentClassification,
+    ResponseLanguage,
     RoutingClassification,
     TaskComplexity,
     build_loop_routing_classification,
+    normalize_response_language,
 )
 from .pass1_classifier import IntakePass1Classifier
 from .pass2_classifier import IntakePass2Classifier
@@ -37,9 +39,11 @@ __all__ = [
     "IntakePass2LLMResult",
     "IntakeScope",
     "IntentClassification",
+    "ResponseLanguage",
     "RoutingClassification",
     "TaskComplexity",
     "TwoPassIntakeCoordinator",
     "TwoPassIntakeResult",
     "build_loop_routing_classification",
+    "normalize_response_language",
 ]

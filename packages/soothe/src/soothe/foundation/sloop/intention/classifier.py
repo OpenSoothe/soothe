@@ -23,6 +23,7 @@ from .models import (
     IntakePass1LLMResult,
     IntakePass2LLMResult,
     IntentClassification,
+    ResponseLanguage,
     derive_task_complexity_from_intake,
 )
 from .two_pass_coordinator import TwoPassIntakeCoordinator, TwoPassIntakeResult
@@ -91,12 +92,14 @@ class IntentClassifier:
         self,
         query: str,
         *,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> IntakePass1LLMResult:
         """Run Pass 1 only (social vs task) for pre-graph gather."""
         result = await self._two_pass.classify_social_only(
             query,
+            prior_response_language=prior_response_language,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
@@ -109,6 +112,7 @@ class IntentClassifier:
         loop_messages: list[BaseMessage] | None = None,
         thread_id: str | None = None,
         context_engine: Any | None = None,
+        pass1_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
         observability_phase: str = "pre-stream",
@@ -133,7 +137,11 @@ class IntentClassifier:
             },
             goal_trace=goal_trace,
         )
-        intent = self._pass2_to_intent(pass2_result, query)
+        intent = self._pass2_to_intent(
+            pass2_result,
+            query,
+            pass1_response_language=pass1_response_language,
+        )
         await self._record_pass2_ledger(
             query=query,
             pass2_result=pass2_result,
@@ -149,6 +157,7 @@ class IntentClassifier:
         loop_messages: list[BaseMessage] | None = None,
         thread_id: str | None = None,
         context_engine: Any | None = None,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
         observability_phase: str = "strange_loop_graph",
@@ -180,6 +189,7 @@ class IntentClassifier:
         two_pass_result = await self._two_pass.classify(
             query,
             prior_projection=prior_projection,
+            prior_response_language=prior_response_language,
             observability_metadata={
                 **(observability_metadata or {}),
                 "observability_phase": observability_phase,
@@ -215,6 +225,7 @@ class IntentClassifier:
             reasoning=pass1_result.reasoning,
             chitchat_response=(pass1_result.social_response or "").strip(),
             social_kind=pass1_result.social_kind,
+            response_language=pass1_result.response_language,
             task_complexity=derive_task_complexity_from_intake(IntakeLabel.CHITCHAT),
         )
 
@@ -237,6 +248,8 @@ class IntentClassifier:
         self,
         pass2_result: IntakePass2LLMResult,
         query: str,
+        *,
+        pass1_response_language: ResponseLanguage | None = None,
     ) -> IntentClassification:
         """Convert Pass 2 scope result to IntentClassification."""
         intake_label = pass2_result.to_intake_label()
@@ -247,6 +260,7 @@ class IntentClassifier:
             multi_phase=pass2_result.multi_phase,
             wire_subagent=pass2_result.wire_subagent,
             requires_tool_use=pass2_result.requires_tool_use,
+            response_language=pass1_response_language,
             task_complexity=derive_task_complexity_from_intake(intake_label),
         )
         return self._patch_missing_fields(intent, query)
@@ -317,7 +331,7 @@ class IntentClassifier:
         _ = query
         if intent.intake_label == IntakeLabel.CHITCHAT:
             if not (intent.chitchat_response or "").strip():
-                intent.chitchat_response = pick_generic_chitchat_fallback(query)
+                intent.chitchat_response = pick_generic_chitchat_fallback(intent.response_language)
                 logger.debug("Patched missing chitchat_response")
             return intent
         if not intent.reasoning:

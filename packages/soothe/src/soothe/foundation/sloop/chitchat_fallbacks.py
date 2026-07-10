@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import random
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from soothe.foundation.sloop.intention.models import ResponseLanguage
 
 GENERIC_CHITCHAT_FALLBACKS_EN: tuple[str, ...] = (
     "Hello! How can I help you today?",
@@ -21,37 +25,20 @@ GENERIC_CHITCHAT_FALLBACKS_ZH: tuple[str, ...] = (
     "你好！随时告诉我你需要什么。",
 )
 
-GENERIC_CHITCHAT_FALLBACKS: tuple[str, ...] = (
-    *GENERIC_CHITCHAT_FALLBACKS_EN,
-    *GENERIC_CHITCHAT_FALLBACKS_ZH,
-)
 
-# Backward-compatible default (first English fallback).
-GENERIC_CHITCHAT_FALLBACK = GENERIC_CHITCHAT_FALLBACKS_EN[0]
+def pick_generic_chitchat_fallback(language: ResponseLanguage | None = None) -> str:
+    """Return a random friendly chitchat fallback for the detected response language."""
+    from soothe.foundation.sloop.intention.models import ResponseLanguage
 
-
-def query_prefers_chinese(query: str | None) -> bool:
-    """Return True when the user message contains Chinese characters."""
-    if not query:
-        return False
-    return any("\u4e00" <= ch <= "\u9fff" for ch in query)
-
-
-def pick_generic_chitchat_fallback(query: str | None = None) -> str:
-    """Return a random friendly chitchat fallback matched to query language."""
-    pool = (
-        GENERIC_CHITCHAT_FALLBACKS_ZH
-        if query_prefers_chinese(query)
-        else GENERIC_CHITCHAT_FALLBACKS_EN
-    )
+    if language == ResponseLanguage.ZH:
+        pool = GENERIC_CHITCHAT_FALLBACKS_ZH
+    else:
+        pool = GENERIC_CHITCHAT_FALLBACKS_EN
     return random.choice(pool)
 
 
 __all__ = [
-    "GENERIC_CHITCHAT_FALLBACK",
-    "GENERIC_CHITCHAT_FALLBACKS",
     "GENERIC_CHITCHAT_FALLBACKS_EN",
     "GENERIC_CHITCHAT_FALLBACKS_ZH",
     "pick_generic_chitchat_fallback",
-    "query_prefers_chinese",
 ]

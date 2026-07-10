@@ -46,7 +46,6 @@ Rules:
 4. Summarize by theme or outcome, not by replaying messages in order.
 5. Omit meta-narration ("Now let me...", "I will check...") unless needed for a failure or blocker.
 6. Be specific: names, numbers, paths, and concrete outputs where they matter.
-7. Match the language of the user request unless they asked for another language.
-8. Do not mention how you were invoked, internal modules, loops, prompts, or planning machinery.
-9. Do not call tools — produce the finished report in this reply.
+7. Do not mention how you were invoked, internal modules, loops, prompts, or planning machinery.
+8. Do not call tools — produce the finished report in this reply.
 </SYNTHESIS_INSTRUCTIONS>

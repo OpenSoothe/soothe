@@ -22,7 +22,7 @@ from soothe.foundation.sloop.prompts.fragments import (
 from soothe.foundation.sloop.prompts.system_templates import (
     _TOOL_ORCHESTRATION_GUIDE,
     EXECUTE_WORKSPACE_RULES_FRAGMENT,
-    RESPONSE_LANGUAGE_HINT_FRAGMENT,
+    RESPONSE_LANGUAGE_HINT_FALLBACK,
 )
 from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 
@@ -71,7 +71,7 @@ def test_xml_fragments_omit_internal_terms(path: Path) -> None:
             ),
         ),
         ("execute_workspace_rules", EXECUTE_WORKSPACE_RULES_FRAGMENT),
-        ("response_language_hint", RESPONSE_LANGUAGE_HINT_FRAGMENT),
+        ("response_language_hint", RESPONSE_LANGUAGE_HINT_FALLBACK),
         ("tool_orchestration_guide", _TOOL_ORCHESTRATION_GUIDE),
         ("veritas_system", build_veritas_system_prompt()),
     ],

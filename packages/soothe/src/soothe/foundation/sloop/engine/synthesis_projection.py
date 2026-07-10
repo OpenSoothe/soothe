@@ -57,11 +57,15 @@ def render_synthesis_system_prompt(
     user_goal: str,
     workspace: str | None = None,
     agent_instructions_max_chars: int = 8000,
+    response_language: object | None = None,
 ) -> str:
     """Render system instructions from the synthesis template (no orchestration terms)."""
     from soothe.foundation.sloop.prompts.loader import load_prompt_fragment
     from soothe.foundation.sloop.prompts.project_instructions import load_agent_instructions
-    from soothe.foundation.sloop.prompts.system_templates import build_timestamp_xml_footer
+    from soothe.foundation.sloop.prompts.system_templates import (
+        build_response_language_hint,
+        build_timestamp_xml_footer,
+    )
 
     template = load_prompt_fragment("instructions/synthesis_report_system.xml")
     focus_items = "\n".join(f"- {item}" for item in classification.contextual_focus)
@@ -73,7 +77,8 @@ def render_synthesis_system_prompt(
             evidence_emphasis=classification.evidence_emphasis,
             format_hint=format_hint_for_scenario(classification.scenario),
             user_goal=user_goal,
-        )
+        ),
+        build_response_language_hint(response_language),
     ]
     if workspace:
         block = load_agent_instructions(
@@ -104,6 +109,7 @@ def build_synthesis_messages(
         user_goal=user_goal,
         workspace=state.workspace,
         agent_instructions_max_chars=agent_instructions_max_chars,
+        response_language=getattr(state, "response_language", None),
     )
     ledger_msgs = list(
         project_loop_messages_for_synthesis(state.loop_messages, ledger_cfg),

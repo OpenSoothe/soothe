@@ -138,6 +138,7 @@ class _SystemPromptState(TypedDict):
 
     messages: Annotated[list[AnyMessage], add_messages]
     routing_classification: NotRequired[Any]  # Type: RoutingClassification
+    response_language: NotRequired[Any]  # Type: ResponseLanguage
     workspace: NotRequired[str | None]
     sent_mcp_tool_names: NotRequired[set[str]]
     invoked_mcp_tools: NotRequired[dict[str, dict]]
@@ -494,11 +495,12 @@ class SystemPromptMiddleware(AgentMiddleware):
         # sections follow. Workspace tail (when bound):
         #   ENVIRONMENT → WORKSPACE_RULES → WORKSPACE → AGENT_INSTRUCTIONS
         from soothe.foundation.sloop.prompts.identity import prepend_assistant_identity
-        from soothe.foundation.sloop.prompts.system_templates import RESPONSE_LANGUAGE_HINT_FRAGMENT
+        from soothe.foundation.sloop.prompts.system_templates import build_response_language_hint
 
+        response_language = (state or {}).get("response_language")
         static_sections: list[str] = [
             prepend_assistant_identity(base_core, self._config.agent.name),
-            RESPONSE_LANGUAGE_HINT_FRAGMENT,
+            build_response_language_hint(response_language),
         ]
 
         deferred_tools = state.get("_deferred_tools_for_listing") if state else None
@@ -1094,6 +1096,7 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "synthesis_scenario": request.state.get("synthesis_scenario"),
                 "skill_activation": request.state.get("skill_activation"),
                 "tool_activation": request.state.get("tool_activation"),
+                "response_language": request.state.get("response_language"),
             }
             resolved_workspace = self._resolve_workspace_for_prompt(state_dict)
             if resolved_workspace:

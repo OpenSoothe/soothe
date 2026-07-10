@@ -47,7 +47,5 @@ def test_plan_generate_preserves_contract_guards() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
     assert "clarify.questions" in text
     assert "exclusive with non-empty ``steps``" in text
-    assert "Language lock" in text
-    assert "same natural language as the current goal statement" in text
     assert "iteration 0" in text
     assert len(text) < 3500  # guard against prompt bloat (was ~5900 bytes pre-condense)

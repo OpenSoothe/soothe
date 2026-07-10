@@ -11,6 +11,7 @@ from soothe.foundation.sloop.intention.models import (
     IntakePass1LLMResult,
     IntakePass2LLMResult,
     IntakeScope,
+    ResponseLanguage,
     derive_task_complexity_from_intake,
 )
 from soothe.foundation.sloop.intention.prompts import (
@@ -64,6 +65,8 @@ class TestTwoPassPrompts:
         assert "WORK" in INTAKE_PASS1_SYSTEM_PROMPT
         assert "is_task" in INTAKE_PASS1_SYSTEM_PROMPT
         assert "social_response" in INTAKE_PASS1_SYSTEM_PROMPT
+        assert "response_language" in INTAKE_PASS1_SYSTEM_PROMPT
+        assert "PRIOR_RESPONSE_LANGUAGE" in INTAKE_PASS1_SYSTEM_PROMPT
 
     def test_pass2_prompt_has_scope_labels(self) -> None:
         for label in ("trivial", "simple", "complex"):
@@ -214,3 +217,15 @@ class TestIntakeClassifier:
             mock_classify.return_value = mock_result
             result = await classifier.classify_intake("summarize readme")
         assert result.reasoning == "I'll use tools to work through this goal."
+
+    def test_pass1_to_intent_propagates_response_language(self) -> None:
+        classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
+        pass1 = IntakePass1LLMResult(
+            is_task=False,
+            confidence=IntakePass1Confidence.HIGH,
+            social_response="你好！",
+            response_language=ResponseLanguage.ZH,
+            reasoning="greeting",
+        )
+        intent = classifier.pass1_to_intent(pass1, "你好")
+        assert intent.response_language == ResponseLanguage.ZH
