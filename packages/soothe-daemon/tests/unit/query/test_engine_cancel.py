@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from contextlib import suppress
 from pathlib import Path
 from types import SimpleNamespace
@@ -238,7 +237,6 @@ def _daemon_factory(
     *,
     runner: Any,
     broadcasts: list[dict[str, Any]],
-    cancel_grace_seconds: int = 30,
 ) -> SimpleNamespace:
     async def _broadcast(msg: dict[str, Any]) -> None:
         broadcasts.append(msg)
@@ -246,7 +244,6 @@ def _daemon_factory(
     daemon_config = SootheDaemonConfig(
         max_query_duration_minutes=0,
         max_concurrent_threads=100,
-        cancel_grace_seconds=cancel_grace_seconds,
     )
 
     return SimpleNamespace(
@@ -311,17 +308,18 @@ def _daemon_factory(
 
 @pytest.mark.asyncio
 async def test_cancel_does_not_emit_legacy_success_or_early_idle() -> None:
-    """cancel_current_query must not broadcast legacy success or forge idle (IG-398)."""
+    """cancel_loop must not broadcast legacy success or forge idle (IG-398)."""
     broadcasts: list[dict[str, Any]] = []
     runner = _SlowCancelRunner(unwind_delay=0.02)
-    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-cancel"})
     engine = QueryEngine(daemon)
 
     await engine.run_query("hello", loop_id="loop-cancel")
     task = daemon._current_query_task
     assert task is not None
 
-    await engine.cancel_current_query()
+    await engine.cancel_loop("loop-cancel")
 
     contents = [
         str(m.get("content", "")) for m in broadcasts if m.get("type") == "command_response"
@@ -338,11 +336,17 @@ async def test_cancel_waits_for_slow_unwind_before_idle() -> None:
     """Idle status must come from _run_stream finally, after cancel unwind completes."""
     broadcasts: list[dict[str, Any]] = []
     runner = _SlowCancelRunner(unwind_delay=0.06)
-    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-cancel"})
     engine = QueryEngine(daemon)
 
     await engine.run_query("slow cancel", loop_id="loop-cancel")
-    await engine.cancel_current_query()
+    task = daemon._current_query_task
+    assert task is not None
+    await engine.cancel_loop("loop-cancel")
+
+    with suppress(asyncio.CancelledError):
+        await task
 
     idle_after_cancel = [
         i
@@ -362,39 +366,6 @@ async def test_cancel_waits_for_slow_unwind_before_idle() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_grace_timeout_keeps_task_then_drains(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Grace shorter than unwind: cancel returns while unwinding; task kept until finally."""
-    broadcasts: list[dict[str, Any]] = []
-    # Use min allowed grace (1s) with slightly longer unwind (1.1s)
-    # This tests the "grace timeout while unwinding" path in ~1.3s total.
-    runner = _SlowCancelRunner(unwind_delay=1.1)
-    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=1)
-    engine = QueryEngine(daemon)
-
-    await engine.run_query("blocking unwind", loop_id="loop-cancel")
-    task = daemon._current_query_task
-    assert task is not None
-
-    caplog.set_level(logging.WARNING, logger="soothe_daemon.query_engine")
-
-    await engine.cancel_current_query()
-
-    warn_msgs = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-    assert any("still unwinding" in m for m in warn_msgs)
-
-    assert daemon._current_query_task is task
-    assert not task.done()
-
-    # Wait for unwind to complete (1.1s unwind - 1s grace timeout already elapsed + margin)
-    await asyncio.sleep(0.2)
-    with suppress(asyncio.CancelledError):
-        await task
-    assert task.done()
-
-
-@pytest.mark.asyncio
 async def test_cancel_loop_noop_when_loop_id_empty() -> None:
     """Empty loop_id must not cancel threads or match unscoped registry entries."""
     broadcasts: list[dict[str, Any]] = []
@@ -406,7 +377,6 @@ async def test_cancel_loop_noop_when_loop_id_empty() -> None:
     daemon_config = SootheDaemonConfig(
         max_query_duration_minutes=0,
         max_concurrent_threads=100,
-        cancel_grace_seconds=60,
     )
     daemon = SimpleNamespace(
         _runner=runner,
@@ -497,7 +467,7 @@ async def test_cancel_loop_cancels_subprocess_runner_before_stream_finally() -> 
     """``cancel_loop`` must call ``LoopRunner.cancel`` while the runner is still active."""
     broadcasts: list[dict[str, Any]] = []
     runner = _SlowCancelRunner(unwind_delay=0.02)
-    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
     daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
 
     engine = QueryEngine(daemon)
@@ -599,7 +569,7 @@ async def test_duplicate_cancel_does_not_poison_immediate_resubmit() -> None:
     """Multiple ``/cancel`` during Ctrl+C must not leave a stale ``_pending_cancels`` token."""
     broadcasts: list[dict[str, Any]] = []
     runner = _ChunkedRunner(chunk_count=20, chunk_delay=0.03)
-    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
     daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
     engine = QueryEngine(daemon)
 
@@ -652,7 +622,7 @@ async def test_cancel_running_query_does_not_poison_immediate_resubmit() -> None
     """Ctrl+C on a running query must not leave a stale ``_pending_cancels`` token."""
     broadcasts: list[dict[str, Any]] = []
     runner = _ChunkedRunner(chunk_count=5, chunk_delay=0.03)
-    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts, cancel_grace_seconds=60)
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
     daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-a"})
     engine = QueryEngine(daemon)
 

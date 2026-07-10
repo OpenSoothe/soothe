@@ -92,13 +92,6 @@ class SootheDaemonConfig(BaseSettings):
         ge=0,
         description="Maximum query duration in minutes (0 = unlimited)",
     )
-    cancel_grace_seconds: int = Field(
-        default=30,
-        ge=1,
-        description=(
-            "Seconds to await in-flight query after /cancel before logging slow-unwind warning"
-        ),
-    )
     cancel_retry_count: int = Field(
         default=3,
         ge=1,

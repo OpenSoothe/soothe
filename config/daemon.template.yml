@@ -35,7 +35,6 @@ max_input_queue_size: 1000
 # ============================================================================
 max_query_duration_minutes: 0  # 0 = unlimited
 thread_max_age_hours: 24
-cancel_grace_seconds: 30
 cancel_retry_count: 3
 cancel_retry_interval_seconds: 2.0
 cancel_force_kill_timeout_seconds: 10.0

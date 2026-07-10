@@ -174,7 +174,6 @@ class AsyncCancelOrchestrator:
         # Cleanup bookkeeping
         self._query_engine._active_runners.pop(loop_id, None)
         self._query_engine._clear_loop_cancel_armed_state(loop_id)
-        # IG-XXX: Release query admission so loop can accept future queries
         await self._query_engine._release_query_admission(loop_id)
 
     async def _get_execution_pool(self) -> Any | None:
@@ -1434,76 +1433,6 @@ class QueryEngine:
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
             d._current_query_task = None
-
-    async def _await_cancel_after_signal(self, task: asyncio.Task, label: str) -> None:
-        """Await task cancellation without forging daemon state (IG-398).
-
-        Uses ``asyncio.shield`` so ``wait_for`` timeout does not cancel the query task;
-        slow subagent unwind continues until ``_run_stream`` finally clears bookkeeping.
-
-        Args:
-            task: The asyncio task running ``_run_stream``.
-            label: Thread id or ``current`` for logs.
-        """
-        d = self._daemon
-        grace = float(getattr(d._daemon_config, "cancel_grace_seconds", 30))
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=grace)
-        except TimeoutError:
-            logger.warning(
-                "Query task %s still unwinding after %.1fs; awaiting completion in background",
-                label,
-                grace,
-            )
-            asyncio.create_task(self._drain_cancelled_task(task, label))
-        except asyncio.CancelledError:
-            pass
-
-    async def _drain_cancelled_task(self, task: asyncio.Task, label: str) -> None:
-        """Await a cancelled query task until ``_run_stream`` finally completes."""
-        try:
-            await task
-        except asyncio.CancelledError:
-            logger.debug("Background cancel drain finished for %s", label)
-        except Exception:
-            logger.debug(
-                "Background cancel drain for %s completed with exception",
-                label,
-                exc_info=True,
-            )
-
-    async def cancel_current_query(self) -> None:
-        """Cancel the currently running query if any.
-
-        Signals cancellation and awaits unwind up to ``daemon.cancel_grace_seconds``.
-        Does not mutate ``_active_threads``, ``_current_query_task``, or broadcast
-        ``idle`` — those are owned by ``_run_stream`` finally blocks (IG-398).
-        """
-        d = self._daemon
-        tasks_to_cancel: list[tuple[str, asyncio.Task]] = []
-        seen: set[int] = set()
-        for tid, t in list(d._active_threads.items()):
-            if t is not None and not t.done() and id(t) not in seen:
-                tasks_to_cancel.append((str(tid), t))
-                seen.add(id(t))
-        ct = d._current_query_task
-        if ct is not None and not ct.done() and id(ct) not in seen:
-            tasks_to_cancel.append(("current", ct))
-
-        if not tasks_to_cancel:
-            return
-
-        await d._broadcast(
-            {
-                "type": "command_response",
-                "content": "[yellow]Cancellation requested.[/yellow]",
-            }
-        )
-
-        for label, task in tasks_to_cancel:
-            logger.info("Cancelling query task %s", label)
-            task.cancel()
-            await self._await_cancel_after_signal(task, label)
 
     async def cancel_loop(self, loop_id: str) -> None:
         """Cancel running query tasks bound to ``loop_id`` (IG-408).
