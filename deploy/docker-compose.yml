@@ -66,6 +66,7 @@ services:
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
       SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
       SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
+      SOOTHE_DEBUG: ${SOOTHE_DEBUG:-false}
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
