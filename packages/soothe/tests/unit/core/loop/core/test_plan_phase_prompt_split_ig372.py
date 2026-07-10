@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
 
+from soothe.foundation.sloop.intention.models import ResponseLanguage
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage
@@ -37,8 +38,24 @@ def test_generate_system_includes_policies_and_plan_generate() -> None:
     assert "<PLAN_EXECUTE_LOOP>" not in system.content
     assert "<EXECUTION_POLICIES>" in system.content
     assert "<PLAN_ASSESS>" not in system.content
-    assert "Language lock" in system.content
-    assert "same natural language as the current goal statement" in system.content
+    assert "<RESPONSE_LANGUAGE_HINT>" in system.content
+    assert "same natural language as the user's goal" in system.content
+
+
+def test_generate_system_uses_explicit_language_when_set() -> None:
+    state = LoopState(
+        goal="分析代码",
+        thread_id="t1",
+        iteration=0,
+        max_iterations=8,
+        response_language=ResponseLanguage.ZH,
+    )
+    ctx = PlanContext(workspace=None)
+    builder = PromptBuilder()
+    messages = builder.build_plan_messages("分析代码", state, ctx, plan_phase="generate")
+    system = messages[0]
+    assert isinstance(system, SystemMessage)
+    assert "Chinese (zh)" in system.content
 
 
 def test_assess_with_config_omits_environment_workspace() -> None:

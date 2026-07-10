@@ -20,7 +20,8 @@ from .system_templates import (
     _SIMPLE_SYSTEM_PROMPT,
     _SUBAGENT_GUIDE,
     _TOOL_ORCHESTRATION_GUIDE,
-    RESPONSE_LANGUAGE_HINT_FRAGMENT,
+    RESPONSE_LANGUAGE_HINT_FALLBACK,
+    build_response_language_hint,
 )
 from .user_message import (
     UserMessageBuilder,
@@ -29,8 +30,9 @@ from .user_message import (
 
 __all__ = [
     "PromptBuilder",
-    "RESPONSE_LANGUAGE_HINT_FRAGMENT",
+    "RESPONSE_LANGUAGE_HINT_FALLBACK",
     "UserMessageBuilder",
+    "build_response_language_hint",
     "_DATA_GUIDE",
     "_DEFAULT_SYSTEM_PROMPT",
     "_FILE_OPS_GUIDE",

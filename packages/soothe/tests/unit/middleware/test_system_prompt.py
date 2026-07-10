@@ -658,6 +658,22 @@ class TestWorkspaceInjection:
         # Hint sits in the behavioral prelude (before workspace tail / ENVIRONMENT).
         assert prompt.find("<RESPONSE_LANGUAGE_HINT>") < prompt.find("<ENVIRONMENT")
 
+    def test_response_language_hint_uses_explicit_language_from_state(self, tmp_path) -> None:
+        from soothe.foundation.sloop.intention.models import ResponseLanguage
+
+        mw = self._middleware()
+        classification = RoutingClassification(task_complexity="simple")
+        request = MockModelRequest(
+            state={
+                "routing_classification": classification,
+                "response_language": ResponseLanguage.ZH,
+                "workspace": str(tmp_path),
+            },
+            system_message=SystemMessage(content="original prompt"),
+        )
+        modified = mw.modify_request(request)
+        assert "Chinese (zh)" in modified.system_message.content
+
     def test_workspace_rules_use_execute_semantics(self, tmp_path) -> None:
         """WORKSPACE_RULES must describe path semantics for filesystem and shell tools."""
         (tmp_path / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")

@@ -5,10 +5,6 @@ If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; 
 ``ASSESSMENT:`` in the user message. Goal is in GOAL:. When ``Status: continue`` and DAG
 STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan only when needed.
 
-**Language lock**: Use the same natural language as the current goal statement in GOAL: for
-``steps[].description``, ``steps[].expected_output``, and ``reasoning``.
-Do not switch language unless requested; keep paths, identifiers, and quoted literals unchanged.
-
 **Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
 
 **Top-level fields** (only these — never put field names inside ``steps[]``):

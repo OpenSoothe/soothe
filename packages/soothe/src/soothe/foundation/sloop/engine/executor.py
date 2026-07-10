@@ -713,6 +713,7 @@ class Executor:
         messages: list[Any],
         *,
         routing_classification: Any | None = None,
+        response_language: Any | None = None,
         workspace: str | None = None,
         continue_loop_mode: bool = False,
         synthesis_scenario: str | None = None,
@@ -724,6 +725,8 @@ class Executor:
         out: dict[str, Any] = {"messages": messages}
         if routing_classification is not None:
             out["routing_classification"] = routing_classification
+        if response_language is not None:
+            out["response_language"] = response_language
         if workspace:
             out["workspace"] = workspace
         if continue_loop_mode:
@@ -1911,6 +1914,9 @@ class Executor:
             skill_activation = self._seed_skill_activation(loop_state) if loop_state else None
             mcp_state = self._seed_mcp_state(loop_state) if loop_state else None
             tool_activation = self._seed_tool_activation(loop_state) if loop_state else None
+            response_language = (
+                getattr(loop_state, "response_language", None) if loop_state else None
+            )
 
             max_action_retries = self._execute_action_retry_max()
             action_retries_done = 0
@@ -1930,6 +1936,7 @@ class Executor:
                     self._execute_graph_input(
                         stream_input_messages,
                         routing_classification=routing_classification,
+                        response_language=response_language,
                         workspace=workspace,
                         continue_loop_mode=continue_loop_mode,
                         skill_activation=skill_activation,

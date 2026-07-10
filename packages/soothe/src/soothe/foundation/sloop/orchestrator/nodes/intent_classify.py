@@ -16,6 +16,7 @@ from soothe.foundation.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     build_loop_routing_classification,
+    normalize_response_language,
 )
 
 from ..runtime_context import LoopRuntimeContext
@@ -23,6 +24,21 @@ from ..runtime_context import LoopRuntimeContext
 logger = logging.getLogger(__name__)
 
 INTENT_CLASSIFY_STATUS_LABEL = "Interpreting goal"
+
+
+def _apply_intent_to_loop_state(
+    loop_state: Any,
+    intent: IntentClassification,
+    *,
+    preferred_subagent: str | None,
+) -> None:
+    """Persist intake classification and derived routing on loop state."""
+    loop_state.intent = intent
+    loop_state.response_language = normalize_response_language(intent.response_language)
+    loop_state.routing_classification = build_loop_routing_classification(
+        intent,
+        preferred_subagent,
+    )
 
 
 def intent_classified_reasoning_event(
@@ -81,9 +97,10 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
 
     if ctx.loop_state.intent is not None:
         if ctx.loop_state.routing_classification is None:
-            ctx.loop_state.routing_classification = build_loop_routing_classification(
+            _apply_intent_to_loop_state(
+                ctx.loop_state,
                 ctx.loop_state.intent,
-                ctx.preferred_subagent,
+                preferred_subagent=ctx.preferred_subagent,
             )
         logger.info(
             "[Intent] Skipping graph entry classification (pre-classified: %s)",
@@ -102,11 +119,14 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
     thread_id = ctx.loop_state.thread_id
     loop_messages = _ledger_messages_for_intake(ctx)
 
+    prior_language = normalize_response_language(getattr(ctx.loop_state, "response_language", None))
+
     intent = await classifier.classify_intake(
         query,
         loop_messages=loop_messages,
         thread_id=thread_id,
         context_engine=ctx.ce,
+        prior_response_language=prior_language,
         goal_trace=ctx.goal_trace,
         observability_phase="strange_loop_graph",
         observability_component="strange_loop.intent_classification",
@@ -118,11 +138,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
         query[:50],
     )
 
-    ctx.loop_state.intent = intent
-    ctx.loop_state.routing_classification = build_loop_routing_classification(
-        intent,
-        ctx.preferred_subagent,
-    )
+    _apply_intent_to_loop_state(ctx.loop_state, intent, preferred_subagent=ctx.preferred_subagent)
 
     reasoning_event = intent_classified_reasoning_event(intent)
     if reasoning_event is not None:

@@ -33,15 +33,19 @@ logger = logging.getLogger(__name__)
 
 _GOAL_FINALIZE_STATUS_LABEL = "Finalizing goal"
 
-_GOAL_COMPLETION_LEDGER_HUMAN = (
+_GOAL_COMPLETION_LEDGER_HUMAN_BASE = (
     "Produce the final user-facing response summarizing the outcome. "
-    "Use the same primary natural language as the user's request; keep code, paths, and quoted literals unchanged."
+    "Keep code, paths, and quoted literals unchanged."
 )
 
 
 def _goal_completion_ledger_human_content(state: LoopState) -> str:
     """Human ledger line for goal completion: user submission for trivial, else synthesis prompt."""
-    from soothe.foundation.sloop.intention.models import IntakeLabel
+    from soothe.foundation.sloop.intention.models import (
+        IntakeLabel,
+        ResponseLanguage,
+        normalize_response_language,
+    )
 
     intent = getattr(state, "intent", None)
     intake_label = getattr(intent, "intake_label", None) if intent is not None else None
@@ -49,7 +53,22 @@ def _goal_completion_ledger_human_content(state: LoopState) -> str:
         submission = (getattr(state, "goal_user_submission", None) or state.goal or "").strip()
         if submission:
             return submission
-    return _GOAL_COMPLETION_LEDGER_HUMAN
+    language = normalize_response_language(getattr(state, "response_language", None))
+    if language is None or language == ResponseLanguage.OTHER:
+        return (
+            _GOAL_COMPLETION_LEDGER_HUMAN_BASE
+            + " Use the same primary natural language as the user's request."
+        )
+    display = {
+        ResponseLanguage.EN: "English",
+        ResponseLanguage.ZH: "Chinese",
+        ResponseLanguage.JA: "Japanese",
+        ResponseLanguage.KO: "Korean",
+    }.get(language, language.value)
+    return (
+        _GOAL_COMPLETION_LEDGER_HUMAN_BASE
+        + f" Write user-facing prose in {display} ({language.value})."
+    )
 
 
 def _append_goal_completion_ledger_pair(
@@ -456,6 +475,7 @@ async def node_goal_completion(
         ledger_messages=list(state.loop_messages),
         goals_completed=ctx.checkpoint.total_goals_completed,
         fast_llm=strange_loop._fast_llm,
+        response_language=getattr(state, "response_language", None),
     )
 
     # Runner ``loop_assistant_messages_chunk`` replay: skip when synthesis already

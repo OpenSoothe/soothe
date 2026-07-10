@@ -17,6 +17,7 @@ from .models import (
     IntakePass2LLMResult,
     IntakeScope,
     IntentClassification,
+    ResponseLanguage,
     derive_task_complexity_from_intake,
 )
 from .pass1_classifier import IntakePass1Classifier
@@ -64,6 +65,7 @@ class TwoPassIntakeResult:
                 multi_phase=pass2_result.multi_phase,
                 wire_subagent=pass2_result.wire_subagent,
                 requires_tool_use=pass2_result.requires_tool_use,
+                response_language=pass1_result.response_language,
                 task_complexity=derive_task_complexity_from_intake(intake_label),
             )
         else:
@@ -154,6 +156,7 @@ class TwoPassIntakeCoordinator:
         query: str,
         *,
         prior_projection: str | None = None,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> TwoPassIntakeResult:
@@ -174,6 +177,7 @@ class TwoPassIntakeCoordinator:
         # Pass 1: social vs task
         pass1_result = await self._pass1_classifier.classify(
             query,
+            prior_response_language=prior_response_language,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )
@@ -215,6 +219,7 @@ class TwoPassIntakeCoordinator:
         self,
         query: str,
         *,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> TwoPassIntakeResult:
@@ -234,6 +239,7 @@ class TwoPassIntakeCoordinator:
         """
         pass1_result = await self._pass1_classifier.classify(
             query,
+            prior_response_language=prior_response_language,
             observability_metadata=observability_metadata,
             goal_trace=goal_trace,
         )

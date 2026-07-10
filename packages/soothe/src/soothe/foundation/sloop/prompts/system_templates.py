@@ -142,16 +142,48 @@ SKILL_CONTEXT_ACTIVE_GUIDE = (
     "</SKILL_CONTEXT_GUIDE>"
 )
 
-# Cache-stable directive about user-facing prose language. Lives in the system
-# prompt so the per-turn user envelope stays small and the directive is recorded
-# once in the prefix.
-RESPONSE_LANGUAGE_HINT_FRAGMENT = (
+# Cache-stable fallback when response language is unknown (fail-safe).
+RESPONSE_LANGUAGE_HINT_FALLBACK = (
     "<RESPONSE_LANGUAGE_HINT>\n"
     "Prefer the same natural language as the user's goal for explanations, "
     "summaries, and conclusions; keep code, file paths, identifiers, and "
     "quoted literals unchanged.\n"
     "</RESPONSE_LANGUAGE_HINT>"
 )
+
+_RESPONSE_LANGUAGE_DISPLAY: dict[str, str] = {
+    "en": "English",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+}
+
+
+def build_response_language_hint(language: object | None) -> str:
+    """Build explicit or fallback ``RESPONSE_LANGUAGE_HINT`` for system prompts.
+
+    Args:
+        language: ``ResponseLanguage`` or wire string (``en``, ``zh``, etc.).
+
+    Returns:
+        XML fragment instructing the model which language to use for user-facing prose.
+    """
+    from soothe.foundation.sloop.intention.models import (
+        ResponseLanguage,
+        normalize_response_language,
+    )
+
+    resolved = normalize_response_language(language)
+    if resolved is None or resolved == ResponseLanguage.OTHER:
+        return RESPONSE_LANGUAGE_HINT_FALLBACK
+    display = _RESPONSE_LANGUAGE_DISPLAY.get(resolved.value, resolved.value)
+    return (
+        f"<RESPONSE_LANGUAGE_HINT>\n"
+        f"Write all user-facing prose in {display} ({resolved.value}). "
+        f"Keep code, file paths, identifiers, and quoted literals unchanged.\n"
+        f"</RESPONSE_LANGUAGE_HINT>"
+    )
+
 
 # Execute-step workspace path semantics (RFC-214 cache-stable tail).
 EXECUTE_WORKSPACE_RULES_FRAGMENT = (

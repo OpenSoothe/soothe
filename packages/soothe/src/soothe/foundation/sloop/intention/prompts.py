@@ -32,6 +32,22 @@ INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_classifier_fragment("intake_pass1_socia
 INTAKE_PASS1_HUMAN_TASK = (
     "Classify above. Identity replies must use the configured assistant name. JSON only."
 )
+INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX = "PRIOR_RESPONSE_LANGUAGE: {language}"
+
+
+def build_intake_pass1_human_content(
+    query: str,
+    *,
+    prior_response_language: str | None = None,
+) -> str:
+    """Assemble Pass 1 human message with optional prior-language structural hint."""
+    parts = [query.strip()]
+    if prior_response_language:
+        parts.append(INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX.format(language=prior_response_language))
+    parts.append(INTAKE_PASS1_HUMAN_TASK)
+    return "\n\n".join(parts)
+
+
 INTAKE_PASS2_HUMAN_TASK = "Classify CURRENT_GOAL scope. JSON only."
 INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK = "Write the social_response reply. JSON only."
 
@@ -66,11 +82,13 @@ def build_intake_pass1_system_prompt(body: str, assistant_name: str) -> str:
 
 __all__ = [
     "INTAKE_PASS1_HUMAN_TASK",
+    "INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX",
     "INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK",
     "INTAKE_PASS1_SOCIAL_REPLY_PROMPT",
     "INTAKE_PASS1_SYSTEM_PROMPT",
     "INTAKE_PASS2_HUMAN_TASK",
     "INTAKE_PASS2_SYSTEM_PROMPT",
+    "build_intake_pass1_human_content",
     "build_intake_pass1_system_prompt",
     "build_prompt_timestamp_block",
 ]

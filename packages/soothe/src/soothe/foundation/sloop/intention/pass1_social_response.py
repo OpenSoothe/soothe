@@ -6,7 +6,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .models import IntakePass1LLMResult, IntakePass1SocialKind
+from .models import (
+    IntakePass1LLMResult,
+    IntakePass1SocialKind,
+    ResponseLanguage,
+    normalize_response_language,
+)
 
 
 class Pass1SocialReplyLLMResult(BaseModel):
@@ -28,7 +33,7 @@ class Pass1SocialReplyLLMResult(BaseModel):
 def pass1_json_schema(*, require_social_response: bool = False) -> dict[str, Any]:
     """Build Pass 1 wire schema with optional ``social_response`` required."""
     schema = dict(IntakePass1LLMResult.model_json_schema())
-    required = {"is_task", "confidence", "reasoning", "social_kind"}
+    required = {"is_task", "confidence", "reasoning", "social_kind", "response_language"}
     if require_social_response:
         required.add("social_response")
     schema["required"] = sorted(required)
@@ -41,6 +46,8 @@ def coalesce_pass1_dict(result_dict: dict[str, Any]) -> dict[str, Any]:
     raw_kind = merged.get("social_kind")
     if raw_kind is None or not str(raw_kind).strip():
         merged["social_kind"] = IntakePass1SocialKind.OTHER.value
+    lang = normalize_response_language(merged.get("response_language"))
+    merged["response_language"] = (lang or ResponseLanguage.OTHER).value
     return merged
 
 

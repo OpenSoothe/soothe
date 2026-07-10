@@ -142,6 +142,10 @@ class IntentClassification(BaseModel):
             "(weather, web lookup, file contents); false for pure reasoning/math."
         ),
     )
+    response_language: ResponseLanguage | None = Field(
+        default=None,
+        description="Pass 1: preferred language for user-facing prose this turn",
+    )
     task_complexity: TaskComplexity = Field(
         description="Routing complexity derived from intake_label"
     )
@@ -183,6 +187,16 @@ def build_loop_routing_classification(
 # -----------------------------------------------------------------------------
 # Two-pass intake schemas (RFC-630, IG-554)
 # -----------------------------------------------------------------------------
+
+
+class ResponseLanguage(StrEnum):
+    """Primary language for user-facing agent prose (Pass 1 detection)."""
+
+    EN = "en"
+    ZH = "zh"
+    JA = "ja"
+    KO = "ko"
+    OTHER = "other"
 
 
 class IntakePass1Confidence(StrEnum):
@@ -239,9 +253,30 @@ class IntakePass1LLMResult(BaseModel):
             "When is_task=True: other."
         ),
     )
+    response_language: ResponseLanguage = Field(
+        default=ResponseLanguage.OTHER,
+        description=(
+            "Primary language for user-facing prose: en, zh, ja, ko, or other when uncertain"
+        ),
+    )
     reasoning: str = Field(
         description="Brief reasoning for the classification (≤15 words)",
     )
+
+
+def normalize_response_language(value: object | None) -> ResponseLanguage | None:
+    """Coerce wire values to ``ResponseLanguage``; unknown values become ``other``."""
+    if value is None:
+        return None
+    if isinstance(value, ResponseLanguage):
+        return value
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    try:
+        return ResponseLanguage(text)
+    except ValueError:
+        return ResponseLanguage.OTHER
 
 
 class IntakeScope(StrEnum):

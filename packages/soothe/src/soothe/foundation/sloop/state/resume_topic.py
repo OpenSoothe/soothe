@@ -22,11 +22,29 @@ _inflight_loop_ids: set[str] = set()
 
 _TOPIC_PROMPT = """Summarize this agent loop transcript as a short resume topic label.
 Reply with ONLY the topic text: at most {max_words} words, no quotes or punctuation-only answer.
-Prefer the same natural language as the user's goal when obvious.
+{language_instruction}
 
 Transcript:
 {transcript}
 """
+
+
+def _resume_topic_language_instruction(response_language: object | None) -> str:
+    from soothe.foundation.sloop.intention.models import (
+        ResponseLanguage,
+        normalize_response_language,
+    )
+
+    resolved = normalize_response_language(response_language)
+    if resolved is None or resolved == ResponseLanguage.OTHER:
+        return "Prefer the same natural language as the user's goal when obvious."
+    display = {
+        ResponseLanguage.EN: "English",
+        ResponseLanguage.ZH: "Chinese",
+        ResponseLanguage.JA: "Japanese",
+        ResponseLanguage.KO: "Korean",
+    }.get(resolved, resolved.value)
+    return f"Write the topic label in {display} ({resolved.value})."
 
 
 def _topic_is_set(value: str | None) -> bool:
@@ -139,6 +157,7 @@ async def generate_resume_topic_from_ledger(
     ledger_messages: list[Any],
     *,
     fast_llm: Any | None = None,
+    response_language: object | None = None,
 ) -> str | None:
     """Generate a resume topic label from abbreviated ledger text.
 
@@ -164,6 +183,7 @@ async def generate_resume_topic_from_ledger(
 
     prompt = _TOPIC_PROMPT.format(
         max_words=_TOPIC_MAX_WORDS,
+        language_instruction=_resume_topic_language_instruction(response_language),
         transcript=transcript,
     )
 
@@ -214,6 +234,7 @@ async def generate_and_persist_resume_topic(
     loop_id: str,
     ledger_messages: list[Any],
     fast_llm: Any | None = None,
+    response_language: object | None = None,
 ) -> None:
     """Background task: summarize ledger and store resume topic once."""
     if await _load_existing_resume_topic(config, loop_id):
@@ -224,6 +245,7 @@ async def generate_and_persist_resume_topic(
         config,
         ledger_messages,
         fast_llm=fast_llm,
+        response_language=response_language,
     )
     if not topic:
         logger.debug("Resume topic generation skipped for loop %s (empty result)", loop_id)
@@ -251,6 +273,7 @@ def schedule_resume_topic_generation(
     goals_completed: int,
     fast_llm: Any | None = None,
     existing_resume_topic: str | None = None,
+    response_language: object | None = None,
 ) -> None:
     """Fire-and-forget resume topic generation after the first goal completes."""
     if goals_completed != 1:
@@ -270,6 +293,7 @@ def schedule_resume_topic_generation(
                 loop_id=loop_id,
                 ledger_messages=list(ledger_messages),
                 fast_llm=fast_llm,
+                response_language=response_language,
             )
         except Exception:
             logger.warning(

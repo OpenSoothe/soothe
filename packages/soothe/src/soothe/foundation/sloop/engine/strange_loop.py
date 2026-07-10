@@ -15,7 +15,9 @@ from soothe.foundation.sloop.cognition.phase import PlanPhase
 from soothe.foundation.sloop.intention.models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
+    ResponseLanguage,
     build_loop_routing_classification,
+    normalize_response_language,
 )
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
 from soothe.foundation.sloop.state.schemas import (
@@ -263,6 +265,7 @@ class StrangeLoop:
             preclassified_intent = intent
             checkpoint: Any = None
             pass1_reasoning_text = ""
+            pass1_result: IntakePass1LLMResult | None = None
 
             active_goal_trace = goal_trace
             if (
@@ -290,22 +293,37 @@ class StrangeLoop:
 
                 yield ("plan_phase_status", {"label": INTENT_CLASSIFY_STATUS_LABEL})
 
-                pass1_task = intent_classifier.classify_pass1(
-                    execution_goal,
-                    observability_metadata={"thread_id": main_thread_id},
-                    goal_trace=active_goal_trace,
-                )
-                checkpoint_task = state_manager.load()
-                pass1_raw, checkpoint_raw = await asyncio.gather(
-                    pass1_task,
-                    checkpoint_task,
-                    return_exceptions=True,
-                )
+                try:
+                    checkpoint_raw = await state_manager.load()
+                except Exception as exc:
+                    logger.warning(
+                        "Checkpoint load failed before Pass1 (%s)",
+                        type(exc).__name__,
+                        exc_info=exc,
+                    )
+                    checkpoint = None
+                else:
+                    checkpoint = checkpoint_raw
 
-                if isinstance(pass1_raw, Exception):
+                prior_language = None
+                if checkpoint is not None:
+                    prior_loop_state = getattr(checkpoint, "loop_state", None)
+                    if prior_loop_state is not None:
+                        prior_language = normalize_response_language(
+                            getattr(prior_loop_state, "response_language", None)
+                        )
+
+                try:
+                    pass1_raw = await intent_classifier.classify_pass1(
+                        execution_goal,
+                        prior_response_language=prior_language,
+                        observability_metadata={"thread_id": main_thread_id},
+                        goal_trace=active_goal_trace,
+                    )
+                except Exception as exc:
                     logger.warning(
                         "Pass1 pre-graph classification failed (%s); continuing as task",
-                        type(pass1_raw).__name__,
+                        type(exc).__name__,
                     )
                     pass1_result = IntakePass1LLMResult(
                         is_task=True,
@@ -321,16 +339,6 @@ class StrangeLoop:
                 else:
                     pass1_result = pass1_raw
 
-                if isinstance(checkpoint_raw, Exception):
-                    logger.warning(
-                        "Checkpoint load failed during Pass1 gather (%s)",
-                        type(checkpoint_raw).__name__,
-                        exc_info=checkpoint_raw,
-                    )
-                    checkpoint = None
-                else:
-                    checkpoint = checkpoint_raw
-
                 if pass1_result.is_task:
                     pass1_reasoning_text = (pass1_result.reasoning or "").strip()
 
@@ -343,10 +351,14 @@ class StrangeLoop:
                         logger.info(
                             "[StrangeLoop] Structural loop-control bypasses Pass1 social fast-path"
                         )
+                        prior_lang = normalize_response_language(
+                            getattr(pass1_result, "response_language", None)
+                        )
                         pass1_result = IntakePass1LLMResult(
                             is_task=True,
                             confidence=IntakePass1Confidence.HIGH,
                             social_response=None,
+                            response_language=prior_lang or ResponseLanguage.OTHER,
                             reasoning="Loop-control phrase; resume via checkpoint",
                         )
                         pass1_reasoning_text = pass1_result.reasoning or ""
@@ -540,6 +552,21 @@ class StrangeLoop:
                 iteration=iteration,  # Use recovered or initial iteration
                 max_iterations=max_iterations,
                 intent=preclassified_intent,
+                response_language=normalize_response_language(
+                    getattr(preclassified_intent, "response_language", None)
+                    if preclassified_intent is not None
+                    else (
+                        normalize_response_language(
+                            getattr(
+                                getattr(checkpoint, "loop_state", None),
+                                "response_language",
+                                None,
+                            )
+                        )
+                        if clarification_answer and checkpoint is not None
+                        else None
+                    )
+                ),
                 routing_classification=routing_classification,
                 loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
             )
@@ -653,6 +680,11 @@ class StrangeLoop:
                     loop_messages=ledger_messages,
                     thread_id=main_thread_id,
                     context_engine=ce_instance,
+                    pass1_response_language=normalize_response_language(
+                        getattr(pass1_result, "response_language", None)
+                    )
+                    if pass1_result is not None
+                    else None,
                     goal_trace=active_goal_trace,
                     observability_metadata={"thread_id": main_thread_id},
                     observability_phase="pre-stream",
@@ -689,6 +721,9 @@ class StrangeLoop:
             # IG-554 Stage 2: apply Pass 2 scope result and surface reasoning to TUI.
             if pass2_needed and preclassified_intent is not None:
                 state.intent = preclassified_intent
+                state.response_language = normalize_response_language(
+                    preclassified_intent.response_language
+                )
                 effective_routing = build_loop_routing_classification(
                     preclassified_intent,
                     preferred_subagent,

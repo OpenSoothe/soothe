@@ -18,17 +18,22 @@ from soothe.utils.llm.invoke_policy import (
 )
 from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat
 
-from .models import IntakePass1Confidence, IntakePass1LLMResult, IntakePass1SocialKind
+from .models import (
+    IntakePass1Confidence,
+    IntakePass1LLMResult,
+    IntakePass1SocialKind,
+    ResponseLanguage,
+)
 from .pass1_social_response import (
     Pass1SocialReplyLLMResult,
     coalesce_pass1_dict,
     pass1_json_schema,
 )
 from .prompts import (
-    INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SOCIAL_REPLY_HUMAN_TASK,
     INTAKE_PASS1_SOCIAL_REPLY_PROMPT,
     INTAKE_PASS1_SYSTEM_PROMPT,
+    build_intake_pass1_human_content,
     build_intake_pass1_system_prompt,
 )
 
@@ -89,6 +94,7 @@ class IntakePass1Classifier:
         self,
         query: str,
         *,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> IntakePass1LLMResult:
@@ -113,6 +119,7 @@ class IntakePass1Classifier:
         try:
             result = await self._classify_llm_with_output_retry(
                 query,
+                prior_response_language=prior_response_language,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
             )
@@ -131,7 +138,7 @@ class IntakePass1Classifier:
                         "Pass1 dedicated social reply failed; using generic fallback",
                         exc_info=True,
                     )
-                    reply = pick_generic_chitchat_fallback(query)
+                    reply = pick_generic_chitchat_fallback(result.response_language)
                 result = result.model_copy(update={"social_response": reply})
             _log_pass1_result(result)
             return result
@@ -149,6 +156,7 @@ class IntakePass1Classifier:
         self,
         query: str,
         *,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> IntakePass1LLMResult:
@@ -156,6 +164,7 @@ class IntakePass1Classifier:
         try:
             return await self._classify_llm(
                 query,
+                prior_response_language=prior_response_language,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
             )
@@ -163,6 +172,7 @@ class IntakePass1Classifier:
             logger.warning("Pass1 structured output failed; retrying classification once")
             return await self._classify_llm(
                 query,
+                prior_response_language=prior_response_language,
                 observability_metadata=observability_metadata,
                 goal_trace=goal_trace,
             )
@@ -171,10 +181,12 @@ class IntakePass1Classifier:
         self,
         query: str,
         *,
+        prior_response_language: ResponseLanguage | None = None,
         observability_metadata: dict[str, str] | None = None,
         goal_trace: Any | None = None,
     ) -> IntakePass1LLMResult:
         """Single LLM call for Pass 1 classification."""
+        prior_wire = prior_response_language.value if prior_response_language else None
         messages = [
             SystemMessage(
                 content=build_intake_pass1_system_prompt(
@@ -182,7 +194,12 @@ class IntakePass1Classifier:
                     self._assistant_name,
                 )
             ),
-            HumanMessage(content=f"{query}\n\n{INTAKE_PASS1_HUMAN_TASK}"),
+            HumanMessage(
+                content=build_intake_pass1_human_content(
+                    query,
+                    prior_response_language=prior_wire,
+                )
+            ),
         ]
 
         config = self._build_invoke_config(
