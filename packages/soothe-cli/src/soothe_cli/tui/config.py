@@ -18,6 +18,11 @@ from soothe_sdk.client.config import SOOTHE_HOME
 from soothe_cli.tui._version import (
     __version__,
 )
+from soothe_cli.tui._version import (
+    is_editable_install as _is_editable_install,
+)
+
+__all__ = ["_is_editable_install"]
 
 logger = logging.getLogger(__name__)
 
