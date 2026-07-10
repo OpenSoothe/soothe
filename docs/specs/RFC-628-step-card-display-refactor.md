@@ -92,7 +92,7 @@ Rendered by `StepActivityTree.render` from `StepRowIndex` (see below).
 
 ### Preview cap
 
-`STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT = 3` — latest N tool invocation lines **per scope** (task branch children, main-agent tools, orphan subgraph tools).
+`STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT = 2` — latest N tool invocation lines **per scope** (task branch children, main-agent tools, orphan subgraph tools).
 
 ### Render order
 
@@ -215,7 +215,7 @@ _sync_step_card_surface()
 | Constant | Default | Purpose |
 |----------|---------|---------|
 | `STEP_CARD_SHOW_TOOL_ROW_DETAILS` | `False` | When `True`, also render full nested list in `#step-cognition-tools` |
-| `STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT` | `3` | Latest tool lines per scope in activity tree |
+| `STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT` | `2` | Latest tool lines per scope in activity tree |
 | `STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD` | `3` | Fold threshold for optional full tool list only (not card auto-collapse) |
 
 ---
