@@ -141,4 +141,3 @@ def test_resolve_loop_workspace_uses_workspace_mapping_from_metadata(
         },
     )
     assert ws == mapped.resolve()
-

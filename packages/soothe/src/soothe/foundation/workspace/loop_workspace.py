@@ -143,33 +143,32 @@ def resolve_client_workspace_on_host(
     Returns the path when it exists locally or maps under ``workspace_mount``.
     """
     path = validate_client_workspace(client_workspace)
-    if path.exists():
-        return path
 
     hr, cr = _resolve_mount_roots(
         host_root=host_root,
         container_root=container_root,
         workspace_mapping=workspace_mapping,
     )
-    if not hr or not cr:
-        return None
+    if hr and cr:
+        try:
+            translated = translate_client_path_to_container(
+                path,
+                host_root=hr,
+                container_root=cr,
+            )
+        except ValueError:
+            translated = None
+        if translated is not None and translated.exists():
+            logger.info(
+                "Resolved client workspace via mount mapping: %s -> %s",
+                path,
+                translated,
+            )
+            return translated
 
-    try:
-        translated = translate_client_path_to_container(
-            path,
-            host_root=hr,
-            container_root=cr,
-        )
-    except ValueError:
-        return None
+    if path.exists():
+        return path
 
-    if translated.exists():
-        logger.info(
-            "Resolved client workspace via mount mapping: %s -> %s",
-            path,
-            translated,
-        )
-        return translated
     return None
 
 

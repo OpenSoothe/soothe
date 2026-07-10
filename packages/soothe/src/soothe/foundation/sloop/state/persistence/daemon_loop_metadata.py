@@ -21,9 +21,7 @@ def extract_daemon_loop_metadata(data: dict[str, Any] | None) -> dict[str, Any]:
     if not data:
         return {}
     return {
-        key: data[key]
-        for key in DAEMON_LOOP_METADATA_KEYS
-        if key in data and data[key] is not None
+        key: data[key] for key in DAEMON_LOOP_METADATA_KEYS if key in data and data[key] is not None
     }
 
 

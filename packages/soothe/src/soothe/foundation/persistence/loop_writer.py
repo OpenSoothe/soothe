@@ -446,9 +446,7 @@ class LoopPersistenceWriter:
                         async with conn.transaction():
                             async with conn.cursor() as cur:
                                 preserved = await load_preserved_daemon_metadata(cur, loop_id)
-                                merged_data = merge_daemon_loop_metadata(
-                                    checkpoint_data, preserved
-                                )
+                                merged_data = merge_daemon_loop_metadata(checkpoint_data, preserved)
                                 data_json = json.dumps(merged_data)
                                 await cur.execute(
                                     """

@@ -309,10 +309,10 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         async def _do_save(pool: AsyncConnectionPool) -> None:
             async with pool.connection() as conn:
                 async with conn.cursor() as cur:
-                    checkpoint_data = await _checkpoint_data_with_daemon_metadata(
+                    merged_checkpoint_data = await _checkpoint_data_with_daemon_metadata(
                         cur, checkpoint_data
                     )
-                    data_json = json.dumps(checkpoint_data)
+                    data_json = json.dumps(merged_checkpoint_data)
                     if hot_json is not None:
                         await cur.execute(
                             """
