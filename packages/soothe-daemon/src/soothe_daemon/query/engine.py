@@ -174,6 +174,8 @@ class AsyncCancelOrchestrator:
         # Cleanup bookkeeping
         self._query_engine._active_runners.pop(loop_id, None)
         self._query_engine._clear_loop_cancel_armed_state(loop_id)
+        # IG-XXX: Release query admission so loop can accept future queries
+        await self._query_engine._release_query_admission(loop_id)
 
     async def _get_execution_pool(self) -> Any | None:
         """Return the shared thread/process execution pool."""
