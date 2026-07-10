@@ -4,13 +4,15 @@ from __future__ import annotations
 
 
 def format_duration(seconds: float) -> str:
-    """Format a duration in seconds into a human-readable string.
+    """Format a completed duration in seconds into a human-readable string.
 
     Args:
         seconds: Duration in seconds.
 
     Returns:
-        Formatted string like `"5s"`, `"2.3s"`, `"5m 12s"`, or `"1h 23m 4s"`.
+        Formatted string like ``5s``, ``2.3s``, ``5m 12s``, or ``1h 23m 4s``.
+        For live running timers that tick in whole seconds, use
+        :func:`format_running_elapsed` instead.
     """
     rounded = round(seconds, 1)
     if rounded < 60:  # noqa: PLR2004
@@ -22,6 +24,11 @@ def format_duration(seconds: float) -> str:
         return f"{minutes}m {secs}s"
     hours, minutes = divmod(minutes, 60)
     return f"{hours}h {minutes}m {secs}s"
+
+
+def format_running_elapsed(seconds: float) -> str:
+    """Format a live running timer using whole-second ticks (e.g. ``20s``, ``1m 5s``)."""
+    return format_duration(float(max(0, int(seconds))))
 
 
 def format_duration_ms(milliseconds: int) -> str:

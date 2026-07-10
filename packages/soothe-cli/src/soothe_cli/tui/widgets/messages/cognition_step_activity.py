@@ -19,7 +19,7 @@ from soothe_sdk.ux.task_namespace import (
 )
 from textual.content import Content
 
-from soothe_cli.runtime.presentation.duration_format import format_duration
+from soothe_cli.runtime.presentation.duration_format import format_running_elapsed
 from soothe_cli.tui import theme
 from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
 from soothe_cli.tui.preview_limits import STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT
@@ -433,7 +433,7 @@ class StepCardStatusLine:
         """Step card footer while executing."""
         elapsed = ""
         if elapsed_secs is not None:
-            elapsed = f" ({format_duration(float(elapsed_secs))})"
+            elapsed = f" ({format_running_elapsed(float(elapsed_secs))})"
         head = f"{gutter}{spinner_frame} Running{retry_suffix}...{elapsed}"
         tail = f"{stats_suffix}{token_suffix}"
         parts: list[object] = [Content.styled(head, colors.warning)]

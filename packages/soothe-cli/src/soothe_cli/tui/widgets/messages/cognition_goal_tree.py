@@ -11,7 +11,7 @@ from textual.containers import Vertical
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.runtime.presentation.duration_format import format_duration
+from soothe_cli.runtime.presentation.duration_format import format_duration, format_running_elapsed
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
@@ -253,8 +253,7 @@ class CognitionGoalTreeMessage(Vertical):
         if st.phase == "running":
             parts: list[str] = []
             if st.started_at is not None:
-                elapsed_s = max(0.001, time() - st.started_at)
-                parts.append(format_duration(elapsed_s))
+                parts.append(format_running_elapsed(time() - st.started_at))
             if st.tool_call_count > 0:
                 parts.append(f"{st.tool_call_count} tools")
             if not parts:
