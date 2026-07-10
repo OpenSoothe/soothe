@@ -4,7 +4,7 @@ DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
 
 # Parent directory on the HOST that contains project repos (RFC-621). Must match docker-compose volume source.
-SOOTHE_WORKSPACE_HOST_ROOT=/Users/you
+SOOTHE_WORKSPACE_HOST_ROOT=${HOME}
 
 # Enable verbose agent and file logging in the daemon (SOOTHE_DEBUG → config debug: true).
 SOOTHE_DEBUG=false
