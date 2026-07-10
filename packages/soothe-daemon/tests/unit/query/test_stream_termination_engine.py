@@ -223,7 +223,8 @@ async def test_cancel_emits_turn_stream_end_with_reason_before_idle() -> None:
     await engine.run_query("cancel mid stream", loop_id="loop-cancel-end")
     task = daemon._current_query_task
     assert task is not None
-    await engine.cancel_current_query()
+    daemon._thread_registry = _ENGINE_CANCEL._RegistryMapsThreadLoop({"thread-1": "loop-cancel-end"})
+    await engine.cancel_loop("loop-cancel-end")
     with suppress(asyncio.CancelledError):
         await task
 

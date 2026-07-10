@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,6 +31,11 @@ class _FakeRunnerFactory:
 
     async def get_shared_execution_pool(self) -> _FakeExecutionPool:
         return self._pool
+
+
+class _FakeThreadRegistry:
+    def get_thread_loop(self, _thread_id: str) -> str | None:
+        return None
 
 
 @pytest.mark.asyncio
@@ -79,32 +85,22 @@ async def test_cancel_orchestrator_force_kill_releases_query_admission() -> None
     daemon = SimpleNamespace(
         _runner_factory=_FakeRunnerFactory(pool),
         _daemon_config=SootheDaemonConfig(
-            cancel_retry_count=1,  # Minimize retries for faster test
-            cancel_retry_interval_seconds=0.01,
-            cancel_force_kill_timeout_seconds=0.01,
+            cancel_retry_count=1,
+            cancel_retry_interval_seconds=0.5,
+            cancel_force_kill_timeout_seconds=5.0,
         ),
-        _query_state_lock=AsyncMock(),
-        _loops_with_active_query={"loop-a"},  # Simulate admission held
+        _query_state_lock=asyncio.Lock(),
+        _loops_with_active_query={"loop-a"},
+        _active_threads={},
+        _current_query_task=None,
+        _runner=None,
+        _thread_registry=_FakeThreadRegistry(),
     )
-    # Mock lock context
-    daemon._query_state_lock.__aenter__ = AsyncMock()
-    daemon._query_state_lock.__aexit__ = AsyncMock()
 
-    query_engine = MagicMock(spec=QueryEngine)
-    query_engine._active_runners = {}
-    query_engine._clear_loop_cancel_armed_state = MagicMock()
-    # Create async mock for _release_query_admission
-    release_mock = AsyncMock()
-    query_engine._release_query_admission = release_mock
-    query_engine.collect_active_tasks_for_loop = MagicMock(return_value=[])
-
+    query_engine = QueryEngine(daemon)
     orchestrator = AsyncCancelOrchestrator(daemon, query_engine)
 
-    # Execute cancel - should hit force kill path
     await orchestrator._cancel_with_retry_and_force("loop-a")
 
-    # Verify force_cancel_worker was called
     pool.force_cancel_worker.assert_called_once()
-
-    # Critical: verify admission was released
-    release_mock.assert_called_once_with("loop-a")
+    assert "loop-a" not in daemon._loops_with_active_query
