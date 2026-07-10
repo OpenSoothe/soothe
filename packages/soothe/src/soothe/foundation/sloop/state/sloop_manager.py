@@ -1243,7 +1243,8 @@ class StrangeLoopStateManager:
         """Create fresh loop after /clear (IG-500).
 
         Generates new loop_id with fresh state (empty goal_history, reset metrics).
-        Thread_id reused for immediate continuation.
+        Thread_id reused for immediate continuation. Workspace metadata from the
+        prior loop is copied so mounted client workspaces survive the clear.
 
         Args:
             old_thread_id: Thread to reuse for new loop.
@@ -1251,6 +1252,9 @@ class StrangeLoopStateManager:
         Returns:
             Tuple of (new_loop_id, new_checkpoint).
         """
+        old_loop_id = self.loop_id
+        inherited_metadata = await self._load_daemon_loop_metadata(old_loop_id)
+
         # Generate new loop_id
         new_loop_id = str(uuid.uuid4())
 
@@ -1295,14 +1299,52 @@ class StrangeLoopStateManager:
 
         # Persist new checkpoint
         await self._save_checkpoint_to_db(new_checkpoint)
+        await self._apply_daemon_loop_metadata(new_loop_id, inherited_metadata)
 
         logger.info(
-            "Reinitialized loop after clear: new_loop_id=%s thread=%s",
+            "Reinitialized loop after clear: new_loop_id=%s thread=%s inherited_workspace=%s",
             new_loop_id,
             old_thread_id,
+            bool(inherited_metadata.get("current_workspace")),
         )
 
         return new_loop_id, new_checkpoint
+
+    async def _load_daemon_loop_metadata(self, loop_id: str) -> dict[str, Any]:
+        """Load daemon-owned workspace metadata for a loop."""
+        from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
+            extract_daemon_loop_metadata,
+        )
+
+        if self._backend_type == "postgresql":
+            await self._ensure_backend_initialized()
+            if self._postgres_backend is None:
+                return {}
+            meta = await self._postgres_backend.get_loop_metadata(loop_id)
+            return extract_daemon_loop_metadata(meta)
+
+        backend = SQLitePersistenceBackend(Path(self.db_path))
+        meta = await backend.get_loop_metadata(loop_id)
+        return extract_daemon_loop_metadata(meta)
+
+    async def _apply_daemon_loop_metadata(
+        self,
+        loop_id: str,
+        metadata: dict[str, Any],
+    ) -> None:
+        """Persist daemon workspace metadata onto a loop row."""
+        if not metadata:
+            return
+
+        if self._backend_type == "postgresql":
+            await self._ensure_backend_initialized()
+            if self._postgres_backend is None:
+                return
+            await self._postgres_backend.update_loop_metadata(loop_id, **metadata)
+            return
+
+        backend = SQLitePersistenceBackend(Path(self.db_path))
+        await backend.update_loop_metadata(loop_id, **metadata)
 
     async def close(self) -> None:
         """Close backend connection pools (IG-404, IG-406).

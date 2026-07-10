@@ -55,6 +55,7 @@ def _resolve_loop(
     client_workspace_id: str | None = None,
     soothe_home: Path | None = None,
     create: bool = True,
+    workspace_mapping: dict[str, Any] | None = None,
 ) -> ResolvedWorkspace:
     """LOOP precedence: client_workspace > persisted > daemon fallback."""
     from soothe.foundation.workspace.loop_workspace import resolve_loop_workspace
@@ -69,6 +70,7 @@ def _resolve_loop(
             client_workspace_id=client_workspace_id,
             soothe_home=soothe_home,
             create=create,
+            workspace_mapping=workspace_mapping,
         )
     except ValueError:
         path = resolve_daemon_workspace()

@@ -6,8 +6,12 @@ import hashlib
 import logging
 import re
 from pathlib import Path
+from typing import Any
 
-from soothe.foundation.workspace.resolution import validate_client_workspace
+from soothe.foundation.workspace.resolution import (
+    translate_client_path_to_container,
+    validate_client_workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +95,84 @@ def resolve_persisted_loop_workspace(
     return workspace_path
 
 
+def _workspace_mount_from_config() -> tuple[str | None, str | None]:
+    """Return configured ``workspace_mount`` host/container roots when set."""
+    try:
+        from soothe.config import get_config
+
+        mount = get_config().workspace_mount
+        if mount.is_configured:
+            return mount.host_root, mount.container_root
+    except Exception:
+        logger.debug("Could not load workspace_mount from config", exc_info=True)
+    return None, None
+
+
+def _resolve_mount_roots(
+    *,
+    host_root: str | Path | None = None,
+    container_root: str | Path | None = None,
+    workspace_mapping: dict[str, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    """Resolve RFC-621 mount roots from explicit args, metadata, or config."""
+    hr = str(host_root).strip() if host_root else None
+    cr = str(container_root).strip() if container_root else None
+    if workspace_mapping:
+        if not hr:
+            raw = workspace_mapping.get("host_root")
+            hr = str(raw).strip() if raw else None
+        if not cr:
+            raw = workspace_mapping.get("container_root")
+            cr = str(raw).strip() if raw else None
+    if not hr or not cr:
+        cfg_hr, cfg_cr = _workspace_mount_from_config()
+        hr = hr or cfg_hr
+        cr = cr or cfg_cr
+    return hr, cr
+
+
+def resolve_client_workspace_on_host(
+    client_workspace: str | Path,
+    *,
+    host_root: str | Path | None = None,
+    container_root: str | Path | None = None,
+    workspace_mapping: dict[str, Any] | None = None,
+) -> Path | None:
+    """Resolve a client workspace hint to a usable path on this host/container.
+
+    Returns the path when it exists locally or maps under ``workspace_mount``.
+    """
+    path = validate_client_workspace(client_workspace)
+    if path.exists():
+        return path
+
+    hr, cr = _resolve_mount_roots(
+        host_root=host_root,
+        container_root=container_root,
+        workspace_mapping=workspace_mapping,
+    )
+    if not hr or not cr:
+        return None
+
+    try:
+        translated = translate_client_path_to_container(
+            path,
+            host_root=hr,
+            container_root=cr,
+        )
+    except ValueError:
+        return None
+
+    if translated.exists():
+        logger.info(
+            "Resolved client workspace via mount mapping: %s -> %s",
+            path,
+            translated,
+        )
+        return translated
+    return None
+
+
 def resolve_loop_workspace(
     *,
     loop_id: str,
@@ -99,11 +181,15 @@ def resolve_loop_workspace(
     client_workspace_id: str | None = None,
     soothe_home: Path | None = None,
     create: bool = True,
+    host_root: str | Path | None = None,
+    container_root: str | Path | None = None,
+    workspace_mapping: dict[str, Any] | None = None,
 ) -> Path:
     """Resolve the workspace directory for a loop run.
 
     Precedence:
-        1. ``client_workspace`` — use the validated client path directly.
+        1. ``client_workspace`` — use the validated client path directly, or map it
+           via ``workspace_mount`` when the host path is absent on this machine.
         2. Persisted layout — ``$SOOTHE_HOME/data/workspaces/<normalized_user>/ws_<hash>``
            where hash is ``sha256(user_id, client_workspace_id)`` or
            ``sha256(user_id, loop_id)`` when ``client_workspace_id`` is unset.
@@ -112,12 +198,17 @@ def resolve_loop_workspace(
     """
     client_ws = str(client_workspace).strip() if client_workspace else None
     if client_ws:
-        path = validate_client_workspace(client_ws)
-        if path.exists():
-            return path
+        resolved = resolve_client_workspace_on_host(
+            client_ws,
+            host_root=host_root,
+            container_root=container_root,
+            workspace_mapping=workspace_mapping,
+        )
+        if resolved is not None:
+            return resolved
         logger.warning(
             "Client workspace not present on daemon host (%s); using persisted layout",
-            path,
+            validate_client_workspace(client_ws),
         )
 
     return resolve_persisted_loop_workspace(

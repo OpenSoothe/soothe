@@ -428,9 +428,13 @@ class LoopPersistenceWriter:
             raise RuntimeError(msg)
 
         checkpoint_data = checkpoint.model_dump(mode="json")
-        data_json = json.dumps(checkpoint_data)
         hot_json = json.dumps(extract_hot_index(checkpoint))
         cold_json = json.dumps(extract_cold_blob(checkpoint))
+
+        from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
+            load_preserved_daemon_metadata,
+            merge_daemon_loop_metadata,
+        )
 
         async with self._write_lock:
             self._inflight += 1
@@ -441,6 +445,11 @@ class LoopPersistenceWriter:
                     try:
                         async with conn.transaction():
                             async with conn.cursor() as cur:
+                                preserved = await load_preserved_daemon_metadata(cur, loop_id)
+                                merged_data = merge_daemon_loop_metadata(
+                                    checkpoint_data, preserved
+                                )
+                                data_json = json.dumps(merged_data)
                                 await cur.execute(
                                     """
                                     INSERT INTO agentloop_checkpoints

@@ -215,6 +215,18 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         thread_id = checkpoint_data["current_thread_id"]
         status = checkpoint_data["status"]
 
+        from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
+            load_preserved_daemon_metadata,
+            merge_daemon_loop_metadata,
+        )
+
+        async def _checkpoint_data_with_daemon_metadata(
+            cur: Any,
+            data: dict[str, Any],
+        ) -> dict[str, Any]:
+            preserved = await load_preserved_daemon_metadata(cur, loop_id)
+            return merge_daemon_loop_metadata(data, preserved)
+
         if write_mode == "index_only" and hot_cold_enabled:
             from soothe.foundation.persistence.checkpoint_split import extract_hot_index
 
@@ -236,7 +248,9 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                                 (thread_id, status, hot_json, loop_id),
                             )
                             if cur.rowcount == 0:
-                                data_json = json.dumps(checkpoint_data)
+                                preserved = await load_preserved_daemon_metadata(cur, loop_id)
+                                merged = merge_daemon_loop_metadata(checkpoint_data, preserved)
+                                data_json = json.dumps(merged)
                                 await cur.execute(
                                     """
                                     INSERT INTO agentloop_checkpoints
@@ -254,7 +268,9 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
                         except Exception as exc:
                             if not _is_missing_hot_cold_schema(exc):
                                 raise
-                            data_json = json.dumps(checkpoint_data)
+                            data_json = json.dumps(
+                                await _checkpoint_data_with_daemon_metadata(cur, checkpoint_data)
+                            )
                             await cur.execute(
                                 """
                                 INSERT INTO agentloop_checkpoints
@@ -279,7 +295,6 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             if hot_cold_enabled:
                 return
 
-        data_json = json.dumps(checkpoint_data)
         hot_json = None
         cold_json = None
         if hot_cold_enabled:
@@ -294,6 +309,10 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
         async def _do_save(pool: AsyncConnectionPool) -> None:
             async with pool.connection() as conn:
                 async with conn.cursor() as cur:
+                    checkpoint_data = await _checkpoint_data_with_daemon_metadata(
+                        cur, checkpoint_data
+                    )
+                    data_json = json.dumps(checkpoint_data)
                     if hot_json is not None:
                         await cur.execute(
                             """
@@ -628,6 +647,7 @@ class PostgreSQLPersistenceBackend(StrangeLoopPersistenceBackend):
             "last_message_at",
             "current_workspace",
             "resume_topic",
+            "workspace_mapping",
         }
         updates = {k: v for k, v in fields.items() if k in _allowed}
         if not updates:
