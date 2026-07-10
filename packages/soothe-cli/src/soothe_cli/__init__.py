@@ -1,10 +1,5 @@
 """Soothe CLI client - communicates with daemon via WebSocket."""
 
-import importlib.metadata
+from soothe_cli.tui._version import __version__
 
-try:
-    __version__ = importlib.metadata.version("soothe-cli")
-except importlib.metadata.PackageNotFoundError:
-    __version__ = "0.0.0"
-
-__all__ = []
+__all__ = ["__version__"]
