@@ -14,7 +14,10 @@ def test_extract_daemon_loop_metadata_filters_strange_loop_fields() -> None:
         "status": "running",
         "current_workspace": "/var/lib/soothe/workspaces/project",
         "client_workspace": "/Users/me/project",
-        "workspace_mapping": {"host_root": "/Users/me", "container_root": "/var/lib/soothe/workspaces"},
+        "workspace_mapping": {
+            "host_root": "/Users/me",
+            "container_root": "/var/lib/soothe/workspaces",
+        },
         "goal_history": [{"goal_id": "g1"}],
     }
     extracted = extract_daemon_loop_metadata(data)
