@@ -923,6 +923,7 @@ class QueryEngine:
                     or loop_meta.get("client_workspace"),
                     user_id=loop_meta.get("user_id") or loop_meta.get("user"),
                     client_workspace_id=loop_meta.get("client_workspace_id"),
+                    workspace_mapping=loop_meta.get("workspace_mapping"),
                     autonomous=stream_kwargs.get("autonomous", False),
                     max_iterations=stream_kwargs.get("max_iterations"),
                     preferred_subagent=stream_kwargs.get("preferred_subagent"),

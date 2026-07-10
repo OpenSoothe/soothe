@@ -103,3 +103,42 @@ def test_loop_run_request_resolve_workspace_path(tmp_path: Path) -> None:
         client_workspace=str(project),
     )
     assert Path(req.resolve_workspace_path()) == project.resolve()
+
+
+def test_resolve_loop_workspace_maps_host_path_via_mount(tmp_path: Path) -> None:
+    host_root = tmp_path / "host"
+    container_root = tmp_path / "container"
+    project = host_root / "project-a"
+    project.mkdir(parents=True)
+    mapped = container_root / "project-a"
+    mapped.mkdir(parents=True)
+
+    ws = resolve_loop_workspace(
+        loop_id="loop-1",
+        client_workspace=str(project),
+        host_root=str(host_root),
+        container_root=str(container_root),
+    )
+    assert ws == mapped.resolve()
+
+
+def test_resolve_loop_workspace_uses_workspace_mapping_from_metadata(
+    tmp_path: Path,
+) -> None:
+    host_root = tmp_path / "host"
+    container_root = tmp_path / "container"
+    project = host_root / "demo"
+    project.mkdir(parents=True)
+    mapped = container_root / "demo"
+    mapped.mkdir(parents=True)
+
+    ws = resolve_loop_workspace(
+        loop_id="loop-1",
+        client_workspace=str(project),
+        workspace_mapping={
+            "host_root": str(host_root),
+            "container_root": str(container_root),
+        },
+    )
+    assert ws == mapped.resolve()
+

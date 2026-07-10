@@ -81,6 +81,9 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     user = str(raw_user).strip() if raw_user else None
     client_ws = str(raw_client_ws).strip() if raw_client_ws else None
     client_ws_id = str(raw_client_ws_id).strip() if raw_client_ws_id else None
+    workspace_mapping = metadata.get("workspace_mapping")
+    if not isinstance(workspace_mapping, dict):
+        workspace_mapping = None
 
     # Trust persisted current_workspace — already contains the container path
     # from loop_new. Only re-resolve when the field is missing (legacy or corrupt).
@@ -94,6 +97,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
                 client_workspace=client_ws,
                 user_id=user,
                 client_workspace_id=client_ws_id,
+                workspace_mapping=workspace_mapping,
             )
         except ValueError as e:
             logger.warning(

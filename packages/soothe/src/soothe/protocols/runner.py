@@ -73,6 +73,7 @@ class LoopRunRequest:
     client_workspace: str | None = None
     user_id: str | None = None
     client_workspace_id: str | None = None
+    workspace_mapping: dict[str, Any] | None = None
     autonomous: bool = False
     max_iterations: int | None = None
     preferred_subagent: str | None = None
@@ -108,6 +109,7 @@ class LoopRunRequest:
                 client_workspace=self.client_workspace,
                 user_id=self.user_id,
                 client_workspace_id=self.client_workspace_id,
+                workspace_mapping=self.workspace_mapping,
             )
         )
 
