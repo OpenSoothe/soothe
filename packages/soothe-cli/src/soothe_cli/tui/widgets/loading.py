@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.runtime.presentation.duration_format import format_duration
+from soothe_cli.runtime.presentation.duration_format import format_running_elapsed
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 
@@ -101,7 +101,7 @@ class LoadingWidget(Static):
         return f" {status}... "
 
     def _format_hint_line(self, elapsed_secs: float, *, include_interrupt: bool = False) -> str:
-        duration = format_duration(elapsed_secs)
+        duration = format_running_elapsed(elapsed_secs)
         segments: list[str] = []
         if self._hint_extra:
             segments.append(self._hint_extra)
@@ -121,7 +121,7 @@ class LoadingWidget(Static):
         status_part = Content.styled(self._format_status_line(self._status), colors.primary)
         if self._paused:
             spinner_part = Content.styled(get_glyphs().pause, "dim")
-            paused_duration = format_duration(float(self._paused_total_elapsed))
+            paused_duration = format_running_elapsed(float(self._paused_total_elapsed))
             if self._show_interrupt_hint:
                 paused_hint = f" (paused at {paused_duration} · esc to interrupt)"
             else:
