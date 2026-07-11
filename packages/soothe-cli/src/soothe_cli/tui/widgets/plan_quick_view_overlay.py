@@ -108,6 +108,7 @@ class PlanQuickViewOverlay(Vertical):
 
     def on_mount(self) -> None:
         self._content = self.query_one("#plan-quick-view-content", Static)
+        self.query_one("#plan-quick-view-body", VerticalScroll).can_focus = False
         self.display = False
 
     @property

@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
+from textual.widgets import Static, TextArea
+
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
 
 
@@ -19,6 +24,34 @@ class _FocusAppStub(_MessagesMixin):
         self.set_focus = MagicMock()
         self.call_after_refresh = MagicMock(side_effect=lambda fn: fn())
         self.set_timer = MagicMock()
+
+
+class _ChatFocusHarnessApp(App[None]):
+    """Minimal layout mirroring main-screen transcript + chat input."""
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll(id="chat"):
+            yield Static("transcript", id="transcript")
+        yield TextArea(id="chat-input")
+
+    async def on_mount(self) -> None:
+        chat = self.query_one("#chat", VerticalScroll)
+        chat.can_focus = False
+        self.query_one("#chat-input", TextArea).focus()
+
+
+@pytest.mark.asyncio
+async def test_click_transcript_keeps_chat_input_focused() -> None:
+    """Clicking outside the prompt must not leave the user unable to type."""
+    async with _ChatFocusHarnessApp().run_test() as pilot:
+        text_area = pilot.app.query_one("#chat-input", TextArea)
+        assert text_area.has_focus
+
+        await pilot.click("#transcript")
+        await pilot.pause()
+
+        assert text_area.has_focus
+        assert pilot.app.focused is text_area
 
 
 def test_primary_text_input_prefers_clarification_field() -> None:
