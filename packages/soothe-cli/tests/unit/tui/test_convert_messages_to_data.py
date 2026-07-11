@@ -13,7 +13,8 @@ from soothe_cli.tui.app._history import _HistoryMixin
 from soothe_cli.tui.widgets.message_store import MessageData, MessageType, ToolStatus
 
 
-def test_convert_tool_message_respects_status_error_with_benign_content() -> None:
+def test_convert_tool_message_checkpoint_pairs_emit_no_standalone_tool_cards() -> None:
+    """Display ledger never emits standalone TOOL cards from checkpoint pairs."""
     messages = [
         AIMessage(
             content="",
@@ -27,16 +28,12 @@ def test_convert_tool_message_respects_status_error_with_benign_content() -> Non
         ),
     ]
     data = SootheApp._convert_messages_to_data(messages)
-    tool_msgs = [m for m in data if m.type == MessageType.TOOL]
-    assert len(tool_msgs) == 1
-    assert tool_msgs[0].tool_status == ToolStatus.ERROR
-    assert tool_msgs[0].tool_output == "ok"
+    assert not [m for m in data if m.type == MessageType.TOOL]
 
 
-def test_convert_tool_message_respects_arguments_json_string() -> None:
-    """Loop replay: wire-style ``arguments`` must populate tool card args."""
+def test_convert_tool_message_arguments_json_string_emits_no_tool_card() -> None:
+    """Wire-style tool call pairs are folded into step stats only, not TOOL cards."""
     ai = AIMessage(content="", tool_calls=[])
-    # LangChain rejects ``arguments`` at construct time; some checkpoints store it anyway.
     ai.tool_calls = [
         {"id": "tc-args", "name": "read_file", "arguments": '{"file_path": "/src/a.py"}'}
     ]
@@ -50,12 +47,10 @@ def test_convert_tool_message_respects_arguments_json_string() -> None:
         ),
     ]
     data = SootheApp._convert_messages_to_data(messages)
-    tool_msgs = [m for m in data if m.type == MessageType.TOOL]
-    assert len(tool_msgs) == 1
-    assert tool_msgs[0].tool_args == {"file_path": "/src/a.py"}
+    assert not [m for m in data if m.type == MessageType.TOOL]
 
 
-def test_convert_tool_message_list_content_uses_formatted_output() -> None:
+def test_convert_tool_message_list_content_emits_no_tool_card() -> None:
     messages = [
         AIMessage(
             content="",
@@ -69,10 +64,31 @@ def test_convert_tool_message_list_content_uses_formatted_output() -> None:
         ),
     ]
     data = SootheApp._convert_messages_to_data(messages)
-    tool_msgs = [m for m in data if m.type == MessageType.TOOL]
-    assert len(tool_msgs) == 1
-    assert tool_msgs[0].tool_status == ToolStatus.SUCCESS
-    assert tool_msgs[0].tool_output == "line1\nline2"
+    assert not [m for m in data if m.type == MessageType.TOOL]
+
+
+def test_convert_messages_drops_intent_classify_checkpoint_rows() -> None:
+    """Intent-classify ledger pairs must not surface as user/assistant resume cards."""
+    internal_user = HumanMessage(content="GOAL:\nShip the fix\n\nTASK:\nClassify scope.")
+    internal_user.phase = "intent_classify"  # type: ignore[attr-defined]
+    internal_ai = AIMessage(content='{"intake_label":"complex"}')
+    internal_ai.phase = "intent_classify"  # type: ignore[attr-defined]
+    completion_ai = AIMessage(content="Done.")
+    completion_ai.phase = "goal_completion"  # type: ignore[attr-defined]
+    messages = [
+        HumanMessage(content="Ship the fix"),
+        internal_user,
+        internal_ai,
+        completion_ai,
+    ]
+    data = SootheApp._convert_messages_to_data(messages)
+    user_cards = [m for m in data if m.type == MessageType.USER]
+    assert len(user_cards) == 1
+    assert user_cards[0].content == "Ship the fix"
+    assistant_text = " ".join(m.content for m in data if m.type == MessageType.ASSISTANT)
+    assert "intake_label" not in assistant_text
+    assert "Classify scope" not in assistant_text
+    assert "Done." in assistant_text
 
 
 def test_merge_history_sources_handles_mixed_timestamp_awareness() -> None:

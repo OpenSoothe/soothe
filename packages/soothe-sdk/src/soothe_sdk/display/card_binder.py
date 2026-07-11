@@ -12,7 +12,6 @@ emission (daemon).
 
 from __future__ import annotations
 
-import json
 import logging
 import time as _time
 from ast import literal_eval
@@ -22,21 +21,12 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
-from soothe_sdk.display.message_processing import (
-    extract_tool_args_dict,
-    normalize_tool_calls_list,
-)
 from soothe_sdk.display.text_extract import (
     extract_ai_text_for_display,
     extract_user_text_for_display,
     normalize_stream_message,
 )
-from soothe_sdk.display.tool_result import extract_tool_result_payload
 from soothe_sdk.display.transcript_types import MessageData, MessageType, ToolStatus
-from soothe_sdk.ux.task_namespace import (
-    is_step_level_task_tool_id,
-    parse_unified_tool_call_id,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +34,15 @@ logger = logging.getLogger(__name__)
 # cognition cards (plan / step / task rows) rather than standalone assistant
 # and tool widgets.
 _LOOP_INTERNAL_CHECKPOINT_PHASES: frozenset[str] = frozenset(
-    {"plan_assess", "plan_generate", "execute_step", "execute_wave"}
+    {
+        "plan_assess",
+        "plan_generate",
+        "plan_gap_analysis",
+        "intent_classify",
+        "continuation",
+        "execute_step",
+        "execute_wave",
+    }
 )
 
 
@@ -193,21 +191,19 @@ def convert_messages_to_data(
 
     Args:
         messages: LangChain message objects from a LangGraph checkpoint.
-        cognition_card_replay: When non-empty, strip checkpoint messages
-            tagged with internal loop phases and merge these cognition cards
-            (plan / goal / step) so resume matches live streaming.
+        cognition_card_replay: When non-empty, merge cognition cards (plan /
+            step) from the activity log so resume matches live streaming.
+            Orchestration-internal checkpoint rows are always stripped;
+            standalone tool cards are never emitted (use step tool counts).
 
     Returns:
         Ordered list of ``MessageData`` ready for ``MessageStore.bulk_load``.
     """
-    hide_internals = bool(cognition_card_replay)
     result: list[MessageData] = []
-    # Maps tool_call_id -> index into result list
-    pending_tool_indices: dict[str, int] = {}
 
     for msg in messages:
         msg = normalize_stream_message(msg)
-        if hide_internals and is_loop_internal_checkpoint_message(msg):
+        if is_loop_internal_checkpoint_message(msg):
             continue
         user_text = extract_user_text_for_display(msg)
         if user_text is not None:
@@ -233,65 +229,17 @@ def convert_messages_to_data(
             if text:
                 _append_assistant_text(result, msg, text)
 
-            # When cognition cards are present, tool activity is already represented
-            # inside the matching STEP_PROGRESS card's stats footer. Emitting a
-            # parallel standalone TOOL card here renders an extra ``[run_command]``
-            # widget under the step that the live transcript never shows.
-            if hide_internals:
-                continue
-
-            # Track tool calls for later matching
-            for tc in normalize_tool_calls_list(getattr(msg, "tool_calls", [])):
-                tc_id = tc.get("id")
-                name = str(tc.get("name") or "").strip() or "unknown"
-                args = extract_tool_args_dict(tc)
-                data = MessageData(
-                    type=MessageType.TOOL,
-                    content="",
-                    tool_name=name,
-                    tool_args=args,
-                    tool_status=ToolStatus.PENDING,
-                )
-                result.append(data)
-                if tc_id:
-                    pending_tool_indices[tc_id] = len(result) - 1
-                else:
-                    data.tool_status = ToolStatus.REJECTED
+            # Display ledger: tool activity is represented on STEP_PROGRESS
+            # cards via ``step_tool_call_count`` only — never standalone TOOL rows.
 
         elif isinstance(msg, ToolMessage):
-            if hide_internals:
-                continue
-            tc_id = getattr(msg, "tool_call_id", None)
-            if tc_id and tc_id in pending_tool_indices:
-                idx = pending_tool_indices.pop(tc_id)
-                data = result[idx]
-                payload = extract_tool_result_payload(msg)
-                if payload is not None:
-                    data.tool_status = ToolStatus.ERROR if payload.is_error else ToolStatus.SUCCESS
-                    data.tool_output = payload.output_display
-                else:
-                    status = getattr(msg, "status", "success")
-                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                    if status == "success":
-                        data.tool_status = ToolStatus.SUCCESS
-                    else:
-                        data.tool_status = ToolStatus.ERROR
-                    data.tool_output = content
-            else:
-                logger.debug(
-                    "ToolMessage with tool_call_id=%r could not be matched to a pending tool call",
-                    tc_id,
-                )
+            continue
 
         else:
             logger.debug(
                 "Skipping unsupported message type %s during history conversion",
                 type(msg).__name__,
             )
-
-    # Mark unmatched tool calls as rejected
-    for idx in pending_tool_indices.values():
-        result[idx].tool_status = ToolStatus.REJECTED
 
     if cognition_card_replay:
         return merge_visible_messages_with_cognition_cards(
@@ -591,11 +539,6 @@ def collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageD
             step_card_position[step_id] = len(cards)
         cards.append(msg_data)
 
-    # Rebuild inline tool rows ("ListFiles(...)", "ShellExecute(...)") and
-    # attach to each STEP_PROGRESS card so the resumed step card expands the
-    # same way the live CognitionStepMessage does, instead of collapsing to
-    # the "N tools" footer.
-    _attach_step_tool_rows(cards, _build_step_tool_rows_map(events))
     return cards
 
 
@@ -625,134 +568,20 @@ def merge_step_progress(prior: MessageData, later: MessageData) -> MessageData:
     )
 
 
-def _build_step_tool_rows_map(events: list[dict[str, Any]]) -> dict[str, str]:
-    """Reconstruct inline tool rows per step from persisted activity events.
+def sanitize_resume_display_cards(cards: list[MessageData]) -> list[MessageData]:
+    """Prepare persisted cards for TUI resume: drop tool stubs, strip inline tool rows.
 
-    Live ``CognitionStepMessage`` populates its inline tool rows from the
-    ``soothe.stream.tool_call.update`` wire events (carrying the unified
-    ``tool_call_id`` with the step_id prefix) interleaved with the
-    ``tool_call`` / ``tool_result`` activity-log rows (carrying the output
-    payload and timestamps).
-
-    Resume must do the same merge offline so the step card expands to show
-    ``ListFiles(...)`` / ``ShellExecute(...)`` rows instead of the bare
-    ``N tools`` footer.
-
-    Args:
-        events: Sorted-or-unsorted activity rows from the daemon
-            conversation log (``kind`` ∈ ``event``/``tool_call``/``tool_result``).
-
-    Returns:
-        Mapping ``{step_id: step_tool_calls_json}`` where the JSON value is
-        the same shape that ``CognitionStepMessage.snapshot_tool_rows()``
-        produces — ready to assign to
-        ``MessageData.step_tool_calls_json`` so ``binding.py`` can rehydrate
-        the rows via ``apply_tool_rows_snapshot()``.
+    Step and subagent cards keep ``step_tool_call_count`` for the footer stats line;
+    per-tool row replay is live-only.
     """
-    sorted_events = sorted(
-        events,
-        key=lambda event: (
-            parse_loop_event_timestamp(event.get("timestamp")) or datetime.min.replace(tzinfo=UTC)
-        ),
-    )
-
-    # FIFO queues per tool_name for matching tool_call (start ts) and
-    # tool_result (output + end ts) rows to the subsequent
-    # ``stream.tool_call.update`` event that carries the unified id.
-    pending_starts: dict[str, list[datetime]] = {}
-    pending_results: dict[str, list[tuple[datetime, str]]] = {}
-    rows_by_step: dict[str, list[dict[str, Any]]] = {}
-
-    for event in sorted_events:
-        kind = str(event.get("kind") or "").strip()
-        ts = parse_loop_event_timestamp(event.get("timestamp"))
-
-        if kind == "tool_call":
-            name = str(event.get("tool_name") or "").strip()
-            if name and ts is not None:
-                pending_starts.setdefault(name, []).append(ts)
-            continue
-
-        if kind == "tool_result":
-            name = str(event.get("tool_name") or "").strip()
-            content = str(event.get("content") or "")
-            if name and ts is not None:
-                pending_results.setdefault(name, []).append((ts, content))
-            continue
-
-        if kind != "event":
-            continue
-
-        data = event.get("data")
-        if not isinstance(data, dict):
-            metadata = event.get("metadata")
-            if isinstance(metadata, dict):
-                nested = metadata.get("data")
-                if isinstance(nested, dict):
-                    data = nested
-        if not isinstance(data, dict):
-            continue
-        if str(data.get("type") or "") != "soothe.stream.tool_call.update":
-            continue
-
-        tool_call_id = str(data.get("tool_call_id") or "").strip()
-        if not tool_call_id:
-            continue
-        step_id, _type_code, _task_idx, _tool_info = parse_unified_tool_call_id(tool_call_id)
-        if not step_id:
-            continue
-
-        name = str(data.get("name") or "").strip()
-        args = data.get("args")
-        if not isinstance(args, dict):
-            args = {}
-
-        start_ts: datetime | None = None
-        starts = pending_starts.get(name)
-        if starts:
-            start_ts = starts.pop(0)
-        end_ts: datetime | None = None
-        output: str | None = None
-        results = pending_results.get(name)
-        if results:
-            end_ts, output = results.pop(0)
-
-        duration_ms = 0
-        if start_ts is not None and end_ts is not None:
-            duration_ms = max(0, int((end_ts - start_ts).total_seconds() * 1000))
-
-        row = {
-            "id": tool_call_id,
-            "name": name or "tool",
-            "args": dict(args),
-            "phase": "success",
-            "output": output,
-            "duration_ms": duration_ms,
-            "started_at": start_ts.timestamp() if start_ts is not None else None,
-            "parent_tool_call_id": None,
-            "is_task_row": is_step_level_task_tool_id(tool_call_id),
-        }
-        rows_by_step.setdefault(step_id, []).append(row)
-
-    return {sid: json.dumps(rows) for sid, rows in rows_by_step.items() if rows}
-
-
-def _attach_step_tool_rows(
-    cards: list[MessageData],
-    step_tool_rows: dict[str, str],
-) -> None:
-    """Mutate ``cards`` in place: attach ``step_tool_calls_json`` to each STEP_PROGRESS."""
-    if not step_tool_rows:
-        return
+    sanitized: list[MessageData] = []
     for card in cards:
-        if card.type != MessageType.STEP_PROGRESS:
+        if card.type == MessageType.TOOL:
             continue
-        sid = card.step_progress_id
-        if not sid:
-            continue
-        encoded = step_tool_rows.get(sid)
-        if encoded and not card.step_tool_calls_json:
-            card.step_tool_calls_json = encoded
+        if card.type == MessageType.STEP_PROGRESS:
+            card.step_tool_calls_json = None
+        sanitized.append(card)
+    return sanitized
 
 
 def _has_cognition_step_events(events: list[dict[str, Any]]) -> bool:
@@ -840,10 +669,6 @@ def convert_loop_events_to_data(events: list[dict[str, Any]]) -> list[MessageDat
 
         data.append(msg_data)
 
-    # Same step-card tool-row hydration as collect_cognition_card_replay so
-    # the fallback path renders identically when checkpoint messages are
-    # unavailable (the case observed on loop 43ea / pgsql).
-    _attach_step_tool_rows(data, _build_step_tool_rows_map(events))
     return data
 
 
@@ -933,4 +758,5 @@ __all__ = [
     "merge_step_progress",
     "merge_visible_messages_with_cognition_cards",
     "parse_loop_event_timestamp",
+    "sanitize_resume_display_cards",
 ]

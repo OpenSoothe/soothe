@@ -185,9 +185,12 @@ class _HistoryMixin:
             )
             return _LoopHistoryPayload([], context_tokens, goal_dicts)
 
-        from soothe_sdk.display.card_binder import merge_consecutive_assistant_cards
+        from soothe_sdk.display.card_binder import (
+            merge_consecutive_assistant_cards,
+            sanitize_resume_display_cards,
+        )
 
-        data = merge_consecutive_assistant_cards(data)
+        data = sanitize_resume_display_cards(merge_consecutive_assistant_cards(data))
 
         return _LoopHistoryPayload(data, context_tokens, goal_dicts)
 
@@ -294,6 +297,7 @@ class _HistoryMixin:
 
         logger.info("Starting background event consumer for subscribed loop")
         from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+        from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
 
         assistant_cards_by_ns: dict[tuple[Any, ...], AssistantMessage] = {}
         last_user_text_by_ns: dict[tuple[Any, ...], str] = {}
@@ -324,6 +328,9 @@ class _HistoryMixin:
                     message, _metadata = data
                     message = normalize_stream_message(message)
 
+                    if self._is_loop_internal_checkpoint_message(message):
+                        continue
+
                     user_text = extract_user_text_for_display(message)
                     if user_text is not None:
                         # Deduplicate immediate replayed user rows after reconnect/resubscribe.
@@ -338,6 +345,9 @@ class _HistoryMixin:
                         continue
 
                     if isinstance(message, (AIMessage, AIMessageChunk)):
+                        phase = assistant_output_phase(message)
+                        if phase is not None and phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
+                            continue
                         extracted = extract_ai_text_for_display(message)
                         is_terminal = is_stream_terminal(message)
                         if extracted:

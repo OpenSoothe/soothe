@@ -29,6 +29,7 @@ from soothe_sdk.display.card_binder import (
     merge_step_progress,
     merge_visible_messages_with_cognition_cards,
     parse_loop_event_timestamp,
+    sanitize_resume_display_cards,
 )
 from soothe_sdk.display.card_ledger import (
     CARD_SCHEMA_VERSION,
@@ -76,6 +77,7 @@ __all__ = [
     "merge_step_progress",
     "merge_visible_messages_with_cognition_cards",
     "parse_loop_event_timestamp",
+    "sanitize_resume_display_cards",
     # Ledger (RFC-413)
     "CARD_SCHEMA_VERSION",
     "CardMutation",

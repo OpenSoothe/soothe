@@ -15,6 +15,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def is_restorable_message_data(data: MessageData) -> bool:
+    """Return False for message types that must not be mounted from the store."""
+    return data.type != MessageType.TOOL
+
+
 def message_to_widget(data: MessageData) -> Widget:
     """Recreate a widget from this message data.
 
@@ -46,10 +51,6 @@ def message_to_widget(data: MessageData) -> Widget:
 
         case MessageType.ASSISTANT:
             return AssistantMessage(data.content, id=data.id)
-
-        case MessageType.TOOL:
-            name = data.tool_name or "tool"
-            return AppMessage(f"[{name}]", id=data.id)
 
         case MessageType.SKILL:
             widget = SkillMessage(

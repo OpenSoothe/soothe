@@ -113,9 +113,12 @@ class _MessagesMixin:
                     return
 
                 # Create and mount only visible widgets (max WINDOW_SIZE).
+                from soothe_sdk.display.card_binder import sanitize_resume_display_cards
+
                 from soothe_cli.tui.binding import message_to_widget
 
                 visible = self._dedupe_message_data_by_id(visible)
+                visible = sanitize_resume_display_cards(visible)
                 widgets = [message_to_widget(msg_data) for msg_data in visible]
                 if widgets:
                     await messages_container.mount(*widgets)

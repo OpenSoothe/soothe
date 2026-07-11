@@ -50,12 +50,14 @@ The design eliminates the live/replay drift class by construction: live renderin
 
 The live TUI display is complete and correct: cognition cards, step cards, tool cards, user prompts, and final assistant text all render via the daemon's live event stream. **Resuming a historical loop produces a broken, incomplete transcript** that does not match what the user saw live.
 
-Symptoms on resume:
+Symptoms on resume (pre–IG-577; largely addressed):
 
-* **Cognition / step cards** — partly present, but step→tool binding is unreliable.
-* **User messages** — present when persisted via `ThreadLogger.log_user_input`, but not always linked to the iteration that consumed them.
-* **Assistant streamed text** — only the final consolidated body is persisted; per-step `LoopAIMessage(phase=execute_step)` fragments are lost or mis-attributed.
-* **Subagent cards** — completely absent (subagent domain is classified `INTERNAL` and never persisted).
+* **Cognition / step cards** — present; step cards show description, duration, and **tool-call count** on resume (inline tool-row replay is live-only).
+* **User messages** — present when persisted via `ThreadLogger.log_user_input`.
+* **Assistant streamed text** — consolidated assistant cards; `AssistantMessage` renders body on mount (no dot-only flash).
+* **Standalone tool stubs** — suppressed; display ledger never emits `MessageType.TOOL` cards.
+* **Orchestration-internal checkpoint rows** — `intent_classify`, `plan_gap_analysis`, `continuation`, and existing internal phases are stripped before bind.
+* **Subagent cards** — roll-up cards appear when bound at freeze; per-chunk subagent wire remains live-only.
 
 Core-agent thread internal messages are intentionally suppressed live and remain suppressed on replay (by design, not a gap).
 
@@ -270,7 +272,7 @@ Inferred from the current TUI widget set; covers everything the live UI renders 
 |---|---|---|
 | `user_message` | `content`, `timestamp` | One per user prompt |
 | `assistant_text` | `content` (markdown), `timestamp` | Final consolidated body per turn |
-| `step` | `step_id`, `description`, `phase`, `tool_rows[]`, `success?`, `duration_ms?`, `tool_call_count?`, `summary?` | Tool rows bound from `messages`-mode tool calls; phase ∈ `{running, success, error}` |
+| `step` | `step_id`, `description`, `phase`, `tool_call_count?`, `duration_ms?`, `summary?` | **Live:** optional inline `tool_rows[]` on the step card. **Resume:** footer stats only (`tool_call_count`); inline rows are not replayed (`sanitize_resume_display_cards`). Phase ∈ `{running, success, error}` |
 | `cognition_plan` | `iteration`, `action`, `status`, `assessment?`, `strategy?` | Updated as plan reflects |
 | `cognition_reason` | `iteration`, `content` | Per `soothe.cognition.strange_loop.reasoned` |
 | `subagent` | `task`, `progress[]`, `success?` | Roll-up of subagent stream — not one card per chunk |
@@ -359,10 +361,10 @@ Move binding logic from `_history.py::_convert_messages_to_data`, `_collect_cogn
 
 ## 12. Success Criteria
 
-1. **Live ≡ Replay invariant**: the transcript rendered after `/loops` switch or `loop continue` is bit-identical to what the user saw live during the original session (modulo client-side state like scroll position).
-2. **All three resume paths converge** on the same code (`card.*` frame consumption); the dead `history_replay` reconstructor is deleted.
-3. **Subagent cards** appear on replay.
-4. **Step → tool binding** is correct: every tool row attaches to the right step card, with status, args, and output preserved.
+1. **Live ≡ Replay invariant (relaxed for tool detail):** user-visible transcript structure matches after `/resume` or `loop continue` — user prompts, cognition/step/plan cards, and final assistant text. Inline step/subagent tool rows are **live-only**; resume shows tool-call **counts** on step footers.
+2. **All three resume paths converge** on `loop_history_fetch` + `CardBinder` output (TUI consumes RPC cards, not legacy checkpoint merge).
+3. **Subagent cards** appear on replay when frozen in the goal snapshot.
+4. **Step tool activity on resume:** `step_tool_call_count` preserved; standalone `TOOL` cards and `step_tool_calls_json` inline replay suppressed (IG-577).
 5. **Disk cost** stays under ~1 MB per 100-turn loop (`cards.jsonl`).
 6. **Replay latency** under 100 ms first-paint, under 500 ms full hydrate for 100-turn loops.
 7. **Desktop app** (RFC-505) consumes `card.*` frames with zero CLI-specific code.
@@ -376,6 +378,25 @@ Move binding logic from `_history.py::_convert_messages_to_data`, `_collect_cogn
 3. **Concurrent client reads during write.** Today the daemon serves one live + multiple readers per loop. Need to confirm Python file-handle semantics suffice for tail-read while another writer appends (POSIX `O_APPEND` should, but worth explicit test coverage).
 4. **`after_seq` semantics on schema upgrade.** If a daemon restart re-binds an in-progress loop under a newer card schema, can a client resume with the old `seq`? Provisional answer: yes, schema-version mismatch triggers a full replay rather than diff.
 5. **Tool-row identity across retries.** When a tool call is retried within a step, does the new attempt mutate the existing `tool_row` (same `tool_call_id`) or create a sibling row? Live UI today appears to create a sibling; needs explicit binder rule.
+
+---
+
+## 15. Resume display policy (IG-577)
+
+**Implemented 2026-07-11.** Clients fetching history via `loop_history_fetch` / `loop_cards_fetch` apply `sanitize_resume_display_cards()` before mount:
+
+| Data | Live | Resume |
+|------|------|--------|
+| Step card header + summary | Yes | Yes |
+| Step `tool_call_count` footer | Yes | Yes |
+| Inline step/subagent tool rows | Yes | **No** (stripped) |
+| Standalone `TOOL` cards | Never (live) | **No** (dropped) |
+| `intent_classify` / planning checkpoint rows | Never (live) | **No** (binder filter) |
+| Cognition plan/reason cards | Yes | Yes (from activity log replay) |
+
+Binder module: `soothe_sdk.display.card_binder` — expanded `_LOOP_INTERNAL_CHECKPOINT_PHASES`, always suppresses checkpoint `ToolMessage` pairs, removed offline `_build_step_tool_rows_map` replay attachment.
+
+TUI: `_fetch_loop_history_data` → sanitize → `message_to_widget`; `AssistantMessage.on_mount` renders preloaded body; background event consumer skips internal-phase wire messages.
 
 ---
 

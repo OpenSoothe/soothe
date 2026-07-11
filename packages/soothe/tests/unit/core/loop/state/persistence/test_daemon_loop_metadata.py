@@ -20,6 +20,7 @@ def test_extract_daemon_loop_metadata_filters_strange_loop_fields() -> None:
             "host_root": "/Users/me",
             "container_root": "/var/lib/soothe/workspaces",
         },
+        "resume_topic": "Explicit work request: file counting operation.",
         "goal_history": [{"goal_id": "g1"}],
     }
     extracted = extract_daemon_loop_metadata(data)
@@ -30,6 +31,7 @@ def test_extract_daemon_loop_metadata_filters_strange_loop_fields() -> None:
             "host_root": "/Users/me",
             "container_root": "/var/lib/soothe/workspaces",
         },
+        "resume_topic": "Explicit work request: file counting operation.",
     }
 
 
@@ -42,10 +44,12 @@ def test_merge_daemon_loop_metadata_overlays_preserved_fields() -> None:
     preserved = {
         "current_workspace": "/var/lib/soothe/workspaces/project",
         "client_workspace": "/Users/me/project",
+        "resume_topic": "Auth module build",
     }
     merged = merge_daemon_loop_metadata(checkpoint_data, preserved)
     assert merged["current_workspace"] == "/var/lib/soothe/workspaces/project"
     assert merged["client_workspace"] == "/Users/me/project"
+    assert merged["resume_topic"] == "Auth module build"
     assert merged["goal_history"] == []
 
 
@@ -68,6 +72,7 @@ async def test_merge_checkpoint_with_preserved_metadata_overlays_existing_row() 
             "checkpoint_data": {
                 "current_workspace": "/var/lib/soothe/workspaces/project",
                 "client_workspace": "/Users/me/project",
+                "resume_topic": "Count production files per package",
             },
             "client_workspace": None,
         }
@@ -78,4 +83,5 @@ async def test_merge_checkpoint_with_preserved_metadata_overlays_existing_row() 
         {"loop_id": "loop-1", "status": "running", "goal_history": []},
     )
     assert merged["current_workspace"] == "/var/lib/soothe/workspaces/project"
+    assert merged["resume_topic"] == "Count production files per package"
     assert merged["goal_history"] == []
