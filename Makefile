@@ -13,9 +13,12 @@
 .PHONY: docker-dev-up docker-dev-down docker-dev-ps
 .PHONY: docker-daemon-build docker-daemon-build-pypi
 .PHONY: docker-daemon-up docker-daemon-down docker-daemon-ps
+.PHONY: docker-prod-pull docker-prod-up docker-prod-down docker-prod-ps
 
 # Docker Compose env file (all commands use deploy/.env)
 DOCKER_ENV_FILE := --env-file deploy/.env
+# Production stack (deploy/docker-compose.yml)
+DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml $(DOCKER_ENV_FILE)
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
@@ -59,6 +62,12 @@ help:
 	@echo "  make docker-daemon-up        - Full dev stack: deps + langfuse + daemon"
 	@echo "  make docker-daemon-down      - Stop dev stack"
 	@echo "  make docker-daemon-ps        - Show daemon stack status"
+	@echo ""
+	@echo "Docker (Production):"
+	@echo "  make docker-prod-pull  - Pull production images (pgvector + soothed)"
+	@echo "  make docker-prod-up    - Start production stack (deploy/)"
+	@echo "  make docker-prod-down  - Stop production stack"
+	@echo "  make docker-prod-ps    - Show production stack status"
 	@echo ""
 	@echo "Docker (Reset):"
 	@echo "  make reset-the-world   - Reset all state and restart clean"
@@ -117,6 +126,7 @@ sync-verify:
 # Quick reference:
 #   Dev stack (deps + Langfuse): make docker-dev-up
 #   Full dev stack:             make docker-daemon-build && make docker-daemon-up
+#   Production stack:           cp deploy/env-example deploy/.env && make docker-prod-up
 
 # Version from VERSION file
 SOOTHE_VERSION := $(shell cat VERSION)
@@ -177,6 +187,32 @@ docker-daemon-down:
 
 docker-daemon-ps:
 	docker compose $(DOCKER_ENV_FILE) --profile daemon ps
+
+# --- Production Stack (deploy/docker-compose.yml) --------------------------
+
+docker-prod-pull:
+	@echo "Pulling production images..."
+	$(DOCKER_PROD_COMPOSE) pull
+	@echo "Pull complete"
+
+docker-prod-up:
+	@echo "Starting production stack (PostgreSQL + pgvector + soothed)..."
+	$(DOCKER_PROD_COMPOSE) up -d
+	@echo ""
+	@echo "Stack running. Check status: make docker-prod-ps"
+	@echo ""
+	@echo "Services:"
+	@echo "  Daemon API:  http://localhost:8765"
+	@echo "  PostgreSQL:  internal (soothe-pgvector)"
+	@echo ""
+	@echo "Config: deploy/.env (copy from deploy/env-example if missing)"
+
+docker-prod-down:
+	@echo "Stopping production stack..."
+	$(DOCKER_PROD_COMPOSE) down
+
+docker-prod-ps:
+	$(DOCKER_PROD_COMPOSE) ps
 
 # --- Reset -----------------------------------------------------------------
 
