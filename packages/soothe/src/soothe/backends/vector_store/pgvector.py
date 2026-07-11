@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Mapping
 from typing import Any
 
 from soothe.protocols.vector_store import VectorRecord
 
 logger = logging.getLogger(__name__)
+
+
+def _row_get(row: Any, *, name: str, index: int) -> Any:
+    """Read a column from psycopg rows (tuple or dict_row)."""
+    if isinstance(row, Mapping):
+        return row[name]
+    return row[index]
 
 
 class PGVectorStore:
@@ -100,7 +108,7 @@ class PGVectorStore:
             result = await row.fetchone()
             if result is None:
                 return None
-            typmod = int(result[0])
+            typmod = int(_row_get(result, name="atttypmod", index=0))
             return typmod if typmod > 0 else None
 
     async def create_collection(
@@ -232,7 +240,14 @@ class PGVectorStore:
 
             rows = await conn.execute(sql, sql_params)
             results = await rows.fetchall()
-            return [VectorRecord(id=r[0], payload=r[1] or {}, score=float(r[2])) for r in results]
+            return [
+                VectorRecord(
+                    id=_row_get(r, name="id", index=0),
+                    payload=_row_get(r, name="payload", index=1) or {},
+                    score=float(_row_get(r, name="score", index=2)),
+                )
+                for r in results
+            ]
 
     async def delete(self, record_id: str) -> None:
         """Delete a record by ID."""
@@ -284,7 +299,10 @@ class PGVectorStore:
             r = await row.fetchone()
             if r is None:
                 return None
-            return VectorRecord(id=r[0], payload=r[1] or {})
+            return VectorRecord(
+                id=_row_get(r, name="id", index=0),
+                payload=_row_get(r, name="payload", index=1) or {},
+            )
 
     async def list_records(
         self,
@@ -313,7 +331,13 @@ class PGVectorStore:
                 tuple(params) if params else None,
             )
             results = await rows.fetchall()
-            return [VectorRecord(id=r[0], payload=r[1] or {}) for r in results]
+            return [
+                VectorRecord(
+                    id=_row_get(r, name="id", index=0),
+                    payload=_row_get(r, name="payload", index=1) or {},
+                )
+                for r in results
+            ]
 
     async def delete_collection(self) -> None:
         """Drop the vector table."""
