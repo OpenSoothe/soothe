@@ -36,6 +36,10 @@ DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "search_tools",
         "search_skills",
         "invoke_skill",
+        # MCP progressive disclosure (RFC-412)
+        "search_mcp_tools",
+        "mcp_resources_list",
+        "mcp_resources_read",
     }
 )
 

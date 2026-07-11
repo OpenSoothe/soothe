@@ -25,6 +25,7 @@ def _reset_singleton() -> None:
     mod._setup_waiter = None
 
 
+@pytest.mark.integration
 def test_get_or_create_returns_same_pool_instance() -> None:
     pytest.importorskip("psycopg_pool")
     pytest.importorskip("langgraph.checkpoint.postgres.aio")
@@ -43,6 +44,7 @@ def test_get_or_create_returns_same_pool_instance() -> None:
     assert SharedCheckpointerPool.is_shared_pool(p1)
 
 
+@pytest.mark.integration
 def test_is_shared_pool_false_for_foreign_pool() -> None:
     pytest.importorskip("psycopg_pool")
 
@@ -114,6 +116,7 @@ async def test_setup_checkpointer_serializes_concurrent_waiters() -> None:
     assert mod._setup_waiter is None
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_reset_shared_instance_from_different_event_loop() -> None:
     pytest.importorskip("psycopg_pool")

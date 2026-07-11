@@ -1,4 +1,4 @@
-"""Integration tests for PostgreSQLPersistStore async operations (IG-258 Phase 2)."""
+"""Unit tests for PostgreSQLPersistStore async operations (IG-258 Phase 2)."""
 
 import asyncio
 import os
@@ -6,6 +6,8 @@ import uuid
 
 import pytest
 import pytest_asyncio
+
+pytestmark = pytest.mark.integration
 
 # Default matches docker-compose ``soothe-pgvector`` (host port 6432) and
 # Requires PostgreSQL with soothe_* databases (auto-provisioned on daemon startup;

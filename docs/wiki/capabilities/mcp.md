@@ -102,9 +102,21 @@ To add a custom MCP server, add it to `config.yml`:
 mcp_servers:
   - name: my-custom
     transport: stdio
-    command: ["python", "-m", "my_mcp_server"]
+    command: npx
+    args: ["-y", "@my/mcp-server"]
     defer: true
 ```
+
+Or opt into curated **builtin** servers (all deferred by default; empty list = no MCP connections):
+
+```yaml
+mcp_builtins:
+  - github
+  - playwright
+  - postgres
+```
+
+Set env vars for tokens/DSN (`GITHUB_PERSONAL_ACCESS_TOKEN`, `POSTGRES_CONNECTION_STRING`, etc.).
 
 The server exposes tools via the MCP protocol; Soothe discovers them on connection and applies progressive disclosure, policy gating, and workspace filtering automatically.
 

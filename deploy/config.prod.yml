@@ -62,7 +62,7 @@ vector_store_router:
 # Workspace Configuration
 # =============================================================================
 # Maps host paths to container paths so daemon can access client workspaces.
-# Set SOOTHE_WORKSPACE_HOST_ROOT in .env to match your host directory.
+# docker-compose defaults the bind mount to $HOME; override SOOTHE_WORKSPACE_HOST_ROOT if needed.
 workspace_mount:
   host_root: ${SOOTHE_WORKSPACE_HOST_ROOT}
   container_root: /var/lib/soothe/workspaces

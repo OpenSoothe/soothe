@@ -10,6 +10,8 @@ from langchain_core.messages import HumanMessage
 from soothe.config import SootheConfig
 from soothe.utils.llm.structured import invoke_structured_chat
 
+pytestmark = pytest.mark.integration
+
 WORD_REPLY_SCHEMA = {
     "type": "object",
     "properties": {
@@ -24,7 +26,6 @@ WORD_REPLY_SCHEMA = {
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_invoke_structured_chat_live_default_model(
     integration_config: SootheConfig,
     requires_llm_api,
@@ -44,7 +45,6 @@ async def test_invoke_structured_chat_live_default_model(
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_invoke_structured_chat_enforces_schema_constraints(
     integration_config: SootheConfig,
     requires_llm_api,
@@ -84,7 +84,6 @@ async def test_invoke_structured_chat_enforces_schema_constraints(
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_invoke_structured_chat_roundtrip_json(
     integration_config: SootheConfig,
     requires_llm_api,

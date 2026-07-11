@@ -19,7 +19,6 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestRunCommandShellTool:
     """Integration tests for shell command execution."""
 
@@ -87,7 +86,6 @@ class TestRunCommandShellTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestRunPythonREPLTool:
     """Integration tests for Python REPL execution."""
 
@@ -176,7 +174,6 @@ print(z)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestExecutionErrorHandling:
     """Test error handling across execution tools."""
 

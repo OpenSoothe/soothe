@@ -5,6 +5,8 @@ Tests wizsearch search and crawl capabilities with real API calls.
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 # ---------------------------------------------------------------------------
 # Wizsearch Search Tool Tests
 # ---------------------------------------------------------------------------
@@ -18,7 +20,6 @@ except ImportError:
     pass
 
 
-@pytest.mark.integration
 class TestWizsearchSearchTool:
     """Integration tests for wizsearch search tool."""
 
@@ -75,7 +76,6 @@ class TestWizsearchSearchTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestWizsearchCrawlTool:
     """Integration tests for wizsearch crawl tool."""
 
@@ -125,7 +125,6 @@ class TestWizsearchCrawlTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestWizsearchToolErrors:
     """Test error handling and edge cases for wizsearch tools."""
 

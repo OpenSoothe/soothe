@@ -6,7 +6,7 @@ Self-contained production stack: PostgreSQL + pgvector + Soothe daemon.
 
 ```bash
 cd deploy
-cp .env.example .env && vim .env   # Set API keys and workspace path
+cp env-example .env && vim .env   # Set API keys
 docker compose up -d
 ```
 
@@ -16,7 +16,9 @@ Verify: `docker compose ps` — should show soothe-pgvector and soothed running.
 
 Required (`.env`):
 - `DASHSCOPE_API_KEY` — DashScope provider key
-- `SOOTHE_WORKSPACE_HOST_ROOT` — Host workspace path
+
+Optional:
+- `SOOTHE_WORKSPACE_HOST_ROOT` — Host workspace path (default: `$HOME` via docker-compose)
 
 ## Architecture
 

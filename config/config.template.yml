@@ -419,7 +419,12 @@ skillify:
   retrieval_top_k: 10
 
 # MCPServerConfig — unique name per server; defer=true for progressive disclosure
+# mcp_builtins — opt-in daily-use servers (not connected when empty). All defer=true.
+#   Available: playwright, github, slack, postgres, gdrive, chrome-devtools
+#   Example: mcp_builtins: [github, playwright]
+# Set env vars for tokens/DSN (e.g. GITHUB_PERSONAL_ACCESS_TOKEN, POSTGRES_CONNECTION_STRING).
 mcp_servers: []
+mcp_builtins: []
 progressive_mcp:
   budget_pct: 0.01
   max_listing_chars_per_entry: 250

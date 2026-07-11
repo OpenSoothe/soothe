@@ -6,6 +6,8 @@ import uuid
 import pytest
 import pytest_asyncio
 
+pytestmark = pytest.mark.integration
+
 # Default matches repo docker-compose.yml: soothe-pgvector service on host port 6432,
 # database soothe_vectors (auto-provisioned on daemon startup).
 _DEFAULT_PGVECTOR_DSN = "postgresql://postgres:postgres@127.0.0.1:6432/soothe_vectors"
@@ -62,7 +64,6 @@ async def pgvector_store(pgvector_config):
         pytest.skip("pgvector dependencies not installed")
 
 
-@pytest.mark.integration
 @pytest.mark.requires_postgresql
 class TestPGVectorStoreIntegration:
     """Integration tests for PGVectorStore with real PostgreSQL database."""

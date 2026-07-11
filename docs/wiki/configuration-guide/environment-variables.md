@@ -190,6 +190,7 @@ Agent config (JSON or YAML) for Docker path mapping:
 | Variable / YAML | Purpose |
 |-----------------|---------|
 | `SOOTHE_WORKSPACE_MOUNT` | JSON: `{"host_root":"/Users/you/Workspace","container_root":"/var/lib/soothe/workspaces"}` |
+| `SOOTHE_WORKSPACE_HOST_ROOT` | Host workspace bind-mount source for Compose (default: `$HOME`; optional override) |
 | `workspace_mount.host_root` | Host prefix of CLI project paths (RFC-621) |
 | `workspace_mount.container_root` | In-container mount point (must match Docker `-v` target) |
 
@@ -267,7 +268,7 @@ cd /Users/you/Workspace/soothe && soothe
 
 Path translation: CLI sends `/Users/chenxm/Workspace/soothe` → daemon uses `/var/lib/soothe/workspaces/soothe`.
 
-**With YAML** (Compose / `deploy/`): same mapping under `workspace_mount:` in agent config; mount `${SOOTHE_WORKSPACE_HOST_ROOT}:/var/lib/soothe/workspaces` — see `deploy/config.prod.yml` and root `docker-compose.yml`.
+**With YAML** (Compose / `deploy/`): same mapping under `workspace_mount:` in agent config; docker-compose mounts `$HOME` by default (`${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces`) — see `deploy/config.prod.yml` and root `docker-compose.yml`. Override `SOOTHE_WORKSPACE_HOST_ROOT` when projects live outside `$HOME`.
 
 **Rules:**
 

@@ -82,7 +82,6 @@ def apply_diff_tool(middleware):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestDeleteFileTool:
     """Integration tests for delete_file tool."""
 
@@ -119,7 +118,6 @@ class TestDeleteFileTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestFileInfoTool:
     """Integration tests for file_info tool."""
 
@@ -148,7 +146,6 @@ class TestFileInfoTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestEditFileLinesTool:
     """Integration tests for edit_file_lines tool."""
 
@@ -203,7 +200,6 @@ class TestEditFileLinesTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestInsertLinesTool:
     """Integration tests for insert_lines tool."""
 
@@ -238,7 +234,6 @@ class TestInsertLinesTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestDeleteLinesTool:
     """Integration tests for delete_lines tool."""
 
@@ -275,7 +270,6 @@ class TestDeleteLinesTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestApplyDiffTool:
     """Integration tests for apply_diff tool."""
 
@@ -309,7 +303,6 @@ class TestApplyDiffTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestFileOpsErrorHandling:
     """Test error handling across file operation tools."""
 

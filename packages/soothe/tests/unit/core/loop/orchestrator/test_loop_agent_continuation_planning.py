@@ -300,7 +300,9 @@ async def test_continuation_new_goal_projection_includes_boundary_marker() -> No
     """IG-555: iter=0 continuation plan prompts include prior-goal boundary marker."""
     goal = "build image then run e2e"
     ctx, _ = await _make_continuation_context(goal=goal)
-    ctx.loop_state.loop_messages = [
+    # loop_messages is CE-backed once bound (see LoopState.loop_messages property),
+    # so record into the CE ledger rather than assigning to the (ignored) cache.
+    for msg in [
         LoopHumanMessage(content="finalize", phase="goal_completion", thread_id="tid"),
         LoopAIMessage(
             content="Recommended: apply signature change.",
@@ -311,7 +313,8 @@ async def test_continuation_new_goal_projection_includes_boundary_marker() -> No
         LoopAIMessage(
             content='{"intake_label":"complex"}', phase="intent_classify", thread_id="tid"
         ),
-    ]
+    ]:
+        ctx.ce.ledger.record_message(msg, getattr(msg, "phase", ""))
     mode = resolve_planner_projection_mode(ctx.loop_state)
     projected = project_planner_ledger(
         ctx.loop_state.loop_messages,

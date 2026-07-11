@@ -78,7 +78,6 @@ def _subagent_names(specs: list) -> list[str]:
     return out
 
 
-@pytest.mark.integration
 def test_resolve_sample_echo_after_plugin_load() -> None:
     cfg = _minimal_config_sample_echo_only()
     asyncio.run(load_plugins(cfg))
@@ -87,7 +86,6 @@ def test_resolve_sample_echo_after_plugin_load() -> None:
     assert "sample_echo" in _subagent_names(specs)
 
 
-@pytest.mark.integration
 def test_create_soothe_agent_includes_sample_echo() -> None:
     cfg = _minimal_config_sample_echo_only()
     fake = FakeListChatModel(responses=["stub"])
@@ -96,7 +94,6 @@ def test_create_soothe_agent_includes_sample_echo() -> None:
     assert "sample_echo" in names
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_sample_echo_runnable_invocation() -> None:
     cfg = _minimal_config_sample_echo_only()

@@ -23,6 +23,8 @@ from typing import Any
 
 from .local import LocalFilesystem
 from .protocol import (
+    BatchedEditOperation,
+    BatchedEditResult,
     DeleteResult,
     EditResult,
     FileInfo,
@@ -533,6 +535,19 @@ class LangChainAdapter(UnifiedFilesystem):
         See apply_diff() for details.
         """
         return await self._underlying.aapply_diff(path, diff, backup=backup)
+
+    async def aedit_batched(
+        self,
+        path: str,
+        operations: list[BatchedEditOperation],
+        *,
+        backup: bool = True,
+    ) -> BatchedEditResult:
+        """Async apply multiple edit operations to a file in one read/modify/write cycle.
+
+        See ``UnifiedFilesystem.aedit_batched`` for operation semantics.
+        """
+        return await self._underlying.aedit_batched(path, operations, backup=backup)
 
     # ========================================================================
     # Directory Operations (delegated to underlying)

@@ -21,7 +21,6 @@ def _get_router_config_for_available_credentials() -> dict:
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_parallel_tools_config_propagation(requires_llm_api):
     """Verify concurrency config propagates correctly."""
     router = _get_router_config_for_available_credentials()
@@ -47,7 +46,6 @@ async def test_parallel_tools_config_propagation(requires_llm_api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_parallel_tools_performance_improvement(requires_llm_api):
     """Verify parallel execution is faster than sequential.
 
@@ -109,7 +107,6 @@ async def test_parallel_tools_performance_improvement(requires_llm_api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_parallel_tools_mixed_sync_async(requires_llm_api):
     """Verify middleware works with both sync and async tools."""
     router = _get_router_config_for_available_credentials()
@@ -144,7 +141,6 @@ async def test_parallel_tools_mixed_sync_async(requires_llm_api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_parallel_tools_default_parallelism(requires_llm_api):
     """Verify default configuration uses max_parallel_steps=4."""
     router = _get_router_config_for_available_credentials()
@@ -164,7 +160,6 @@ async def test_parallel_tools_default_parallelism(requires_llm_api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_parallel_tools_extreme_cases(requires_llm_api):
     """Test edge cases: max_parallel_steps=1 (sequential) and max_parallel_steps=10 (high)."""
     router = _get_router_config_for_available_credentials()
@@ -200,7 +195,6 @@ async def test_parallel_tools_extreme_cases(requires_llm_api):
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
 async def test_parallel_tools_zero_means_unlimited(requires_llm_api):
     """Verify that max_parallel_steps=0 means unlimited (valid special value)."""
     router = _get_router_config_for_available_credentials()
