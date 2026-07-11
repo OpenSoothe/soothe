@@ -45,6 +45,30 @@ def resolve_wire_subagent_for_step(
     return _wire_subagent_from_routing(routing_classification)
 
 
+def resolve_user_requested_wire_subagent(
+    *,
+    routing_classification: Any | None = None,
+    intent: Any | None = None,
+) -> str | None:
+    """Return a wired subagent the user explicitly requested (Pass 2 or slash routing)."""
+    from soothe.foundation.sloop.state.schemas import (
+        resolve_step_wire_subagent,
+        resolve_wire_subagent,
+    )
+
+    if intent is not None:
+        raw = getattr(intent, "wire_subagent", None)
+        if isinstance(raw, str) and raw.strip():
+            resolved = resolve_wire_subagent(wire_subagent=raw.strip())
+            if resolved:
+                return resolved
+
+    raw = _wire_subagent_from_routing(routing_classification)
+    if raw:
+        return resolve_step_wire_subagent(execution_hint="subagent", subagent=raw)
+    return None
+
+
 def _select_thread_for_step(
     step: StepAction,
     decision: AgentDecision,
@@ -76,5 +100,6 @@ def _select_thread_for_step(
 __all__ = [
     "_select_thread_for_step",
     "_wire_subagent_from_routing",
+    "resolve_user_requested_wire_subagent",
     "resolve_wire_subagent_for_step",
 ]

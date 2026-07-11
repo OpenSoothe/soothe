@@ -149,6 +149,39 @@ def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:
     return out
 
 
+def strip_unrequested_step_delegates(
+    steps: list[StepAction],
+    *,
+    user_wire_subagent: str | None,
+) -> list[StepAction]:
+    """Clear planner-chosen subagent wiring unless the user explicitly requested a subagent."""
+    if user_wire_subagent:
+        return steps
+
+    out: list[StepAction] = []
+    stripped = 0
+    for step in steps:
+        if step.execution_hint == "subagent" or step.subagent or step.wire_subagent:
+            stripped += 1
+            out.append(
+                step.model_copy(
+                    update={
+                        "execution_hint": "auto",
+                        "subagent": None,
+                        "wire_subagent": None,
+                    }
+                )
+            )
+        else:
+            out.append(step)
+    if stripped:
+        logger.info(
+            "[PlanGen] Cleared subagent delegate on %d step(s); execute CoreAgent will choose",
+            stripped,
+        )
+    return out
+
+
 def _merged_step_dependencies(step: PlanGenerateStep) -> list[str] | None:
     """Merge in-wave dependencies and cross-wave continues_from tokens."""
     deps: list[str] = []

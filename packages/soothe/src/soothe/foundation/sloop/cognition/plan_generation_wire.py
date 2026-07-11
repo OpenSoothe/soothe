@@ -37,7 +37,10 @@ class PlanGenerateStepWire(BaseModel):
     )
     delegate: str | None = Field(
         default=None,
-        description="Optional subagent name when this step should delegate.",
+        description=(
+            "Optional wired subagent (planner, browser_use, deep_research) only when the "
+            "step exclusively requires that capability; omit for workspace/local steps."
+        ),
     )
 
 

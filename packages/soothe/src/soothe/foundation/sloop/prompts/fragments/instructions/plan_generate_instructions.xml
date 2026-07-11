@@ -19,7 +19,21 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
   composite ids from STEP ANCHOR REGISTRY when ordering matters (simple and complex goals).
 - ``expected_output``: Checkable completion signal.
 - ``id``: Optional short token (``01``, ``02``) or per STEP ID HINT.
-- ``delegate``: Optional subagent name when this step must delegate.
+- ``delegate``: Optional wired subagent when this step must **exclusively** delegate via
+  ``task`` (``planner``, ``browser_use``, ``deep_research`` only). **Default: omit / null**
+  on every step — execute CoreAgent already has ``task`` and local tools and chooses per hop.
+
+**``delegate`` rules** (match intake Pass 2 — do not over-delegate):
+- Leave ``delegate`` null for workspace/codebase work: file reads, repo search, config edits,
+  gap analysis from local docs, synthesis from prior step outputs, adb/shell on workspace.
+- Set ``delegate`` only when the step **cannot** be done with local tools alone:
+  - ``deep_research``: public web investigation only (not local files or repo paths).
+  - ``browser_use``: live browser interaction (pages, forms, screenshots).
+  - ``planner``: agentic markdown execution-plan design as the step deliverable.
+- Set ``delegate`` when GOAL or SUBAGENT ROUTING names that subagent **and** the step matches
+  the subagent's scope above.
+- Never set ``delegate`` on every step in a wave; mixed local + delegated steps are normal
+  (``delegate`` null on local steps, set only where required).
 
 Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps,
 else ``parallel``). Do not emit ``type``, ``execution_mode``, ``full_description``, or ``kind``.
