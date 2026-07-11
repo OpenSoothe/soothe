@@ -9,7 +9,7 @@ This package provides middleware implementations:
 - PerTurnModelMiddleware: Per-stream model override for daemon/TUI
 - SootheFilesystemMiddleware: Extended filesystem tools middleware
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
-- MCPToolSearchMiddleware: MCP progressive disclosure telemetry (RFC-412)
+- MCPActivationMiddleware: MCP progressive disclosure search, promote, bind (RFC-412)
 - ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-511)
 
 Utility functions:
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.identity import IdentityMiddleware
     from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
-    from soothe.middleware.mcp_tool_search import MCPToolSearchMiddleware
+    from soothe.middleware.mcp_activation import MCPActivationMiddleware
     from soothe.middleware.model_call_profiler import (
         InnerModelCallProfilerMiddleware,
         LLMCallProfilerMiddleware,
@@ -55,7 +55,7 @@ __all__ = [
     "InnerModelCallProfilerMiddleware",
     "LLMCallProfilerMiddleware",
     "LLMRateLimitMiddleware",
-    "MCPToolSearchMiddleware",
+    "MCPActivationMiddleware",
     "ModelCallProfilerMiddleware",
     "SootheFilesystemMiddleware",
     "SoothePolicyMiddleware",
@@ -87,7 +87,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "IdentityMiddleware": ("soothe.middleware.identity", "IdentityMiddleware"),
     "IdentityRuntime": ("soothe.middleware.identity", "IdentityRuntime"),
     "LLMRateLimitMiddleware": ("soothe.middleware.llm_rate_limit", "LLMRateLimitMiddleware"),
-    "MCPToolSearchMiddleware": ("soothe.middleware.mcp_tool_search", "MCPToolSearchMiddleware"),
+    "MCPActivationMiddleware": ("soothe.middleware.mcp_activation", "MCPActivationMiddleware"),
     "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
     "SoothePolicyMiddleware": ("soothe.middleware.policy", "SoothePolicyMiddleware"),
     "SystemPromptMiddleware": (

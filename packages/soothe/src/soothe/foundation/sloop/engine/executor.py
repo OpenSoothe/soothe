@@ -839,8 +839,8 @@ class Executor:
         will lazy-init fresh fields.
         """
         has_data = (
-            loop_state.sent_mcp_tool_names
-            or loop_state.invoked_mcp_tools
+            loop_state.mcp_activation_sent
+            or loop_state.mcp_activation_promoted
             or loop_state.disabled_mcp_servers
             or loop_state.cached_mcp_resources
         )
@@ -848,8 +848,10 @@ class Executor:
             return None
 
         return {
-            "sent_mcp_tool_names": set(loop_state.sent_mcp_tool_names),
-            "invoked_mcp_tools": dict(loop_state.invoked_mcp_tools),
+            "mcp_activation": {
+                "sent": set(loop_state.mcp_activation_sent),
+                "promoted": set(loop_state.mcp_activation_promoted),
+            },
             "disabled_mcp_servers": set(loop_state.disabled_mcp_servers),
             "cached_mcp_resources": dict(loop_state.cached_mcp_resources),
         }
@@ -865,14 +867,16 @@ class Executor:
         """
         if not graph_output:
             return
-        sent = graph_output.get("sent_mcp_tool_names")
-        invoked = graph_output.get("invoked_mcp_tools")
+        activation = graph_output.get("mcp_activation")
+        if isinstance(activation, dict):
+            sent = activation.get("sent")
+            promoted = activation.get("promoted")
+            if isinstance(sent, (set, list, tuple)):
+                loop_state.mcp_activation_sent = set(sent)
+            if isinstance(promoted, (set, list, tuple)):
+                loop_state.mcp_activation_promoted = set(promoted)
         disabled = graph_output.get("disabled_mcp_servers")
         cached = graph_output.get("cached_mcp_resources")
-        if isinstance(sent, (set, list, tuple)):
-            loop_state.sent_mcp_tool_names = set(sent)
-        if isinstance(invoked, dict):
-            loop_state.invoked_mcp_tools = dict(invoked)
         if isinstance(disabled, (set, list, tuple)):
             loop_state.disabled_mcp_servers = set(disabled)
         if isinstance(cached, dict):

@@ -194,13 +194,19 @@ class AgentBuilder:
         if tools:
             all_tools.extend(tools)
 
-        # RFC-412: Append MCP always-loaded tools (defer=False servers)
+        # RFC-412: Full MCP catalog; per-hop binding via MCPActivationMiddleware
         registry = mcp_registry or self._mcp_registry
         if registry is not None:
-            mcp_tools = registry.always_loaded_tools()
+            mcp_tools = registry.all_tools()
             if mcp_tools:
                 all_tools.extend(mcp_tools)
-                logger.debug("[Init] MCP tools: %d always-loaded", len(mcp_tools))
+                logger.debug("[Init] MCP tools: %d in catalog", len(mcp_tools))
+
+            if registry.deferred_tools():
+                from soothe.mcp.discovery_tools import create_search_mcp_tools_tool
+
+                all_tools.append(create_search_mcp_tools_tool())
+                logger.debug("[Init] search_mcp_tools added (deferred MCP tools present)")
 
             # Synthetic MCP resource tools (list + read)
             from soothe.mcp.tools import create_mcp_resource_tools
@@ -266,12 +272,14 @@ class AgentBuilder:
             identity_runtime=identity_runtime,
         )
         if all_tools:
+            from soothe.middleware.mcp_activation import MCPActivationMiddleware
             from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
 
             for mw in default_middleware:
                 if isinstance(mw, ProgressiveToolMiddleware):
                     mw.set_tool_catalog(all_tools)
-                    break
+                elif isinstance(mw, MCPActivationMiddleware) and registry is not None:
+                    mw.set_tool_catalog()
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
         # RFC-105: Skill emission is owned by SystemPromptMiddleware via

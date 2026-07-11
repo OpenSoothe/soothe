@@ -11,6 +11,7 @@ from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, Too
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
+from soothe.mcp.progressive_registry import merge_mcp_activation
 from soothe.skills.registry import merge_skill_activation
 from soothe.toolkits.progressive.registry import merge_tool_activation
 from soothe.utils.text_preview import preview_first
@@ -140,8 +141,7 @@ class _SystemPromptState(TypedDict):
     routing_classification: NotRequired[Any]  # Type: RoutingClassification
     response_language: NotRequired[Any]  # Type: ResponseLanguage
     workspace: NotRequired[str | None]
-    sent_mcp_tool_names: NotRequired[set[str]]
-    invoked_mcp_tools: NotRequired[dict[str, dict]]
+    mcp_activation: NotRequired[Annotated[dict[str, Any], merge_mcp_activation]]
     disabled_mcp_servers: NotRequired[set[str]]
     cached_mcp_resources: NotRequired[dict[str, str]]
     tool_activation: NotRequired[Annotated[dict[str, Any], merge_tool_activation]]
@@ -837,10 +837,10 @@ class SystemPromptMiddleware(AgentMiddleware):
         """RFC-412: Compose <AVAILABLE_MCP_TOOLS> block for deferred MCP tools.
 
         Only deferred tools (defer=True) need listing — always-loaded tools
-        are already in the tool array.
+        are bound via MCPActivationMiddleware on every hop.
 
         Args:
-            state: Request state dict (may contain ``sent_mcp_tool_names``).
+            state: Request state dict (may contain ``mcp_activation``).
 
         Returns:
             XML block string, or None if no MCP tools or registry.
@@ -848,16 +848,24 @@ class SystemPromptMiddleware(AgentMiddleware):
         if not self._mcp_registry or not state:
             return None
 
-        sent = state.get("sent_mcp_tool_names", set())
-        if not isinstance(sent, set):
-            sent = set()
+        from soothe.mcp.progressive_registry import ProgressiveMCPRegistry
+        from soothe.middleware.mcp_activation import stash_mcp_activation_update
+
+        core_names = frozenset(
+            t.name for t in self._mcp_registry.always_loaded_tools() if getattr(t, "name", None)
+        )
+        progressive = ProgressiveMCPRegistry(always_loaded_names=core_names)
+
+        activation = state.get("mcp_activation")
+        if not isinstance(activation, dict):
+            activation = ProgressiveMCPRegistry.init_activation_state()
+            state["mcp_activation"] = activation
 
         descriptors = self._mcp_registry.deferred_tools()
         if not descriptors:
             return None
 
-        # Filter out already-sent tools
-        new_descriptors = [d for d in descriptors if d.name not in sent]
+        new_descriptors = progressive.new_for_thread(activation, descriptors)
         if not new_descriptors:
             return None
 
@@ -888,10 +896,9 @@ class SystemPromptMiddleware(AgentMiddleware):
         if not text:
             return None
 
-        # Mark as sent
-        for d in new_descriptors:
-            sent.add(d.name)
-        state["sent_mcp_tool_names"] = sent
+        progressive.mark_sent(activation, [d.name for d in new_descriptors])
+        state["mcp_activation"] = activation
+        stash_mcp_activation_update(activation)
 
         return f"<AVAILABLE_MCP_TOOLS>\n{text}\n</AVAILABLE_MCP_TOOLS>"
 
@@ -1096,6 +1103,7 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "synthesis_scenario": request.state.get("synthesis_scenario"),
                 "skill_activation": request.state.get("skill_activation"),
                 "tool_activation": request.state.get("tool_activation"),
+                "mcp_activation": request.state.get("mcp_activation"),
                 "response_language": request.state.get("response_language"),
             }
             resolved_workspace = self._resolve_workspace_for_prompt(state_dict)
