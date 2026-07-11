@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.config.models import normalize_agentic_final_response_mode
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode, StepNode
 from soothe.foundation.context.planning import (
@@ -20,7 +21,6 @@ from soothe.foundation.context.planning import (
     StepPlanManagerAdapter,
     StepPlanningSubengine,
 )
-from soothe.config.models import normalize_agentic_final_response_mode
 from soothe.foundation.context.planning.completion import (
     _LEDGER_DIRECT_MAX_TOOL_CALLS,
     _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
