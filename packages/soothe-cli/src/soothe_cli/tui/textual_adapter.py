@@ -112,12 +112,18 @@ from soothe_cli.runtime.state.session_stats import (
     format_token_count,
 )
 from soothe_cli.runtime.state.step_router import StepTaskRouter
+from soothe_cli.runtime.token_usage import (
+    extract_stream_message_token_usage,
+    fetch_conversation_token_count,
+    merge_context_token_totals,
+)
 from soothe_cli.runtime.turn.pipeline import run_turn_pipeline
 from soothe_cli.runtime.turn.prepare import (
     PreparedTurnChunk,
     TurnPrepareState,
     prepare_turn_chunk,
 )
+from soothe_cli.runtime.wire.messages import normalize_lc_stream_message
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
@@ -1616,23 +1622,6 @@ def _finalize_stuck_dependency_predecessors(
 # Stream messages
 # ---------------------------------------------------------------------------
 
-logger = logging.getLogger(__name__)
-
-
-def _normalize_lc_stream_message(message: Any) -> Any:
-    """Turn daemon JSON dicts into LangChain message objects when possible."""
-    if not isinstance(message, dict):
-        return message
-    try:
-        from soothe_sdk.langchain_wire import deserialize_langchain_message_from_wire
-
-        restored = deserialize_langchain_message_from_wire(message)
-        if restored is not message:
-            return restored
-    except Exception:
-        logger.debug("TUI could not restore LangChain message from dict", exc_info=True)
-    return message
-
 
 def _coerce_ai_message_for_blocks(message: Any) -> Any:
     """Best-effort dict → ``AIMessage`` / ``AIMessageChunk`` for block extraction.
@@ -1981,8 +1970,6 @@ async def apply_tool_call_wire_update(
 # ---------------------------------------------------------------------------
 # Turn helpers
 # ---------------------------------------------------------------------------
-
-logger = logging.getLogger(__name__)
 
 
 def _goal_loop_elapsed_start(
@@ -2499,14 +2486,24 @@ async def _report_and_persist_tokens(
     approximate: bool = False,
 ) -> None:
     """Update the token display and best-effort persist via ``loop_state_update``."""
-    if captured_input_tokens or captured_output_tokens:
+    display_tokens = captured_input_tokens
+    display_approximate = approximate
+    if not display_tokens and not captured_output_tokens:
+        loop_id = _loop_id_for_remote_state(config, daemon_session)
+        estimated = await fetch_conversation_token_count(daemon_session, loop_id)
+        if estimated:
+            display_tokens = estimated
+            display_approximate = True
+
+    if display_tokens or captured_output_tokens:
         if adapter._on_tokens_update:
-            adapter._on_tokens_update(captured_input_tokens, approximate=approximate)
+            adapter._on_tokens_update(display_tokens, approximate=display_approximate)
+        persist_tokens = captured_input_tokens or display_tokens
         if shield:
             try:
                 await _persist_context_tokens(
                     config,
-                    captured_input_tokens,
+                    persist_tokens,
                     daemon_session=daemon_session,
                 )
             except (Exception, asyncio.CancelledError):
@@ -2517,11 +2514,11 @@ async def _report_and_persist_tokens(
         else:
             await _persist_context_tokens(
                 config,
-                captured_input_tokens,
+                persist_tokens,
                 daemon_session=daemon_session,
             )
     elif adapter._on_tokens_show:
-        adapter._on_tokens_show(approximate=approximate)
+        adapter._on_tokens_show(approximate=display_approximate)
 
 
 async def _flush_assistant_text_ns(
@@ -2956,7 +2953,7 @@ async def execute_task_textual(
                             metadata = prepared.message_metadata
                         else:
                             message, metadata = data
-                            message = _normalize_lc_stream_message(message)
+                            message = normalize_lc_stream_message(message)
 
                         if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
                             router.on_subgraph_namespace(ns_key)
@@ -3071,37 +3068,33 @@ async def execute_task_textual(
                                     )
                             continue
 
-                        # Extract token usage (before content_blocks check
-                        # - usage may be on any chunk)
-                        if hasattr(message, "usage_metadata"):
-                            usage = message.usage_metadata
-                            if usage:
-                                input_toks = usage.get("input_tokens", 0)
-                                output_toks = usage.get("output_tokens", 0)
-                                total_toks = usage.get("total_tokens", 0)
-                                from soothe_cli.tui.config import settings
+                        # Extract token usage (before content_blocks check — usage may
+                        # be on any chunk; providers use usage_metadata or response_metadata).
+                        input_toks, output_toks, total_toks = extract_stream_message_token_usage(
+                            message
+                        )
+                        if input_toks or output_toks or total_toks:
+                            from soothe_cli.tui.config import settings
 
-                                active_model = settings.model_name or ""
+                            active_model = settings.model_name or ""
+                            if input_toks or output_toks:
+                                turn_stats.record_request(active_model, input_toks, output_toks)
+                            elif total_toks:
+                                turn_stats.record_request(active_model, total_toks, 0)
+                            captured_input_tokens = merge_context_token_totals(
+                                captured_input_tokens,
+                                input_toks,
+                                output_toks,
+                                total_toks,
+                            )
+                            token_card = _resolve_token_target_card(
+                                adapter, router, ns_key, message=message
+                            )
+                            if token_card is not None:
                                 if input_toks or output_toks:
-                                    # Model gives split counts — preferred path
-                                    turn_stats.record_request(active_model, input_toks, output_toks)
-                                    captured_input_tokens = max(
-                                        captured_input_tokens, input_toks + output_toks
-                                    )
-                                    token_card = _resolve_token_target_card(
-                                        adapter, router, ns_key, message=message
-                                    )
-                                    if token_card is not None:
-                                        token_card.record_token_usage(input_toks, output_toks)
+                                    token_card.record_token_usage(input_toks, output_toks)
                                 elif total_toks:
-                                    # Fallback: model gives only total (no split)
-                                    turn_stats.record_request(active_model, total_toks, 0)
-                                    captured_input_tokens = max(captured_input_tokens, total_toks)
-                                    token_card = _resolve_token_target_card(
-                                        adapter, router, ns_key, message=message
-                                    )
-                                    if token_card is not None:
-                                        token_card.record_token_usage(total_toks, 0)
+                                    token_card.record_token_usage(total_toks, 0)
 
                         touched_tool_ids = tool_ids_touched_by_stream_message(message)
                         if touched_tool_ids:

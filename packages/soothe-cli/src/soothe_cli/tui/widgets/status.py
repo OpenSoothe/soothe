@@ -201,6 +201,7 @@ class StatusBar(Horizontal):
 
     StatusBar .status-tokens {
         width: auto;
+        min-width: 11;
         padding: 0 1;
         color: $text-muted;
     }
