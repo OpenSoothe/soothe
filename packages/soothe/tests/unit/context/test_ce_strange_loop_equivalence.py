@@ -218,4 +218,4 @@ class TestNamedConstantsEquivalence:
 
         assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
         assert DAG_DEPENDENCY_THRESHOLD == 3
-        assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
+        assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 1

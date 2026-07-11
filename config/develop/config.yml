@@ -114,10 +114,8 @@ agent:
       completion:
         dag_dependency_threshold: 3
         low_success_rate_threshold: 0.6
-        simple_ledger_direct_max_steps: 2
-        structured_payload_min_lines: 6
-        rich_text_min_chars: 100
-        ledger_overlap_min_token_len: 4
+        simple_ledger_direct_max_steps: 1
+        ledger_direct_max_tool_calls: 50
       scenario:
         skip_llm_when_single_step: true
         skip_llm_when_all_failed: true
@@ -140,7 +138,7 @@ agent:
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96
-      execute_ai_ledger_max_tokens: 2048
+      execute_ai_ledger_max_tokens: 65536
     llm_rate_limit:
       rate_limit_retry_timeout_seconds: 120
 

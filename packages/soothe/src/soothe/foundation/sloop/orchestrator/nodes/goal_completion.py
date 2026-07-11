@@ -81,7 +81,7 @@ def _append_goal_completion_ledger_pair(
 ) -> None:
     """Append RFC-214 Human–AI pair for the goal completion report.
 
-    Every completion strategy (``synthesize``, ``summary``, ``ledger_direct``) writes
+    Every completion strategy (``synthesize``, ``ledger_direct``) writes
     an independent ``goal_completion`` unit so the ledger has one canonical terminal
     report per goal regardless of how the text was produced.
 
@@ -444,15 +444,13 @@ async def node_goal_completion(
             len(final_output or ""),
         )
 
-        if not final_output:
+        if not (final_output or "").strip():
             used_synthesis_fallback = True
             final_output = generate_user_fallback_summary(state, plan_result)
-
-    if action == CompletionStrategy.SUMMARY:
-        # RFC-624 Phase 4 Stage 2: No restore needed.
-        # state.step_results property reads from CE DAG when bound.
-        final_output = generate_user_fallback_summary(state, plan_result)
-        logger.info("Goal completion: action=summary chars=%d", len(final_output or ""))
+            logger.info(
+                "Goal completion: synthesis fallback chars=%d",
+                len(final_output or ""),
+            )
 
     _append_goal_completion_ledger_pair(
         state=state,

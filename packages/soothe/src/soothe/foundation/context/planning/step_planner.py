@@ -243,7 +243,7 @@ class StepPlanningSubengine:
         goal_id: str,
         state: Any,
         plan_result: Any,
-        mode: str = "adaptive",
+        mode: str = "auto",
     ) -> CompletionStrategy:
         """Delegate to completion.determine_completion_strategy."""
         goal = self._dag.get_goal(goal_id)
@@ -274,8 +274,8 @@ class StepPlanningSubengine:
                 state.current_decision.steps if getattr(state, "current_decision", None) else None
             ),
             ledger_text=ledger_text,
-            plan_result=plan_result,
             final_response_mode=mode,
+            last_wave_tool_call_count=int(getattr(state, "last_wave_tool_call_count", 0) or 0),
         )
 
         return CompletionStrategy(strategy_str)
@@ -496,7 +496,7 @@ class StepPlanManagerAdapter:
         self,
         state: Any,
         plan_result: Any,
-        mode: str = "adaptive",
+        mode: str = "auto",
     ) -> CompletionStrategy:
         return self._subengine.determine_completion_strategy(
             self._goal_id, state, plan_result, mode

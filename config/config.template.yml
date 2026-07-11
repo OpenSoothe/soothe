@@ -64,7 +64,7 @@ agent:
   # system_prompt: null
   agent_instructions_max_chars: 8000
   goal_completion_mode: llm_only
-  final_response: adaptive
+  final_response: auto
   # Autopilot — AutopilotService scheduling and goal pool (AutopilotConfig)
   autopilot:
     enabled: false
@@ -126,7 +126,7 @@ agent:
     max_subagent_tasks_per_wave: 4
     strange_loop_output_contract_enabled: true
     goal_completion_mode: llm_only
-    final_response: adaptive
+    final_response: auto
     step_brief_hydration_enabled: true
     prior_conversation_limit: 10
     context_window_limit: 200000
@@ -141,10 +141,8 @@ agent:
       completion:
         dag_dependency_threshold: 3
         low_success_rate_threshold: 0.6
-        simple_ledger_direct_max_steps: 2
-        structured_payload_min_lines: 6
-        rich_text_min_chars: 100
-        ledger_overlap_min_token_len: 4
+        simple_ledger_direct_max_steps: 1
+        ledger_direct_max_tool_calls: 50
       scenario:
         skip_llm_when_single_step: true
         skip_llm_when_all_failed: true
@@ -204,7 +202,7 @@ agent:
     execute_prompt_ledger:
       cross_goal_completion_tail: 3
       predecessor_max_messages: 96
-      execute_ai_ledger_max_tokens: 2048
+      execute_ai_ledger_max_tokens: 65536
     report_output:
       display_threshold: 20000
       preview_chars: 500
