@@ -170,7 +170,7 @@ class _UIMixin:
         source: str = "backend",
     ) -> None:
         """Merge backend goal-run token totals into the visible loop counter."""
-        from soothe.foundation.sloop.utils.token_usage import coerce_total_tokens_used
+        from soothe_cli.runtime.token_usage import coerce_total_tokens_used
 
         goal_total = coerce_total_tokens_used(goal_run_tokens)
         self._ensure_loop_token_scope(self._lc_loop_id)
