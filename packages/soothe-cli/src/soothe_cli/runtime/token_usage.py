@@ -8,17 +8,23 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "coerce_total_tokens_used",
     "extract_stream_message_token_usage",
     "fetch_conversation_token_count",
     "message_has_token_usage_metadata",
 ]
 
 
-def _coerce_int(value: Any) -> int:
+def coerce_total_tokens_used(value: Any) -> int:
+    """Parse a non-negative ``total_tokens_used`` field from event payloads."""
     try:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
         return 0
+
+
+def _coerce_int(value: Any) -> int:
+    return coerce_total_tokens_used(value)
 
 
 def _usage_from_mapping(usage: dict[str, Any]) -> tuple[int, int, int]:

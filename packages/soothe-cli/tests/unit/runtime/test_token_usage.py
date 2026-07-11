@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from soothe_cli.runtime.token_usage import extract_stream_message_token_usage
+from soothe_cli.runtime.token_usage import (
+    coerce_total_tokens_used,
+    extract_stream_message_token_usage,
+)
+
+
+def test_coerce_total_tokens_used_parses_and_clamps() -> None:
+    assert coerce_total_tokens_used("42") == 42
+    assert coerce_total_tokens_used(-5) == 0
+    assert coerce_total_tokens_used("bad") == 0
 
 
 def test_extract_usage_metadata_split_counts() -> None:
