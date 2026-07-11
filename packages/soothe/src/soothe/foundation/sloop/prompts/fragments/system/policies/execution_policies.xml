@@ -19,4 +19,10 @@ Independent steps may share a parallel wave when scopes do not conflict (readonl
 After glob timeout or empty results, switch to ``grep`` (with path/glob filter) or ``ls`` on known directories — do not retry broad ``**`` globs.
 
 **On failure**: Different approach; do not repeat same step text.
+
+**Subagent delegation** (``steps[].delegate``):
+- Default null — execute CoreAgent delegates via ``task`` when needed; planner wiring locks
+  the step to ``task``-only and blocks local tools.
+- Wire ``delegate`` only for exclusive public-web / browser / plan-design steps (see
+  PLAN_GENERATE ``delegate`` rules); never wire ``deep_research`` for repo or file reads.
 </EXECUTION_POLICIES>
