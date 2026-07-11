@@ -11,7 +11,10 @@
 # Optional:
 #   TAVILY_API_KEY=...                      # Tavily web search (deep_research / wizsearch)
 #   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory (default: $HOME)
-# Logs are bind-mounted from $HOME/.soothe/logs → /var/lib/soothe/logs in the container.
+# Host persistence (bind mounts into /var/lib/soothe):
+#   $HOME/.soothe/data  → data (loops, threads, local artifacts)
+#   $HOME/.soothe/logs  → logs
+#   $SOOTHE_WORKSPACE_HOST_ROOT (default $HOME) → workspaces
 
 services:
   soothe-pgvector:
@@ -76,6 +79,7 @@ services:
     volumes:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.prod.yml:/app/config.yml:ro
+      - ${HOME}/.soothe/data:/var/lib/soothe/data
       - ${HOME}/.soothe/logs:/var/lib/soothe/logs
       - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
     deploy:
