@@ -444,7 +444,7 @@ async def node_goal_completion(
             len(final_output or ""),
         )
 
-        if not final_output:
+        if not (final_output or "").strip():
             used_synthesis_fallback = True
             final_output = generate_user_fallback_summary(state, plan_result)
             logger.info(
