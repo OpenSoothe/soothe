@@ -119,6 +119,9 @@ class _StartupMixin:
         gc.freeze()
 
         chat = self.query_one("#chat", VerticalScroll)
+        # Transcript scrolling is mouse-driven; keeping the region unfocusable
+        # prevents clicks in the message area from stealing the chat prompt caret.
+        chat.can_focus = False
         chat.anchor()
 
         self._status_bar = self.query_one("#status-bar", StatusBar)
