@@ -646,6 +646,7 @@ class UserMessageBuilder:
         assessment_status: str | None = None,
         assessment_progress: str | None = None,
         plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
+        user_wire_subagent: str | None = None,
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -698,6 +699,24 @@ class UserMessageBuilder:
             open_gaps = _render_open_gaps_block(plan_gap)
             if open_gaps.strip():
                 sections.append(("OPEN GAPS", open_gaps))
+
+        if user_wire_subagent:
+            sections.append(
+                (
+                    "SUBAGENT ROUTING",
+                    f"User requested wired subagent: {user_wire_subagent}. Set delegate on "
+                    f"steps that exclusively need that subagent; leave delegate null on "
+                    "workspace/codebase steps (execute uses local tools there).",
+                )
+            )
+        else:
+            sections.append(
+                (
+                    "SUBAGENT ROUTING",
+                    "Leave delegate null on all steps unless GOAL explicitly names a wired "
+                    "subagent. Execute CoreAgent has task and local tools.",
+                )
+            )
 
         sections.append(
             (

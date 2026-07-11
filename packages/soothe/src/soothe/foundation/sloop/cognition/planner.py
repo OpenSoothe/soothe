@@ -22,6 +22,7 @@ from soothe.foundation.sloop.cognition.plan_step_safety import (
     intake_label_from_state,
     simple_intake_should_force_done,
 )
+from soothe.foundation.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.foundation.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     AgentDecision,
@@ -31,6 +32,7 @@ from soothe.foundation.sloop.state.schemas import (
     plan_generate_steps_to_step_actions,
     renumber_decision_local_step_ids_for_goal_continuation,
     step_actions_to_plan_generate_steps,
+    strip_unrequested_step_delegates,
 )
 from soothe.foundation.sloop.utils.json_parsing import (
     _extract_balanced_json_object,
@@ -991,6 +993,21 @@ class LLMPlanner:
             )
 
         if result is not None and result.decision is not None:
+            user_wire = resolve_user_requested_wire_subagent(
+                routing_classification=context.routing_classification,
+                intent=getattr(state, "intent", None),
+            )
+            stripped_steps = strip_unrequested_step_delegates(
+                result.decision.steps,
+                user_wire_subagent=user_wire,
+            )
+            if stripped_steps is not result.decision.steps:
+                result = result.model_copy(
+                    update={
+                        "decision": result.decision.model_copy(update={"steps": stripped_steps}),
+                    }
+                )
+
             from soothe.foundation.sloop.state.schemas import apply_step_wire_subagents
 
             wired_steps = apply_step_wire_subagents(result.decision.steps)

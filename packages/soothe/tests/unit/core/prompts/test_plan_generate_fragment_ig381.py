@@ -35,11 +35,25 @@ def test_execution_policies_per_wave_cap() -> None:
     assert "runtime truncates extras" in EXECUTION_POLICIES_FRAGMENT
 
 
+def test_execution_policies_subagent_delegation_guidance() -> None:
+    from soothe.foundation.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+
+    assert "Subagent delegation" in EXECUTION_POLICIES_FRAGMENT
+    assert "never wire ``deep_research`` for repo or file reads" in EXECUTION_POLICIES_FRAGMENT
+
+
 def test_execution_policies_forbids_sequential_mode() -> None:
     from soothe.foundation.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "never ``sequential``" in EXECUTION_POLICIES_FRAGMENT
     assert "only ``parallel`` or ``dependency``" in EXECUTION_POLICIES_FRAGMENT
+
+
+def test_plan_generate_delegate_rules_default_null() -> None:
+    text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
+    assert "Default: omit / null" in text
+    assert "deep_research``: public web investigation only" in text
+    assert "Never set ``delegate`` on every step" in text
 
 
 def test_plan_generate_preserves_contract_guards() -> None:
@@ -48,4 +62,4 @@ def test_plan_generate_preserves_contract_guards() -> None:
     assert "clarify.questions" in text
     assert "exclusive with non-empty ``steps``" in text
     assert "iteration 0" in text
-    assert len(text) < 3500  # guard against prompt bloat (was ~5900 bytes pre-condense)
+    assert len(text) < 4500  # guard against prompt bloat (was ~5900 bytes pre-condense)
