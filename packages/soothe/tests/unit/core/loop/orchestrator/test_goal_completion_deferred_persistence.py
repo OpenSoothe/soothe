@@ -66,7 +66,7 @@ async def test_completed_emits_before_finalize_goal_persistence() -> None:
     strange_loop = Mock()
     strange_loop.loop_planner = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
     strange_loop._fast_llm = None  # Prevent synthesis LLM calls
 
     finalize_started = asyncio.Event()
@@ -139,7 +139,7 @@ async def test_terminal_bootstrap_skips_duplicate_record_iteration() -> None:
     pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.LEDGER_DIRECT)
 
     strange_loop = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
     strange_loop._fast_llm = None  # Prevent synthesis LLM calls
 
     sm = Mock()

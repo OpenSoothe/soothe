@@ -123,7 +123,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
 
     # RFC-630 trivial branch: pseudo 1-step plan (user goal), skip
     # plan_assess/plan_generate, execute on a step thread branch, then
-    # goal_completion via terminal_after_execute (ledger_direct).
+    # goal_completion via terminal_after_execute (auto strategy selects ledger vs synthesize).
     if (
         intake_label == IntakeLabel.TRIVIAL
         and not is_continuation

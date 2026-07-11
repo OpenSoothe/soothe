@@ -10,10 +10,9 @@ preserving ContextEngine's independence from StrangeLoop (RFC-624 invariant).
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
-from soothe.config.models import CompletionRulesConfig
+from soothe.config.models import CompletionRulesConfig, normalize_agentic_final_response_mode
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +21,8 @@ _DEFAULT_RULES = CompletionRulesConfig()
 # Backward-compatible module aliases (tests and legacy imports).
 DAG_DEPENDENCY_THRESHOLD = _DEFAULT_RULES.dag_dependency_threshold
 LOW_SUCCESS_RATE_THRESHOLD = _DEFAULT_RULES.low_success_rate_threshold
-STRUCTURED_PAYLOAD_MIN_LINES = _DEFAULT_RULES.structured_payload_min_lines
 _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS = _DEFAULT_RULES.simple_ledger_direct_max_steps
+_LEDGER_DIRECT_MAX_TOOL_CALLS = _DEFAULT_RULES.ledger_direct_max_tool_calls
 
 
 def _rules(completion_rules: CompletionRulesConfig | None) -> CompletionRulesConfig:
@@ -75,22 +74,34 @@ def heuristic_requires_goal_completion(
     return False
 
 
-def _is_simple_execution(
+def _ledger_direct_eligible(
     *,
     plan_wave_count: int,
     has_dag_dependencies: bool,
     failed_steps: int,
     total_steps: int,
+    last_wave_tool_call_count: int,
     completion_rules: CompletionRulesConfig | None = None,
 ) -> bool:
-    """Check if the DAG represents a simple, single-plan execution."""
+    """Declarative structural gates for ``ledger_direct`` (no content heuristics)."""
     rules = _rules(completion_rules)
-    return (
+    if not (
         plan_wave_count <= 1
         and not has_dag_dependencies
         and failed_steps == 0
         and total_steps <= rules.simple_ledger_direct_max_steps
-    )
+    ):
+        return False
+
+    if last_wave_tool_call_count > rules.ledger_direct_max_tool_calls:
+        logger.info(
+            "LedgerDirect: tool_calls=%d > max=%d → synthesize",
+            last_wave_tool_call_count,
+            rules.ledger_direct_max_tool_calls,
+        )
+        return False
+
+    return True
 
 
 def _dag_requires_synthesis(
@@ -208,30 +219,20 @@ def determine_completion_strategy(
     chain_depth: int,
     last_wave_hit_subagent_cap: bool,
     last_execute_wave_parallel_multi_step: bool,
+    last_wave_tool_call_count: int = 0,
     current_decision_steps: list[Any] | None = None,
     ledger_text: str | None = None,
-    plan_result: Any = None,
-    final_response_mode: str = "adaptive",
+    final_response_mode: str = "auto",
     completion_rules: CompletionRulesConfig | None = None,
 ) -> str:
     """Determine goal completion strategy from DAG + history."""
-    if final_response_mode == "always_synthesize":
+    mode = normalize_agentic_final_response_mode(final_response_mode)
+
+    if mode == "always_synthesize":
         return "synthesize"
 
-    if not plan_result_require_goal_completion:
-        if _is_simple_execution(
-            plan_wave_count=plan_wave_count,
-            has_dag_dependencies=has_dag_dependencies,
-            failed_steps=failed_steps,
-            total_steps=total_steps,
-            completion_rules=completion_rules,
-        ):
-            if (ledger_text or "").strip():
-                return "ledger_direct"
-            logger.info(
-                "Completion: simple execution but empty ledger → synthesize",
-            )
-            return "synthesize"
+    if plan_result_require_goal_completion:
+        logger.info("Completion: require_goal_completion=True → synthesize")
         return "synthesize"
 
     if _dag_requires_synthesis(
@@ -246,77 +247,18 @@ def determine_completion_strategy(
     ):
         return "synthesize"
 
-    if not ledger_text:
+    if not (ledger_text or "").strip():
+        logger.info("Completion: empty ledger → synthesize")
         return "synthesize"
 
-    if plan_result is not None and can_return_directly_from_ledger(
-        ledger_text,
-        plan_result,
+    if _ledger_direct_eligible(
+        plan_wave_count=plan_wave_count,
+        has_dag_dependencies=has_dag_dependencies,
+        failed_steps=failed_steps,
+        total_steps=total_steps,
+        last_wave_tool_call_count=last_wave_tool_call_count,
         completion_rules=completion_rules,
     ):
         return "ledger_direct"
 
     return "synthesize"
-
-
-# ── Ledger overlap helpers ─────────────────────────────────────────────
-
-
-def can_return_directly_from_ledger(
-    ledger_text: str,
-    plan_result: Any,
-    *,
-    completion_rules: CompletionRulesConfig | None = None,
-) -> bool:
-    """Check richness + overlap with planner output for ledger direct return."""
-    if not is_rich_enough(ledger_text, completion_rules=completion_rules):
-        return False
-    return overlaps_with_plan_output(
-        ledger_text,
-        plan_result,
-        completion_rules=completion_rules,
-    )
-
-
-def is_rich_enough(
-    text: str,
-    *,
-    completion_rules: CompletionRulesConfig | None = None,
-) -> bool:
-    """Heuristic guard for rich, user-facing completion content."""
-    rules = _rules(completion_rules)
-    text = text.strip()
-    if not text:
-        return False
-    if "```" in text:
-        return True
-    non_empty_lines = [line for line in text.splitlines() if line.strip()]
-    if len(non_empty_lines) >= rules.structured_payload_min_lines:
-        return True
-    return len(text) >= rules.rich_text_min_chars
-
-
-def overlaps_with_plan_output(
-    ledger_text: str,
-    plan_result: Any,
-    *,
-    completion_rules: CompletionRulesConfig | None = None,
-) -> bool:
-    """Return True when ledger text appears to reflect the planner's full_output."""
-    rules = _rules(completion_rules)
-    plan_out = (plan_result.full_output or "").strip() if plan_result else ""
-    if not plan_out:
-        return True
-
-    ledger_lower = ledger_text.lower()
-    probe = plan_out[:160].lower()
-    if not probe.strip():
-        return True
-
-    min_len = rules.ledger_overlap_min_token_len
-    tokens = [t for t in re.split(r"\W+", probe) if len(t) >= min_len]
-    if not tokens:
-        return True
-
-    hits = sum(1 for t in tokens if t in ledger_lower)
-    return hits * 4 >= len(tokens)

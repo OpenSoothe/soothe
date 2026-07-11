@@ -211,6 +211,9 @@ def resolve_goal_completion_text(state: GoalCompletionAccumState) -> str:
     else:
         text = state.final_ai_message_text
 
+    if not text:
+        return ""
+
     # Split into lines, process, then rejoin
     lines = text.split("\n")
     result: list[str] = []

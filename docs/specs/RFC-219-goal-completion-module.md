@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-28
 **Dependencies**: RFC-201, RFC-603
-**Related**: IG-199, IG-295, IG-296, IG-355, IG-400
+**Related**: IG-199, IG-295, IG-296, IG-355, IG-400, IG-631
 
 ---
 
@@ -98,8 +98,7 @@ class PlanDAG:
 ```python
 class CompletionStrategy(str, Enum):
     LEDGER_DIRECT = "ledger_direct"    # Return ledger text directly
-    SYNTHESIZE = "synthesize"          # LLM synthesis required
-    SUMMARY = "summary"                # Fallback summary
+    SYNTHESIZE = "synthesize"          # LLM synthesis required (includes empty-stream fallback)
 
 @dataclass
 class PlanManager:
@@ -113,14 +112,26 @@ class PlanManager:
     def determine_completion_strategy(state, plan_result, mode) -> CompletionStrategy
 ```
 
-**Completion strategy decision flow** (`determine_completion_strategy`):
-1. Mode override: `always_synthesize` → `SYNTHESIZE`
-2. Planner says no synthesis + simple execution → `LEDGER_DIRECT`
-3. DAG complexity vetoes (replan, failures, subagents, deep chains) → `SYNTHESIZE`
-4. Ledger richness check (rich + overlaps with plan) → `LEDGER_DIRECT`
-5. Default → `SYNTHESIZE`
+**Completion strategy decision flow** (`determine_completion_strategy`, mode `auto`):
 
-**Heuristic checks** (`_heuristic_requires_goal_completion`):
+1. Mode override: `always_synthesize` → `SYNTHESIZE`
+2. Planner `require_goal_completion=True` → `SYNTHESIZE`
+3. DAG complexity vetoes via `_dag_requires_synthesis` (replan, hard failures, subagent cap, deep chains, parallel multi-step, low success rate, DAG deps) → `SYNTHESIZE`
+4. Empty execute ledger text → `SYNTHESIZE`
+5. Structural `_ledger_direct_eligible` (single plan wave, no DAG deps, zero hard failures, `total_steps <= simple_ledger_direct_max_steps`, `last_wave_tool_call_count <= ledger_direct_max_tool_calls`) **and** non-empty ledger → `LEDGER_DIRECT`
+6. Default → `SYNTHESIZE`
+
+**Removed (IG-631):** content heuristics `is_rich_enough`, `overlaps_with_plan_output`, and `can_return_directly_from_ledger` (regex/token overlap on prose). `final_response: adaptive` is a deprecated alias for `auto`.
+
+**Config** (`agent.loop.rules.completion`):
+
+| Field | Default | Role |
+|-------|---------|------|
+| `simple_ledger_direct_max_steps` | `1` | Max completed steps for ledger direct |
+| `ledger_direct_max_tool_calls` | `50` | Max tool calls in last execute wave for ledger direct |
+| `execute_ai_ledger_max_tokens` | `65536` | Ledger write cap for execute AI rows (0 = unlimited) |
+
+**Heuristic checks** (`heuristic_requires_goal_completion`, hybrid mode only):
 - `parallel_multi_step` wave execution
 - `subagent_cap` hit
 - Failed steps with low success rate (< 60%)
@@ -161,7 +172,6 @@ class PlanManager:
 class CompletionStrategy(str, Enum):
     LEDGER_DIRECT = "ledger_direct"
     SYNTHESIZE = "synthesize"
-    SUMMARY = "summary"
 
 @dataclass
 class PlanManager:
@@ -187,7 +197,7 @@ class PlanManager:
 
     def determine_completion_strategy(
         self, state: LoopState, plan_result: PlanResult,
-        mode: FinalResponseMode = "adaptive",
+        mode: FinalResponseMode = "auto",
     ) -> CompletionStrategy:
         """Determine goal completion strategy from the full DAG + history."""
 ```
@@ -352,31 +362,38 @@ The completion strategy is now an enum (`CompletionStrategy`) resolved by `PlanM
 ```python
 class CompletionStrategy(str, Enum):
     LEDGER_DIRECT = "ledger_direct"     # Direct return from ledger
-    SYNTHESIZE = "synthesize"           # LLM synthesis required
-    SUMMARY = "summary"                 # Fallback summary
+    SYNTHESIZE = "synthesize"           # LLM synthesis (empty stream → fallback summary)
 ```
 
-**Strategy selection** (in `PlanManager._dag_requires_synthesis`):
-- Replan detected (`plan_count >= 2`) → `SYNTHESIZE`
+**Strategy selection** (in `completion.determine_completion_strategy`):
+
+- `always_synthesize` mode → `SYNTHESIZE`
+- `require_goal_completion=True` → `SYNTHESIZE`
+- Replan detected (`plan_wave_count >= 2`) → `SYNTHESIZE`
 - Failed steps → `SYNTHESIZE`
-- Subagents used → `SYNTHESIZE`
-- Deep chain (`max_chain_depth >= 3`) → `SYNTHESIZE`
+- Deep chain (`chain_depth >= 3`) → `SYNTHESIZE`
 - Subagent cap hit → `SYNTHESIZE`
 - Parallel multi-step wave → `SYNTHESIZE`
 - Low success rate with failures → `SYNTHESIZE`
 - DAG dependencies on current plan → `SYNTHESIZE`
-- Simple execution → `LEDGER_DIRECT` (if ledger rich enough)
+- Empty ledger → `SYNTHESIZE`
+- Structural simple execution + tool budget → `LEDGER_DIRECT`
+- Default → `SYNTHESIZE`
 
-**Simple execution check** (`_is_simple_execution`):
+**Structural ledger-direct gate** (`_ledger_direct_eligible`):
+
 ```python
-def _is_simple_execution(self) -> bool:
+def _ledger_direct_eligible(...) -> bool:
     return (
-        self.dag.plan_count <= 1
-        and not self.dag.has_dag_dependencies
-        and self.dag.failed_steps == 0
-        and self.dag.total_steps <= 2
+        plan_wave_count <= 1
+        and not has_dag_dependencies
+        and failed_steps == 0
+        and total_steps <= simple_ledger_direct_max_steps  # default 1
+        and last_wave_tool_call_count <= ledger_direct_max_tool_calls  # default 50
     )
 ```
+
+`terminal_after_execute` (RFC-226 continuation bootstrap) controls orchestration routing only; it does **not** bypass this gate.
 
 ---
 

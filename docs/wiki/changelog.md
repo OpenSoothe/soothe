@@ -344,7 +344,7 @@ agent:
   loop:
     loop_orchestrator_evidence_validate: true
     goal_completion_mode: llm_only  # llm_only | heuristic_only | hybrid
-    final_response: adaptive        # adaptive | always_synthesize
+    final_response: auto            # auto | always_synthesize
 ```
 
 ### Added - Deployment Infrastructure

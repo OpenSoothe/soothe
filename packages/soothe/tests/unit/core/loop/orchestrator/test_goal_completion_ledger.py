@@ -73,7 +73,7 @@ async def test_synthesize_appends_goal_completion_ledger_pair() -> None:
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -156,7 +156,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -211,7 +211,7 @@ async def test_goal_completion_dag_reflects_finalized_goal_status(
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -271,7 +271,7 @@ async def test_ledger_direct_appends_goal_completion_ledger_pair() -> None:
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -323,7 +323,7 @@ async def test_empty_ledger_direct_falls_back_to_synthesis() -> None:
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -391,7 +391,7 @@ async def test_trivial_intake_ledger_direct_uses_user_submission_as_human() -> N
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -425,7 +425,8 @@ async def test_trivial_intake_ledger_direct_uses_user_submission_as_human() -> N
 
 
 @pytest.mark.asyncio
-async def test_summary_completion_sets_skip_replay_false() -> None:
+async def test_synthesis_fallback_sets_skip_replay_false() -> None:
+    """Empty synthesis stream uses fallback summary and emits wire replay."""
     ce = _make_ce()
     loop_state = LoopState(goal="g", thread_id="thr-1")
     goal = GoalNode(description="g")
@@ -433,13 +434,13 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
     loop_state.bind_ce(ce, goal.id)
     plan_result = PlanResult(status="done", goal_progress="complete", require_goal_completion=False)
     pm = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SUMMARY)
+    pm.determine_completion_strategy = Mock(return_value=CompletionStrategy.SYNTHESIZE)
 
     strange_loop = Mock()
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -455,9 +456,16 @@ async def test_summary_completion_sets_skip_replay_false() -> None:
         goal=goal,
     )
 
-    with patch(
-        "soothe.foundation.sloop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
-        return_value="fallback summary body",
+    async def empty_gen(self, _goal: str, _state: LoopState):  # noqa: ARG002
+        if False:
+            yield None
+
+    with (
+        patch(
+            "soothe.foundation.sloop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
+            return_value="fallback summary body",
+        ),
+        patch.object(SynthesisGenerator, "generate_synthesis", empty_gen),
     ):
         await node_goal_completion(ctx, {})
 
@@ -538,7 +546,7 @@ async def test_ledger_direct_filters_out_planning_messages_for_final_output() ->
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
 
     sm = Mock()
     sm.record_iteration = AsyncMock()
@@ -584,7 +592,7 @@ async def test_goal_completion_emits_finalize_phase_status() -> None:
     strange_loop.loop_planner = Mock()
     strange_loop.loop_planner._model = Mock()
     strange_loop.core_agent = Mock()
-    strange_loop.config.agent.loop.final_response = "adaptive"
+    strange_loop.config.agent.loop.final_response = "auto"
     strange_loop._fast_llm = None  # Prevent synthesis LLM calls
 
     sm = Mock()

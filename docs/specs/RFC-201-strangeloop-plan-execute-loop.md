@@ -93,10 +93,10 @@ async def run_with_progress(...):
 
 When the Plan phase returns `status: done`, StrangeLoop must produce the user-visible completion text. Two strategies exist:
 
-1. **Reuse last Execute assistant text**: After each Execute wave on the goal thread, StrangeLoop records assistant-visible text. Root-graph AIMessage chunks are aggregated from the Act stream for orchestration (`iter_messages_for_act_aggregation` is root-only). When delegation ran via the **`task`** tool, the bounded **return payload** text is also captured (ordered, capped; IG-355)—that is the delegate **final**, not subgraph AIMessage chatter—and preferred for adaptive completion when present so user-visible answers are not lost when subgraph streams stay isolated.
-2. **Final thread synthesis**: An additional CoreAgent turn asks for a consolidated report over full thread history. Used when evidence heuristics indicate a multi-step or heavy run, when the last wave used parallel multi-step execution, when the subagent task cap was hit, or when no assistant text was captured.
+1. **Reuse last Execute assistant text** (`ledger_direct`): After each Execute wave, assistant-visible text is recorded in the CE ledger. Used only when `final_response: auto` and structural gates pass (single plan wave, no hard failures, step count within cap, last-wave tool calls ≤ `ledger_direct_max_tool_calls`). See RFC-219 / IG-631.
+2. **Final thread synthesis** (`synthesize`): A CoreAgent turn produces a consolidated report. Used when the planner sets `require_goal_completion=True`, DAG complexity vetoes apply, the last wave exceeded the tool-call budget, or ledger text is empty.
 
-Configuration (`agentic.final_response`): `adaptive` (default) applies the policy above; `always_synthesize` always runs the report turn; `always_last_execute` skips the report when last Execute text exists (falling back to plan evidence otherwise).
+Configuration (`agent.loop.final_response`): `auto` (default) applies the structural policy above; `always_synthesize` always runs the report turn. Legacy alias: `adaptive` → `auto`. Removed modes: `always_last_execute` (pre-IG-299).
 
 ### Architectural Role Clarification
 

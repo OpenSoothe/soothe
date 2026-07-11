@@ -1,7 +1,7 @@
 """Act-wave finalize resolution (IG-355, IG-356, IG-357, RFC-227).
 
 This module handles the computation of visible assistant text for Execute waves.
-After each Execute wave, adaptive goal completion and headless replay read the
+After each Execute wave, auto goal completion and headless replay read the
 latest non-planning assistant message from the orchestration ledger via
 :func:`~soothe.foundation.sloop.utils.messages.last_ledger_ai_content`.
 That string may come from:
