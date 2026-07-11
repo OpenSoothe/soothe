@@ -473,17 +473,6 @@ async def node_goal_completion(
         }
     )
 
-    from soothe.foundation.sloop.state.resume_topic import schedule_resume_topic_generation
-
-    schedule_resume_topic_generation(
-        config=strange_loop.config,
-        loop_id=ctx.state_manager.loop_id,
-        ledger_messages=list(state.loop_messages),
-        goals_completed=ctx.checkpoint.total_goals_completed,
-        fast_llm=strange_loop._fast_llm,
-        response_language=getattr(state, "response_language", None),
-    )
-
     # Runner ``loop_assistant_messages_chunk`` replay: skip when synthesis already
     # streamed ``phase=goal_completion`` on ``messages`` (``stream_event``). Do not
     # skip for ``ledger_direct`` — headless CLI suppresses execute-phase prose (IG-343)

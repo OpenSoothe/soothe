@@ -211,6 +211,39 @@ def test_aggregate_metrics_cumulative_tokens(mock_core_agent, config, state):
     assert 0.012 <= state.context_percentage_consumed <= 0.013
 
 
+def test_aggregate_metrics_sums_multi_hop_ai_usage(mock_core_agent, config, state):
+    """Each CoreAgent tool-loop hop contributes to loop token totals."""
+    from langchain_core.messages import AIMessage
+
+    executor = Executor(mock_core_agent, config=config)
+    messages = [
+        AIMessage(
+            content="tools",
+            usage_metadata={"input_tokens": 8000, "output_tokens": 100, "total_tokens": 8100},
+        ),
+        AIMessage(
+            content="done",
+            usage_metadata={"input_tokens": 8100, "output_tokens": 360, "total_tokens": 8460},
+        ),
+    ]
+    step_results = [
+        StepResult(
+            step_id="step1",
+            success=True,
+            output="done",
+            duration_ms=100,
+            thread_id="test-thread",
+            tool_call_count=2,
+            subagent_task_completions=0,
+            hit_subagent_cap=False,
+        ),
+    ]
+
+    executor._aggregate_wave_metrics(step_results, "done", messages, state)
+
+    assert state.total_tokens_used == 8100 + 8460
+
+
 def test_aggregate_metrics_multiple_cap_hits(mock_core_agent, config, state):
     """OR logic for cap hit across multiple steps."""
     executor = Executor(mock_core_agent, config=config)

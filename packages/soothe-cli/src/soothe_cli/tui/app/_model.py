@@ -265,7 +265,7 @@ class _ModelMixin:
         from soothe_cli.tui.widgets.context_data import load_token_usage_snapshot
 
         return await load_token_usage_snapshot(
-            context_tokens=self._context_tokens,
+            context_tokens=self._loop_token_total(),
             approximate=self._tokens_approximate,
             loop_id=self._lc_loop_id,
             daemon_session=self._daemon_session,

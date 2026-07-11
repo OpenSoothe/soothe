@@ -5,6 +5,8 @@ from __future__ import annotations
 from soothe_cli.tui.model_config import load_loop_config
 from soothe_cli.tui.widgets.loop_selector import (
     _format_column_value,
+    _is_active_loop,
+    _sort_loops,
     _visible_column_keys,
 )
 
@@ -28,6 +30,44 @@ def test_format_column_value_topic_prefers_generated_label() -> None:
         "topic": "Daemon session refactor",
     }
     assert _format_column_value(loop, "topic") == "Daemon session refactor"
+
+
+def test_format_column_value_topic_marks_live_loop() -> None:
+    loop = {
+        "loop_id": "loop-abc123456789",
+        "live": True,
+        "topic": "Running task",
+    }
+    assert _format_column_value(loop, "topic") == "● Running task"
+
+
+def test_format_column_value_topic_marks_running_loop() -> None:
+    loop = {
+        "loop_id": "loop-abc123456789",
+        "status": "running",
+        "topic": "Interrupted task",
+    }
+    assert _format_column_value(loop, "topic") == "◐ Interrupted task"
+
+
+def test_sort_loops_promotes_active_rows() -> None:
+    loops = [
+        {"loop_id": "idle", "status": "idle", "updated_at": "2026-07-11T12:00:00+00:00"},
+        {"loop_id": "live", "live": True, "updated_at": "2026-07-11T10:00:00+00:00"},
+        {
+            "loop_id": "running",
+            "status": "running",
+            "updated_at": "2026-07-11T11:00:00+00:00",
+        },
+    ]
+    ordered = _sort_loops(loops, sort_key="updated_at")
+    assert [loop["loop_id"] for loop in ordered] == ["running", "live", "idle"]
+
+
+def test_is_active_loop_true_for_live_or_running() -> None:
+    assert _is_active_loop({"live": True, "status": "idle"}) is True
+    assert _is_active_loop({"status": "running"}) is True
+    assert _is_active_loop({"status": "idle"}) is False
 
 
 def test_format_column_value_shows_only_resume_columns() -> None:

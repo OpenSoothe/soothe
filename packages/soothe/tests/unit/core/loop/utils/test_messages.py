@@ -269,8 +269,9 @@ class TestLoopAIMessageWithExecutor:
     """Test LoopAIMessage works with executor token extraction logic."""
 
     def test_token_extraction_logic(self) -> None:
-        """Test executor._extract_token_usage() pattern works with LoopAIMessage."""
-        # Simulate executor token extraction logic (executor.py:104-124)
+        """Test ``extract_token_usage_from_messages`` sums all AI turns."""
+        from soothe.foundation.sloop.utils.token_usage import extract_token_usage_from_messages
+
         messages = [
             LoopAIMessage(
                 content="Result 1",
@@ -289,16 +290,8 @@ class TestLoopAIMessageWithExecutor:
             ),
         ]
 
-        # Find last AIMessage with usage_metadata (executor pattern)
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage) and hasattr(msg, "response_metadata"):
-                metadata = msg.response_metadata
-                token_usage = metadata.get("token_usage", {})
-                if token_usage:
-                    # Should find the second message
-                    assert token_usage["total_tokens"] == 300
-                    assert token_usage["prompt_tokens"] == 200
-                    break
+        usage = extract_token_usage_from_messages(messages)
+        assert usage == {"prompt": 200, "completion": 100, "total": 400}
 
 
 class TestLoopMessageToThreadMetadata:

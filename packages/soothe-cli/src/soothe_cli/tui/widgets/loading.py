@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from time import monotonic
 from typing import TYPE_CHECKING
 
@@ -74,6 +75,7 @@ class LoadingWidget(Static):
         turn_start_mono: float | None = None,
         show_interrupt_hint: bool = False,
         hint_extra: str | None = None,
+        on_tick: Callable[[], None] | None = None,
     ) -> None:
         """Initialize loading widget.
 
@@ -83,6 +85,7 @@ class LoadingWidget(Static):
                 omitted, the first mount time is used so elapsed still advances monotonically.
             show_interrupt_hint: When ``True``, append an esc-to-interrupt hint (off by default).
             hint_extra: Optional hint segment before elapsed time (e.g. ``attempt 2/3``).
+            on_tick: Optional callback invoked on animation ticks to refresh token display.
         """
         super().__init__()
         self._status = status
@@ -90,6 +93,7 @@ class LoadingWidget(Static):
         self._turn_start_mono: float | None = turn_start_mono
         self._show_interrupt_hint = show_interrupt_hint
         self._hint_extra = hint_extra
+        self._on_tick = on_tick
         self._resume_status: str | None = None
         self._resume_hint_extra: str | None = None
         self._animation_timer: Timer | None = None
@@ -210,6 +214,8 @@ class LoadingWidget(Static):
 
         if should_refresh:
             self._last_rendered_elapsed = elapsed_int
+            if self._on_tick is not None:
+                self._on_tick()
             self._refresh_line()
 
     def set_token_usage(self, count: int, *, approximate: bool = False) -> None:

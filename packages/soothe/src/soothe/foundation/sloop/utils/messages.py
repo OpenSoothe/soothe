@@ -191,7 +191,7 @@ class LoopAIMessage(AIMessage):
     """StrangeLoop AIMessage with iteration metadata.
 
     Extends AIMessage to preserve:
-    - response_metadata for token extraction (executor._extract_token_usage)
+    - response_metadata for token extraction (``extract_token_usage_from_messages``)
     - usage_metadata for standardized token counts
     - tool_calls for tool tracking
     - StrangeLoop-specific metadata (iteration, phase)

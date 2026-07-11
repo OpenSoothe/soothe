@@ -11,6 +11,8 @@ from soothe.utils.llm.observability import (
     bind_llm_token_observability,
     ensure_openai_style_token_usage_on_llm_result,
     extract_token_counts_from_llm_result,
+    get_llm_token_usage_callback_handler,
+    merge_token_usage_callbacks,
 )
 
 
@@ -81,6 +83,15 @@ def test_bind_llm_token_observability_invokes_callback() -> None:
     wrapped = bind_llm_token_observability(inner)
     out = wrapped.invoke([HumanMessage(content="hi")])
     assert out.content == "done"
+
+
+def test_merge_token_usage_callbacks_attaches_handler() -> None:
+    handler = get_llm_token_usage_callback_handler()
+    merged = merge_token_usage_callbacks({"metadata": {"purpose": "test"}})
+    callbacks = merged.get("callbacks")
+    assert callbacks is not None
+    assert handler in callbacks
+    assert merged.get("metadata") == {"purpose": "test"}
 
 
 @pytest.mark.asyncio

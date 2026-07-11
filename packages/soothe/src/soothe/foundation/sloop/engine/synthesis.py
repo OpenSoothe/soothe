@@ -227,12 +227,15 @@ class SynthesisGenerator:
             classification.scenario,
             approx_chars,
         )
-        async for chunk in self.llm.astream(messages, config=graph_config):
-            yield tag_messages_stream_chunk_for_goal_completion(
-                ((), "messages", (chunk, {})),
-                thread_id=state.thread_id,
-                iteration=state.iteration,
-            )
+        from soothe.foundation.sloop.utils.token_usage import direct_llm_token_call_scope
+
+        with direct_llm_token_call_scope():
+            async for chunk in self.llm.astream(messages, config=graph_config):
+                yield tag_messages_stream_chunk_for_goal_completion(
+                    ((), "messages", (chunk, {})),
+                    thread_id=state.thread_id,
+                    iteration=state.iteration,
+                )
         synthesis_elapsed_ms = int((time.perf_counter() - synthesis_start) * 1000)
         logger.info(
             "Synthesis Phase 2 (generate): completed elapsed_ms=%d",

@@ -136,6 +136,26 @@ def _active_sort_key(sort_by_updated: bool) -> str:
     return "updated_at" if sort_by_updated else "created_at"
 
 
+def _is_active_loop(loop: dict[str, Any]) -> bool:
+    """Return True when a loop is live on the daemon or persisted as running."""
+    if loop.get("live"):
+        return True
+    return str(loop.get("status", "")).strip().lower() == "running"
+
+
+def _sort_loops(loops: list[dict[str, Any]], *, sort_key: str) -> list[dict[str, Any]]:
+    """Sort loops with live/running rows first, then by timestamp descending."""
+    active = [loop for loop in loops if _is_active_loop(loop)]
+    inactive = [loop for loop in loops if not _is_active_loop(loop)]
+
+    def key_fn(loop: dict[str, Any]) -> str:
+        return loop.get(sort_key) or loop.get("created") or ""
+
+    active.sort(key=key_fn, reverse=True)
+    inactive.sort(key=key_fn, reverse=True)
+    return active + inactive
+
+
 def _visible_column_keys(columns: dict[str, bool]) -> list[str]:
     """Return visible columns in the on-screen order.
 
@@ -216,7 +236,13 @@ def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool 
     elif key == "updated_at":
         value = fmt(loop.get("updated") or loop.get("created"))
     elif key == "topic":
-        value = str(loop.get("topic") or loop.get("prompt") or "").strip() or "(no goal)"
+        raw_topic = str(loop.get("topic") or loop.get("prompt") or "").strip() or "(no goal)"
+        if loop.get("live"):
+            value = f"● {raw_topic}"
+        elif str(loop.get("status", "")).strip().lower() == "running":
+            value = f"◐ {raw_topic}"
+        else:
+            value = raw_topic
     else:
         value = ""
 
@@ -1029,9 +1055,7 @@ class LoopSelectorScreen(ModalScreen[str | None]):
         sort_key = _active_sort_key(sort_by_updated)
 
         if not query:
-            result = list(loops)
-            result.sort(key=lambda t: t.get(sort_key) or t.get("created") or "", reverse=True)
-            return result
+            return _sort_loops(list(loops), sort_key=sort_key)
 
         tokens = query.split()
         try:
@@ -1049,10 +1073,9 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 exc_info=True,
             )
             result = list(loops)
-            result.sort(key=lambda t: t.get(sort_key) or t.get("created") or "", reverse=True)
-            return result
+            return _sort_loops(result, sort_key=sort_key)
 
-        return [
+        matched = [
             loop
             for _, loop in sorted(
                 scored,
@@ -1065,6 +1088,9 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 reverse=True,
             )
         ]
+        active = [loop for loop in matched if _is_active_loop(loop)]
+        inactive = [loop for loop in matched if not _is_active_loop(loop)]
+        return active + inactive
 
     def _schedule_list_rebuild(self) -> None:
         """Queue a list rebuild, coalescing rapid updates."""
@@ -1327,13 +1353,9 @@ class LoopSelectorScreen(ModalScreen[str | None]):
             await header.mount(*cells)
 
     def _apply_sort(self) -> None:
-        """Sort filtered loops by the active sort key."""
+        """Sort filtered loops with live/running rows first."""
         key = _active_sort_key(self._sort_by_updated)
-        # Daemon returns "created" field, so fallback to that if sort_key is missing
-        self._filtered_loops.sort(
-            key=lambda loop: loop.get(key) or loop.get("created") or "",
-            reverse=True,
-        )
+        self._filtered_loops = _sort_loops(self._filtered_loops, sort_key=key)
 
     def _move_selection(self, delta: int) -> None:
         """Move selection by delta, updating only the affected rows.

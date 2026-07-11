@@ -63,17 +63,14 @@ def _peek_latest_assistant_response(loop_id: str) -> str | None:
 
 def _resolve_loop_topic(
     *,
-    goals_completed: int,
     prompt: str | None,
     resume_topic: str | None,
 ) -> str:
     """Return the resume-picker topic label for one loop row."""
-    goal_text = (prompt or "").strip()
     stored = (resume_topic or "").strip()
-    if goals_completed < 1:
-        return goal_text or "(no goal)"
     if stored:
         return stored
+    goal_text = (prompt or "").strip()
     return goal_text or "(no goal)"
 
 
@@ -1460,9 +1457,7 @@ class MessageRouter:
             latest_ai_response = _peek_latest_assistant_response(loop_id)
             if latest_ai_response:
                 entry["latest_ai_response"] = latest_ai_response
-            goals_completed = int(row.get("total_goals_completed") or 0)
             entry["topic"] = _resolve_loop_topic(
-                goals_completed=goals_completed,
                 prompt=prompt,
                 resume_topic=row.get("resume_topic"),
             )
@@ -2477,7 +2472,7 @@ class MessageRouter:
                 if isinstance(card, dict):
                     wire_cards.append(card)
             latest_seq = len(wire_cards)
-            context_tokens = await self._read_loop_context_tokens(loop_id_str)
+            context_tokens = await self._read_loop_token_total(loop_id_str)
         except Exception as exc:
             await d._send_client_message(
                 client_id,
@@ -2537,7 +2532,7 @@ class MessageRouter:
                 loop_id_str,
                 loop_status=loop_status,
             )
-            context_tokens = await self._read_loop_context_tokens(loop_id_str)
+            context_tokens = await self._read_loop_token_total(loop_id_str)
             payload["context_tokens"] = context_tokens
         except Exception as exc:
             await d._send_client_message(
@@ -2552,28 +2547,48 @@ class MessageRouter:
 
         await self._send_response(client_id, request_id, payload)
 
-    async def _read_loop_context_tokens(self, loop_id: str) -> int:
-        """Best-effort read of ``_context_tokens`` from the loop's checkpoint.
+    async def _read_loop_token_total(self, loop_id: str) -> int:
+        """Best-effort loop token total for TUI resume.
 
-        Returns 0 on any failure — the TUI tolerates a zero token count
-        (renders without the budget badge).
+        Prefers StrangeLoop checkpoint ``total_tokens_used`` (authoritative loop
+        aggregate) and falls back to legacy ``_context_tokens`` on the CoreAgent
+        checkpoint channel written by the CLI.
         """
         d = self._daemon
-        runner = getattr(d, "_runner", None)
-        if runner is None:
-            return 0
+        metadata_total = 0
         try:
-            from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
-
-            checkpoint_thread_id = await bind_execution_thread_for_loop(d, loop_id)
-            values = await runner.get_thread_state_values(checkpoint_thread_id)
+            metadata = await d._persistence_manager.get_loop_metadata(loop_id)
+            if isinstance(metadata, dict):
+                raw_meta = metadata.get("total_tokens_used")
+                if isinstance(raw_meta, int) and raw_meta >= 0:
+                    metadata_total = raw_meta
         except Exception:
-            logger.debug("Failed to read context_tokens for loop %s", loop_id, exc_info=True)
-            return 0
-        raw = values.get("_context_tokens") if isinstance(values, dict) else None
-        if isinstance(raw, int) and raw >= 0:
-            return raw
-        return 0
+            logger.debug(
+                "Failed to read loop metadata tokens for loop %s",
+                loop_id,
+                exc_info=True,
+            )
+
+        channel_total = 0
+        runner = getattr(d, "_runner", None)
+        if runner is not None:
+            try:
+                from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
+
+                checkpoint_thread_id = await bind_execution_thread_for_loop(d, loop_id)
+                values = await runner.get_thread_state_values(checkpoint_thread_id)
+            except Exception:
+                logger.debug(
+                    "Failed to read _context_tokens for loop %s",
+                    loop_id,
+                    exc_info=True,
+                )
+            else:
+                raw = values.get("_context_tokens") if isinstance(values, dict) else None
+                if isinstance(raw, int) and raw >= 0:
+                    channel_total = raw
+
+        return max(metadata_total, channel_total)
 
     # ---------------------------------------------------------------------------
     # RFC-228: Autopilot Job IPC Handlers

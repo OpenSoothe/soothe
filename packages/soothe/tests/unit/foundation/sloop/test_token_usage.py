@@ -12,6 +12,7 @@ from soothe.foundation.sloop.utils.token_usage import (
     accumulate_loop_tokens_from_llm_result,
     coerce_total_tokens_used,
     direct_llm_token_call_scope,
+    extract_token_usage_from_messages,
     loop_token_accumulation_scope,
     merge_direct_llm_tokens_into_state,
 )
@@ -45,3 +46,20 @@ def test_accumulate_loop_tokens_from_llm_result_requires_direct_scope() -> None:
 
     assert delta == 15
     assert target.total_tokens_used == 15
+
+
+def test_extract_token_usage_sums_all_ai_turns() -> None:
+    from langchain_core.messages import AIMessage
+
+    messages = [
+        AIMessage(
+            content="hop1",
+            usage_metadata={"input_tokens": 100, "output_tokens": 10, "total_tokens": 110},
+        ),
+        AIMessage(
+            content="hop2",
+            usage_metadata={"input_tokens": 200, "output_tokens": 20, "total_tokens": 220},
+        ),
+    ]
+    usage = extract_token_usage_from_messages(messages)
+    assert usage == {"prompt": 300, "completion": 30, "total": 330}
