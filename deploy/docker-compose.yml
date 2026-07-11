@@ -9,6 +9,7 @@
 # Required environment variables (set in deploy/.env):
 #   DASHSCOPE_API_KEY=...                   # DashScope provider key
 # Optional:
+#   TAVILY_API_KEY=...                      # Tavily web search (deep_research / wizsearch)
 #   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory (default: $HOME)
 # Logs are bind-mounted from $HOME/.soothe/logs → /var/lib/soothe/logs in the container.
 
@@ -62,6 +63,7 @@ services:
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       SOOTHE_WORKSPACE_HOST_ROOT: ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}
       SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
       SOOTHE_POSTGRES_BASE_DSN: postgresql://postgres:postgres@soothe-pgvector:5432

@@ -134,7 +134,7 @@ RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/source
     && if [ "${INCLUDE_BROWSER}" = "true" ] && [ -n "$(ls -A /opt/ms-playwright 2>/dev/null)" ]; then \
       /app/.venv/bin/python -m playwright install-deps; \
     fi \
-    && apt-get install -y --no-install-recommends libjemalloc2 \
+    && apt-get install -y --no-install-recommends libjemalloc2 ripgrep silversearcher-ag \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --system soothe \

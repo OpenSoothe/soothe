@@ -3,5 +3,8 @@
 DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 DASHSCOPE_API_KEY=${DASHSCOPE_API_KEY}
 
+# Tavily web search for deep_research / wizsearch (https://tavily.com)
+TAVILY_API_KEY=${TAVILY_API_KEY}
+
 # Enable verbose agent and file logging in the daemon (SOOTHE_DEBUG → config debug: true).
 SOOTHE_DEBUG=false
