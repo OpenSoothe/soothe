@@ -1,9 +1,7 @@
-"""MCP loader — backward-compat adapter for manager.py imports (RFC-412).
+"""Backward-compat adapter for legacy thread-manager MCP imports (RFC-412).
 
-Provides load_mcp_tools and MCPSessionManager to satisfy the imports in
-core/thread/manager.py:24,553 until those imports are replaced.
-
-TODO (Batch 2): Replace manager.py imports with registry registration.
+Prefer the daemon-owned ``MCPRegistry`` singleton. This module remains for
+``ThreadContextManager._ensure_mcp_session`` until that path is removed.
 """
 
 from __future__ import annotations
@@ -59,7 +57,7 @@ async def load_mcp_tools(
     registry = MCPRegistry(servers=servers, secret_resolver=secret_resolver)
     await registry.initialize()
 
-    # Get always-loaded tools (defer=False servers)
-    tools = registry.always_loaded_tools()
+    # Full catalog for progressive binding; ThreadContextManager legacy path only.
+    tools = registry.all_tools()
 
     return (tools, MCPSessionManager(registry))

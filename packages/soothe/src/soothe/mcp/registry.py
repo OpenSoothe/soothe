@@ -420,6 +420,20 @@ class MCPRegistry:
                 result.extend(self._tools[name])
         return result
 
+    def all_tools(self, workspace: str | None = None) -> list[BaseTool]:
+        """Return all connected MCP BaseTool instances (defer=True and defer=False).
+
+        Args:
+            workspace: Workspace path (for future policy filtering).
+
+        Returns:
+            Flattened list of every tool from every connected server.
+        """
+        result: list[BaseTool] = []
+        for tools in self._tools.values():
+            result.extend(tools)
+        return result
+
     def deferred_tools(self, workspace: str | None = None) -> list[MCPToolDescriptor]:
         """Return descriptors for servers where defer=True.
 

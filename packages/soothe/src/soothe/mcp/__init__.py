@@ -2,7 +2,7 @@
 
 Provides daemon-singleton MCP subsystem with:
 - Per-server connection sharing via langchain_mcp_adapters.MultiServerMCPClient
-- Progressive tool surfacing via MCPToolSearchMiddleware
+- Progressive tool surfacing via MCPActivationMiddleware
 - MCP prompts as slash commands (mcp__<server>__<prompt>)
 - MCP resources as @server:uri attachments
 """

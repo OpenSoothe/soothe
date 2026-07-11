@@ -26,18 +26,18 @@ Soothe's MCP layer **wraps, not replaces** the `langchain_mcp_adapters` library.
 `MCPRegistry` is created once by `SootheDaemon` and shared across all threads. It owns: per-server connections, tools/prompts/resources indices, defer flags, and reconnect state. The singleton design means connection pooling — a server connected once serves all threads, avoiding redundant subprocess spawning or network connections.
 
 The registry partitions tools into two tiers:
-- **Always-loaded** (`defer: false`): added directly to `AgentBuilder.all_tools`, available every turn.
-- **Deferred** (`defer: true`, the default): listed in a compact `<AVAILABLE_MCP_TOOLS>` block in the system prompt, surfaced via search.
+- **Always-loaded** (`defer: false`): bound on every model hop via `MCPActivationMiddleware`.
+- **Deferred** (`defer: true`, the default): listed in `<AVAILABLE_MCP_TOOLS>`, discovered via `search_mcp_tools`, promoted into the tool array on use.
 
 ## Progressive Disclosure Flow
 
 This is the most architecturally significant MCP feature. The flow spans two turns:
 
-**Turn 1 — Static tier**: `SystemPromptOptimizationMiddleware` composes an `<AVAILABLE_MCP_TOOLS>` block containing deferred tool names with brief descriptions (truncated to ~100 chars). Only *new* tools (delta from what's already been sent) are included. The listing is budgeted to 2000 characters via `format_mcp_tools_within_budget()`.
+**Turn 1 — Static tier**: `SystemPromptMiddleware` composes an `<AVAILABLE_MCP_TOOLS>` block containing deferred tool names with brief descriptions. Only *new* tools (delta from what's already been sent) are included. The listing is budgeted via `format_mcp_tools_within_budget()`.
 
-**Turn 2+ — Dynamic tier**: the model calls `mcp_tool_search(query="search files", limit=5)`. The middleware searches by name/description overlap, returns top-k matches with full descriptions, and **promotes** invoked tools — once the model calls an `mcp__<server>__<tool>`, that tool becomes always-available on subsequent turns.
+**Turn 2+ — Dynamic tier**: the model calls `search_mcp_tools(query="search files", limit=5)`. `MCPActivationMiddleware` searches by name/description overlap, promotes matches, and binds them on the next hop. Direct `mcp__<server>__<tool>` invocation also promotes on success.
 
-This promotion is tracked in `LoopState.invoked_mcp_tools` and snapshot at iteration boundaries. The activation state (`sent_mcp_tool_names`, `invoked_mcp_tools`, `disabled_mcp_servers`) persists across turns.
+Promotion is tracked in `state["mcp_activation"]` (`sent`, `promoted`) and snapshotted to `LoopState.mcp_activation_sent` / `mcp_activation_promoted` at iteration boundaries. `disabled_mcp_servers` and `cached_mcp_resources` persist separately.
 
 **Rationale**: without progressive disclosure, a workspace with 5 MCP servers exposing 200 tools would consume ~20K tokens just for tool descriptions — before any user content. The search-and-promote pattern means the agent only sees detailed descriptions for tools it's actively considering.
 

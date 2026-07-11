@@ -1182,8 +1182,8 @@ class LoopState(BaseModel):
     promoted_tool_names: set[str] = Field(default_factory=set)
 
     # RFC-412: MCP progressive disclosure durability snapshot
-    sent_mcp_tool_names: set[str] = Field(default_factory=set)
-    invoked_mcp_tools: dict[str, dict] = Field(default_factory=dict)
+    mcp_activation_sent: set[str] = Field(default_factory=set)
+    mcp_activation_promoted: set[str] = Field(default_factory=set)
     disabled_mcp_servers: set[str] = Field(default_factory=set)
     cached_mcp_resources: dict[str, str] = Field(default_factory=dict)
 

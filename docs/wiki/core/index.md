@@ -64,7 +64,7 @@ Each tier delegates downward: ContextEngine dispatches goals to StrangeLoop, whi
 
 These modules don't have dedicated knowledge articles but are referenced throughout:
 
-- **Middleware Stack** (`soothe.middleware`) — Soothe-specific middlewares assembled by `build_soothe_middleware_stack()`: `IdentityMiddleware` (JWT/identity), `SoothePolicyMiddleware` (policy enforcement), `SystemPromptMiddleware` (dynamic prompt), `LLMRateLimitMiddleware` (LLM-level rate limiting), `WorkspaceContextMiddleware` (thread-aware workspace), `PerTurnModelMiddleware` (per-stream model override), `SootheFilesystemMiddleware` (extended filesystem tools), `CodeInterpreterMiddleware` (embedded QuickJS), `MCPToolSearchMiddleware` (MCP progressive disclosure), `ToolTimeoutMiddleware` (tool call timeout), plus profiler and tool-context helpers.
+- **Middleware Stack** (`soothe.middleware`) — Soothe-specific middlewares assembled by `build_soothe_middleware_stack()`: `IdentityMiddleware` (JWT/identity), `SoothePolicyMiddleware` (policy enforcement), `SystemPromptMiddleware` (dynamic prompt), `LLMRateLimitMiddleware` (LLM-level rate limiting), `WorkspaceContextMiddleware` (thread-aware workspace), `PerTurnModelMiddleware` (per-stream model override), `SootheFilesystemMiddleware` (extended filesystem tools), `CodeInterpreterMiddleware` (embedded QuickJS), `MCPActivationMiddleware` (MCP progressive disclosure), `ToolTimeoutMiddleware` (tool call timeout), plus profiler and tool-context helpers.
 - **Persistence** (`soothe.foundation.persistence`) — Artifact store and configuration-driven policy for run outputs.
 - **Prompts** (`soothe.foundation.sloop.prompts`) — System prompt building via `PromptBuilder`, context XML generation, and template loading.
 

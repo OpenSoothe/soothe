@@ -159,12 +159,12 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] Skill activation enabled")
 
-    # 1c. MCP tool search (RFC-412: MCP progressive disclosure telemetry)
+    # 1c. MCP activation (RFC-412: search, promote, bind deferred MCP tools)
     if mcp_registry is not None:
-        from .mcp_tool_search import MCPToolSearchMiddleware
+        from .mcp_activation import MCPActivationMiddleware
 
-        stack.append(MCPToolSearchMiddleware(mcp_registry=mcp_registry))
-        logger.info("[Middleware] MCP tool search enabled")
+        stack.append(MCPActivationMiddleware(mcp_registry=mcp_registry))
+        logger.info("[Middleware] MCP activation enabled")
 
     # 1d. Record tool-call kwargs for TUI display (IG-519).
     # The executor's stream path reads these via get_recorded_tool_call_args() to
