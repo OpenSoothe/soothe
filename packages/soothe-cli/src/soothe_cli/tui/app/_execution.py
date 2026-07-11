@@ -25,7 +25,7 @@ from soothe_cli.cli.execution.daemon_errors import (
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error as _friendly_agent_execution_error,
 )
-from soothe_cli.runtime.state.session_stats import SessionStats, format_token_count
+from soothe_cli.runtime.state.session_stats import SessionStats
 from soothe_cli.tui import theme
 from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.app._module_init import (
@@ -450,37 +450,6 @@ class _ExecutionMixin:
         """
         return f"{prefix}: {loop_id}"
 
-    async def _get_conversation_token_count(self) -> int | None:
-        """Return the approximate conversation-only token count.
-
-        Returns:
-            Token count as an integer, or `None` if state is unavailable.
-        """
-        if not self._lc_loop_id:
-            return None
-        try:
-            from langchain_core.messages import messages_from_dict
-            from langchain_core.messages.utils import count_tokens_approximately
-
-            if self._daemon_session is None:
-                return None
-            snap = await self._daemon_session.aget_loop_state(self._lc_loop_id)
-            vals = getattr(snap, "values", None)
-            if not isinstance(vals, dict):
-                return None
-            raw = vals.get("messages")
-            if not isinstance(raw, list) or not raw:
-                return None
-            if isinstance(raw[0], dict):
-                messages = messages_from_dict(raw)
-            else:
-                messages = raw
-
-            return count_tokens_approximately(messages)
-        except Exception:  # best-effort for /tokens display
-            logger.debug("Failed to retrieve conversation token count", exc_info=True)
-            return None
-
     async def _handle_command(self, command: str) -> None:
         """Handle a slash command.
 
@@ -516,9 +485,11 @@ class _ExecutionMixin:
                     self.query_one("#chat", VerticalScroll).anchor()
                 return
 
+        from soothe_cli.tui.command_registry import resolve_command_head
         from soothe_cli.tui.config import settings
 
         cmd = command.lower().strip()
+        cmd_head = resolve_command_head(command)
 
         if cmd in {"/quit", "/q"}:
             self._detach_or_exit()
@@ -579,51 +550,8 @@ class _ExecutionMixin:
             await self._handle_update_command()
         elif cmd == "/auto-update":
             await self._handle_auto_update_toggle()
-        elif cmd == "/tokens":
-            await self._mount_message(UserMessage(command))
-            if self._context_tokens > 0:
-                count = self._context_tokens
-                formatted = format_token_count(count)
-
-                model_name = settings.model_name
-                context_limit = settings.model_context_limit
-
-                if context_limit is not None:
-                    limit_str = format_token_count(context_limit)
-                    pct = count / context_limit * 100
-                    usage = f"{formatted} / {limit_str} tokens ({pct:.0f}%)"
-                else:
-                    usage = f"{formatted} tokens used"
-
-                msg = f"{usage} \u00b7 {model_name}" if model_name else usage
-
-                conv_tokens = await self._get_conversation_token_count()
-                if conv_tokens is not None:
-                    overhead = max(0, count - conv_tokens)
-                    overhead_str = format_token_count(overhead)
-                    conv_str = format_token_count(conv_tokens)
-
-                    overhead_unit = " tokens" if overhead < 1000 else ""  # noqa: PLR2004  # not bothersome, cosmetic
-                    conv_unit = " tokens" if conv_tokens < 1000 else ""  # noqa: PLR2004  # not bothersome, cosmetic
-
-                    msg += (
-                        f"\n\u251c System prompt + tools: ~{overhead_str}{overhead_unit} (fixed)"  # noqa: E501
-                        f"\n\u2514 Conversation: ~{conv_str}{conv_unit}"
-                    )
-
-                await self._mount_message(AppMessage(msg))
-            else:
-                model_name = settings.model_name
-                context_limit = settings.model_context_limit
-
-                parts: list[str] = ["No token usage yet"]
-                if context_limit is not None:
-                    limit_str = format_token_count(context_limit)
-                    parts.append(f"{limit_str} token context window")
-                if model_name:
-                    parts.append(model_name)
-
-                await self._mount_message(AppMessage(" · ".join(parts)))
+        elif cmd_head == "/context":
+            await self._show_context_viewer()
         elif cmd == "/skill-creator" or cmd.startswith("/skill-creator "):
             # Convenience alias for /skill:skill-creator — shorter and
             # discoverable before skill loading completes.
@@ -654,8 +582,6 @@ class _ExecutionMixin:
                 )
                 return
             await self._submit_cron_job(args, slash_input=command)
-        elif cmd == "/context":
-            await self._show_context_viewer()
         elif cmd == "/mcp":
             await self._show_mcp_viewer()
         elif cmd == "/theme":

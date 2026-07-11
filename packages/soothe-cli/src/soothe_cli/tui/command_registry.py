@@ -86,9 +86,10 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/context",
-        description="View goal DAG and status from context engine",
+        description="View token usage and context engine goal DAG",
         bypass_tier=BypassTier.IMMEDIATE_UI,
-        hidden_keywords="goals dag status context engine",
+        aliases=("/tokens",),
+        hidden_keywords="goals dag status context engine tokens cost usage",
     ),
     SlashCommand(
         name="/goals",
@@ -127,12 +128,6 @@ COMMANDS: tuple[SlashCommand, ...] = (
         name="/plan",
         description="Send input in plan mode (usage: /plan or /plan <prompt>)",
         bypass_tier=BypassTier.QUEUED,
-    ),
-    SlashCommand(
-        name="/tokens",
-        description="Token usage",
-        bypass_tier=BypassTier.QUEUED,
-        hidden_keywords="cost",
     ),
     SlashCommand(
         name="/reload",
@@ -191,6 +186,29 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
 )
 """All slash commands."""
+
+_ALIAS_TO_CANONICAL: dict[str, str] = {}
+for _cmd in COMMANDS:
+    _ALIAS_TO_CANONICAL[_cmd.name] = _cmd.name
+    for _alias in _cmd.aliases:
+        _ALIAS_TO_CANONICAL[_alias] = _cmd.name
+
+
+def resolve_command_head(command: str) -> str:
+    """Map a slash command (or alias) to its canonical registry name.
+
+    Args:
+        command: Full user input or bare command (e.g. ``/tokens`` or ``/plan x``).
+
+    Returns:
+        Canonical command head (e.g. ``/context`` for ``/tokens``), or the lowercased
+        first token when unknown.
+    """
+    stripped = command.strip()
+    if not stripped.startswith("/"):
+        return stripped.lower()
+    head = stripped.split(maxsplit=1)[0].lower()
+    return _ALIAS_TO_CANONICAL.get(head, head)
 
 
 # ---------------------------------------------------------------------------

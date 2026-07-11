@@ -94,11 +94,11 @@ def test_envelope_idempotent_when_data_present() -> None:
 
 
 def test_normalize_lc_stream_message_restores_ai_message() -> None:
-    """``_normalize_lc_stream_message`` must yield AIMessage for flat wire dicts."""
-    from soothe_cli.tui.textual_adapter import _normalize_lc_stream_message
+    """``normalize_lc_stream_message`` must yield AIMessage for flat wire dicts."""
+    from soothe_cli.runtime.wire.messages import normalize_lc_stream_message
 
     flat = _serialize_for_json(AIMessage(content="wire"))
-    msg = _normalize_lc_stream_message(flat)
+    msg = normalize_lc_stream_message(flat)
     assert isinstance(msg, AIMessage)
     assert msg.content == "wire"
 

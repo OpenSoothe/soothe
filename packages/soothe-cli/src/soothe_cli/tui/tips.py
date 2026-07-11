@@ -8,7 +8,7 @@ SESSION_TIPS: list[str] = [
     "Use @ to reference files and / for commands",
     "Try /resume to pick up a previous StrangeLoop instance",
     "After Ctrl+C exit, use 'soothe loop resume <loop_id>' to continue",
-    "Use /tokens to check context usage",
+    "Use /context to check token usage and goal status",
     "Use /mcp to see your loaded tools and servers",
     "Use /model to switch models mid-conversation",
     "Press ctrl+x to compose prompts in your external editor",

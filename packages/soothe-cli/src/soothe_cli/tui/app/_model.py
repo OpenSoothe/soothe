@@ -9,7 +9,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    pass
+    from soothe_cli.tui.widgets.context_data import TokenUsageSnapshot
 
 from textual.app import ScreenStackError
 from textual.containers import VerticalScroll
@@ -259,8 +259,22 @@ class _ModelMixin:
             return None
         return resp.get("servers")
 
+    async def _load_token_usage_snapshot(self) -> TokenUsageSnapshot:
+        """Build the token usage snapshot for the context modal."""
+        from soothe_cli.tui.config import settings
+        from soothe_cli.tui.widgets.context_data import load_token_usage_snapshot
+
+        return await load_token_usage_snapshot(
+            context_tokens=self._context_tokens,
+            approximate=self._tokens_approximate,
+            loop_id=self._lc_loop_id,
+            daemon_session=self._daemon_session,
+            model_name=settings.model_name,
+            context_limit=settings.model_context_limit,
+        )
+
     async def _show_context_viewer(self) -> None:
-        """Show context engine goal DAG and status as a modal screen."""
+        """Show token usage and context engine goal DAG as a modal screen."""
         from soothe_cli.tui.widgets.context_viewer import ContextViewerScreen
 
         def handle_result(result: None) -> None:  # noqa: ARG001
@@ -268,7 +282,12 @@ class _ModelMixin:
                 self._chat_input.focus_input()
 
         loop_id = self._lc_loop_id
-        screen = ContextViewerScreen(loop_id=loop_id)
+        initial_snapshot = await self._load_token_usage_snapshot()
+        screen = ContextViewerScreen(
+            loop_id=loop_id,
+            load_token_snapshot=self._load_token_usage_snapshot,
+            initial_token_snapshot=initial_snapshot,
+        )
         self.push_screen(screen, handle_result)
 
     async def _show_help_screen(self) -> None:

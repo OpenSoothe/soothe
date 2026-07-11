@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from soothe_cli.tui.command_registry import build_skill_commands_from_wire, parse_skill_command
+from soothe_cli.tui.command_registry import (
+    build_skill_commands_from_wire,
+    parse_skill_command,
+    resolve_command_head,
+)
 
 
 def test_build_skill_commands_from_wire_includes_all_skills() -> None:
@@ -50,3 +54,10 @@ class TestParseSkillCommand:
     def test_name_normalized_to_lowercase(self) -> None:
         name, args = parse_skill_command("/skill:MySkill")
         assert name == "myskill"
+
+
+def test_resolve_command_head_maps_aliases() -> None:
+    assert resolve_command_head("/tokens") == "/context"
+    assert resolve_command_head("/q") == "/quit"
+    assert resolve_command_head("/plan refactor auth") == "/plan"
+    assert resolve_command_head("/unknown") == "/unknown"
