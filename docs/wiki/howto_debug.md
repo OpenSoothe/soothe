@@ -18,25 +18,13 @@ Soothe maintains multiple log files in `~/.soothe/` for different purposes:
 
 ### Main Log Files
 
-| Log File | Purpose | Configured By |
-|----------|---------|---------------|
-| `~/.soothe/logs/soothed.log` | Daemon backend logs (agent execution, protocols, tools) | `config.yml` → `logging.file.level` |
-| `~/.soothe/logs/soothe-cli.log` | CLI client logs (connection, UI, event handling) | `--log-level` (or `SOOTHE_LOG_LEVEL` env) |
-
-### Data Directory Structure
-
-All runtime data is stored in `~/.soothe/data/`:
-
-| Directory/File | Purpose | Configured By |
-|----------------|---------|---------------|
-| `~/.soothe/data/threads/{thread_id}/logs/conversation.jsonl` | Thread-specific conversation audit logs | `config.yml` → `logging.thread_logging` |
-| `~/.soothe/data/threads/{thread_id}/manifest.json` | Thread metadata (query, status, artifacts) | Automatic |
-| `~/.soothe/data/langgraph_checkpoints.db` | LangGraph checkpoint database | `config.yml` → `durability.checkpointer` |
-| `~/.soothe/data/metadata.db` | Metadata database | `config.yml` → `persistence.default_backend` |
-| `~/.soothe/data/history.jsonl` | History log | Automatic |
-| `~/.soothe/data/loops/{loop_id}/` | Agent loop checkpoints | Automatic |
-
-**Note**: Thread logs are only created when `logging.thread_logging.enabled: true`.
+| Log File | Purpose |
+|----------|---------|
+| `~/.soothe/logs/soothed.log` | Daemon backend (agent execution, protocols, tools) |
+| `~/.soothe/logs/soothe-cli.log` | CLI client (connection, UI, event handling) |
+| `~/.soothe/data/threads/{thread_id}/logs/` | Thread conversation audit (when `thread_logging.enabled`) |
+| `~/.soothe/data/langgraph_checkpoints.db` | LangGraph checkpoint database |
+| `~/.soothe/data/metadata.db` | Metadata database |
 
 ---
 

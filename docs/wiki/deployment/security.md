@@ -75,129 +75,92 @@ The WebSocket transport exposes daemon port 8765. This MUST be protected by reve
 | Proxy | Best For | Features |
 |-------|----------|----------|
 | **nginx** | Standard production | TLS, JWT, rate limiting |
-| **HAProxy** | High performance | Advanced routing, health checks |
-| **Traefik** | Kubernetes/Docker | Auto-discovery, dynamic config |
 | **Caddy** | Easy setup | Auto HTTPS, simple config |
+| **Traefik** | Kubernetes/Docker | Auto-discovery, dynamic config |
+| **HAProxy** | High performance | Advanced routing, health checks |
 | **Envoy** | Service mesh | Advanced filtering, observability |
+
+### Caddy Configuration (Simplest Option)
+
+**Caddyfile** (automatic HTTPS + JWT auth):
+```
+soothe.example.com {
+    encode gzip
+
+    # JWT authentication (caddy-auth-jwt plugin)
+    jwt {
+        secret YOUR_JWT_SECRET
+        signalg HS256
+    }
+
+    handle /ws {
+        reverse_proxy localhost:8765
+    }
+}
+```
+
+**Soothe config**:
+```yaml
+transports:
+  websocket:
+    enabled: true
+    host: "127.0.0.1"
+    port: 8765
+```
 
 ### nginx Configuration
 
-#### Basic TLS + JWT Authentication
+#### TLS + Authentication (JWT or API Key)
 
-**`/etc/nginx/sites-available/soothe.conf`**:
 ```nginx
 # WebSocket upstream
 upstream soothe_ws {
     server 127.0.0.1:8765;
 }
 
-# WebSocket endpoint (WSS)
 server {
     listen 443 ssl http2;
     server_name soothe.your-domain.com;
-    
-    # TLS configuration
+
+    # TLS
     ssl_certificate /etc/letsencrypt/live/soothe.your-domain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/soothe.your-domain.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
-    ssl_prefer_server_ciphers on;
-    
+
     # Rate limiting
     limit_req_zone $binary_remote_addr zone=ws_limit:10m rate=10r/s;
-    
-    # WebSocket endpoint
+
     location /ws {
         limit_req zone=ws_limit burst=20 nodelay;
-        
-        # JWT authentication
-        auth_jwt "Soothe API";
-        auth_jwt_key_file /etc/nginx/jwt_key.pem;
-        
-        # JWT claim extraction
-        auth_jwt_claim $jwt_user sub;
-        
+
+        # Option 1: JWT authentication (requires nginx-plus or auth_jwt module)
+        # auth_jwt "Soothe API";
+        # auth_jwt_key_file /etc/nginx/jwt_key.pem;
+
+        # Option 2: API key header validation
+        # if ($http_x_api_key = "") { return 401; }
+        # if ($http_x_api_key != "your-api-key") { return 403; }
+
         proxy_pass http://soothe_ws;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-User $jwt_user;
-        
-        # WebSocket timeouts
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
     }
 }
 ```
 
-**JWT setup**:
-```bash
-# Generate JWT signing key
-openssl genrsa -out /etc/nginx/jwt_key.pem 2048
-
-# Example JWT payload:
-{
-  "sub": "user-id-123",
-  "iat": 1234567890,
-  "exp": 1234571490,
-  "roles": ["developer"]
-}
-```
-
-#### API Key Authentication (Simple)
-
-**`/etc/nginx/sites-available/soothe.conf`**:
-```nginx
-server {
-    listen 443 ssl;
-    server_name soothe.your-domain.com;
-    
-    ssl_certificate /etc/letsencrypt/live/soothe.your-domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/soothe.your-domain.com/privkey.pem;
-    
-    # API key authentication
-    location /ws {
-        # Validate API key header
-        if ($http_x_api_key = "") {
-            return 401;
-        }
-        
-        # API key whitelist (use map for dynamic validation)
-        set $api_key_valid 0;
-        
-        # Example: hardcoded API key
-        if ($http_x_api_key = "sk-soothe-api-key-123") {
-            set $api_key_valid 1;
-        }
-        
-        if ($api_key_valid = 0) {
-            return 403;
-        }
-        
-        proxy_pass http://soothe_ws;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
 **Client usage**:
 ```bash
-# WebSocket with API key (API key validated by reverse proxy, not Soothe)
-soothe \
-  --daemon-host soothe.your-domain.com \
-  --daemon-port 443 \
-  -p "Check workspace status"
+# API key validated by reverse proxy (not Soothe)
+soothe --daemon-host soothe.your-domain.com --daemon-port 443 -p "Check status"
 ```
 
-#### OAuth 2.0 / OIDC Authentication (Enterprise)
+#### OAuth 2.0 / OIDC (Enterprise)
 
-**nginx + OAuth2 Proxy**:
+Use [OAuth2 Proxy](https://oauth2-proxy.github.io/oauth2-proxy/) with nginx:
 
 ```yaml
 # docker-compose.yml
@@ -205,38 +168,18 @@ services:
   oauth2-proxy:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.4.0
     environment:
-      OAUTH2_PROXY_PROVIDER: oidc  # Google, GitHub, Okta, etc.
-      OAUTH2_PROXY_CLIENT_ID: <your_client_id>
-      OAUTH2_PROXY_CLIENT_SECRET: <your_client_secret>
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_CLIENT_ID: <client_id>
+      OAUTH2_PROXY_CLIENT_SECRET: <client_secret>
       OAUTH2_PROXY_OIDC_ISSUER_URL: https://accounts.google.com
       OAUTH2_PROXY_COOKIE_SECRET: <random_secret>
       OAUTH2_PROXY_UPSTREAM: http://soothed:8765
-    ports:
-      - "4180:4180"
 
   soothed:
     image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
-    networks:
-      - soothe-internal
 ```
 
-**nginx configuration**:
-```nginx
-server {
-    listen 443 ssl;
-    server_name soothe.your-domain.com;
-    
-    location /ws {
-        # Proxy to OAuth2 Proxy
-        proxy_pass http://oauth2-proxy:4180;
-        proxy_set_header Host $host;
-        
-        # OAuth2 Proxy handles auth, proxies to Soothe
-    }
-}
-```
-
-### Rate Limiting Configuration
+### Rate Limiting
 
 **nginx rate limiting**:
 ```nginx
@@ -292,6 +235,19 @@ location /ws {
     
     proxy_pass http://soothe_ws;
 }
+```
+
+### CORS Configuration
+
+Configure allowed origins for WebSocket connections:
+
+```yaml
+# ~/.soothe/config/daemon.yml
+transports:
+  websocket:
+    cors_origins:
+      - "https://app.example.com"
+      - "https://soothe.example.com"
 ```
 
 ### TLS Best Practices
@@ -535,68 +491,32 @@ security:
 
 ### Security Policy Profiles
 
-**Profile 1: Standard Development**:
+**Standard Development**:
 ```yaml
 security:
   sandbox: false
   allow_paths_outside_workspace: false
-  denied_paths:
-    - /etc/**
-    - ~/.ssh/**
-    - ~/.aws/**
-  require_approval_for_file_types:
-    - .env
+  denied_paths: [/etc/**, ~/.ssh/**, ~/.aws/**]
+  require_approval_for_file_types: [.env]
 ```
 
-**Profile 2: Strict Production**:
+**Strict Production** (add these to standard):
 ```yaml
 security:
-  sandbox: false
-  allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true
-  denied_paths:
-    - /etc/**
-    - /bin/**
-    - /usr/**
-    - ~/.ssh/**
-    - ~/.aws/**
-    - ~/.gnupg/**
-    - '**/.env'
-    - '**/secrets.json'
-  denied_file_types:
-    - .key
-    - .pem
-    - .p12
-  require_approval_for_file_types:
-    - .env
-    - .credentials
+  denied_paths: [/etc/**, /bin/**, ~/.ssh/**, ~/.aws/**, ~/.gnupg/**, '**/.env']
+  denied_file_types: [.key, .pem, .p12]
 ```
 
-**Profile 3: Maximum Security**:
+**Maximum Security** (restrict workspace scope):
 ```yaml
 security:
-  sandbox: true  # Enable sandbox mode (future feature)
-  allow_paths_outside_workspace: false
-  denied_paths:
-    - /etc/**
-    - /bin/**
-    - /usr/**
-    - ~/.ssh/**
-    - ~/.aws/**
-    - ~/.gnupg/**
-    - '**/.env'
-    - '**/*.key'
-    - '**/*.pem'
-  allowed_paths:
-    - '/workspace/project-a/**'  # Only specific projects
-    - '/workspace/project-b/**'
-  denied_file_types:
-    - .env
-    - .key
-    - .pem
-    - .p12
-    - .credentials
+  sandbox: true
+  allowed_paths: ['/workspace/project-a/**', '/workspace/project-b/**']
+  denied_file_types: [.env, .key, .pem, .credentials]
 ```
+
+### Workspace Isolation (Multi-Team)
 
 ### Workspace Isolation (Multi-Team)
 
