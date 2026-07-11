@@ -41,6 +41,7 @@ jobs:
           test -f _site/wiki/index.html
           test -f _site/.nojekyll
           test ! -e _site/specs
+          test ! -e _site/drafts
           echo "Pages artifact verification passed ($(du -sh _site | cut -f1))"
 
       - name: Deploy to gh-pages branch
