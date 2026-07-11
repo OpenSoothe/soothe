@@ -268,6 +268,25 @@ ps aux | grep soothe
 kill -9 <pid>  # If needed
 ```
 
+### Error: `Request exceeded … timeout` / step cancelled after ~14 days
+
+**Symptoms**: Daemon log shows `request timeout (1209600s)` or `RuntimeError: Request exceeded 1209600s timeout`; step marked `cancelled`; goal did not complete.
+
+**Cause**: The turn exceeded `thread_pool.request_timeout_seconds` (default **14 days**). Autopilot dispatches use the parallel `agent.autopilot.goal_deadline_seconds` knob (same default).
+
+**Solution**:
+
+1. Continue the loop if checkpoint state is good: `soothe loop continue <loop_id>`
+2. Raise or disable the cap in `~/.soothe/config/daemon.yml`:
+   ```yaml
+   thread_pool:
+     request_timeout_seconds: 0  # no timeout
+   ```
+3. For autopilot-only workloads, adjust `agent.autopilot.goal_deadline_seconds` in `config.yml` (`null` disables).
+4. Restart daemon after config changes: `soothed stop && soothed start`
+
+See [Production Setup — Request timeouts](../deployment/production-setup.md#request-timeouts).
+
 ## Thread Issues
 
 ### Error: Thread not found

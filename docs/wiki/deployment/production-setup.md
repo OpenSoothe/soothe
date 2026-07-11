@@ -474,6 +474,21 @@ transports:
 
 **Important**: Use reverse proxy for remote WebSocket access. See [Security Hardening](security.md).
 
+### Request timeouts
+
+Long agent turns (multi-hour builds, large refactors) are bounded by `thread_pool.request_timeout_seconds` in `daemon.yml` (default **1209600** = 14 days). Autopilot goals use the parallel wall-clock knob `agent.autopilot.goal_deadline_seconds` in `config.yml` (same default). Set either to `0` / `null` only when you accept unbounded runs.
+
+```yaml
+# daemon.yml
+thread_pool:
+  request_timeout_seconds: 1209600  # 14d; 0 = no timeout
+
+# config.yml
+agent:
+  autopilot:
+    goal_deadline_seconds: 1209600  # 14d; null disables
+```
+
 ### Firewall Rules
 
 **Production firewall configuration**:

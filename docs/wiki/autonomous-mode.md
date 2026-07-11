@@ -81,7 +81,12 @@ agent:
 
     # Maximum retries per goal on failure (default: 2)
     max_retries: 2
+
+    # Wall-clock budget per dispatched goal (default: 1209600 = 14 days)
+    goal_deadline_seconds: 1209600
 ```
+
+Set `goal_deadline_seconds: null` to disable autopilot deadline enforcement (not recommended for unattended 24/7 runs).
 
 ### Environment Variables
 
@@ -89,6 +94,7 @@ agent:
 export SOOTHE_AGENT_AUTOPILOT_ENABLED=true
 export SOOTHE_AGENT_AUTOPILOT_MAX_ITERATIONS=15
 export SOOTHE_AGENT_AUTOPILOT_MAX_RETRIES=3
+export SOOTHE_AGENT__AUTOPILOT__GOAL_DEADLINE_SECONDS=1209600
 ```
 
 ## How It Works
@@ -106,6 +112,7 @@ export SOOTHE_AGENT_AUTOPILOT_MAX_RETRIES=3
 Autonomous mode stops when:
 - The goal is achieved
 - Maximum iterations reached
+- Wall-clock deadline exceeded (`goal_deadline_seconds`, default 14 days)
 - User cancels with `/cancel` or `Ctrl+C`
 - Critical error occurs
 

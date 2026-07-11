@@ -9,6 +9,8 @@
 **Incident loops**: `0b37` (`019f3543-de29-7bb1-9e6a-487262690b37`)  
 **Logs**: `~/.soothe/logs/soothe.log`, `~/.soothe/logs/daemon.log`, `~/.soothe/data/loops/<loop_id>/runner.log`
 
+> **Note (2026-07-11)**: Daemon `thread_pool.request_timeout_seconds` default is now **1209600** (14 days). Loop `0b37` hit the prior **7200s** (2h) cap.
+
 ---
 
 ## Executive Summary
@@ -239,7 +241,7 @@ async def close(self) -> None:
         # optional: write hot index status=persist_incomplete for reconciler
 ```
 
-Never hold the daemon worker hostage until 7200s outer timeout.
+Never hold the daemon worker hostage until the outer request timeout (default **14 days**; was 2h before 2026-07-11).
 
 ### F. Pool reset protocol
 

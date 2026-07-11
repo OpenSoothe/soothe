@@ -111,6 +111,7 @@ Common cross-log patterns:
 | Symptom | soothe.log | daemon.log | cli.log |
 |---------|------------|--------------|---------|
 | Loop hang | Last line mid-step; no `Step X completed/failed` | `starting request` never `completed request` | Events stop; spinner may persist |
+| Goal failed at wall-clock cap | Step `cancelled` near deadline | `request timeout (1209600s)` or `Request exceeded … timeout` | Frozen snapshot; no `goal_completed` |
 | Stream ended unexpectedly | Step failed / recoverable tool errors | Worker completes | `turn_finished` may still arrive late |
 | TUI step count < log steps | Multiple `[Loop] Plan:` / iterations | — | Plan overlay vs execute events mismatch |
 | Second goal never starts | Goal completion logs | `done` before worker `ready` | No new events after input |
@@ -403,7 +404,7 @@ Reproduce minimally, then re-run Workflow B. `[Tool#N]`, `[write_todos]`, and `[
 - Do not treat idle worker respawn (`thread-worker-1 idle timeout`) as the investigated loop crashing — verify worker id and loop id on each line.
 - `soothe.log` `[suffix]` is last 4 chars of thread id; for loops, thread id is typically the loop id.
 - Prefer `runner.log` for pooled workers — it avoids cross-loop noise.
-- Classify before blaming the model: thread-pool `request_timeout=0`, tool budget, missing `rg`/`ag`, and checkpoint races are common infra causes.
+- Classify before blaming the model: thread-pool `request_timeout` (default **14d** / `1209600`; `0` = no cap), tool budget, missing `rg`/`ag`, and checkpoint races are common infra causes.
 - Never cite internal IG/RFC ids in user-facing diagnosis text.
 
 ## Related

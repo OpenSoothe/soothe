@@ -155,7 +155,7 @@ Daemon may still log: Goal completed: action=synthesize, chars=5182
 **Files**:
 | File | Change |
 |------|--------|
-| `deploy/soothe-config.yml` / config schema | Set `runner.request_timeout_seconds` to **non-zero** (e.g. 7200 for long agent turns, or match `max_query_duration_minutes`) |
+| `config/daemon.template.yml` / config schema | Default `thread_pool.request_timeout_seconds` and `worker_pool.request_timeout_seconds` to **1209600** (14 days); use `0` only for no cap |
 | `packages/soothe-daemon/src/soothe_daemon/runner/thread_runner.py` | Ensure timeout emits `("timeout", RuntimeError(...))` not silent hang |
 | Docs | Document interaction with `ToolTimeoutMiddleware` (IG-511) |
 
