@@ -609,18 +609,30 @@ async def run_llm_call_with_policy(
             timeout_attempts=timeout_attempts,
             rate_limit_attempts=rate_limit_attempts,
         )
-        call_log.debug(
-            "%s call starting (timeout=%ds timeout_try=%d/%d rate_limit_try=%d/%d "
-            "budget_key=%s thread_id=%s)",
-            log_prefix,
-            eff_timeout,
-            timeout_attempts + 1,
-            max_timeout_attempts,
-            rate_limit_attempts + 1,
-            max_rate_limit_attempts,
-            budget_key,
-            telemetry_id,
-        )
+        if timeout_attempts == 0 and rate_limit_attempts == 0:
+            call_log.debug(
+                "%s call (timeout=%ds, thread_id=%s)",
+                log_prefix,
+                eff_timeout,
+                telemetry_id,
+            )
+        else:
+            retry_reasons: list[str] = []
+            if timeout_attempts > 0:
+                retry_reasons.append(
+                    f"timeout {timeout_attempts + 1}/{max_timeout_attempts}",
+                )
+            if rate_limit_attempts > 0:
+                retry_reasons.append(
+                    f"429 {rate_limit_attempts + 1}/{max_rate_limit_attempts}",
+                )
+            call_log.debug(
+                "%s retry (%s, timeout=%ds, thread_id=%s)",
+                log_prefix,
+                ", ".join(retry_reasons),
+                eff_timeout,
+                telemetry_id,
+            )
 
         retry_sleep: float | None = None
         retry_error_type: str | None = None
