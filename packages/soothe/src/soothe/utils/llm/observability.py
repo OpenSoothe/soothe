@@ -155,6 +155,14 @@ class SootheLLMTokenUsageCallbackHandler(BaseCallbackHandler):
             counts["total_tokens"],
             tags,
         )
+        try:
+            from soothe.foundation.sloop.utils.token_usage import (
+                accumulate_loop_tokens_from_llm_result,
+            )
+
+            accumulate_loop_tokens_from_llm_result(response)
+        except Exception:
+            logger.debug("Loop token accumulation from direct LLM failed", exc_info=True)
 
 
 _TOKEN_HANDLER_SINGLETON = SootheLLMTokenUsageCallbackHandler()

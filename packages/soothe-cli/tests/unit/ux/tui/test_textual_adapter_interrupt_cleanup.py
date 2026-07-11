@@ -29,8 +29,6 @@ async def test_interrupt_cleanup_cancels_remote_query_not_detach() -> None:
         config={"configurable": {"thread_id": "t1"}},
         daemon_session=daemon_session,
         pending_text_by_namespace={},
-        captured_input_tokens=0,
-        captured_output_tokens=0,
         turn_stats=SessionStats(),
         start_time=0.0,
     )
@@ -58,8 +56,6 @@ async def test_interrupt_cleanup_daemon_uses_aupdate_loop_state() -> None:
         config={"configurable": {"thread_id": "loop-daemon-1"}},
         daemon_session=daemon_session,
         pending_text_by_namespace={(): "partial answer"},
-        captured_input_tokens=0,
-        captured_output_tokens=0,
         turn_stats=SessionStats(),
         start_time=0.0,
     )
@@ -103,8 +99,6 @@ async def test_interrupt_cleanup_daemon_falls_back_to_session_loop_id() -> None:
         config={"configurable": {"thread_id": ""}},
         daemon_session=daemon_session,
         pending_text_by_namespace={(): "x"},
-        captured_input_tokens=0,
-        captured_output_tokens=0,
         turn_stats=SessionStats(),
         start_time=0.0,
     )
@@ -131,8 +125,6 @@ async def test_interrupt_cleanup_skips_daemon_rpc_when_app_exiting() -> None:
         config={"configurable": {"thread_id": "loop-1"}},
         daemon_session=daemon_session,
         pending_text_by_namespace={(): "partial"},
-        captured_input_tokens=100,
-        captured_output_tokens=0,
         turn_stats=SessionStats(),
         start_time=0.0,
         app_exiting=True,

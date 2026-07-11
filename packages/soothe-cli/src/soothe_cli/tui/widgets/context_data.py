@@ -33,6 +33,8 @@ class TokenUsageSnapshot:
     conv_tokens: int | None = None
     model_name: str | None = None
     context_limit: int | None = None
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 async def load_token_usage_snapshot(
@@ -43,20 +45,42 @@ async def load_token_usage_snapshot(
     daemon_session: Any,
     model_name: str | None = None,
     context_limit: int | None = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
 ) -> TokenUsageSnapshot:
     """Build the token snapshot shown in the context modal."""
-    conv_tokens = (
-        await fetch_conversation_token_count(daemon_session, loop_id)
-        if context_tokens > 0
-        else None
-    )
+    conv_tokens: int | None = None
+    if loop_id and daemon_session is not None:
+        conv_tokens = await fetch_conversation_token_count(daemon_session, loop_id)
+
+    effective_tokens = context_tokens
+    effective_approximate = approximate
+    if effective_tokens <= 0 and conv_tokens:
+        effective_tokens = conv_tokens
+        effective_approximate = True
+
     return TokenUsageSnapshot(
-        context_tokens=context_tokens,
-        approximate=approximate,
+        context_tokens=effective_tokens,
+        approximate=effective_approximate,
         conv_tokens=conv_tokens,
         model_name=model_name,
         context_limit=context_limit,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )
+
+
+def _load_soothe_config_for_context() -> Any:
+    """Load full daemon ``SootheConfig`` for context-engine persistence."""
+    from pathlib import Path
+
+    from soothe.config.settings import SootheConfig
+    from soothe_sdk.client.config import SOOTHE_HOME
+
+    path = Path(SOOTHE_HOME) / "config" / "config.yml"
+    if path.exists():
+        return SootheConfig.from_yaml_file(str(path))
+    return SootheConfig()
 
 
 async def load_ce_goals(loop_id: str) -> list[dict[str, Any]]:
@@ -70,9 +94,7 @@ async def load_ce_goals(loop_id: str) -> list[dict[str, Any]]:
             resolve_context_engine_persistence,
         )
 
-        from soothe_cli.runtime import load_config
-
-        config = load_config()
+        config = _load_soothe_config_for_context()
         persistence = resolve_context_engine_persistence(config, raw_loop_id)
         dag = await persistence.load_dag()
         close = getattr(persistence, "close", None)
@@ -96,6 +118,8 @@ def format_token_usage(snapshot: TokenUsageSnapshot) -> str:
     model_name = (snapshot.model_name or "").strip()
     context_limit = snapshot.context_limit
     suffix = "+" if snapshot.approximate else ""
+    in_count = snapshot.input_tokens
+    out_count = snapshot.output_tokens
 
     if count <= 0:
         parts: list[str] = ["No token usage yet"]
@@ -106,26 +130,21 @@ def format_token_usage(snapshot: TokenUsageSnapshot) -> str:
         return " · ".join(parts)
 
     formatted = format_token_count(count)
-    if context_limit is not None:
-        limit_str = format_token_count(context_limit)
-        pct = count / context_limit * 100
-        usage = f"{formatted}{suffix} / {limit_str} tokens ({pct:.0f}%)"
-    else:
-        usage = f"{formatted}{suffix} tokens used"
+    usage = f"{formatted}{suffix} tokens used this loop"
+    if in_count > 0 or out_count > 0:
+        usage += f" (in: {format_token_count(in_count)} · out: {format_token_count(out_count)})"
 
     msg = f"{usage} · {model_name}" if model_name else usage
 
+    if context_limit is not None:
+        limit_str = format_token_count(context_limit)
+        msg += f"\n├ Context window: {limit_str} tokens"
+
     conv_tokens = snapshot.conv_tokens
     if conv_tokens is not None:
-        overhead = max(0, count - conv_tokens)
-        overhead_str = format_token_count(overhead)
         conv_str = format_token_count(conv_tokens)
-        overhead_unit = " tokens" if overhead < 1000 else ""  # noqa: PLR2004
         conv_unit = " tokens" if conv_tokens < 1000 else ""  # noqa: PLR2004
-        msg += (
-            f"\n├ System prompt + tools: ~{overhead_str}{overhead_unit} (fixed)"
-            f"\n└ Conversation: ~{conv_str}{conv_unit}"
-        )
+        msg += f"\n└ Conversation (est.): ~{conv_str}{conv_unit}"
     return msg
 
 

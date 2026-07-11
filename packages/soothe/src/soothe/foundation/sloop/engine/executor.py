@@ -891,18 +891,10 @@ class Executor:
         Returns:
             Dict with prompt_tokens, completion_tokens, total_tokens (or empty dict if unavailable)
         """
-        # Find last AIMessage with usage_metadata
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage) and hasattr(msg, "response_metadata"):
-                metadata = msg.response_metadata
-                token_usage = metadata.get("token_usage", {})
-                if token_usage:
-                    return {
-                        "prompt": token_usage.get("prompt_tokens", 0),
-                        "completion": token_usage.get("completion_tokens", 0),
-                        "total": token_usage.get("total_tokens", 0),
-                    }
-        return {}
+        # Find last AIMessage with usage metadata or response token_usage.
+        from soothe.foundation.sloop.utils.token_usage import extract_token_usage_from_messages
+
+        return extract_token_usage_from_messages(messages)
 
     def _record_execute_wave_for_finalize(
         self,
@@ -1663,6 +1655,13 @@ class Executor:
                         if df:
                             wave_delegate_parts.append(df)
                         if res.step_result:
+                            if res.messages:
+                                self._aggregate_wave_metrics(
+                                    [res.step_result],
+                                    res.output or "",
+                                    res.messages,
+                                    state,
+                                )
                             report_task = completion_report_tasks.pop(sid, None)
                             summary = await report_task if report_task is not None else None
                             if summary:
@@ -1721,7 +1720,7 @@ class Executor:
                 r.outcome.get("size_bytes", 0) for r in all_step_results if r.success and r.outcome
             ]
             max_output_len = max(output_lengths) if output_lengths else 0
-            # Token totals: parallel steps stream independently; per-step messages are not merged here.
+            # Token totals: per-step messages were aggregated above when each step finished.
             self._aggregate_wave_metrics(all_step_results, "", [], state)
             state.last_wave_output_length = max_output_len
 

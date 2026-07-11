@@ -62,7 +62,7 @@ async def test_load_loop_history_skips_duplicate_scheduled_load() -> None:
     app._runtime_backend_ready = MagicMock(return_value=True)
     app._clear_messages = AsyncMock()
     app._fetch_loop_history_data = AsyncMock(return_value=payload)
-    app._on_tokens_update = MagicMock()
+    app._seed_loop_token_from_checkpoint = MagicMock()
     app.query_one = MagicMock(return_value=container)
     app._mount_message = AsyncMock()
     app._schedule_loop_message_link = MagicMock()

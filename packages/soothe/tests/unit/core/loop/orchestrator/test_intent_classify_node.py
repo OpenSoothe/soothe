@@ -34,6 +34,7 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
         thread_id="t1",
         intent=None,
         routing_classification=None,
+        total_tokens_used=0,
     )
     ce = MagicMock()
     ce.get_ledger_entries.return_value = []
@@ -56,9 +57,11 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
     assert loop_state.intent is intent
     assert loop_state.routing_classification is not None
     assert any(
-        t == "plan_phase_status" and d == {"label": "Interpreting goal"}
+        t == "plan_phase_status"
+        and isinstance(d, dict)
+        and d.get("label") == "Interpreting goal"
+        and d.get("total_tokens_used") == 0
         for t, d in emitted
-        if isinstance(d, dict)
     )
     assert any(t == "intent_classified_reasoning" for t, _ in emitted)
 

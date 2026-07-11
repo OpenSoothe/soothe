@@ -53,7 +53,13 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     context = strange_loop._build_plan_context(state)
     exclude_goal_id = ctx.goal_record.goal_id if ctx.goal_record else None
 
-    await ctx.emit("plan_phase_status", {"label": _PLAN_GENERATE_STATUS_LABEL})
+    await ctx.emit(
+        "plan_phase_status",
+        {
+            "label": _PLAN_GENERATE_STATUS_LABEL,
+            "total_tokens_used": state.total_tokens_used,
+        },
+    )
 
     # RFC-630: the ``simple`` intake branch skips plan_assess and reaches
     # plan_generate directly with a synthetic assessment. Use the cheaper
@@ -84,6 +90,14 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             exclude_goal_id=exclude_goal_id,
             plan_gap=ctx.scratch.plan_gap,
         )
+
+    await ctx.emit(
+        "plan_phase_status",
+        {
+            "label": _PLAN_GENERATE_STATUS_LABEL,
+            "total_tokens_used": state.total_tokens_used,
+        },
+    )
 
     ctx.scratch.plan_result = plan_result
 

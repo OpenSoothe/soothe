@@ -511,9 +511,7 @@ class _ExecutionMixin:
             self._pending_messages.clear()
             self._queued_widgets.clear()
             await self._clear_messages()
-            self._context_tokens = 0
-            self._tokens_approximate = False
-            self._update_tokens(0)
+            self._reset_loop_token_usage(None)
             # Clear status message (e.g., "Interrupted" from previous session)
             self._update_status("")
             if self._session_state:
@@ -535,6 +533,7 @@ class _ExecutionMixin:
                     )
                     self._session_state.loop_id = new_loop_id
                     self._lc_loop_id = new_loop_id
+                    self._reset_loop_token_usage(new_loop_id)
                     try:
                         banner = self.query_one("#welcome-banner", WelcomeBanner)
                         banner.update_loop_id(new_loop_id)
@@ -972,7 +971,7 @@ class _ExecutionMixin:
 
         # Ensure token display is restored (in case of early cancellation).
         # Pass the cached approximate flag so an interrupted "+" isn't clobbered.
-        self._show_tokens(approximate=self._tokens_approximate)
+        self._refresh_token_displays(approximate=self._tokens_approximate)
 
         try:
             await self._maybe_drain_deferred()

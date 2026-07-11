@@ -282,6 +282,7 @@ class StrangeLoop:
                 )
 
             # IG-554 Stage 1: Pass 1 ∥ checkpoint.load (social fast-path before graph).
+            pass1_token_sink = None
             if (
                 preclassified_intent is None
                 and intent_classifier is not None
@@ -292,6 +293,14 @@ class StrangeLoop:
                 )
 
                 yield ("plan_phase_status", {"label": INTENT_CLASSIFY_STATUS_LABEL})
+
+                from soothe.foundation.sloop.utils.token_usage import (
+                    DirectLLMTokenTarget,
+                    loop_token_accumulation_scope,
+                    merge_direct_llm_tokens_into_state,
+                )
+
+                pass1_token_sink = DirectLLMTokenTarget()
 
                 try:
                     checkpoint_raw = await state_manager.load()
@@ -314,12 +323,13 @@ class StrangeLoop:
                         )
 
                 try:
-                    pass1_raw = await intent_classifier.classify_pass1(
-                        execution_goal,
-                        prior_response_language=prior_language,
-                        observability_metadata={"thread_id": main_thread_id},
-                        goal_trace=active_goal_trace,
-                    )
+                    with loop_token_accumulation_scope(pass1_token_sink):
+                        pass1_raw = await intent_classifier.classify_pass1(
+                            execution_goal,
+                            prior_response_language=prior_language,
+                            observability_metadata={"thread_id": main_thread_id},
+                            goal_trace=active_goal_trace,
+                        )
                 except Exception as exc:
                     logger.warning(
                         "Pass1 pre-graph classification failed (%s); continuing as task",
@@ -571,6 +581,13 @@ class StrangeLoop:
                 loop_messages=[],  # RFC-624 Phase 4 Stage 2: CE ledger spans all goals
             )
 
+            if pass1_token_sink is not None:
+                from soothe.foundation.sloop.utils.token_usage import (
+                    merge_direct_llm_tokens_into_state,
+                )
+
+                merge_direct_llm_tokens_into_state(state, pass1_token_sink)
+
             # RFC-225: propagate continue_loop_mode onto LoopState for executor wiring
             state.continue_loop = continue_loop_mode
 
@@ -667,6 +684,8 @@ class StrangeLoop:
             )
 
             async def _classify_scope_after_ce_load() -> Any:
+                from soothe.foundation.sloop.utils.token_usage import loop_token_accumulation_scope
+
                 ledger_messages: list[Any] = []
                 try:
                     ledger_messages = [msg for msg, _phase in ce_instance.get_ledger_entries()]
@@ -675,21 +694,22 @@ class StrangeLoop:
                         "Could not read CE ledger for Pass2 prior projection",
                         exc_info=True,
                     )
-                return await intent_classifier.classify_scope_intake(
-                    execution_goal,
-                    loop_messages=ledger_messages,
-                    thread_id=main_thread_id,
-                    context_engine=ce_instance,
-                    pass1_response_language=normalize_response_language(
-                        getattr(pass1_result, "response_language", None)
+                with loop_token_accumulation_scope(state):
+                    return await intent_classifier.classify_scope_intake(
+                        execution_goal,
+                        loop_messages=ledger_messages,
+                        thread_id=main_thread_id,
+                        context_engine=ce_instance,
+                        pass1_response_language=normalize_response_language(
+                            getattr(pass1_result, "response_language", None)
+                        )
+                        if pass1_result is not None
+                        else None,
+                        goal_trace=active_goal_trace,
+                        observability_metadata={"thread_id": main_thread_id},
+                        observability_phase="pre-stream",
+                        observability_component="intake.pass2",
                     )
-                    if pass1_result is not None
-                    else None,
-                    goal_trace=active_goal_trace,
-                    observability_metadata={"thread_id": main_thread_id},
-                    observability_phase="pre-stream",
-                    observability_component="intake.pass2",
-                )
 
             if semantic_tasks:
                 semantic_wrapped = [asyncio.create_task(task) for task in semantic_tasks]

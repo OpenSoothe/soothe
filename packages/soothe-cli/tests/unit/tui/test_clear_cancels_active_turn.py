@@ -29,8 +29,8 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app._interrupt_daemon_agent_turn = AsyncMock()
     app._cleanup_agent_task = AsyncMock()
     app._clear_messages = AsyncMock()
+    app._reset_loop_token_usage = MagicMock()
     app._update_status = MagicMock()
-    app._update_tokens = MagicMock()
     app._lc_loop_id = "old-loop"
     app._clear_loop_model_override = MagicMock()
     app._mount_message = AsyncMock()

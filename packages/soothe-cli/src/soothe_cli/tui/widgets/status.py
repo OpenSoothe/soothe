@@ -383,7 +383,7 @@ class StatusBar(Horizontal):
         """Render the token count into the display widget.
 
         Args:
-            count: Total context token count.
+            count: Accumulated loop token usage total.
             approximate: Append "+" suffix to indicate the count is stale
                 (e.g. after an interrupted generation).
         """
@@ -410,7 +410,7 @@ class StatusBar(Horizontal):
         attribute.
 
         Args:
-            count: Current context token count.
+            count: Accumulated loop token usage total.
             approximate: Append "+" to indicate the count is stale.
         """
         self._approximate = approximate

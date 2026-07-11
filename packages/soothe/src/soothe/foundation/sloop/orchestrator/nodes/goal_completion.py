@@ -315,7 +315,13 @@ async def node_goal_completion(
         )
         return {"last_outcome": "fatal"}
 
-    await ctx.emit("plan_phase_status", {"label": _GOAL_FINALIZE_STATUS_LABEL})
+    await ctx.emit(
+        "plan_phase_status",
+        {
+            "label": _GOAL_FINALIZE_STATUS_LABEL,
+            "total_tokens_used": ctx.loop_state.total_tokens_used,
+        },
+    )
 
     perf_start = ctx.scratch.iteration_perf_start or time.perf_counter()
 

@@ -9,6 +9,7 @@ from textual.content import Content
 from textual.widgets import Static
 
 from soothe_cli.runtime.presentation.duration_format import format_running_elapsed
+from soothe_cli.runtime.state.session_stats import format_token_count
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 
@@ -52,7 +53,7 @@ class Spinner:
 class LoadingWidget(Static):
     """Animated loading indicator with status text and elapsed time.
 
-    Displays: <spinner> Thinking...  (12s)
+    Displays: <spinner> Thinking...  (12s · 1.2K tokens)
 
     Renders as a single Static so elapsed-time ticks do not relayout sibling
     widgets (which caused the spinner to flash on each second boundary).
@@ -95,6 +96,13 @@ class LoadingWidget(Static):
         self._paused = False
         self._paused_total_elapsed: int = 0
         self._last_rendered_elapsed: int = -1
+        self._token_count: int = 0
+        self._token_approximate: bool = False
+
+    @staticmethod
+    def _format_token_segment(count: int, *, approximate: bool = False) -> str:
+        suffix = "+" if approximate else ""
+        return f"{format_token_count(count)}{suffix} tokens"
 
     @staticmethod
     def _format_status_line(status: str) -> str:
@@ -106,6 +114,10 @@ class LoadingWidget(Static):
         if self._hint_extra:
             segments.append(self._hint_extra)
         segments.append(duration)
+        if self._token_count > 0:
+            segments.append(
+                self._format_token_segment(self._token_count, approximate=self._token_approximate)
+            )
         body = " · ".join(segments)
         if include_interrupt:
             return f"({body} · esc to interrupt)"
@@ -125,7 +137,10 @@ class LoadingWidget(Static):
             if self._show_interrupt_hint:
                 paused_hint = f" (paused at {paused_duration} · esc to interrupt)"
             else:
-                paused_hint = f" (paused at {paused_duration})"
+                paused_suffix = ""
+                if self._token_count > 0:
+                    paused_suffix = f" · {self._format_token_segment(self._token_count, approximate=self._token_approximate)}"
+                paused_hint = f" (paused at {paused_duration}{paused_suffix})"
             hint_part = Content.styled(paused_hint, colors.muted)
         else:
             spinner_part = Content.styled(self._spinner.current_frame(), colors.primary)
@@ -195,6 +210,13 @@ class LoadingWidget(Static):
 
         if should_refresh:
             self._last_rendered_elapsed = elapsed_int
+            self._refresh_line()
+
+    def set_token_usage(self, count: int, *, approximate: bool = False) -> None:
+        """Update the loop token total shown after elapsed time in the hint."""
+        self._token_count = max(0, count)
+        self._token_approximate = approximate
+        if self.is_mounted:
             self._refresh_line()
 
     def set_status(self, status: str) -> None:

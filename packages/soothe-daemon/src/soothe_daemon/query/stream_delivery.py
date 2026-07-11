@@ -76,6 +76,7 @@ class _TextCoalesceBuffer:
     parts: list[str] = field(default_factory=list)
     template_msg: dict[str, Any] | None = None
     template_meta: dict[str, Any] | None = None
+    usage_metadata: dict[str, Any] | None = None
     last_activity_monotonic: float = 0.0
 
 
@@ -150,6 +151,12 @@ def _msg_to_wire_dict(msg: Any) -> dict[str, Any] | None:
                 out["tool_calls"] = msg.tool_calls
             if hasattr(msg, "tool_call_chunks") and msg.tool_call_chunks:
                 out["tool_call_chunks"] = msg.tool_call_chunks
+            usage = getattr(msg, "usage_metadata", None)
+            if isinstance(usage, dict) and usage:
+                out["usage_metadata"] = dict(usage)
+            response_metadata = getattr(msg, "response_metadata", None)
+            if isinstance(response_metadata, dict) and response_metadata:
+                out["response_metadata"] = dict(response_metadata)
             phase = getattr(msg, "phase", None)
             if isinstance(phase, str):
                 out["phase"] = phase
@@ -484,6 +491,17 @@ class StreamDeliveryCoalescer:
                     buf.template_msg = dict(body)
                     if isinstance(metadata, dict):
                         buf.template_meta = dict(metadata)
+                usage = body.get("usage_metadata")
+                if isinstance(usage, dict) and usage:
+                    buf.usage_metadata = dict(usage)
+                response = body.get("response_metadata")
+                if isinstance(response, dict):
+                    nested = response.get("token_usage")
+                    if isinstance(nested, dict) and nested:
+                        buf.template_msg = dict(buf.template_msg or body)
+                        existing = buf.template_msg.setdefault("response_metadata", {})
+                        if isinstance(existing, dict):
+                            existing["token_usage"] = dict(nested)
                 interval_due = (
                     bool(buf.parts)
                     and buf.last_activity_monotonic > 0
@@ -832,6 +850,8 @@ class StreamDeliveryCoalescer:
         msg = dict(buf.template_msg or {"type": "AIMessageChunk"})
         msg.setdefault("type", "AIMessageChunk")
         msg["content"] = text
+        if buf.usage_metadata:
+            msg["usage_metadata"] = dict(buf.usage_metadata)
         if final:
             msg["chunk_position"] = "last"
             msg[GOAL_COMPLETION_STREAM_TERMINAL_FIELD] = True

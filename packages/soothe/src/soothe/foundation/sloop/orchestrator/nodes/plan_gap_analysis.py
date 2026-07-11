@@ -15,7 +15,13 @@ _PLAN_GAP_STATUS_LABEL = "Analyzing goal coverage"
 
 
 async def _emit_plan_phase_status(ctx: LoopRuntimeContext, *, label: str) -> None:
-    await ctx.emit("plan_phase_status", {"label": label})
+    await ctx.emit(
+        "plan_phase_status",
+        {
+            "label": label,
+            "total_tokens_used": ctx.loop_state.total_tokens_used,
+        },
+    )
 
 
 async def node_plan_gap_analysis(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:

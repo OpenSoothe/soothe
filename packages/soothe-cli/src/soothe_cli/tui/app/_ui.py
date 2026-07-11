@@ -16,6 +16,7 @@ from textual.containers import Container, VerticalScroll
 from textual.css.query import NoMatches
 
 from soothe_cli.runtime.state.session_stats import SpinnerStatus
+from soothe_cli.runtime.token_events_debug import TokenEventTrace
 from soothe_cli.tui.spinner_labels import SPINNER_LABEL_INPUT
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.messages import AssistantMessage
@@ -30,6 +31,13 @@ _HYDRATION_CHECK_INTERVAL_SECONDS = 0.08
 class _UIMixin:
     """UI interaction: status, tokens, hydration, spinner, quit/interrupt."""
 
+    def _token_event_trace(self) -> TokenEventTrace | None:
+        """Return the per-turn token event tracer when the UI adapter is wired."""
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None:
+            return None
+        return getattr(adapter, "_token_event_trace", None)
+
     def on_scroll_up(self, _event: ScrollUp) -> None:
         """Handle scroll up to check if we need to hydrate older messages."""
         self._check_hydration_needed()
@@ -42,46 +50,145 @@ class _UIMixin:
     def _update_tokens(self, count: int, *, approximate: bool = False) -> None:
         """Update the token count in the status bar.
 
-        Low-level helper — only touches the UI.  Callers that also need to
-        update the local cache should use `_on_tokens_update` instead.
+        Low-level helper — only touches the UI. Callers that also need to
+        update the local cache should use ``_sync_loop_token_display`` instead.
 
         Args:
-            count: Total context token count.
+            count: Accumulated loop token usage total.
             approximate: Append "+" to signal a stale/interrupted count.
         """
         if self._status_bar:
             self._status_bar.set_tokens(count, approximate=approximate)
 
-    def _on_tokens_update(self, count: int, *, approximate: bool = False) -> None:
-        """Update the local cache *and* the status bar.
+    def _loop_token_total(self) -> int:
+        """Return accumulated API token usage for the active loop."""
+        return self._loop_baseline_tokens + self._loop_input_tokens + self._loop_output_tokens
 
-        This is the callback wired to the adapter's `_on_tokens_update`.
+    def _display_token_total(self) -> int:
+        """Return loop usage including the in-flight turn when a worker is active."""
+        total = self._loop_token_total()
+        inflight = getattr(self, "_inflight_turn_stats", None)
+        if inflight is not None:
+            total += inflight.input_tokens + inflight.output_tokens
+        return total
 
-        Args:
-            count: Total context token count to cache and display.
-            approximate: Append "+" to signal a stale/interrupted count.
-        """
-        self._context_tokens = count
-        self._tokens_approximate = approximate
-        self._update_tokens(count, approximate=approximate)
+    def _refresh_token_displays(self, *, approximate: bool | None = None) -> None:
+        """Push the current token total to the thinking row or status bar."""
+        if approximate is not None:
+            self._tokens_approximate = self._tokens_approximate or approximate
+        total = self._display_token_total()
+        approximate_flag = self._tokens_approximate
+        loading_widget = getattr(self, "_loading_widget", None)
+        status_bar = getattr(self, "_status_bar", None)
+        if loading_widget is not None:
+            loading_widget.set_token_usage(total, approximate=approximate_flag)
+            if status_bar:
+                status_bar.hide_tokens()
+            target = "thinking_row"
+        elif status_bar:
+            self._update_tokens(total, approximate=approximate_flag)
+            target = "status_bar"
+        else:
+            target = "none"
+        trace = self._token_event_trace()
+        if trace is not None:
+            trace.note_display_refresh(display_total=total, target=target)
 
-    def _show_tokens(self, *, approximate: bool = False) -> None:
-        """Restore the status bar to the cached token value.
+    def _push_token_displays(self, *, approximate: bool = False) -> None:
+        """Adapter callback: refresh visible token displays (optional stale marker)."""
+        self._refresh_token_displays(approximate=approximate)
 
-        Args:
-            approximate: Append "+" to signal a stale/interrupted count.
+    def _sync_loop_token_display(self, *, approximate: bool | None = None) -> None:
+        """Refresh cached loop total and update visible token displays."""
+        self._context_tokens = self._loop_token_total()
+        if approximate is not None:
+            self._tokens_approximate = approximate
+        self._refresh_token_displays()
 
-                This flag is sticky until `_on_tokens_update` receives a fresh
-                count from the model.
-        """
-        self._tokens_approximate = self._tokens_approximate or approximate
-        self._update_tokens(
-            self._context_tokens,
-            approximate=self._tokens_approximate,
-        )
+    def _reset_loop_token_usage(
+        self,
+        loop_id: str | None,
+        *,
+        baseline: int = 0,
+        approximate: bool = False,
+    ) -> None:
+        """Clear per-loop token counters (loop switch, /clear, or scope change)."""
+        self._loop_token_scope_id = str(loop_id or "").strip() or None
+        self._loop_baseline_tokens = max(0, baseline)
+        self._loop_input_tokens = 0
+        self._loop_output_tokens = 0
+        self._sync_loop_token_display(approximate=approximate)
+
+    def _ensure_loop_token_scope(self, loop_id: str | None) -> None:
+        """Reset counters when the active loop changes without an explicit reset."""
+        lid = str(loop_id or "").strip() or None
+        if lid != self._loop_token_scope_id:
+            self._reset_loop_token_usage(lid)
+
+    def _seed_loop_token_baseline(
+        self,
+        loop_id: str | None,
+        baseline: int,
+        *,
+        approximate: bool = False,
+    ) -> None:
+        """Seed loop usage from checkpoint when resuming loop history."""
+        self._reset_loop_token_usage(loop_id, baseline=baseline, approximate=approximate)
+
+    def _record_loop_turn_tokens(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        *,
+        approximate: bool = False,
+    ) -> None:
+        """Add one turn's API usage to the active loop total and refresh the bar."""
+        if input_tokens <= 0 and output_tokens <= 0:
+            return
+        self._ensure_loop_token_scope(self._lc_loop_id)
+        if input_tokens > 0:
+            self._loop_input_tokens += input_tokens
+        if output_tokens > 0:
+            self._loop_output_tokens += output_tokens
+        if approximate:
+            self._tokens_approximate = True
+        self._sync_loop_token_display()
+
+    def _seed_loop_token_from_checkpoint(self, total: int, *, approximate: bool = False) -> None:
+        """Seed loop usage from persisted checkpoint for the active loop."""
+        self._seed_loop_token_baseline(self._lc_loop_id, total, approximate=approximate)
+
+    def _apply_authoritative_loop_tokens(
+        self,
+        goal_run_tokens: int,
+        *,
+        source: str = "backend",
+    ) -> None:
+        """Merge backend goal-run token totals into the visible loop counter."""
+        from soothe.foundation.sloop.utils.token_usage import coerce_total_tokens_used
+
+        goal_total = coerce_total_tokens_used(goal_run_tokens)
+        self._ensure_loop_token_scope(self._lc_loop_id)
+        current_goal = self._loop_input_tokens + self._loop_output_tokens
+        applied = goal_total > current_goal
+        if applied:
+            self._loop_input_tokens = 0
+            self._loop_output_tokens = goal_total
+            self._sync_loop_token_display()
+        else:
+            self._refresh_token_displays()
+        trace = self._token_event_trace()
+        if trace is not None:
+            trace.note_authoritative_merge(
+                source=source,
+                goal_run_total=goal_total,
+                previous_goal_run=current_goal,
+                applied=applied,
+                display_total=self._display_token_total(),
+            )
 
     def _hide_tokens(self) -> None:
-        """Hide the token display during streaming."""
+        """Hide the status-bar token display while the thinking row is active."""
         if self._status_bar:
             self._status_bar.hide_tokens()
 
@@ -370,6 +477,7 @@ class _UIMixin:
                 show_interrupt_hint=show_interrupt_hint,
                 hint_extra=hint_extra,
             )
+        self._refresh_token_displays()
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming
 

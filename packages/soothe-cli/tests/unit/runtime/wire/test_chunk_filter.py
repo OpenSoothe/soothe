@@ -44,3 +44,32 @@ def test_should_keep_enveloped_wire_dict_with_text() -> None:
 def test_should_drop_enveloped_wire_dict_without_text() -> None:
     wire = ({"type": "ai", "data": {"type": "ai", "content": ""}}, {})
     assert should_drop_stream_chunk_early((), "messages", wire) is True
+
+
+def test_should_keep_usage_only_ai_chunk() -> None:
+    chunk = AIMessageChunk(
+        content="",
+        usage_metadata={"input_tokens": 100, "output_tokens": 25, "total_tokens": 125},
+    )
+    assert should_drop_stream_chunk_early((), "messages", (chunk, {})) is False
+
+
+def test_should_keep_wire_dict_with_response_metadata_usage() -> None:
+    wire = (
+        {
+            "type": "ai",
+            "data": {
+                "type": "ai",
+                "content": "",
+                "response_metadata": {
+                    "token_usage": {
+                        "prompt_tokens": 50,
+                        "completion_tokens": 10,
+                        "total_tokens": 60,
+                    }
+                },
+            },
+        },
+        {},
+    )
+    assert should_drop_stream_chunk_early((), "messages", wire) is False

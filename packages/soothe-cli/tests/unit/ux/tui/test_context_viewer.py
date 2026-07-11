@@ -61,11 +61,15 @@ def test_format_token_usage_includes_breakdown() -> None:
         conv_tokens=1200,
         model_name="test-model",
         context_limit=128000,
+        input_tokens=3800,
+        output_tokens=1200,
     )
     rendered = context_data.format_token_usage(snapshot)
     assert "test-model" in rendered
-    assert "Conversation" in rendered
-    assert "System prompt + tools" in rendered
+    assert "tokens used this loop" in rendered
+    assert "in:" in rendered
+    assert "out:" in rendered
+    assert "Conversation (est.)" in rendered
 
 
 def test_summarize_goal_statuses_counts_all_statuses() -> None:
@@ -80,7 +84,7 @@ def test_summarize_goal_statuses_counts_all_statuses() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_token_usage_snapshot_skips_conversation_when_zero(monkeypatch) -> None:
+async def test_load_token_usage_snapshot_estimates_when_context_zero(monkeypatch) -> None:
     fetch = AsyncMock(return_value=999)
     monkeypatch.setattr(context_data, "fetch_conversation_token_count", fetch)
 
@@ -91,9 +95,10 @@ async def test_load_token_usage_snapshot_skips_conversation_when_zero(monkeypatc
         model_name="test-model",
     )
 
-    assert snapshot.context_tokens == 0
-    assert snapshot.conv_tokens is None
-    fetch.assert_not_called()
+    assert snapshot.context_tokens == 999
+    assert snapshot.approximate is True
+    assert snapshot.conv_tokens == 999
+    fetch.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -113,4 +118,4 @@ async def test_load_token_usage_snapshot_includes_conversation_breakdown(monkeyp
     )
 
     assert snapshot.conv_tokens == 1200
-    assert "Conversation" in context_data.format_token_usage(snapshot)
+    assert "Conversation (est.)" in context_data.format_token_usage(snapshot)
