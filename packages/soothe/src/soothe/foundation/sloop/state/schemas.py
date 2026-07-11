@@ -1193,7 +1193,7 @@ class LoopState(BaseModel):
         description="Chronological action descriptions for progression tracking",
     )
 
-    # Last Execute wave provenance for adaptive final response (IG-199, IG-355)
+    # Last Execute wave provenance for auto final response (IG-199, IG-355, IG-631)
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals

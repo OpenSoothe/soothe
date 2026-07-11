@@ -80,7 +80,7 @@ Define routing in **`router_profiles`** and select with **`active_router_profile
 
 ## Agent
 
-The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt`), behavior (`goal_completion_mode`: llm_only/heuristic_only/hybrid; `final_response`: adaptive/always_synthesize), `autopilot`, `loop`, and `protocols`.
+The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt`), behavior (`goal_completion_mode`: llm_only/heuristic_only/hybrid; `final_response`: auto/always_synthesize), `autopilot`, `loop`, and `protocols`.
 
 ### Autopilot (`agent.autopilot`)
 

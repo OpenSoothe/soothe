@@ -62,7 +62,6 @@ class CompletionStrategy(StrEnum):
 
     LEDGER_DIRECT = "ledger_direct"
     SYNTHESIZE = "synthesize"
-    SUMMARY = "summary"
 
 
 @dataclass

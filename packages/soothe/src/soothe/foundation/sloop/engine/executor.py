@@ -2,7 +2,7 @@
 
 Act-wave visible answer resolution is integrated here (IG-355, IG-356, IG-357).
 
-After each Execute wave, adaptive goal completion and headless replay read the
+After each Execute wave, auto goal completion and headless replay read the
 latest non-planning assistant message from the orchestration ledger via
 ``last_ledger_ai_content``. That string may come from:
 

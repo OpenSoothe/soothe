@@ -463,7 +463,7 @@ def test_strategy_ledger_direct_simple() -> None:
         ]
     )
     assert (
-        adapter.determine_completion_strategy(state, pr, "adaptive")
+        adapter.determine_completion_strategy(state, pr, "auto")
         == CompletionStrategy.LEDGER_DIRECT
     )
 
@@ -489,7 +489,7 @@ def test_strategy_simple_empty_ledger_synthesizes() -> None:
     )
     state = mock_loop_state(loop_messages=[])
     assert (
-        adapter.determine_completion_strategy(state, pr, "adaptive")
+        adapter.determine_completion_strategy(state, pr, "auto")
         == CompletionStrategy.SYNTHESIZE
     )
 
@@ -523,7 +523,7 @@ def test_strategy_synthesize_multiple_plans() -> None:
 
     state = mock_loop_state()
     assert (
-        adapter.determine_completion_strategy(state, pr2, "adaptive")
+        adapter.determine_completion_strategy(state, pr2, "auto")
         == CompletionStrategy.SYNTHESIZE
     )
 
@@ -557,7 +557,7 @@ def test_strategy_synthesize_failed_steps() -> None:
     )
     state = mock_loop_state()
     assert (
-        adapter.determine_completion_strategy(state, pr, "adaptive")
+        adapter.determine_completion_strategy(state, pr, "auto")
         == CompletionStrategy.SYNTHESIZE
     )
 

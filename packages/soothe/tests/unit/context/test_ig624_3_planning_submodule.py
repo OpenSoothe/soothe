@@ -20,19 +20,17 @@ from soothe.foundation.context.planning import (
     StepPlanManagerAdapter,
     StepPlanningSubengine,
 )
+from soothe.config.models import normalize_agentic_final_response_mode
 from soothe.foundation.context.planning.completion import (
+    _LEDGER_DIRECT_MAX_TOOL_CALLS,
     _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
     DAG_DEPENDENCY_THRESHOLD,
     LOW_SUCCESS_RATE_THRESHOLD,
-    STRUCTURED_PAYLOAD_MIN_LINES,
     _dag_requires_synthesis,
-    _is_simple_execution,
-    can_return_directly_from_ledger,
+    _ledger_direct_eligible,
     determine_completion_strategy,
     determine_goal_completion_needs,
     heuristic_requires_goal_completion,
-    is_rich_enough,
-    overlaps_with_plan_output,
 )
 from soothe.foundation.context.planning.models import (
     DagPlanningContext,
@@ -184,60 +182,50 @@ class TestHeuristicRequiresGoalCompletion:
         )
 
 
-class TestIsSimpleExecution:
+class TestLedgerDirectStructuralGates:
     def test_single_wave_no_deps_no_failures(self) -> None:
-        assert (
-            _is_simple_execution(
-                plan_wave_count=1,
-                has_dag_dependencies=False,
-                failed_steps=0,
-                total_steps=2,
-            )
-            is True
+        assert _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=False,
+            failed_steps=0,
+            total_steps=1,
+            last_wave_tool_call_count=0,
         )
 
-    def test_replan_not_simple(self) -> None:
-        assert (
-            _is_simple_execution(
-                plan_wave_count=2,
-                has_dag_dependencies=False,
-                failed_steps=0,
-                total_steps=1,
-            )
-            is False
+    def test_replan_not_eligible(self) -> None:
+        assert not _ledger_direct_eligible(
+            plan_wave_count=2,
+            has_dag_dependencies=False,
+            failed_steps=0,
+            total_steps=1,
+            last_wave_tool_call_count=0,
         )
 
-    def test_deps_not_simple(self) -> None:
-        assert (
-            _is_simple_execution(
-                plan_wave_count=1,
-                has_dag_dependencies=True,
-                failed_steps=0,
-                total_steps=1,
-            )
-            is False
+    def test_deps_not_eligible(self) -> None:
+        assert not _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=True,
+            failed_steps=0,
+            total_steps=1,
+            last_wave_tool_call_count=0,
         )
 
-    def test_failures_not_simple(self) -> None:
-        assert (
-            _is_simple_execution(
-                plan_wave_count=1,
-                has_dag_dependencies=False,
-                failed_steps=1,
-                total_steps=1,
-            )
-            is False
+    def test_failures_not_eligible(self) -> None:
+        assert not _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=False,
+            failed_steps=1,
+            total_steps=1,
+            last_wave_tool_call_count=0,
         )
 
-    def test_too_many_steps_not_simple(self) -> None:
-        assert (
-            _is_simple_execution(
-                plan_wave_count=1,
-                has_dag_dependencies=False,
-                failed_steps=0,
-                total_steps=3,
-            )
-            is False
+    def test_too_many_steps_not_eligible(self) -> None:
+        assert not _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=False,
+            failed_steps=0,
+            total_steps=2,
+            last_wave_tool_call_count=0,
         )
 
 
@@ -353,14 +341,51 @@ class TestDetermineCompletionStrategy:
                 plan_wave_count=1,
                 has_dag_dependencies=False,
                 failed_steps=0,
-                total_steps=2,
-                completed_steps=2,
+                total_steps=1,
+                completed_steps=1,
                 chain_depth=1,
                 last_wave_hit_subagent_cap=False,
                 last_execute_wave_parallel_multi_step=False,
+                last_wave_tool_call_count=10,
                 ledger_text="Final answer from execute step.",
             )
             == "ledger_direct"
+        )
+
+    def test_tool_heavy_wave_synthesizes(self) -> None:
+        assert (
+            determine_completion_strategy(
+                plan_result_require_goal_completion=False,
+                plan_wave_count=1,
+                has_dag_dependencies=False,
+                failed_steps=0,
+                total_steps=1,
+                completed_steps=1,
+                chain_depth=1,
+                last_wave_hit_subagent_cap=False,
+                last_execute_wave_parallel_multi_step=False,
+                last_wave_tool_call_count=51,
+                ledger_text="Long execute monologue.",
+            )
+            == "synthesize"
+        )
+
+    def test_require_goal_completion_forces_synthesize(self) -> None:
+        assert (
+            determine_completion_strategy(
+                plan_result_require_goal_completion=True,
+                plan_wave_count=1,
+                has_dag_dependencies=False,
+                failed_steps=0,
+                total_steps=1,
+                completed_steps=1,
+                chain_depth=1,
+                last_wave_hit_subagent_cap=False,
+                last_execute_wave_parallel_multi_step=False,
+                last_wave_tool_call_count=0,
+                ledger_text="Rich execute answer.",
+            )
+            == "synthesize"
         )
 
     def test_simple_empty_ledger_synthesizes(self) -> None:
@@ -397,37 +422,28 @@ class TestDetermineCompletionStrategy:
         )
 
 
-class TestLedgerHelpers:
-    def test_is_rich_enough_empty(self) -> None:
-        assert is_rich_enough("") is False
+class TestLedgerDirectEligibility:
+    def test_eligible_single_step_low_tools(self) -> None:
+        assert _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=False,
+            failed_steps=0,
+            total_steps=1,
+            last_wave_tool_call_count=10,
+        )
 
-    def test_is_rich_enough_code_block(self) -> None:
-        assert is_rich_enough("```python\nprint('hi')\n```") is True
+    def test_ineligible_when_tool_cap_exceeded(self) -> None:
+        assert not _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=False,
+            failed_steps=0,
+            total_steps=1,
+            last_wave_tool_call_count=51,
+        )
 
-    def test_is_rich_enough_many_lines(self) -> None:
-        text = "\n".join(f"line {i}" for i in range(8))
-        assert is_rich_enough(text) is True
-
-    def test_is_rich_enough_short_text(self) -> None:
-        assert is_rich_enough("short") is False
-
-    def test_is_rich_enough_100_chars(self) -> None:
-        assert is_rich_enough("x" * 100) is True
-
-    def test_overlaps_with_no_plan_output(self) -> None:
-        result = MagicMock()
-        result.full_output = ""
-        assert overlaps_with_plan_output("some text", result) is True
-
-    def test_overlaps_with_matching_output(self) -> None:
-        result = MagicMock()
-        result.full_output = "This is a detailed report about database migration"
-        assert overlaps_with_plan_output("database migration report here", result) is True
-
-    def test_can_return_directly_not_rich(self) -> None:
-        result = MagicMock()
-        result.full_output = "output"
-        assert can_return_directly_from_ledger("short", result) is False
+    def test_normalize_final_response_mode_alias(self) -> None:
+        assert normalize_agentic_final_response_mode("adaptive") == "auto"
+        assert normalize_agentic_final_response_mode("auto") == "auto"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -728,7 +744,7 @@ class TestStepPlanManagerAdapter:
             ]
         )
 
-        strategy = adapter.determine_completion_strategy(state, plan_result, "adaptive")
+        strategy = adapter.determine_completion_strategy(state, plan_result, "auto")
         assert strategy.value == "ledger_direct"
 
     def test_format_completion_dag_report_delegates(self) -> None:
@@ -1126,5 +1142,5 @@ def test_completion_constants_single_source() -> None:
     """Constants live in completion.py (single source of truth)."""
     assert DAG_DEPENDENCY_THRESHOLD == 3
     assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
-    assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
-    assert STRUCTURED_PAYLOAD_MIN_LINES == 6
+    assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 1
+    assert _LEDGER_DIRECT_MAX_TOOL_CALLS == 50

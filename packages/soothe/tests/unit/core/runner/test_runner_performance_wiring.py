@@ -110,12 +110,12 @@ async def test_feature_flags(requires_llm_api):
         await runner1.cleanup()
 
     config2 = config_with_router_profile(router_config)
-    config2.agent.loop.final_response = "adaptive"
+    config2.agent.loop.final_response = "auto"
     config2.agent.protocols.memory.enabled = False  # Anthropic doesn't support embeddings
     runner2 = SootheRunner(config2)
 
     try:
-        assert config2.agent.loop.final_response == "adaptive"
+        assert config2.agent.loop.final_response == "auto"
 
     finally:
         await runner2.cleanup()

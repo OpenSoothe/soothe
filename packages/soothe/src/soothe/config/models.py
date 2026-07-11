@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
@@ -873,10 +873,17 @@ class ReportOutputConfig(BaseModel):
     synthesis_max_chars: int = Field(default=0, ge=0, le=50000)
 
 
-AgenticFinalResponseMode = Literal["adaptive", "always_synthesize"]
+AgenticFinalResponseMode = Literal["auto", "always_synthesize"]
 
 AgenticGoalCompletionMode = Literal["llm_only", "heuristic_only", "hybrid"]
 ExecuteDeliverableAssessMode = Literal["auto", "always", "never"]
+
+
+def normalize_agentic_final_response_mode(value: Any) -> Any:
+    """Normalize ``final_response``; ``adaptive`` is a deprecated alias for ``auto``."""
+    if value == "adaptive":
+        return "auto"
+    return value
 
 
 class PlanPromptLedgerConfig(BaseModel):
@@ -951,7 +958,7 @@ class ExecutePromptLedgerConfig(BaseModel):
         description="Max predecessor execute_step ledger rows for Slice B (0 = unlimited)",
     )
     execute_ai_ledger_max_tokens: int = Field(
-        default=2048,
+        default=65536,
         ge=0,
         le=100_000,
         description=(
@@ -1441,10 +1448,15 @@ class CompletionRulesConfig(BaseModel):
 
     dag_dependency_threshold: int = Field(default=3, ge=1)
     low_success_rate_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
-    simple_ledger_direct_max_steps: int = Field(default=2, ge=1)
-    structured_payload_min_lines: int = Field(default=6, ge=1)
-    rich_text_min_chars: int = Field(default=100, ge=1)
-    ledger_overlap_min_token_len: int = Field(default=4, ge=1)
+    simple_ledger_direct_max_steps: int = Field(default=1, ge=1)
+    ledger_direct_max_tool_calls: int = Field(
+        default=50,
+        ge=0,
+        description=(
+            "Max tool calls in the last execute wave for ledger_direct eligibility "
+            "(0 = no cap; structural gate only)"
+        ),
+    )
 
 
 class ScenarioRulesConfig(BaseModel):
@@ -1492,7 +1504,7 @@ class StrangeLoopConfig(BaseModel):
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
         strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
-            assistant text when appropriate, or use adaptive heuristics (IG-199).
+            assistant text when structurally eligible, or use auto heuristics (IG-199, IG-631).
         working_memory: Working memory / spill configuration (RFC-203).
         goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.
@@ -1588,12 +1600,18 @@ class StrangeLoopConfig(BaseModel):
     )
 
     final_response: AgenticFinalResponseMode = Field(
-        default="adaptive",
+        default="auto",
         description=(
-            "On goal completion: adaptive uses heuristics to choose ledger direct vs "
-            "a final CoreAgent report; always_synthesize always runs the report"
+            "On goal completion: auto uses structural heuristics to choose ledger direct vs "
+            "a final CoreAgent report; always_synthesize always runs the report. "
+            "Legacy alias: adaptive → auto."
         ),
     )
+
+    @field_validator("final_response", mode="before")
+    @classmethod
+    def _normalize_final_response(cls, value: Any) -> Any:
+        return normalize_agentic_final_response_mode(value)
 
     goal_completion_mode: AgenticGoalCompletionMode = Field(
         default="llm_only",
@@ -2335,7 +2353,7 @@ class AgentConfig(BaseModel):
         name: Display name for the assistant identity in system prompts.
         system_prompt: System prompt override. None generates default using name.
         goal_completion_mode: How planner completion combines with execution heuristics.
-        final_response: Whether to always synthesize final report or use adaptive heuristics.
+        final_response: Whether to always synthesize final report or use auto heuristics.
         autopilot: Autopilot scheduling and self-running configuration.
         loop: StrangeLoop configuration (IG-407: unified agentic+execution).
         protocols: Protocol backends configuration (planner, policy, durability).
@@ -2379,13 +2397,19 @@ class AgentConfig(BaseModel):
     """How planner completion (require_goal_completion) combines with execution heuristics."""
 
     final_response: AgenticFinalResponseMode = Field(
-        default="adaptive",
+        default="auto",
         description=(
-            "On goal completion: adaptive uses heuristics to choose ledger direct vs "
-            "a final CoreAgent report; always_synthesize always runs the report"
+            "On goal completion: auto uses structural heuristics to choose ledger direct vs "
+            "a final CoreAgent report; always_synthesize always runs the report. "
+            "Legacy alias: adaptive → auto."
         ),
     )
-    """Whether to always synthesize a final CoreAgent report or use adaptive heuristics."""
+    """Whether to always synthesize a final CoreAgent report or use auto heuristics."""
+
+    @field_validator("final_response", mode="before")
+    @classmethod
+    def _normalize_agent_final_response(cls, value: Any) -> Any:
+        return normalize_agentic_final_response_mode(value)
 
     # === AUTOPILOT (Self-Driving) ===
     autopilot: AutopilotConfig = Field(

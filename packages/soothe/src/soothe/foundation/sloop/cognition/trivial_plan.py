@@ -3,7 +3,7 @@
 For the ``trivial`` intake label, ``init_or_resume`` injects a minimal
 1-step plan so the loop skips ``plan_assess`` and ``plan_generate``. Execute
 runs on a step thread branch; ``terminal_after_execute`` routes to
-``goal_completion`` (ledger_direct) without a second assess wave.
+``goal_completion`` without a second assess wave (``auto`` strategy applies).
 """
 
 from __future__ import annotations
