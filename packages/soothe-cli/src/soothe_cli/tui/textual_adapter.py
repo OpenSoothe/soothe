@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     class _LoopTokenTotalCallback(Protocol):
         def __call__(self) -> int: ...
 
+    class _LoopTokenBreakdownCallback(Protocol):
+        def __call__(self) -> tuple[int, int, int]: ...
+
     class _AuthoritativeLoopTokensCallback(Protocol):
         def __call__(self, goal_run_tokens: int, *, source: str = "backend") -> None: ...
 
@@ -299,8 +302,14 @@ class TextualUIAdapter:
         self._get_loop_token_total: _LoopTokenTotalCallback | None = None
         """Return the current accumulated loop token total for persistence."""
 
+        self._get_loop_token_breakdown: _LoopTokenBreakdownCallback | None = None
+        """Return ``(baseline, goal_run, display_total)`` for debug tracing."""
+
         self._on_refresh_token_displays: _RefreshTokenDisplaysCallback | None = None
         """Refresh loop token usage on the thinking row or status bar."""
+
+        self._on_begin_loop_turn_tokens: Callable[[], None] | None = None
+        """Reset per-turn goal counters at the start of each daemon turn."""
 
         self._apply_authoritative_loop_tokens: _AuthoritativeLoopTokensCallback | None = None
         """Merge backend ``total_tokens_used`` from StrangeLoop lifecycle events."""
@@ -2577,15 +2586,20 @@ async def _report_and_persist_tokens(
             )
 
     loop_id = _loop_id_for_remote_state(config, daemon_session)
-    display_total = (
-        adapter._get_loop_token_total()
-        if adapter._get_loop_token_total
-        else input_tokens + output_tokens
-    )
+    if adapter._get_loop_token_breakdown:
+        baseline, goal_run, display_total = adapter._get_loop_token_breakdown()
+    else:
+        display_total = (
+            adapter._get_loop_token_total()
+            if adapter._get_loop_token_total
+            else input_tokens + output_tokens
+        )
+        baseline = 0
+        goal_run = display_total
     adapter._token_event_trace.finish_turn(
         loop_id=loop_id,
-        baseline=0,
-        goal_run=display_total,
+        baseline=baseline,
+        goal_run=goal_run,
         display_total=display_total,
         turn_input=input_tokens,
         turn_output=output_tokens,
@@ -2901,6 +2915,8 @@ async def execute_task_textual(
     adapter._execute_wave_total = 0
     adapter._execute_wave_completed = 0
     adapter._token_event_trace.reset()
+    if adapter._on_begin_loop_turn_tokens:
+        adapter._on_begin_loop_turn_tokens()
     ui_coalesce = TurnToolUiCoalescer()
     adapter._goal_completion_mounted_this_turn = False
     adapter._goal_tree_message = None

@@ -50,9 +50,6 @@ class _UIMixin:
     def _update_tokens(self, count: int, *, approximate: bool = False) -> None:
         """Update the token count in the status bar.
 
-        Low-level helper — only touches the UI. Callers that also need to
-        update the local cache should use ``_sync_loop_token_display`` instead.
-
         Args:
             count: Accumulated loop token usage total.
             approximate: Append "+" to signal a stale/interrupted count.
@@ -61,16 +58,21 @@ class _UIMixin:
             self._status_bar.set_tokens(count, approximate=approximate)
 
     def _loop_token_total(self) -> int:
-        """Return accumulated API token usage for the active loop."""
+        """Return persisted loop usage plus the active goal/turn portion."""
         return self._loop_baseline_tokens + self._loop_input_tokens + self._loop_output_tokens
+
+    def _current_turn_token_total(self) -> int:
+        """Best-effort tokens for the in-flight goal/turn (stream + backend)."""
+        goal_total = self._loop_input_tokens + self._loop_output_tokens
+        inflight = getattr(self, "_inflight_turn_stats", None)
+        if inflight is None:
+            return goal_total
+        stream_total = inflight.input_tokens + inflight.output_tokens
+        return max(goal_total, stream_total)
 
     def _display_token_total(self) -> int:
         """Return loop usage including the in-flight turn when a worker is active."""
-        total = self._loop_token_total()
-        inflight = getattr(self, "_inflight_turn_stats", None)
-        if inflight is not None:
-            total += inflight.input_tokens + inflight.output_tokens
-        return total
+        return self._loop_baseline_tokens + self._current_turn_token_total()
 
     def _refresh_token_displays(self, *, approximate: bool | None = None) -> None:
         """Push the current token total to the thinking row or status bar."""
@@ -94,16 +96,11 @@ class _UIMixin:
         if trace is not None:
             trace.note_display_refresh(display_total=total, target=target)
 
-    def _push_token_displays(self, *, approximate: bool = False) -> None:
-        """Adapter callback: refresh visible token displays (optional stale marker)."""
-        self._refresh_token_displays(approximate=approximate)
-
-    def _sync_loop_token_display(self, *, approximate: bool | None = None) -> None:
-        """Refresh cached loop total and update visible token displays."""
-        self._context_tokens = self._loop_token_total()
-        if approximate is not None:
-            self._tokens_approximate = approximate
-        self._refresh_token_displays()
+    def _loop_token_breakdown(self) -> tuple[int, int, int]:
+        """Return ``(baseline, goal_run, display_total)`` for debug tracing."""
+        baseline = self._loop_baseline_tokens
+        goal_run = self._loop_input_tokens + self._loop_output_tokens
+        return baseline, goal_run, self._display_token_total()
 
     def _reset_loop_token_usage(
         self,
@@ -117,7 +114,7 @@ class _UIMixin:
         self._loop_baseline_tokens = max(0, baseline)
         self._loop_input_tokens = 0
         self._loop_output_tokens = 0
-        self._sync_loop_token_display(approximate=approximate)
+        self._refresh_token_displays(approximate=approximate)
 
     def _ensure_loop_token_scope(self, loop_id: str | None) -> None:
         """Reset counters when the active loop changes without an explicit reset."""
@@ -135,6 +132,12 @@ class _UIMixin:
         """Seed loop usage from checkpoint when resuming loop history."""
         self._reset_loop_token_usage(loop_id, baseline=baseline, approximate=approximate)
 
+    def _begin_loop_turn_tokens(self) -> None:
+        """Reset per-turn goal counters; baseline from prior turns is retained."""
+        self._ensure_loop_token_scope(self._lc_loop_id)
+        self._loop_input_tokens = 0
+        self._loop_output_tokens = 0
+
     def _record_loop_turn_tokens(
         self,
         input_tokens: int,
@@ -142,17 +145,19 @@ class _UIMixin:
         *,
         approximate: bool = False,
     ) -> None:
-        """Add one turn's API usage to the active loop total and refresh the bar."""
-        if input_tokens <= 0 and output_tokens <= 0:
-            return
+        """Fold one turn's usage into the loop baseline and refresh the bar."""
         self._ensure_loop_token_scope(self._lc_loop_id)
-        if input_tokens > 0:
-            self._loop_input_tokens += input_tokens
-        if output_tokens > 0:
-            self._loop_output_tokens += output_tokens
+        stream_total = max(0, input_tokens) + max(0, output_tokens)
+        goal_total = self._loop_input_tokens + self._loop_output_tokens
+        turn_total = max(stream_total, goal_total)
+        if turn_total <= 0:
+            return
+        self._loop_baseline_tokens += turn_total
+        self._loop_input_tokens = 0
+        self._loop_output_tokens = 0
         if approximate:
             self._tokens_approximate = True
-        self._sync_loop_token_display()
+        self._refresh_token_displays()
 
     def _seed_loop_token_from_checkpoint(self, total: int, *, approximate: bool = False) -> None:
         """Seed loop usage from persisted checkpoint for the active loop."""
@@ -169,12 +174,12 @@ class _UIMixin:
 
         goal_total = coerce_total_tokens_used(goal_run_tokens)
         self._ensure_loop_token_scope(self._lc_loop_id)
-        current_goal = self._loop_input_tokens + self._loop_output_tokens
-        applied = goal_total > current_goal
-        if applied:
+        previous_goal = self._loop_input_tokens + self._loop_output_tokens
+        applied = goal_total >= previous_goal
+        if applied and goal_total > 0:
             self._loop_input_tokens = 0
             self._loop_output_tokens = goal_total
-            self._sync_loop_token_display()
+            self._refresh_token_displays()
         else:
             self._refresh_token_displays()
         trace = self._token_event_trace()
@@ -182,8 +187,8 @@ class _UIMixin:
             trace.note_authoritative_merge(
                 source=source,
                 goal_run_total=goal_total,
-                previous_goal_run=current_goal,
-                applied=applied,
+                previous_goal_run=previous_goal,
+                applied=applied and goal_total > 0,
                 display_total=self._display_token_total(),
             )
 
@@ -458,6 +463,7 @@ class _UIMixin:
                 turn_start_mono=turn_mono,
                 show_interrupt_hint=show_interrupt_hint,
                 hint_extra=hint_extra,
+                on_tick=self._refresh_token_displays,
             )
             await thinking_status.mount(self._loading_widget)
         else:
@@ -477,6 +483,7 @@ class _UIMixin:
                 show_interrupt_hint=show_interrupt_hint,
                 hint_extra=hint_extra,
             )
+            self._loading_widget._on_tick = self._refresh_token_displays
         self._refresh_token_displays()
         # NOTE: Don't call anchor() here - it would re-anchor and drag user back
         # to bottom if they've scrolled away during streaming

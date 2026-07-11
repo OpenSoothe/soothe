@@ -43,7 +43,6 @@ async def test_resume_loop_via_daemon_loads_history_before_live_consumer() -> No
     app._chat_input = None
     app._pending_messages = []
     app._queued_widgets = []
-    app._context_tokens = 0
     app._tokens_approximate = False
 
     app._clear_messages = AsyncMock()
@@ -111,7 +110,6 @@ async def test_resume_loop_via_daemon_rolls_back_on_switch_failure() -> None:
     app._chat_input = None
     app._pending_messages = []
     app._queued_widgets = []
-    app._context_tokens = 0
     app._tokens_approximate = False
 
     app._clear_messages = AsyncMock()

@@ -202,7 +202,9 @@ class _StartupMixin:
         self._ui_adapter._seed_loop_token_from_checkpoint = self._seed_loop_token_from_checkpoint
         self._ui_adapter._on_turn_tokens = self._record_loop_turn_tokens
         self._ui_adapter._get_loop_token_total = self._loop_token_total
-        self._ui_adapter._on_refresh_token_displays = self._push_token_displays
+        self._ui_adapter._on_refresh_token_displays = self._refresh_token_displays
+        self._ui_adapter._get_loop_token_breakdown = self._loop_token_breakdown
+        self._ui_adapter._on_begin_loop_turn_tokens = self._begin_loop_turn_tokens
         self._ui_adapter._apply_authoritative_loop_tokens = self._apply_authoritative_loop_tokens
         self._ui_adapter._on_tokens_hide = self._hide_tokens
         self._dump_tui_debug_snapshot()

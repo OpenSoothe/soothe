@@ -87,56 +87,66 @@ def accumulate_loop_tokens_from_llm_result(response: LLMResult) -> int:
     return delta
 
 
-def extract_token_usage_from_messages(messages: list[BaseMessage]) -> dict[str, int]:
-    """Return prompt/completion/total token counts from the latest AI message."""
-    from langchain_core.messages import AIMessage, AIMessageChunk
-
-    for msg in reversed(messages):
-        if not isinstance(msg, (AIMessage, AIMessageChunk)):
-            continue
-        usage = getattr(msg, "usage_metadata", None)
-        if isinstance(usage, dict) and usage:
-            prompt = int(usage.get("input_tokens") or 0)
-            completion = int(usage.get("output_tokens") or 0)
-            total = int(usage.get("total_tokens") or 0) or prompt + completion
+def _token_counts_from_ai_message(msg: BaseMessage) -> dict[str, int] | None:
+    """Return prompt/completion/total for one AI message when usage metadata is present."""
+    usage = getattr(msg, "usage_metadata", None)
+    if isinstance(usage, dict) and usage:
+        prompt = int(usage.get("input_tokens") or 0)
+        completion = int(usage.get("output_tokens") or 0)
+        total = int(usage.get("total_tokens") or 0) or prompt + completion
+        if total > 0:
+            return {"prompt": prompt, "completion": completion, "total": total}
+    metadata = getattr(msg, "response_metadata", None) or {}
+    if isinstance(metadata, dict):
+        token_usage = metadata.get("token_usage")
+        if isinstance(token_usage, dict) and token_usage:
+            prompt = int(token_usage.get("prompt_tokens") or token_usage.get("input_tokens") or 0)
+            completion = int(
+                token_usage.get("completion_tokens") or token_usage.get("output_tokens") or 0
+            )
+            total = int(token_usage.get("total_tokens") or 0) or prompt + completion
             if total > 0:
                 return {"prompt": prompt, "completion": completion, "total": total}
-        metadata = getattr(msg, "response_metadata", None) or {}
-        if isinstance(metadata, dict):
-            token_usage = metadata.get("token_usage")
-            if isinstance(token_usage, dict) and token_usage:
-                prompt = int(
-                    token_usage.get("prompt_tokens") or token_usage.get("input_tokens") or 0
-                )
-                completion = int(
-                    token_usage.get("completion_tokens") or token_usage.get("output_tokens") or 0
-                )
-                total = int(token_usage.get("total_tokens") or 0) or prompt + completion
-                if total > 0:
-                    return {"prompt": prompt, "completion": completion, "total": total}
-    return {}
+    return None
 
 
-def accumulate_loop_tokens_from_messages(
-    state: LoopState,
+def _sum_token_usage_from_messages(
     messages: list[BaseMessage],
     *,
-    output_fallback: str = "",
-) -> int:
-    """Add token usage from CoreAgent messages into ``state.total_tokens_used``."""
-    usage = extract_token_usage_from_messages(messages)
-    if usage.get("total"):
-        delta = int(usage["total"])
-        state.total_tokens_used += delta
-        return delta
-    if output_fallback:
-        from soothe.utils.token_counting import count_tokens
+    include_chunks: bool,
+) -> dict[str, int]:
+    """Sum usage across AI messages (optionally including stream chunks)."""
+    from langchain_core.messages import AIMessage, AIMessageChunk
 
-        delta = count_tokens(output_fallback)
-        if delta > 0:
-            state.total_tokens_used += delta
-            return delta
-    return 0
+    prompt = completion = total = 0
+    for msg in messages:
+        if isinstance(msg, AIMessage):
+            counts = _token_counts_from_ai_message(msg)
+        elif include_chunks and isinstance(msg, AIMessageChunk):
+            counts = _token_counts_from_ai_message(msg)
+        else:
+            continue
+        if counts is None:
+            continue
+        prompt += counts["prompt"]
+        completion += counts["completion"]
+        total += counts["total"]
+    if total <= 0:
+        return {}
+    return {"prompt": prompt, "completion": completion, "total": total}
+
+
+def extract_token_usage_from_messages(messages: list[BaseMessage]) -> dict[str, int]:
+    """Sum prompt/completion/total across all CoreAgent AI turns in ``messages``.
+
+    Multi-hop tool loops emit one ``AIMessage`` per model call; summing every turn
+    matches Langfuse generation totals. Falls back to stream chunks when providers
+    only attach usage to the final chunk.
+    """
+    usage = _sum_token_usage_from_messages(messages, include_chunks=False)
+    if usage:
+        return usage
+    return _sum_token_usage_from_messages(messages, include_chunks=True)
 
 
 def coerce_total_tokens_used(value: Any) -> int:
@@ -150,7 +160,6 @@ def coerce_total_tokens_used(value: Any) -> int:
 __all__ = [
     "DirectLLMTokenTarget",
     "accumulate_loop_tokens_from_llm_result",
-    "accumulate_loop_tokens_from_messages",
     "coerce_total_tokens_used",
     "direct_llm_token_call_scope",
     "extract_token_usage_from_messages",

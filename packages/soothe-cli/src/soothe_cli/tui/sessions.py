@@ -39,7 +39,7 @@ class LoopInfo(TypedDict, total=False):
     """First user-visible prompt of the loop (the initial goal text)."""
 
     topic: str
-    """Resume-picker topic label (goal text or LLM summary after first completion)."""
+    """Resume-picker topic label (Pass 1 reasoning or goal text after first completion)."""
 
     messages: int
     """Total user + assistant turns recorded in the loop."""

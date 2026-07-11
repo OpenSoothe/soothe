@@ -882,20 +882,6 @@ class Executor:
         if isinstance(cached, dict):
             loop_state.cached_mcp_resources = dict(cached)
 
-    def _extract_token_usage(self, messages: list[BaseMessage]) -> dict[str, int]:
-        """Extract token usage from last AIMessage response metadata.
-
-        Args:
-            messages: List of messages from CoreAgent execution
-
-        Returns:
-            Dict with prompt_tokens, completion_tokens, total_tokens (or empty dict if unavailable)
-        """
-        # Find last AIMessage with usage metadata or response token_usage.
-        from soothe.foundation.sloop.utils.token_usage import extract_token_usage_from_messages
-
-        return extract_token_usage_from_messages(messages)
-
     def _record_execute_wave_for_finalize(
         self,
         state: LoopState,
@@ -1027,8 +1013,10 @@ class Executor:
         state.last_wave_output_length = output_length
         state.last_wave_error_count = error_count
 
-        # Context window metrics with actual token usage (IG-151)
-        token_usage = self._extract_token_usage(messages)
+        # Context window metrics with actual token usage (IG-151, IG-630)
+        from soothe.foundation.sloop.utils.token_usage import extract_token_usage_from_messages
+
+        token_usage = extract_token_usage_from_messages(messages)
 
         if token_usage and "total" in token_usage:
             # Use actual token count from LLM response

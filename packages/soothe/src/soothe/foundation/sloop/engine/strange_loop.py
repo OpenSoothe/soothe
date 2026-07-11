@@ -607,6 +607,17 @@ class StrangeLoop:
                 continue_loop_mode,
             )
 
+            from soothe.foundation.sloop.goal_text import resolve_user_request
+            from soothe.foundation.sloop.state.resume_topic import schedule_resume_topic_persistence
+
+            schedule_resume_topic_persistence(
+                config=self.config,
+                loop_id=state_manager.loop_id,
+                pass1_reasoning=pass1_reasoning_text or None,
+                goal_text=resolve_user_request(state),
+                is_first_loop_goal=checkpoint.total_goals_completed == 0,
+            )
+
             queue: asyncio.Queue[Any] = asyncio.Queue()
             _graph_sentinel = object()
 

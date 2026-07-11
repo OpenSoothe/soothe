@@ -133,6 +133,22 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
     return _LoopHeartbeatHandle(task=task)
 
 
+async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
+    """Bump loop freshness after user cancel so /resume keeps the row discoverable."""
+    try:
+        from soothe.foundation.sloop.state.persistence.manager import (
+            StrangeLoopCheckpointPersistenceManager,
+        )
+
+        pm = await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(config)
+        try:
+            await pm.heartbeat_loop(loop_id)
+        finally:
+            await pm.close()
+    except Exception:
+        logger.debug("Loop interrupt touch failed for %s", loop_id, exc_info=True)
+
+
 def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
@@ -482,6 +498,7 @@ class StrangeLoopMixin:
         heartbeat_handle = _start_loop_heartbeat(self._config, strange_loop_id)
         increment_ai_message_count = False
         pending_chitchat_persist: dict[str, object] | None = None
+        interrupted = False
 
         try:
             async for event_type, event_data in loop_agent.run_with_progress(
@@ -830,7 +847,12 @@ class StrangeLoopMixin:
                         strange_loop_id,
                         exc_info=True,
                     )
+        except asyncio.CancelledError:
+            interrupted = True
+            raise
         finally:
+            if interrupted:
+                await _touch_loop_after_interrupt(self._config, strange_loop_id)
             if increment_ai_message_count:
                 await _increment_loop_ai_message_count(self._config, strange_loop_id)
             await heartbeat_handle.stop()

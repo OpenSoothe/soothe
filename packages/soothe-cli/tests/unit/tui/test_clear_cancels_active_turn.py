@@ -16,7 +16,6 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app = object.__new__(_ExecutionMixin)
     app._pending_messages = []
     app._queued_widgets = []
-    app._context_tokens = 0
     app._tokens_approximate = False
     app._session_state = MagicMock(loop_id="old-loop")
     app._daemon_session = AsyncMock()

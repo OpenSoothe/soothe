@@ -173,6 +173,22 @@ def get_llm_token_usage_callback_handler() -> SootheLLMTokenUsageCallbackHandler
     return _TOKEN_HANDLER_SINGLETON
 
 
+def merge_token_usage_callbacks(config: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge the shared token-usage callback into a LangChain ``RunnableConfig`` dict.
+
+    Structured-output runnables invoke the inner chat model without passing through
+    ``SootheTokenUsageChatModel._agenerate``; attaching the handler here ensures
+    planner/intent calls still fold usage into ``LoopState`` when scoped.
+    """
+    from langchain_core.runnables.config import merge_configs
+
+    handler = _TOKEN_HANDLER_SINGLETON
+    token_cfg: dict[str, Any] = {"callbacks": [handler]}
+    if config is None:
+        return token_cfg
+    return merge_configs(config, token_cfg)
+
+
 def _prepend_token_usage_handler(run_manager: Any) -> None:
     """Ensure the shared token handler runs before other LLM callbacks (e.g. Langfuse)."""
     if run_manager is None:
@@ -284,4 +300,5 @@ __all__ = [
     "extract_token_counts_from_llm_result",
     "ensure_openai_style_token_usage_on_llm_result",
     "get_llm_token_usage_callback_handler",
+    "merge_token_usage_callbacks",
 ]

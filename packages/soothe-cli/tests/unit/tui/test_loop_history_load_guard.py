@@ -46,7 +46,6 @@ async def test_load_loop_history_skips_duplicate_scheduled_load() -> None:
     app._message_store = MessageStore()
     app._deferred_assistant_renders = __import__("collections").deque()
     app._assistant_render_drain_scheduled = False
-    app._context_tokens = 0
     app._daemon_session = MagicMock()
 
     payload = _LoopHistoryPayload(

@@ -13,7 +13,6 @@ class _TokenApp(_UIMixin):
 
     def __init__(self) -> None:
         self._lc_loop_id = "loop-a"
-        self._context_tokens = 0
         self._loop_token_scope_id = None
         self._loop_baseline_tokens = 0
         self._loop_input_tokens = 0
@@ -27,16 +26,16 @@ class _TokenApp(_UIMixin):
         )
 
 
-def test_record_loop_turn_tokens_accumulates_within_loop() -> None:
+def test_record_loop_turn_tokens_folds_into_baseline() -> None:
     app = _TokenApp()
 
     app._record_loop_turn_tokens(100, 50)
     assert app._loop_token_total() == 150
-    assert app._context_tokens == 150
+    assert app._loop_input_tokens == 0
+    assert app._loop_output_tokens == 0
 
     app._record_loop_turn_tokens(200, 25)
     assert app._loop_token_total() == 375
-    assert app._context_tokens == 375
 
 
 def test_reset_loop_token_usage_clears_on_loop_change() -> None:
@@ -46,7 +45,6 @@ def test_reset_loop_token_usage_clears_on_loop_change() -> None:
 
     assert app._loop_token_scope_id == "loop-b"
     assert app._loop_token_total() == 0
-    assert app._context_tokens == 0
 
 
 def test_seed_loop_token_baseline_then_accumulate() -> None:
@@ -60,6 +58,17 @@ def test_seed_loop_token_baseline_then_accumulate() -> None:
     assert app._loop_token_total() == 1050
 
 
+def test_begin_loop_turn_tokens_resets_goal_counters_only() -> None:
+    app = _TokenApp()
+    app._seed_loop_token_baseline("loop-a", 900)
+    app._apply_authoritative_loop_tokens(200)
+    app._begin_loop_turn_tokens()
+
+    assert app._loop_token_total() == 900
+    assert app._loop_input_tokens == 0
+    assert app._loop_output_tokens == 0
+
+
 def test_ensure_loop_token_scope_resets_when_loop_id_changes() -> None:
     app = _TokenApp()
     app._record_loop_turn_tokens(300, 100)
@@ -70,11 +79,20 @@ def test_ensure_loop_token_scope_resets_when_loop_id_changes() -> None:
     assert app._loop_token_total() == 15
 
 
+def test_display_token_total_uses_inflight_without_double_counting_goal() -> None:
+    app = _TokenApp()
+    app._seed_loop_token_baseline("loop-a", 1000)
+    app._apply_authoritative_loop_tokens(200)
+    app._inflight_turn_stats = SimpleNamespace(input_tokens=250, output_tokens=50)
+
+    assert app._display_token_total() == 1300
+
+
 def test_refresh_token_displays_updates_thinking_row() -> None:
     app = _TokenApp()
     loading = SimpleNamespace(set_token_usage=MagicMock())
     app._loading_widget = loading
-    app._loop_input_tokens = 500
+    app._loop_baseline_tokens = 500
     app._loop_output_tokens = 250
 
     app._refresh_token_displays()
@@ -82,13 +100,24 @@ def test_refresh_token_displays_updates_thinking_row() -> None:
     loading.set_token_usage.assert_called_once_with(750, approximate=False)
 
 
+def test_loop_token_breakdown_splits_baseline_and_goal() -> None:
+    app = _TokenApp()
+    app._seed_loop_token_baseline("loop-a", 1000)
+    app._apply_authoritative_loop_tokens(250)
+
+    baseline, goal_run, display_total = app._loop_token_breakdown()
+
+    assert baseline == 1000
+    assert goal_run == 250
+    assert display_total == 1250
+
+
 def test_apply_authoritative_loop_tokens_merges_backend_goal_total() -> None:
     app = _TokenApp()
     app._seed_loop_token_baseline("loop-a", 1000)
-    app._record_loop_turn_tokens(100, 50)
-
     app._apply_authoritative_loop_tokens(500)
 
     assert app._loop_token_total() == 1500
+    assert app._display_token_total() == 1500
     assert app._loop_output_tokens == 500
     assert app._loop_input_tokens == 0

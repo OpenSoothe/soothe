@@ -255,10 +255,12 @@ async def invoke_structured_chat(
     Raises:
         StructuredOutputError: On provider or validation failure.
     """
+    from soothe.utils.llm.observability import merge_token_usage_callbacks
+
     schema = validate_response_schema(json_schema)
     name = resolve_schema_name(schema, schema_name)
     schema_with_title = _schema_with_title(schema, name)
-    invoke_cfg = config or {}
+    invoke_cfg = merge_token_usage_callbacks(config)
 
     methods = _ordered_structured_methods(chat)
     last_method = methods[-1]
