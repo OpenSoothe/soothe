@@ -12,6 +12,9 @@ DAEMON_LOOP_METADATA_KEYS = frozenset(
         "user_id",
         "workspace_mapping",
         "is_ephemeral",
+        # Resume-picker label (written once at first goal intake; not part of
+        # StrangeLoopCheckpoint). Must survive full checkpoint replaces.
+        "resume_topic",
     }
 )
 

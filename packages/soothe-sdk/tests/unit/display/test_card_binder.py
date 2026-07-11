@@ -12,7 +12,7 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from soothe_sdk.display import card_binder
-from soothe_sdk.display.transcript_types import MessageData, MessageType, ToolStatus
+from soothe_sdk.display.transcript_types import MessageData, MessageType
 
 
 def test_convert_messages_to_data_user_assistant_pair() -> None:
@@ -90,7 +90,8 @@ def test_merge_consecutive_assistant_cards_merges_long_leading_fragment() -> Non
     assert merged[1].content.endswith("30°C**")
 
 
-def test_convert_messages_to_data_matches_tool_call_to_result() -> None:
+def test_convert_messages_to_data_suppresses_tool_call_pairs() -> None:
+    """Display ledger never emits standalone TOOL cards from checkpoint tool pairs."""
     messages = [
         AIMessage(
             content="",
@@ -104,14 +105,10 @@ def test_convert_messages_to_data_matches_tool_call_to_result() -> None:
         ),
     ]
     data = card_binder.convert_messages_to_data(messages)
-    tools = [m for m in data if m.type == MessageType.TOOL]
-    assert len(tools) == 1
-    assert tools[0].tool_status == ToolStatus.SUCCESS
-    assert tools[0].tool_output == "file contents"
-    assert tools[0].tool_args == {"path": "/tmp/x"}
+    assert not [m for m in data if m.type == MessageType.TOOL]
 
 
-def test_convert_messages_to_data_marks_unmatched_tool_call_rejected() -> None:
+def test_convert_messages_to_data_suppresses_orphan_tool_calls() -> None:
     messages = [
         AIMessage(
             content="",
@@ -119,12 +116,10 @@ def test_convert_messages_to_data_marks_unmatched_tool_call_rejected() -> None:
         ),
     ]
     data = card_binder.convert_messages_to_data(messages)
-    tools = [m for m in data if m.type == MessageType.TOOL]
-    assert len(tools) == 1
-    assert tools[0].tool_status == ToolStatus.REJECTED
+    assert not [m for m in data if m.type == MessageType.TOOL]
 
 
-def test_convert_messages_to_data_empty_tool_name_falls_back_to_unknown() -> None:
+def test_convert_messages_to_data_suppresses_blank_tool_name_pairs() -> None:
     """Tool calls with missing/blank names must not break card binding."""
     messages = [
         AIMessage(
@@ -134,10 +129,7 @@ def test_convert_messages_to_data_empty_tool_name_falls_back_to_unknown() -> Non
         ToolMessage(content="ok", tool_call_id="tc1", name="", status="success"),
     ]
     data = card_binder.convert_messages_to_data(messages)
-    tools = [m for m in data if m.type == MessageType.TOOL]
-    assert len(tools) == 1
-    assert tools[0].tool_name == "unknown"
-    assert tools[0].tool_status == ToolStatus.SUCCESS
+    assert not [m for m in data if m.type == MessageType.TOOL]
 
 
 def test_convert_event_to_message_data_user_conversation_row() -> None:
@@ -413,8 +405,8 @@ def test_convert_event_to_message_data_drops_strange_loop_completed_app_banner()
     assert card_binder.convert_event_to_message_data(event) is None
 
 
-def test_convert_messages_to_data_keeps_standalone_tool_when_no_cognition_replay() -> None:
-    """Without cognition cards, the binder must still emit TOOL cards (back-compat)."""
+def test_convert_messages_to_data_never_emits_standalone_tool_cards() -> None:
+    """Display ledger suppresses standalone TOOL cards even without cognition replay."""
     messages = [
         AIMessage(
             content="",
@@ -423,84 +415,11 @@ def test_convert_messages_to_data_keeps_standalone_tool_when_no_cognition_replay
         ToolMessage(content="ok", tool_call_id="tc1", name="run_command", status="success"),
     ]
     cards = card_binder.convert_messages_to_data(messages)
-    tools = [c for c in cards if c.type == MessageType.TOOL]
-    assert len(tools) == 1
-    assert tools[0].tool_status == ToolStatus.SUCCESS
+    assert not [c for c in cards if c.type == MessageType.TOOL]
 
 
-def test_build_step_tool_rows_map_binds_unified_id_to_step() -> None:
-    """Stream tool_call.update events carry the unified id → step_id prefix.
-
-    The map must group tool rows under the canonical (hyphen-form) step_id
-    parsed from the unified id, populating args/output/duration from the
-    interleaved ``tool_call`` / ``tool_result`` activity rows. This is what
-    lets the resumed step card expand to inline rows instead of showing the
-    bare ``N tools`` footer.
-    """
-    events = [
-        {
-            "kind": "tool_call",
-            "tool_name": "ls",
-            "args_preview": "{'path': '/tmp'}",
-            "timestamp": "2026-06-04T10:00:00+00:00",
-        },
-        {
-            "kind": "tool_result",
-            "tool_name": "ls",
-            "content": "['a', 'b']",
-            "timestamp": "2026-06-04T10:00:00.050000+00:00",
-        },
-        {
-            "kind": "event",
-            "timestamp": "2026-06-04T10:00:00.060000+00:00",
-            "data": {
-                "type": "soothe.stream.tool_call.update",
-                "tool_call_id": "DPB_01:s:tool-abc123",
-                "name": "ls",
-                "args": {"path": "/tmp"},
-            },
-        },
-        {
-            "kind": "tool_call",
-            "tool_name": "run_command",
-            "args_preview": "{'command': 'pwd'}",
-            "timestamp": "2026-06-04T10:00:01+00:00",
-        },
-        {
-            "kind": "tool_result",
-            "tool_name": "run_command",
-            "content": "/tmp",
-            "timestamp": "2026-06-04T10:00:01.100000+00:00",
-        },
-        {
-            "kind": "event",
-            "timestamp": "2026-06-04T10:00:01.110000+00:00",
-            "data": {
-                "type": "soothe.stream.tool_call.update",
-                "tool_call_id": "DPB_01:s:tool-def456",
-                "name": "run_command",
-                "args": {"command": "pwd"},
-            },
-        },
-    ]
-    rows_map = card_binder._build_step_tool_rows_map(events)
-    assert list(rows_map.keys()) == ["DPB-01"]  # canonical hyphen form
-    import json
-
-    rows = json.loads(rows_map["DPB-01"])
-    assert [r["name"] for r in rows] == ["ls", "run_command"]
-    assert rows[0]["args"] == {"path": "/tmp"}
-    assert rows[0]["output"] == "['a', 'b']"
-    assert rows[0]["duration_ms"] == 50
-    assert rows[0]["phase"] == "success"
-    assert rows[0]["id"] == "DPB_01:s:tool-abc123"
-    assert rows[1]["args"] == {"command": "pwd"}
-    assert rows[1]["output"] == "/tmp"
-    assert rows[1]["duration_ms"] == 100
-
-
-def test_collect_cognition_card_replay_attaches_step_tool_calls_json() -> None:
-    """STEP_PROGRESS cards from the cognition replay carry the inline tool rows."""
+def test_collect_cognition_card_replay_keeps_step_tool_call_count_only() -> None:
+    """Resume replay keeps step footer stats, not inline tool-row JSON."""
     events = [
         {
             "kind": "event",
@@ -547,17 +466,12 @@ def test_collect_cognition_card_replay_attaches_step_tool_calls_json() -> None:
     ]
     cards = card_binder.collect_cognition_card_replay(events)
     step = next(c for c in cards if c.type == MessageType.STEP_PROGRESS)
-    assert step.step_tool_calls_json is not None, "step card must carry inline tool rows"
-    import json
-
-    rows = json.loads(step.step_tool_calls_json)
-    assert len(rows) == 1
-    assert rows[0]["name"] == "ls"
-    assert rows[0]["id"] == "DPB_01:s:tool-1"
+    assert step.step_tool_call_count == 1
+    assert step.step_tool_calls_json is None
 
 
-def test_convert_loop_events_to_data_attaches_step_tool_calls_json_fallback_path() -> None:
-    """Fallback path (no checkpoint messages) must also hydrate inline tool rows."""
+def test_convert_loop_events_to_data_keeps_step_tool_call_count_only() -> None:
+    """Fallback path keeps step stats without inline tool-row replay."""
     events = [
         {
             "kind": "conversation",
@@ -609,17 +523,28 @@ def test_convert_loop_events_to_data_attaches_step_tool_calls_json_fallback_path
         },
     ]
     cards = card_binder.convert_loop_events_to_data(events)
-    # Fallback must not emit standalone TOOL cards when cognition step events exist
     assert not any(c.type == MessageType.TOOL for c in cards)
     step = next(c for c in cards if c.type == MessageType.STEP_PROGRESS)
-    assert step.step_tool_calls_json is not None
-    import json
+    assert step.step_tool_call_count == 1
+    assert step.step_tool_calls_json is None
 
-    rows = json.loads(step.step_tool_calls_json)
-    assert len(rows) == 1
-    assert rows[0]["name"] == "run_command"
-    assert rows[0]["args"] == {"command": "echo 42"}
-    assert rows[0]["output"] == "42"
+
+def test_sanitize_resume_display_cards_strips_tool_rows_and_tool_stubs() -> None:
+    cards = [
+        MessageData(type=MessageType.TOOL, content="", tool_name="grep"),
+        MessageData(
+            type=MessageType.STEP_PROGRESS,
+            content="",
+            step_progress_id="S-1",
+            step_tool_call_count=3,
+            step_tool_calls_json='[{"name":"grep"}]',
+        ),
+    ]
+    sanitized = card_binder.sanitize_resume_display_cards(cards)
+    assert len(sanitized) == 1
+    assert sanitized[0].type == MessageType.STEP_PROGRESS
+    assert sanitized[0].step_tool_call_count == 3
+    assert sanitized[0].step_tool_calls_json is None
 
 
 def test_module_has_no_textual_or_cli_imports() -> None:

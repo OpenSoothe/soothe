@@ -306,8 +306,10 @@ class _UIMixin:
             hydrated_widgets: list[tuple[Widget, Any]] = []  # (widget, msg_data)
             for msg_data in to_hydrate:
                 try:
-                    from soothe_cli.tui.binding import message_to_widget
+                    from soothe_cli.tui.binding import is_restorable_message_data, message_to_widget
 
+                    if not is_restorable_message_data(msg_data):
+                        continue
                     widget = message_to_widget(msg_data)
                     hydrated_widgets.append((widget, msg_data))
                 except Exception:

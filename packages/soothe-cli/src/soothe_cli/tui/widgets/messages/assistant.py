@@ -252,6 +252,8 @@ class AssistantMessage(Vertical):
         self._dot = self.query_one("#assistant-dot", Static)
         self._body = self.query_one("#assistant-body", Static)
         self._refresh_assistant_dot()
+        if self._content:
+            self._render_to_body()
         if self._streaming_active:
             self._start_dot_animation()
 

@@ -128,7 +128,8 @@ Applied by `SnapshotCollapser` over the live ledger segment at freeze time:
 |---------------|---------------------|
 | Streaming cognition ticks | Final plan card + final reason card per iteration |
 | Step in-progress updates | One terminal step card per `step_id` |
-| Tool rows | Folded into parent step card |
+| Tool rows (live) | Inline on step card during active turn |
+| Tool rows (resume) | **Omitted** — only `step_tool_call_count` on step footer (IG-577) |
 | Assistant stream chunks | One consolidated assistant card |
 | User prompt | Exactly one user card (required) |
 | Subagent / error cards | Include if bound at freeze; omit if never created |
@@ -232,13 +233,17 @@ Trivial fast-path goals (e.g. weather lookup) MUST still produce snapshots. Mini
 | `live_goal_index` | Index of active goal; `null` when idle |
 | `context_tokens` | Best-effort persisted token count (same as `loop_cards_fetch`) |
 
-**Client assembly**:
+**Client assembly** (IG-577):
 
 ```text
 cards = flatten(goal.display_cards for goal in goals) + live_cards
+cards = sanitize_resume_display_cards(cards)   # drop TOOL stubs; strip step_tool_calls_json
 dedupe by MessageData.id (last wins)
+merge_consecutive_assistant_cards(cards)
 mount visible window
 ```
+
+Resume shows step **tool-call counts** only; inline tool-row replay is live-only.
 
 ### 9.2 `loop_cards_fetch` (deprecated)
 
