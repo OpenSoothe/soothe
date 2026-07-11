@@ -67,35 +67,11 @@ Soothe is a **goal-driven orchestration framework** for building 24/7 long-runni
 pip install -U 'soothe[all]' soothe-cli soothe-daemon
 ```
 
-This installs:
-- `soothe[all]` - Core agent runtime + all optional extras
-- `soothe-cli` - CLI and TUI
-- `soothe-daemon` - Background daemon server
+**Minimal** (core + CLI): `pip install soothe soothe-cli`
 
-**Minimal** (core + CLI only):
-```bash
-pip install soothe soothe-cli
-```
+**Optional extras**: `tabular`, `document`, `github`, `claude`, `all`
 
-Add daemon later: `pip install soothe-daemon`
-
-### What optional extras are available?
-
-| Extra | Adds |
-|-------|------|
-| `tabular` | Pandas/Excel workflows |
-| `document` | PDF/DOCX/document parsing |
-| `github` | GitHub API integration |
-| `claude` | Claude agent SDK integration |
-| `all` | `tabular` + `document` + `github` + `claude` |
-
-Research, semantic embedding, DashScope, and browser-use dependencies are included in base `soothe`.
-Install Langfuse separately with `pip install langfuse` when observability is enabled.
-
-**Install specific extras**:
-```bash
-pip install 'soothe[document,github]' soothe-cli soothe-daemon
-```
+See [Installation Guide](getting-started/Installation.md) for details.
 
 ### Why do I need soothe-plugins?
 
@@ -371,23 +347,12 @@ See [Transport Guide](multi-transport.md).
 
 ### How do I deploy Soothe in production?
 
-See [Deployment Guide](deployment/index.md) for comprehensive production deployment instructions.
-
-**Quick start** (Docker Compose):
+**Docker Compose** (recommended):
 ```bash
-cd deploy
-cp env-example .env
-vim .env  # Set API keys and passwords
-docker compose up -d
+cd deploy && cp env-example .env && vim .env && docker compose up -d
 ```
 
-**Production components**:
-- PostgreSQL + pgvector (multi-database architecture)
-- Soothe daemon (WebSocket)
-- Reverse proxy (nginx) for authentication and TLS
-- Langfuse for LLM observability
-
-See [Deployment Guide - Production Setup](deployment/production-setup.md).
+See [Production Setup](deployment/production-setup.md) for full guide.
 
 ### How do I monitor Soothe?
 

@@ -16,30 +16,17 @@ Welcome to Soothe! This section guides you from installation to your first auton
 
 ## 📋 Learning Path
 
-Follow these guides in order:
-
-### 1. [Installation](Installation.md)
-- System requirements
-- Installation methods (pip, uv, from source)
-- Package overview
-- Troubleshooting installation issues
-
-### 2. [Quick Start](Quick-Start.md)
-- Install CLI, start daemon (Docker or local)
-- Verify health, run first prompt
-- Production deploy pointer
-
-### 3. [Basic Concepts](Basic-Concepts.md)
-- Core architecture
-- Goals and threads
-- Subagents and tools
-- Memory and context
+| Step | Guide | Time | What You'll Learn |
+|------|-------|------|-------------------|
+| 1 | [Installation](Installation.md) | 5 min | System requirements, install methods, package overview |
+| 2 | [Quick Start](Quick-Start.md) | 5 min | Install CLI → start daemon → run first prompt |
+| 3 | [Basic Concepts](Basic-Concepts.md) | 10 min | Architecture, goals/threads, subagents, memory |
 
 ---
 
 ## 🚀 Quick Start
 
-See **[Quick Start](Quick-Start.md)** for the full three-step path (install → daemon → prompt). For pip-only local setup details, continue with [Installation](Installation.md).
+See **[Quick Start](Quick-Start.md)** for the full three-step path (install → daemon → prompt).
 
 ---
 
