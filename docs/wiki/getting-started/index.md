@@ -24,11 +24,10 @@ Follow these guides in order:
 - Package overview
 - Troubleshooting installation issues
 
-### 2. [Quick-Start Guide](Quick-Start.md)
-- Your first Soothe session
-- Basic usage patterns
-- Common workflows
-- Next steps
+### 2. [Quick Start](Quick-Start.md)
+- Install CLI, start daemon (Docker or local)
+- Verify health, run first prompt
+- Production deploy pointer
 
 ### 3. [Basic Concepts](Basic-Concepts.md)
 - Core architecture
@@ -38,22 +37,9 @@ Follow these guides in order:
 
 ---
 
-## 🚀 30-Second Quick Start
+## 🚀 Quick Start
 
-If you just want to try Soothe right now:
-
-```bash
-# Install
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
-
-# Set API key
-export OPENAI_API_KEY=sk-your-key-here
-
-# Run your first query
-soothe -p "List all Python files in the current directory and count lines of code"
-```
-
-For detailed setup, continue with the guides above.
+See **[Quick Start](Quick-Start.md)** for the full three-step path (install → daemon → prompt). For pip-only local setup details, continue with [Installation](Installation.md).
 
 ---
 

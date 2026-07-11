@@ -18,27 +18,7 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
 
 ## 🚀 Quick Start
 
-**New to Soothe?** Follow these steps:
-
-1. **Install**: `pip install -U 'soothe[all]' soothe-cli soothe-daemon`
-2. **Configure**: Set `OPENAI_API_KEY` or create `~/.soothe/config/config.yml`
-3. **Run**: `soothe -p "your query"` for one-shot mode
-4. **Learn**: Read [Getting Started](getting-started/index.md)
-
-**30-Second Example:**
-```bash
-# Install complete stack
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
-
-# Set API key
-export OPENAI_API_KEY=sk-...
-
-# Start the daemon (auto-creates ~/.soothe/ directory structure)
-soothed start
-
-# Run your first query
-soothe -p "List all Python files in the current directory and count lines of code"
-```
+**New to Soothe?** Start with **[Quick Start](getting-started/Quick-Start.md)** — install CLI, start the daemon (Docker or local), run your first prompt. Then browse [Getting Started](getting-started/index.md) for installation details and core concepts.
 
 ---
 
@@ -48,7 +28,7 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 - **[Getting Started Hub](getting-started/index.md)** - Start here!
   - **[Installation](getting-started/Installation.md)** - System requirements, installation methods, troubleshooting
-  - **[Quick-Start Guide](getting-started/Quick-Start.md)** - Your first session, common workflows
+  - **[Quick Start](getting-started/Quick-Start.md)** - Install, daemon, first prompt, production
   - **[Basic Concepts](getting-started/Basic-Concepts.md)** - Core architecture and concepts
 - **[CLI Reference](cli-reference.md)** - Complete CLI documentation with examples
 - **[TUI Guide](tui-guide.md)** - Terminal UI, slash commands, keyboard shortcuts

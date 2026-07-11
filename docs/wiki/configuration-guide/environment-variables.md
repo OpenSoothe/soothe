@@ -33,7 +33,7 @@ Minimum to run the agent core or daemon:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-soothed start --foreground   # or Docker — see Quick Start in README
+soothed start --foreground   # or Docker — see [Quick Start](../getting-started/Quick-Start.md)
 soothe "hello"
 ```
 

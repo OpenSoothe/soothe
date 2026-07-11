@@ -6,11 +6,10 @@
   [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mirasoth/soothe)
 
-  🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2)
+  🎥 [Watch the demo video on Vimeo](https://player.vimeo.com/video/1185023866?h=72febe1ed2) · 📖 [Documentation Wiki](https://mirasoth.github.io/soothe/)
 </div>
 
-✨ Soothe is an **agent-harnessing framework**—an *Agentic OS* that pushes humans **out of the execution loop**.
-Built on LangChain / DeepAgents, it adds a persistent **agentic loop** and **goal engine** that maintains context across sessions, sustains long-running goals, coordinates multiple objectives, and autonomously steers complex tasks. Shift from *human-in-the-loop* to **agent-in-the-loop**: define intent, let the system handle execution.
+✨ Soothe is a **goal-driven orchestration framework**—an *Agentic OS* for 24/7 autonomous work that keeps humans out of the execution loop. Built on LangChain and DeepAgents, it adds a persistent **agentic loop** and **goal engine**: context carries across sessions, long-running goals keep moving, interdependent objectives coordinate in a typed dependency graph, and complex tasks steer themselves to completion. Move from *human-in-the-loop* to **agent-in-the-loop**—define intent, let Soothe handle execution.
 
 ---
 
@@ -43,89 +42,19 @@ Five design choices make Soothe more than another agent loop.
 
 ## Quick Start
 
-1. **Install the CLI** (Python 3.11+):
-
-   ```bash
-   pip install -U soothe-cli
-   ```
-
-2. **Start the daemon** (Docker, env-only — no config file):
-
-   Image: `registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest`
-
-   **OpenAI** (default model `gpt-4o-mini` via zero-config):
-
-   ```bash
-   docker run --rm -d --name soothed \
-     -p 8765:8765 \
-     -e OPENAI_API_KEY=sk-... \
-     -v soothe-data:/var/lib/soothe \
-     registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
-   ```
-
-   **DashScope** (`qwen3.7-plus` via `SOOTHE_ROUTER_PROFILES`; mount host workspace for file tools):
-
-   ```bash
-   export DASHSCOPE_API_KEY=sk-...
-   export HOST_WS=/Users/you/Workspace
-   export CONTAINER_WS=/var/lib/soothe/workspaces
-   export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
-   export SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}"
-
-   docker run --rm -d --name soothed \
-     -p 8765:8765 \
-     -e DASHSCOPE_API_KEY \
-     -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
-     -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
-     -e SOOTHE_ROUTER_PROFILES \
-     -e SOOTHE_WORKSPACE_MOUNT \
-     -v soothe-data:/var/lib/soothe \
-     -v "$HOST_WS:$CONTAINER_WS" \
-     registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
-
-   cd /Users/you/Workspace/soothe && soothe
-   ```
-
-   DashScope uses the OpenAI-compatible endpoint; zero-config names the provider `openai`, so router targets are `openai:qwen3.7-plus` (not `dashscope:…`). Chat-only without a workspace mount: omit the `HOST_WS` / `CONTAINER_WS` / `SOOTHE_WORKSPACE_MOUNT` exports and the workspace `-v` — the CLI can still send `cwd`; the daemon ignores host paths that are missing in the container.
-
-   **Local (pip)** instead of Docker:
-
-   ```bash
-   pip install -U 'soothe[all]' soothe-daemon
-   export OPENAI_API_KEY=sk-...
-   soothed start
-   ```
-
-   More env vars and Compose setups: [Configuration guide](docs/wiki/configuration-guide/environment-variables.md).
-
-3. **Verify** the daemon:
-
-   ```bash
-   curl -sf http://127.0.0.1:8765/healthz
-   ```
-
-4. **Run a prompt:**
-
-   ```bash
-   soothe -p "Research top 5 Python web frameworks"
-   # or interactive TUI:
-   soothe
-   ```
-
-### Production deployment
-
-Full stack (PostgreSQL + pgvector + config templates): [`deploy/`](deploy/README.md).
-
 ```bash
-cd deploy && cp env-example .env && vim .env && docker compose up -d
+pip install -U soothe-cli
+soothe -p "Your first task"   # requires a running daemon
 ```
 
-Optional: copy `config/config.template.yml` to `~/.soothe/config/config.yml` for multi-provider routing and deployment overrides.
+**[Quick Start guide](docs/wiki/getting-started/Quick-Start.md)** — install, Docker (OpenAI / DashScope), local daemon, health check, production deploy.
 
 ## Documentation
 
 | Resource | Description |
 |----------|-------------|
+| [Wiki](https://mirasoth.github.io/soothe/) | User, operator, and developer guides ([source](docs/wiki/index.md)) |
+| [Quick Start](docs/wiki/getting-started/Quick-Start.md) | Install, daemon, first prompt |
 | [Configuration guide](docs/wiki/configuration-guide/) | YAML, env vars, zero-config |
 | [User Guide](docs/user_guide.md) | End-user usage guide |
 | [RFCs](docs/specs/) | Architecture specs |
