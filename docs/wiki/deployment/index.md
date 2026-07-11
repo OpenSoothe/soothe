@@ -224,6 +224,8 @@ transports:
     enabled: true
     host: 127.0.0.1
     port: 8765
+thread_pool:
+  request_timeout_seconds: 1209600  # 14d per turn; 0 = no cap
 ```
 
 ### Scenario 2: Production Team (50 users)
@@ -253,6 +255,8 @@ transports:
     enabled: true
     host: 127.0.0.1
     port: 8765
+thread_pool:
+  request_timeout_seconds: 1209600
 ```
 
 ### Scenario 3: Large Organization (500 users)

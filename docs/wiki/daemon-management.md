@@ -198,7 +198,11 @@ transports:
     host: "127.0.0.1"
     port: 8765
 
-# Concurrency
+# Concurrency — per-request wall-clock cap (default 14 days; 0 = no timeout)
+thread_pool:
+  request_timeout_seconds: 1209600
+
+# Legacy / optional fields (may appear in older configs)
 max_concurrent_threads: 100
 thread_max_age_hours: 24
 

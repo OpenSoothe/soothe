@@ -130,7 +130,7 @@ thread_pool:
   max_pool_size: 96  # IG-553: Support up to 96 concurrent synthesis loops
   idle_timeout_seconds: 120
   max_requests_per_thread: 50
-  request_timeout_seconds: 7200  # 2h default; 0 = no timeout
+  request_timeout_seconds: 1209600  # 14d default; 0 = no timeout
   thread_startup_timeout_seconds: 60
   reuse_runner: true
   warmup_runner: true
@@ -143,7 +143,7 @@ worker_pool:
   max_pool_size: 4
   idle_timeout_seconds: 300
   max_requests_per_worker: 100
-  request_timeout_seconds: 7200  # 2h default; 0 = no timeout
+  request_timeout_seconds: 1209600  # 14d default; 0 = no timeout
   heartbeat_interval_seconds: 30
   stuck_worker_timeout_seconds: 180
   reuse_runner: true

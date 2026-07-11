@@ -87,6 +87,7 @@ agent:
     enabled: true
     max_parallel_goals: 6
     max_loops: 8
+    goal_deadline_seconds: 1209600  # 14d wall-clock budget per dispatched goal
   loop:
     max_plan_steps_per_wave: 10
     concurrency:

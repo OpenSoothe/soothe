@@ -80,11 +80,11 @@ Define routing in **`router_profiles`** and select with **`active_router_profile
 
 ## Agent
 
-The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt`), behavior (`goal_completion_mode`: llm_only/heuristic_only/hybrid; `final_response`: adaptive/always_synthesize), `autonomous`, `loop`, and `protocols`.
+The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt`), behavior (`goal_completion_mode`: llm_only/heuristic_only/hybrid; `final_response`: adaptive/always_synthesize), `autopilot`, `loop`, and `protocols`.
 
-### Autonomous (`agent.autonomous`)
+### Autopilot (`agent.autopilot`)
 
-Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](../autonomous-mode.md) for detail.
+Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `goal_deadline_seconds` (wall-clock budget per dispatched goal, default **14 days** / `1209600`), `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](../autonomous-mode.md) for detail.
 
 ### Loop (`agent.loop`)
 
@@ -149,6 +149,19 @@ A list of `VectorStoreProviderConfig` entries (`name`, `provider_type`: pgvector
 ## UI & Runtime
 
 `UIConfig` (`theme`), top-level `debug`, `activity_max_lines`, `tui_debug`, and `UpdateConfig` (`check`, `auto_update`).
+
+## Daemon (`daemon.yml`)
+
+Separate from `config.yml` — loaded as `SootheDaemonConfig`. Controls transports, pools, and server lifecycle.
+
+| Field | Purpose | Default |
+|-------|---------|---------|
+| `thread_pool.request_timeout_seconds` | Wall-clock cap per client turn / loop run on a worker thread (`0` = no timeout) | **1209600** (14 days) |
+| `worker_pool.request_timeout_seconds` | Same cap when process-based worker pool is enabled | **1209600** (14 days) |
+| `thread_pool.idle_timeout_seconds` | Idle thread shutdown | 120s |
+| `worker_pool.stuck_worker_timeout_seconds` | Heartbeat-based stuck worker detection | 180s |
+
+Interactive CLI/TUI goals and autopilot dispatches share the thread-pool request timeout. Set `0` only when you accept unbounded worker occupancy.
 
 ## Minimal Configs
 

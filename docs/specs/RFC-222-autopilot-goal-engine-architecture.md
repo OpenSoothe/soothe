@@ -706,7 +706,7 @@ When `agent.autonomous.enabled=true`, the following wiring is required before un
 | Setting | Pilot recommendation | Notes |
 |---------|---------------------|-------|
 | `agent.autonomous.enabled` | `true` | Master switch; scheduling loop does not start when `false` |
-| `goal_deadline_seconds` | e.g. `3600` | Hang detection; default `null` disables |
+| `goal_deadline_seconds` | `1209600` (14 days) | AutopilotMonitor cancels workers past this wall-clock budget; `null` disables |
 | `max_parallel_goals` | tuned to capacity | Service + runner semaphores |
 | `verify_interval` | `30` | AutopilotMonitor DAG health cadence |
 

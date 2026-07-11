@@ -278,6 +278,27 @@ grep -i "langfuse\|observability" ~/.soothe/logs/soothed.log | tail -100
 - Response parsing
 - Token usage statistics
 
+### Workflow 2b: Debug daemon request timeout (goal killed mid-run)
+
+**Symptoms**: `daemon.log` contains `request timeout (1209600s)` or `Request exceeded 1209600s timeout`; `soothe.log` shows `Step … cancelled`; no `goal_completed` in CLI.
+
+**Steps**:
+
+1. Confirm wall-clock duration matches configured cap:
+```bash
+rg 'request timeout|Request exceeded|cancelled after' ~/.soothe/logs/daemon.log ~/.soothe/data/loops/*/runner.log
+```
+
+2. Check active settings:
+```bash
+grep -A2 'request_timeout_seconds' ~/.soothe/config/daemon.yml
+grep -A2 'goal_deadline_seconds' ~/.soothe/config/config.yml
+```
+
+Defaults (template): **1209600s (14 days)** for both daemon request timeout and autopilot goal deadline. Prior default was **7200s (2 hours)**.
+
+3. Resume or re-run with a higher cap if the goal legitimately needs more wall-clock time (see [Troubleshooting — Request exceeded timeout](../troubleshooting/index.md#error-request-exceeded--timeout--step-cancelled-after-14-days)).
+
 ### Workflow 3: Debug Connection/Transport Issues
 
 **Stale worker_pool subprocesses** (orphaned `multiprocessing.spawn` children after crashes or old daemon runs):

@@ -177,7 +177,7 @@ class WorkerPoolConfig(BaseModel):
     request_timeout_seconds: int = Field(
         default=0,
         ge=0,
-        le=604_800,
+        le=1_209_600,
         description="Default per-request timeout in seconds (0 = no timeout)",
     )
     heartbeat_interval_seconds: int = Field(
@@ -356,10 +356,10 @@ class ThreadPoolConfig(BaseModel):
         description="Max requests before thread respawn (prevents memory buildup)",
     )
     request_timeout_seconds: int = Field(
-        default=7200,
+        default=1_209_600,
         ge=0,
-        le=604_800,
-        description="Default per-request timeout in seconds (0 = no timeout)",
+        le=1_209_600,
+        description="Default per-request timeout in seconds (0 = no timeout, default 14d)",
     )
     thread_startup_timeout_seconds: int = Field(
         default=60,

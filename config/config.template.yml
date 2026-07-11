@@ -104,7 +104,7 @@ agent:
     loop_idle_timeout: 300
     poll_interval: 5
     dreaming_poll_interval: 60
-    goal_deadline_seconds: null
+    goal_deadline_seconds: 1209600  # 14d wall-clock budget per dispatched goal
     context_projection:
       max_findings: 20
       max_files: 50

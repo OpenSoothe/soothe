@@ -126,8 +126,16 @@ Daemon transport, concurrency, and paths use prefix `SOOTHE_DAEMON_` and nested 
 |--------------------------|---------|
 | `transports.websocket.host` | `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST` |
 | `transports.http_rest.enabled` | `SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED` |
+| `thread_pool.request_timeout_seconds` | `SOOTHE_DAEMON_THREAD_POOL__REQUEST_TIMEOUT_SECONDS` |
+| `worker_pool.request_timeout_seconds` | `SOOTHE_DAEMON_WORKER_POOL__REQUEST_TIMEOUT_SECONDS` |
 | `soothe_config_path` | `SOOTHE_DAEMON_SOOTHE_CONFIG_PATH` |
 | `memory_profiling.enabled` | `SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED` |
+
+Agent config (`config.yml`) nested autopilot deadline:
+
+| YAML path | Env var |
+|-----------|---------|
+| `agent.autopilot.goal_deadline_seconds` | `SOOTHE_AGENT__AUTOPILOT__GOAL_DEADLINE_SECONDS` |
 
 The production Docker image sets `SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST=0.0.0.0` and enables HTTP REST by default.
 

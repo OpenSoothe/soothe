@@ -61,8 +61,8 @@ A common confusion: the daemon uses **two separate config files**:
 
 | File | Config Class | Controls |
 |------|-------------|----------|
-| `config.yml` | `SootheConfig` | Agent core — providers, models, protocols, tools |
-| `daemon.yml` | `SootheDaemonConfig` | Server — transports, worker pool, channels, TLS |
+| `config.yml` | `SootheConfig` | Agent core — providers, models, protocols, tools, `agent.autopilot.goal_deadline_seconds` (default 14d) |
+| `daemon.yml` | `SootheDaemonConfig` | Server — transports, thread/worker pools, `request_timeout_seconds` (default 14d), channels, TLS |
 
 The agent config can be shared across daemon and non-daemon (embedded) deployments. The daemon config is server-specific.
 
