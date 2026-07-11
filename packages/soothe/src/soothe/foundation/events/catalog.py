@@ -300,6 +300,7 @@ class StrangeLoopPlanPhaseStatusEvent(LifecycleEvent):
         "soothe.cognition.strange_loop.plan.phase"
     )
     label: str
+    total_tokens_used: int = 0
 
 
 class StrangeLoopStepStartedEvent(LifecycleEvent):
@@ -340,6 +341,7 @@ class StrangeLoopStepCompletedEvent(LifecycleEvent):
     duration_ms: int
     tool_call_count: int = 0
     clarification: dict[str, Any] | None = None
+    total_tokens_used: int = 0
 
 
 class LLMRetryAttemptEvent(LifecycleEvent):

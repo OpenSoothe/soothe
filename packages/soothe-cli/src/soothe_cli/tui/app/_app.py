@@ -254,11 +254,23 @@ class SootheApp(
         """Monotonic anchor for startup daemon-connect elapsed time in the thinking row."""
 
         self._context_tokens: int = 0
-        """Local cache of the last total-context token count.
+        """Local cache of accumulated API token usage for the active loop.
 
-        Source of truth is `_context_tokens` in graph state; this is a sync
-        copy for the status bar.
+        Mirrors the status bar; seeded from checkpoint on resume and incremented
+        after each turn via ``_record_loop_turn_tokens``.
         """
+
+        self._loop_token_scope_id: str | None = None
+        """Loop id that ``_loop_*_tokens`` counters belong to."""
+
+        self._loop_baseline_tokens: int = 0
+        """Persisted loop usage total loaded from checkpoint (resume baseline)."""
+
+        self._loop_input_tokens: int = 0
+        """Input tokens accumulated this session for the active loop."""
+
+        self._loop_output_tokens: int = 0
+        """Output tokens accumulated this session for the active loop."""
 
         self._tokens_approximate: bool = False
         """Whether the cached token count is stale (interrupted generation)."""

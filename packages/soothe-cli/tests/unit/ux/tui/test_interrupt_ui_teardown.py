@@ -34,8 +34,6 @@ async def test_interrupt_cleanup_marks_goal_tree_interrupted() -> None:
         config={"configurable": {"thread_id": "loop-1"}},
         daemon_session=daemon_session,
         pending_text_by_namespace={},
-        captured_input_tokens=0,
-        captured_output_tokens=0,
         turn_stats=SessionStats(),
         start_time=0.0,
     )

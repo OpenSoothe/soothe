@@ -100,6 +100,18 @@ def test_loading_widget_activate_status_clears_pause() -> None:
     assert widget._status == "Executing"
 
 
+def test_loading_widget_hint_includes_token_usage_after_elapsed() -> None:
+    widget = LoadingWidget("Thinking")
+    widget.set_token_usage(1250)
+    assert widget._format_hint_line(12.0) == "(12s · 1.2K tokens)"
+
+
+def test_loading_widget_hint_omits_tokens_when_zero() -> None:
+    widget = LoadingWidget("Thinking")
+    widget.set_token_usage(0)
+    assert widget._format_hint_line(12.0) == "(12s)"
+
+
 def test_loading_widget_hint_extra_includes_attempt_and_elapsed() -> None:
     widget = LoadingWidget("Connecting", hint_extra="attempt 2/3")
     assert widget._format_hint_line(15.0) == "(attempt 2/3 · 15s)"

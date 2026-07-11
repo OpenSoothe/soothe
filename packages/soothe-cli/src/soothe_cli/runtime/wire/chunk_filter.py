@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_cli.runtime.token_usage import message_has_token_usage_metadata
 from soothe_cli.runtime.wire.message_text import (
     extract_plain_text_from_stream_message,
     wire_message_body,
@@ -72,6 +73,8 @@ def message_chunk_is_non_actionable(data: Any) -> bool:
     from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
     if isinstance(msg, ToolMessage):
+        return False
+    if message_has_token_usage_metadata(msg):
         return False
     if isinstance(msg, dict):
         body = wire_message_body(msg)

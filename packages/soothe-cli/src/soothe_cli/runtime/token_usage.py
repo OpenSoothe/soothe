@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "extract_stream_message_token_usage",
     "fetch_conversation_token_count",
-    "merge_context_token_totals",
+    "message_has_token_usage_metadata",
 ]
 
 
@@ -54,28 +54,32 @@ def extract_stream_message_token_usage(message: Any) -> tuple[int, int, int]:
                 return _usage_from_mapping(nested)
 
     if isinstance(message, dict):
-        direct_usage = message.get("usage_metadata")
-        if isinstance(direct_usage, dict) and direct_usage:
-            return _usage_from_mapping(direct_usage)
-        response = message.get("response_metadata")
-        if isinstance(response, dict):
-            for key in ("token_usage", "usage"):
-                nested = response.get(key)
-                if isinstance(nested, dict) and nested:
-                    return _usage_from_mapping(nested)
+        from soothe_cli.runtime.wire.message_text import wire_message_body
+
+        bodies = [message]
+        nested = wire_message_body(message)
+        if nested is not message:
+            bodies.append(nested)
+        for body in bodies:
+            if not isinstance(body, dict):
+                continue
+            direct_usage = body.get("usage_metadata")
+            if isinstance(direct_usage, dict) and direct_usage:
+                return _usage_from_mapping(direct_usage)
+            response = body.get("response_metadata")
+            if isinstance(response, dict):
+                for key in ("token_usage", "usage"):
+                    nested_usage = response.get(key)
+                    if isinstance(nested_usage, dict) and nested_usage:
+                        return _usage_from_mapping(nested_usage)
 
     return 0, 0, 0
 
 
-def merge_context_token_totals(
-    current: int, input_toks: int, output_toks: int, total_toks: int
-) -> int:
-    """Merge a new usage reading into the running context total."""
-    if input_toks or output_toks:
-        return max(current, input_toks + output_toks)
-    if total_toks:
-        return max(current, total_toks)
-    return current
+def message_has_token_usage_metadata(message: Any) -> bool:
+    """Return True when a stream message carries provider token usage."""
+    input_toks, output_toks, total_toks = extract_stream_message_token_usage(message)
+    return bool(input_toks or output_toks or total_toks)
 
 
 async def fetch_conversation_token_count(daemon_session: Any, loop_id: str | None) -> int | None:

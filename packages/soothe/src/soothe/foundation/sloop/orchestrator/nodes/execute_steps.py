@@ -186,6 +186,7 @@ async def _record_and_emit_step_completed(
         "duration_ms": result.duration_ms,
         "tool_call_count": result.tool_call_count,
         "subgraph_tool_call_count": result.subgraph_tool_call_count,
+        "total_tokens_used": state.total_tokens_used,
     }
     # Surface ask_user Q&A on the event so the TUI can render the resolved
     # question/answer pair on the step card.

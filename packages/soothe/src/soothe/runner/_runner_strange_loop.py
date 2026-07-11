@@ -618,6 +618,11 @@ class StrangeLoopMixin:
                         summary = f"Error: {event_data['error'][:50]}"
 
                     clarification = event_data.get("clarification")
+                    from soothe.foundation.sloop.utils.token_usage import coerce_total_tokens_used
+
+                    total_tokens_used = coerce_total_tokens_used(
+                        event_data.get("total_tokens_used")
+                    )
                     yield _custom(
                         StrangeLoopStepCompletedEvent(
                             step_id=str(event_data.get("step_id", "")),
@@ -628,6 +633,7 @@ class StrangeLoopMixin:
                             clarification=clarification
                             if isinstance(clarification, dict)
                             else None,
+                            total_tokens_used=total_tokens_used,
                         ).to_dict()
                     )
 
@@ -679,7 +685,19 @@ class StrangeLoopMixin:
                 elif event_type == "plan_phase_status":
                     label = str(event_data.get("label", "")).strip()
                     if label:
-                        yield _custom(StrangeLoopPlanPhaseStatusEvent(label=label).to_dict())
+                        from soothe.foundation.sloop.utils.token_usage import (
+                            coerce_total_tokens_used,
+                        )
+
+                        total_tokens_used = coerce_total_tokens_used(
+                            event_data.get("total_tokens_used")
+                        )
+                        yield _custom(
+                            StrangeLoopPlanPhaseStatusEvent(
+                                label=label,
+                                total_tokens_used=total_tokens_used,
+                            ).to_dict()
+                        )
 
                 elif event_type == "assess":
                     reasoning = str(event_data.get("assessment_reasoning", "")).strip()

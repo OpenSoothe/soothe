@@ -96,9 +96,9 @@ class _MessagesMixin:
                 if not payload.messages:
                     return
 
-                # Seed token cache from persisted state
+                # Seed loop token total from persisted checkpoint
                 if payload.context_tokens > 0:
-                    self._on_tokens_update(payload.context_tokens)
+                    self._seed_loop_token_from_checkpoint(payload.context_tokens)
 
                 # Bulk load into store (sets visible window; replaces prior data).
                 _archived, visible = self._message_store.bulk_load(

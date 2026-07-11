@@ -300,7 +300,7 @@ class _LoopHistoryPayload:
     """Converted message data ready for bulk loading."""
 
     context_tokens: int
-    """Persisted `_context_tokens` from the checkpoint (0 if absent)."""
+    """Persisted accumulated loop token usage from checkpoint (0 if absent)."""
 
     goals: tuple[dict[str, Any], ...] = ()
     """Goal display snapshots from ``loop_history_fetch`` (RFC-631)."""

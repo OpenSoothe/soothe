@@ -81,14 +81,17 @@ async def await_with_llm_call_policy(
     """
     budget_key = resolve_llm_budget_key(thread_id)
     telemetry_id = thread_id or budget_key
-    return await run_llm_call_with_policy(
-        coro_factory,
-        config=config,
-        budget_key=budget_key,
-        thread_id=telemetry_id,
-        log_prefix="Direct LLM",
-        log=logger,
-    )
+    from soothe.foundation.sloop.utils.token_usage import direct_llm_token_call_scope
+
+    with direct_llm_token_call_scope():
+        return await run_llm_call_with_policy(
+            coro_factory,
+            config=config,
+            budget_key=budget_key,
+            thread_id=telemetry_id,
+            log_prefix="Direct LLM",
+            log=logger,
+        )
 
 
 __all__ = [

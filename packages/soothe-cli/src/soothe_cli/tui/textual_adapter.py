@@ -20,11 +20,26 @@ if TYPE_CHECKING:
 
     from langchain_core.runnables import RunnableConfig
 
-    class _TokensUpdateCallback(Protocol):
-        def __call__(self, count: int, *, approximate: bool = False) -> None: ...
+    class _SeedLoopTokenFromCheckpointCallback(Protocol):
+        def __call__(self, total: int, *, approximate: bool = False) -> None: ...
 
-    class _TokensShowCallback(Protocol):
+    class _RefreshTokenDisplaysCallback(Protocol):
         def __call__(self, *, approximate: bool = False) -> None: ...
+
+    class _TurnTokensCallback(Protocol):
+        def __call__(
+            self,
+            input_tokens: int,
+            output_tokens: int,
+            *,
+            approximate: bool = False,
+        ) -> None: ...
+
+    class _LoopTokenTotalCallback(Protocol):
+        def __call__(self) -> int: ...
+
+    class _AuthoritativeLoopTokensCallback(Protocol):
+        def __call__(self, goal_run_tokens: int, *, source: str = "backend") -> None: ...
 
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -112,10 +127,10 @@ from soothe_cli.runtime.state.session_stats import (
     format_token_count,
 )
 from soothe_cli.runtime.state.step_router import StepTaskRouter
+from soothe_cli.runtime.token_events_debug import TokenEventTrace
 from soothe_cli.runtime.token_usage import (
     extract_stream_message_token_usage,
     fetch_conversation_token_count,
-    merge_context_token_totals,
 )
 from soothe_cli.runtime.turn.pipeline import run_turn_pipeline
 from soothe_cli.runtime.turn.prepare import (
@@ -274,18 +289,27 @@ class TextualUIAdapter:
         self._subagent_cards_by_key: dict[str, Any] = {}
         """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
 
-        self._subagent_cards_by_key: dict[str, Any] = {}
-        """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
-
         # Token display callbacks (set by the app after construction)
-        self._on_tokens_update: _TokensUpdateCallback | None = None
-        """Called with total context tokens after each LLM response."""
+        self._seed_loop_token_from_checkpoint: _SeedLoopTokenFromCheckpointCallback | None = None
+        """Seed accumulated loop usage from checkpoint or conversation estimate."""
+
+        self._on_turn_tokens: _TurnTokensCallback | None = None
+        """Called with per-turn input/output deltas to accumulate loop usage."""
+
+        self._get_loop_token_total: _LoopTokenTotalCallback | None = None
+        """Return the current accumulated loop token total for persistence."""
+
+        self._on_refresh_token_displays: _RefreshTokenDisplaysCallback | None = None
+        """Refresh loop token usage on the thinking row or status bar."""
+
+        self._apply_authoritative_loop_tokens: _AuthoritativeLoopTokensCallback | None = None
+        """Merge backend ``total_tokens_used`` from StrangeLoop lifecycle events."""
+
+        self._token_event_trace = TokenEventTrace()
+        """Per-turn debug counters for token lifecycle events (DEBUG log)."""
 
         self._on_tokens_hide: Callable[[], None] | None = None
         """Called to hide the token display during streaming."""
-
-        self._on_tokens_show: _TokensShowCallback | None = None
-        """Called to restore the token display with the cached value."""
 
         self._clarification_pending: bool = False
         """RFC-622: True while the loop graph is paused on ``await_clarification``.
@@ -707,6 +731,33 @@ def _register_execute_namespace_binding(
         step_w = adapter._current_step_messages.get(only_sid)
         if step_w is not None:
             adapter._step_by_namespace[ns_key] = step_w
+
+
+def _apply_backend_loop_tokens_event(
+    adapter: TextualUIAdapter,
+    data: dict[str, Any],
+    *,
+    source: str,
+    step_id: str = "",
+) -> None:
+    """Trace and merge backend ``total_tokens_used`` from a lifecycle event."""
+    has_total_field = "total_tokens_used" in data
+    total_used = int(data.get("total_tokens_used") or 0) if has_total_field else None
+    if source == "plan_phase":
+        label = str(data.get("label", "")).strip()
+        adapter._token_event_trace.note_plan_phase(
+            label=label,
+            total_tokens_used=total_used,
+            has_total_field=has_total_field,
+        )
+    else:
+        adapter._token_event_trace.note_step_completed(
+            step_id=step_id,
+            total_tokens_used=total_used,
+            has_total_field=has_total_field,
+        )
+    if adapter._apply_authoritative_loop_tokens is not None and has_total_field:
+        adapter._apply_authoritative_loop_tokens(int(total_used or 0), source=source)
 
 
 def _resolve_token_target_card(
@@ -2340,8 +2391,6 @@ async def _handle_interrupt_cleanup(
     config: RunnableConfig,
     daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
     pending_text_by_namespace: dict[tuple, str],
-    captured_input_tokens: int,
-    captured_output_tokens: int,
     turn_stats: SessionStats,
     start_time: float,
     app_exiting: bool = False,
@@ -2354,8 +2403,6 @@ async def _handle_interrupt_cleanup(
         daemon_session: Active daemon websocket session; also receives ``/cancel``
             so the in-flight query stops (Ctrl+C / Esc; ``detach`` is quit-only).
         pending_text_by_namespace: Accumulated text per namespace.
-        captured_input_tokens: Input tokens captured before interrupt.
-        captured_output_tokens: Output tokens captured before interrupt.
         turn_stats: Stats for the current turn.
         start_time: Monotonic timestamp when the turn began.
         app_exiting: When ``True`` (TUI quit), skip daemon RPC — disconnect
@@ -2431,11 +2478,10 @@ async def _handle_interrupt_cleanup(
         await _report_and_persist_tokens(
             adapter,
             config,
-            captured_input_tokens,
-            captured_output_tokens,
             shield=True,
             approximate=approximate,
             daemon_session=daemon_session,
+            turn_stats=turn_stats,
         )
 
     # Ensure the daemon-side query is cancelled, not detached (detach is quit-only).
@@ -2456,20 +2502,20 @@ async def _handle_interrupt_cleanup(
                 )
 
 
-async def _persist_context_tokens(
+async def _persist_loop_token_total(
     config: RunnableConfig,
     tokens: int,
     *,
     daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
 ) -> None:
-    """Best-effort persist of the context token count into remote loop state."""
+    """Best-effort persist of accumulated loop token usage into remote loop state."""
     try:
         loop_id = _loop_id_for_remote_state(config, daemon_session)
         if loop_id:
             await daemon_session.aupdate_loop_state(loop_id, {"_context_tokens": tokens})
     except Exception:  # non-critical; stale count on resume is acceptable
         logger.warning(
-            "Failed to persist _context_tokens=%d; token count may be stale on resume",
+            "Failed to persist loop token total=%d; count may be stale on resume",
             tokens,
             exc_info=True,
         )
@@ -2478,30 +2524,42 @@ async def _persist_context_tokens(
 async def _report_and_persist_tokens(
     adapter: TextualUIAdapter,
     config: RunnableConfig,
-    captured_input_tokens: int,
-    captured_output_tokens: int,
     *,
     daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
     shield: bool = False,
     approximate: bool = False,
+    turn_stats: SessionStats | None = None,
 ) -> None:
-    """Update the token display and best-effort persist via ``loop_state_update``."""
-    display_tokens = captured_input_tokens
-    display_approximate = approximate
-    if not display_tokens and not captured_output_tokens:
-        loop_id = _loop_id_for_remote_state(config, daemon_session)
-        estimated = await fetch_conversation_token_count(daemon_session, loop_id)
-        if estimated:
-            display_tokens = estimated
-            display_approximate = True
+    """Accumulate turn usage into the loop total and best-effort persist."""
+    stats = turn_stats or SessionStats()
+    input_tokens = stats.input_tokens
+    output_tokens = stats.output_tokens
 
-    if display_tokens or captured_output_tokens:
-        if adapter._on_tokens_update:
-            adapter._on_tokens_update(display_tokens, approximate=display_approximate)
-        persist_tokens = captured_input_tokens or display_tokens
+    if input_tokens or output_tokens:
+        if adapter._on_turn_tokens:
+            adapter._on_turn_tokens(
+                input_tokens,
+                output_tokens,
+                approximate=approximate,
+            )
+    elif not approximate:
+        current_total = adapter._get_loop_token_total() if adapter._get_loop_token_total else 0
+        if current_total <= 0:
+            loop_id = _loop_id_for_remote_state(config, daemon_session)
+            estimated = await fetch_conversation_token_count(daemon_session, loop_id)
+            if estimated and adapter._seed_loop_token_from_checkpoint:
+                adapter._seed_loop_token_from_checkpoint(estimated, approximate=True)
+    elif adapter._on_refresh_token_displays:
+        adapter._on_refresh_token_displays(approximate=approximate)
+
+    persist_tokens = adapter._get_loop_token_total() if adapter._get_loop_token_total else 0
+    if persist_tokens <= 0 and (input_tokens or output_tokens):
+        persist_tokens = input_tokens + output_tokens
+
+    if persist_tokens > 0:
         if shield:
             try:
-                await _persist_context_tokens(
+                await _persist_loop_token_total(
                     config,
                     persist_tokens,
                     daemon_session=daemon_session,
@@ -2512,13 +2570,27 @@ async def _report_and_persist_tokens(
                     exc_info=True,
                 )
         else:
-            await _persist_context_tokens(
+            await _persist_loop_token_total(
                 config,
                 persist_tokens,
                 daemon_session=daemon_session,
             )
-    elif adapter._on_tokens_show:
-        adapter._on_tokens_show(approximate=display_approximate)
+
+    loop_id = _loop_id_for_remote_state(config, daemon_session)
+    display_total = (
+        adapter._get_loop_token_total()
+        if adapter._get_loop_token_total
+        else input_tokens + output_tokens
+    )
+    adapter._token_event_trace.finish_turn(
+        loop_id=loop_id,
+        baseline=0,
+        goal_run=display_total,
+        display_total=display_total,
+        turn_input=input_tokens,
+        turn_output=output_tokens,
+        approximate=approximate,
+    )
 
 
 async def _flush_assistant_text_ns(
@@ -2786,8 +2858,6 @@ async def execute_task_textual(
 
     await dispatch_hook("session.start", {"loop_id": loop_id})
 
-    captured_input_tokens = 0
-    captured_output_tokens = 0
     if turn_stats is None:
         turn_stats = SessionStats()
     ev_stats = TurnEventStats()
@@ -2795,19 +2865,23 @@ async def execute_task_textual(
     start_time = time.monotonic()
     goal_completed_logged = False
 
-    # Warn if token display callbacks are only partially wired — all three
-    # should be set together to avoid inconsistent status-bar behavior.
+    # Warn if token display callbacks are only partially wired.
     token_cbs = (
-        adapter._on_tokens_update,
+        adapter._on_turn_tokens,
+        adapter._get_loop_token_total,
+        adapter._on_refresh_token_displays,
+        adapter._apply_authoritative_loop_tokens,
         adapter._on_tokens_hide,
-        adapter._on_tokens_show,
     )
     if any(token_cbs) and not all(token_cbs):
         logger.warning(
-            "Token callbacks partially wired (update=%s, hide=%s, show=%s); token display may behave inconsistently",
-            adapter._on_tokens_update is not None,
+            "Token callbacks partially wired (turn=%s, total=%s, refresh=%s, "
+            "authoritative=%s, hide=%s); token display may behave inconsistently",
+            adapter._on_turn_tokens is not None,
+            adapter._get_loop_token_total is not None,
+            adapter._on_refresh_token_displays is not None,
+            adapter._apply_authoritative_loop_tokens is not None,
             adapter._on_tokens_hide is not None,
-            adapter._on_tokens_show is not None,
         )
 
     # Show spinner
@@ -2826,6 +2900,7 @@ async def execute_task_textual(
     router.reset_turn()
     adapter._execute_wave_total = 0
     adapter._execute_wave_completed = 0
+    adapter._token_event_trace.reset()
     ui_coalesce = TurnToolUiCoalescer()
     adapter._goal_completion_mounted_this_turn = False
     adapter._goal_tree_message = None
@@ -2912,7 +2987,6 @@ async def execute_task_textual(
             nonlocal clarification_pending
             nonlocal goal_completed_logged
             nonlocal goal_loop_start_monotonic
-            nonlocal captured_input_tokens
             if prepared is None or prepared.skip:
                 return
             for _chunk_once in (0,):
@@ -3074,6 +3148,11 @@ async def execute_task_textual(
                             message
                         )
                         if input_toks or output_toks or total_toks:
+                            adapter._token_event_trace.note_stream_usage(
+                                input_tokens=input_toks,
+                                output_tokens=output_toks,
+                                total_tokens=total_toks,
+                            )
                             from soothe_cli.tui.config import settings
 
                             active_model = settings.model_name or ""
@@ -3081,12 +3160,8 @@ async def execute_task_textual(
                                 turn_stats.record_request(active_model, input_toks, output_toks)
                             elif total_toks:
                                 turn_stats.record_request(active_model, total_toks, 0)
-                            captured_input_tokens = merge_context_token_totals(
-                                captured_input_tokens,
-                                input_toks,
-                                output_toks,
-                                total_toks,
-                            )
+                            if adapter._on_refresh_token_displays:
+                                adapter._on_refresh_token_displays()
                             token_card = _resolve_token_target_card(
                                 adapter, router, ns_key, message=message
                             )
@@ -3930,6 +4005,12 @@ async def execute_task_textual(
 
                             if event_type == STRANGE_LOOP_STEP_COMPLETED:
                                 step_id = str(data.get("step_id", "")).strip()
+                                _apply_backend_loop_tokens_event(
+                                    adapter,
+                                    data,
+                                    source="step_completed",
+                                    step_id=step_id,
+                                )
                                 if step_id:
                                     # Drain buffered tools that still reference this
                                     # step (or its sibling parallel steps) while
@@ -4086,6 +4167,11 @@ async def execute_task_textual(
 
                             if event_type == STRANGE_LOOP_PLAN_PHASE:
                                 label = str(data.get("label", "")).strip()
+                                _apply_backend_loop_tokens_event(
+                                    adapter,
+                                    data,
+                                    source="plan_phase",
+                                )
                                 if label and adapter._set_spinner:
                                     await adapter._set_spinner(map_plan_phase_spinner_label(label))
                                 elif label:
@@ -4267,8 +4353,6 @@ async def execute_task_textual(
             config=config,
             daemon_session=daemon_session,
             pending_text_by_namespace=pending_text_by_namespace,
-            captured_input_tokens=captured_input_tokens,
-            captured_output_tokens=captured_output_tokens,
             turn_stats=turn_stats,
             start_time=start_time,
             app_exiting=app_exiting,
@@ -4286,9 +4370,8 @@ async def execute_task_textual(
     await _report_and_persist_tokens(
         adapter,
         config,
-        captured_input_tokens,
-        captured_output_tokens,
         daemon_session=daemon_session,
+        turn_stats=turn_stats,
     )
     return turn_stats
 

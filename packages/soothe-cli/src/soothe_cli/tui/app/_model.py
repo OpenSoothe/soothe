@@ -271,6 +271,8 @@ class _ModelMixin:
             daemon_session=self._daemon_session,
             model_name=settings.model_name,
             context_limit=settings.model_context_limit,
+            input_tokens=self._loop_baseline_tokens + self._loop_input_tokens,
+            output_tokens=self._loop_output_tokens,
         )
 
     async def _show_context_viewer(self) -> None:
@@ -478,9 +480,7 @@ class _ModelMixin:
             self._pending_messages.clear()
             self._queued_widgets.clear()
             await self._clear_messages()
-            self._context_tokens = 0
-            self._tokens_approximate = False
-            self._update_tokens(0)
+            self._reset_loop_token_usage(None)
             self._update_status("")
 
             status = await self._daemon_session.switch_loop(loop_id)

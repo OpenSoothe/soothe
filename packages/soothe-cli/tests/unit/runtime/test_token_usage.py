@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from soothe_cli.runtime.token_usage import (
-    extract_stream_message_token_usage,
-    merge_context_token_totals,
-)
+from soothe_cli.runtime.token_usage import extract_stream_message_token_usage
 
 
 def test_extract_usage_metadata_split_counts() -> None:
@@ -32,18 +29,30 @@ def test_extract_response_metadata_openai_shape() -> None:
     assert extract_stream_message_token_usage(message) == (512, 64, 576)
 
 
-def test_extract_wire_dict_response_metadata() -> None:
+def test_extract_wire_dict_response_metadata_enveloped() -> None:
     wire = {
         "type": "ai",
-        "content": "hello",
-        "response_metadata": {
-            "token_usage": {"prompt_tokens": 200, "completion_tokens": 10, "total_tokens": 210}
+        "data": {
+            "type": "ai",
+            "content": "",
+            "response_metadata": {
+                "token_usage": {"prompt_tokens": 200, "completion_tokens": 10, "total_tokens": 210}
+            },
         },
     }
     assert extract_stream_message_token_usage(wire) == (200, 10, 210)
 
 
-def test_merge_context_token_totals_prefers_largest() -> None:
-    assert merge_context_token_totals(100, 50, 20, 0) == 100
-    assert merge_context_token_totals(50, 50, 20, 0) == 70
-    assert merge_context_token_totals(100, 0, 0, 150) == 150
+def test_message_has_token_usage_metadata() -> None:
+    from soothe_cli.runtime.token_usage import message_has_token_usage_metadata
+
+    assert message_has_token_usage_metadata({"type": "ai", "content": ""}) is False
+    assert (
+        message_has_token_usage_metadata(
+            {
+                "type": "ai",
+                "usage_metadata": {"input_tokens": 1, "output_tokens": 2, "total_tokens": 3},
+            }
+        )
+        is True
+    )

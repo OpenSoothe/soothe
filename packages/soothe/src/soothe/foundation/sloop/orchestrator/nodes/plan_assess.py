@@ -55,7 +55,13 @@ async def _emit_plan_phase_status(
     label: str,
 ) -> None:
     """Update TUI spinner/status while plan assess or generate LLM calls run."""
-    await ctx.emit("plan_phase_status", {"label": label})
+    await ctx.emit(
+        "plan_phase_status",
+        {
+            "label": label,
+            "total_tokens_used": ctx.loop_state.total_tokens_used,
+        },
+    )
 
 
 # Ordered progress buckets shared by the digest hint and StatusAssessment.goal_progress.
@@ -357,6 +363,7 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
         context_engine=ctx.ce,
         plan_gap=ctx.scratch.plan_gap,
     )
+    await _emit_plan_phase_status(ctx, label=_PLAN_ASSESS_STATUS_LABEL)
     ctx.scratch.plan_assessment = assessment
 
     _log_prior_progress_disagreement(state, assessment)
