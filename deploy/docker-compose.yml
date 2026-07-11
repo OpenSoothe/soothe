@@ -10,6 +10,7 @@
 #   DASHSCOPE_API_KEY=...                   # DashScope provider key
 # Optional:
 #   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory (default: $HOME)
+# Logs are bind-mounted from $HOME/.soothe/logs → /var/lib/soothe/logs in the container.
 
 services:
   soothe-pgvector:
@@ -73,7 +74,7 @@ services:
     volumes:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.prod.yml:/app/config.yml:ro
-      - ./logs:/var/lib/soothe/logs
+      - ${HOME}/.soothe/logs:/var/lib/soothe/logs
       - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
     deploy:
       resources:
