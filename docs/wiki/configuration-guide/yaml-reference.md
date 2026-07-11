@@ -47,6 +47,7 @@ The full set of sections:
 | `skillify` | `SkillifyConfig` | Daemon-shared semantic skill warehouse indexing and retrieval |
 | `tools` | `ToolsConfig` | Tool group enable/disable + config |
 | `mcp_servers` | `MCPServerConfig` (list) | External MCP server connections |
+| `mcp_builtins` | `list[str]` | Opt-in builtin MCP names (playwright, github, slack, postgres, gdrive); merged into `mcp_servers` at load |
 | `observability` | `ObservabilityConfig` | Logging, verbosity, Langfuse |
 | `persistence` | `PersistenceConfig` | SQLite / PostgreSQL backends + pools |
 | `vector_stores` | `VectorStoreProviderConfig` (list) | Vector storage backends |

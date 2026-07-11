@@ -8,7 +8,6 @@ from soothe.middleware.system_prompt import SystemPromptMiddleware
 from soothe.runner import SootheRunner
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_end_to_end_prompt_optimization_enabled(test_config: SootheConfig):
     """System prompt optimization middleware is always present on the Soothe stack."""
@@ -24,7 +23,6 @@ async def test_end_to_end_prompt_optimization_enabled(test_config: SootheConfig)
         await runner.cleanup()
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_end_to_end_prompt_optimization_disabled(test_config: SootheConfig):
     """No config flag disables optimization; stack remains unchanged (regression guard)."""

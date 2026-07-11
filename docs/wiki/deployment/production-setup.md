@@ -498,19 +498,23 @@ For container deployments, workspace paths need mapping between host and contain
 
 ### Docker Compose Workspace Mount
 
+Compose bind-mounts `$HOME` by default (`SOOTHE_WORKSPACE_HOST_ROOT` optional):
+
 ```yaml
 services:
   soothed:
     volumes:
-      # Host workspace → container workspace
-      - /Users/yourname/Workspace:/var/lib/soothe/workspaces
+      # Host workspace → container workspace (default source: $HOME)
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
 ```
 
 ### Configuration Mapping
 
+`deploy/config.prod.yml` resolves `host_root` from the same env var Compose injects (default `$HOME`):
+
 ```yaml
 workspace_mount:
-  host_root: /Users/yourname/Workspace
+  host_root: ${SOOTHE_WORKSPACE_HOST_ROOT}
   container_root: /var/lib/soothe/workspaces
 ```
 

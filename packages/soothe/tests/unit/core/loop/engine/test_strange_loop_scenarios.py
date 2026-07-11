@@ -7,6 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.config.models import (
+    ExecutePromptLedgerConfig,
+    PlanPromptLedgerConfig,
+)
 from soothe.foundation.sloop import StrangeLoop
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
@@ -54,7 +58,13 @@ class MockLoopPlanner:
         self._model = MagicMock()
 
     async def assess_status(
-        self, goal: str, state, context: PlanContext, *, context_engine: Any | None = None
+        self,
+        goal: str,
+        state,
+        context: PlanContext,
+        *,
+        context_engine: Any | None = None,
+        **_kwargs: Any,
     ):
         """Assess-only call for split graph flow."""
         from soothe.foundation.sloop.state.schemas import StatusAssessment
@@ -132,6 +142,7 @@ class MockLoopPlanner:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        **_kwargs: Any,
     ):
         """Generate plan after assessment (split graph flow)."""
         self._generate_count += 1
@@ -191,6 +202,12 @@ class MockLoopPlanner:
             next_action="Working on it",
             reasoning="fallback",
         )
+
+    async def analyze_plan_gap(
+        self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
+    ) -> Any:
+        """Read-only gap analysis (IG-557); stub returns no gaps."""
+        return None
 
     async def plan(self, goal: str, state, context: PlanContext) -> PlanResult:
         """Legacy unified plan method (not used by split graph flow)."""
@@ -312,6 +329,20 @@ def _make_config(max_iterations: int = 8) -> MagicMock:
     al.concurrency.max_parallel_goals = 1
     al.concurrency.max_parallel_tools = 5
     al.concurrency.max_parallel_subagents = 4
+    # Async checkpoint worker config (LoopCheckpointAsyncConfig). Must be real
+    # floats — a MagicMock here makes ``asyncio.sleep(flush_interval)`` raise
+    # TypeError on every tick, and the worker's ``except Exception`` swallows
+    # it with no sleep, producing a ~100% CPU busy-loop that hangs the test.
+    al.concurrency.checkpoint.flush_interval = 5.0
+    al.concurrency.checkpoint.close_timeout_seconds = 5.0
+    al.concurrency.checkpoint.durable_flush_timeout = 5.0
+    # Execute/plan prompt-ledger config must be real typed instances — a
+    # MagicMock here makes ``cross_goal_completion_tail > 0`` raise TypeError
+    # inside execute-step projection and fail every parallel step. Typed
+    # defaults satisfy both the direct attribute access in strange_loop and
+    # the numeric comparisons in plan_ledger_projection.
+    al.execute_prompt_ledger = ExecutePromptLedgerConfig()
+    al.plan_prompt_ledger = PlanPromptLedgerConfig()
     # Thread switch policy: set on loop config directly, not on limits
     # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
     al.thread_switch_policy = None
@@ -414,7 +445,9 @@ async def test_loop_agent_max_iterations() -> None:
             self._assess_count = 0
             self._generate_count = 0
 
-        async def assess_status(self, goal, state, context, *, context_engine: Any | None = None):
+        async def assess_status(
+            self, goal, state, context, *, context_engine: Any | None = None, **_kwargs: Any
+        ):
             """Assess-only: always needs more work."""
             self._assess_count += 1
             return StatusAssessment(
@@ -433,6 +466,7 @@ async def test_loop_agent_max_iterations() -> None:
             *,
             plan_manager: Any = None,
             context_engine: Any | None = None,
+            **_kwargs: Any,
         ):
             """Generate: always new steps."""
             self._generate_count += 1
@@ -454,6 +488,11 @@ async def test_loop_agent_max_iterations() -> None:
                 next_action="I'll take another step toward the goal.",
                 goal_progress="none",
             )
+
+        async def analyze_plan_gap(
+            self, goal, state, context, *, context_engine: Any | None = None
+        ) -> Any:
+            return None
 
         async def plan(self, goal, state, context):
             self.plan_count += 1
@@ -507,7 +546,9 @@ async def test_loop_agent_parallel_execution() -> None:
             self._generate_count = 0
             self._model = MagicMock()
 
-        async def assess_status(self, goal, state, context, *, context_engine: Any | None = None):
+        async def assess_status(
+            self, goal, state, context, *, context_engine: Any | None = None, **_kwargs: Any
+        ):
             """Assess-only for parallel execution."""
             self._assess_count += 1
             if self._assess_count == 1:
@@ -533,6 +574,7 @@ async def test_loop_agent_parallel_execution() -> None:
             *,
             plan_manager: Any = None,
             context_engine: Any | None = None,
+            **_kwargs: Any,
         ):
             """Generate parallel steps."""
             self._generate_count += 1
@@ -561,6 +603,11 @@ async def test_loop_agent_parallel_execution() -> None:
                 next_action="I'm finished with the parallel work.",
                 goal_progress="complete",
             )
+
+        async def analyze_plan_gap(
+            self, goal, state, context, *, context_engine: Any | None = None
+        ) -> Any:
+            return None
 
         async def plan(self, goal, state, context):
             self.plan_count += 1

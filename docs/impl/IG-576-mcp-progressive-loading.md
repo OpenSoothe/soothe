@@ -19,6 +19,8 @@ Close the MCP progressive disclosure runtime gap: deferred tools must be discove
 - [x] `search_mcp_tools` stub (always registered when deferred MCP tools exist)
 - [x] Unit tests
 - [x] Legacy cleanup (flat MCP state, dead middleware APIs)
+- [x] Integration test: progressive MCP surfacing
+- [x] Builtin deferred MCP catalog (`mcp_builtins` opt-in)
 - [x] `./scripts/verify_finally.sh`
 
 ## Files
@@ -30,5 +32,8 @@ Close the MCP progressive disclosure runtime gap: deferred tools must be discove
 | New | `packages/soothe/src/soothe/middleware/mcp_activation.py` |
 | New | `packages/soothe/tests/unit/mcp/test_progressive_registry.py` |
 | New | `packages/soothe/tests/unit/middleware/test_mcp_activation.py` |
+| New | `packages/soothe/tests/unit/mcp/test_progressive_mcp_tool_surfacing.py` |
+| New | `packages/soothe/tests/unit/mcp/test_builtin_servers.py` |
 | Delete | `packages/soothe/src/soothe/middleware/mcp_tool_search.py` |
-| Modify | `registry.py`, `_builder.py`, `agent/_builder.py`, `system_prompt.py`, `executor.py`, `schemas.py`, `models.py`, `settings.py`, config yml |
+| Delete | `packages/soothe/tests/unit/mcp/test_mcp_integration.py` (superseded) |
+| Modify | `builtin_servers.py`, `registry.py`, `_builder.py`, `agent/_builder.py`, `system_prompt.py`, `executor.py`, `schemas.py`, `models.py`, `settings.py`, `toolkits/progressive/registry.py`, config yml |

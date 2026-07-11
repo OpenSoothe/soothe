@@ -220,3 +220,13 @@ skillify:
   index_collection: soothe_skillify
   index_interval_seconds: 300
   retrieval_top_k: 10
+
+# ============================================================
+# MCP (RFC-412 — progressive disclosure; opt-in builtins)
+# ============================================================
+mcp_servers: []
+mcp_builtins: []
+progressive_mcp:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20

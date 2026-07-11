@@ -54,7 +54,6 @@ def delete_lines_tool(middleware):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestEditFileLinesTool:
     """Integration tests for surgical line editing."""
 
@@ -155,7 +154,6 @@ class TestEditFileLinesTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestInsertLinesTool:
     """Integration tests for line insertion."""
 
@@ -236,7 +234,6 @@ class TestInsertLinesTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestDeleteLinesTool:
     """Integration tests for line deletion."""
 
@@ -316,7 +313,6 @@ class TestDeleteLinesTool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestCodeEditErrorHandling:
     """Test error handling across code editing tools."""
 

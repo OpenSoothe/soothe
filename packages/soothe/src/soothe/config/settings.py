@@ -420,6 +420,24 @@ class SootheConfig(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _resolve_mcp_builtins(self) -> SootheConfig:
+        """Merge opt-in ``mcp_builtins`` names into ``mcp_servers`` (RFC-412)."""
+        if not self.mcp_builtins:
+            return self
+
+        from soothe.mcp.builtin_servers import resolve_mcp_builtins
+
+        resolved = resolve_mcp_builtins(self.mcp_builtins)
+        existing_names = {s.name for s in self.mcp_servers}
+        merged = list(self.mcp_servers)
+        for server in resolved:
+            if server.name not in existing_names:
+                merged.append(server)
+                existing_names.add(server.name)
+        object.__setattr__(self, "mcp_servers", merged)
+        return self
+
+    @model_validator(mode="after")
     def _validate_mcp_server_names(self) -> SootheConfig:
         """Ensure MCP server names are unique (RFC-412)."""
         if self.mcp_servers:
@@ -480,6 +498,14 @@ class SootheConfig(BaseSettings):
 
     mcp_servers: list[MCPServerConfig] = Field(default_factory=list)
     """MCP server configurations (RFC-412). Server names must be unique."""
+
+    mcp_builtins: list[str] = Field(default_factory=list)
+    """Opt-in builtin MCP server names (playwright, github, slack, postgres, gdrive).
+
+    Resolved into ``mcp_servers`` at config load. Empty by default — no MCP servers
+    connect until you list names here or add explicit ``mcp_servers`` entries.
+    All builtins use ``defer: true`` (progressive tool loading).
+    """
 
     progressive_mcp: ProgressiveMCPConfig = Field(default_factory=ProgressiveMCPConfig)
     """RFC-412: Progressive MCP tool listing budget tunables."""

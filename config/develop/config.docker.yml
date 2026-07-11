@@ -89,7 +89,7 @@ observability:
 # Workspace Configuration
 # =============================================================================
 # Maps host paths to container paths so daemon can access client workspaces.
-# Set SOOTHE_WORKSPACE_HOST_ROOT in .env to match your host directory.
+# docker-compose defaults the bind mount to $HOME; set host_root to match (or override SOOTHE_WORKSPACE_HOST_ROOT).
 workspace_mount:
   host_root: /Users/xiamingchen/Workspace
   container_root: /var/lib/soothe/workspaces

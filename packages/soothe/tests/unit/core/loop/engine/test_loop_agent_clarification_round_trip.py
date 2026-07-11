@@ -14,6 +14,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.config.models import (
+    ExecutePromptLedgerConfig,
+    PlanPromptLedgerConfig,
+)
 from soothe.foundation.sloop import StrangeLoop
 from soothe.foundation.sloop.clarification import (
     ClarificationAnswer,
@@ -56,7 +60,13 @@ class _AskUserPlanner:
         self._model = MagicMock()
 
     async def assess_status(
-        self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
+        self,
+        goal: str,
+        state: Any,
+        context: PlanContext,
+        *,
+        context_engine: Any | None = None,
+        **_kwargs: Any,
     ) -> StatusAssessment:
         self._assess_count += 1
         if self._assess_count == 1:
@@ -82,6 +92,7 @@ class _AskUserPlanner:
         *,
         plan_manager: Any = None,
         context_engine: Any | None = None,
+        **_kwargs: Any,
     ) -> PlanResult:
         self._generate_count += 1
         if assessment.status == "done":
@@ -110,6 +121,12 @@ class _AskUserPlanner:
             ),
             next_action="I need to ask the user before proceeding.",
         )
+
+    async def analyze_plan_gap(
+        self, goal: str, state: Any, context: PlanContext, *, context_engine: Any | None = None
+    ) -> Any:
+        """Read-only gap analysis (IG-557); stub returns no gaps."""
+        return None
 
     async def plan(self, goal: str, state: Any, context: PlanContext) -> PlanResult:
         # Legacy unified entry; route through the split methods.
@@ -161,6 +178,19 @@ def _make_config(max_iterations: int = 4) -> Any:
     al.concurrency.max_parallel_goals = 1
     al.concurrency.max_parallel_tools = 5
     al.concurrency.max_parallel_subagents = 4
+    # Async checkpoint worker config (LoopCheckpointAsyncConfig). Must be real
+    # floats — a MagicMock here makes ``asyncio.sleep(flush_interval)`` raise
+    # TypeError on every tick, and the worker's ``except Exception`` swallows
+    # it with no sleep, producing a ~100% CPU busy-loop that hangs the test.
+    al.concurrency.checkpoint.flush_interval = 5.0
+    al.concurrency.checkpoint.close_timeout_seconds = 5.0
+    al.concurrency.checkpoint.durable_flush_timeout = 5.0
+    # Execute/plan prompt-ledger config must be real typed instances — a
+    # MagicMock here makes execute-step projection numeric comparisons raise
+    # TypeError. Typed defaults satisfy both strange_loop's attribute access
+    # and plan_ledger_projection's comparisons.
+    al.execute_prompt_ledger = ExecutePromptLedgerConfig()
+    al.plan_prompt_ledger = PlanPromptLedgerConfig()
     # Thread switch policy: set on loop config directly, not on limits
     # _get_rate_limit_threshold looks at loop_cfg.thread_switch_policy
     al.thread_switch_policy = MagicMock()

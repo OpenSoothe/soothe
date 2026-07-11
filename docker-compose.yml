@@ -42,6 +42,7 @@
 #   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
 #   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
 #   SOOTHE_CONFIG_PATH=./config/develop/config.docker.yml   # Dev daemon config (default)
+#   SOOTHE_WORKSPACE_HOST_ROOT=${HOME}       # Host workspace bind mount (default: $HOME)
 
 services:
   # ===========================================================================
@@ -328,7 +329,7 @@ services:
       - soothe_daemon_data:/var/lib/soothe
       - ${SOOTHE_CONFIG_PATH:-./config/develop/config.docker.yml}:/app/config.yml:ro
       - ./deploy/logs:/var/lib/soothe/logs
-      - ${SOOTHE_WORKSPACE_HOST_ROOT:-/tmp/soothe-workspaces}:/var/lib/soothe/workspaces
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
     deploy:
       resources:
         limits:

@@ -128,18 +128,32 @@ class StrangeLoopStateManager:
         self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
         self._init_lock = asyncio.Lock()
 
-        # RFC-803 / IG-550: async coalesced checkpoint writes (always on)
+        # RFC-803 / IG-550: async coalesced checkpoint writes (always on).
+        # Coerce to float: a non-numeric ``flush_interval`` (e.g. from an
+        # incomplete mock config) would make ``asyncio.sleep`` raise TypeError
+        # on every tick; the worker's broad ``except Exception`` would swallow
+        # it with no sleep and busy-loop at ~100% CPU. Fall back to defaults.
         checkpoint_cfg = (
             config.agent.loop.concurrency.checkpoint
             if config and hasattr(config.agent.loop.concurrency, "checkpoint")
             else None
         )
-        self._flush_interval = checkpoint_cfg.flush_interval if checkpoint_cfg else 5.0
-        self._close_timeout_seconds = (
-            checkpoint_cfg.close_timeout_seconds if checkpoint_cfg else 30.0
+
+        def _coerced(value: Any, default: float) -> float:
+            try:
+                coerced = float(value)
+            except (TypeError, ValueError):
+                return default
+            return coerced if coerced > 0 else default
+
+        self._flush_interval = _coerced(
+            checkpoint_cfg.flush_interval if checkpoint_cfg else 5.0, 5.0
         )
-        self._durable_flush_timeout = (
-            checkpoint_cfg.durable_flush_timeout if checkpoint_cfg else 10.0
+        self._close_timeout_seconds = _coerced(
+            checkpoint_cfg.close_timeout_seconds if checkpoint_cfg else 30.0, 30.0
+        )
+        self._durable_flush_timeout = _coerced(
+            checkpoint_cfg.durable_flush_timeout if checkpoint_cfg else 10.0, 10.0
         )
         self._config = config
         self._loop_writer = None

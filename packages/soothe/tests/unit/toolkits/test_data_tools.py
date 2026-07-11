@@ -13,7 +13,6 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestDataInspectionTools:
     """Integration tests for data file inspection tools."""
 
@@ -84,7 +83,6 @@ class TestDataInspectionTools:
             assert isinstance(result, (str, dict))
 
 
-@pytest.mark.integration
 class TestDataSummaryTools:
     """Integration tests for data summarization tools."""
 
@@ -124,7 +122,6 @@ class TestDataSummaryTools:
             assert isinstance(result, (str, dict))
 
 
-@pytest.mark.integration
 class TestDataQualityTools:
     """Integration tests for data quality validation."""
 
@@ -163,7 +160,6 @@ class TestDataQualityTools:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestDocumentTools:
     """Integration tests for document extraction tools."""
 
@@ -215,7 +211,6 @@ class TestDocumentTools:
             assert "Header" in result
 
 
-@pytest.mark.integration
 class TestDocumentQA:
     """Integration tests for document Q&A capabilities."""
 
@@ -265,7 +260,6 @@ class TestDocumentQA:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestFileInfoTools:
     """Integration tests for file metadata tools."""
 
@@ -305,7 +299,6 @@ class TestFileInfoTools:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.integration
 class TestDataToolErrors:
     """Test error handling for data/document tools."""
 

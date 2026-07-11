@@ -8,7 +8,8 @@
 #
 # Required environment variables (set in deploy/.env):
 #   DASHSCOPE_API_KEY=...                   # DashScope provider key
-#   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory to mount
+# Optional:
+#   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory (default: $HOME)
 
 services:
   soothe-pgvector:
@@ -60,7 +61,7 @@ services:
     environment:
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
       DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL}
-      SOOTHE_WORKSPACE_HOST_ROOT: ${SOOTHE_WORKSPACE_HOST_ROOT}
+      SOOTHE_WORKSPACE_HOST_ROOT: ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}
       SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
       SOOTHE_POSTGRES_BASE_DSN: postgresql://postgres:postgres@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
@@ -73,7 +74,7 @@ services:
       - soothe_daemon_data:/var/lib/soothe
       - ./config.prod.yml:/app/config.yml:ro
       - ./logs:/var/lib/soothe/logs
-      - ${SOOTHE_WORKSPACE_HOST_ROOT:-/tmp/soothe-workspaces}:/var/lib/soothe/workspaces
+      - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
     deploy:
       resources:
         limits:

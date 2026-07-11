@@ -61,7 +61,6 @@ def mock_soothe_home(tmp_path):
         sdk_config.SOOTHE_DATA_DIR = original_sdk_data_dir
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_complete_smart_retry_workflow(tmp_path):
     """Test complete smart retry cycle across all components.
@@ -202,7 +201,6 @@ async def test_complete_smart_retry_workflow(tmp_path):
         assert len(successful_anchors) >= 1  # iteration 0
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_multiple_failures_with_learning_accumulation(tmp_path):
     """Test multiple failures accumulate learning insights.
@@ -279,7 +277,6 @@ async def test_multiple_failures_with_learning_accumulation(tmp_path):
         assert branches[1]["iteration"] == 2  # Earlier failure
 
 
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_branch_pruning_retention_policy(tmp_path):
     """Test branch pruning respects retention policy.

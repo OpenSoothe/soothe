@@ -37,6 +37,7 @@ class TestSootheConfig:
         # Heavy optional tools are disabled by default (opt-in via config)
         assert cfg.tools.deepxiv.enabled is False
         assert cfg.mcp_servers == []
+        assert cfg.mcp_builtins == []
         assert cfg.skills == []
         assert cfg.memory == []
         assert cfg.providers == []

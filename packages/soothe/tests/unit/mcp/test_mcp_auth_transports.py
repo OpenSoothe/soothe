@@ -1,4 +1,4 @@
-"""Integration tests for MCP auth with transports and MCPRegistry (RFC-412).
+"""Unit tests for MCP auth with transports and MCPRegistry (RFC-412).
 
 Tests validate:
 1. Auth header interpolation with env vars

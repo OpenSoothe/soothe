@@ -19,7 +19,10 @@ def test_default_core_includes_surgical_file_ops() -> None:
     assert {"apply_diff", "file_info"}.issubset(DEFAULT_CORE_TOOL_NAMES)
     assert {"run_background", "kill_process"}.issubset(DEFAULT_CORE_TOOL_NAMES)
     assert {"search_skills", "invoke_skill"}.issubset(DEFAULT_CORE_TOOL_NAMES)
-    assert len(DEFAULT_CORE_TOOL_NAMES) == 22
+    assert {"search_mcp_tools", "mcp_resources_list", "mcp_resources_read"}.issubset(
+        DEFAULT_CORE_TOOL_NAMES
+    )
+    assert len(DEFAULT_CORE_TOOL_NAMES) == 25
 
 
 def test_partition_core_and_deferred() -> None:

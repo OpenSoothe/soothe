@@ -211,11 +211,11 @@ class TestNamedConstantsEquivalence:
 
     def test_threshold_values_defined(self) -> None:
         from soothe.foundation.context.planning.completion import (
+            _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
             DAG_DEPENDENCY_THRESHOLD,
             LOW_SUCCESS_RATE_THRESHOLD,
-            SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
         )
 
         assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
         assert DAG_DEPENDENCY_THRESHOLD == 3
-        assert SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
+        assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 2
