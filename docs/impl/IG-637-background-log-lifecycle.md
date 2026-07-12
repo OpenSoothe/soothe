@@ -18,3 +18,7 @@ Dedicated log-tail tool, log retention/cleanup policy, streaming sync stdout.
 ## Verification
 
 - `./scripts/verify_finally.sh`
+
+## Status
+
+**Complete** (phases 1–3). Phase 4 (retention, log-tail tool, sync streaming) deferred.

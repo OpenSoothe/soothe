@@ -18,8 +18,6 @@ Background log files, streaming stdout, persistent shell sessions (phase 2).
 
 - `./scripts/verify_finally.sh`
 
-## Cleanup
+## Status
 
-- Removed legacy `create_execution_tools()` wrapper (use `ExecutionToolkit` / `build_execution_toolkit()`).
-- Deduplicated resolver toolkit construction via `build_execution_toolkit()`.
-- Removed skipped/dead test stubs and redundant execution tests in `test_consolidated_tools.py`.
+**Complete.** Phase 4 deferred.
