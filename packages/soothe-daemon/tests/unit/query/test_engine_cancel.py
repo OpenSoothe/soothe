@@ -474,16 +474,16 @@ async def test_cancel_loop_cancels_subprocess_runner_before_stream_finally() -> 
     await engine.run_query("hello", loop_id="loop-a")
     await asyncio.sleep(0.05)
     assert "loop-a" in engine._active_runners
-    loop_runner = engine._active_runners["loop-a"]
-    assert loop_runner._cancelled is False
+    active = engine._active_runners["loop-a"]
+    assert active.runner._cancelled is False
 
     task = daemon._current_query_task
     assert task is not None
 
     await engine.cancel_loop("loop-a")
 
-    assert loop_runner._cancelled is True
-    assert "loop-a" not in engine._active_runners
+    assert active.runner._cancelled is True
+    assert "loop-a" in engine._active_runners
     assert any(
         m.get("type") == "command_response"
         and m.get("loop_id") == "loop-a"
