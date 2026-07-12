@@ -19,8 +19,6 @@ Log tail tool, auto-cleanup on kill, streaming sync stdout.
 
 - `./scripts/verify_finally.sh`
 
-## Cleanup
+## Status
 
-- Dropped unused ``current_run_dir`` fallback (ContextVar is never set).
-- Consolidated ``run_background`` error payloads via ``_background_run_error()``.
-- Merged config test into ``test_execution_run_background.py``.
+**Complete.** Phase 4 deferred (log-tail tool, retention policy, sync streaming).
