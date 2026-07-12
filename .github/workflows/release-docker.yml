@@ -1,0 +1,194 @@
+name: Release Docker Image
+
+# Builds and pushes Docker images when a GitHub release is published.
+# This workflow is triggered after the PyPI release workflow completes successfully.
+# It builds the image from PyPI packages using the release version as the tag.
+
+on:
+  workflow_run:
+    workflows: ["Release Soothe Packages"]
+    types: [completed]
+    branches: [main, master]
+
+env:
+  REGISTRY: registry.cn-hangzhou.aliyuncs.com
+  NAMESPACE: lacogito
+  IMAGE_NAME: soothed
+  PYTHON_BASE: registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    # Only run if the triggering workflow succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write  # For potential OIDC registry auth
+
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get clean
+          df -h
+
+      - name: Extract release version from workflow_run
+        id: extract_version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          
+          # Get the workflow run details
+          WORKFLOW_RUN='${{ toJson(github.event.workflow_run) }}'
+          HEAD_SHA='${{ github.event.workflow_run.head_sha }}'
+          HEAD_BRANCH='${{ github.event.workflow_run.head_branch }}'
+          
+          echo "head_sha=${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "head_branch=${HEAD_BRANCH}" >> "${GITHUB_OUTPUT}"
+          
+          # Try to get the release tag from the triggering event
+          # For workflow_run triggered by release, we need to find the matching tag
+          RELEASE_TAG="${HEAD_BRANCH}"
+          
+          # If head_branch looks like a version tag, use it
+          if [[ "${HEAD_BRANCH}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+            VERSION="${HEAD_BRANCH#v}"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "✓ Extracted version from branch: ${VERSION}"
+          else
+            # Fall back to checking tags at the SHA
+            TAGS=$(gh api repos/${{ github.repository }}/tags --jq ".[] | select(.commit.sha == \"${HEAD_SHA}\") | .name" 2>/dev/null || echo "")
+            if [ -n "${TAGS}" ]; then
+              FIRST_TAG=$(echo "${TAGS}" | head -1)
+              VERSION="${FIRST_TAG#v}"
+              echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+              echo "✓ Extracted version from tag at SHA: ${VERSION}"
+            else
+              echo "::error::Could not determine release version from workflow_run"
+              exit 1
+            fi
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+          ref: ${{ steps.extract_version.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Verify VERSION file matches release
+        run: |
+          VERSION_FILE=$(tr -d ' \n\r\t' < VERSION)
+          RELEASE_VERSION="${{ steps.extract_version.outputs.version }}"
+          
+          if [ "${VERSION_FILE}" != "${RELEASE_VERSION}" ]; then
+            echo "::warning::VERSION file (${VERSION_FILE}) differs from release tag (${RELEASE_VERSION})"
+            echo "Using release tag version: ${RELEASE_VERSION}"
+          else
+            echo "✓ VERSION file matches release: ${RELEASE_VERSION}"
+          fi
+
+      - name: Wait for PyPI packages with exponential backoff
+        id: wait_pypi
+        env:
+          SOOTHE_VERSION: ${{ steps.extract_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          
+          check_pypi_package() {
+            local pkg="$1"
+            local version="$2"
+            local max_wait=300  # 5 minutes total
+            local interval=5   # Start with 5 seconds
+            local max_interval=30
+            local elapsed=0
+          
+            echo "Checking ${pkg}==${version} on PyPI..."
+          
+            while [ ${elapsed} -lt ${max_wait} ]; do
+              if curl -sf "https://pypi.org/pypi/${pkg}/${version}/json" >/dev/null 2>&1; then
+                echo "✓ ${pkg}==${version} available on PyPI after ${elapsed}s"
+                return 0
+              fi
+              
+              echo "  Not yet available, waiting ${interval}s (elapsed: ${elapsed}s/${max_wait}s)"
+              sleep ${interval}
+              elapsed=$((elapsed + interval))
+              
+              # Exponential backoff
+              interval=$((interval * 2))
+              if [ ${interval} -gt ${max_interval} ]; then
+                interval=${max_interval}
+              fi
+            done
+          
+            echo "::error::Timeout waiting for ${pkg}==${version} on PyPI after ${elapsed}s"
+            return 1
+          }
+          
+          check_pypi_package "soothe" "${SOOTHE_VERSION}"
+          check_pypi_package "soothe-daemon" "${SOOTHE_VERSION}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          version: latest
+
+      - name: Login to Aliyun Container Registry
+        if: ${{ secrets.ALIYUN_REGISTRY_USERNAME != '' && secrets.ALIYUN_REGISTRY_PASSWORD != '' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.ALIYUN_REGISTRY_USERNAME }}
+          password: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.extract_version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.extract_version.outputs.version }}
+            type=semver,pattern={{major}},value=v${{ steps.extract_version.outputs.version }},enable=${{ !startsWith(steps.extract_version.outputs.version, '0.') }}
+          labels: |
+            org.opencontainers.image.title=Soothe Daemon
+            org.opencontainers.image.description=24/7 autonomous agent orchestration daemon
+            org.opencontainers.image.version=${{ steps.extract_version.outputs.version }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packages/soothe-daemon/Dockerfile
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            SOOTHE_VERSION=${{ steps.extract_version.outputs.version }}
+            SOOTHE_DAEMON_VERSION=${{ steps.extract_version.outputs.version }}
+            PYTHON_BASE=${{ env.PYTHON_BASE }}
+          platforms: linux/amd64,linux/arm64
+          push: ${{ secrets.ALIYUN_REGISTRY_USERNAME != '' && secrets.ALIYUN_REGISTRY_PASSWORD != '' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image digest
+        run: |
+          echo "### Docker Image Published" >> ${GITHUB_STEP_SUMMARY}
+          echo "" >> ${GITHUB_STEP_SUMMARY}
+          echo "| Property | Value |" >> ${GITHUB_STEP_SUMMARY}
+          echo "|----------|-------|" >> ${GITHUB_STEP_SUMMARY}
+          echo "| Version | \`${{ steps.extract_version.outputs.version }}\` |" >> ${GITHUB_STEP_SUMMARY}
+          echo "| Tags | \`${{ steps.meta.outputs.tags }}\` |" >> ${GITHUB_STEP_SUMMARY}
+          echo "| Platforms | linux/amd64, linux/arm64 |" >> ${GITHUB_STEP_SUMMARY}
+          echo "| Registry | \`${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}\` |" >> ${GITHUB_STEP_SUMMARY}

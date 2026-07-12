@@ -1,9 +1,14 @@
 name: Build Docker Image
 
+# This workflow handles manual and branch-triggered builds.
+# For release-triggered builds, see release-docker.yml
+
 on:
-  workflow_run:
-    workflows: ["Release Soothe Packages"]
-    types: [completed]
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "**"  # Tag pushes are handled by release.yml
   workflow_dispatch:
     branches:
       - "**"
@@ -34,7 +39,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') || github.event_name == 'workflow_dispatch' }}
+    # Only run on manual dispatch or branch pushes
+    # Release-triggered builds are handled by release-docker.yml
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
 
@@ -58,7 +65,9 @@ jobs:
           set -euo pipefail
           checkout_ref=""
           version=""
+          branch_name=""
           publish_version_tags=false
+          publish_branch_tags=false
 
           api_get() {
             curl -fsSL \
@@ -75,10 +84,18 @@ jobs:
             fi
           }
 
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            checkout_ref="${{ github.event.workflow_run.head_sha }}"
-            publish_version_tags=true
+          # Normalize branch name for Docker tag (replace non-alphanumeric with -)
+          normalize_branch() {
+            echo "$1" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-\+\|-\+$//g'
+          }
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Branch push: build from source with branch tags
+            checkout_ref="${GH_SHA}"
+            branch_name="$(normalize_branch "${GH_REF_NAME}")"
+            publish_branch_tags=true
           elif [ -n "${INPUT_VERSION// }" ]; then
+            # Manual dispatch with version: use tag
             version="${INPUT_VERSION#v}"
             checkout_ref="$(tag_exists "${version}")"
             if [ -z "${checkout_ref}" ]; then
@@ -90,17 +107,24 @@ jobs:
             fi
             publish_version_tags=true
           elif [[ "${GH_REF}" == refs/tags/* ]]; then
+            # Tag ref: build versioned image
             checkout_ref="${GH_REF_NAME}"
             version="${GH_REF_NAME#v}"
             publish_version_tags=true
           else
+            # Fallback: branch/tag dispatch without version
             checkout_ref="${GH_SHA}"
-            publish_version_tags=false
+            if [[ "${GH_REF}" == refs/heads/* ]]; then
+              branch_name="$(normalize_branch "${GH_REF_NAME}")"
+              publish_branch_tags=true
+            fi
           fi
-
+          
           echo "checkout_ref=${checkout_ref}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "branch_name=${branch_name}" >> "${GITHUB_OUTPUT}"
           echo "publish_version_tags=${publish_version_tags}" >> "${GITHUB_OUTPUT}"
+          echo "publish_branch_tags=${publish_branch_tags}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout
         uses: actions/checkout@v5
@@ -178,8 +202,8 @@ jobs:
             exit 0
           fi
 
-          if [ "${{ github.event_name }}" = "workflow_run" ] || \
-             [ "${{ steps.build_context.outputs.publish_version_tags }}" = "true" ]; then
+          # For version tags (from manual dispatch or tag ref) or workflow_run, PyPI packages are required
+          if [ "${{ steps.build_context.outputs.publish_version_tags }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_run" ]; then
             echo "::error::PyPI packages for ${SOOTHE_VERSION} are not available (soothe=${soothe_on_pypi}, soothe-daemon=${daemon_on_pypi}). Release publish must finish before building the Docker image."
             exit 1
           fi
@@ -203,6 +227,7 @@ jobs:
           want=false
           if [ "${{ github.event_name }}" = "workflow_run" ]; then want=true; fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.push_image }}" = "true" ]; then want=true; fi
+          if [ "${{ github.event_name }}" = "push" ]; then want=true; fi
           echo "want_push=${want}" >> "${GITHUB_OUTPUT}"
 
           should=false
@@ -236,10 +261,15 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
           tags: |
+            # Version tags (release builds): latest + version + major.minor
             type=raw,value=latest,enable=${{ steps.build_context.outputs.publish_version_tags == 'true' }}
-            type=sha,prefix=
             type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
+            # Branch tags: latest for main, latest-<branch> for others
+            type=raw,value=latest,enable=${{ steps.build_context.outputs.publish_branch_tags == 'true' && steps.build_context.outputs.branch_name == 'main' }}
+            type=raw,value=latest-${{ steps.build_context.outputs.branch_name }},enable=${{ steps.build_context.outputs.publish_branch_tags == 'true' && steps.build_context.outputs.branch_name != '' && steps.build_context.outputs.branch_name != 'main' }}
+            # Always include SHA for traceability
+            type=sha,prefix=
 
       - name: Build and push daemon image from PyPI (multi-platform)
         if: ${{ steps.build_mode.outputs.mode == 'pypi' }}
