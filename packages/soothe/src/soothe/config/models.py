@@ -1473,7 +1473,7 @@ class ToolTimeoutConfig(BaseModel):
     )
     skip_tools_with_internal_timeout: bool = Field(
         default=True,
-        description="Skip wrapping tools that already have robust internal timeout (run_command, execute)",
+        description="Skip wrapping tools that already have robust internal timeout (run_command)",
     )
 
 
@@ -2615,12 +2615,6 @@ class SecurityConfig(BaseModel):
         require_approval_for_file_types: File types that need user approval.
             Examples: [".env", ".pem", ".key"] - User will be prompted before access
 
-        sandbox: Enable sandboxed execution via SandboxBackendProtocol. When True,
-            the ``execute`` tool (sandbox-backed) is available. When False,
-            the ``execute`` tool is removed. Host-execution tools (run_command,
-            run_python, run_background) are always available regardless of this flag.
-            Default: False
-
     Path Evaluation Order:
     1. Check denied_paths - if matched, deny immediately
     2. Check allowed_paths - if matched, allow
@@ -2628,11 +2622,6 @@ class SecurityConfig(BaseModel):
     4. Apply file type restrictions
     5. Default deny
     """
-
-    sandbox: bool = Field(
-        default=False,
-        description="Enable sandboxed execution (`execute` tool via SandboxBackendProtocol). Host-execution tools (run_command, etc.) are always available. Default: False",
-    )
 
     allow_paths_outside_workspace: bool = False
     require_approval_for_outside_paths: bool = True

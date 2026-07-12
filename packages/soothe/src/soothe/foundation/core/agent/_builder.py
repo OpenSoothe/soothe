@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
 from soothe.foundation.core.agent._execute_filter import (
-    without_execute_tool_when_sandbox_disabled,
+    apply_execute_tool_removal_patch,
+    without_deepagents_execute_tool,
 )
 from soothe.foundation.core.agent._patch_summarization import (
     apply_summarization_patches,
@@ -55,6 +56,7 @@ from soothe.foundation.core.agent._core import CoreAgent  # noqa: E402
 # Apply all patches at module import time (after all imports complete)
 apply_summarization_patches()
 apply_task_tool_patch()
+apply_execute_tool_removal_patch()
 
 logger = logging.getLogger(__name__)
 
@@ -203,13 +205,11 @@ class AgentBuilder:
             all_tools.extend(create_mcp_resource_tools(registry))
             logger.debug("[Init] MCP resource tools added")
 
-        # Filter out execute tool when sandbox is disabled (IG-sandbox)
+        # deepagents registers ``execute``; Soothe uses host execution tools instead.
         before = len(all_tools)
-        all_tools = without_execute_tool_when_sandbox_disabled(
-            all_tools, security_sandbox_enabled=self._config.security.sandbox
-        )
+        all_tools = without_deepagents_execute_tool(all_tools)
         if len(all_tools) < before:
-            logger.debug("Sandbox disabled: execute tool filtered out")
+            logger.debug("Removed deepagents execute tool from resolver tool list")
 
         if (
             self._config.progressive_tools.enabled

@@ -194,9 +194,7 @@ def resolve_tools(
             enabled_tools.append(name)
 
     # Host-execution tools (run_command, run_python, etc.) do not require a
-    # sandbox — they run on the host via subprocess. The `execute`
-    # tool (which needs a SandboxBackendProtocol) is filtered separately in
-    # execute_tool_filter.py.
+    # Host-execution tools run on the host via subprocess (see toolkits.execution).
 
     total_start = time.perf_counter()
 

@@ -20,6 +20,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 
+from soothe.foundation.core.agent._execute_filter import apply_execute_tool_removal_patch
 from soothe.foundation.core.filesystem.discovery_hints import GLOB_TOOL_DESCRIPTION
 
 # OpenAI-compatible chat APIs used by many Soothe providers (e.g. coding-plan) reject
@@ -246,6 +247,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 resolution without callable backend deprecation.
             **kwargs: Passed to FilesystemMiddleware (backend, system_prompt, etc.)
         """
+        apply_execute_tool_removal_patch()
         custom_descriptions = dict(kwargs.pop("custom_tool_descriptions", None) or {})
         custom_descriptions.setdefault("glob", GLOB_TOOL_DESCRIPTION)
         kwargs["custom_tool_descriptions"] = custom_descriptions

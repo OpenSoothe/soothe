@@ -497,13 +497,11 @@ vector_store_router:
 # ============================================================
 # SECURITY & WORKSPACE
 # ============================================================
-# SecurityConfig — sandbox enables execute tool via SandboxBackendProtocol.
-# Path evaluation: denied_paths → allowed_paths → workspace boundary → file types.
+# SecurityConfig — path evaluation: denied_paths → allowed_paths → workspace boundary.
 # FilesystemMiddlewareConfig — backup on delete; sandboxing from security.allow_paths_outside_workspace.
 # WorkspaceMountConfig — host_root + container_root for container deployments (RFC-621).
 
 security:
-  sandbox: false
   allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true
   denied_paths:

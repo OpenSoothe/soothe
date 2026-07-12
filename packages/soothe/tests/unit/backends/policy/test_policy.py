@@ -132,7 +132,7 @@ class TestExtractRequiredPermission:
         """Test extracting shell execute permission."""
         action = ActionRequest(
             action_type="tool_call",
-            tool_name="execute",
+            tool_name="run_command",
             tool_args={"command": "ls -la"},
         )
 
@@ -231,7 +231,7 @@ class TestConfigDrivenPolicy:
 
         action = ActionRequest(
             action_type="tool_call",
-            tool_name="execute",
+            tool_name="run_command",
             tool_args={"command": "ls -la"},
         )
 
