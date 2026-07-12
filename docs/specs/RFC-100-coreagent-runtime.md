@@ -96,7 +96,9 @@ Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in 
 
 ### Tools
 
-**Execution** (RFC-101): `execute`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
+**Execution** (RFC-101): `run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process` (host subprocess tools; deepagents `execute` is stripped).
+
+**Filesystem** (deepagents middleware): `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
 
 **Websearch**: `TavilySearchResults`, `DuckDuckGoSearchRun`.
 

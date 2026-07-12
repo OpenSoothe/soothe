@@ -136,7 +136,7 @@ For protocol-orchestrated execution (policy validation, memory persistence, even
 
 - **Lazy CoreAgent** — when `config.agent.runtime.lazy_core_agent` is `True`, the runner wraps CoreAgent in `LazyCoreAgent` that defers graph compilation until first use. This speeds startup but means protocol properties may be `None` until materialization.
 - **Model override** — per-execution model override is available via `config.configurable["model_override"]`, handled by middleware, not CoreAgent itself.
-- **Sandbox tool filtering** — `without_execute_tool_when_sandbox_disabled()` removes the execute tool when sandbox mode is active. This is applied during builder construction, not at runtime.
+- **Host execution only** — deepagents registers a sandbox-backed `execute` tool by default; Soothe strips it at builder construction and via a `FilesystemMiddleware` init patch (`_execute_filter.py`). Shell access is only through host tools (`run_command`, `run_background`, etc.) from `toolkits.execution`.
 
 ---
 

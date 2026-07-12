@@ -323,7 +323,6 @@ See [Backup Recovery](backup-recovery.md)
 
 ```yaml
 security:
-  sandbox: false  # Enable for restrictive environments
   allow_paths_outside_workspace: false
   denied_paths:
     - /etc/**
