@@ -1,0 +1,93 @@
+"""Extended unit tests for run_command output handling and subprocess wiring."""
+
+from __future__ import annotations
+
+import subprocess
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from soothe.toolkits.execution import RunCommandShellTool
+
+
+def _completed(stdout: str, returncode: int = 0) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args="cmd", returncode=returncode, stdout=stdout, stderr="")
+
+
+class TestRunCommandOutputHandling:
+    def test_strips_ansi_escape_sequences(self) -> None:
+        tool = RunCommandShellTool(max_output_length=10_000)
+        raw = "hello \x1B[31mworld\x1B[0m"
+        with patch(
+            "soothe.toolkits.execution._run_shell_command_sync",
+            return_value=_completed(raw),
+        ):
+            result = tool._run("echo test")
+        assert "\x1B" not in result
+        assert "hello world" in result
+
+    def test_truncates_output_at_max_length(self) -> None:
+        tool = RunCommandShellTool(max_output_length=20)
+        with patch(
+            "soothe.toolkits.execution._run_shell_command_sync",
+            return_value=_completed("x" * 100),
+        ):
+            result = tool._run("echo big")
+        assert len(result) <= 20 + len("\n... (output truncated)")
+        assert result.endswith("... (output truncated)")
+
+    def test_per_call_timeout_forwarded(self) -> None:
+        tool = RunCommandShellTool(timeout=60)
+        with patch("soothe.toolkits.execution._run_shell_command_sync") as mock_run:
+            mock_run.return_value = _completed("ok")
+            tool._run("sleep 1", timeout=5)
+        mock_run.assert_called_once()
+        assert mock_run.call_args.kwargs["timeout"] == 5
+
+    def test_oserror_returns_error_string(self) -> None:
+        tool = RunCommandShellTool()
+        with patch(
+            "soothe.toolkits.execution._run_shell_command_sync",
+            side_effect=OSError("bad fd"),
+        ):
+            result = tool._run("echo x")
+        assert "Error executing command: bad fd" in result
+
+    def test_nonzero_exit_still_returns_merged_stdout(self) -> None:
+        tool = RunCommandShellTool()
+        with patch(
+            "soothe.toolkits.execution._run_shell_command_sync",
+            return_value=_completed("stderr merged\n", returncode=1),
+        ):
+            result = tool._run("false")
+        assert "stderr merged" in result
+
+
+class TestRunCommandWorkspaceWiring:
+    def test_passes_resolved_cwd_to_subprocess(self, tmp_path) -> None:
+        tool = RunCommandShellTool(workspace_root=str(tmp_path))
+        with patch("soothe.toolkits.execution._run_shell_command_sync") as mock_run:
+            mock_run.return_value = _completed("")
+            tool._run("pwd")
+        assert mock_run.call_args.kwargs["cwd"] == str(tmp_path.resolve())
+
+    def test_runtime_workspace_overrides_workspace_root(self, tmp_path) -> None:
+        client = tmp_path / "client"
+        client.mkdir()
+        tool = RunCommandShellTool(workspace_root="/daemon")
+        runtime = MagicMock()
+        runtime.config = {"configurable": {"workspace": str(client)}}
+        with patch("soothe.toolkits.execution._run_shell_command_sync") as mock_run:
+            mock_run.return_value = _completed("")
+            tool._run("pwd", runtime=runtime)
+        assert mock_run.call_args.kwargs["cwd"] == str(client.resolve())
+
+    def test_virtual_path_translation_before_subprocess(self, tmp_path) -> None:
+        security = MagicMock()
+        security.allow_paths_outside_workspace = False
+        tool = RunCommandShellTool(workspace_root=str(tmp_path), security_config=security)
+        with patch("soothe.toolkits.execution._run_shell_command_sync") as mock_run:
+            mock_run.return_value = _completed("")
+            tool._run("cat /notes.txt")
+        cmd = mock_run.call_args.args[0]
+        assert cmd == f"cat {tmp_path.resolve()}/notes.txt"

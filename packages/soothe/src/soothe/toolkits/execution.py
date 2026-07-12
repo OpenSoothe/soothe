@@ -132,6 +132,21 @@ class RunCommandInput(BaseModel):
     )
 
 
+def _process_is_alive(pid: int) -> bool:
+    """Return whether ``pid`` still exists (signal 0 probe)."""
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        # Permission denied or similar — treat as alive so callers can escalate.
+        return True
+    else:
+        return True
+
+
 def _kill_process_tree(pid: int, *, sig: int = signal.SIGKILL) -> None:
     """Terminate ``pid`` and its descendants (process group on Unix)."""
     if pid <= 0:
@@ -325,7 +340,8 @@ class RunPythonREPLTool(PythonREPLTool):
     name: str = "run_python"
     description: str = (
         "Execute Python code in a persistent Python REPL (langchain_experimental). "
-        "Variables and imports persist across calls for this tool instance. "
+        "Variables and imports persist across calls on the same tool instance "
+        "(reset when the agent tool catalog is rebuilt). "
         "Parameters: code (required). Use print(...) to display values."
     )
     args_schema: type[BaseModel] = RunPythonInput
@@ -463,7 +479,7 @@ class KillProcessTool(BaseTool):
     )
 
     def _run(self, pid: int) -> str:
-        """Terminate background process.
+        """Terminate background process and its children.
 
         Args:
             pid: Process ID to terminate
@@ -471,16 +487,25 @@ class KillProcessTool(BaseTool):
         Returns:
             Status message
         """
+        if pid <= 0:
+            return f"Error: invalid process ID {pid}"
+
         try:
-            os.kill(pid, signal.SIGTERM)
+            os.kill(pid, 0)
         except ProcessLookupError:
             return f"Process {pid} not found or already terminated"
         except PermissionError:
             return f"Error killing process {pid}: permission denied"
         except OSError as e:
             return f"Error killing process: {e}"
-        else:
+
+        _kill_process_tree(pid, sig=signal.SIGTERM)
+        if _process_is_alive(pid):
+            _kill_process_tree(pid, sig=signal.SIGKILL)
+
+        if not _process_is_alive(pid):
             return f"Process {pid} terminated"
+        return f"Process {pid} termination signaled (process may still be shutting down)"
 
     async def _arun(self, pid: int) -> str:
         """Async execution (delegates to sync)."""
@@ -515,15 +540,7 @@ class ExecutionToolkit:
         self._max_output_length = max_output_length
 
     def get_tools(self) -> list[BaseTool]:
-        """Get list of langchain tools.
-
-        Args:
-            workspace_root: Working directory for shell sessions.
-            timeout: Default timeout for shell commands.
-
-        Returns:
-            List of execution BaseTool instances.
-        """
+        """Return the four execution tool instances for this toolkit."""
         return [
             RunCommandShellTool(
                 workspace_root=self._workspace_root,
@@ -540,29 +557,27 @@ class ExecutionToolkit:
         ]
 
 
-def create_execution_tools(
+def build_execution_toolkit(
     *,
+    config: Any | None = None,
     workspace_root: str = "",
-    timeout: int = 60,
-    security_config: Any = None,
-    max_output_length: int = DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
-) -> list[BaseTool]:
-    """Factory function to create execution tools.
-
-    Args:
-        workspace_root: Working directory for commands.
-        timeout: Default command timeout in seconds.
-
-    Returns:
-        List of execution BaseTool instances.
-    """
-    toolkit = ExecutionToolkit(
+    timeout: int = DEFAULT_EXECUTE_TIMEOUT,
+    security_config: Any | None = None,
+    max_output_length: int | None = None,
+) -> ExecutionToolkit:
+    """Construct :class:`ExecutionToolkit` from resolver or plugin config."""
+    if security_config is None and config is not None:
+        security_config = getattr(config, "security", None)
+    return ExecutionToolkit(
         workspace_root=workspace_root,
         timeout=timeout,
         security_config=security_config,
-        max_output_length=max_output_length,
+        max_output_length=(
+            max_output_length
+            if max_output_length is not None
+            else _execution_max_output_from_config(config)
+        ),
     )
-    return toolkit.get_tools()
 
 
 def _execution_max_output_from_config(config: Any | None) -> int:
@@ -598,14 +613,12 @@ class ExecutionPlugin:
         """
         workspace_root = getattr(context.config, "workspace_root", "")
         timeout = getattr(context.config, "timeout", 60)
-        security_config = getattr(context.soothe_config, "security", None)
 
-        toolkit = ExecutionToolkit(
+        self._tools = build_execution_toolkit(
+            config=context.soothe_config,
             workspace_root=workspace_root,
             timeout=timeout,
-            security_config=security_config,
-        )
-        self._tools = toolkit.get_tools()
+        ).get_tools()
 
         context.logger.info(
             "Loaded %d execution tools (workspace=%s, timeout=%ds)",
@@ -614,10 +627,14 @@ class ExecutionPlugin:
             timeout,
         )
 
-    def get_tools(self) -> list[BaseTool]:
-        """Get list of langchain tools.
 
-        Returns:
-            List of execution tool instances.
-        """
-        return self._tools
+def _execution_plugin_get_tools(self: ExecutionPlugin) -> list[BaseTool]:
+    """Return tools loaded by :meth:`ExecutionPlugin.on_load`.
+
+    Assigned after class creation because ``@plugin`` replaces ``get_tools`` with
+    an ``@tool`` method scanner that does not apply to toolkit-backed plugins.
+    """
+    return self._tools
+
+
+ExecutionPlugin.get_tools = _execution_plugin_get_tools  # type: ignore[method-assign]
