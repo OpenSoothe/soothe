@@ -76,7 +76,7 @@ The compiled graph state **must** include `messages` with `add_messages` for the
 
 ### 4.4 Model roles
 
-- **Plan** subagent primary model: **always** the router **`think`** role via `SootheConfig.create_chat_model("think")`. The top-level YAML field `subagents.plan.model` is **not** consulted (reserved shape only; same as other subagents).
+- **Plan** subagent primary model: router role from ``subagents.planner.model_role`` (default ``think``) via ``SootheConfig.create_chat_model(role)``. The YAML field ``subagents.planner.model`` (explicit ``provider:model``) is **not** consulted.
 - **Explore** invocations (including those spawned from plan): **`fast`** model inside `create_explore_subagent` from the plan factory; the standalone explore subagent default remains **`fast`** in `resolve_subagents`.
 
 ### 4.5 Future: additional readonly tools

@@ -194,14 +194,6 @@ class SootheRunner(
         durability_ms = (time.perf_counter() - durability_start) * 1000
         logger.debug("Durability resolved in %.1fms", durability_ms)
 
-        # Model for consensus loop (RFC-204 goal validation)
-        self._model: Any | None = None
-        try:
-            self._model = self._config.create_chat_model("think")
-            logger.debug("Consensus model initialized (role=think)")
-        except Exception:
-            logger.debug("Consensus model unavailable; consensus validation will suspend goals")
-
         self._current_thread_id: str | None = None
         self._current_plan: Plan | None = None
         _concurrency_cfg = self._config.agent.loop.concurrency

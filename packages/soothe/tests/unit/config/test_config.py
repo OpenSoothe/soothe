@@ -102,6 +102,7 @@ class TestSootheConfig:
         assert "scout" not in cfg.subagents
         for name in ("planner", "deep_research", "academic_research"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
+        assert cfg.subagents["planner"].model_role == "think"
         assert cfg.subagents["browser_use"].enabled is True
         assert cfg.subagents["browser_use"].model_role == "default"
 
@@ -197,7 +198,7 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.agent.loop.plan_assess_model_role == "think"
         assert cfg.agent.loop.plan_generate_model_role == "think"
-        assert cfg.agent.loop.goal_synthesis_model_role == "think"
+        assert cfg.agent.loop.goal_synthesis_model_role == "default"
 
     def test_loop_plan_model_roles_yaml(self) -> None:
         cfg = SootheConfig(

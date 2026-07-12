@@ -464,7 +464,7 @@ class SootheConfig(BaseSettings):
         # Built-in subagent entries merged before user YAML and plugin registry.
         # browser_use ships in core dependencies.
         builtin_subagents = {
-            "planner": SubagentConfig(),
+            "planner": SubagentConfig(model_role="think"),
             "deep_research": SubagentConfig(),
             "academic_research": SubagentConfig(),
             "browser_use": SubagentConfig(enabled=True, model_role="default"),

@@ -28,6 +28,7 @@ _HEALTH_JSON = """```json
 def mock_config() -> MagicMock:
     """Minimal SootheConfig mock."""
     cfg = MagicMock()
+    cfg.agent.autopilot.monitor_model_role = "think"
     cfg.create_chat_model.return_value = AsyncMock()
     return cfg
 

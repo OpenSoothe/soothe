@@ -46,6 +46,7 @@ def _goal(goal_id: str, *, depends_on: list[str] | None = None) -> MagicMock:
 @pytest.fixture
 def mock_config() -> MagicMock:
     cfg = MagicMock()
+    cfg.agent.autopilot.monitor_model_role = "think"
     cfg.create_chat_model.return_value = AsyncMock()
     return cfg
 

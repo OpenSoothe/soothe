@@ -90,7 +90,9 @@ class GoalBackoffReasoner:
         Args:
             config: SootheConfig with model provider settings
         """
-        self._model: BaseChatModel = config.create_chat_model("think")
+        self._model: BaseChatModel = config.create_chat_model(
+            config.agent.autopilot.monitor_model_role
+        )
         self._soothe_config = config
         self._prompt_template: str = BACKOFF_REASONING_PROMPT
 

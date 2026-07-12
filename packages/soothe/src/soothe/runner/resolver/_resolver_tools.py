@@ -543,8 +543,8 @@ def resolve_subagents(
         if name in ("deep_research", "academic_research"):
             model_override = sub_cfg.model or config.create_chat_model("fast")
         elif name == "planner":
-            # Built-in: always the router ``think`` role (ignore ``subagents.planner.model``).
-            model_override = config.create_chat_model("think")
+            planner_role = sub_cfg.model_role or "think"
+            model_override = config.create_chat_model(planner_role)
         elif name == "browser_use":
             model_override = None
         else:

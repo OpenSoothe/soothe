@@ -49,7 +49,7 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "coding-plan:glm-5"
+      default: "coding-plan:MiniMax-M2.5"
       fast: "coding-plan:kimi-k2.5"
       think: "coding-plan:glm-5"
       image: "coding-plan:kimi-k2.5"
@@ -88,6 +88,8 @@ agent:
     max_parallel_goals: 6
     max_loops: 8
     goal_deadline_seconds: 1209600  # 14d wall-clock budget per dispatched goal
+    monitor_model_role: think
+    consensus_model_role: think
   loop:
     max_plan_steps_per_wave: 10
     concurrency:

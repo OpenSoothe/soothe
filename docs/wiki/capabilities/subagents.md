@@ -50,7 +50,7 @@ Planner is a multi-round planning subagent: it iteratively refines a markdown ex
 
 **Key design decisions:**
 - **Agentic refinement loop** — planning runs multiple refinement rounds, each producing a progressively refined markdown plan, until the model declares "done."
-- **Think-role model** — the resolver always passes the router's `think` role, ensuring the strongest reasoning model is used for plan design.
+- **Configurable model role** — the resolver uses ``subagents.planner.model_role`` (default ``think``) for plan-design loops.
 - **Bounded cost** — explicit cap on `max_plan_rounds` prevents runaway refinement loops.
 - **Registered as `name="planner"`** — the subagent directory is `plan/` but the plugin and subagent name is `planner`. Triggers include `planner`, `decompose`, `roadmap`, `break down`.
 
@@ -84,14 +84,14 @@ If veritas cannot answer with sufficient confidence, it sets `defer=True` and th
 
 Subagents use specific model roles, not the main agent's model. This is a cost optimization:
 
-| Subagent | Model Role | Rationale |
-|----------|------------|-----------|
-| planner | `think` | Plan design needs the strongest reasoning model |
-| deep_research | `fast` | Query generation and summarization are fast-model tasks |
-| academic_research | `fast` | Same fast-model profile as deep_research |
-| browser_use | `default` | Browser step planning uses the default model |
+| Subagent | Model Role | Config | Rationale |
+|----------|------------|--------|-----------|
+| planner | `think` (default) | `subagents.planner.model_role` | Plan design benefits from the reasoning tier |
+| deep_research | `fast` | resolver default | Query generation and summarization are fast-model tasks |
+| academic_research | `fast` | resolver default | Same fast-model profile as deep_research |
+| browser_use | `default` | `subagents.browser_use.model_role` | Browser step planning uses the default model |
 
-The planner subagent's primary model always uses the router's `think` role — planning quality directly determines execution quality. Note that `subagents.<name>.model` config overrides are **ignored** for built-in subagents; the role is fixed by design.
+Built-in subagents ignore ``subagents.<name>.model`` (explicit ``provider:model`` overrides). Use ``model_role`` for router-based selection on ``planner`` and ``browser_use``.
 
 ## Workspace Isolation
 

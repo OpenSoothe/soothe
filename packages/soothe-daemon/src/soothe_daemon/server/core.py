@@ -614,12 +614,14 @@ class SootheDaemon(DaemonHandlersMixin):
                     )
 
                 consensus_model = None
+                consensus_role = self._config.agent.autopilot.consensus_model_role
                 try:
-                    consensus_model = self._config.create_chat_model_with_fallback("think")
+                    consensus_model = self._config.create_chat_model_with_fallback(consensus_role)
                 except Exception:
                     logger.warning(
-                        "[Autopilot] consensus model unavailable after think→default "
-                        "fallback; completed goals will suspend until a model is configured"
+                        "[Autopilot] consensus model unavailable after %s→default "
+                        "fallback; completed goals will suspend until a model is configured",
+                        consensus_role,
                     )
 
                 self._autopilot_service = AutopilotService(
