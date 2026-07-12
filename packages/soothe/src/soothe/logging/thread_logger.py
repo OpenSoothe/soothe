@@ -69,6 +69,7 @@ class ThreadLogger:
         # Buffer for batched writes (performance optimization)
         self._buffer: list[str] = []
         self._last_flush_time: float = time.time()
+        self._goal_completion_chunk_accum: list[str] = []
 
     @property
     def thread_dir(self) -> Path:
@@ -183,6 +184,29 @@ class ThreadLogger:
                         "content": _truncate_for_log(content),
                     }
                 )
+            elif isinstance(msg, AIMessageChunk):
+                from soothe_sdk.ux.loop_stream import is_goal_completion_stream_terminal
+
+                phase = assistant_output_phase(msg)
+                if phase != "goal_completion":
+                    return
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                if content:
+                    self._goal_completion_chunk_accum.append(content)
+                if is_goal_completion_stream_terminal(msg):
+                    cleaned = "".join(self._goal_completion_chunk_accum).strip()
+                    self._goal_completion_chunk_accum.clear()
+                    if cleaned:
+                        self._write_record(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "kind": "conversation",
+                                "role": "assistant",
+                                "text": cleaned,
+                                "phase": "goal_completion",
+                                "namespace": list(namespace),
+                            }
+                        )
             elif isinstance(msg, AIMessage):
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 for tc in tool_calls:
@@ -197,21 +221,8 @@ class ThreadLogger:
                             }
                         )
 
-                # Persist loop-tagged assistant output (plan_direct next-action,
-                # goal_completion final answer for LEDGER_DIRECT, etc.) so
-                # resume replay can rebuild the assistant text. ``LEDGER_DIRECT``
-                # goal completion skips ``_append_goal_completion_ledger_pair``
-                # so the final answer never lands in the checkpoint — without
-                # this persistence path the resumed transcript silently drops
-                # the user-visible result.
-                #
-                # Only fully-assembled ``LoopAIMessage`` instances are logged.
-                # ``AIMessageChunk`` payloads (SYNTHESIZE streaming) are
-                # already accumulated into a ``goal_completion`` LoopAIMessage
-                # appended to ``state.loop_messages`` by the goal_completion
-                # node, so resume picks them up via the checkpoint.
                 phase = assistant_output_phase(msg)
-                if phase and not tool_calls and not isinstance(msg, AIMessageChunk):
+                if phase and not tool_calls:
                     content = msg.content if isinstance(msg.content, str) else str(msg.content)
                     cleaned = content.strip()
                     if cleaned:

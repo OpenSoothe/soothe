@@ -39,6 +39,27 @@ _MSG_PAIR_LENGTH = 2
 _MAX_FULL_RESPONSE_CHARS = 100_000
 
 
+async def _peek_goal_completion_from_ledger(card_manager: Any, loop_id: str) -> str:
+    """Return the best assistant completion body from the live display ledger."""
+    from soothe_sdk.display.transcript_types import MessageType
+
+    ledger = await card_manager.ensure_for_loop(loop_id)
+    cards = ledger.snapshot()
+    for card in reversed(cards):
+        if card.type != MessageType.ASSISTANT:
+            continue
+        if card.loop_output_phase == "goal_completion":
+            content = (card.content or "").strip()
+            if content:
+                return content
+    for card in reversed(cards):
+        if card.type == MessageType.ASSISTANT:
+            content = (card.content or "").strip()
+            if content:
+                return content
+    return ""
+
+
 class QueryAdmission(StrEnum):
     """Result of daemon query admission under ``_query_state_lock``."""
 
@@ -811,6 +832,8 @@ class QueryEngine:
 
         full_response: list[str] = []
         full_response_chars: int = 0  # Track total characters for bounded accumulation
+        goal_completion_response: list[str] = []
+        goal_completion_chars: int = 0
         # Set to True once a phase-tagged loop assistant chunk (plan_direct,
         # goal_completion, autonomous_goal, direct_model, chitchat) has been
         # persisted by ThreadLogger._log_message_event. When true, the legacy
@@ -977,7 +1000,7 @@ class QueryEngine:
                 )
 
                 async def _process_stream() -> None:
-                    nonlocal chunk_count, warning_sent, full_response_chars
+                    nonlocal chunk_count, warning_sent, full_response_chars, goal_completion_chars
                     # Scope cancellation to this stream task only. The daemon keeps a
                     # single ``_current_query_task`` pointer that concurrent queries
                     # overwrite; checking that global slot caused unrelated finished
@@ -1042,11 +1065,16 @@ class QueryEngine:
                                 if full_response_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
                                     full_response.append(part)
                                     full_response_chars += len(part)
+                            from soothe_sdk.ux.loop_stream import assistant_output_phase
+
+                            if assistant_output_phase(msg) == "goal_completion":
+                                for part in text_parts:
+                                    if goal_completion_chars + len(part) < _MAX_FULL_RESPONSE_CHARS:
+                                        goal_completion_response.append(part)
+                                        goal_completion_chars += len(part)
                             # Detect phase-tagged loop assistant output so the
                             # finally block can skip the legacy concat row.
                             if not phase_tagged_assistant_written[0]:
-                                from soothe_sdk.ux.loop_stream import assistant_output_phase
-
                                 if assistant_output_phase(msg):
                                     phase_tagged_assistant_written[0] = True
 
@@ -1209,10 +1237,16 @@ class QueryEngine:
                     card_manager = getattr(d, "_card_manager", None)
                     if card_manager is not None:
                         try:
+                            goal_completion_text = "".join(goal_completion_response).strip()
+                            if not goal_completion_text:
+                                goal_completion_text = await _peek_goal_completion_from_ledger(
+                                    card_manager,
+                                    effective_loop_id,
+                                )
                             await card_manager.freeze_goal_display(
                                 effective_loop_id,
                                 goal_text=effective_text,
-                                goal_completion="".join(full_response),
+                                goal_completion=goal_completion_text,
                             )
                         except Exception:
                             logger.warning(

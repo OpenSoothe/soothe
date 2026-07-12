@@ -172,6 +172,9 @@ class MessageData:
     cognition_goal_snapshot_json: str | None = None
     """JSON blob from ``CognitionGoalTreeMessage.snapshot_dict()`` (COGNITION_GOAL_TREE only)."""
 
+    loop_output_phase: str | None = None
+    """RFC-614 assistant output phase (``goal_completion``, ``plan_direct``, etc.)."""
+
     is_streaming: bool = False
     """Whether the message is still being streamed.
 

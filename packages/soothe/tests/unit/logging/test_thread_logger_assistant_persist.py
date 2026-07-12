@@ -60,12 +60,31 @@ def test_full_loop_ai_message_with_goal_completion_phase_persists(tmp_path: Path
     assert "Total: 42" in conv[0]["text"]
 
 
-def test_streaming_ai_chunk_is_not_persisted_as_conversation_row(tmp_path: Path) -> None:
-    """SYNTHESIZE chunks are already accumulated into a goal_completion AIMessage
-    appended to ``state.loop_messages`` by the orchestrator. Logging each chunk
-    here would create one conversation row per token — never the desired output.
-    """
+def test_streaming_goal_completion_chunks_accumulate_until_terminal(tmp_path: Path) -> None:
+    """Terminal ``goal_completion`` stream frames persist one assembled row."""
+    from soothe_sdk.ux.loop_stream import GOAL_COMPLETION_STREAM_TERMINAL_FIELD
+
     logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="t3")
+    chunk_a = AIMessageChunk(content="There are ", phase="goal_completion")
+    chunk_b = AIMessageChunk(
+        content="3632 files.",
+        phase="goal_completion",
+        **{GOAL_COMPLETION_STREAM_TERMINAL_FIELD: True},
+    )
+
+    logger.log(namespace=(), mode="messages", data=(chunk_a, {}))
+    logger.log(namespace=(), mode="messages", data=(chunk_b, {}))
+    logger._flush_buffer()  # type: ignore[attr-defined]
+
+    rows = _read_jsonl(logger.log_path)
+    conv = [r for r in rows if r.get("kind") == "conversation"]
+    assert len(conv) == 1
+    assert conv[0]["phase"] == "goal_completion"
+    assert conv[0]["text"] == "There are 3632 files."
+
+
+def test_non_terminal_goal_completion_chunk_is_not_persisted(tmp_path: Path) -> None:
+    logger = ThreadLogger(thread_dir=str(tmp_path), thread_id="t3b")
     chunk = AIMessageChunk(content="partial token ")
     chunk.phase = "goal_completion"
 
