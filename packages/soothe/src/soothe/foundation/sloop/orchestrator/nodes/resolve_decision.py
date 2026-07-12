@@ -8,9 +8,11 @@ from typing import Any
 from soothe.foundation.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
+    LoopState,
     StepAction,
     allocate_plan_id,
     assign_plan_step_ids,
+    prepare_decision_for_plan_scoping,
 )
 
 from ..runtime_context import LoopRuntimeContext
@@ -18,8 +20,22 @@ from ..runtime_context import LoopRuntimeContext
 logger = logging.getLogger(__name__)
 
 
+def _scope_decision_for_plan(
+    decision: AgentDecision,
+    state: LoopState,
+    *,
+    reuse_plan_id: str | None,
+) -> AgentDecision:
+    """Normalize, generate, and scope step ids for a new or bootstrapped plan."""
+    decision = prepare_decision_for_plan_scoping(decision, known_plan_ids=state.known_plan_ids())
+    plan_id = reuse_plan_id or allocate_plan_id()
+    state.plan_id = plan_id
+    decision = assign_plan_step_ids(decision, plan_id=plan_id)
+    return normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
+
+
 async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Allocate plan ids, merge keep/new semantics, stash decision on scratch."""
+    """Generate plan ids, merge keep/new semantics, stash decision on scratch."""
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
     plan_result = ctx.scratch.plan_result
@@ -57,22 +73,11 @@ async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any])
             return {"last_outcome": "fatal"}
 
     if plan_result.plan_action == "new":
-        reserved = set(state.dependency_completion_ids())
-        plan_id = allocate_plan_id(decision, reserved_step_ids=reserved)
-        state.plan_id = plan_id
-        decision = assign_plan_step_ids(decision, plan_id=plan_id)
-        decision = normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
+        decision = _scope_decision_for_plan(decision, state, reuse_plan_id=None)
     elif plan_result.plan_action == "keep" and state.current_decision is None:
-        reserved = set(state.dependency_completion_ids())
-        plan_id = state.plan_id or allocate_plan_id(decision, reserved_step_ids=reserved)
-        state.plan_id = plan_id
-        decision = assign_plan_step_ids(decision, plan_id=plan_id)
-        decision = normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
+        decision = _scope_decision_for_plan(decision, state, reuse_plan_id=state.plan_id)
 
     if plan_result.plan_action == "new":
-        # RFC-624 Phase 4 Stage 2: No longer clear completed_step_ids on new plan.
-        # Old step IDs remain in the set but don't interfere with new plan's
-        # dependency resolution (dependency_completion_ids() unions with step_results).
         state.current_decision = decision
 
     ctx.scratch.decision = decision
