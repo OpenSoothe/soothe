@@ -234,9 +234,7 @@ async def test_planner_ask_user_round_trip_records_answer_as_step_result() -> No
     assert asked.origin_node == "execute"
     assert asked.origin_interrupt_id.startswith("planner-ask:")
 
-    # A step_completed event surfaced for the ask_user step. The plan-id
-    # assignment prepends a 3-letter alphabetic prefix to the planner-supplied
-    # id, so accept any id ending in ``ASK-01``.
+    # Plan scoping prepends a 3-char uppercase letter prefix to the planner-supplied id.
     step_completed = [
         e for e in events if e[0] == "step_completed" and e[1].get("step_id", "").endswith("ASK-01")
     ]
