@@ -1,12 +1,13 @@
 name: Build Docker Image
 
-# This workflow handles manual and branch-triggered builds.
-# For release-triggered builds, see release-docker.yml
+# This workflow handles manual and mainline branch pushes.
+# Feature/PR branch pushes do not build images. Release-triggered builds use release-docker.yml.
 
 on:
   push:
     branches:
-      - "**"
+      - main
+      - develop
     tags-ignore:
       - "**"  # Tag pushes are handled by release.yml
   workflow_dispatch:
@@ -39,7 +40,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # Only run on manual dispatch or branch pushes
+    # Manual dispatch or pushes to main/develop only (not PR feature branches).
     # Release-triggered builds are handled by release-docker.yml
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
