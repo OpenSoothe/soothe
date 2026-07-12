@@ -328,6 +328,42 @@ async def test_ensure_for_loop_without_runner_still_opens_ledger(isolated_displa
 
 
 @pytest.mark.asyncio
+async def test_freeze_goal_display_prefers_goal_completion_phase_text(
+    isolated_display_db,
+) -> None:
+    """RFC-631 freeze must use goal_completion wire text, not mixed full_response."""
+    from langchain_core.messages import AIMessage, HumanMessage
+
+    manager = LoopCardManager(SimpleNamespace(_runner=MagicMock()))
+    await _seed_messages(
+        manager,
+        "loop_gc",
+        [
+            HumanMessage(content="count files"),
+            AIMessage(
+                content="**Total file count in packages: 3632**",
+                phase="goal_completion",
+            ),
+            AIMessage(
+                content="I'll count all files in the packages directory.",
+                phase="plan_direct",
+            ),
+        ],
+    )
+    await manager.freeze_goal_display(
+        "loop_gc",
+        goal_id="goal_0",
+        goal_text="count files",
+        goal_completion="**Total file count in packages: 3632**",
+    )
+    snapshots = isolated_display_db.list_goal_snapshots("loop_gc")
+    assert len(snapshots) == 1
+    assert snapshots[0]["goal_completion"] == "**Total file count in packages: 3632**"
+    assistants = [c for c in snapshots[0].get("display_cards", []) if c.get("type") == "assistant"]
+    assert len(assistants) == 2
+
+
+@pytest.mark.asyncio
 async def test_freeze_goal_display_snapshots_current_user_segment_only(
     isolated_display_db,
 ) -> None:

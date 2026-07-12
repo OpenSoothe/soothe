@@ -569,9 +569,16 @@ class LoopCardManager:
                     break
             assistant_text = ""
             for card in reversed(segment):
-                if card.type == MessageType.ASSISTANT and card.content.strip():
+                if card.type != MessageType.ASSISTANT or not card.content.strip():
+                    continue
+                if card.loop_output_phase == "goal_completion":
                     assistant_text = card.content.strip()
                     break
+            if not assistant_text:
+                for card in reversed(segment):
+                    if card.type == MessageType.ASSISTANT and card.content.strip():
+                        assistant_text = card.content.strip()
+                        break
             goal_id = f"{loop_id}_goal_{goal_index}"
             snapshot = build_goal_snapshot(
                 goal_id=goal_id,

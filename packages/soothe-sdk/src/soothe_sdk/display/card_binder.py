@@ -117,6 +117,9 @@ def merge_consecutive_assistant_cards(cards: list[MessageData]) -> list[MessageD
     def _should_merge_run(run: list[MessageData]) -> bool:
         if len(run) < 2:
             return False
+        phases = {card.loop_output_phase for card in run}
+        if len(phases) > 1:
+            return False
         if len(run) >= 3:
             return True
         first, second = run[0].content, run[1].content
@@ -152,21 +155,39 @@ def merge_consecutive_assistant_cards(cards: list[MessageData]) -> list[MessageD
     return merged
 
 
+def _assistant_output_phase(msg: AIMessage | AIMessageChunk) -> str | None:
+    phase = getattr(msg, "phase", None)
+    return phase if isinstance(phase, str) and phase.strip() else None
+
+
 def _append_assistant_text(
     result: list[MessageData],
     msg: AIMessage | AIMessageChunk,
     text: str,
 ) -> None:
-    """Append one assistant delta, merging stream chunks into one card."""
+    """Append one assistant delta, merging stream chunks into one card per phase."""
+    phase = _assistant_output_phase(msg)
     chunk_pos = getattr(msg, "chunk_position", None)
     is_stream_chunk = isinstance(msg, AIMessageChunk) or chunk_pos is not None
     if is_stream_chunk and result and result[-1].type == MessageType.ASSISTANT:
         prior = result[-1]
+        if prior.loop_output_phase == phase:
+            prior.content = prior.content + text
+            if chunk_pos == "last":
+                prior.is_streaming = False
+            elif chunk_pos is not None:
+                prior.is_streaming = True
+            return
+    if (
+        not is_stream_chunk
+        and result
+        and result[-1].type == MessageType.ASSISTANT
+        and result[-1].loop_output_phase == phase
+        and phase is not None
+    ):
+        prior = result[-1]
         prior.content = prior.content + text
-        if chunk_pos == "last":
-            prior.is_streaming = False
-        elif chunk_pos is not None:
-            prior.is_streaming = True
+        prior.is_streaming = False
         return
     is_streaming = chunk_pos not in (None, "last")
     result.append(
@@ -174,6 +195,7 @@ def _append_assistant_text(
             type=MessageType.ASSISTANT,
             content=text,
             is_streaming=is_streaming,
+            loop_output_phase=phase,
         )
     )
 
@@ -325,10 +347,13 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
                 timestamp=event_timestamp,
             )
         if role == "assistant":
+            phase_raw = event.get("phase") or metadata.get("phase")
+            phase = phase_raw if isinstance(phase_raw, str) and phase_raw.strip() else None
             return MessageData(
                 type=MessageType.ASSISTANT,
                 content=content,
                 timestamp=event_timestamp,
+                loop_output_phase=phase,
             )
         return None
 

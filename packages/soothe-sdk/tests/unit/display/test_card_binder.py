@@ -26,6 +26,40 @@ def test_convert_messages_to_data_user_assistant_pair() -> None:
     assert data[1].content == "hi there"
 
 
+def test_convert_messages_to_data_splits_assistant_phases() -> None:
+    """Distinct RFC-614 phases must not merge into one assistant card."""
+    from langchain_core.messages import AIMessage
+
+    messages = [
+        AIMessage(content="**Total file count in packages: 3632**", phase="goal_completion"),
+        AIMessage(content="I'll count all files in the packages directory.", phase="plan_direct"),
+    ]
+    data = card_binder.convert_messages_to_data(messages)
+    assistants = [m for m in data if m.type == MessageType.ASSISTANT]
+    assert len(assistants) == 2
+    assert assistants[0].loop_output_phase == "goal_completion"
+    assert assistants[1].loop_output_phase == "plan_direct"
+
+
+def test_merge_consecutive_assistant_cards_respects_loop_output_phase() -> None:
+    cards = [
+        MessageData(
+            type=MessageType.ASSISTANT,
+            content="Answer with 3632 files.",
+            loop_output_phase="goal_completion",
+            id="msg-a1",
+        ),
+        MessageData(
+            type=MessageType.ASSISTANT,
+            content="I'll count all files next.",
+            loop_output_phase="plan_direct",
+            id="msg-a2",
+        ),
+    ]
+    merged = card_binder.merge_consecutive_assistant_cards(cards)
+    assert len(merged) == 2
+
+
 def test_convert_messages_to_data_merges_assistant_stream_chunks() -> None:
     """Streaming AIMessage chunks must bind to one assistant card (RFC-631 resume)."""
     from langchain_core.messages import AIMessageChunk

@@ -10,6 +10,9 @@ import time
 from typing import Any
 
 from soothe.foundation.context.planning.models import CompletionStrategy
+from soothe.foundation.sloop.engine.goal_completion_output import (
+    reconcile_synthesis_with_step_ledger,
+)
 from soothe.foundation.sloop.engine.synthesis import (
     SynthesisGenerator,
     generate_user_fallback_summary,
@@ -436,6 +439,11 @@ async def node_goal_completion(
             await ctx.emit("stream_event", inner)
 
         final_output = resolve_goal_completion_text(accum)
+
+        final_output = reconcile_synthesis_with_step_ledger(
+            final_output,
+            loop_messages=state.loop_messages,
+        )
 
         logger.info(
             "Synthesis stream: chunks=%d ai_msgs=%d chars=%d",
