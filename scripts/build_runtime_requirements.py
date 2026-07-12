@@ -43,19 +43,6 @@ def main() -> None:
     add_reqs(requirements, core["project"].get("dependencies", []))
     add_reqs(requirements, daemon["project"].get("dependencies", []))
 
-    extras = ["tabular", "document", "github"]
-    if args.include_browser:
-        extras = [
-            "tabular",
-            "document",
-            "github",
-            "claude",
-        ]
-
-    optional = core["project"].get("optional-dependencies", {})
-    for extra in extras:
-        add_reqs(requirements, optional.get(extra, []))
-
     if args.include_browser:
         requirements.append("playwright")
 

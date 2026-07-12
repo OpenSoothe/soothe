@@ -37,41 +37,30 @@ python --version
 Install the complete Soothe stack for everyday use:
 
 ```bash
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+pip install -U soothe soothe-cli soothe-daemon
 ```
 
 This includes:
-- **soothe[all]**: Core runtime plus optional extras (`tabular`, `document`, `github`, `claude`)
+- **soothe**: Core runtime with data tools (CSV/Excel/PDF/DOCX), research, browser-use, and PostgreSQL drivers
 - **soothe-cli**: Interactive TUI and command-line interface
 - **soothe-daemon**: Background daemon (WebSocket)
 
-### Option 2: Core Installation
+### Option 2: Minimal Installation
 
-Install the core framework only:
+Install the core framework and CLI only:
 
 ```bash
 pip install -U soothe soothe-cli
 ```
 
-Add optional capability groups as needed:
-
-```bash
-# Document processing (PDF, DOCX, etc.)
-pip install -U 'soothe[document]'
-
-# GitHub integration
-pip install -U 'soothe[github]'
-
-# Multiple groups
-pip install -U 'soothe[document,github]'
-```
+The base `soothe` package includes all built-in tool dependencies (tabular data, document parsing, web research, browser subagent, PostgreSQL).
 
 ### Option 3: Using uv (Fast Alternative)
 
 If you use [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv pip install 'soothe[all]' soothe-cli soothe-daemon
+uv pip install soothe soothe-cli soothe-daemon
 ```
 
 ### Option 4: From Source
@@ -84,7 +73,7 @@ git clone https://github.com/mirasoth/soothe.git
 cd soothe
 
 # Install with development dependencies
-pip install -e '.[all,dev]' soothe-cli soothe-daemon
+pip install -e '.[dev]' soothe-cli soothe-daemon
 
 # Or use the provided script
 make install-dev
@@ -104,23 +93,17 @@ Soothe is organized as a monorepo with multiple packages:
 | **soothe-sdk** | `soothe-sdk` | Shared protocol types, decorators | Auto-installed |
 | **soothe-plugins** | `soothe-plugins` | Community plugins | Optional |
 
-### Capability Groups
+### Built-in Capabilities
 
-The base `soothe` package already includes research, semantic embedding, DashScope,
-and browser-use dependencies. `soothe[all]` adds the remaining optional groups:
+The `soothe` package includes research (Tavily, Arxiv, Wizsearch), data tools
+(CSV/Excel/Parquet, PDF/DOCX), browser-use, PostgreSQL drivers, and DashScope
+support out of the box.
 
-| Group | Tools Included |
-|-------|----------------|
-| `document` | PDF, DOCX, TXT, Markdown processing |
-| `tabular` | CSV, Excel, Parquet, data analysis |
-| `github` | GitHub API integration |
-| `claude` | Anthropic Claude models and agent SDK |
+**GitHub integration** uses the `gh` CLI (builtin skill) or the GitHub MCP server
+(`mcp_builtins: [github]` with Node.js/npx) — not a Python extra.
 
-Install specific groups:
-
-```bash
-pip install -U 'soothe[document]'
-```
+**Langfuse tracing** is optional: `pip install langfuse` or install soothe from
+source with dev dependencies (`pip install -e '.[dev]'`).
 
 ---
 
@@ -265,7 +248,7 @@ xcode-select --install
 sudo apt-get install -y python3-dev build-essential
 
 # Then retry installation
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+pip install -U soothe soothe-cli soothe-daemon
 ```
 
 **Problem**: `ModuleNotFoundError: No module named 'soothe'`
@@ -277,7 +260,7 @@ which python
 which pip
 
 # Use python -m pip for clarity
-python -m pip install -U 'soothe[all]' soothe-cli soothe-daemon
+python -m pip install -U soothe soothe-cli soothe-daemon
 ```
 
 **Problem**: Version conflicts with existing packages
@@ -286,7 +269,7 @@ python -m pip install -U 'soothe[all]' soothe-cli soothe-daemon
 ```bash
 python -m venv soothe-env
 source soothe-env/bin/activate  # On Windows: soothe-env\Scripts\activate
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+pip install -U soothe soothe-cli soothe-daemon
 ```
 
 ### Configuration Issues
@@ -343,7 +326,7 @@ After successful installation:
 ### Update to Latest Version
 
 ```bash
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+pip install -U soothe soothe-cli soothe-daemon
 ```
 
 ### Check Version

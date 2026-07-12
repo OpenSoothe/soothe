@@ -52,16 +52,6 @@ class HttpRequestsToolkit:
             return []
 
         try:
-            import aiohttp  # noqa: F401 — pulled in by langchain_community.utilities.requests
-        except ModuleNotFoundError:
-            logger.warning(
-                "HttpRequestsToolkit: missing optional dependency `aiohttp` "
-                "(required by langchain-community for HTTP tools). "
-                "Install project dependencies (e.g. `uv sync` at the repo root)."
-            )
-            return []
-
-        try:
             from langchain_community.agent_toolkits.openapi.toolkit import RequestsToolkit
             from langchain_community.utilities.requests import TextRequestsWrapper
         except ImportError as exc:

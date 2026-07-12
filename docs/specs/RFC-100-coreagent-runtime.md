@@ -100,9 +100,13 @@ Concurrent execution: `asyncio.gather([astream(step, thread_id=tid) for step in 
 
 **Filesystem** (deepagents middleware): `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
 
-**Websearch**: `TavilySearchResults`, `DuckDuckGoSearchRun`.
+**Websearch**: `wizsearch_search`, `wizsearch_crawl` (Tavily via langchain-tavily when configured).
 
-**Research** (RFC-601): `ArxivQueryRun`, `WikipediaQueryRun`, `GitHubAPIWrapper`.
+**Data** (RFC-0016): `inspect_data`, `summarize_data`, `check_data_quality`, `extract_text`, `get_data_info`, `ask_about_file`.
+
+**Research subagents**: `deep_research`, `academic_research` (Arxiv, web sources).
+
+**GitHub**: `gh` CLI via builtin skill, or MCP (`mcp_builtins: [github]`).
 
 **Other**: langchain ecosystem tools, custom tools via configuration.
 

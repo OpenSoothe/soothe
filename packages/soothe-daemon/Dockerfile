@@ -4,7 +4,7 @@
 # Build context must be the monorepo root (parent of `packages/`).
 # Published wheels are installed from PyPI (same as end users).
 #
-# Build (default — no browser, core extras only):
+# Build (default — core soothe + daemon):
 #   docker build -f packages/soothe-daemon/Dockerfile \
 #     --build-arg SOOTHE_VERSION=0.5.8 \
 #     -t soothed:latest .
@@ -15,7 +15,7 @@
 #     --build-arg INCLUDE_BROWSER=true \
 #     -t soothed:browser .
 #
-# `soothe[all]` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to the
+# `soothe` is pinned to SOOTHE_VERSION. `soothe-daemon` defaults to the
 # latest PyPI release compatible with that pin (PyPI may lag: newer soothe
 # patch, older daemon-only release). Override when you need an exact daemon:
 #   --build-arg SOOTHE_DAEMON_VERSION=0.5.6
@@ -37,7 +37,7 @@ ARG PYTHON_BASE=registry.cn-hangzhou.aliyuncs.com/lacogito/python:3.12-bookworm
 FROM ${PYTHON_BASE} AS deps
 
 ARG SOOTHE_VERSION=0.5.8
-# Empty = latest soothe-daemon on PyPI compatible with pinned soothe[all].
+# Empty = latest soothe-daemon on PyPI compatible with pinned soothe version.
 ARG SOOTHE_DAEMON_VERSION=
 # Include browser subagent dependencies (playwright/chromium). Default: false.
 ARG INCLUDE_BROWSER=false
@@ -70,15 +70,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
       dspec="soothe-daemon"; \
     fi; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \
-      extras="all"; \
       pip_extras="playwright"; \
     else \
-      extras="document,tabular,github"; \
       pip_extras=""; \
     fi; \
     uv venv /app/.venv; \
     uv pip install --python /app/.venv/bin/python \
-        "soothe[${extras}]==${SOOTHE_VERSION}" \
+        "soothe==${SOOTHE_VERSION}" \
         "${dspec}" \
         ${pip_extras}; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \

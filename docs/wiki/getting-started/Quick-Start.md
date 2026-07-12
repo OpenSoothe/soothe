@@ -65,7 +65,7 @@ Chat-only (no file tools): omit CONTAINER_WS`, `SOOTHE_WORKSPACE_MOUNT`, and the
 ### Local (pip)
 
 ```bash
-pip install -U 'soothe[all]' soothe-daemon
+pip install -U soothe soothe-daemon
 export OPENAI_API_KEY=sk-...
 soothed start
 ```

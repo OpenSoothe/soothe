@@ -53,7 +53,7 @@ This is the most important design decision in the resolver. `resolve_checkpointe
 The rationale: in-memory storage silently loses state on process restart. For a daemon that may run for days, silently degrading to in-memory would cause checkpoint loss, thread state loss, and goal DAG loss — all without error messages. Failing loud at startup is better than failing silent at runtime.
 
 The error messages are explicit about remediation:
-- PostgreSQL: "Install with: `pip install 'soothe[postgres]'`" and "Verify `postgres_base_dsn` and `postgres_databases` configuration."
+- PostgreSQL: verify `postgres_base_dsn` and `postgres_databases` configuration; ensure PostgreSQL is reachable. `psycopg` ships with `soothe` — upgrade with `pip install -U soothe` if import errors persist.
 - SQLite: "Check sqlite3 installation and path configuration."
 
 ---

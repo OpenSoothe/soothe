@@ -16,7 +16,7 @@ from soothe.foundation.workspace.tool_path_resolution import (
 
 
 def resolve_toolkit_local_path(file_path: str, *, config: Any | None) -> Path:
-    """Resolve a local file path for tabular/media tools.
+    """Resolve a local file path for data inspection tools.
 
     Callers must not pass ``http://`` or ``https://`` URIs.
 

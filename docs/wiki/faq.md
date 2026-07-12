@@ -64,12 +64,12 @@ Soothe is a **goal-driven orchestration framework** for building 24/7 long-runni
 
 **Recommended** (full stack):
 ```bash
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+pip install -U soothe soothe-cli soothe-daemon
 ```
 
 **Minimal** (core + CLI): `pip install soothe soothe-cli`
 
-**Optional extras**: `tabular`, `document`, `github`, `all`
+**GitHub**: use the `gh` CLI (builtin skill) or MCP (`mcp_builtins: [github]`); no Python extra required.
 
 See [Installation Guide](getting-started/Installation.md) for details.
 

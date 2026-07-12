@@ -7,7 +7,7 @@ Consolidates single-purpose execution tools into one module:
 - tail_background_log: Read trailing lines from background logs
 - kill_process: Terminate background processes
 
-Follows the pattern from image.py and audio.py.
+Follows the pattern from data.py and file_ops.py.
 """
 
 from __future__ import annotations

@@ -736,8 +736,8 @@ agent:
 # Before (0.3.x)
 pip install soothe
 
-# After (0.4.x)
-pip install 'soothe[all]' soothe-cli soothe-daemon
+# After (0.4.x+)
+pip install soothe soothe-cli soothe-daemon
 ```
 
 **PostgreSQL multi-database** (RFC-802):

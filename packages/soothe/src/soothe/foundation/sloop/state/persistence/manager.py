@@ -55,8 +55,8 @@ class StrangeLoopCheckpointPersistenceManager:
                 )
             except ModuleNotFoundError as exc:
                 raise RuntimeError(
-                    "PostgreSQL persistence backend requires optional dependency "
-                    "`psycopg`. Install soothe with postgres extras."
+                    "PostgreSQL persistence backend requires `psycopg`. "
+                    "Install with: pip install -U soothe"
                 ) from exc
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
             pool_size = config.persistence.metadata_pool_size

@@ -127,7 +127,7 @@ class InformationSource(Protocol):
 | FilesystemSource | filesystem | Local files | None |
 | CLISource | cli | CLI tools | None |
 | BrowserSource | browser | Page/driver capture for research | browser-use |
-| DocumentSource | document | PDF/DOCX parsing | pypdf, docx2txt |
+| DocumentSource | document | PDF/DOCX parsing | PyMuPDF, docx2txt |
 
 ### 4.6 Domain Profiles
 
