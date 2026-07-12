@@ -15,6 +15,11 @@ def check_condition_syntax(condition: str, context: str) -> list[str]:
     """Check GitHub Actions expression syntax."""
     errors = []
 
+    if "secrets." in condition:
+        errors.append(
+            f"ERROR: Secrets cannot be used in if conditions ({context}): {condition}"
+        )
+
     # Check for common syntax issues
     if "${{" in condition and "}}" not in condition:
         errors.append(f"Unbalanced expression brackets in: {condition}")
@@ -53,15 +58,7 @@ def validate_docker_yml(workflow: dict) -> list[str]:
     elif isinstance(triggers, list):
         trigger_names = set(triggers)
 
-    # Should have push trigger for branches
-    if "push" not in trigger_names:
-        errors.append("ERROR: Missing push trigger for branch builds")
-    else:
-        push_config = triggers.get("push", {}) if isinstance(triggers, dict) else {}
-        if "branches" not in push_config and "branches-ignore" not in push_config:
-            errors.append("WARNING: push trigger has no branch filter")
-
-    # Should have workflow_dispatch
+    # Manual branch builds only (release builds use release-docker.yml).
     if "workflow_dispatch" not in trigger_names:
         errors.append("ERROR: Missing workflow_dispatch trigger")
 
@@ -220,6 +217,18 @@ def main():
                         step_name = step.get("name", f"step {step_idx}")
                         cond_errors = check_condition_syntax(step["if"], f"{job_name}/{step_name}")
                         all_errors.extend([(wf_path, e) for e in cond_errors])
+
+                    with_ = step.get("with", {})
+                    for field in ("push",):
+                        value = with_.get(field)
+                        if isinstance(value, str) and "secrets." in value:
+                            step_name = step.get("name", f"step {step_idx}")
+                            all_errors.append(
+                                (
+                                    wf_path,
+                                    f"ERROR: Secrets cannot be used in step inputs ({job_name}/{step_name}.{field}): {value}",
+                                )
+                            )
 
     if not any(e[1].startswith("ERROR") for e in all_errors):
         print("  ✓ All conditional expressions valid")
