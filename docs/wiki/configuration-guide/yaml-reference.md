@@ -84,7 +84,7 @@ The largest section. `AgentConfig` consolidates identity (`name`, `system_prompt
 
 ### Autopilot (`agent.autopilot`)
 
-Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `goal_deadline_seconds` (wall-clock budget per dispatched goal, default **14 days** / `1209600`), `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](../autonomous-mode.md) for detail.
+Controls 24/7 self-running. All fields are ceilings to bound cost and prevent runaway loops. Key ones: `enabled`, `max_iterations` (per goal), `max_parallel_goals`, `max_loops`, `goal_deadline_seconds` (wall-clock budget per dispatched goal, default **14 days** / `1209600`), `monitor_model_role` (AutopilotMonitor LLM reasoners), `consensus_model_role` (RFC-204 goal acceptance), `dreaming_enabled`, `scheduler_enabled`, `max_scheduled_tasks`, `webhooks`. See [Autonomous Mode](../autonomous-mode.md) for detail.
 
 ### Loop (`agent.loop`)
 
@@ -116,7 +116,7 @@ The `default` sentinel in durability lets you set the backend once in `persisten
 
 ## Subagents
 
-A dict of `SubagentConfig` entries. Each has `enabled`, `model` (null → falls back to `fast` role), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. `deep_research` and `academic_research` take `config.effort` (`normal` | `thorough`); `planner` takes `config.routing` (auto/always_direct/always_planner).
+A dict of `SubagentConfig` entries. Each has `enabled`, `model` (explicit `provider:model` override where supported), `model_role` (router role for `planner` and `browser_use`), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. Built-in research subagents default to the `fast` role; `planner` defaults to `think` via `model_role`.
 
 Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Semantic skill search uses top-level `skillify:` (not a subagent).
 

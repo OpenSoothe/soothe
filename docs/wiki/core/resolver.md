@@ -119,17 +119,21 @@ agent:
   protocols:
     memory:
       enabled: true
-      llm_chat_role: think
+      llm_chat_role: fast
       llm_embed_role: embedding
     planner:
-      enabled: true
       model: think
+      routing: auto
     policy:
       enabled: true
       profile: standard
     durability:
       enabled: true
       backend: sqlite  # or postgresql
+
+subagents:
+  planner:
+    model_role: think
 
 persistence:
   default_backend: sqlite  # drives ContextEngine backend too

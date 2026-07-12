@@ -243,7 +243,9 @@ class DagVerificationReasoner:
         Args:
             config: SootheConfig with model provider settings
         """
-        self._model: BaseChatModel = config.create_chat_model("think")
+        self._model: BaseChatModel = config.create_chat_model(
+            config.agent.autopilot.monitor_model_role
+        )
         self._soothe_config = config
 
     async def verify_health(self, snapshot: DagSnapshot) -> DagHealthResponse:

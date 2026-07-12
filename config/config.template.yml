@@ -79,6 +79,8 @@ agent:
     dreaming_enabled: true
     dreaming_consolidation_interval: 300
     dreaming_health_check_interval: 60
+    monitor_model_role: think
+    consensus_model_role: think
     verify_interval: 30
     dreaming_interval: 300
     dreaming_scope: workspace
@@ -136,7 +138,7 @@ agent:
     plan_assess_model_role: think
     plan_gap_analysis_enabled: true
     plan_generate_model_role: think
-    goal_synthesis_model_role: think
+    goal_synthesis_model_role: default
     rules:
       completion:
         dag_dependency_threshold: 3
@@ -379,6 +381,7 @@ subagents:
   planner:
     enabled: true
     model: null
+    model_role: think
     transport: local
     url: null
     config: {}

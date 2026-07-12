@@ -167,7 +167,8 @@ class SubagentConfig(BaseModel):
     model_role: ModelRole | None = Field(
         default=None,
         description=(
-            "Router profile role for browser_use LLM selection. Defaults to ``default`` when unset."
+            "Router profile role for subagents that resolve via ModelRouter. "
+            "``planner`` defaults to ``think`` when unset; ``browser_use`` defaults to ``default``."
         ),
     )
     transport: Literal["local", "acp", "a2a", "langgraph"] = "local"
@@ -693,6 +694,10 @@ class AutopilotConfig(BaseModel):
         dreaming_enabled: Enter dreaming mode when all goals complete.
         dreaming_consolidation_interval: Seconds between memory consolidation during dreaming.
         dreaming_health_check_interval: Seconds between health checks during dreaming.
+        monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
+            DAG verification, dreaming distillation). Defaults to ``think``.
+        consensus_model_role: Router role for RFC-204 goal consensus validation.
+            Defaults to ``think``; daemon uses ``create_chat_model_with_fallback``.
         webhooks: Webhook URLs by event type (e.g., on_goal_completed).
     """
 
@@ -726,6 +731,19 @@ class AutopilotConfig(BaseModel):
     dreaming_enabled: bool = True
     dreaming_consolidation_interval: int = Field(default=300, ge=10)
     dreaming_health_check_interval: int = Field(default=60, ge=5)
+
+    monitor_model_role: ModelRole = Field(
+        default="think",
+        description=(
+            "Router model role for AutopilotMonitor LLM reasoners "
+            "(backoff, DAG verification, dreaming distillation)."
+        ),
+    )
+
+    consensus_model_role: ModelRole = Field(
+        default="think",
+        description="Router model role for RFC-204 goal consensus validation.",
+    )
 
     # RFC-625: AutopilotMonitor settings
     verify_interval: int = Field(
@@ -1555,7 +1573,7 @@ class StrangeLoopConfig(BaseModel):
         tool_timeout: Tool timeout middleware configuration (IG-511).
         plan_assess_model_role: Router role for plan-assess LLM calls (default ``think``).
         plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
-        goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``think``).
+        goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
 
     Note: Performance optimizations (intent/routing classification pipeline, optimize_system_prompts,
     parallel_pre_stream) are always enabled by design and not configurable.
@@ -1808,7 +1826,7 @@ class StrangeLoopConfig(BaseModel):
     )
 
     goal_synthesis_model_role: ModelRole = Field(
-        default="think",
+        default="default",
         description="Router model role for goal-completion synthesis streaming.",
     )
 
