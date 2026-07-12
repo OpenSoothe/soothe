@@ -95,7 +95,6 @@ class TestDataSummaryTools:
 
     def test_summarize_numeric_data(self, summarize_tool) -> None:
         """Test summarizing numeric data with statistics."""
-        pytest.importorskip("pandas")
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_file = Path(tmpdir) / "numbers.csv"
             csv_file.write_text("value\n10\n20\n30\n40\n50\n")
@@ -112,7 +111,6 @@ class TestDataSummaryTools:
 
     def test_summarize_categorical_data(self, summarize_tool) -> None:
         """Test summarizing categorical data."""
-        pytest.importorskip("pandas")
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_file = Path(tmpdir) / "categories.csv"
             csv_file.write_text("category\nA\nA\nB\nC\nA\n")
@@ -169,23 +167,6 @@ class TestDocumentTools:
         from soothe.toolkits.data import ExtractTextTool
 
         return ExtractTextTool()
-
-    def test_extract_text_from_pdf(self, extract_tool) -> None:
-        """Test extracting text from PDF file."""
-        pytest.importorskip("pypdf")
-
-        # Would need actual PDF file for real test
-        pytest.skip("Requires actual PDF file for text extraction")
-
-    def test_extract_text_from_docx(self, extract_tool) -> None:
-        """Test extracting text from DOCX file."""
-        pytest.importorskip("docx2txt")
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            Path(tmpdir) / "test.docx"
-            # Create a simple docx file
-            # (docx2txt can extract from created files)
-            pytest.skip("Requires docx creation library")
 
     def test_extract_text_from_txt(self, extract_tool) -> None:
         """Test extracting text from plain text file."""

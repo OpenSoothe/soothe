@@ -1,7 +1,7 @@
 """Document parsing and Q&A with multi-format support.
 
 Ported from noesium's document_toolkit.py.
-Uses PyMuPDF for PDF parsing with optional Chunkr API support.
+Uses PyMuPDF for PDF parsing and docx2txt for DOCX.
 
 IG-405: Uses backend_ops for virtual mode file operations.
 """
@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+_SOOTHE_INSTALL_HINT = "pip install -U soothe"
 
 
 def _get_cache_path(document_path: str, cache_dir: str = "", config: Any = None) -> Path | None:
@@ -57,9 +59,9 @@ def _download_if_url(document_path: str) -> str:
             tmp_path = tmp.name
 
         logger.info("Downloaded document from URL: %s", document_path)
-    except ImportError:
-        msg = "requests not installed for URL downloading"
-        raise RuntimeError(msg) from None
+    except Exception as exc:
+        msg = f"Failed to download document from URL: {exc}"
+        raise RuntimeError(msg) from exc
     else:
         return tmp_path
 
@@ -91,8 +93,31 @@ def _parse_pdf_pymupdf(file_path: str) -> str:
         return "\n\n".join(pages)
 
     except ImportError:
-        msg = "PyMuPDF not installed. Install with: pip install PyMuPDF"
+        msg = f"PyMuPDF not installed. Install with: {_SOOTHE_INSTALL_HINT}"
         raise ImportError(msg) from None
+
+
+def _parse_docx(file_path: str) -> str:
+    """Parse DOCX using docx2txt.
+
+    Args:
+        file_path: Path to DOCX file.
+
+    Returns:
+        Extracted text.
+
+    Raises:
+        ImportError: If docx2txt is not installed.
+    """
+    try:
+        import docx2txt
+
+        text = docx2txt.process(file_path)
+    except ImportError:
+        msg = f"docx2txt not installed. Install with: {_SOOTHE_INSTALL_HINT}"
+        raise ImportError(msg) from None
+    else:
+        return text or ""
 
 
 def _parse_document(document_path: str) -> str:
@@ -114,6 +139,10 @@ def _parse_document(document_path: str) -> str:
     if suffix == ".pdf":
         return _parse_pdf_pymupdf(document_path)
 
+    # Word documents
+    if suffix == ".docx":
+        return _parse_docx(document_path)
+
     # Text files
     if suffix in {".txt", ".md", ".rst", ".log"}:
         return path.read_text(encoding="utf-8", errors="ignore")
@@ -125,7 +154,7 @@ def _parse_document(document_path: str) -> str:
         return json.dumps(json.loads(path.read_text()), indent=2)
 
     # Unsupported format
-    msg = f"Unsupported document format: {suffix}. Supported: PDF, TXT, MD, RST, JSON"
+    msg = f"Unsupported document format: {suffix}. Supported: PDF, DOCX, TXT, MD, RST, JSON"
     raise ValueError(msg)
 
 

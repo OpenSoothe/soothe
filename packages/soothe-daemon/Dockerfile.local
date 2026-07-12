@@ -73,15 +73,10 @@ COPY packages/soothe-daemon /app/packages/soothe-daemon
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     set -eux; \
-    if [ "${INCLUDE_BROWSER}" = "true" ]; then \
-      extras="all"; \
-    else \
-      extras="tabular,document,github"; \
-    fi; \
     uv pip install --python /app/.venv/bin/python \
         --no-deps \
         "/app/packages/soothe-sdk" \
-        "/app/packages/soothe[${extras}]" \
+        "/app/packages/soothe" \
         "/app/packages/soothe-daemon"; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \
       /app/.venv/bin/python -m playwright install chromium; \

@@ -19,6 +19,7 @@ from soothe.toolkits._internal.backend_ops import (
 _MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 _MAX_SAMPLE_DISPLAY_LENGTH = 50
 _HIGH_MISSING_THRESHOLD_PCT = 50
+_SOOTHE_INSTALL_HINT = "pip install -U soothe"
 
 
 def _load_dataframe(file_path: str, config: Any = None) -> Any:
@@ -39,7 +40,11 @@ def _load_dataframe(file_path: str, config: Any = None) -> Any:
         ValueError: If file is too large or format is unsupported.
         FileNotFoundError: If file does not exist.
     """
-    import pandas as pd
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        msg = f"pandas not installed. Install with: {_SOOTHE_INSTALL_HINT}"
+        raise ImportError(msg) from exc
 
     path = Path(file_path)
 

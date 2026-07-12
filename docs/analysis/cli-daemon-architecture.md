@@ -67,11 +67,7 @@ The CLI and daemon communicate via WebSocket only:
 ### Install Full System (CLI + Daemon)
 
 ```bash
-# Install both CLI and daemon
-pip install soothe-cli soothed
-
-# Or with optional extras
-pip install soothe-cli soothed[research,websearch]
+pip install soothe soothe-cli soothe-daemon
 ```
 
 ### Install CLI Only (Lightweight)
@@ -79,17 +75,13 @@ pip install soothe-cli soothed[research,websearch]
 ```bash
 # Install just the client (connects to remote daemon)
 pip install soothe-cli
-
-# ~10 dependencies vs ~50 for full installation
 ```
 
 ### Install Daemon Only (Server)
 
 ```bash
 # Install just the server (for remote deployment)
-pip install soothed[all]
-
-# Includes all optional extras: research, websearch, media, etc.
+pip install soothe-daemon
 ```
 
 ## Usage

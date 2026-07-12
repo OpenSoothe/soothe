@@ -23,7 +23,7 @@ autonomously steers complex tasks.
 
 ```bash
 # Install the complete stack
-pip install -U 'soothe[all]' soothe-cli soothe-daemon
+pip install -U soothe soothe-cli soothe-daemon
 
 # Set your API key
 export OPENAI_API_KEY=sk-...

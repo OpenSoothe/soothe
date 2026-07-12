@@ -16,11 +16,15 @@ This document clarifies the entry points architecture following the CLI-daemon s
 - **Entry Points**: `soothe`
 - **Install**: `pip install soothe-cli`
 
-### soothe (Daemon Server)
+### soothe-daemon (Daemon Server)
 - **Purpose**: Daemon server (agent runtime, protocols, backends)
 - **Entry Points**: `soothed`
-- **Optional Dependencies**: `[cli]` - includes soothe-cli
-- **Install**: `pip install soothe` (daemon only) or `pip install soothe[cli]` (daemon + client)
+- **Install**: `pip install soothe-daemon` (pulls in `soothe` core)
+
+### soothe (Core Runtime)
+- **Purpose**: Agent runtime, toolkits, protocols, backends
+- **Entry Points**: None (library; used by daemon and in-proc runners)
+- **Install**: `pip install soothe`
 
 ## Entry Points
 
@@ -49,7 +53,7 @@ soothe --websocket-host server-host --websocket-port 8765
 ### Option 2: Combined Installation
 ```bash
 # Install both daemon and client
-pip install soothe[cli]
+pip install soothe soothe-cli soothe-daemon
 
 # Start daemon
 soothed start
@@ -58,18 +62,11 @@ soothed start
 soothe
 ```
 
-### Option 3: All Optional Features
+### Option 3: Full Stack
 ```bash
-# Install everything including all optional dependencies
-pip install soothe[all]
+# Install everything (core soothe includes data, research, and browser-use deps)
+pip install soothe soothe-daemon soothe-cli
 
-# This includes:
-# - daemon server (soothe)
-# - CLI client (soothe-cli via [cli])
-# - research tools ([research])
-# - websearch ([websearch])
-# - tabular processing ([tabular])
-# - document handling ([document])
 # Optional plugin subagents: install soothe-plugins (see package docs)
 ```
 

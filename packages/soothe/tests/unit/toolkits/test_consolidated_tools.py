@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
-
-import pytest
 
 from soothe.toolkits.data import DataToolkit, InspectDataTool
 from soothe.toolkits.wizsearch import WizsearchCrawlTool, WizsearchSearchTool
-
-
-def _has_pandas() -> bool:
-    """Check if pandas is available."""
-    return importlib.util.find_spec("pandas") is not None
-
 
 # ---------------------------------------------------------------------------
 # Wizsearch Toolkit (formerly web_search)
@@ -174,7 +165,6 @@ class TestDataTools:
         tool = InspectDataTool()
         assert tool.name == "inspect_data"
 
-    @pytest.mark.skipif(not _has_pandas(), reason="pandas not installed")
     def test_inspect_csv(self, tmp_path: Path) -> None:
         csv_file = tmp_path / "test.csv"
         csv_file.write_text("name,age\nAlice,30\nBob,25\n")
@@ -191,6 +181,46 @@ class TestDataTools:
         tool = ExtractTextTool()
         result = tool._run(file_path=str(txt_file))
         assert "Hello document world" in result
+
+    def test_document_extract_docx(self, tmp_path: Path) -> None:
+        import zipfile
+
+        from soothe.toolkits.data import ExtractTextTool
+
+        docx_file = tmp_path / "doc.docx"
+        document_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body><w:p><w:r><w:t>Hello DOCX world</w:t></w:r></w:p></w:body>"
+            "</w:document>"
+        )
+        content_types = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" '
+            'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument'
+            '.wordprocessingml.document.main+xml"/>'
+            "</Types>"
+        )
+        rels = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+            'Target="word/document.xml"/>'
+            "</Relationships>"
+        )
+        with zipfile.ZipFile(docx_file, "w") as zf:
+            zf.writestr("[Content_Types].xml", content_types)
+            zf.writestr("_rels/.rels", rels)
+            zf.writestr("word/document.xml", document_xml)
+
+        tool = ExtractTextTool()
+        result = tool._run(file_path=str(docx_file))
+        assert "Hello DOCX world" in result
 
 
 # ---------------------------------------------------------------------------

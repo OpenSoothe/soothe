@@ -213,7 +213,10 @@ class PostgreSQLPersistStore:
             try:
                 from psycopg_pool import AsyncConnectionPool
             except ImportError as exc:
-                msg = "psycopg[pool] is required for PostgreSQL persistence: pip install 'soothe[postgres]'"
+                msg = (
+                    "psycopg[pool] is required for PostgreSQL persistence. "
+                    "Install with: pip install -U soothe"
+                )
                 raise ImportError(msg) from exc
 
             from soothe.foundation.persistence.postgres_pool_lifecycle import apply_row_factory

@@ -5,7 +5,6 @@ Tests DeepXiv academic paper search and reading tools with mocked SDK.
 
 from __future__ import annotations
 
-import importlib.util
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -31,9 +30,6 @@ from soothe.toolkits.deepxiv import (
     _safe_call,
     resolve_deepxiv_token,
 )
-
-# Check if deepxiv_sdk is installed (optional dependency)
-DEEPXIV_SDK_INSTALLED = importlib.util.find_spec("deepxiv_sdk") is not None
 
 # -----------------------------------------------------------------------------
 # Fixtures
@@ -756,7 +752,6 @@ class TestErrorHandling:
         result = failing_func()
         assert "Error" in result
 
-    @pytest.mark.skipif(not DEEPXIV_SDK_INSTALLED, reason="deepxiv_sdk not installed")
     def test_safe_call_maps_authentication_error(self, search_tool):
         """Test _safe_call maps deepxiv_sdk.reader.AuthenticationError without traceback spam."""
         from deepxiv_sdk import AuthenticationError
@@ -771,7 +766,6 @@ class TestErrorHandling:
         assert "DEEPXIV_API_KEY" in result
         assert "DeepXiv operation failed" not in result
 
-    @pytest.mark.skipif(not DEEPXIV_SDK_INSTALLED, reason="deepxiv_sdk not installed")
     def test_deepxiv_exception_message_for_auth(self):
         """Test auth errors use the dedicated user message."""
         from deepxiv_sdk import AuthenticationError
