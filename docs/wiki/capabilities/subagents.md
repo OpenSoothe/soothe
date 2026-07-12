@@ -86,12 +86,12 @@ Subagents use specific model roles, not the main agent's model. This is a cost o
 
 | Subagent | Model Role | Config | Rationale |
 |----------|------------|--------|-----------|
-| planner | `think` (default) | `subagents.planner.model_role` | Plan design benefits from the reasoning tier |
-| deep_research | `fast` | resolver default | Query generation and summarization are fast-model tasks |
-| academic_research | `fast` | resolver default | Same fast-model profile as deep_research |
+| planner | `think` (default) | `model` or `model_role` | Explicit `provider:model` wins over role |
+| deep_research | `fast` | `model` or router default | Optional explicit `provider:model` override |
+| academic_research | `fast` | `model` or router default | Same resolution as deep_research |
 | browser_use | `default` | `subagents.browser_use.model_role` | Browser step planning uses the default model |
 
-Built-in subagents ignore ``subagents.<name>.model`` (explicit ``provider:model`` overrides). Use ``model_role`` for router-based selection on ``planner`` and ``browser_use``.
+Built-in subagents ignore ``subagents.<name>.model_role`` when ``model`` (explicit ``provider:model``) is set. Use ``model_role`` for router-based selection; use ``model`` to pin a specific provider/model on ``planner``, ``deep_research``, and ``academic_research``.
 
 ## Workspace Isolation
 

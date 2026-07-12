@@ -872,59 +872,28 @@ class SootheConfig(BaseSettings):
                 return plugin.config
         return {}
 
-    def create_chat_model(self, role: ModelRole = "default") -> BaseChatModel:
+    def create_chat_model(
+        self,
+        role: ModelRole = "default",
+        *,
+        fallback_role: ModelRole | None = None,
+    ) -> BaseChatModel:
         """Create a ``BaseChatModel`` for a given role with caching.
 
-        Delegates to ``llm_factory.create_chat_model``. All model creation logic
-        (provider resolution, wrapper application, caching) is handled by LLMFactory
-        per RFC-627.
+        Delegates to ``llm_factory.create_chat_model``. When ``fallback_role`` is
+        omitted and ``role`` is not ``default``, instantiation failure for the
+        primary role retries the ``default`` router role if it resolves to a
+        different ``provider:model`` spec.
 
         Args:
             role: Purpose role — one of the :data:`~soothe.config.models.ModelRole` values.
+            fallback_role: Optional explicit fallback role. ``None`` enables automatic
+                ``default`` fallback for non-``default`` primary roles.
 
         Returns:
             A configured ``BaseChatModel`` instance, possibly wrapped for provider compatibility.
         """
-        return self.llm_factory.create_chat_model(role)
-
-    def create_chat_model_with_fallback(
-        self,
-        role: ModelRole = "think",
-        *,
-        fallback_role: ModelRole = "default",
-    ) -> BaseChatModel:
-        """Create a chat model for ``role``, falling back to ``fallback_role`` on failure.
-
-        Router resolution already maps unset roles (e.g. ``think``) to ``default``; this
-        method adds a second attempt when model instantiation fails for the primary role.
-
-        Args:
-            role: Primary purpose role (typically ``think`` for consensus / verification).
-            fallback_role: Role to try when primary creation raises.
-
-        Returns:
-            A configured ``BaseChatModel`` instance.
-
-        Raises:
-            Exception: Re-raises the last error when both roles fail.
-        """
-        last_exc: Exception | None = None
-        for attempt_role in (role, fallback_role):
-            try:
-                return self.create_chat_model(attempt_role)
-            except Exception as exc:
-                last_exc = exc
-                if attempt_role == fallback_role:
-                    raise
-                _logger.warning(
-                    "Chat model creation failed for role %r; falling back to %r",
-                    role,
-                    fallback_role,
-                )
-        if last_exc is not None:
-            raise last_exc
-        msg = "create_chat_model_with_fallback failed without exception"
-        raise RuntimeError(msg)
+        return self.llm_factory.create_chat_model(role, fallback_role=fallback_role)
 
     def create_chat_model_for_spec(
         self,

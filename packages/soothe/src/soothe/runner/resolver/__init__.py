@@ -116,10 +116,7 @@ def resolve_planner(
         try:
             planner_model = config.create_chat_model(planner_role)
         except Exception:
-            try:
-                planner_model = config.create_chat_model("default")
-            except Exception:
-                logger.warning("Failed to create model for planner")
+            logger.warning("Failed to create model for planner")
 
     loop_cfg = config.agent.loop
     plan_assess_model = _create_loop_phase_model(

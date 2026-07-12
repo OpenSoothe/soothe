@@ -716,14 +716,14 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 
 1. **AutopilotService.start/stop** starts and stops **AutopilotMonitor** background loops (verification + dreaming timer).
 2. **submit_task** routes through **AutopilotMonitor.intake_goal** when a monitor is wired (placement analysis path); falls back to direct `ContextEngine.create_goal` when no monitor.
-3. **Consensus model**: `SootheConfig.create_chat_model_with_fallback("think")` tries the `think` router role, then **`default`** on instantiation failure. Router resolution already maps unset `think` → `default`.
+3. **Consensus model**: `SootheConfig.create_chat_model("think")` tries the `think` router role, then **`default`** on instantiation failure when specs differ. Router resolution already maps unset `think` → `default`.
 
 ### Verification
 
 | Test | Location |
 |------|----------|
 | Monitor lifecycle + intake routing | `packages/soothe/tests/unit/core/autopilot/test_monitor_lifecycle.py` |
-| think→default model fallback | `packages/soothe/tests/unit/config/test_create_chat_model_with_fallback.py` |
+| think→default model fallback | `packages/soothe/tests/unit/config/test_create_chat_model_fallback.py` |
 | Enabled daemon starts scheduling + monitor | `packages/soothe-daemon/tests/integration/autopilot/test_autopilot_enabled_startup.py` |
 | Real dispatch E2E (fake runner) | `packages/soothe/tests/unit/core/autopilot/test_real_dispatch.py` |
 
@@ -777,7 +777,7 @@ Pydantic default for `enabled` remains **`false`** — production deploys must o
 
 ### 2026-07-01 (Guarded production pilot minimum bar)
 - Documented **Guarded Production Pilot** section: config recommendations, monitor lifecycle wiring, intake routing, consensus model fallback.
-- Implementation: `AutopilotService` starts/stops `AutopilotMonitor`; `submit_task` uses `intake_goal` when monitor wired; `create_chat_model_with_fallback("think")` for daemon consensus model.
+- Implementation: `AutopilotService` starts/stops `AutopilotMonitor`; `submit_task` uses `intake_goal` when monitor wired; `create_chat_model(consensus_model_role)` for daemon consensus model.
 
 ---
 

@@ -162,7 +162,11 @@ class SubagentConfig(BaseModel):
     enabled: bool = True
     model: str | None = Field(
         default=None,
-        description="Explicit provider:model override for subagents that support it. browser_use uses model_role instead.",
+        description=(
+            "Explicit ``provider:model`` override for subagents that support it "
+            "(``planner``, ``deep_research``, ``academic_research``). "
+            "Takes precedence over ``model_role``. ``browser_use`` uses ``model_role`` only."
+        ),
     )
     model_role: ModelRole | None = Field(
         default=None,
@@ -697,7 +701,8 @@ class AutopilotConfig(BaseModel):
         monitor_model_role: Router role for AutopilotMonitor LLM reasoners (backoff,
             DAG verification, dreaming distillation). Defaults to ``think``.
         consensus_model_role: Router role for RFC-204 goal consensus validation.
-            Defaults to ``think``; daemon uses ``create_chat_model_with_fallback``.
+            Defaults to ``think``; daemon uses ``create_chat_model`` with automatic
+            fallback to ``default`` on instantiation failure.
         webhooks: Webhook URLs by event type (e.g., on_goal_completed).
     """
 
