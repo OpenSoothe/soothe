@@ -106,11 +106,11 @@ async def test_second_query_on_same_loop_rejected() -> None:
     engine = QueryEngine(daemon)
 
     assert (
-        await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-1")
+        (await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-1"))[0]
         is QueryAdmission.ADMITTED
     )
     assert (
-        await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-2")
+        (await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-2"))[0]
         is QueryAdmission.LOOP_BUSY
     )
 
@@ -122,8 +122,8 @@ async def test_concurrent_queries_on_different_loops_admitted() -> None:
     daemon = _daemon_factory(broadcasts=[])
     engine = QueryEngine(daemon)
 
-    first = await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-a")
-    second = await engine._admit_query(effective_loop_id="loop-b", thread_id="thread-b")
+    first, _ = await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-a")
+    second, _ = await engine._admit_query(effective_loop_id="loop-b", thread_id="thread-b")
 
     assert first is QueryAdmission.ADMITTED
     assert second is QueryAdmission.ADMITTED

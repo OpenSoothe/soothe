@@ -321,6 +321,7 @@ class TuiDaemonSession:
         inbound_dropped_baseline = getattr(self._client, "inbound_dropped", 0)
         query_started = False
         expected_loop_id = self._loop_id
+        stream_payload_seen = False
         self._streaming = True
         turn_read_started = time.monotonic()
         first_event_logged = False
@@ -405,7 +406,20 @@ class TuiDaemonSession:
                         if state == "running":
                             query_started = True
                             progress_seen = True
-                        elif query_started and state in {"idle", "stopped"}:
+                        elif query_started and state == "stopped":
+                            self.last_turn_end_state = state
+                            async for chunk in self._drain_stream_events_after_idle(
+                                expected_loop_id=expected_loop_id,
+                            ):
+                                yield chunk
+                            break
+                        elif query_started and state == "idle":
+                            if not stream_payload_seen and not self.last_turn_cancellation_seen:
+                                logger.debug(
+                                    "Ignoring stale idle before stream payload (loop=%s)",
+                                    (expected_loop_id or "?")[:16],
+                                )
+                                continue
                             self.last_turn_end_state = state
                             async for chunk in self._drain_stream_events_after_idle(
                                 expected_loop_id=expected_loop_id,
@@ -430,6 +444,7 @@ class TuiDaemonSession:
                         self.turn_event_stats.filtered_early += 1
                         continue
                     progress_seen = True
+                    stream_payload_seen = True
                     yield (namespace, mode, data)
                     # Graph auto-resumes LangGraph interrupts server-side; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:

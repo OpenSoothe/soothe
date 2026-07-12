@@ -231,6 +231,13 @@ async def test_iter_turn_chunks_drains_events_after_idle() -> None:
     session._client = _StubEventClient(
         [
             {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("first", {}),
+            },
             {"type": "status", "state": "idle", "loop_id": "loop-main"},
             {
                 "type": "event",
@@ -239,12 +246,44 @@ async def test_iter_turn_chunks_drains_events_after_idle() -> None:
                 "mode": "messages",
                 "data": ("late", {}),
             },
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
         ]
     )
 
     chunks = [chunk async for chunk in session.iter_turn_chunks()]
 
-    assert chunks == [((), "messages", ("late", {}))]
+    assert chunks == [
+        ((), "messages", ("first", {})),
+        ((), "messages", ("late", {})),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_ignores_stale_idle_before_stream_payload() -> None:
+    """Stale ``idle`` from a cancelled predecessor turn must not end the read session."""
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("successor", {}),
+            },
+            {"type": "status", "state": "idle", "loop_id": "loop-main"},
+        ]
+    )
+
+    chunks = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert chunks == [((), "messages", ("successor", {}))]
+    assert session.last_turn_end_state == "idle"
 
 
 @pytest.mark.asyncio
@@ -337,6 +376,13 @@ async def test_iter_turn_chunks_records_stopped_end_state() -> None:
     session._client = _StubEventClient(
         [
             {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "custom",
+                "data": {"type": "soothe.stream.end"},
+            },
             {"type": "status", "state": "stopped", "loop_id": "loop-main"},
         ]
     )
