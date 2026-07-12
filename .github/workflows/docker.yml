@@ -1,26 +1,12 @@
 name: Build Docker Image
 
-# This workflow handles manual and mainline branch pushes.
-# Feature/PR branch pushes do not build images. Release-triggered builds use release-docker.yml.
+# Manual branch builds only. Release builds use release-docker.yml.
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-    tags-ignore:
-      - "**"  # Tag pushes are handled by release.yml
   workflow_dispatch:
     branches:
       - "**"
-    tags:
-      - "*"
     inputs:
-      soothe_version:
-        description: "PyPI version to build (optional). Uses matching git tag; builds from source on branch if unpublished."
-        required: false
-        default: ""
-        type: string
       push_image:
         description: "Push image to registry"
         required: false
@@ -40,9 +26,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # Manual dispatch or pushes to main/develop only (not PR feature branches).
-    # Release-triggered builds are handled by release-docker.yml
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     permissions:
       contents: read
 
@@ -53,164 +36,26 @@ jobs:
           sudo apt-get clean
           df -h
 
-      - name: Resolve build context
-        id: build_context
+      - name: Resolve branch tag
+        id: branch
         env:
-          GH_REPO: ${{ github.repository }}
-          INPUT_VERSION: ${{ github.event.inputs.soothe_version }}
-          GH_REF: ${{ github.ref }}
           GH_REF_NAME: ${{ github.ref_name }}
-          GH_SHA: ${{ github.sha }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          checkout_ref=""
-          version=""
-          branch_name=""
-          publish_version_tags=false
-          publish_branch_tags=false
-
-          api_get() {
-            curl -fsSL \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$1"
-          }
-
-          tag_exists() {
-            local cand="$1"
-            if api_get "https://api.github.com/repos/${GH_REPO}/git/ref/tags/${cand}" >/dev/null 2>&1; then
-              printf '%s' "$cand"
-            fi
-          }
-
-          # Normalize branch name for Docker tag (replace non-alphanumeric with -)
-          normalize_branch() {
-            echo "$1" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-\+\|-\+$//g'
-          }
-
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # Branch push: build from source with branch tags
-            checkout_ref="${GH_SHA}"
-            branch_name="$(normalize_branch "${GH_REF_NAME}")"
-            publish_branch_tags=true
-          elif [ -n "${INPUT_VERSION// }" ]; then
-            # Manual dispatch with version: use tag
-            version="${INPUT_VERSION#v}"
-            checkout_ref="$(tag_exists "${version}")"
-            if [ -z "${checkout_ref}" ]; then
-              checkout_ref="$(tag_exists "v${version}")"
-            fi
-            if [ -z "${checkout_ref}" ]; then
-              echo "::error::No git tag found for version '${INPUT_VERSION}' (tried '${version}' and 'v${version}'). Push the tag before dispatching."
-              exit 1
-            fi
-            publish_version_tags=true
-          elif [[ "${GH_REF}" == refs/tags/* ]]; then
-            # Tag ref: build versioned image
-            checkout_ref="${GH_REF_NAME}"
-            version="${GH_REF_NAME#v}"
-            publish_version_tags=true
+          normalized="$(echo "${GH_REF_NAME}" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/^-\+\|-\+$//g')"
+          if [ "${normalized}" = "main" ]; then
+            image_tag="latest"
           else
-            # Fallback: branch/tag dispatch without version
-            checkout_ref="${GH_SHA}"
-            if [[ "${GH_REF}" == refs/heads/* ]]; then
-              branch_name="$(normalize_branch "${GH_REF_NAME}")"
-              publish_branch_tags=true
-            fi
+            image_tag="latest-${normalized}"
           fi
-          
-          echo "checkout_ref=${checkout_ref}" >> "${GITHUB_OUTPUT}"
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "branch_name=${branch_name}" >> "${GITHUB_OUTPUT}"
-          echo "publish_version_tags=${publish_version_tags}" >> "${GITHUB_OUTPUT}"
-          echo "publish_branch_tags=${publish_branch_tags}" >> "${GITHUB_OUTPUT}"
+          echo "name=${normalized}" >> "${GITHUB_OUTPUT}"
+          echo "image_tag=${image_tag}" >> "${GITHUB_OUTPUT}"
+          echo "Branch ${GH_REF_NAME} -> tag ${image_tag}"
 
       - name: Checkout
         uses: actions/checkout@v5
         with:
           submodules: true
-          ref: ${{ steps.build_context.outputs.checkout_ref }}
-
-      - name: Resolve Soothe version for Docker build
-        id: soothe_version
-        run: |
-          set -euo pipefail
-          v="${{ steps.build_context.outputs.version }}"
-          if [ -z "$v" ]; then
-            v="$(tr -d ' \n\r\t' < VERSION)"
-          fi
-          if [ -z "$v" ]; then
-            echo "::error::Could not resolve Soothe version (VERSION file empty and no release tag)"
-            exit 1
-          fi
-          echo "version=${v}" >> "${GITHUB_OUTPUT}"
-          echo "Resolved SOOTHE_VERSION=${v}"
-
-      - name: Wait 5 minutes for PyPI propagation
-        if: ${{ github.event_name == 'workflow_run' }}
-        run: |
-          echo "Waiting 5 minutes for PyPI packages to propagate after release..."
-          sleep 300
-
-      - name: Wait for PyPI wheels
-        if: ${{ github.event_name == 'workflow_run' }}
-        env:
-          SOOTHE_VERSION: ${{ steps.soothe_version.outputs.version }}
-        run: |
-          set -euo pipefail
-          pypi_pkg_available() {
-            local pkg="$1"
-            curl -sf "https://pypi.org/pypi/${pkg}/${SOOTHE_VERSION}/json" >/dev/null
-          }
-          wait_pkg() {
-            local pkg="$1"
-            echo "Waiting for ${pkg}==${SOOTHE_VERSION} on PyPI..."
-            for attempt in $(seq 1 12); do
-              if pypi_pkg_available "${pkg}"; then
-                echo "✓ ${pkg} ${SOOTHE_VERSION} is on PyPI"
-                return 0
-              fi
-              echo "  attempt ${attempt}/12: not yet available, sleeping 10s"
-              sleep 10
-            done
-            echo "::error::Timed out waiting for ${pkg}==${SOOTHE_VERSION} on PyPI"
-            return 1
-          }
-          wait_pkg soothe
-          wait_pkg soothe-daemon
-
-      - name: Resolve Docker build mode
-        id: build_mode
-        env:
-          SOOTHE_VERSION: ${{ steps.soothe_version.outputs.version }}
-        run: |
-          set -euo pipefail
-          pypi_pkg_available() {
-            local pkg="$1"
-            curl -sf "https://pypi.org/pypi/${pkg}/${SOOTHE_VERSION}/json" >/dev/null
-          }
-
-          soothe_on_pypi=false
-          daemon_on_pypi=false
-          if pypi_pkg_available soothe; then soothe_on_pypi=true; fi
-          if pypi_pkg_available soothe-daemon; then daemon_on_pypi=true; fi
-
-          if [ "${soothe_on_pypi}" = "true" ] && [ "${daemon_on_pypi}" = "true" ]; then
-            echo "mode=pypi" >> "${GITHUB_OUTPUT}"
-            echo "Using PyPI wheels for soothe and soothe-daemon ${SOOTHE_VERSION}"
-            exit 0
-          fi
-
-          # For version tags (from manual dispatch or tag ref) or workflow_run, PyPI packages are required
-          if [ "${{ steps.build_context.outputs.publish_version_tags }}" = "true" ] || [ "${{ github.event_name }}" = "workflow_run" ]; then
-            echo "::error::PyPI packages for ${SOOTHE_VERSION} are not available (soothe=${soothe_on_pypi}, soothe-daemon=${daemon_on_pypi}). Release publish must finish before building the Docker image."
-            exit 1
-          fi
-
-          echo "mode=local" >> "${GITHUB_OUTPUT}"
-          echo "::notice::Version ${SOOTHE_VERSION} is not on PyPI yet; building from local source (Dockerfile.local)"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -226,9 +71,7 @@ jobs:
           echo "registry_secrets_ready=${ready}" >> "${GITHUB_OUTPUT}"
 
           want=false
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then want=true; fi
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.push_image }}" = "true" ]; then want=true; fi
-          if [ "${{ github.event_name }}" = "push" ]; then want=true; fi
+          if [ "${{ github.event.inputs.push_image }}" = "true" ]; then want=true; fi
           echo "want_push=${want}" >> "${GITHUB_OUTPUT}"
 
           should=false
@@ -238,7 +81,7 @@ jobs:
       - name: Warn when registry push is skipped
         if: ${{ steps.publish.outputs.want_push == 'true' && steps.publish.outputs.should_push != 'true' }}
         run: |
-          echo "::warning::Skipping registry push. Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to publish images after release."
+          echo "::warning::Skipping registry push. Configure repository secrets ALIYUN_REGISTRY_USERNAME and ALIYUN_REGISTRY_PASSWORD to publish images."
 
       # Login before setup-buildx: docker/login-action rewrites DOCKER_CONFIG and would
       # otherwise drop the buildx builder config (see docker/build-push-action#1253).
@@ -262,36 +105,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Version tags (release builds): latest + version + major.minor
-            type=raw,value=latest,enable=${{ steps.build_context.outputs.publish_version_tags == 'true' }}
-            type=raw,value=${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
-            type=semver,pattern={{major}}.{{minor}},value=v${{ steps.soothe_version.outputs.version }},enable=${{ steps.build_context.outputs.publish_version_tags == 'true' && steps.soothe_version.outputs.version != '' }}
-            # Branch tags: latest for main, latest-<branch> for others
-            type=raw,value=latest,enable=${{ steps.build_context.outputs.publish_branch_tags == 'true' && steps.build_context.outputs.branch_name == 'main' }}
-            type=raw,value=latest-${{ steps.build_context.outputs.branch_name }},enable=${{ steps.build_context.outputs.publish_branch_tags == 'true' && steps.build_context.outputs.branch_name != '' && steps.build_context.outputs.branch_name != 'main' }}
-            # Always include SHA for traceability
+            type=raw,value=${{ steps.branch.outputs.image_tag }}
             type=sha,prefix=
 
-      - name: Build and push daemon image from PyPI (multi-platform)
-        if: ${{ steps.build_mode.outputs.mode == 'pypi' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: packages/soothe-daemon/Dockerfile
-          builder: ${{ steps.buildx.outputs.name }}
-          build-args: |
-            SOOTHE_VERSION=${{ steps.soothe_version.outputs.version }}
-            SOOTHE_DAEMON_VERSION=${{ steps.soothe_version.outputs.version }}
-            PYTHON_BASE=${{ env.PYTHON_BASE }}
-          platforms: linux/amd64,linux/arm64
-          push: ${{ steps.publish.outputs.should_push == 'true' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          provenance: false
-          sbom: false
-
       - name: Build and push daemon image from source (multi-platform)
-        if: ${{ steps.build_mode.outputs.mode == 'local' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -306,3 +123,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
           sbom: false
+
+      - name: Build summary
+        run: |
+          echo "### Docker Image Built" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Property | Value |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "|----------|-------|" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Tag | \`${{ steps.branch.outputs.image_tag }}\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Pushed | \`${{ steps.publish.outputs.should_push }}\` |" >> "${GITHUB_STEP_SUMMARY}"
+          echo "| Registry | \`${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ env.IMAGE_NAME }}\` |" >> "${GITHUB_STEP_SUMMARY}"
