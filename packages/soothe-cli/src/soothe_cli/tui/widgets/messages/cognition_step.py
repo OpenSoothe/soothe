@@ -118,6 +118,11 @@ class CognitionStepMessage(Vertical):
         height: auto;
     }
 
+    CognitionStepMessage .step-status {
+        height: auto;
+        color: $text-muted;
+    }
+
     CognitionStepMessage.-collapsed .step-tools,
     CognitionStepMessage.-collapsed .step-status,
     CognitionStepMessage.-collapsed .step-subagent-notes,
@@ -542,8 +547,8 @@ class CognitionStepMessage(Vertical):
         Args:
             head: The leading status text (e.g. ``"Completed (1.2s)"`` or
                 ``"Failed · 1.2s"``) that gets the prominent success/error tone.
-            success: Whether this is a successful completion (green) or a
-                failure (red).
+            success: Whether this is a successful completion (dim, like tool
+                activity rows) or a failure (red).
             suffix: Optional stats tail (tool counts, token budget) that keeps
                 the subdued cognition tone so it doesn't drown out the head.
         """
@@ -556,11 +561,16 @@ class CognitionStepMessage(Vertical):
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
         icon = g.checkmark if success else g.error
-        head_tone = colors.card_success if success else colors.card_error
-        parts: list[object] = [Content.styled(f"{gutter}{icon} {head}", head_tone)]
-        if suffix:
-            parts.append(Content.styled(suffix, theme.SECONDARY_TEXT_STYLE))
-        self._status_widget.update(Content.assemble(*parts))
+        self._status_widget.update(
+            StepCardStatusLine.footer_completed(
+                gutter=gutter,
+                icon=icon,
+                head=head,
+                suffix=suffix,
+                success=success,
+                colors=colors,
+            )
+        )
         self._status_widget.display = True
 
     def _refresh_header_title(self) -> None:
@@ -610,37 +620,6 @@ class CognitionStepMessage(Vertical):
             circle_empty=g.circle_empty,
             style=style,
         )
-
-    def _step_branched_completion_detail(
-        self,
-        *,
-        success: bool,
-        status_line_body: str,
-        prose: str,
-    ) -> Content:
-        """Completed step detail: first line ``⎿ ✓|✗ status``; prose lines ``⎿ ○ …``."""
-        g = get_glyphs()
-        gutter = self._step_goal_tree_gutter()
-        try:
-            colors = theme.get_theme_colors(self)
-        except Exception:  # noqa: BLE001
-            colors = theme.DARK_COLORS
-        icon = g.checkmark if success else g.error
-        # Match running step line and tool activity: cognition accent, not semantic green.
-        tone = colors.cognition if success else colors.error
-        parts: list[object] = [
-            Content.styled(f"{gutter}{icon} {status_line_body}", tone),
-        ]
-        prose = (prose or "").strip()
-        if prose:
-            sub = f"{g.output_prefix} {g.circle_empty} "
-            prose_style = colors.muted if success else tone
-            parts.append("\n")
-            for i, ln in enumerate(prose.splitlines()):
-                if i:
-                    parts.append("\n")
-                parts.append(Content.styled(f"{sub}{ln}", prose_style))
-        return Content.assemble(*parts)
 
     def _step_branched_error_detail(self, err_text: str) -> Content:
         """Multiline error body: first line ``⎿ ✗ …``; continuations ``⎿ ○ …``."""
