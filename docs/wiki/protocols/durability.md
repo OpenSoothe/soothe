@@ -57,7 +57,7 @@ This split exists because the backend database may not index all fields efficien
 
 The protocol defines three associated models — see `durability.py` for full definitions:
 
-- **`ThreadMetadata`** — tags (system categorical), `policy_profile` (security profile applied to thread operations), `plan_summary`, user-defined `labels`/`priority`/`category` (RFC-452), and `claude_sessions` (maps workspace cwd → Claude Agent SDK session UUID for resumption, IG-202).
+- **`ThreadMetadata`** — tags (system categorical), `policy_profile` (security profile applied to thread operations), `plan_summary`, user-defined `labels`/`priority`/`category` (RFC-452).
 - **`ThreadInfo`** — the full thread record: `thread_id`, `status`, `created_at`, `updated_at`, `metadata`.
 - **`ThreadFilter`** — the two-tier filter criteria described above.
 

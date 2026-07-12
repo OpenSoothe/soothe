@@ -540,9 +540,7 @@ def resolve_subagents(
             logger.warning("Unknown subagent '%s', skipping.", name)
             continue
 
-        if name == "claude":
-            model_override = None
-        elif name in ("deep_research", "academic_research"):
+        if name in ("deep_research", "academic_research"):
             model_override = sub_cfg.model or config.create_chat_model("fast")
         elif name == "planner":
             # Built-in: always the router ``think`` role (ignore ``subagents.planner.model``).

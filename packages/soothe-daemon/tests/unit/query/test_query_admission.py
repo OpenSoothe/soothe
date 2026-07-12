@@ -105,14 +105,12 @@ async def test_second_query_on_same_loop_rejected() -> None:
     daemon = _daemon_factory(broadcasts=broadcasts)
     engine = QueryEngine(daemon)
 
-    assert (
-        (await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-1"))[0]
-        is QueryAdmission.ADMITTED
-    )
-    assert (
-        (await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-2"))[0]
-        is QueryAdmission.LOOP_BUSY
-    )
+    assert (await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-1"))[
+        0
+    ] is QueryAdmission.ADMITTED
+    assert (await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-2"))[
+        0
+    ] is QueryAdmission.LOOP_BUSY
 
     await engine._release_query_admission("loop-a")
 

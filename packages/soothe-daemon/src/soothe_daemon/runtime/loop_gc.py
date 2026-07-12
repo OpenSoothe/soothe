@@ -112,14 +112,7 @@ async def purge_loop_fully(daemon: Any, loop_id: str, metadata: dict[str, Any] |
             await card_manager.stop_for_loop(loop_id)
         except Exception:
             logger.warning("Failed to release card ledger for loop %s", loop_id, exc_info=True)
-    removed_threads = daemon._thread_registry.cleanup_loop(loop_id)
-    if removed_threads:
-        try:
-            from soothe.foundation.core.agent._claude_session import cleanup_claude_sessions
-        except ImportError:
-            cleanup_claude_sessions = None  # type: ignore[assignment]
-        if cleanup_claude_sessions is not None:
-            cleanup_claude_sessions(removed_threads)
+    daemon._thread_registry.cleanup_loop(loop_id)
 
     await _delete_loop_threads(daemon, thread_ids)
     await _delete_loop_filesystem(loop_id)

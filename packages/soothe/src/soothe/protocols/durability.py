@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ThreadMetadata(BaseModel):
@@ -18,9 +18,14 @@ class ThreadMetadata(BaseModel):
         labels: User-defined labels for organization (RFC-452).
         priority: Thread priority level (RFC-452).
         category: User-defined category (RFC-452).
-        claude_sessions: Maps resolved workspace cwd (absolute path) to Claude Agent SDK
-            session UUID for ``ClaudeAgentOptions.resume`` (IG-202).
     """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_legacy_claude_sessions(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data.pop("claude_sessions", None)
+        return data
 
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
@@ -29,7 +34,6 @@ class ThreadMetadata(BaseModel):
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
-    claude_sessions: dict[str, str] = Field(default_factory=dict)
 
 
 class ThreadInfo(BaseModel):

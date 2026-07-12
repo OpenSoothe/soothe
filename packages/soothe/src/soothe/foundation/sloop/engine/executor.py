@@ -346,23 +346,6 @@ class Executor:
             return frozenset()
         return collect_core_agent_message_ids(list(graph_state.values.get("messages") or []))
 
-    async def _claude_runner_config_extras(self, thread_id: str) -> dict[str, Any]:
-        """Load Claude session ids + durability handle for subagent resume (IG-202)."""
-        if not thread_id or self._config is None:
-            return {}
-        try:
-            from soothe.runner.resolver import resolve_durability
-
-            d = resolve_durability(self._config)
-            info = await d.get_thread(thread_id)
-            extras: dict[str, Any] = {"soothe_durability": d}
-            if info:
-                extras["claude_sessions"] = dict(info.metadata.claude_sessions)
-            return extras
-        except Exception:
-            logger.debug("Claude runner config extras failed", exc_info=True)
-            return {}
-
     def _max_subagent_tasks_per_wave(self) -> int:
         """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
         if self._config is None:
@@ -1847,7 +1830,6 @@ class Executor:
                         step.id,
                         len(goal_briefing),
                     )
-            configurable.update(await self._claude_runner_config_extras(thread_id))
             # Pass current_decision for middleware to inject agent loop output contract
             # when available on ``loop_state``; parallel branches
             # may still omit it here because middleware reads configurable elsewhere.
