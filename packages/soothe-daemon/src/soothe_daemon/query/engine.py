@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -45,6 +46,14 @@ class QueryAdmission(StrEnum):
     ADMITTED = "admitted"
     DAEMON_BUSY = "daemon_busy"
     LOOP_BUSY = "loop_busy"
+
+
+@dataclass(frozen=True, slots=True)
+class _ActiveLoopRunner:
+    """Runner handle scoped to a single admitted loop turn."""
+
+    runner: Any
+    turn_generation: int
 
 
 class AsyncCancelOrchestrator:
@@ -105,7 +114,8 @@ class AsyncCancelOrchestrator:
         base_interval = getattr(config, "cancel_retry_interval_seconds", 2.0)
         force_timeout = getattr(config, "cancel_force_kill_timeout_seconds", 10.0)
 
-        runner = self._query_engine._active_runners.get(loop_id)
+        runner_entry = self._query_engine._active_runners.get(loop_id)
+        runner = runner_entry.runner if runner_entry is not None else None
         worker_id = await self._get_worker_id_for_loop(loop_id)
 
         # Collect asyncio tasks to cancel
@@ -171,8 +181,7 @@ class AsyncCancelOrchestrator:
         )
         await self._force_kill_worker(worker_id, loop_id, timeout=force_timeout)
 
-        # Cleanup bookkeeping
-        self._query_engine._active_runners.pop(loop_id, None)
+        # Cleanup bookkeeping (runner unregister is turn-scoped in stream finally).
         self._query_engine._clear_loop_cancel_armed_state(loop_id)
         await self._query_engine._release_query_admission(loop_id)
 
@@ -239,8 +248,11 @@ class QueryEngine:
     def __init__(self, daemon: Any) -> None:
         """Attach to the running ``SootheDaemon`` instance (expects ``_runner_factory`` after ``start()``)."""
         self._daemon = daemon
-        # RFC-221: per-loop runner instances keyed by loop_id
-        self._active_runners: dict[str, Any] = {}
+        # RFC-221: per-loop runner instances keyed by loop_id (turn-scoped).
+        self._active_runners: dict[str, _ActiveLoopRunner] = {}
+        # Monotonic turn counter per loop; stale finally blocks must not emit
+        # terminal frames or cancel a successor runner.
+        self._loop_turn_generation: dict[str, int] = {}
         # Async cancel orchestrator for guaranteed cancellation
         self._cancel_orchestrator: AsyncCancelOrchestrator | None = None
         # Loop ids cancelled before their query task was registered. The early
@@ -271,6 +283,46 @@ class QueryEngine:
             return False
         task = orchestrator._active_cancel_tasks.get(loop_id)
         return task is not None and not task.done()
+
+    def _owns_turn(self, loop_id: str | None, turn_generation: int) -> bool:
+        """Return whether ``turn_generation`` is still the active turn for ``loop_id``."""
+        if not loop_id:
+            return True
+        return self._loop_turn_generation.get(loop_id) == turn_generation
+
+    async def _get_execution_pool(self) -> Any | None:
+        """Return the shared thread/process execution pool when configured."""
+        factory = getattr(self._daemon, "_runner_factory", None)
+        if factory is None or not hasattr(factory, "get_shared_execution_pool"):
+            return None
+        return await factory.get_shared_execution_pool()
+
+    async def await_loop_ready_for_turn(self, loop_id: str) -> None:
+        """Wait for cancel orchestration and worker teardown before a new turn.
+
+        Queued ``loop_input`` after Ctrl+C must not race the prior turn's
+        asyncio finally block or an in-flight pool worker.
+        """
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return
+
+        orchestrator = self._cancel_orchestrator
+        if orchestrator is not None:
+            task = orchestrator._active_cancel_tasks.get(lid)
+            if task is not None and not task.done():
+                try:
+                    await task
+                except Exception:
+                    logger.debug(
+                        "await_loop_ready_for_turn: cancel task failed loop=%s",
+                        lid[:16],
+                        exc_info=True,
+                    )
+
+        pool = await self._get_execution_pool()
+        if pool is not None and hasattr(pool, "await_loop_dispatchable"):
+            await pool.await_loop_dispatchable(lid)
 
     def _should_arm_pending_cancel(self, loop_id: str) -> bool:
         """Return True only for the genuine pre-registration cancel race window."""
@@ -365,18 +417,25 @@ class QueryEngine:
         *,
         effective_loop_id: str | None,
         thread_id: str,
-    ) -> QueryAdmission:
-        """Reserve daemon / per-loop query capacity atomically."""
+    ) -> tuple[QueryAdmission, int]:
+        """Reserve daemon / per-loop query capacity atomically.
+
+        Returns:
+            Tuple of admission result and turn generation (0 when not loop-scoped).
+        """
         d = self._daemon
         max_concurrent = getattr(d._daemon_config, "max_concurrent_threads", 100)
         async with d._query_state_lock:
             if max_concurrent > 0 and len(d._active_threads) >= max_concurrent:
-                return QueryAdmission.DAEMON_BUSY
+                return QueryAdmission.DAEMON_BUSY, 0
             if effective_loop_id and effective_loop_id in d._loops_with_active_query:
-                return QueryAdmission.LOOP_BUSY
+                return QueryAdmission.LOOP_BUSY, 0
+            turn_generation = 0
             if effective_loop_id:
+                turn_generation = self._loop_turn_generation.get(effective_loop_id, 0) + 1
+                self._loop_turn_generation[effective_loop_id] = turn_generation
                 d._loops_with_active_query.add(effective_loop_id)
-            return QueryAdmission.ADMITTED
+            return QueryAdmission.ADMITTED, turn_generation
 
     async def _release_query_admission(self, effective_loop_id: str | None) -> None:
         """Drop per-loop admission reservation when a query ends or aborts early."""
@@ -708,7 +767,8 @@ class QueryEngine:
         thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
 
         # IG-054: Admit before vision preflight (IG-327) to avoid wasted image API calls.
-        admission = await self._admit_query(
+        await self.await_loop_ready_for_turn(effective_loop_id or "")
+        admission, turn_generation = await self._admit_query(
             effective_loop_id=effective_loop_id,
             thread_id=thread_id,
         )
@@ -934,7 +994,10 @@ class QueryEngine:
                 )
                 run_workspace = run_request.resolve_workspace_path()
                 loop_runner = d._runner_factory.create_runner(_runner_key)
-                self._active_runners[_runner_key] = loop_runner
+                self._active_runners[_runner_key] = _ActiveLoopRunner(
+                    runner=loop_runner,
+                    turn_generation=turn_generation,
+                )
                 logger.info(
                     "Query stream dispatching loop=%s checkpoint=%s",
                     effective_loop_id or "?",
@@ -1135,10 +1198,20 @@ class QueryEngine:
                 reset_stream_model_override(override_token)
                 await self._unregister_query_task(thread_id)
                 await self._release_query_admission(effective_loop_id)
-                # RFC-221: tear down the subprocess runner (pool cancel_event / local SIGTERM).
-                # ``cancel_loop`` may have already popped and cancelled; pop here covers
-                # disconnect and other paths where no explicit cancel ran.
-                loop_runner_cleanup = self._active_runners.pop(effective_loop_id or thread_id, None)
+                owns_turn = self._owns_turn(effective_loop_id, turn_generation)
+                if owns_turn:
+                    active = self._active_runners.pop(effective_loop_id or thread_id, None)
+                    if (
+                        active is not None
+                        and active.turn_generation == turn_generation
+                    ):
+                        loop_runner_cleanup = active.runner
+                    else:
+                        loop_runner_cleanup = None
+                        if active is not None and effective_loop_id:
+                            self._active_runners[effective_loop_id] = active
+                else:
+                    loop_runner_cleanup = None
                 if loop_runner_cleanup is not None:
                     try:
                         await loop_runner_cleanup.cancel()
@@ -1198,7 +1271,7 @@ class QueryEngine:
                 if final_thread_id:
                     await d._runner.touch_thread_activity_timestamp(final_thread_id)
 
-                if effective_loop_id:
+                if effective_loop_id and self._owns_turn(effective_loop_id, turn_generation):
                     await _ensure_turn_stream_end()
                     drain_cfg = self._get_output_streaming_config(d)
                     await d._session_manager.await_loop_delivery_drained(
@@ -1242,7 +1315,7 @@ class QueryEngine:
                         {"type": "status", "state": "idle"},
                     )
 
-                if client_id:
+                if client_id and self._owns_turn(effective_loop_id, turn_generation):
                     await d._session_manager.release_loop_ownership(client_id)
                 d._current_query_task = None
 
@@ -1470,10 +1543,10 @@ class QueryEngine:
         # RFC-221: signal the pool/local subprocess runner *before* return.
         # This ensures cooperative cancellation starts immediately, even though
         # retry/force-kill logic runs in background.
-        loop_runner = self._active_runners.pop(lidq, None)
-        if loop_runner is not None:
+        active = self._active_runners.get(lidq)
+        if active is not None:
             try:
-                await loop_runner.cancel()
+                await active.runner.cancel()
             except Exception:
                 logger.debug(
                     "cancel_loop: loop_runner.cancel failed loop_id=%s",

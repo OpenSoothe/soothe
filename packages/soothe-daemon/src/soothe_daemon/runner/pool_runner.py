@@ -1459,6 +1459,8 @@ class WorkerPool:
         # Generate unique request_id for this request
         request_id = uuid.uuid4().hex[:16]
 
+        await self.await_loop_dispatchable(request.loop_id)
+
         # Set timeout on request if not specified
         if request.timeout_seconds is None or request.timeout_seconds <= 0:
             request.timeout_seconds = (
@@ -1661,6 +1663,24 @@ class WorkerPool:
     def get_worker_id_for_loop(self, loop_id: str) -> str | None:
         """Return worker_id handling the given loop_id, if any."""
         return self._workers_by_loop_id.get(loop_id)
+
+    def is_loop_busy(self, loop_id: str) -> bool:
+        """Return True when a non-idle worker is mapped to ``loop_id``."""
+        worker_id = self._workers_by_loop_id.get(loop_id)
+        if worker_id is None:
+            return False
+        return not self.is_worker_idle(worker_id)
+
+    async def await_loop_dispatchable(self, loop_id: str) -> None:
+        """Block until no in-flight worker request is mapped to ``loop_id``."""
+        cond = self._worker_available
+        if cond is None:
+            return
+        while self.is_loop_busy(loop_id):
+            if not self._running:
+                return
+            async with cond:
+                await cond.wait()
 
     def is_worker_idle(self, worker_id: str) -> bool:
         """Check if worker has returned to idle state."""
