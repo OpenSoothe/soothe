@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import re
 import secrets
@@ -368,7 +369,82 @@ class AgentDecision(BaseModel):
 
 
 PLAN_ID_LENGTH = 3
-PLAN_ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+PLAN_ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+_PLAN_SCOPE_PREFIX = re.compile(rf"^[{PLAN_ID_ALPHABET}]{{{PLAN_ID_LENGTH}}}-(.+)$")
+
+
+def _model_local_step_id(raw_id: str) -> str:
+    """Strip one runtime plan prefix (``XXX-``) so a new plan can re-scope the suffix."""
+    s = raw_id.strip()
+    if not s:
+        return s
+    match = _PLAN_SCOPE_PREFIX.match(s)
+    if match:
+        return match.group(1)
+    return s
+
+
+def prepare_decision_for_plan_scoping(decision: AgentDecision) -> AgentDecision:
+    """Normalize model step ids before allocating a new plan scope.
+
+    Strips prior ``PLAN-`` prefixes from step ids and in-plan dependencies, then
+    deduplicates local ids that would collapse under :func:`composite_step_id`.
+
+    Args:
+        decision: Parsed execution decision from the planner.
+
+    Returns:
+        Copy with model-local step ids safe for :func:`allocate_plan_id`.
+    """
+    if not decision.steps:
+        return decision
+
+    used_local_ids: set[str] = set()
+    old_to_new: dict[str, str] = {}
+
+    def unique_local_id(raw_id: str) -> str:
+        local = _model_local_step_id(raw_id)
+        if local not in used_local_ids:
+            used_local_ids.add(local)
+            return local
+        suffix = 2
+        while True:
+            candidate = f"{local}_{suffix}"
+            suffix += 1
+            if candidate not in used_local_ids:
+                used_local_ids.add(candidate)
+                return candidate
+
+    for step in decision.steps:
+        new_id = unique_local_id(step.id)
+        old_to_new[step.id] = new_id
+        stripped = _model_local_step_id(step.id)
+        if stripped not in old_to_new:
+            old_to_new[stripped] = new_id
+
+    new_steps: list[StepAction] = []
+    for step in decision.steps:
+        new_id = old_to_new[step.id]
+        new_deps: list[str] | None = None
+        if step.dependencies:
+            new_deps = []
+            for dep in step.dependencies:
+                dep_stripped = _model_local_step_id(dep)
+                if dep in old_to_new:
+                    new_deps.append(old_to_new[dep])
+                elif dep_stripped in old_to_new:
+                    new_deps.append(old_to_new[dep_stripped])
+                else:
+                    new_deps.append(dep)
+        new_steps.append(step.model_copy(update={"id": new_id, "dependencies": new_deps}))
+    return decision.model_copy(update={"steps": new_steps})
+
+
+def _shuffled_plan_ids() -> list[str]:
+    """All 3-char plan ids from :data:`PLAN_ID_ALPHABET`, in random order."""
+    ids = ["".join(chars) for chars in itertools.product(PLAN_ID_ALPHABET, repeat=PLAN_ID_LENGTH)]
+    secrets.SystemRandom().shuffle(ids)
+    return ids
 
 
 def composite_step_id(raw_id: str, plan_id: str) -> str:
@@ -427,9 +503,11 @@ def allocate_plan_id(
     *,
     reserved_step_ids: set[str] | frozenset[str],
 ) -> str:
-    """Allocate a unique uppercase 3-letter plan id so scoped step ids do not collide (IG-303).
+    """Allocate a unique 3-character plan id so scoped step ids do not collide (IG-303).
 
-    Tries random plan ids until every ``composite_step_id(step.id, plan_id)`` is disjoint
+    Plan ids use uppercase letters and digits (``A-Z``, ``0-9``).
+
+    Tries plan ids until every ``composite_step_id(step.id, plan_id)`` is disjoint
     from ``reserved_step_ids`` and pairwise distinct within ``decision.steps``.
 
     Args:
@@ -437,23 +515,25 @@ def allocate_plan_id(
         reserved_step_ids: Completed or external step ids (e.g. ``dependency_completion_ids()``).
 
     Returns:
-        Three uppercase letters (A–Z).
+        Three-character plan id from :data:`PLAN_ID_ALPHABET`.
 
     Raises:
-        RuntimeError: If no plan id is found within the attempt budget.
+        RuntimeError: If no plan id is found within the search space.
     """
     if not decision.steps:
         return "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
     reserved = set(reserved_step_ids)
-    for _ in range(4096):
-        plan_id = "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
+    for plan_id in _shuffled_plan_ids():
         composites = [composite_step_id(s.id, plan_id) for s in decision.steps]
         if len(set(composites)) != len(composites):
             continue
         if set(composites) & reserved:
             continue
         return plan_id
-    msg = f"Could not allocate unique plan id after 4096 attempts ({PLAN_ID_LENGTH}-char A–Z)"
+    msg = (
+        "Could not allocate unique plan id after exhausting "
+        f"all {PLAN_ID_LENGTH}-char A-Z0-9 combinations"
+    )
     raise RuntimeError(msg)
 
 
@@ -472,7 +552,7 @@ def assign_plan_step_ids(
 
     Args:
         decision: Parsed or merged execution decision.
-        plan_id: Uppercase plan id from :func:`allocate_plan_id` or inherited ``LoopState.plan_id``.
+        plan_id: Plan scope id from :func:`allocate_plan_id` or inherited ``LoopState.plan_id``.
 
     Returns:
         Copy with scoped ids; unchanged if ``steps`` is empty.
@@ -1081,7 +1161,7 @@ class LoopState(BaseModel):
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
-        plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses (IG-303).
+        plan_id: Active plan scope (3 uppercase letters or digits); new plan allocates, keep reuses (IG-303).
         completed_step_ids: Set of completed step IDs (CE-backed property when bound)
         previous_plan: Previous Plan phase result
         step_results: All step results from execution (CE-backed property when bound)
@@ -1396,11 +1476,8 @@ class LoopState(BaseModel):
     def dependency_completion_ids(self) -> set[str]:
         """Step IDs that satisfy ``StepAction.dependencies`` edges.
 
-        Combines the current-wave ``completed_step_ids`` with every successful
-        ``step_results`` ID. When ``plan_action == 'new'`` clears
-        ``completed_step_ids``, replanned steps that still depend on prior-wave
-        IDs (e.g. ``step_001``) remain schedulable because historical successes
-        stay in ``step_results`` (IG-346).
+        Combines ``completed_step_ids`` with every successful ``step_results`` ID so
+        cross-wave dependencies keep resolving after replans (IG-346).
 
         Returns:
             Union of completed IDs for dependency checks.

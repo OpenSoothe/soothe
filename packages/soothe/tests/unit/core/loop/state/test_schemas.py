@@ -24,6 +24,7 @@ from soothe.foundation.sloop.state.schemas import (
     max_goal_step_numeric_suffix,
     next_goal_local_step_id_start,
     plan_generate_steps_to_step_actions,
+    prepare_decision_for_plan_scoping,
     renumber_decision_local_step_ids_for_goal_continuation,
     resolve_step_wire_subagent,
     resolve_wire_subagent,
@@ -252,7 +253,7 @@ class TestAgentDecision:
             assign_plan_step_ids(decision, plan_id="KFA")
 
     def test_allocate_plan_id_skips_reserved_composite(self) -> None:
-        """First random plan id blocked by reserved composite; second attempt succeeds."""
+        """Blocked plan id is skipped; next candidate in search order succeeds."""
         decision = AgentDecision(
             type="execute_steps",
             steps=[StepAction(id="001", description="x", expected_output="o")],
@@ -260,11 +261,56 @@ class TestAgentDecision:
             reasoning="r",
         )
         reserved = {"KFA-001"}
-        with patch.object(schemas_mod.secrets, "choice", side_effect=list("KFAZZZ")):
+        with patch.object(schemas_mod, "_shuffled_plan_ids", return_value=["KFA", "ZZZ"]):
             pid = allocate_plan_id(decision, reserved_step_ids=reserved)
         assert pid == "ZZZ"
         scoped = assign_plan_step_ids(decision, plan_id=pid)
         assert scoped.steps[0].id == "ZZZ-001"
+
+    def test_prepare_decision_for_plan_scoping_strips_and_dedupes(self) -> None:
+        """Prior scoped ids are normalized so a new plan can allocate safely."""
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[
+                StepAction(id="001", description="a", expected_output="o"),
+                StepAction(id="KFA-001", description="b", expected_output="o"),
+                StepAction(
+                    id="A1B-002",
+                    description="alnum",
+                    expected_output="o",
+                ),
+                StepAction(
+                    id="003",
+                    description="c",
+                    expected_output="o",
+                    dependencies=["KFA-001"],
+                ),
+            ],
+            execution_mode="dependency",
+            reasoning="r",
+        )
+        prepared = prepare_decision_for_plan_scoping(decision)
+        assert [s.id for s in prepared.steps] == ["001", "001_2", "002", "003"]
+        assert prepared.steps[3].dependencies == ["001_2"]
+        pid = allocate_plan_id(prepared, reserved_step_ids={"KFA-001", "A1B-002"})
+        scoped = assign_plan_step_ids(prepared, plan_id=pid)
+        assert scoped.steps[0].id == f"{pid}-001"
+        assert scoped.steps[1].id == f"{pid}-001_2"
+        assert scoped.steps[2].id == f"{pid}-002"
+
+    def test_allocate_plan_id_uses_alphanumeric_alphabet(self) -> None:
+        decision = AgentDecision(
+            type="execute_steps",
+            steps=[StepAction(id="01", description="x", expected_output="o")],
+            execution_mode="parallel",
+            reasoning="r",
+        )
+        reserved = {"KFA-01"}
+        with patch.object(schemas_mod, "_shuffled_plan_ids", return_value=["KFA", "A1B"]):
+            pid = allocate_plan_id(decision, reserved_step_ids=reserved)
+        assert pid == "A1B"
+        scoped = assign_plan_step_ids(decision, plan_id=pid)
+        assert scoped.steps[0].id == "A1B-01"
 
     def test_replan_collision_avoids_empty_ready_steps(self) -> None:
         """Scoped id must not equal a completed historical step id."""
@@ -739,8 +785,8 @@ class TestLoopState:
         state.completed_step_ids.add("s1")
         assert state.has_remaining_steps() is False
 
-    def test_dependency_completion_ids_survives_replan_clear(self) -> None:
-        """After replan clears ``completed_step_ids``, deps on prior waves still resolve (IG-346)."""
+    def test_dependency_completion_ids_survives_completed_cache_clear(self) -> None:
+        """Historical successes in ``step_results`` still satisfy dependencies (IG-346)."""
         state = LoopState(goal="Count READMEs", thread_id="t1")
         state.add_step_result(
             StepResult(
