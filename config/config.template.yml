@@ -348,6 +348,7 @@ agent:
 tools:
   execution:
     enabled: true
+    background_log_dir: null
   file_ops:
     enabled: true
   datetime:
