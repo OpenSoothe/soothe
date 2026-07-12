@@ -36,7 +36,7 @@ async def test_load_ce_goals_reads_persistence_dag(monkeypatch) -> None:
         "soothe.foundation.context.persistence.factory.resolve_context_engine_persistence",
         lambda _config, _loop_id: persistence,
     )
-    monkeypatch.setattr("soothe_cli.runtime.load_config", lambda: object())
+    monkeypatch.setattr(context_data, "_load_soothe_config_for_context", lambda: object())
 
     goals = await context_data.load_ce_goals("loop-123")
     assert [g["id"] for g in goals] == ["g1"]
@@ -50,7 +50,7 @@ async def test_load_ce_goals_returns_empty_when_dag_missing(monkeypatch) -> None
         "soothe.foundation.context.persistence.factory.resolve_context_engine_persistence",
         lambda _config, _loop_id: persistence,
     )
-    monkeypatch.setattr("soothe_cli.runtime.load_config", lambda: object())
+    monkeypatch.setattr(context_data, "_load_soothe_config_for_context", lambda: object())
 
     assert await context_data.load_ce_goals("missing-loop") == []
 

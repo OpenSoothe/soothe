@@ -552,7 +552,14 @@ class PlannerProtocolConfig(BaseModel):
     model: str = "think"
 
     # Config fields (IG-150 Phase 4)
-    routing: Literal["auto", "always_direct", "always_planner", "always_claude"] = "auto"
+    routing: Literal["auto", "always_direct", "always_planner"] = "auto"
+
+    @field_validator("routing", mode="before")
+    @classmethod
+    def _normalize_legacy_routing(cls, value: Any) -> Any:
+        if value == "always_claude":
+            return "auto"
+        return value
 
 
 class PolicyProtocolConfig(BaseModel):
@@ -2359,6 +2366,21 @@ class AgentConfig(BaseModel):
         protocols: Protocol backends configuration (planner, policy, durability).
     """
 
+    @model_validator(mode="before")
+    @classmethod
+    def _strip_legacy_claude_core_agent(cls, data: Any) -> Any:
+        """Drop removed Claude Code core-agent YAML keys."""
+        if not isinstance(data, dict):
+            return data
+        for key in (
+            "core_agent_backend",
+            "claude_permission_mode",
+            "claude_max_turns",
+            "claude_model",
+        ):
+            data.pop(key, None)
+        return data
+
     # === BASIC (User Identity) ===
     name: str = "Soothe"
     """Display name for the assistant identity in system prompts."""
@@ -2458,21 +2480,6 @@ class AgentConfig(BaseModel):
         description="Veritas auto-answerer configuration",
     )
     """Settings for the intent-grounded clarification answerer."""
-
-    # === CORE AGENT BACKEND ===
-    core_agent_backend: Literal["langgraph", "claude"] = "langgraph"
-    """Core agent runtime backend. 'langgraph' uses LangGraph (default),
-    'claude' uses claude-agent-sdk (Claude Code CLI)."""
-
-    claude_permission_mode: str = "bypassPermissions"
-    """Claude Code permission mode (used when core_agent_backend='claude')."""
-
-    claude_max_turns: int = 25
-    """Maximum Claude Code turns per execution (used when core_agent_backend='claude')."""
-
-    claude_model: str | None = None
-    """Claude model name (e.g., 'sonnet', 'opus'). None = SDK default.
-    Used when core_agent_backend='claude'."""
 
 
 class ClarificationConfig(BaseModel):

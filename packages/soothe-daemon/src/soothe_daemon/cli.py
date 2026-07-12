@@ -40,7 +40,7 @@ def _ensure_cli_dotenv() -> None:
 
 app = typer.Typer(
     name="soothed",
-    help="Soothe daemon management - start/stop/status/doctor/warmup",
+    help="Soothe daemon management - start/stop/status/doctor",
 )
 
 # Register identity sub-app (RFC-307)
@@ -428,49 +428,6 @@ def doctor(
     ):
         raise typer.Exit(code=1)
     if fail_key == "error" and _status_meets_or_exceeds(report.overall_status, CheckStatus.ERROR):
-        raise typer.Exit(code=1)
-
-
-@app.command("warmup")
-def warmup_cache(
-    verbose: Annotated[
-        bool,
-        typer.Option("--verbose", "-v", help="Show detailed progress."),
-    ] = False,
-) -> None:
-    """Pre-download embedding model cache for faster startup.
-
-    Downloads the FastEmbed ONNX embedding model to
-    ~/.cache/soothe/models/embeddings/ for sharing across main daemon
-    and worker processes.
-
-    Run this before starting the daemon for faster first-query response.
-    """
-    import asyncio
-
-    from soothe.utils.similarity import async_warmup_embedding_model, embedding_cache_dir
-
-    cache_dir = embedding_cache_dir()
-    typer.echo(f"Warming up embedding model cache at {cache_dir}...")
-
-    async def _warmup() -> bool:
-        return await async_warmup_embedding_model()
-
-    success = asyncio.run(_warmup())
-
-    if success:
-        typer.echo("Model cache warmed up successfully.")
-        if verbose:
-            typer.echo(f"Cache directory: {cache_dir}")
-    else:
-        typer.echo(
-            "Model cache warmup failed (fastembed may not be installed).",
-            err=True,
-        )
-        typer.echo(
-            "Install with: pip install -U soothe",
-            err=True,
-        )
         raise typer.Exit(code=1)
 
 

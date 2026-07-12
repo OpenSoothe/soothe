@@ -193,7 +193,7 @@ A critical implementation detail: commands arrive with a `loop_id` (the StrangeL
 | `vector_stores` | `vector_stores_check` | Vector DB connectivity + dimension match |
 | `providers` | `providers_check` | LLM provider API key validity |
 | `mcp_servers` | `mcp_check` | MCP server reachability |
-| `models` | `embedding_warmup_check` | Model instantiation + embedding warmup |
+| `models` | `embedding_role_configured` | Router ``embedding`` role for Skillify / MemU / vector stores |
 | `external_apis` | `external_apis_check` | OpenAI/Anthropic/etc. connectivity |
 | `observability` | `observability_check` | Logging, tracing config |
 

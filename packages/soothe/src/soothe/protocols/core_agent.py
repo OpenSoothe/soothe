@@ -54,9 +54,7 @@ class CoreAgentProtocol(Protocol):
     def checkpointer(self) -> BaseCheckpointSaver | None:
         """LangGraph checkpointer for thread state persistence.
 
-        Returns None if the implementation doesn't use LangGraph checkpointing
-        or if checkpointing is disabled. Alternative implementations (e.g.,
-        ClaudeCoreAgent) return None since they manage state differently.
+        Returns None if checkpointing is disabled.
         """
         ...
 

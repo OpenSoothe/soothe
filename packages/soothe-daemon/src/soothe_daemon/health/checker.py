@@ -215,14 +215,14 @@ class HealthChecker:
         return await check_mcp_servers(self.config)
 
     async def check_models(self) -> CategoryResult:
-        """Check local model caches (embedding warmup).
+        """Check embedding router role configuration.
 
         Returns:
-            CategoryResult with model cache check results
+            CategoryResult with embedding role check results
         """
-        from soothe_daemon.health.checks.embedding_warmup_check import check_embedding_warmup
+        from soothe_daemon.health.checks.embedding_role_check import check_embedding_role
 
-        return await check_embedding_warmup(self.config)
+        return await check_embedding_role(self.config)
 
     async def check_external_apis(self) -> CategoryResult:
         """Check external API connectivity.

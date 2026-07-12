@@ -22,9 +22,9 @@ Skill warehouse indexing and semantic retrieval — **built into `soothe`** (`so
 
 Generative agent framework with skill harmonization. Composes skills from Skillify, resolves conflicts, and generates task-specific subagents dynamically.
 
-### BrowserUse and Claude Code
+### BrowserUse (core)
 
-Delegated **browser-use** and **Claude agent SDK** subagents (IG-415). Install with `pip install "soothe-plugins[browser_use]"` or `"soothe-plugins[claude]"` and enable `subagents.browser_use` / `subagents.claude` in config. Spec: `docs/RFC-601-community-agents.md`.
+Browser automation via **browser-use** — built into `soothe` (`soothe.subagents.browser_use`), not this package. Enable via `subagents.browser_use` in config.
 
 ## Extensibility
 

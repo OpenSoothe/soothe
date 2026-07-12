@@ -26,11 +26,15 @@ Root cause: cancelled asyncio turns still emitted terminal frames and tore down 
 - Per-loop **turn generation** incremented on each admitted query.
 - `_active_runners` stores `(runner, generation)`; `finally` only cancels runner and emits `idle` / `complete` when generation still matches.
 - `cancel_loop` / cancel orchestrator do not pop successor runners from `_active_runners`.
+- **All** shared-state teardown in the stream `finally` is ownership-gated so a superseded turn cannot evict a successor that reused the loop's checkpoint `thread_id`:
+  - `_unregister_query_task` is identity-scoped (drops `_active_threads[thread_id]` only when it still holds this turn's task).
+  - `_release_query_admission` and `_active_stream_loop_ids.discard` run only when the turn still owns the loop.
+  - `_current_query_task` is cleared only when it still points at this turn's task (agent and direct-model paths).
 
 ### P0 — Serialize post-cancel intake
 
 - `await_loop_ready_for_turn()` waits for cancel orchestrator completion and execution-pool worker idle.
-- `run_query()` calls it before admission (invoked from loop worker handlers for user input).
+- `run_query()` calls it before admission (this is the entry point invoked by loop worker handlers for user input).
 
 ### P0 — Per-loop worker dispatch
 
@@ -46,8 +50,7 @@ Root cause: cancelled asyncio turns still emitted terminal frames and tore down 
 
 | Area | File |
 |------|------|
-| Turn ownership + await | `packages/soothe-daemon/src/soothe_daemon/query/engine.py` |
-| Loop worker → run_query | `packages/soothe-daemon/src/soothe_daemon/server/handlers.py` |
+| Turn ownership + await + teardown guards | `packages/soothe-daemon/src/soothe_daemon/query/engine.py` |
 | Pool serialize | `packages/soothe-daemon/src/soothe_daemon/runner/thread_runner.py` |
 | Pool serialize | `packages/soothe-daemon/src/soothe_daemon/runner/pool_runner.py` |
 | TUI consumer | `packages/soothe-cli/src/soothe_cli/runtime/transport/session.py` |

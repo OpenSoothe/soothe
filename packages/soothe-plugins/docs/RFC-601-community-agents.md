@@ -1,4 +1,4 @@
-# RFC-601 (Community): Skillify, Weaver, BrowserUse, and Claude Agents
+# RFC-601 (Community): Skillify, Weaver, and Sample Echo
 
 **Status**: Implemented (Community Plugin)
 **Package**: `soothe-plugins`
@@ -11,17 +11,16 @@
 
 ## 1. Abstract
 
-This RFC defines the architecture of community plugin agents for Soothe: **Weaver** (generative agent composition), **BrowserUse** (browser-use automation), and **Claude** (Claude Code via claude-agent-sdk). **Skillify** moved to the core `soothe` package (`soothe.subagents.skillify`) in 2026-07; see RFC-601 in the main soothe specs. Remaining agents are distributed via `soothe-plugins` and loaded through RFC-600 entry-point discovery.
+This RFC defines the architecture of community plugin agents for Soothe: **Weaver** (generative agent composition) and **Sample Echo** (minimal integration test subagent). **Skillify** and **BrowserUse** moved to the core `soothe` package in 2026-07; see RFC-601 in the main soothe specs. Remaining community agents are distributed via `soothe-plugins` and loaded through RFC-600 entry-point discovery.
 
 ---
 
 ## 2. Scope
 
 This RFC defines:
-- Skillify agent architecture (background indexing, retrieval subagent)
+- Skillify agent architecture (background indexing, retrieval subagent) — **core only**
 - Weaver agent architecture (reuse-first generation, skill harmonization)
-- BrowserUse and Claude Code plugin packages (`soothe_plugins.browser_use`, `soothe_plugins.claude`)
-- Plugin definitions for all community agents
+- Plugin definitions for community agents
 - Integration contracts with protocols
 - Cross-plugin dependency (Weaver depends on Skillify)
 
@@ -268,9 +267,7 @@ async def on_load(self, context):
 ## 6. File Structure (Community)
 
 ```
-community/src/soothe_plugins/
-├── browser_use/              # BrowserUsePlugin (browser-use)
-├── claude/                   # ClaudePlugin (claude-agent-sdk)
+packages/soothe-plugins/src/soothe_plugins/
 ├── sample_echo/              # SampleEchoPlugin (minimal test subagent)
 └── weaver/
     ├── __init__.py           # WeaverPlugin + exports
@@ -289,25 +286,20 @@ community/src/soothe_plugins/
 
 ```bash
 pip install soothe-plugins
-# Optional subagents:
-pip install "soothe-plugins[browser_use]"
-pip install "soothe-plugins[claude]"
 ```
 
 Plugins are auto-discovered via entry points in `pyproject.toml`:
 
 ```toml
 [project.entry-points."soothe.plugins"]
-browser_use = "soothe_plugins.browser_use:BrowserUsePlugin"
-claude = "soothe_plugins.claude:ClaudePlugin"
 sample_echo = "soothe_plugins.sample_echo:SampleEchoPlugin"
 weaver = "soothe_plugins.weaver:WeaverPlugin"
 ```
 
-### 7.1 BrowserUse and Claude (IG-415)
+### 7.1 Core subagents (not soothe-plugins)
 
-- **BrowserUse**: `soothe_plugins.browser_use` — `BrowserUseSubagentConfig` validates `subagents.browser_use.config` in the plugin factory; wire events register via `soothe_sdk.plugin.registry.register_event`.
-- **Claude**: `soothe_plugins.claude` — session bridge `cleanup_claude_sessions` is imported optionally from the daemon when loops are deleted.
+- **Skillify**: `soothe.subagents.skillify` — skill warehouse indexing and retrieval
+- **BrowserUse**: `soothe.subagents.browser_use` — browser-use automation; `BrowserUseSubagentConfig` validates `subagents.browser_use.config`
 
 ---
 
@@ -333,11 +325,9 @@ weaver = "soothe_plugins.weaver:WeaverPlugin"
 This RFC documents community plugin agents for Soothe:
 
 - **Weaver**: Generative agent composition with skill harmonization (depends on core Skillify)
-- **BrowserUse**: Browser-use automation (optional extra)
-- **Claude**: Claude Code agent wrapper (optional extra)
 - **Sample Echo**: Minimal test subagent for integration testing
 
-Skillify is a built-in core subagent (`soothe.subagents.skillify`), not a `soothe-plugins` entry point.
+Skillify and BrowserUse are built-in core subagents (`soothe.subagents.*`), not `soothe-plugins` entry points.
 
 All follow the RFC-600 plugin architecture with `@plugin` + `@subagent` decorators, self-contained package structure, and entry-point discovery via `soothe-plugins`.
 

@@ -90,19 +90,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # =============================================================================
-# Stage 2: warm embedding cache (separate layer for better caching)
-# =============================================================================
-FROM deps AS warmup
-
-ENV SOOTHE_EMBEDDING_CACHE=/root/.cache/soothe/models/embeddings
-COPY scripts/warmup_embedding_model.py /tmp/warmup_embedding_model.py
-RUN mkdir -p /root/.cache/soothe/models/embeddings \
-    && /app/.venv/bin/python /tmp/warmup_embedding_model.py --verbose \
-        || echo "Embedding warmup skipped (will download at runtime)" \
-    && rm -f /tmp/warmup_embedding_model.py
-
-# =============================================================================
-# Stage 3: minimal runtime (venv + browsers + HF cache + jemalloc, non-root)
+# Stage 2: minimal runtime (venv + browsers + jemalloc, non-root)
 # =============================================================================
 FROM ${PYTHON_BASE} AS runtime
 
@@ -123,7 +111,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY --from=warmup /app/.venv /app/.venv
+COPY --from=deps /app/.venv /app/.venv
 COPY --from=deps /opt/ms-playwright /opt/ms-playwright
 
 ENV PATH="/app/.venv/bin:${PATH}"
@@ -139,10 +127,7 @@ RUN sed -i 's|http://deb.debian.org|http://mirrors.aliyun.com|g' /etc/apt/source
 
 RUN useradd --create-home --system soothe \
     && mkdir -p /var/lib/soothe \
-    && mkdir -p /home/soothe/.cache/soothe/models \
-    && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright /home/soothe/.cache
-
-COPY --from=warmup --chown=soothe:soothe /root/.cache/soothe/models/embeddings /home/soothe/.cache/soothe/models/embeddings
+    && chown -R soothe:soothe /var/lib/soothe /opt/ms-playwright
 
 USER soothe
 WORKDIR /var/lib/soothe

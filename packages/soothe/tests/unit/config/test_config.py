@@ -122,6 +122,25 @@ class TestSootheConfig:
         assert "skillify" not in cfg.subagents
         assert cfg.skillify.enabled is True
 
+    def test_legacy_claude_core_agent_fields_stripped(self) -> None:
+        cfg = SootheConfig(
+            agent={
+                "core_agent_backend": "claude",
+                "claude_permission_mode": "default",
+                "claude_max_turns": 10,
+                "claude_model": "claude-sonnet-4",
+            }
+        )
+        dumped = cfg.agent.model_dump()
+        assert "core_agent_backend" not in dumped
+        assert "claude_permission_mode" not in dumped
+        assert "claude_max_turns" not in dumped
+        assert "claude_model" not in dumped
+
+    def test_legacy_always_claude_routing_normalized(self) -> None:
+        cfg = SootheConfig(agent={"protocols": {"planner": {"routing": "always_claude"}}})
+        assert cfg.agent.protocols.planner.routing == "auto"
+
     def test_assistant_name_default(self) -> None:
         cfg = SootheConfig()
         assert cfg.agent.name == "Soothe"
@@ -170,7 +189,7 @@ class TestSootheConfig:
         assert cfg.agent.protocols.planner.routing == "auto"
 
     def test_planner_routing_options(self) -> None:
-        for routing in ("auto", "always_direct", "always_planner", "always_claude"):
+        for routing in ("auto", "always_direct", "always_planner"):
             cfg = SootheConfig(agent={"protocols": {"planner": {"routing": routing}}})
             assert cfg.agent.protocols.planner.routing == routing
 

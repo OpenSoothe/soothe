@@ -10,10 +10,10 @@ from soothe.config import SootheConfig
 from soothe.foundation.core.agent._builder import AgentBuilder
 
 
-def test_build_passes_filesystem_backend_not_core_agent_backend_string(
+def test_build_passes_filesystem_backend_to_deepagents(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``core_agent_backend='langgraph'`` must not shadow the filesystem ``backend`` param."""
+    """Filesystem ``backend`` must be passed to ``create_deep_agent``, not a config string."""
     fs_backend = MagicMock(name="filesystem_backend")
     captured: dict[str, object] = {}
 

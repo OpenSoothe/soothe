@@ -219,9 +219,7 @@ class SootheConfig(BaseSettings):
 
     Builtin subagents (planner, deep_research, academic_research, browser_use) are added
     automatically. browser_use is included in base dependencies
-    and is enabled by default. Claude Code runs via ``agent.core_agent_backend:
-    claude`` (``soothe[claude]`` extra), not as a subagent.
-    Plugin-discovered subagents are merged during config validation.
+    and is enabled by default. Plugin-discovered subagents are merged during config validation.
     """
 
     @model_validator(mode="before")

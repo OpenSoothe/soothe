@@ -64,8 +64,6 @@ dependencies = [
     "wizsearch>=1.1.8,<2.0.0",
     "chardet<6",
     "deepxiv-sdk>=0.2.5",
-    # Promoted from optional group: semantic
-    "fastembed>=0.6.0,<1.0.0",
     # Promoted from optional group: browser_use
     "browser-use>=0.11.0,<0.13.0",
     "psycopg[binary,pool]>=3.2.0,<4.0.0",
@@ -86,12 +84,8 @@ document = [
 github = [
     "pygithub>=2.0.0",
 ]
-claude = [
-    "anthropic>=0.96.0,<1.0.0",
-    "claude-agent-sdk>=0.1.0,<1.0.0",
-]
 all = [
-    "soothe[tabular,document,github,claude]",
+    "soothe[tabular,document,github]",
 ]
 dev = [
     "pytest>=8.0.0",

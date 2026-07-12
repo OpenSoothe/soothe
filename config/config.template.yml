@@ -337,11 +337,6 @@ agent:
   veritas:
     model_role: think
     max_context_steps: 8
-  # langgraph (default) | claude — requires soothe[claude] extra
-  core_agent_backend: langgraph
-  claude_permission_mode: bypassPermissions
-  claude_max_turns: 25
-  claude_model: null
 
 # ============================================================
 # TOOLS & EXTENSIONS

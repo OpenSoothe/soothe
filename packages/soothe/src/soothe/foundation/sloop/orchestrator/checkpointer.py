@@ -16,5 +16,5 @@ def core_agent_checkpointer(strange_loop: StrangeLoop) -> Any | None:
             return None
         return getattr(graph, "checkpointer", None)
     except NotImplementedError:
-        # ClaudeCoreAgent doesn't use LangGraph
+        # CoreAgent without LangGraph graph
         return None
