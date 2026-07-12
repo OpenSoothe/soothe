@@ -6,11 +6,8 @@ import importlib
 from pathlib import Path
 
 import pytest
-from langchain_community.tools import ShellTool
-from langchain_experimental.tools.python.tool import PythonREPLTool
 
 from soothe.toolkits.data import DataToolkit, InspectDataTool
-from soothe.toolkits.execution import ExecutionToolkit, RunCommandShellTool, RunPythonREPLTool
 from soothe.toolkits.wizsearch import WizsearchCrawlTool, WizsearchSearchTool
 
 
@@ -157,48 +154,6 @@ class TestFileOpsToolkit:
         assert any(t.name == "apply_diff" for t in middleware.tools)
         # Note: apply_diff implementation would need proper diff format
         # This is a placeholder test
-
-
-# ---------------------------------------------------------------------------
-# Execution Tools (replaces ExecuteTool)
-# ---------------------------------------------------------------------------
-
-
-class TestExecutionTools:
-    """Tests for the execution tools."""
-
-    def test_create_returns_four_tools(self) -> None:
-        toolkit = ExecutionToolkit()
-        tools = toolkit.get_tools()
-        assert len(tools) == 4
-        assert isinstance(tools[0], RunCommandShellTool)
-        assert isinstance(tools[0], ShellTool)
-        assert isinstance(tools[1], RunPythonREPLTool)
-        assert isinstance(tools[1], PythonREPLTool)
-
-    def test_run_python_tool_name(self) -> None:
-        tool = RunPythonREPLTool()
-        assert tool.name == "run_python"
-
-    def test_run_python_emits_print_output(self) -> None:
-        tool = RunPythonREPLTool()
-        out = tool._run(code="print('hello')")
-        assert "hello" in str(out)
-
-    def test_run_command_tool_name(self) -> None:
-        tool = RunCommandShellTool()
-        assert tool.name == "run_command"
-
-    def test_run_command_description_mentions_shell(self) -> None:
-        tool = RunCommandShellTool()
-        desc = tool.description.lower()
-        assert "command" in desc or "shell" in desc
-
-    def test_run_command_basic(self) -> None:
-        """Test basic command execution."""
-        tool = RunCommandShellTool()
-        result = tool._run(command="echo hello")
-        assert "hello" in result or result  # Should have some output
 
 
 # ---------------------------------------------------------------------------

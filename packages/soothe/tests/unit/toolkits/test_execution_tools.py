@@ -130,10 +130,6 @@ class TestRunPythonREPLTool:
         result = t2._run(code="print(x)")
         assert "NameError" in str(result)
 
-    def test_matplotlib_plot_generation(self) -> None:
-        """Test matplotlib plot generation."""
-        pytest.skip("matplotlib test requires specific environment setup")
-
     def test_pandas_dataframe_operations(self, python_tool) -> None:
         """Test pandas DataFrame operations."""
         try:
@@ -167,28 +163,3 @@ print(z)
 
         assert isinstance(result, str)
         assert "SyntaxError" in str(result) or "Error" in str(result)
-
-
-# ---------------------------------------------------------------------------
-# Error Handling Tests
-# ---------------------------------------------------------------------------
-
-
-class TestExecutionErrorHandling:
-    """Test error handling across execution tools."""
-
-    def test_shell_injection_prevention(self) -> None:
-        """Test that shell injection is prevented."""
-        pytest.skip("Requires security testing setup")
-
-    def test_python_memory_limit(self) -> None:
-        """Test Python memory limits."""
-        pytest.skip("Requires specific memory limit configuration")
-
-    def test_python_timeout(self) -> None:
-        """Test Python execution timeout."""
-        pytest.skip("Requires specific timeout configuration")
-
-    def test_concurrent_session_handling(self) -> None:
-        """Test handling of concurrent sessions."""
-        pytest.skip("Requires concurrent execution setup")

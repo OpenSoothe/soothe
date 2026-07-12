@@ -8,11 +8,11 @@ from langchain_experimental.tools.python.tool import PythonREPLTool
 
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 from soothe.toolkits.execution import (
+    ExecutionToolkit,
     KillProcessTool,
     RunBackgroundTool,
     RunCommandShellTool,
     RunPythonREPLTool,
-    create_execution_tools,
 )
 
 
@@ -97,8 +97,8 @@ class TestRunCommandShellToolInitialization:
         tool = RunCommandShellTool()
         assert tool.security_config is None
 
-    def test_create_execution_tools(self) -> None:
-        tools = create_execution_tools()
+    def test_execution_toolkit_returns_four_tools(self) -> None:
+        tools = ExecutionToolkit().get_tools()
 
         assert len(tools) == 4
         assert isinstance(tools[0], RunCommandShellTool)
