@@ -26,17 +26,16 @@ def _scope_decision_for_plan(
     *,
     reuse_plan_id: str | None,
 ) -> AgentDecision:
-    """Normalize, allocate, and scope step ids for a new or bootstrapped plan."""
-    reserved = set(state.dependency_completion_ids())
-    decision = prepare_decision_for_plan_scoping(decision)
-    plan_id = reuse_plan_id or allocate_plan_id(decision, reserved_step_ids=reserved)
+    """Normalize, generate, and scope step ids for a new or bootstrapped plan."""
+    decision = prepare_decision_for_plan_scoping(decision, known_plan_ids=state.known_plan_ids())
+    plan_id = reuse_plan_id or allocate_plan_id()
     state.plan_id = plan_id
     decision = assign_plan_step_ids(decision, plan_id=plan_id)
     return normalize_plan_dag(decision, completed_ids=state.dependency_completion_ids())
 
 
 async def node_resolve_decision(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
-    """Allocate plan ids, merge keep/new semantics, stash decision on scratch."""
+    """Generate plan ids, merge keep/new semantics, stash decision on scratch."""
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
     plan_result = ctx.scratch.plan_result

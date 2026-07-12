@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import itertools
 import logging
 import re
 import secrets
@@ -369,41 +368,57 @@ class AgentDecision(BaseModel):
 
 
 PLAN_ID_LENGTH = 3
-PLAN_ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-_PLAN_SCOPE_PREFIX = re.compile(rf"^[{PLAN_ID_ALPHABET}]{{{PLAN_ID_LENGTH}}}-(.+)$")
+PLAN_ID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-def _model_local_step_id(raw_id: str) -> str:
-    """Strip one runtime plan prefix (``XXX-``) so a new plan can re-scope the suffix."""
+def _plan_id_prefix_from_step_id(step_id: str) -> str | None:
+    """Return the first plan-scope segment when ``step_id`` is ``PLAN-suffix``."""
+    if "-" not in step_id:
+        return None
+    prefix, _ = step_id.split("-", 1)
+    if len(prefix) == PLAN_ID_LENGTH and prefix.isalpha() and prefix.isupper():
+        return prefix
+    return None
+
+
+def _model_local_step_id(raw_id: str, *, known_plan_ids: frozenset[str]) -> str:
+    """Strip a loop plan prefix only when it matches a known scoped plan id."""
     s = raw_id.strip()
-    if not s:
+    if not s or "-" not in s:
         return s
-    match = _PLAN_SCOPE_PREFIX.match(s)
-    if match:
-        return match.group(1)
+    prefix, suffix = s.split("-", 1)
+    if len(prefix) == PLAN_ID_LENGTH and prefix in known_plan_ids:
+        return suffix
     return s
 
 
-def prepare_decision_for_plan_scoping(decision: AgentDecision) -> AgentDecision:
-    """Normalize model step ids before allocating a new plan scope.
+def prepare_decision_for_plan_scoping(
+    decision: AgentDecision,
+    *,
+    known_plan_ids: set[str] | frozenset[str] | None = None,
+) -> AgentDecision:
+    """Normalize model step ids before scoping under a new plan.
 
-    Strips prior ``PLAN-`` prefixes from step ids and in-plan dependencies, then
-    deduplicates local ids that would collapse under :func:`composite_step_id`.
+    Strips prior loop ``PLAN-`` prefixes from step ids and in-plan dependencies when
+    the prefix matches a plan id already used in this loop, then deduplicates local
+    ids that would collapse under :func:`composite_step_id`.
 
     Args:
         decision: Parsed execution decision from the planner.
+        known_plan_ids: Plan ids from the current loop (e.g. ``LoopState.known_plan_ids()``).
 
     Returns:
-        Copy with model-local step ids safe for :func:`allocate_plan_id`.
+        Copy with model-local step ids safe for :func:`assign_plan_step_ids`.
     """
     if not decision.steps:
         return decision
 
+    known = frozenset(known_plan_ids or ())
     used_local_ids: set[str] = set()
     old_to_new: dict[str, str] = {}
 
     def unique_local_id(raw_id: str) -> str:
-        local = _model_local_step_id(raw_id)
+        local = _model_local_step_id(raw_id, known_plan_ids=known)
         if local not in used_local_ids:
             used_local_ids.add(local)
             return local
@@ -418,7 +433,7 @@ def prepare_decision_for_plan_scoping(decision: AgentDecision) -> AgentDecision:
     for step in decision.steps:
         new_id = unique_local_id(step.id)
         old_to_new[step.id] = new_id
-        stripped = _model_local_step_id(step.id)
+        stripped = _model_local_step_id(step.id, known_plan_ids=known)
         if stripped not in old_to_new:
             old_to_new[stripped] = new_id
 
@@ -429,7 +444,7 @@ def prepare_decision_for_plan_scoping(decision: AgentDecision) -> AgentDecision:
         if step.dependencies:
             new_deps = []
             for dep in step.dependencies:
-                dep_stripped = _model_local_step_id(dep)
+                dep_stripped = _model_local_step_id(dep, known_plan_ids=known)
                 if dep in old_to_new:
                     new_deps.append(old_to_new[dep])
                 elif dep_stripped in old_to_new:
@@ -438,13 +453,6 @@ def prepare_decision_for_plan_scoping(decision: AgentDecision) -> AgentDecision:
                     new_deps.append(dep)
         new_steps.append(step.model_copy(update={"id": new_id, "dependencies": new_deps}))
     return decision.model_copy(update={"steps": new_steps})
-
-
-def _shuffled_plan_ids() -> list[str]:
-    """All 3-char plan ids from :data:`PLAN_ID_ALPHABET`, in random order."""
-    ids = ["".join(chars) for chars in itertools.product(PLAN_ID_ALPHABET, repeat=PLAN_ID_LENGTH)]
-    secrets.SystemRandom().shuffle(ids)
-    return ids
 
 
 def composite_step_id(raw_id: str, plan_id: str) -> str:
@@ -498,43 +506,17 @@ def _resolve_in_plan_dependency(dep: str, id_map: dict[str, str]) -> str:
     return dep
 
 
-def allocate_plan_id(
-    decision: AgentDecision,
-    *,
-    reserved_step_ids: set[str] | frozenset[str],
-) -> str:
-    """Allocate a unique 3-character plan id so scoped step ids do not collide (IG-303).
+def allocate_plan_id() -> str:
+    """Return a random 3-character plan scope id (uppercase ``A-Z`` only).
 
-    Plan ids use uppercase letters and digits (``A-Z``, ``0-9``).
-
-    Tries plan ids until every ``composite_step_id(step.id, plan_id)`` is disjoint
-    from ``reserved_step_ids`` and pairwise distinct within ``decision.steps``.
-
-    Args:
-        decision: Parsed execution decision (model step ids in ``StepAction.id``).
-        reserved_step_ids: Completed or external step ids (e.g. ``dependency_completion_ids()``).
+    Plan ids distinguish step waves within a single loop; they are not required
+    to be unique across loops or threads. Step uniqueness within a loop comes
+    from ``composite_step_id`` scoping in :func:`assign_plan_step_ids`.
 
     Returns:
-        Three-character plan id from :data:`PLAN_ID_ALPHABET`.
-
-    Raises:
-        RuntimeError: If no plan id is found within the search space.
+        Three uppercase letters from :data:`PLAN_ID_ALPHABET`.
     """
-    if not decision.steps:
-        return "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
-    reserved = set(reserved_step_ids)
-    for plan_id in _shuffled_plan_ids():
-        composites = [composite_step_id(s.id, plan_id) for s in decision.steps]
-        if len(set(composites)) != len(composites):
-            continue
-        if set(composites) & reserved:
-            continue
-        return plan_id
-    msg = (
-        "Could not allocate unique plan id after exhausting "
-        f"all {PLAN_ID_LENGTH}-char A-Z0-9 combinations"
-    )
-    raise RuntimeError(msg)
+    return "".join(secrets.choice(PLAN_ID_ALPHABET) for _ in range(PLAN_ID_LENGTH))
 
 
 def assign_plan_step_ids(
@@ -1161,7 +1143,7 @@ class LoopState(BaseModel):
         iteration: Current iteration number
         max_iterations: Maximum iterations allowed
         current_decision: Current AgentDecision being executed
-        plan_id: Active plan scope (3 uppercase letters or digits); new plan allocates, keep reuses (IG-303).
+        plan_id: Active plan scope (3 uppercase letters); new plan allocates, keep reuses (IG-303).
         completed_step_ids: Set of completed step IDs (CE-backed property when bound)
         previous_plan: Previous Plan phase result
         step_results: All step results from execution (CE-backed property when bound)
@@ -1484,6 +1466,17 @@ class LoopState(BaseModel):
         """
         historical = {r.step_id for r in self.step_results if r.success}
         return set(self.completed_step_ids) | historical
+
+    def known_plan_ids(self) -> set[str]:
+        """Plan scope ids already used in this loop for replan prefix stripping."""
+        ids: set[str] = set()
+        if self.plan_id:
+            ids.add(self.plan_id)
+        for sid in self.dependency_completion_ids():
+            prefix = _plan_id_prefix_from_step_id(sid)
+            if prefix:
+                ids.add(prefix)
+        return ids
 
     def add_action_to_history(self, action: str) -> None:
         """Add action description to history with bounded accumulation (IG-475).

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from unittest.mock import patch
 
 import pytest
@@ -252,31 +253,25 @@ class TestAgentDecision:
         with pytest.raises(ValueError, match="duplicate composite"):
             assign_plan_step_ids(decision, plan_id="KFA")
 
-    def test_allocate_plan_id_skips_reserved_composite(self) -> None:
-        """Blocked plan id is skipped; next candidate in search order succeeds."""
-        decision = AgentDecision(
-            type="execute_steps",
-            steps=[StepAction(id="001", description="x", expected_output="o")],
-            execution_mode="parallel",
-            reasoning="r",
-        )
-        reserved = {"KFA-001"}
-        with patch.object(schemas_mod, "_shuffled_plan_ids", return_value=["KFA", "ZZZ"]):
-            pid = allocate_plan_id(decision, reserved_step_ids=reserved)
-        assert pid == "ZZZ"
-        scoped = assign_plan_step_ids(decision, plan_id=pid)
-        assert scoped.steps[0].id == "ZZZ-001"
+    def test_allocate_plan_id_returns_random_uppercase_letters(self) -> None:
+        """Plan id is exactly three uppercase A-Z letters."""
+        alphabet = schemas_mod.PLAN_ID_ALPHABET
+        with patch.object(secrets, "choice", side_effect=list("KFA")):
+            pid = allocate_plan_id()
+        assert pid == "KFA"
+        assert len(pid) == schemas_mod.PLAN_ID_LENGTH
+        assert all(c in alphabet for c in pid)
 
     def test_prepare_decision_for_plan_scoping_strips_and_dedupes(self) -> None:
-        """Prior scoped ids are normalized so a new plan can allocate safely."""
+        """Prior scoped ids are normalized so a new plan can scope safely."""
         decision = AgentDecision(
             type="execute_steps",
             steps=[
                 StepAction(id="001", description="a", expected_output="o"),
                 StepAction(id="KFA-001", description="b", expected_output="o"),
                 StepAction(
-                    id="A1B-002",
-                    description="alnum",
+                    id="XYZ-002",
+                    description="prior scoped",
                     expected_output="o",
                 ),
                 StepAction(
@@ -289,31 +284,35 @@ class TestAgentDecision:
             execution_mode="dependency",
             reasoning="r",
         )
-        prepared = prepare_decision_for_plan_scoping(decision)
+        prepared = prepare_decision_for_plan_scoping(decision, known_plan_ids={"KFA", "XYZ"})
         assert [s.id for s in prepared.steps] == ["001", "001_2", "002", "003"]
         assert prepared.steps[3].dependencies == ["001_2"]
-        pid = allocate_plan_id(prepared, reserved_step_ids={"KFA-001", "A1B-002"})
+        pid = "ZZZ"
         scoped = assign_plan_step_ids(prepared, plan_id=pid)
         assert scoped.steps[0].id == f"{pid}-001"
         assert scoped.steps[1].id == f"{pid}-001_2"
         assert scoped.steps[2].id == f"{pid}-002"
 
-    def test_allocate_plan_id_uses_alphanumeric_alphabet(self) -> None:
+    def test_prepare_decision_preserves_model_ask_step_id(self) -> None:
+        """Planner ids like ASK-01 must not be mistaken for plan prefixes."""
         decision = AgentDecision(
             type="execute_steps",
-            steps=[StepAction(id="01", description="x", expected_output="o")],
+            steps=[
+                StepAction(
+                    id="ASK-01",
+                    description="ask user",
+                    kind="ask_user",
+                    questions=["Which format?"],
+                )
+            ],
             execution_mode="parallel",
             reasoning="r",
         )
-        reserved = {"KFA-01"}
-        with patch.object(schemas_mod, "_shuffled_plan_ids", return_value=["KFA", "A1B"]):
-            pid = allocate_plan_id(decision, reserved_step_ids=reserved)
-        assert pid == "A1B"
-        scoped = assign_plan_step_ids(decision, plan_id=pid)
-        assert scoped.steps[0].id == "A1B-01"
+        prepared = prepare_decision_for_plan_scoping(decision)
+        assert prepared.steps[0].id == "ASK-01"
 
-    def test_replan_collision_avoids_empty_ready_steps(self) -> None:
-        """Scoped id must not equal a completed historical step id."""
+    def test_replan_scoping_prefixes_new_steps(self) -> None:
+        """New plan scope prefixes step ids within the loop."""
 
         sr = StepResult(
             step_id="1",
@@ -331,12 +330,15 @@ class TestAgentDecision:
             reasoning="r",
         )
         reserved = set(state.dependency_completion_ids())
-        plan_id = allocate_plan_id(decision, reserved_step_ids=reserved)
-        normalized = assign_plan_step_ids(decision, plan_id=plan_id)
-        ready = normalized.get_ready_steps(state.dependency_completion_ids())
+        plan_id = "ZZZ"
+        normalized = assign_plan_step_ids(
+            prepare_decision_for_plan_scoping(decision, known_plan_ids=state.known_plan_ids()),
+            plan_id=plan_id,
+        )
+        ready = normalized.get_ready_steps(reserved)
         assert len(ready) == 1
+        assert ready[0].id == "ZZZ-more"
         assert ready[0].id not in reserved
-        assert ready[0].id.endswith("-more")
 
 
 class TestPlanResult:
