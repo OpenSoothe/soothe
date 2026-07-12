@@ -8,7 +8,16 @@ on:
   workflow_run:
     workflows: ["Release Soothe Packages"]
     types: [completed]
-    branches: [main, master]
+    # Release Soothe Packages runs on `release: published` with head_branch = tag (e.g. v0.7.14),
+    # not main. Tag names must be matched via the branches filter (workflow_run has no tags key).
+    branches:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to build from PyPI (e.g. 0.7.14)"
+        required: true
+        type: string
 
 env:
   REGISTRY: registry.cn-hangzhou.aliyuncs.com
@@ -19,8 +28,12 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # Only run if the triggering workflow succeeded
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # workflow_run: only after a successful PyPI release. workflow_dispatch: manual backfill.
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch') ||
+        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'release')
+      }}
     permissions:
       contents: read
       packages: write
@@ -39,9 +52,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          
-          # Get the workflow run details
-          WORKFLOW_RUN='${{ toJson(github.event.workflow_run) }}'
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+            TAG="v${VERSION}"
+            HEAD_SHA="$(gh api "repos/${{ github.repository }}/commits/${TAG}" --jq '.sha')"
+            if [ -z "${HEAD_SHA}" ] || [ "${HEAD_SHA}" = "null" ]; then
+              echo "::error::Release tag ${TAG} not found"
+              exit 1
+            fi
+            echo "head_sha=${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
+            echo "head_branch=${TAG}" >> "${GITHUB_OUTPUT}"
+            echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+            echo "✓ Manual dispatch for release tag: ${TAG}"
+            exit 0
+          fi
+
           HEAD_SHA='${{ github.event.workflow_run.head_sha }}'
           HEAD_BRANCH='${{ github.event.workflow_run.head_branch }}'
           

@@ -123,6 +123,12 @@ def validate_release_docker_yml(workflow: dict) -> list[str]:
             errors.append(
                 f"ERROR: workflow_run should trigger on 'completed', got: {wr.get('types')}"
             )
+        branches = wr.get("branches") or []
+        if branches in (["main"], ["master"], ["main", "master"], ["master", "main"]):
+            errors.append(
+                "ERROR: workflow_run branches [main, master] never match release tag runs "
+                "(Release Soothe Packages head_branch is e.g. v0.7.14). Use a 'v*' pattern."
+            )
 
     # Check for required steps (look for any job, not just 'build')
     jobs = workflow.get("jobs", {})
