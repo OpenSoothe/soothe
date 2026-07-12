@@ -28,15 +28,17 @@ The core package is intentionally decoupled from how queries arrive (CLI, WebSoc
 
 ## Three-Level Execution Model
 
-Soothe organizes execution into three hierarchical tiers. Understanding this structure is the key to navigating the core modules:
+Soothe organizes execution into three hierarchical tiers. See the [Architecture Overview](../architecture/index.md#three-level-execution) for the full conceptual model.
 
-| Tier | Module | Scope | Loop Pattern |
-|------|--------|-------|--------------|
-| **ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | Goal → PLAN → PERFORM → REFLECT → Update |
-| **StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | Plan → Execute (max ~8 iterations) |
-| **CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | LangGraph native execution |
+**Core module responsibilities**:
 
-Each tier delegates downward: ContextEngine dispatches goals to StrangeLoop, which delegates step execution to CoreAgent. Tiers communicate via **advisory hints** (passed through `config.configurable`) rather than tight coupling — CoreAgent never knows about goals, it only executes prompts with optional execution hints.
+| Tier | Module | Scope | Key File |
+|------|--------|-------|----------|
+| **ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | `foundation/context/` |
+| **StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | `foundation/sloop/` |
+| **CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | `foundation/core/agent/` |
+
+Each tier delegates downward via **advisory hints** (passed through `config.configurable`) — CoreAgent never knows about goals, it only executes prompts with optional execution hints.
 
 ---
 

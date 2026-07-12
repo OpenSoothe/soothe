@@ -30,32 +30,9 @@ Soothe is a **goal-driven orchestration framework** for building 24/7 long-runni
 
 ### Three-Level Execution Model
 
-Soothe uses a hierarchical execution model:
+Soothe uses a hierarchical execution model with three tiers: **ContextEngine** (goal management), **StrangeLoop** (goal execution), and **CoreAgent** (runtime foundation). Each tier delegates to the one below it.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ContextEngine: Autonomous Goal Management                  │
-│ • Manages goal DAGs (directed acyclic graphs)             │
-│ • Delegates single goals to StrangeLoop                     │
-│ • Loop: Goal → PLAN → PERFORM → REFLECT → Update          │
-└─────────────────────────────────────────────────────────────┘
-                          ↓ PERFORM (full delegation)
-┌─────────────────────────────────────────────────────────────┐
-│ StrangeLoop: Agentic Goal Execution                          │
-│ • Executes single goals through Plan → Execute iterations │
-│ • Maximum ~8 iterations per goal                           │
-│ • Adapts plans based on results                           │
-└─────────────────────────────────────────────────────────────┘
-                          ↓ EXECUTE (step execution)
-┌─────────────────────────────────────────────────────────────┐
-│ CoreAgent: Runtime Foundation                              │
-│ • Model → Tools → Model loop (LangGraph native)           │
-│ • Tool execution and result processing                     │
-│ • Foundation: create_soothe_agent() → CompiledStateGraph  │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**Key Insight**: Each level delegates to the level below it, enabling autonomous behavior while maintaining control.
+→ **See [Architecture Overview](../architecture/index.md#three-level-execution) for the full conceptual model.**
 
 ### Component Overview
 

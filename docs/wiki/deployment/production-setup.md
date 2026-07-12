@@ -184,49 +184,13 @@ docker compose exec soothe-pgvector psql -U postgres -d soothe_metadata \
 
 ### Production Docker Compose Configuration
 
-**Key settings in `deploy/docker-compose.yml`**:
+Key settings (see `deploy/docker-compose.yml` for full file):
 
-```yaml
-services:
-  soothe-pgvector:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17
-    restart: unless-stopped
-    command: ["postgres", "-c", "max_connections=200"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    shm_size: 256mb
-    volumes:
-      - soothe_postgres_data:/var/lib/postgresql/data
-
-  soothed:
-    image: registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
-    restart: unless-stopped
-    depends_on:
-      soothe-pgvector:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "python -c 'import socket; ...'"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    volumes:
-      - soothe_daemon_data:/var/lib/soothe
-      - ./config.yml:/var/lib/soothe/config/config.yml:ro
-      # Workspace mount (RFC-621)
-      - /path/to/workspace:/var/lib/soothe/workspaces
-```
-
-**Production considerations**:
-- `restart: unless-stopped`: Auto-restart on failure
-- Health checks: Container health monitoring
-- Volume mounts: Persistent data storage
-- Config mount: Read-only configuration
-- Workspace mount: Client workspace access (RFC-621)
+- `restart: unless-stopped` — Auto-restart on failure
+- Health checks — Container health monitoring
+- Volume mounts — Persistent data storage
+- Config mount — Read-only configuration
+- Workspace mount — Client workspace access (RFC-621)
 
 ### Persistent Volumes
 
@@ -255,99 +219,26 @@ See [Backup Recovery](backup-recovery.md) for comprehensive backup strategies.
 
 For environments without Docker or requiring direct hardware access.
 
-### Step 1: Install Dependencies
+### Quick Setup
 
-```bash
-# Install PostgreSQL
-sudo apt install postgresql-17 postgresql-17-pgvector
+1. **Install PostgreSQL**: `sudo apt install postgresql-17 postgresql-17-pgvector`
+2. **Install Python 3.11+**: `sudo apt install python3.11 python3.11-venv`
+3. **Create user**: `sudo useradd -r -s /bin/false soothe`
+4. **Install Soothe**: `sudo /opt/soothe/venv/bin/pip install soothe-daemon soothe`
+5. **Configure**: Create `/var/lib/soothe/config/config.yml` and `/etc/default/soothe` with environment variables
+6. **Create systemd service**: See `deploy/soothed.service` template
 
-# Install Python 3.11+
-sudo apt install python3.11 python3.11-venv python3-pip
+### systemd Service Template
 
-# PostgreSQL databases are auto-provisioned on first soothed startup
-# when postgres_base_dsn is configured in config.yml.
-```
+Key settings (`/etc/systemd/system/soothed.service`):
+- `User=soothe` — Run as dedicated user
+- `EnvironmentFile=/etc/default/soothe` — Load secrets from env file
+- `ExecStart=/opt/soothe/venv/bin/soothed start --foreground`
+- `Restart=on-failure` — Auto-restart
 
-### Step 2: Configure PostgreSQL
+See `deploy/soothed.service` for the full template with security hardening options.
 
-```bash
-# Edit PostgreSQL configuration
-sudo vim /etc/postgresql/17/main/postgresql.conf
-
-# Recommended settings:
-max_connections = 200
-shared_buffers = 256MB
-work_mem = 16MB
-```
-
-```bash
-# pgvector extension is installed automatically in soothe_vectors on daemon startup.
-```
-
-### Step 3: Create Soothe User
-
-```bash
-# Create dedicated user
-sudo useradd -r -s /bin/false soothe
-
-# Create directories
-sudo mkdir -p /var/lib/soothe /var/log/soothe
-sudo chown soothe:soothe /var/lib/soothe /var/log/soothe
-```
-
-### Step 4: Install Soothe Package
-
-```bash
-# Create virtual environment
-sudo python3.11 -m venv /opt/soothe/venv
-
-# Install package
-sudo /opt/soothe/venv/bin/pip install soothe-daemon soothe
-
-# Or install from source
-sudo /opt/soothe/venv/bin/pip install -e /path/to/soothe/packages/soothe
-```
-
-### Step 5: Configure Soothe
-
-```bash
-# Create configuration
-sudo mkdir -p /var/lib/soothe/config
-sudo cp deploy/config.prod.yml /var/lib/soothe/config/config.yml
-sudo vim /var/lib/soothe/config/config.yml
-
-# Set environment variables
-sudo vim /etc/default/soothe
-```
-
-**`/etc/default/soothe`**:
-```bash
-SOOTHE_POSTGRES_BASE_DSN=postgresql://postgres:password@localhost:5432
-DASHSCOPE_API_KEY=<your_key>
-SOOTHE_LOG_FILE_PATH=/var/log/soothe/soothed.log
-SOOTHE_LOG_FILE_LEVEL=INFO
-```
-
-### Step 6: Create systemd Service
-
-**`/etc/systemd/system/soothed.service`**:
-```ini
-[Unit]
-Description=Soothe Daemon - Autonomous Agent Orchestration Server
-After=network.target postgresql.service
-Requires=postgresql.service
-
-[Service]
-Type=simple
-User=soothe
-Group=soothe
-EnvironmentFile=/etc/default/soothe
-ExecStart=/opt/soothe/venv/bin/soothed start --foreground
-ExecStop=/opt/soothe/venv/bin/soothed stop
-Restart=on-failure
-RestartSec=5s
-
-# Security hardening
+## Kubernetes Deployment
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

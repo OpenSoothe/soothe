@@ -22,40 +22,20 @@ Soothe provides multiple observability layers:
 
 ## Langfuse Integration (Recommended)
 
-Langfuse provides comprehensive LLM observability: request traces, token counts, latency, cost tracking, and debugging.
+Langfuse provides LLM observability: traces, token counts, latency, cost tracking.
 
-### Setup Langfuse
+### Setup
 
-#### Option 1: Self-Hosted Langfuse (Docker)
-
-Use the development Docker Compose stack:
-
+**Self-hosted** (Docker):
 ```bash
-# Start Langfuse + dependencies
 docker compose -f docker-compose.yml up -d
-
-# Langfuse UI: http://localhost:3300
-# Default credentials:
-#   Email: dev@soothe.local
-#   Password: SootheLangfuseLocalDev1
+# UI: http://localhost:3300
+# Default: dev@soothe.local / SootheLangfuseLocalDev1
 ```
 
-**Services started**:
-- `langfuse-web`: Web UI and API (port 3300)
-- `langfuse-worker`: Background processing
-- `langfuse-postgres`: Langfuse metadata
-- `langfuse-clickhouse`: Observability data
-- `langfuse-redis`: Job queue
-- `langfuse-minio`: Blob storage
+**Cloud** (langfuse.com): Sign up → Create project → Get API keys.
 
-#### Option 2: Langfuse Cloud
-
-```bash
-# Sign up at https://langfuse.com
-# Create project → Get API keys
-```
-
-### Configure Soothe for Langfuse
+### Configure Soothe
 
 ```yaml
 observability:
