@@ -5,35 +5,55 @@ from __future__ import annotations
 import subprocess
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from soothe.toolkits.execution import RunCommandShellTool
+from soothe.toolkits.execution import (
+    ExecutionToolkit,
+    RunCommandShellTool,
+    _execution_max_output_from_config,
+)
 
 
 def _completed(stdout: str, returncode: int = 0) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(args="cmd", returncode=returncode, stdout=stdout, stderr="")
 
 
+class TestRunCommandOutputCap:
+    def test_execution_toolkit_passes_max_output_length(self) -> None:
+        toolkit = ExecutionToolkit(max_output_length=500)
+        run_command = next(t for t in toolkit.get_tools() if t.name == "run_command")
+        assert run_command.max_output_length == 500
+
+    def test_execution_max_output_from_config_default(self) -> None:
+        assert _execution_max_output_from_config(None) == 100_000
+
+
 class TestRunCommandOutputHandling:
     def test_strips_ansi_escape_sequences(self) -> None:
         tool = RunCommandShellTool(max_output_length=10_000)
-        raw = "hello \x1B[31mworld\x1B[0m"
+        raw = "hello \x1b[31mworld\x1b[0m"
         with patch(
             "soothe.toolkits.execution._run_shell_command_sync",
             return_value=_completed(raw),
         ):
             result = tool._run("echo test")
-        assert "\x1B" not in result
+        assert "\x1b" not in result
         assert "hello world" in result
 
     def test_truncates_output_at_max_length(self) -> None:
-        tool = RunCommandShellTool(max_output_length=20)
-        with patch(
-            "soothe.toolkits.execution._run_shell_command_sync",
-            return_value=_completed("x" * 100),
-        ):
-            result = tool._run("echo big")
-        assert len(result) <= 20 + len("\n... (output truncated)")
+        from soothe.toolkits.execution import _run_shell_command_sync
+
+        completed = _run_shell_command_sync(
+            "python -c \"print('z' * 5000)\"",
+            cwd=None,
+            timeout=30,
+            max_output_chars=200,
+        )
+        assert len(completed.stdout) <= 200 + len("\n... (output truncated)")
+        assert completed.stdout.endswith("... (output truncated)")
+
+    def test_run_command_tool_truncates_large_output(self) -> None:
+        tool = RunCommandShellTool(max_output_length=200, timeout=30)
+        result = tool._run("python -c \"print('y' * 10000)\"")
+        assert len(result) <= 200 + len("\n... (output truncated)")
         assert result.endswith("... (output truncated)")
 
     def test_per_call_timeout_forwarded(self) -> None:
@@ -43,6 +63,13 @@ class TestRunCommandOutputHandling:
             tool._run("sleep 1", timeout=5)
         mock_run.assert_called_once()
         assert mock_run.call_args.kwargs["timeout"] == 5
+
+    def test_max_output_chars_forwarded_to_sync_runner(self) -> None:
+        tool = RunCommandShellTool(max_output_length=42)
+        with patch("soothe.toolkits.execution._run_shell_command_sync") as mock_run:
+            mock_run.return_value = _completed("ok")
+            tool._run("echo x")
+        assert mock_run.call_args.kwargs["max_output_chars"] == 42
 
     def test_oserror_returns_error_string(self) -> None:
         tool = RunCommandShellTool()

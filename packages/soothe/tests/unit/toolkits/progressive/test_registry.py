@@ -17,12 +17,14 @@ def _desc(name: str) -> ToolDescriptor:
 
 def test_default_core_includes_surgical_file_ops() -> None:
     assert {"apply_diff", "file_info"}.issubset(DEFAULT_CORE_TOOL_NAMES)
-    assert {"run_background", "kill_process"}.issubset(DEFAULT_CORE_TOOL_NAMES)
+    assert {"run_background", "tail_background_log", "kill_process"}.issubset(
+        DEFAULT_CORE_TOOL_NAMES
+    )
     assert {"search_skills", "invoke_skill"}.issubset(DEFAULT_CORE_TOOL_NAMES)
     assert {"search_mcp_tools", "mcp_resources_list", "mcp_resources_read"}.issubset(
         DEFAULT_CORE_TOOL_NAMES
     )
-    assert len(DEFAULT_CORE_TOOL_NAMES) == 25
+    assert len(DEFAULT_CORE_TOOL_NAMES) == 26
 
 
 def test_partition_core_and_deferred() -> None:

@@ -4,6 +4,7 @@ Consolidates single-purpose execution tools into one module:
 - run_command: Execute shell commands synchronously (langchain_community ShellTool)
 - run_python: Execute Python code (langchain_experimental PythonREPLTool)
 - run_background: Run commands in background
+- tail_background_log: Read trailing lines from background logs
 - kill_process: Terminate background processes
 
 Follows the pattern from image.py and audio.py.
@@ -18,6 +19,7 @@ import re
 import signal
 import subprocess
 import sys
+import time
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -148,6 +150,41 @@ def _background_log_dir_from_config(config: Any | None) -> str | None:
     return str(raw) if raw else None
 
 
+def _background_log_retention_from_config(config: Any | None) -> int:
+    if config is None:
+        return 7
+    try:
+        return max(0, int(config.tools.execution.background_log_retention_days))
+    except (AttributeError, TypeError, ValueError):
+        return 7
+
+
+def _cleanup_stale_background_logs(log_dir: Path, retention_days: int) -> None:
+    """Remove ``bg-*.log`` files older than ``retention_days`` (no-op when 0)."""
+    if retention_days <= 0:
+        return
+    cutoff = time.time() - (retention_days * 86400)
+    for path in log_dir.glob("bg-*.log"):
+        with contextlib.suppress(OSError):
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+
+
+def _tail_text_file(path: Path, *, max_lines: int) -> str:
+    """Return up to the last ``max_lines`` lines from a text file."""
+    if not path.is_file():
+        return f"Error: log file not found: {path}"
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return f"Error reading log file: {exc}"
+    lines = content.splitlines()
+    if len(lines) <= max_lines:
+        return content if content.endswith("\n") or not content else content + "\n"
+    tail = "\n".join(lines[-max_lines:])
+    return f"{tail}\n"
+
+
 def _virtual_mode_from_security(security_config: Any) -> bool:
     """Return True when the workspace is sandboxed (paths outside denied)."""
     if security_config is None:
@@ -246,8 +283,9 @@ def _run_shell_command_sync(
     *,
     cwd: str | None,
     timeout: int,
+    max_output_chars: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a shell command with timeout and process-group teardown on expiry."""
+    """Run a shell command with timeout and optional streaming stdout cap."""
     proc = subprocess.Popen(
         command,
         shell=True,
@@ -257,19 +295,76 @@ def _run_shell_command_sync(
         text=True,
         start_new_session=sys.platform != "win32",
     )
-    try:
-        stdout, _ = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        with contextlib.suppress(OSError):
-            proc.kill()
-        _kill_process_tree(proc.pid)
-        with contextlib.suppress(subprocess.TimeoutExpired):
-            proc.communicate(timeout=5)
-        raise
+    if max_output_chars is None or proc.stdout is None:
+        try:
+            stdout, _ = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(OSError):
+                proc.kill()
+            _kill_process_tree(proc.pid)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=5)
+            raise
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=proc.returncode if proc.returncode is not None else -1,
+            stdout=stdout or "",
+            stderr="",
+        )
+
+    stdout_parts: list[str] = []
+    total = 0
+    truncated = False
+    deadline = time.monotonic() + timeout
+    assert proc.stdout is not None
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            with contextlib.suppress(OSError):
+                proc.kill()
+            _kill_process_tree(proc.pid)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=5)
+            raise subprocess.TimeoutExpired(cmd=command, timeout=timeout)
+
+        chunk = proc.stdout.read(4096)
+        if chunk == "":
+            if proc.poll() is not None:
+                break
+            time.sleep(0.01)
+            continue
+
+        if total + len(chunk) > max_output_chars:
+            stdout_parts.append(chunk[: max_output_chars - total])
+            truncated = True
+            with contextlib.suppress(OSError):
+                proc.kill()
+            _kill_process_tree(proc.pid)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=5)
+            break
+
+        stdout_parts.append(chunk)
+        total += len(chunk)
+
+    if not truncated:
+        try:
+            proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(OSError):
+                proc.kill()
+            _kill_process_tree(proc.pid)
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                proc.communicate(timeout=5)
+            raise
+
+    stdout = "".join(stdout_parts)
+    if truncated:
+        stdout = stdout + "\n... (output truncated)"
     return subprocess.CompletedProcess(
         args=command,
         returncode=proc.returncode if proc.returncode is not None else -1,
-        stdout=stdout or "",
+        stdout=stdout,
         stderr="",
     )
 
@@ -362,6 +457,7 @@ class RunCommandShellTool(ShellTool):
                 command,
                 cwd=cwd,
                 timeout=actual_timeout,
+                max_output_chars=self.max_output_length,
             )
         except (subprocess.TimeoutExpired, TimeoutError):
             return (
@@ -378,8 +474,6 @@ class RunCommandShellTool(ShellTool):
 
         output = completed.stdout or ""
         output = _ANSI_ESCAPE.sub("", output) if output else ""
-        if len(output) > self.max_output_length:
-            output = output[: self.max_output_length] + "\n... (output truncated)"
         return output.strip()
 
     async def _arun(
@@ -454,12 +548,17 @@ class RunBackgroundTool(BaseTool):
         "Parameters: command (required) - the command to run. "
         "Returns: process ID, log_path (stdout/stderr log file), and status. "
         "The log header (timestamp + command) is written immediately; use read_file "
-        "on log_path to inspect progress. Use kill_process to stop."
+        "or tail_background_log for output. Use kill_process to stop."
     )
     workspace_root: str = Field(default="", description="Working directory for shell")
     background_log_dir: str | None = Field(
         default=None,
         description="Optional override for background log directory",
+    )
+    background_log_retention_days: int = Field(
+        default=7,
+        ge=0,
+        description="Delete bg-*.log files older than this many days on spawn (0=off)",
     )
     security_config: Any = Field(default=None, description="Security configuration object")
 
@@ -516,6 +615,7 @@ class RunBackgroundTool(BaseTool):
             workspace=cwd,
             tool_runtime=runtime,
         )
+        _cleanup_stale_background_logs(log_dir, self.background_log_retention_days)
         pending_log = log_dir / f"bg-pending-{uuid.uuid4().hex[:12]}.log"
         log_handle = open(pending_log, "w", encoding="utf-8", buffering=1)
         log_handle.write(_format_background_log_header(command))
@@ -564,6 +664,64 @@ class RunBackgroundTool(BaseTool):
     ) -> dict[str, Any]:
         """Async execution (delegates to sync)."""
         return self._run(command, runtime=runtime)
+
+
+class TailBackgroundLogInput(BaseModel):
+    """Arguments for ``tail_background_log``."""
+
+    pid: int = Field(..., description="Process ID from run_background.")
+    lines: int = Field(
+        default=50,
+        ge=1,
+        le=5000,
+        description="Number of trailing lines to return (default 50).",
+    )
+
+
+class TailBackgroundLogTool(BaseTool):
+    """Read the trailing lines of a ``run_background`` log file."""
+
+    name: str = "tail_background_log"
+    description: str = (
+        "Read the last N lines from a run_background log file (bg-{pid}.log). "
+        "Parameters: pid (required), lines (optional, default 50). "
+        "Use instead of read_file for large or growing background logs."
+    )
+    args_schema: type[BaseModel] = TailBackgroundLogInput
+    workspace_root: str = Field(default="", description="Working directory fallback")
+    background_log_dir: str | None = Field(
+        default=None,
+        description="Optional override for background log directory",
+    )
+
+    def _run(
+        self,
+        pid: int,
+        lines: int = 50,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> str:
+        if pid <= 0:
+            return f"Error: invalid process ID {pid}"
+
+        cwd_raw = _resolve_workspace(self.workspace_root, runtime)
+        cwd = str(expand_path(cwd_raw)) if cwd_raw else None
+        log_dir = _resolve_background_log_dir(
+            configured_dir=self.background_log_dir,
+            workspace=cwd,
+            tool_runtime=runtime,
+        )
+        log_path = _background_log_path_for_pid(pid, log_dir)
+        return _tail_text_file(log_path, max_lines=lines)
+
+    async def _arun(
+        self,
+        pid: int,
+        lines: int = 50,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> str:
+        return self._run(pid, lines, runtime=runtime)
 
 
 class KillProcessTool(BaseTool):
@@ -648,7 +806,7 @@ class KillProcessTool(BaseTool):
 class ExecutionToolkit:
     """Toolkit for shell and Python execution.
 
-    Provides: run_command, run_python, run_background, kill_process
+    Provides: run_command, run_python, run_background, tail_background_log, kill_process
     """
 
     def __init__(
@@ -659,6 +817,7 @@ class ExecutionToolkit:
         security_config: Any = None,
         max_output_length: int = DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
         background_log_dir: str | None = None,
+        background_log_retention_days: int = 7,
     ) -> None:
         """Initialize toolkit.
 
@@ -668,15 +827,17 @@ class ExecutionToolkit:
             security_config: Security configuration for operation policy.
             max_output_length: Max stdout chars for run_command.
             background_log_dir: Optional override for run_background log directory.
+            background_log_retention_days: Prune bg-*.log older than this (0=off).
         """
         self._workspace_root = workspace_root
         self._timeout = timeout
         self._security_config = security_config
         self._max_output_length = max_output_length
         self._background_log_dir = background_log_dir
+        self._background_log_retention_days = background_log_retention_days
 
     def get_tools(self) -> list[BaseTool]:
-        """Return the four execution tool instances for this toolkit."""
+        """Return the five execution tool instances for this toolkit."""
         return [
             RunCommandShellTool(
                 workspace_root=self._workspace_root,
@@ -688,6 +849,11 @@ class ExecutionToolkit:
             RunBackgroundTool(
                 workspace_root=self._workspace_root,
                 security_config=self._security_config,
+                background_log_dir=self._background_log_dir,
+                background_log_retention_days=self._background_log_retention_days,
+            ),
+            TailBackgroundLogTool(
+                workspace_root=self._workspace_root,
                 background_log_dir=self._background_log_dir,
             ),
             KillProcessTool(
@@ -718,6 +884,7 @@ def build_execution_toolkit(
             else _execution_max_output_from_config(config)
         ),
         background_log_dir=_background_log_dir_from_config(config),
+        background_log_retention_days=_background_log_retention_from_config(config),
     )
 
 
@@ -739,7 +906,7 @@ def _execution_max_output_from_config(config: Any | None) -> int:
 class ExecutionPlugin:
     """Execution tools plugin.
 
-    Provides run_command, run_python, run_background, and kill_process tools.
+    Provides run_command, run_python, run_background, tail_background_log, and kill_process tools.
     """
 
     def __init__(self) -> None:

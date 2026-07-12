@@ -339,6 +339,17 @@ _register(
 
 _register(
     ToolMeta(
+        name="tail_background_log",
+        display_name="TailBackgroundLog",
+        arg_keys=("pid", "lines"),
+        category="execution",
+        outcome_type="code_exec",
+        source="soothe",
+    )
+)
+
+_register(
+    ToolMeta(
         name="kill_process",
         display_name="KillProcess",
         arg_keys=("pid",),

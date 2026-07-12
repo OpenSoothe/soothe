@@ -90,7 +90,14 @@ class TestOutcomeTypeCoverage:
 
     def test_execution_tools_have_code_exec_outcome_type(self) -> None:
         """Execution tools should have outcome_type='code_exec'."""
-        execution_tools = ["execute", "run_command", "run_python", "run_background", "kill_process"]
+        execution_tools = [
+            "execute",
+            "run_command",
+            "run_python",
+            "run_background",
+            "tail_background_log",
+            "kill_process",
+        ]
         for name in execution_tools:
             meta = get_tool_meta(name)
             assert meta is not None

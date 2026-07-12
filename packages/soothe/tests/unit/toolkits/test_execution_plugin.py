@@ -12,6 +12,7 @@ from soothe.toolkits.execution import (
     RunBackgroundTool,
     RunCommandShellTool,
     RunPythonREPLTool,
+    TailBackgroundLogTool,
 )
 
 
@@ -28,10 +29,13 @@ async def test_execution_plugin_on_load_wires_config() -> None:
     await plugin.on_load(context)
 
     tools = plugin.get_tools()
-    assert len(tools) == 4
+    assert len(tools) == 5
     run_command = next(t for t in tools if isinstance(t, RunCommandShellTool))
     run_background = next(t for t in tools if isinstance(t, RunBackgroundTool))
     assert isinstance(next(t for t in tools if isinstance(t, RunPythonREPLTool)), RunPythonREPLTool)
+    assert isinstance(
+        next(t for t in tools if isinstance(t, TailBackgroundLogTool)), TailBackgroundLogTool
+    )
     assert isinstance(next(t for t in tools if isinstance(t, KillProcessTool)), KillProcessTool)
     assert run_command.workspace_root == "/ws/proj"
     assert run_command.timeout == 90

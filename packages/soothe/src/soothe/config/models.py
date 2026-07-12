@@ -299,6 +299,7 @@ class ExecutionToolsConfig(ToolConfig):
         enabled: Whether execution tools are bound to the agent.
         background_log_dir: Optional directory for ``run_background`` stdout/stderr logs.
             When null, logs go under ``<workspace>/.soothe/background`` or soothe home.
+        background_log_retention_days: Prune ``bg-*.log`` older than this on spawn (0=off).
     """
 
     background_log_dir: str | None = Field(
@@ -306,6 +307,14 @@ class ExecutionToolsConfig(ToolConfig):
         description=(
             "Directory for run_background stdout/stderr logs. "
             "Null uses workspace .soothe/background or soothe home fallback."
+        ),
+    )
+    background_log_retention_days: int = Field(
+        default=7,
+        ge=0,
+        description=(
+            "Delete bg-*.log files older than this many days when run_background spawns "
+            "(0 disables cleanup)."
         ),
     )
 

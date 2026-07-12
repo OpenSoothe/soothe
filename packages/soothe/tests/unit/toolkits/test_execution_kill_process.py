@@ -62,7 +62,9 @@ def test_kill_process_escalates_to_sigkill_when_still_alive(monkeypatch) -> None
 
     monkeypatch.setattr("soothe.toolkits.execution.os.kill", lambda _pid, _sig: None)
     monkeypatch.setattr("soothe.toolkits.execution._kill_process_tree", fake_kill_tree)
-    monkeypatch.setattr("soothe.toolkits.execution._process_is_alive", lambda _pid: next(alive_checks))
+    monkeypatch.setattr(
+        "soothe.toolkits.execution._process_is_alive", lambda _pid: next(alive_checks)
+    )
 
     result = tool._run(42)
     assert result == "Process 42 terminated"

@@ -361,7 +361,13 @@ def _resolve_single_tool_group_uncached(
         return toolkit.get_tools()
 
     # Support individual tool names (map to consolidated group)
-    if name in ("run_command", "run_background", "kill_process", "run_python"):
+    if name in (
+        "run_command",
+        "run_background",
+        "tail_background_log",
+        "kill_process",
+        "run_python",
+    ):
         # Host-execution tools do not require a sandbox backend.
         from soothe.toolkits.execution import build_execution_toolkit
 

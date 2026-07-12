@@ -16,9 +16,7 @@ def check_condition_syntax(condition: str, context: str) -> list[str]:
     errors = []
 
     if "secrets." in condition:
-        errors.append(
-            f"ERROR: Secrets cannot be used in if conditions ({context}): {condition}"
-        )
+        errors.append(f"ERROR: Secrets cannot be used in if conditions ({context}): {condition}")
 
     # Check for common syntax issues
     if "${{" in condition and "}}" not in condition:

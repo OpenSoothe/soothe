@@ -349,6 +349,7 @@ tools:
   execution:
     enabled: true
     background_log_dir: null
+    background_log_retention_days: 7
   file_ops:
     enabled: true
   datetime:
