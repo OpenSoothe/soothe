@@ -38,7 +38,7 @@ _SHELL_GUIDE = """\
 Execution tools (always bound — not listed in <AVAILABLE_TOOLS>):
 - run_command: Execute shell commands synchronously (returns output). Use for: CLI tools, scripts.
 - run_python: Execute Python code with session persistence. Variables persist across calls.
-- run_background: Run long commands in background (returns PID and log_path). Use read_file on log_path to inspect output.
+- run_background: Run long commands in background (returns PID and log_path). Log header is immediate; use read_file on log_path for output.
 - kill_process: Terminate background process by PID from run_background.
 """
 
