@@ -50,7 +50,7 @@ This guide covers:
 ┌──────────────┐
 │  Soothe      │  ← No built-in auth (trusts reverse proxy)
 │  Daemon      │     Workspace security policies
-│              │     Tool execution sandbox (optional)
+│              │     Host execution tools (run_command, run_background, …)
 └──────────────┘
 ```
 
@@ -454,8 +454,6 @@ Soothe provides workspace-level security policies in `config.yml`:
 
 ```yaml
 security:
-  sandbox: false  # Enable for restrictive environments
-  
   # Workspace access control
   allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true
@@ -494,7 +492,6 @@ security:
 **Standard Development**:
 ```yaml
 security:
-  sandbox: false
   allow_paths_outside_workspace: false
   denied_paths: [/etc/**, ~/.ssh/**, ~/.aws/**]
   require_approval_for_file_types: [.env]
@@ -511,7 +508,7 @@ security:
 **Maximum Security** (restrict workspace scope):
 ```yaml
 security:
-  sandbox: true
+  allow_paths_outside_workspace: false
   allowed_paths: ['/workspace/project-a/**', '/workspace/project-b/**']
   denied_file_types: [.env, .key, .pem, .credentials]
 ```

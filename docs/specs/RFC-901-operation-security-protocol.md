@@ -101,8 +101,8 @@ Operation security is evaluated before profile permission matching:
 ### Execution Rules
 
 - Block explicit destructive command patterns (for example, recursive root deletion and privileged destructive sequences).
-- Rules apply consistently to command-bearing tools such as:
-  - `execute` / `shell` / `bash` / `run_command`
+- Rules apply consistently to command-bearing host execution tools:
+  - `run_command` (SDK display aliases: `shell`, `bash`)
   - `run_background`
 
 ---

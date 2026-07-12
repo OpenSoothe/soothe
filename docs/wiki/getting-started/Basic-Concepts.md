@@ -166,7 +166,7 @@ Soothe:
 | Category | Tools |
 |----------|-------|
 | **Filesystem** | `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep` |
-| **Execution** | `run_command`, `run_python`, `run_background` |
+| **Execution** | `run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process` |
 | **Web** | `wizsearch_search`, `wizsearch_crawl`, `requests_get` |
 | **Documents** | `extract_text`, `inspect_data`, `summarize_data` |
 | **Media** | `analyze_image`, `transcribe_audio`, `analyze_video` |

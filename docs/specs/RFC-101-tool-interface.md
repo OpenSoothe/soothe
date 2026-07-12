@@ -75,7 +75,7 @@ Pattern: `{verb}_{noun}` or single verb for obvious operations.
 
 | Category | Examples | Pattern |
 |----------|----------|---------|
-| Shell execution | `run_command`, `run_background`, `kill_process` | `{verb}_{noun}` |
+| Shell execution | `run_command`, `run_background`, `tail_background_log`, `kill_process` | `{verb}_{noun}` |
 | Python execution | `run_python` | `{verb}_{noun}` |
 | File operations | `read_file`, `write_file`, `delete_file`, `search_files` | `{verb}_{noun}` |
 | Code editing | `edit_file_lines`, `insert_lines`, `delete_lines`, `apply_diff` | `{verb}_{context}` |
@@ -196,6 +196,22 @@ class RunBackgroundTool(BaseTool):
 
         Returns:
             Dict with pid, status, and initial output.
+        """
+        ...
+
+class TailBackgroundLogTool(BaseTool):
+    name: str = "tail_background_log"
+    description: str = "Read the tail of a run_background log file."
+
+    def _run(self, pid: int, max_lines: int = 200) -> str:
+        """Return recent stdout/stderr from a background process log.
+
+        Args:
+            pid: Background process ID from run_background.
+            max_lines: Maximum lines to return from the log tail.
+
+        Returns:
+            Log tail text or an error message.
         """
         ...
 
@@ -489,7 +505,7 @@ async def awrite(self, path: str, content: str) -> WriteResult:
 
 ```
 tools/
-├── execution/           # run_command, run_python, run_background, kill_process
+├── execution/           # run_command, run_python, run_background, tail_background_log, kill_process
 │   ├── __init__.py
 │   ├── events.py
 │   └── implementation.py

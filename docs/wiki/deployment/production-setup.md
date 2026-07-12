@@ -637,7 +637,6 @@ persistence:
   default_backend: postgresql
 
 security:
-  sandbox: false
   allow_paths_outside_workspace: false
   require_approval_for_outside_paths: true
   denied_paths:

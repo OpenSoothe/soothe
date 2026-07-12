@@ -29,7 +29,7 @@ Soothe organizes tools into domain-specific **toolkits** — modules of related 
 
 | Toolkit | Domain | Key Tools |
 |---------|--------|-----------|
-| **execution** | Shell & Python execution | `run_command`, `run_python`, `run_background`, `kill_process` |
+| **execution** | Shell & Python execution | `run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process` |
 | **file_ops** | File I/O & editing | `read_file`, `write_file`, `edit_file`, `glob`, `grep`, `ls` |
 | **wizsearch** | Web search | `wizsearch_search`, `wizsearch_crawl` |
 | **deepxiv** | Academic papers | `deepxiv_search`, `deepxiv_paper_brief`, `deepxiv_read_section` |
@@ -62,7 +62,7 @@ All tools integrate with `OperationSecurityProtocol` for workspace boundary enfo
 2. **Path checking** — `WorkspaceToolOperationSecurity` validates that all file paths fall within the workspace boundary, preventing access to files outside the sandbox.
 3. **Virtual path translation** — for sandboxed environments, virtual paths are translated to real filesystem paths transparently.
 
-Execution tools (shell, Python) additionally enforce timeouts (default 60s), strip ANSI escape sequences for clean output, and run background processes as daemons with PID tracking for termination.
+Execution tools (shell, Python) additionally enforce timeouts (default 60s), strip ANSI escape sequences for clean output, cap synchronous stdout length, and run background processes as daemons with PID tracking, log files under `<workspace>/.soothe/background/`, and optional log retention via `tools.execution.background_log_retention_days`.
 
 ## Event Naming Convention
 

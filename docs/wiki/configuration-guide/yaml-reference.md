@@ -52,7 +52,7 @@ The full set of sections:
 | `persistence` | `PersistenceConfig` | SQLite / PostgreSQL backends + pools |
 | `vector_stores` | `VectorStoreProviderConfig` (list) | Vector storage backends |
 | `vector_store_router` | `VectorStoreRouter` | Role → `provider:collection` |
-| `security` | `SecurityConfig` | Path policies, sandbox, approvals |
+| `security` | `SecurityConfig` | Path policies and approvals |
 | `plugins`, `skills`, `memory` | various | Extension points |
 | `ui`, `update`, `debug` | various | UI and runtime toggles |
 
@@ -122,7 +122,7 @@ Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veri
 
 ## Tools
 
-`ToolsConfig` holds independently toggleable groups: `execution` (run_command/run_python/run_background), `file_ops`, `datetime`, `data`, `wizsearch` (with `default_engines`, `max_results_per_engine`, `timeout`), `image`, `audio`, `video`, `http_requests` (with `allow_dangerous_requests`, `verify_ssl`), `deepxiv` (with `token`, `timeout`, `max_retries`). Disabling a group removes its tools from the model's array entirely (saves context tokens). See [Common Patterns](common-patterns.md) for use-case scoping.
+`ToolsConfig` holds independently toggleable groups: `execution` (`run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process`; optional `background_log_dir`, `background_log_retention_days`), `file_ops`, `datetime`, `data`, `wizsearch` (with `default_engines`, `max_results_per_engine`, `timeout`), `image`, `audio`, `video`, `http_requests` (with `allow_dangerous_requests`, `verify_ssl`), `deepxiv` (with `token`, `timeout`, `max_retries`). Disabling a group removes its tools from the model's array entirely (saves context tokens). See [Common Patterns](common-patterns.md) for use-case scoping.
 
 ## MCP Servers
 
@@ -142,7 +142,7 @@ A list of `VectorStoreProviderConfig` entries (`name`, `provider_type`: pgvector
 
 ## Security
 
-`SecurityConfig` fields: `sandbox` (enables sandboxed `execute` tool; host tools always available), `allow_paths_outside_workspace`, `require_approval_for_outside_paths`, `denied_paths` (globs, checked first), `allowed_paths` (overrides denied within workspace), `denied_file_types`, `require_approval_for_file_types` (defaults to `.env`/`.pem`/`.key`/`.p12`/`.pfx`/`.crt`), plus `whitelist_paths_bypass` and `whitelist_commands_bypass`.
+`SecurityConfig` fields: `allow_paths_outside_workspace` (when `false`, filesystem tools use virtual path sandboxing via `virtual_mode`), `require_approval_for_outside_paths`, `denied_paths` (globs, checked first), `allowed_paths` (overrides denied within workspace), `denied_file_types`, `require_approval_for_file_types` (defaults to `.env`/`.pem`/`.key`/`.p12`/`.pfx`/`.crt`), plus `whitelist_paths_bypass` and `whitelist_commands_bypass`. Host execution tools (`run_command`, `run_background`, etc.) are always available when the `execution` tool group is enabled; there is no separate sandbox toggle for shell access.
 
 **Evaluation order:** denied_paths → allowed_paths → workspace boundary → file-type rules → default deny. See [Security](../deployment/security.md) for policy design.
 
