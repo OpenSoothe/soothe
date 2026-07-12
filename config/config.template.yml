@@ -380,7 +380,6 @@ tools:
 subagents:
   planner:
     enabled: true
-    model: null
     model_role: think
     transport: local
     url: null
@@ -388,14 +387,12 @@ subagents:
     runtime_dir: ''
   deep_research:
     enabled: true
-    model: null
     transport: local
     url: null
     config: {}
     runtime_dir: ''
   academic_research:
     enabled: true
-    model: null
     transport: local
     url: null
     config: {}

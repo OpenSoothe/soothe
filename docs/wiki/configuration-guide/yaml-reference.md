@@ -116,7 +116,7 @@ The `default` sentinel in durability lets you set the backend once in `persisten
 
 ## Subagents
 
-A dict of `SubagentConfig` entries. Each has `enabled`, `model` (explicit `provider:model` override where supported), `model_role` (router role for `planner` and `browser_use`), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. Built-in research subagents default to the `fast` role; `planner` defaults to `think` via `model_role`.
+A dict of `SubagentConfig` entries. Each has `enabled`, `model` (optional explicit `provider:model`; takes precedence over `model_role` on planner and research subagents), `model_role` (router role when `model` is unset), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. Built-in research subagents default to the `fast` role; `planner` defaults to `think` via `model_role`.
 
 Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Semantic skill search uses top-level `skillify:` (not a subagent).
 

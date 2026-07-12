@@ -70,17 +70,50 @@ class LLMFactory:
         """
         return self._config.resolve_model(role)
 
-    def create_chat_model(self, role: ModelRole = "default") -> BaseChatModel:
+    def create_chat_model(
+        self,
+        role: ModelRole = "default",
+        *,
+        fallback_role: ModelRole | None = None,
+    ) -> BaseChatModel:
         """Create model for router role with caching and wrappers.
+
+        When ``fallback_role`` is omitted and ``role`` is not ``default``, a failed
+        resolve or instantiation for ``role`` retries ``default`` if that maps to a
+        different ``provider:model`` spec.
 
         Args:
             role: Purpose role.
+            fallback_role: Optional fallback role after primary failure. ``None``
+                enables automatic ``default`` fallback for non-``default`` roles.
 
         Returns:
             Wrapped BaseChatModel instance.
+
+        Raises:
+            Exception: Re-raises the primary error when fallback is disabled,
+                specs are identical, or the fallback attempt also fails.
         """
-        spec = self.resolve_model(role)
-        return self._create_from_spec(spec, {})
+        effective_fallback = fallback_role
+        if effective_fallback is None and role != "default":
+            effective_fallback = "default"
+
+        primary_spec = self.resolve_model(role)
+        try:
+            return self._create_from_spec(primary_spec, {})
+        except Exception:
+            if not effective_fallback or effective_fallback == role:
+                raise
+            fallback_spec = self.resolve_model(effective_fallback)
+            if fallback_spec == primary_spec:
+                raise
+            logger.warning(
+                "Chat model creation failed for role %r (spec=%r); falling back to role %r",
+                role,
+                primary_spec,
+                effective_fallback,
+            )
+            return self._create_from_spec(fallback_spec, {})
 
     def create_chat_model_for_spec(
         self,

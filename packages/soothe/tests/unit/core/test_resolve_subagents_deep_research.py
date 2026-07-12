@@ -51,3 +51,34 @@ def test_resolve_subagents_passes_config_and_context_to_deep_research() -> None:
         _factory, kwargs = factory_mock.call_args[0]
         assert kwargs["config"] is cfg
         assert "work_dir" in kwargs["context"]
+
+
+def test_resolve_subagents_deep_research_uses_explicit_model_spec() -> None:
+    cfg = SootheConfig()
+    cfg.subagents["deep_research"] = SubagentConfig(
+        enabled=True,
+        model="dashscope:kimi-k2.5",
+    )
+    for name in cfg.subagents:
+        if name != "deep_research":
+            cfg.subagents[name] = SubagentConfig(enabled=False)
+
+    spec_model = MagicMock(name="spec-model")
+
+    with (
+        patch(
+            "soothe.config.settings.SootheConfig.create_chat_model_for_spec",
+            return_value=spec_model,
+        ) as create_for_spec,
+        patch(
+            "soothe.config.settings.SootheConfig.create_chat_model",
+        ) as create_model,
+        patch(
+            "soothe.plugin.global_registry.is_plugins_loaded",
+            return_value=False,
+        ),
+    ):
+        resolve_subagents(cfg, lazy=False)
+
+    create_for_spec.assert_called_once_with("dashscope:kimi-k2.5")
+    create_model.assert_not_called()

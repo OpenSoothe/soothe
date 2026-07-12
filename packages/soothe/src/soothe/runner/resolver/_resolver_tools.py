@@ -10,7 +10,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.config import SootheConfig
+from soothe.config import SootheConfig, SubagentConfig
+from soothe.config.models import ModelRole
 from soothe.foundation.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
@@ -148,6 +149,23 @@ def _call_subagent_factory(factory: Any, kwargs: dict[str, Any]) -> Any:
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(_run_coro_on_fresh_loop, result).result()
+
+
+def _resolve_subagent_chat_model(
+    config: SootheConfig,
+    sub_cfg: SubagentConfig,
+    *,
+    default_role: ModelRole,
+) -> BaseChatModel:
+    """Resolve a subagent chat model from an explicit spec or router role.
+
+    When ``sub_cfg.model`` is set (``provider:model``), it takes precedence over
+    ``sub_cfg.model_role`` and ``default_role``.
+    """
+    if sub_cfg.model:
+        return config.create_chat_model_for_spec(sub_cfg.model)
+    role = sub_cfg.model_role or default_role
+    return config.create_chat_model(role)
 
 
 # ---------------------------------------------------------------------------
@@ -541,10 +559,9 @@ def resolve_subagents(
             continue
 
         if name in ("deep_research", "academic_research"):
-            model_override = sub_cfg.model or config.create_chat_model("fast")
+            model_override = _resolve_subagent_chat_model(config, sub_cfg, default_role="fast")
         elif name == "planner":
-            planner_role = sub_cfg.model_role or "think"
-            model_override = config.create_chat_model(planner_role)
+            model_override = _resolve_subagent_chat_model(config, sub_cfg, default_role="think")
         elif name == "browser_use":
             model_override = None
         else:

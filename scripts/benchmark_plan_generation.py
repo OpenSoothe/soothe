@@ -261,14 +261,13 @@ async def run_online_benchmark(
     sys.path.insert(0, str(_ROOT / "packages" / "soothe-sdk" / "src"))
     sys.path.insert(0, str(_ROOT / "packages" / "soothe-daemon" / "src"))
 
-    from soothe.config.models import create_chat_model_with_fallback
     from soothe.foundation.sloop.cognition.planner import LLMPlanner
     from soothe.foundation.sloop.state.schemas import LoopState
 
     results: list[PlanBenchmarkResult] = []
 
     # Resolve model for the specified role
-    model = create_chat_model_with_fallback(config, model_role)
+    model = config.create_chat_model(model_role)
 
     # Create planner with config
     planner = LLMPlanner(model, config)

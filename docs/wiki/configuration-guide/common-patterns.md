@@ -128,7 +128,7 @@ subagents:
     config:
       effort: normal
   planner:
-    model_role: think  # router role for plan-design loops
+    model_role: think  # router role; optional model: provider:model overrides role
 ```
 
 **Rule of thumb:** research subagents use the `fast` role by default; `planner` wants reasoning (use the `think` role); `browser_use` wants vision-capable models. Disabling all subagents puts you in single-agent mode — simpler but no parallelism or specialized planning.

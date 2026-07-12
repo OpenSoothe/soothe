@@ -27,7 +27,7 @@ def create_plan_subagent(
 
     Args:
         model: Primary chat model for plan-design loops (resolver passes
-            ``subagents.planner.model_role``, default ``think``).
+            ``subagents.planner.model`` when set, else ``model_role``, default ``think``).
         config: Soothe configuration.
         context: Optional resolver context (``work_dir`` ignored; kept for API parity).
 
