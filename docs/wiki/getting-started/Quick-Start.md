@@ -42,10 +42,9 @@ Uses the OpenAI-compatible endpoint. Router targets are `openai:qwen3.7-plus` (n
 
 ```bash
 export DASHSCOPE_API_KEY=sk-...
-export HOST_WS=/Users/you/Workspace
 export CONTAINER_WS=/var/lib/soothe/workspaces
 export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
-export SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}"
+export SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOME\",\"container_root\":\"$CONTAINER_WS\"}"
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
@@ -55,13 +54,13 @@ docker run --rm -d --name soothed \
   -e SOOTHE_ROUTER_PROFILES \
   -e SOOTHE_WORKSPACE_MOUNT \
   -v soothe-data:/var/lib/soothe \
-  -v "$HOST_WS:$CONTAINER_WS" \
+  -v "$HOME:$CONTAINER_WS" \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 
-cd /Users/you/Workspace/soothe && soothe
+cd /path/to/project && soothe
 ```
 
-Chat-only (no file tools): omit `HOST_WS`, `CONTAINER_WS`, `SOOTHE_WORKSPACE_MOUNT`, and the workspace `-v`.
+Chat-only (no file tools): omit CONTAINER_WS`, `SOOTHE_WORKSPACE_MOUNT`, and the workspace `-v`.
 
 ### Local (pip)
 

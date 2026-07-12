@@ -256,7 +256,6 @@ Use this when the CLI runs on the host and the daemon runs in Docker **and** you
 **Env-only (no config file):**
 
 ```bash
-export HOST_WS=/Users/you/Workspace
 export CONTAINER_WS=/var/lib/soothe/workspaces
 export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
 
@@ -266,12 +265,12 @@ docker run --rm -d --name soothed \
   -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
   -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
   -e SOOTHE_ROUTER_PROFILES \
-  -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}" \
+  -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOME\",\"container_root\":\"$CONTAINER_WS\"}" \
   -v soothe-data:/var/lib/soothe \
-  -v "$HOST_WS:$CONTAINER_WS" \
+  -v "$HOME:$CONTAINER_WS" \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 
-cd /Users/you/Workspace/soothe && soothe
+cd ~/soothe && soothe
 ```
 
 Path translation: CLI sends `/Users/chenxm/Workspace/soothe` → daemon uses `/var/lib/soothe/workspaces/soothe`.
