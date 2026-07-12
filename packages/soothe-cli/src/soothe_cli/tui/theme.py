@@ -377,7 +377,7 @@ class ThemeColors:
     """Tertiary activity text — more subdued than card_activity."""
 
     card_success: str
-    """Success state color — prominent green for visibility."""
+    """Card prefix dot color for successful lifecycle — green header indicator only."""
 
     card_error: str
     """Error state color — prominent red for visibility."""

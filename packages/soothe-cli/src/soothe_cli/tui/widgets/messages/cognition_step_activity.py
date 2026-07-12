@@ -458,6 +458,23 @@ class StepCardStatusLine:
             parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
         return Content.assemble(*parts)
 
+    @staticmethod
+    def footer_completed(
+        *,
+        gutter: str,
+        icon: str,
+        head: str,
+        suffix: str = "",
+        success: bool,
+        colors: Any,
+    ) -> Content:
+        """Step card footer after successful or failed completion."""
+        head_tone = theme.SECONDARY_TEXT_STYLE if success else colors.card_error
+        parts: list[object] = [Content.styled(f"{gutter}{icon} {head}", head_tone)]
+        if suffix:
+            parts.append(Content.styled(suffix, theme.SECONDARY_TEXT_STYLE))
+        return Content.assemble(*parts)
+
 
 # Activity tree renderer
 # ---------------------------------------------------------------------------

@@ -123,3 +123,23 @@ def test_step_activity_tree_shows_collapsed_tool_overflow() -> None:
         preview_limit=1,
     )
     assert "+4 more tools" in str(content)
+
+
+def test_completed_footer_uses_dim_style_like_tool_activity() -> None:
+    """Completed footer matches subdued tool-activity tone, not semantic green."""
+    from types import SimpleNamespace
+
+    from soothe_cli.tui import theme
+    from soothe_cli.tui.widgets.messages.cognition_step_activity import StepCardStatusLine
+
+    colors = SimpleNamespace(card_error="#ff0000")
+    content = StepCardStatusLine.footer_completed(
+        gutter="⎿ ",
+        icon="✓",
+        head="Completed (1.2s)",
+        suffix=" · 3 tools",
+        success=True,
+        colors=colors,
+    )
+    assert content.spans[0].style == theme.SECONDARY_TEXT_STYLE
+    assert content.spans[1].style == theme.SECONDARY_TEXT_STYLE

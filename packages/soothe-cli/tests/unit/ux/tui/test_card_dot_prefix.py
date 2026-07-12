@@ -44,3 +44,10 @@ def test_stream_cards_use_flush_horizontal_padding() -> None:
     assert "padding: 0;" in assistant_css
     assert "border-left:" not in step_css
     assert "border-left:" not in assistant_css
+
+
+def test_step_status_footer_uses_same_muted_base_as_tool_activity() -> None:
+    """Footer status line shares $text-muted with tool/subagent activity panels."""
+    step_css = CognitionStepMessage.DEFAULT_CSS
+    assert "CognitionStepMessage .step-status" in step_css
+    assert "color: $text-muted;" in step_css
