@@ -236,12 +236,14 @@ class TestResolverToolkitNames:
         assert "list_files" not in tool_names
 
     def test_execution_resolves(self) -> None:
-        """Execution toolkit should resolve to 4 tools."""
+        """Execution toolkit should resolve to 5 tools."""
         from soothe.runner.resolver._resolver_tools import _resolve_single_tool_group_uncached
 
         tools = _resolve_single_tool_group_uncached("execution")
-        assert len(tools) == 4
+        assert len(tools) == 5
         assert tools[0].name == "run_command"
+        tool_names = {t.name for t in tools}
+        assert "tail_background_log" in tool_names
 
     def test_data_resolves(self) -> None:
         """Data toolkit should resolve to 6 tools."""

@@ -13,6 +13,7 @@ from soothe.toolkits.execution import (
     RunBackgroundTool,
     RunCommandShellTool,
     RunPythonREPLTool,
+    TailBackgroundLogTool,
 )
 
 
@@ -97,16 +98,17 @@ class TestRunCommandShellToolInitialization:
         tool = RunCommandShellTool()
         assert tool.security_config is None
 
-    def test_execution_toolkit_returns_four_tools(self) -> None:
+    def test_execution_toolkit_returns_five_tools(self) -> None:
         tools = ExecutionToolkit().get_tools()
 
-        assert len(tools) == 4
+        assert len(tools) == 5
         assert isinstance(tools[0], RunCommandShellTool)
         assert isinstance(tools[0], ShellTool)
         assert isinstance(tools[1], RunPythonREPLTool)
         assert isinstance(tools[1], PythonREPLTool)
         assert isinstance(tools[2], RunBackgroundTool)
-        assert isinstance(tools[3], KillProcessTool)
+        assert isinstance(tools[3], TailBackgroundLogTool)
+        assert isinstance(tools[4], KillProcessTool)
 
 
 class TestRunCommandShellToolCommandValidation:

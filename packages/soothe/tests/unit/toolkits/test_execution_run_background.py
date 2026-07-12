@@ -7,8 +7,6 @@ import signal
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from soothe.toolkits.execution import (
     RunBackgroundTool,
     _kill_process_tree,
@@ -192,7 +190,10 @@ class TestExecutionToolkitConfig:
         config = SimpleNamespace(
             security=None,
             tools=SimpleNamespace(
-                execution=SimpleNamespace(background_log_dir="/tmp/bg-logs"),
+                execution=SimpleNamespace(
+                    background_log_dir="/tmp/bg-logs",
+                    background_log_retention_days=3,
+                ),
             ),
             agent=SimpleNamespace(
                 loop=SimpleNamespace(
@@ -204,4 +205,5 @@ class TestExecutionToolkitConfig:
         bg_tool = next(t for t in toolkit.get_tools() if t.name == "run_background")
         kill_tool = next(t for t in toolkit.get_tools() if t.name == "kill_process")
         assert bg_tool.background_log_dir == "/tmp/bg-logs"
+        assert bg_tool.background_log_retention_days == 3
         assert kill_tool.background_log_dir == "/tmp/bg-logs"
