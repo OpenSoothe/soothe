@@ -98,7 +98,7 @@ def _extract_required_permission(action: ActionRequest) -> Permission | None:
     """Extract the permission required for an action request."""
     if action.action_type == "tool_call" and action.tool_name:
         name = action.tool_name
-        if name in ("execute", "shell", "bash", "run_command"):
+        if name == "run_command":
             cmd = action.tool_args.get("command") or action.tool_args.get("cmd", "")
             cmd_s = str(cmd) if cmd is not None else ""
             first_word = cmd_s.split()[0] if cmd_s.split() else "*"

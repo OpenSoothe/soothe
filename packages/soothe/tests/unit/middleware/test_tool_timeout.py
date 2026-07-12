@@ -123,7 +123,6 @@ class TestToolTimeoutMiddleware:
         """run_command should be skipped when skip_tools_with_internal_timeout=True."""
         middleware = ToolTimeoutMiddleware(skip_tools_with_internal_timeout=True)
         assert middleware._should_skip_timeout("run_command") is True
-        assert middleware._should_skip_timeout("execute") is True
         assert middleware._should_skip_timeout("grep") is False
 
     def test_no_skip_when_disabled(self) -> None:

@@ -124,7 +124,6 @@ class TestSootheFilesystemMiddlewareToolCreation:
             "edit_file",
             "glob",
             "grep",
-            "execute",
         ]
         for name in inherited_tool_names:
             assert any(t.name == name for t in middleware.tools), f"Missing inherited tool: {name}"

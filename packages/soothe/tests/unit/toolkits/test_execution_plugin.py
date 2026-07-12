@@ -23,7 +23,7 @@ async def test_execution_plugin_on_load_wires_config() -> None:
     plugin = ExecutionPlugin()
     context = MagicMock()
     context.config = SimpleNamespace(workspace_root="/ws/proj", timeout=90)
-    context.soothe_config = SimpleNamespace(security=SimpleNamespace(sandbox=False))
+    context.soothe_config = SimpleNamespace(security=SimpleNamespace())
     context.logger = MagicMock()
 
     await plugin.on_load(context)

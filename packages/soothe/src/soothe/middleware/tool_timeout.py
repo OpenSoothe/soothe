@@ -2,7 +2,7 @@
 
 Wraps tool invocations with configurable timeouts, preventing indefinite hangs
 from tools that lack internal timeout guards. This middleware complements
-tool-level timeouts (run_command, execute, MCP) with a uniform wrapper.
+tool-level timeouts (run_command, MCP) with a uniform wrapper.
 
 Architecture:
     Position: Last in middleware stack (innermost wrapper around tool call)
@@ -104,9 +104,9 @@ FILESYSTEM_TOOL_NAMES: frozenset[str] = frozenset(
 EXECUTION_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "run_command",
-        "execute",
         "run_python",
         "run_background",
+        "tail_background_log",
     }
 )
 
@@ -125,7 +125,6 @@ TOOLS_WITH_INTERNAL_TIMEOUT: frozenset[str] = frozenset(
     {
         "glob",  # deepagents FilesystemMiddleware enforces GLOB_TIMEOUT (20s)
         "run_command",  # subprocess.run(timeout=...) already enforced
-        "execute",  # deepagents execute has timeout parameter
     }
 )
 
@@ -147,7 +146,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         default_timeout_seconds: Default timeout for tools without specific override.
         per_tool_timeout: Dict mapping tool names to custom timeouts.
         skip_tools_with_internal_timeout: When True, don't wrap tools that already
-            have robust internal timeout mechanisms (run_command, execute).
+            have robust internal timeout mechanisms (run_command).
 
     Example:
         ```python
@@ -217,7 +216,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
     def _should_skip_timeout(self, tool_name: str) -> bool:
         """Check if tool should skip timeout wrapping.
 
-        Tools with robust internal timeouts (glob, run_command, execute) don't need
+        Tools with robust internal timeouts (glob, run_command) don't need
         middleware wrapping - their internal timeout is more precise.
 
         Args:

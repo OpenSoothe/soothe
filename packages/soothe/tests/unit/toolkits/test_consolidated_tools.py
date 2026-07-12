@@ -294,7 +294,7 @@ class TestDomainScopedPrompts:
         assert "websearch" in _RESEARCH_GUIDE or "search_web" in _RESEARCH_GUIDE
         assert "research" in _RESEARCH_GUIDE.lower()
         assert "read_file" in _FILE_OPS_GUIDE or "file" in _FILE_OPS_GUIDE.lower()
-        assert "run_command" in _SHELL_GUIDE or "execute" in _SHELL_GUIDE.lower()
+        assert "run_command" in _SHELL_GUIDE
         assert "data" in _DATA_GUIDE.lower()
         assert "planner" in _SUBAGENT_GUIDE.lower()
         assert "deep_research" in _SUBAGENT_GUIDE.lower()
@@ -305,7 +305,7 @@ class TestDomainScopedPrompts:
         # Check for tool categories mentioned in the guide
         guide_lower = _TOOL_ORCHESTRATION_GUIDE.lower()
         assert "read_file" in guide_lower or "file" in guide_lower
-        assert "run_command" in guide_lower or "execute" in guide_lower or "shell" in guide_lower
+        assert "run_command" in guide_lower or "shell" in guide_lower
         assert "data" in guide_lower
         assert "search_web" in guide_lower or "websearch" in guide_lower or "web" in guide_lower
         assert "research" in guide_lower

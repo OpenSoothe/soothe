@@ -28,7 +28,7 @@ class ToolMeta:
         path_arg_keys: Argument keys that hold filesystem paths (subset
             of ``arg_keys``). Used for path abbreviation in display.
         aliases: Alternative names the model might emit for the same tool
-            (e.g., ``shell`` and ``bash`` are aliases of ``execute``).
+            (e.g., ``shell`` and ``bash`` are legacy aliases of ``run_command``).
         category: Semantic category for display grouping
             (``file_ops``, ``execution``, ``web``, ``media``, ``goals``,
             ``subagent``, ``generic``).
@@ -184,15 +184,19 @@ _register(
     )
 )
 
+# ---------------------------------------------------------------------------
+# soothe execution tools
+# ---------------------------------------------------------------------------
+
 _register(
     ToolMeta(
-        name="execute",
-        display_name="ShellExecute",
+        name="run_command",
+        display_name="RunCommand",
         arg_keys=("command", "cmd", "script"),
-        aliases=("shell", "bash", "run_command"),
+        aliases=("shell", "bash"),
         category="execution",
         outcome_type="code_exec",
-        source="deepagents",
+        source="soothe",
         has_header_info=True,
     )
 )
@@ -312,7 +316,7 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
-# soothe execution tools
+# soothe execution tools (continued)
 # ---------------------------------------------------------------------------
 
 _register(

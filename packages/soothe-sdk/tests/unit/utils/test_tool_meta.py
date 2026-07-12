@@ -91,7 +91,6 @@ class TestOutcomeTypeCoverage:
     def test_execution_tools_have_code_exec_outcome_type(self) -> None:
         """Execution tools should have outcome_type='code_exec'."""
         execution_tools = [
-            "execute",
             "run_command",
             "run_python",
             "run_background",
@@ -159,11 +158,11 @@ class TestGetOutcomeTypeHelper:
         """Helper should return explicit outcome_type from ToolMeta."""
         assert get_outcome_type("read_file") == "file_read"
         assert get_outcome_type("write_file") == "file_write"
-        assert get_outcome_type("execute") == "code_exec"
+        assert get_outcome_type("run_command") == "code_exec"
 
     def test_resolves_aliases_correctly(self) -> None:
         """Helper should resolve aliases to canonical tool and return its outcome_type."""
-        # shell is alias of execute
+        # shell is alias of run_command
         assert get_outcome_type("shell") == "code_exec"
         # list_files is alias of ls
         assert get_outcome_type("list_files") == "file_read"
@@ -192,7 +191,7 @@ class TestToolMetaDisplayNames:
     def test_curated_display_names(self) -> None:
         """Display names are PascalCase from ToolMeta registry."""
         expected = {
-            "execute": "ShellExecute",
+            "run_command": "RunCommand",
             "ls": "ListFiles",
             "read_file": "ReadFile",
             "write_file": "WriteFile",
@@ -222,20 +221,20 @@ class TestToolMetaDisplayNames:
 class TestToolMetaAliases:
     """Verify alias resolution."""
 
-    def test_shell_alias_resolves_to_execute(self) -> None:
+    def test_shell_alias_resolves_to_run_command(self) -> None:
         meta = get_tool_meta("shell")
         assert meta is not None
-        assert meta.name == "execute"
+        assert meta.name == "run_command"
 
-    def test_bash_alias_resolves_to_execute(self) -> None:
+    def test_bash_alias_resolves_to_run_command(self) -> None:
         meta = get_tool_meta("bash")
         assert meta is not None
-        assert meta.name == "execute"
+        assert meta.name == "run_command"
 
-    def test_run_command_alias_resolves_to_execute(self) -> None:
+    def test_run_command_canonical(self) -> None:
         meta = get_tool_meta("run_command")
         assert meta is not None
-        assert meta.name == "execute"
+        assert meta.name == "run_command"
 
     def test_list_files_alias_resolves_to_ls(self) -> None:
         meta = get_tool_meta("list_files")
@@ -254,7 +253,7 @@ class TestToolMetaAliases:
 
     def test_alias_has_same_display_name(self) -> None:
         """Aliases resolve to canonical tool's display name."""
-        assert get_tool_display_name("shell") == "ShellExecute"
+        assert get_tool_display_name("shell") == "RunCommand"
         assert get_tool_display_name("list_files") == "ListFiles"
         assert get_tool_display_name("search_web") == "WebSearch"
 
@@ -317,10 +316,9 @@ class TestDerivedSets:
             "edit_file",
             "glob",
             "grep",
-            "execute",
+            "run_command",
             "shell",
             "bash",
-            "run_command",
             "web_search",
             "fetch_url",
             "search_web",
@@ -371,7 +369,7 @@ class TestGetToolMeta:
     def test_returns_meta_for_alias(self) -> None:
         meta = get_tool_meta("shell")
         assert meta is not None
-        assert meta.name == "execute"
+        assert meta.name == "run_command"
 
 
 class TestPolicyFilesystemMetadata:
@@ -380,7 +378,7 @@ class TestPolicyFilesystemMetadata:
     def test_is_policy_filesystem_tool(self) -> None:
         assert is_policy_filesystem_tool("read_file")
         assert is_policy_filesystem_tool("glob")
-        assert not is_policy_filesystem_tool("execute")
+        assert not is_policy_filesystem_tool("run_command")
         assert is_policy_filesystem_tool("fs_custom")
 
     def test_extract_path_prefers_registered_keys(self) -> None:

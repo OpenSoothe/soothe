@@ -234,12 +234,12 @@ class TestProgressEvent:
 
     def test_to_dict(self):
         """Test serialization."""
-        event = ProgressEvent(message="Working", tool_name="execute")
+        event = ProgressEvent(message="Working", tool_name="run_command")
         data = event.to_dict()
 
         assert data["type"] == "soothe.output.progress"
         assert data["message"] == "Working"
-        assert data["tool_name"] == "execute"
+        assert data["tool_name"] == "run_command"
 
 
 class TestReasoningEvent:
