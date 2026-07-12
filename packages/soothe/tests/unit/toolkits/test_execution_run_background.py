@@ -32,6 +32,15 @@ class TestRunBackgroundSpawn:
         finally:
             _kill_process_tree(result["pid"], sig=signal.SIGKILL)
 
+    def test_run_background_writes_header_before_spawn(self, tmp_path) -> None:
+        tool = RunBackgroundTool(workspace_root=str(tmp_path))
+        result = tool._run(command='echo "header-test" && sleep 30')
+        assert result["log_path"]
+        content = open(result["log_path"], encoding="utf-8").read()
+        assert "[soothe] background started" in content
+        assert 'echo "header-test" && sleep 30' in content
+        _kill_process_tree(result["pid"], sig=signal.SIGKILL)
+
     def test_run_background_captures_stdout_to_log(self, tmp_path) -> None:
         tool = RunBackgroundTool(workspace_root=str(tmp_path))
         result = tool._run(command='echo "bg-log-test" && sleep 30')
@@ -193,4 +202,6 @@ class TestExecutionToolkitConfig:
         )
         toolkit = build_execution_toolkit(config=config, workspace_root="/ws")
         bg_tool = next(t for t in toolkit.get_tools() if t.name == "run_background")
+        kill_tool = next(t for t in toolkit.get_tools() if t.name == "kill_process")
         assert bg_tool.background_log_dir == "/tmp/bg-logs"
+        assert kill_tool.background_log_dir == "/tmp/bg-logs"

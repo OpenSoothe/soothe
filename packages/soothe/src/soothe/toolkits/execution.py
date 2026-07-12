@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -103,6 +104,38 @@ def _resolve_background_log_dir(
 def _background_run_error(message: str) -> dict[str, Any]:
     """Standard error payload for ``run_background``."""
     return {"pid": None, "status": "error", "message": message, "log_path": None}
+
+
+def _format_background_log_header(command: str) -> str:
+    """Return a synchronous log preamble written before the shell starts."""
+    ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return f"[soothe] background started {ts}\n[soothe] command: {command}\n"
+
+
+def _background_log_path_for_pid(pid: int, log_dir: Path) -> Path:
+    """Standard log file path for a background PID under ``log_dir``."""
+    return log_dir / f"bg-{pid}.log"
+
+
+def _append_background_log_footer(
+    pid: int,
+    *,
+    configured_dir: str | None,
+    workspace: str | None,
+    tool_runtime: Any = None,
+    note: str,
+) -> None:
+    """Append a footer line to ``bg-{pid}.log`` when the file exists."""
+    log_dir = _resolve_background_log_dir(
+        configured_dir=configured_dir,
+        workspace=workspace,
+        tool_runtime=tool_runtime,
+    )
+    log_path = _background_log_path_for_pid(pid, log_dir)
+    if not log_path.is_file():
+        return
+    with open(log_path, "a", encoding="utf-8") as log_file:
+        log_file.write(f"\n[soothe] {note}\n")
 
 
 def _background_log_dir_from_config(config: Any | None) -> str | None:
@@ -420,7 +453,8 @@ class RunBackgroundTool(BaseTool):
         "Use for: training scripts, servers, long computations. "
         "Parameters: command (required) - the command to run. "
         "Returns: process ID, log_path (stdout/stderr log file), and status. "
-        "Use read_file on log_path to inspect progress; kill_process to stop."
+        "The log header (timestamp + command) is written immediately; use read_file "
+        "on log_path to inspect progress. Use kill_process to stop."
     )
     workspace_root: str = Field(default="", description="Working directory for shell")
     background_log_dir: str | None = Field(
@@ -484,6 +518,8 @@ class RunBackgroundTool(BaseTool):
         )
         pending_log = log_dir / f"bg-pending-{uuid.uuid4().hex[:12]}.log"
         log_handle = open(pending_log, "w", encoding="utf-8", buffering=1)
+        log_handle.write(_format_background_log_header(command))
+        log_handle.flush()
 
         try:
             proc = subprocess.Popen(
@@ -502,7 +538,7 @@ class RunBackgroundTool(BaseTool):
         finally:
             log_handle.close()
 
-        log_path = log_dir / f"bg-{proc.pid}.log"
+        log_path = _background_log_path_for_pid(proc.pid, log_dir)
         try:
             pending_log.rename(log_path)
         except OSError:
@@ -515,7 +551,7 @@ class RunBackgroundTool(BaseTool):
             "status": "running",
             "message": (
                 f"Background process started with PID: {proc.pid}. "
-                f"Log file: {log_path_str} (use read_file to inspect)."
+                f"Log file: {log_path_str} (header written; use read_file to inspect output)."
             ),
             "log_path": log_path_str,
         }
@@ -541,10 +577,20 @@ class KillProcessTool(BaseTool):
     description: str = (
         "Terminate a background process. "
         "Parameters: pid (required) - process ID from run_background. "
-        "Returns: termination status."
+        "Returns: termination status. Appends a footer to bg-{pid}.log when present."
+    )
+    workspace_root: str = Field(default="", description="Working directory fallback for log lookup")
+    background_log_dir: str | None = Field(
+        default=None,
+        description="Optional override for background log directory",
     )
 
-    def _run(self, pid: int) -> str:
+    def _run(
+        self,
+        pid: int,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> str:
         """Terminate background process and its children.
 
         Args:
@@ -569,13 +615,34 @@ class KillProcessTool(BaseTool):
         if _process_is_alive(pid):
             _kill_process_tree(pid, sig=signal.SIGKILL)
 
-        if not _process_is_alive(pid):
+        cwd_raw = _resolve_workspace(self.workspace_root, runtime)
+        cwd = str(expand_path(cwd_raw)) if cwd_raw else None
+        terminated = not _process_is_alive(pid)
+        footer_note = (
+            f"process {pid} terminated"
+            if terminated
+            else f"process {pid} termination signaled (may still be shutting down)"
+        )
+        _append_background_log_footer(
+            pid,
+            configured_dir=self.background_log_dir,
+            workspace=cwd,
+            tool_runtime=runtime,
+            note=footer_note,
+        )
+
+        if terminated:
             return f"Process {pid} terminated"
         return f"Process {pid} termination signaled (process may still be shutting down)"
 
-    async def _arun(self, pid: int) -> str:
+    async def _arun(
+        self,
+        pid: int,
+        *,
+        runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
+    ) -> str:
         """Async execution (delegates to sync)."""
-        return self._run(pid)
+        return self._run(pid, runtime=runtime)
 
 
 class ExecutionToolkit:
@@ -623,7 +690,10 @@ class ExecutionToolkit:
                 security_config=self._security_config,
                 background_log_dir=self._background_log_dir,
             ),
-            KillProcessTool(),
+            KillProcessTool(
+                workspace_root=self._workspace_root,
+                background_log_dir=self._background_log_dir,
+            ),
         ]
 
 

@@ -85,7 +85,7 @@ async def test_kill_process_arun_delegates_to_sync() -> None:
     with patch.object(tool, "_run", return_value="Process 1 terminated") as mock_run:
         result = await tool._arun(1)
     assert result == "Process 1 terminated"
-    mock_run.assert_called_once_with(1)
+    mock_run.assert_called_once_with(1, runtime=None)
 
 
 def test_kill_process_tree_noop_for_invalid_pid() -> None:
@@ -93,3 +93,22 @@ def test_kill_process_tree_noop_for_invalid_pid() -> None:
         _kill_process_tree(0)
         _kill_process_tree(-5)
     mock_killpg.assert_not_called()
+
+
+def test_kill_process_appends_footer_to_log(tmp_path, monkeypatch) -> None:
+    ws = tmp_path / "project"
+    ws.mkdir()
+    log_dir = ws / ".soothe" / "background"
+    log_dir.mkdir(parents=True)
+    log_path = log_dir / "bg-42.log"
+    log_path.write_text("[soothe] background started\n", encoding="utf-8")
+
+    tool = KillProcessTool(workspace_root=str(ws))
+    monkeypatch.setattr("soothe.toolkits.execution.os.kill", lambda _pid, _sig: None)
+    monkeypatch.setattr("soothe.toolkits.execution._kill_process_tree", lambda *_a, **_k: None)
+    monkeypatch.setattr("soothe.toolkits.execution._process_is_alive", lambda _pid: False)
+
+    result = tool._run(42)
+    assert result == "Process 42 terminated"
+    content = log_path.read_text(encoding="utf-8")
+    assert "process 42 terminated" in content
