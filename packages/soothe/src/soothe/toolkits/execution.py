@@ -18,6 +18,7 @@ import re
 import signal
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -72,6 +73,46 @@ def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | N
         fallback=workspace_root or None,
     )
     return str(resolved) if resolved is not None else None
+
+
+def _resolve_background_log_dir(
+    *,
+    configured_dir: str | None,
+    workspace: str | None,
+    tool_runtime: Any = None,
+) -> Path:
+    """Resolve the directory for ``run_background`` stdout/stderr log files."""
+    if configured_dir and str(configured_dir).strip():
+        target = expand_path(str(configured_dir).strip())
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    effective_workspace = _resolve_workspace(workspace or "", tool_runtime)
+    if effective_workspace:
+        target = expand_path(str(effective_workspace)) / ".soothe" / "background"
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+
+    from soothe.foundation.workspace import get_virtual_home
+
+    target = get_virtual_home() / "background"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _background_run_error(message: str) -> dict[str, Any]:
+    """Standard error payload for ``run_background``."""
+    return {"pid": None, "status": "error", "message": message, "log_path": None}
+
+
+def _background_log_dir_from_config(config: Any | None) -> str | None:
+    if config is None:
+        return None
+    try:
+        raw = config.tools.execution.background_log_dir
+    except AttributeError:
+        return None
+    return str(raw) if raw else None
 
 
 def _virtual_mode_from_security(security_config: Any) -> bool:
@@ -143,8 +184,7 @@ def _process_is_alive(pid: int) -> bool:
     except OSError:
         # Permission denied or similar — treat as alive so callers can escalate.
         return True
-    else:
-        return True
+    return True
 
 
 def _kill_process_tree(pid: int, *, sig: int = signal.SIGKILL) -> None:
@@ -379,10 +419,14 @@ class RunBackgroundTool(BaseTool):
         "Run a long-running command in the background. "
         "Use for: training scripts, servers, long computations. "
         "Parameters: command (required) - the command to run. "
-        "Returns: process ID for tracking. "
-        "Use kill_process to stop background commands."
+        "Returns: process ID, log_path (stdout/stderr log file), and status. "
+        "Use read_file on log_path to inspect progress; kill_process to stop."
     )
     workspace_root: str = Field(default="", description="Working directory for shell")
+    background_log_dir: str | None = Field(
+        default=None,
+        description="Optional override for background log directory",
+    )
     security_config: Any = Field(default=None, description="Security configuration object")
 
     def _security_decision(self, command: str, tool_runtime: Any = None) -> tuple[str, str]:
@@ -414,15 +458,15 @@ class RunBackgroundTool(BaseTool):
             command: Command to run in background
 
         Returns:
-            Dict with 'pid', 'status', and 'message'
+            Dict with ``pid``, ``status``, ``message``, and ``log_path``
         """
         verdict, reason = self._security_decision(command, runtime)
         if verdict != "allow":
-            return {"pid": None, "status": "error", "message": f"Error: {reason}"}
+            return _background_run_error(f"Error: {reason}")
 
         shell_error = macos_shell_compatibility_error(command)
         if shell_error is not None:
-            return {"pid": None, "status": "error", "message": shell_error}
+            return _background_run_error(shell_error)
 
         effective = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(effective)) if effective else None
@@ -433,25 +477,47 @@ class RunBackgroundTool(BaseTool):
             virtual_mode=_virtual_mode_from_security(self.security_config),
         )
 
+        log_dir = _resolve_background_log_dir(
+            configured_dir=self.background_log_dir,
+            workspace=cwd,
+            tool_runtime=runtime,
+        )
+        pending_log = log_dir / f"bg-pending-{uuid.uuid4().hex[:12]}.log"
+        log_handle = open(pending_log, "w", encoding="utf-8", buffering=1)
+
         try:
             proc = subprocess.Popen(
                 command,
                 shell=True,
                 cwd=cwd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
                 start_new_session=True,
             )
         except Exception as e:
-            return {
-                "pid": None,
-                "status": "error",
-                "message": f"Error starting background process: {e}",
-            }
+            log_handle.close()
+            with contextlib.suppress(OSError):
+                pending_log.unlink(missing_ok=True)
+            return _background_run_error(f"Error starting background process: {e}")
+        finally:
+            log_handle.close()
+
+        log_path = log_dir / f"bg-{proc.pid}.log"
+        try:
+            pending_log.rename(log_path)
+        except OSError:
+            logger.debug("Could not rename background log %s → %s", pending_log, log_path)
+            log_path = pending_log
+
+        log_path_str = str(log_path)
         return {
             "pid": proc.pid,
             "status": "running",
-            "message": f"Background process started with PID: {proc.pid}",
+            "message": (
+                f"Background process started with PID: {proc.pid}. "
+                f"Log file: {log_path_str} (use read_file to inspect)."
+            ),
+            "log_path": log_path_str,
         }
 
     async def _arun(
@@ -525,6 +591,7 @@ class ExecutionToolkit:
         timeout: int = 60,
         security_config: Any = None,
         max_output_length: int = DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+        background_log_dir: str | None = None,
     ) -> None:
         """Initialize toolkit.
 
@@ -533,11 +600,13 @@ class ExecutionToolkit:
             timeout: Default command timeout in seconds.
             security_config: Security configuration for operation policy.
             max_output_length: Max stdout chars for run_command.
+            background_log_dir: Optional override for run_background log directory.
         """
         self._workspace_root = workspace_root
         self._timeout = timeout
         self._security_config = security_config
         self._max_output_length = max_output_length
+        self._background_log_dir = background_log_dir
 
     def get_tools(self) -> list[BaseTool]:
         """Return the four execution tool instances for this toolkit."""
@@ -552,6 +621,7 @@ class ExecutionToolkit:
             RunBackgroundTool(
                 workspace_root=self._workspace_root,
                 security_config=self._security_config,
+                background_log_dir=self._background_log_dir,
             ),
             KillProcessTool(),
         ]
@@ -577,6 +647,7 @@ def build_execution_toolkit(
             if max_output_length is not None
             else _execution_max_output_from_config(config)
         ),
+        background_log_dir=_background_log_dir_from_config(config),
     )
 
 

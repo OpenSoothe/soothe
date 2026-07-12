@@ -211,6 +211,14 @@ progressive_skills:
   intent_prefetch_min_query_chars: 4
 
 # ============================================================
+# TOOLS (execution background logs)
+# ============================================================
+tools:
+  execution:
+    enabled: true
+    background_log_dir: null
+
+# ============================================================
 # SKILLIFY (daemon-shared semantic skill search)
 # ============================================================
 skillify:

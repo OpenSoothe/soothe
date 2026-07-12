@@ -154,4 +154,5 @@ class TestBackgroundTools:
         tool = RunBackgroundTool()
         result = tool._run("sudo rm -rf /")
         assert result["status"] == "error"
+        assert result["log_path"] is None
         assert "Command blocked by security rule" in result["message"]

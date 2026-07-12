@@ -38,7 +38,7 @@ _SHELL_GUIDE = """\
 Execution tools (always bound — not listed in <AVAILABLE_TOOLS>):
 - run_command: Execute shell commands synchronously (returns output). Use for: CLI tools, scripts.
 - run_python: Execute Python code with session persistence. Variables persist across calls.
-- run_background: Run long commands in background (returns PID). Use for: training, servers, builds.
+- run_background: Run long commands in background (returns PID and log_path). Use read_file on log_path to inspect output.
 - kill_process: Terminate background process by PID from run_background.
 """
 
@@ -126,7 +126,7 @@ Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_file_lines) instead of full-file rewrites.
 - Use websearch for quick lookups; use deep_research for thorough public web research reports.
-- Use run_command for sync shell, run_background for long-running jobs, kill_process to stop background PIDs, run_python for Python code.
+- Use run_command for sync shell, run_background for long-running jobs (inspect log_path via read_file), kill_process to stop background PIDs, run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
 
