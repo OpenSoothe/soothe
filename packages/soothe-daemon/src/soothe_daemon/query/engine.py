@@ -453,10 +453,19 @@ class QueryEngine:
             d._active_threads[thread_id] = task
             d._current_query_task = task
 
-    async def _unregister_query_task(self, thread_id: str) -> None:
-        """Remove a query task registration under ``_query_state_lock``."""
+    async def _unregister_query_task(
+        self, thread_id: str, task: asyncio.Task[Any] | None = None
+    ) -> None:
+        """Remove a query task registration under ``_query_state_lock``.
+
+        When ``task`` is provided the entry is only dropped if it still matches,
+        so a superseded turn cannot evict a successor that reused the same
+        checkpoint ``thread_id``.
+        """
         d = self._daemon
         async with d._query_state_lock:
+            if task is not None and d._active_threads.get(thread_id) is not task:
+                return
             d._active_threads.pop(thread_id, None)
 
     async def _reject_query_admission(
@@ -1196,15 +1205,18 @@ class QueryEngine:
                     )
             finally:
                 reset_stream_model_override(override_token)
-                await self._unregister_query_task(thread_id)
-                await self._release_query_admission(effective_loop_id)
+                # Turn ownership guards every shared-state teardown below: a
+                # superseded turn (Ctrl+C + queued goal admitted a successor on
+                # the same loop) must not evict the successor's task, admission,
+                # runner, or stream registration. ``_unregister_query_task`` is
+                # identity-scoped since successors reuse the checkpoint thread_id.
+                stream_task = asyncio.current_task()
                 owns_turn = self._owns_turn(effective_loop_id, turn_generation)
+                await self._unregister_query_task(thread_id, stream_task)
                 if owns_turn:
+                    await self._release_query_admission(effective_loop_id)
                     active = self._active_runners.pop(effective_loop_id or thread_id, None)
-                    if (
-                        active is not None
-                        and active.turn_generation == turn_generation
-                    ):
+                    if active is not None and active.turn_generation == turn_generation:
                         loop_runner_cleanup = active.runner
                     else:
                         loop_runner_cleanup = None
@@ -1220,7 +1232,7 @@ class QueryEngine:
                             "QueryEngine: loop_runner.cancel during stream finally failed",
                             exc_info=True,
                         )
-                if effective_loop_id:
+                if owns_turn and effective_loop_id:
                     d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
 
                 # IG-054: Moved post-query logic here since we don't await task
@@ -1317,7 +1329,11 @@ class QueryEngine:
 
                 if client_id and self._owns_turn(effective_loop_id, turn_generation):
                     await d._session_manager.release_loop_ownership(client_id)
-                d._current_query_task = None
+                # Only clear the shared pointer if a successor turn has not
+                # already claimed it (superseded turns must not null it out).
+                async with d._query_state_lock:
+                    if d._current_query_task is stream_task:
+                        d._current_query_task = None
 
         try:
             task = asyncio.create_task(_run_stream())
@@ -1485,7 +1501,8 @@ class QueryEngine:
                 },
             )
         finally:
-            await self._unregister_query_task(thread_id)
+            direct_task = asyncio.current_task()
+            await self._unregister_query_task(thread_id, direct_task)
             await self._release_query_admission(effective_loop_id)
             try:
                 thread_logger.flush()
@@ -1505,7 +1522,9 @@ class QueryEngine:
             )
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
-            d._current_query_task = None
+            async with d._query_state_lock:
+                if d._current_query_task is direct_task:
+                    d._current_query_task = None
 
     async def cancel_loop(self, loop_id: str) -> None:
         """Cancel running query tasks bound to ``loop_id`` (IG-408).

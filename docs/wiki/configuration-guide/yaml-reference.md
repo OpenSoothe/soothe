@@ -108,7 +108,7 @@ Backend selection for four protocols:
 | Protocol | Key fields | Default |
 |----------|-----------|---------|
 | `memory` (MemU) | `enabled`, `llm_chat_role`, `llm_embed_role`, `enable_embeddings` | enabled, roles `fast`/`embedding` |
-| `planner` | `model` (role), `routing` (auto/always_direct/always_planner/always_claude) | `think`, `auto` |
+| `planner` | `model` (role), `routing` (auto/always_direct/always_planner) | `think`, `auto` |
 | `policy` | `profile` | `standard` |
 | `durability` | `backend`, `checkpointer` (both accept `default` to inherit `persistence.default_backend`), `thread_inactivity_timeout_hours` | `default`, 72h |
 
@@ -118,7 +118,7 @@ The `default` sentinel in durability lets you set the backend once in `persisten
 
 A dict of `SubagentConfig` entries. Each has `enabled`, `model` (null → falls back to `fast` role), `transport` (local | acp | a2a | langgraph), `url`, `config` (subagent-specific), and `runtime_dir`. `deep_research` and `academic_research` take `config.effort` (`normal` | `thorough`); `planner` takes `config.routing` (auto/always_direct/always_planner).
 
-Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Semantic skill search uses top-level `skillify:` (not a subagent). Claude Code runs via `agent.core_agent_backend`, not as a subagent.
+Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Semantic skill search uses top-level `skillify:` (not a subagent).
 
 ## Tools
 

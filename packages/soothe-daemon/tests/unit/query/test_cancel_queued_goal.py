@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe_daemon.config import SootheDaemonConfig
-from soothe_daemon.query.engine import QueryAdmission, QueryEngine
-from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
+from soothe_daemon.query.engine import AsyncCancelOrchestrator, QueryAdmission, QueryEngine
 from soothe_daemon.runner.thread_runner import ThreadPool, WorkerThreadState, WorkerThreadStatus
+from soothe_daemon.runtime.loop_broadcast_budget import LoopBroadcastBudget
 
 
 def _daemon_factory(*, broadcasts: list[dict[str, Any]] | None = None) -> SimpleNamespace:
@@ -114,6 +114,7 @@ async def test_await_loop_ready_waits_for_cancel_orchestrator() -> None:
     """Queued intake must block until the background cancel task completes."""
     daemon = _daemon_factory()
     engine = QueryEngine(daemon)
+    engine._cancel_orchestrator = AsyncCancelOrchestrator(daemon, engine)
     gate = asyncio.Event()
 
     async def slow_cancel() -> None:
@@ -128,9 +129,7 @@ async def test_await_loop_ready_waits_for_cancel_orchestrator() -> None:
 
     gate.set()
     await asyncio.wait_for(ready, timeout=1.0)
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
+    await task
 
 
 @pytest.mark.asyncio
@@ -219,3 +218,28 @@ async def test_admit_query_increments_turn_generation_per_loop() -> None:
     admission, gen3 = await engine._admit_query(effective_loop_id="loop-b", thread_id="t2")
     assert admission is QueryAdmission.ADMITTED
     assert gen3 == 1
+
+
+@pytest.mark.asyncio
+async def test_unregister_query_task_is_identity_scoped() -> None:
+    """A superseded turn must not evict a successor that reused the thread_id."""
+    daemon = _daemon_factory()
+    engine = QueryEngine(daemon)
+
+    async def _noop() -> None:
+        return None
+
+    predecessor = asyncio.create_task(_noop())
+    successor = asyncio.create_task(_noop())
+    await asyncio.gather(predecessor, successor)
+
+    # Successor now owns the shared checkpoint thread_id registration.
+    daemon._active_threads["thread-1"] = successor
+
+    # Stale predecessor finally must be a no-op (identity mismatch).
+    await engine._unregister_query_task("thread-1", predecessor)
+    assert daemon._active_threads.get("thread-1") is successor
+
+    # The owning turn clears its own registration.
+    await engine._unregister_query_task("thread-1", successor)
+    assert "thread-1" not in daemon._active_threads

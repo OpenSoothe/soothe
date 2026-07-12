@@ -69,25 +69,24 @@ pip install -U 'soothe[all]' soothe-cli soothe-daemon
 
 **Minimal** (core + CLI): `pip install soothe soothe-cli`
 
-**Optional extras**: `tabular`, `document`, `github`, `claude`, `all`
+**Optional extras**: `tabular`, `document`, `github`, `all`
 
 See [Installation Guide](getting-started/Installation.md) for details.
 
 ### Why do I need soothe-plugins?
 
-`soothe-plugins` is a **separate package** (separate repo) with optional delegated agents:
-- `claude` - Anthropic Claude delegation
-- Other community plugins
+`soothe-plugins` is a **separate package** (separate repo) with optional delegated agents such as Weaver and BrowserUse extensions.
 
 **Install**:
 ```bash
 pip install soothe-plugins
 ```
 
-**Configure**:
+**Configure** (example):
+
 ```yaml
 subagents:
-  claude:
+  browser_use:
     enabled: true
 ```
 
@@ -465,9 +464,9 @@ subagents:
 pip install soothe-plugins
 ```
 
-**Missing provider key** (for claude):
+**Missing Anthropic provider key**:
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...  # For claude
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 See [Troubleshooting Guide](troubleshooting.md).

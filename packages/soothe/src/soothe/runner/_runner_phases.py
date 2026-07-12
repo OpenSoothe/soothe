@@ -263,7 +263,7 @@ class PhasesMixin:
         try:
             _ = agent.graph
         except NotImplementedError:
-            # Agent doesn't use LangGraph (e.g., ClaudeCoreAgent)
+            # Agent doesn't use LangGraph checkpointer
             logger.debug("Agent does not support LangGraph checkpointer, skipping initialization")
             self._checkpointer_initialized = True
             return
