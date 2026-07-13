@@ -1,7 +1,7 @@
 """Mtime-based skill index for fast daemon-level skill discovery.
 
-Indexes skills under ``~/.soothe/skills``, ``~/.agents/skills``, and
-the package-bundled ``skills/builtin_skills/`` directory.
+Indexes skills under ``~/.agents/skills``, package-bundled
+``skills/builtin_skills/``, and ``~/.soothe/skills``.
 Uses stat-only invalidation: re-parses SKILL.md only when mtime changes.
 Persists cache to ~/.soothe/cache/skill_index.json for fast restarts.
 """
@@ -24,9 +24,9 @@ _BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent / "builtin_skills"
 
 # (root_path, source_label) — order matters: later roots win on name collision
 _SKILL_ROOTS: tuple[tuple[Path, str], ...] = (
+    (Path.home() / ".agents" / "skills", "user"),
     (_BUILTIN_SKILLS_DIR, "builtin"),
     (Path.home() / ".soothe" / "skills", "user"),
-    (Path.home() / ".agents" / "skills", "user"),
 )
 
 
@@ -64,9 +64,9 @@ class SkillIndexEntry:
 class SkillIndex:
     """Mtime-aware skill index that avoids re-parsing unchanged SKILL.md files.
 
-    The index scans built-in, user, and community skill directories.
+    The index scans community, built-in, and user skill directories.
     When a skill name appears in multiple roots, the later root wins
-    (``~/.agents/skills`` > ``~/.soothe/skills`` > built-ins).
+    (``~/.soothe/skills`` > built-ins > ``~/.agents/skills``).
     Workspace/project skills are resolved by the loop at runtime.
     """
 
@@ -92,8 +92,7 @@ class SkillIndex:
         changed = False
 
         new_entries: dict[str, SkillIndexEntry] = {}
-        for skill_dir, (mtime, source) in current_skills.items():
-            key = skill_dir.name.lower()
+        for key, (skill_dir, mtime, source) in current_skills.items():
             existing = self._entries.get(key)
             if existing and existing.mtime >= mtime and existing.path == str(skill_dir):
                 new_entries[key] = existing
@@ -141,12 +140,12 @@ class SkillIndex:
             self._load_cache()
             self.rebuild_if_stale()
 
-    def _discover_skill_dirs(self) -> dict[Path, tuple[float, str]]:
-        """Stat SKILL.md in each candidate dir; return path → (mtime, source).
+    def _discover_skill_dirs(self) -> dict[str, tuple[Path, float, str]]:
+        """Stat SKILL.md in each candidate dir; return name key → (path, mtime, source).
 
         When the same skill name exists in multiple roots, the later root wins
-        (last-wins dedup). ``~/.agents/skills`` overrides ``~/.soothe/skills``
-        which overrides built-ins.
+        (last-wins dedup). ``~/.soothe/skills`` overrides built-ins which
+        override ``~/.agents/skills``.
         """
         by_name: dict[str, tuple[Path, float, str]] = {}
         for root, source in _SKILL_ROOTS:
@@ -165,12 +164,31 @@ class SkillIndex:
                         st = skill_md.stat()
                     except OSError:
                         continue
-                    by_name[dir_entry.name.lower()] = (
+                    skill_name_key = self._discover_skill_name_key(skill_md, dir_entry.name)
+                    by_name[skill_name_key] = (
                         Path(dir_entry.path).resolve(),
                         st.st_mtime,
                         source,
                     )
-        return {path: (mtime, source) for path, mtime, source in by_name.values()}
+        return by_name
+
+    def _discover_skill_name_key(self, skill_md: Path, fallback_dir_name: str) -> str:
+        """Return lowercase dedupe key from frontmatter ``name`` when available."""
+        fallback = str(fallback_dir_name).strip().lower()
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            return fallback
+        try:
+            from soothe.skills.catalog import _parse_frontmatter
+
+            fm = _parse_frontmatter(text)
+        except Exception:  # noqa: BLE001
+            return fallback
+        raw_name = fm.get("name")
+        if isinstance(raw_name, str) and raw_name.strip():
+            return raw_name.strip().lower()
+        return fallback
 
     def _parse_skill_dir(
         self, skill_dir: Path, mtime: float, *, source: str = "user"

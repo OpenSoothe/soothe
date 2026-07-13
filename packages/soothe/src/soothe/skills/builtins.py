@@ -25,14 +25,14 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     """Return absolute paths for discovered skill directories.
 
     A valid skill directory contains a `SKILL.md` file. The search includes:
+    - User skills in `~/.agents/skills/`
     - Package-bundled built-ins (`soothe/skills/builtin_skills/`)
     - User skills in `~/.soothe/skills/`
-    - User skills in `~/.agents/skills/`
     - Project skills in `<workspace>/.soothe/skills/` (if workspace provided)
 
     When the same skill name exists in multiple roots, later roots win
-    (last-wins dedup). Workspace overrides ``~/.agents`` which overrides
-    ``~/.soothe`` which overrides built-ins.
+    (last-wins dedup). Workspace overrides ``~/.soothe`` which overrides
+    built-ins which override ``~/.agents``.
 
     Args:
         workspace: Optional workspace directory path for project-local skills.
@@ -42,9 +42,9 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
     """
     skills_dir = Path(__file__).resolve().parent
     candidate_roots = [
+        Path.home() / ".agents" / "skills",
         skills_dir / "builtin_skills",
         SOOTHE_HOME / "skills",
-        Path.home() / ".agents" / "skills",
     ]
 
     # Add workspace .soothe/skills if provided

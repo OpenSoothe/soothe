@@ -22,13 +22,15 @@ logger = logging.getLogger(__name__)
 
 _shared_instance: SkillifyService | None = None
 _shared_lock = asyncio.Lock()
+_BUILTIN_SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills" / "builtin_skills"
 
 
 def _default_warehouse_paths(soothe_home: Path) -> list[str]:
     """Default Skillify scan roots (same user skill dirs as the skill catalog)."""
     return [
-        str(soothe_home / "skills"),
         str(Path.home() / ".agents" / "skills"),
+        str(_BUILTIN_SKILLS_DIR),
+        str(soothe_home / "skills"),
     ]
 
 

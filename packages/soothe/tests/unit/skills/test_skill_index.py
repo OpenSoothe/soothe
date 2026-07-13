@@ -194,8 +194,21 @@ def test_agents_skills_root_included(tmp_path: Path) -> None:
 
     root_paths = [r for r, _ in _SKILL_ROOTS]
     agents_root = Path.home() / ".agents" / "skills"
+    soothe_root = Path.home() / ".soothe" / "skills"
     assert agents_root in root_paths
     assert _BUILTIN_SKILLS_DIR in root_paths
+    assert soothe_root in root_paths
+
+
+def test_default_root_precedence_soothe_over_builtin_over_agents(tmp_path: Path) -> None:
+    """Default roots should be ordered by effective priority (last-wins)."""
+    from soothe.skills.index import _BUILTIN_SKILLS_DIR, _SKILL_ROOTS
+
+    root_paths = [r for r, _ in _SKILL_ROOTS]
+    agents_root = Path.home() / ".agents" / "skills"
+    soothe_root = Path.home() / ".soothe" / "skills"
+    assert root_paths.index(agents_root) < root_paths.index(_BUILTIN_SKILLS_DIR)
+    assert root_paths.index(_BUILTIN_SKILLS_DIR) < root_paths.index(soothe_root)
 
 
 def test_source_builtin_vs_user(tmp_path: Path) -> None:
@@ -219,3 +232,33 @@ def test_source_builtin_vs_user(tmp_path: Path) -> None:
     my = next(e for e in entries if e.name == "my-skill")
     assert core.source == "builtin"
     assert my.source == "user"
+
+
+def test_dedup_uses_frontmatter_name_not_directory_name(tmp_path: Path) -> None:
+    """Collision dedupe should use SKILL frontmatter name across roots."""
+    low_root = tmp_path / "agents"
+    low_root.mkdir()
+    _make_skill(low_root, "alpha-dir", description="from-agents")
+    (low_root / "alpha-dir" / "SKILL.md").write_text(
+        "---\nname: shared\ndescription: from-agents\n---\n# shared\n",
+        encoding="utf-8",
+    )
+
+    high_root = tmp_path / "soothe"
+    high_root.mkdir()
+    _make_skill(high_root, "beta-dir", description="from-soothe")
+    (high_root / "beta-dir" / "SKILL.md").write_text(
+        "---\nname: shared\ndescription: from-soothe\n---\n# shared\n",
+        encoding="utf-8",
+    )
+
+    index = SkillIndex()
+    with patch(
+        "soothe.skills.index._SKILL_ROOTS",
+        ((low_root, "user"), (high_root, "user")),
+    ):
+        entries = index.rebuild_if_stale()
+
+    assert len(entries) == 1
+    assert entries[0].name == "shared"
+    assert entries[0].description == "from-soothe"

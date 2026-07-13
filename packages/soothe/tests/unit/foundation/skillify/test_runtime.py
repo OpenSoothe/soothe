@@ -11,8 +11,9 @@ def test_default_warehouse_paths_include_user_skill_dirs(tmp_path: Path) -> None
     soothe_home = tmp_path / ".soothe"
     defaults = _default_warehouse_paths(soothe_home)
     assert defaults == [
-        str(soothe_home / "skills"),
         str(Path.home() / ".agents" / "skills"),
+        str(Path(__file__).resolve().parents[4] / "src" / "soothe" / "skills" / "builtin_skills"),
+        str(soothe_home / "skills"),
     ]
 
 
@@ -26,9 +27,10 @@ def test_resolve_warehouse_paths_keeps_custom_paths(tmp_path: Path) -> None:
     soothe_home = tmp_path / ".soothe"
     custom = "/tmp/extra-skills"
     resolved = resolve_warehouse_paths(soothe_home, [custom])
-    assert resolved[0] == str(soothe_home / "skills")
-    assert resolved[1] == str(Path.home() / ".agents" / "skills")
-    assert resolved[2] == custom
+    assert resolved[0] == str(Path.home() / ".agents" / "skills")
+    assert resolved[1].endswith("/skills/builtin_skills")
+    assert resolved[2] == str(soothe_home / "skills")
+    assert resolved[3] == custom
 
 
 def test_resolve_warehouse_paths_dedupes_configured_defaults(tmp_path: Path) -> None:
