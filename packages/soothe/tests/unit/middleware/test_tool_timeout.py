@@ -10,7 +10,9 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
+from soothe.config.constants import MAX_EXECUTE_TIMEOUT
 from soothe.middleware.tool_timeout import (
+    DEFAULT_EXECUTION_TIMEOUT_SECONDS,
     DEFAULT_FILESYSTEM_TIMEOUT_SECONDS,
     DEFAULT_SUBAGENT_TIMEOUT_SECONDS,
     DEFAULT_TASK_TIMEOUT_SECONDS,
@@ -22,13 +24,18 @@ from soothe.middleware.tool_timeout import (
 )
 
 
-def _make_request(tool_name: str, tool_call_id: str = "test-id") -> MagicMock:
+def _make_request(
+    tool_name: str,
+    tool_call_id: str = "test-id",
+    *,
+    args: dict[str, Any] | None = None,
+) -> MagicMock:
     """Create a mock ToolCallRequest."""
     request = MagicMock()
     request.tool_call = {
         "name": tool_name,
         "id": tool_call_id,
-        "args": {},
+        "args": args or {},
     }
     request.metadata = {}  # IG-517: metadata for fast-path checks
     return request
@@ -120,15 +127,16 @@ class TestToolTimeoutMiddleware:
         assert DEFAULT_TASK_TIMEOUT_SECONDS == 86400.0  # 24 hours
 
     def test_skip_tools_with_internal_timeout(self) -> None:
-        """run_command should be skipped when skip_tools_with_internal_timeout=True."""
+        """glob should be skipped when skip_tools_with_internal_timeout=True."""
         middleware = ToolTimeoutMiddleware(skip_tools_with_internal_timeout=True)
-        assert middleware._should_skip_timeout("run_command") is True
+        assert middleware._should_skip_timeout("glob") is True
+        assert middleware._should_skip_timeout("run_command") is False
         assert middleware._should_skip_timeout("grep") is False
 
     def test_no_skip_when_disabled(self) -> None:
-        """run_command should NOT be skipped when skip_tools_with_internal_timeout=False."""
+        """glob should NOT be skipped when skip_tools_with_internal_timeout=False."""
         middleware = ToolTimeoutMiddleware(skip_tools_with_internal_timeout=False)
-        assert middleware._should_skip_timeout("run_command") is False
+        assert middleware._should_skip_timeout("glob") is False
 
     @pytest.mark.asyncio
     async def test_async_handler_completes_within_timeout(self) -> None:
@@ -190,20 +198,61 @@ class TestToolTimeoutMiddleware:
         assert middleware._timeout_count == 1
 
     @pytest.mark.asyncio
-    async def test_skip_internal_timeout_tools(self) -> None:
-        """run_command should bypass timeout wrapper and call handler directly."""
-        middleware = ToolTimeoutMiddleware(
-            default_timeout_seconds=0.1,
-            skip_tools_with_internal_timeout=True,
-        )
+    async def test_run_command_uses_middleware_timeout(self) -> None:
+        """run_command should be wrapped by middleware timeout (backup for tool timeout)."""
+        middleware = ToolTimeoutMiddleware(per_tool_timeout={"run_command": 0.1})
         request = _make_request("run_command")
 
-        # skip_tools_with_internal_timeout bypasses the wrapper; use a fast handler.
-        result = await middleware.awrap_tool_call(request, _make_async_handler("direct"))
+        result = await middleware.awrap_tool_call(request, _make_slow_async_handler(5.0))
 
         assert isinstance(result, ToolMessage)
-        assert result.content == "direct"
-        assert middleware._timeout_count == 0
+        assert result.status == "error"
+        assert "timed out" in result.content.lower()
+        assert middleware._timeout_count == 1
+
+    @pytest.mark.asyncio
+    async def test_run_command_respects_llm_timeout_arg(self) -> None:
+        """Per-call timeout on run_command should override the 120s execution default."""
+        middleware = ToolTimeoutMiddleware()
+        request = _make_request("run_command", args={"command": "sleep 9", "timeout": 3600})
+
+        result = await middleware.awrap_tool_call(request, _make_async_handler("done"))
+
+        assert isinstance(result, ToolMessage)
+        assert result.content == "done"
+        assert result.status != "error"
+        assert middleware._get_timeout_for_tool("run_command", {"timeout": 3600}) == 3600.0
+
+    @pytest.mark.asyncio
+    async def test_run_command_llm_timeout_enforced(self) -> None:
+        """Middleware should cut off run_command when per-call timeout is exceeded."""
+        middleware = ToolTimeoutMiddleware()
+        request = _make_request("run_command", args={"command": "sleep 9", "timeout": 0.15})
+
+        result = await middleware.awrap_tool_call(request, _make_slow_async_handler(5.0))
+
+        assert isinstance(result, ToolMessage)
+        assert result.status == "error"
+        assert "run_background" in str(result.content)
+
+    def test_run_command_invalid_timeout_falls_back_to_execution_default(self) -> None:
+        """Invalid per-call timeout values should not override category defaults."""
+        middleware = ToolTimeoutMiddleware()
+        assert (
+            middleware._get_timeout_for_tool("run_command", {"timeout": 0})
+            == DEFAULT_EXECUTION_TIMEOUT_SECONDS
+        )
+        assert (
+            middleware._get_timeout_for_tool("run_command", {"timeout": "bad"})
+            == DEFAULT_EXECUTION_TIMEOUT_SECONDS
+        )
+
+    def test_run_command_llm_timeout_clamped_to_max(self) -> None:
+        """Per-call timeout above MAX_EXECUTE_TIMEOUT should be clamped."""
+        middleware = ToolTimeoutMiddleware()
+        assert middleware._get_timeout_for_tool("run_command", {"timeout": 999_999}) == float(
+            MAX_EXECUTE_TIMEOUT
+        )
 
     @pytest.mark.asyncio
     async def test_timeout_message_includes_tool_name(self) -> None:

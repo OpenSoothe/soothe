@@ -13,7 +13,7 @@ Default timeouts:
     - Subagent tools: 1800s (30 minutes for exploration/browser)
     - Task tool: 86400s (24 hours for autonomous subagent work)
     - Filesystem tools: 30s (read, grep); glob uses deepagents' internal 20s cap
-    - Execution tools: 120s (run_command already has timeout)
+    - Execution tools: 120s default; run_command honors per-call ``timeout`` (max 5h)
 
 Configuration:
     config.agent.tool_timeout.default_seconds: 60.0
@@ -34,6 +34,7 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
 
+from soothe.config.constants import clamp_execute_timeout
 from soothe.foundation.core.filesystem.discovery_hints import (
     format_glob_timeout_error,
 )
@@ -120,11 +121,30 @@ SUBAGENT_TOOL_NAMES: frozenset[str] = frozenset(
     }
 )
 
-# Tools that already have robust internal timeouts - skip wrapping
+# Tools that accept a per-call ``timeout`` argument honored by middleware
+TOOLS_WITH_LLM_TIMEOUT_ARG: frozenset[str] = frozenset({"run_command"})
+
+
+def _parse_tool_timeout_arg(tool_args: object) -> float | None:
+    """Return a positive timeout in seconds from tool call args, if present."""
+    if not isinstance(tool_args, dict):
+        return None
+    raw = tool_args.get("timeout")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    return value
+
+
+# Tools that already have robust internal timeouts - skip middleware wrapping
 TOOLS_WITH_INTERNAL_TIMEOUT: frozenset[str] = frozenset(
     {
         "glob",  # deepagents FilesystemMiddleware enforces GLOB_TIMEOUT (20s)
-        "run_command",  # subprocess.run(timeout=...) already enforced
     }
 )
 
@@ -146,7 +166,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         default_timeout_seconds: Default timeout for tools without specific override.
         per_tool_timeout: Dict mapping tool names to custom timeouts.
         skip_tools_with_internal_timeout: When True, don't wrap tools that already
-            have robust internal timeout mechanisms (run_command).
+            have robust internal timeout mechanisms (glob).
 
     Example:
         ```python
@@ -179,20 +199,27 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         self._skip_internal = skip_tools_with_internal_timeout
         self._timeout_count = 0
 
-    def _get_timeout_for_tool(self, tool_name: str) -> float:
+    def _get_timeout_for_tool(self, tool_name: str, tool_args: object | None = None) -> float:
         """Get timeout value for a specific tool.
 
         Priority:
-        1. per_tool_timeout explicit override
-        2. Category-based defaults (filesystem, execution, subagent)
-        3. default_timeout_seconds
+        1. Per-call ``timeout`` arg (run_command only; clamped to MAX_EXECUTE_TIMEOUT)
+        2. per_tool_timeout explicit override
+        3. Category-based defaults (filesystem, execution, subagent)
+        4. default_timeout_seconds
 
         Args:
             tool_name: Name of the tool being invoked.
+            tool_args: Tool call arguments (optional).
 
         Returns:
             Timeout in seconds for this tool.
         """
+        if tool_name in TOOLS_WITH_LLM_TIMEOUT_ARG:
+            llm_timeout = _parse_tool_timeout_arg(tool_args or {})
+            if llm_timeout is not None:
+                return float(clamp_execute_timeout(llm_timeout))
+
         # Check explicit override first
         if tool_name in self._per_tool_timeout:
             return self._per_tool_timeout[tool_name]
@@ -216,8 +243,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
     def _should_skip_timeout(self, tool_name: str) -> bool:
         """Check if tool should skip timeout wrapping.
 
-        Tools with robust internal timeouts (glob, run_command) don't need
-        middleware wrapping - their internal timeout is more precise.
+        Tools with robust internal timeouts (glob) don't need middleware wrapping.
 
         Args:
             tool_name: Name of the tool being invoked.
@@ -233,6 +259,13 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         """Build a timeout error message, with tool-specific recovery hints."""
         if tool_name == "glob":
             return format_glob_timeout_error(timeout_s)
+        if tool_name == "run_command":
+            return (
+                f"Error: Tool '{tool_name}' timed out after {timeout_s:.1f}s. "
+                "For servers/daemons or jobs that outlive this limit, use run_background "
+                "and poll tail_background_log; for bounded sync work, pass a higher "
+                "timeout argument or narrow the command."
+            )
         return (
             f"Error: Tool '{tool_name}' timed out after {timeout_s:.1f}s. "
             f"Consider narrowing the scope or using a more specific query."
@@ -264,11 +297,12 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
 
         tool_name = request.tool_call.get("name", "")
         tool_call_id = request.tool_call.get("id", "")
+        tool_args = request.tool_call.get("args", {})
 
         if self._should_skip_timeout(tool_name):
             return handler(request)
 
-        timeout_s = self._get_timeout_for_tool(tool_name)
+        timeout_s = self._get_timeout_for_tool(tool_name, tool_args)
 
         # Sync timeout using asyncio in thread
         import concurrent.futures
@@ -324,11 +358,12 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
 
         tool_name = request.tool_call.get("name", "")
         tool_call_id = request.tool_call.get("id", "")
+        tool_args = request.tool_call.get("args", {})
 
         if self._should_skip_timeout(tool_name):
             return await handler(request)
 
-        timeout_s = self._get_timeout_for_tool(tool_name)
+        timeout_s = self._get_timeout_for_tool(tool_name, tool_args)
 
         try:
             async with asyncio.timeout(timeout_s):
@@ -383,6 +418,7 @@ __all__ = [
     "FILESYSTEM_TOOL_NAMES",
     "SUBAGENT_TOOL_NAMES",
     "TOOLS_WITH_INTERNAL_TIMEOUT",
+    "TOOLS_WITH_LLM_TIMEOUT_ARG",
     "ToolTimeoutMiddleware",
     "ToolTimeoutState",
 ]

@@ -1496,7 +1496,7 @@ class ToolTimeoutConfig(BaseModel):
     )
     skip_tools_with_internal_timeout: bool = Field(
         default=True,
-        description="Skip wrapping tools that already have robust internal timeout (run_command)",
+        description="Skip wrapping tools that already have robust internal timeout (glob)",
     )
 
 

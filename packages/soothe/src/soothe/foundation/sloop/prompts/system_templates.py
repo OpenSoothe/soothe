@@ -36,11 +36,16 @@ _LOOP_CONTINUATION_GUIDE = LOOP_CONTINUATION_GUIDE_FRAGMENT
 
 _SHELL_GUIDE = """\
 Execution tools (always bound — not listed in <AVAILABLE_TOOLS>):
-- run_command: Execute shell commands synchronously (returns output). Use for: CLI tools, scripts.
+- run_command: Sync shell — waits for completion and returns output. Default timeout 60s; pass timeout for longer bounded jobs (max 5h, e.g. timeout=3600). Use for: ls, curl, git, make test, one-shot scripts.
+- run_background: Async shell — returns PID + log_path immediately. Use for: servers, daemons, training, long builds you poll separately. Follow with tail_background_log/read_file; stop with kill_process.
 - run_python: Execute Python code with session persistence. Variables persist across calls.
-- run_background: Run long commands in background (returns PID and log_path). Log header is immediate; use tail_background_log or read_file for output.
 - tail_background_log: Read the last N lines from a run_background log (bg-{{pid}}.log).
 - kill_process: Terminate background process by PID from run_background.
+
+Choose run_command vs run_background:
+- Need output/exit code in this step → run_command (set timeout if >60s).
+- Process keeps running after spawn (HTTP server, nohup job) → run_background.
+- Unsure duration but must block until done → run_command with generous timeout.
 """
 
 _FILE_OPS_GUIDE = """\
@@ -127,7 +132,7 @@ Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_file_lines) instead of full-file rewrites.
 - Use websearch for quick lookups; use deep_research for thorough public web research reports.
-- Use run_command for sync shell, run_background for long-running jobs (inspect log_path via tail_background_log or read_file), kill_process to stop background PIDs, run_python for Python code.
+- Use run_command for sync shell (pass timeout when the job may exceed 60s); use run_background for servers/daemons and jobs you poll via tail_background_log; kill_process stops background PIDs; run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
 

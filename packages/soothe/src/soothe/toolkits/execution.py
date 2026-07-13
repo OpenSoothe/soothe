@@ -1,9 +1,9 @@
 """Execution tools (RFC-0016 consolidation).
 
 Consolidates single-purpose execution tools into one module:
-- run_command: Execute shell commands synchronously (langchain_community ShellTool)
-- run_python: Execute Python code (langchain_experimental PythonREPLTool)
-- run_background: Run commands in background
+- run_command: Synchronous shell (waits for completion; honors per-call timeout)
+- run_background: Background shell (PID + log_path; poll via tail_background_log)
+- run_python: Python REPL with session persistence
 - tail_background_log: Read trailing lines from background logs
 - kill_process: Terminate background processes
 
@@ -13,12 +13,15 @@ Follows the pattern from data.py and file_ops.py.
 from __future__ import annotations
 
 import contextlib
+import functools
 import logging
 import os
+import queue
 import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from datetime import UTC, datetime
@@ -46,6 +49,7 @@ from soothe_sdk.plugin import plugin
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_EXECUTE_TIMEOUT,
+    clamp_execute_timeout,
 )
 from soothe.foundation.core.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
@@ -239,7 +243,10 @@ class RunCommandInput(BaseModel):
     command: str = Field(..., description="The shell command to execute.")
     timeout: int | None = Field(
         default=None,
-        description="Optional timeout in seconds (defaults to toolkit timeout).",
+        description=(
+            "Optional timeout in seconds (defaults to toolkit timeout, max 5h). "
+            "Pass for bounded jobs longer than 60s; use run_background for daemons."
+        ),
     )
 
 
@@ -278,6 +285,103 @@ def _kill_process_tree(pid: int, *, sig: int = signal.SIGKILL) -> None:
         os.killpg(pgid, sig)
 
 
+def _terminate_shell_process(proc: subprocess.Popen[str]) -> None:
+    """Kill ``proc`` and its process group, then drain pipes."""
+    with contextlib.suppress(OSError):
+        proc.kill()
+    _kill_process_tree(proc.pid)
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.communicate(timeout=5)
+
+
+def _collect_capped_stdout(
+    proc: subprocess.Popen[str],
+    *,
+    command: str,
+    timeout: int,
+    max_output_chars: int,
+) -> subprocess.CompletedProcess[str]:
+    """Read stdout with an output cap while honoring ``timeout`` for silent processes.
+
+    A blocking ``stdout.read()`` in the main thread can stall past the deadline when
+    the child produces no output (common for long-running servers). A daemon reader
+    thread performs blocking reads; the main loop enforces the deadline via timed
+    queue reads.
+    """
+    chunk_queue: queue.Queue[str | None] = queue.Queue()
+    reader_errors: list[BaseException] = []
+
+    def _reader() -> None:
+        try:
+            assert proc.stdout is not None
+            while True:
+                chunk = proc.stdout.read(4096)
+                if chunk == "":
+                    break
+                chunk_queue.put(chunk)
+        except BaseException as exc:
+            reader_errors.append(exc)
+        finally:
+            chunk_queue.put(None)
+
+    reader = threading.Thread(target=_reader, daemon=True, name="run_command-stdout")
+    reader.start()
+
+    stdout_parts: list[str] = []
+    total = 0
+    truncated = False
+    deadline = time.monotonic() + timeout
+
+    while True:
+        if reader_errors:
+            raise reader_errors[0]
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            _terminate_shell_process(proc)
+            reader.join(timeout=1)
+            raise subprocess.TimeoutExpired(cmd=command, timeout=timeout)
+
+        try:
+            chunk = chunk_queue.get(timeout=min(remaining, 0.05))
+        except queue.Empty:
+            if proc.poll() is not None and chunk_queue.empty():
+                break
+            continue
+
+        if chunk is None:
+            break
+
+        if total + len(chunk) > max_output_chars:
+            stdout_parts.append(chunk[: max_output_chars - total])
+            truncated = True
+            _terminate_shell_process(proc)
+            reader.join(timeout=1)
+            break
+
+        stdout_parts.append(chunk)
+        total += len(chunk)
+
+    if not truncated:
+        try:
+            proc.wait(timeout=max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            _terminate_shell_process(proc)
+            reader.join(timeout=1)
+            raise
+        reader.join(timeout=1)
+
+    stdout = "".join(stdout_parts)
+    if truncated:
+        stdout = stdout + "\n... (output truncated)"
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=proc.returncode if proc.returncode is not None else -1,
+        stdout=stdout,
+        stderr="",
+    )
+
+
 def _run_shell_command_sync(
     command: str,
     *,
@@ -299,11 +403,7 @@ def _run_shell_command_sync(
         try:
             stdout, _ = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            with contextlib.suppress(OSError):
-                proc.kill()
-            _kill_process_tree(proc.pid)
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.communicate(timeout=5)
+            _terminate_shell_process(proc)
             raise
         return subprocess.CompletedProcess(
             args=command,
@@ -312,60 +412,11 @@ def _run_shell_command_sync(
             stderr="",
         )
 
-    stdout_parts: list[str] = []
-    total = 0
-    truncated = False
-    deadline = time.monotonic() + timeout
-    assert proc.stdout is not None
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            with contextlib.suppress(OSError):
-                proc.kill()
-            _kill_process_tree(proc.pid)
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.communicate(timeout=5)
-            raise subprocess.TimeoutExpired(cmd=command, timeout=timeout)
-
-        chunk = proc.stdout.read(4096)
-        if chunk == "":
-            if proc.poll() is not None:
-                break
-            time.sleep(0.01)
-            continue
-
-        if total + len(chunk) > max_output_chars:
-            stdout_parts.append(chunk[: max_output_chars - total])
-            truncated = True
-            with contextlib.suppress(OSError):
-                proc.kill()
-            _kill_process_tree(proc.pid)
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.communicate(timeout=5)
-            break
-
-        stdout_parts.append(chunk)
-        total += len(chunk)
-
-    if not truncated:
-        try:
-            proc.wait(timeout=max(0.0, deadline - time.monotonic()))
-        except subprocess.TimeoutExpired:
-            with contextlib.suppress(OSError):
-                proc.kill()
-            _kill_process_tree(proc.pid)
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                proc.communicate(timeout=5)
-            raise
-
-    stdout = "".join(stdout_parts)
-    if truncated:
-        stdout = stdout + "\n... (output truncated)"
-    return subprocess.CompletedProcess(
-        args=command,
-        returncode=proc.returncode if proc.returncode is not None else -1,
-        stdout=stdout,
-        stderr="",
+    return _collect_capped_stdout(
+        proc,
+        command=command,
+        timeout=timeout,
+        max_output_chars=max_output_chars,
     )
 
 
@@ -386,14 +437,14 @@ class RunCommandShellTool(ShellTool):
     process: Any = Field(default_factory=lambda: _UnusedShellProcess())
     name: str = "run_command"
     description: str = (
-        "Execute a shell command and return output. "
-        "Use for: CLI tools, system commands, scripts. "
-        "Parameters: command (required) - the shell command to run. "
-        "Optional: timeout (default: 60 seconds). "
-        "Returns: command output (stdout + stderr). "
-        "On macOS do not use GNU `timeout`; use the target tool's own timeout flags "
-        "(e.g. go test -timeout) or run_background for long jobs. "
-        "For long-running commands (>60s), use run_background instead."
+        "Run a shell command synchronously and return stdout+stderr when it finishes. "
+        "Use for: quick CLI checks, short scripts, bounded builds/tests you can wait for. "
+        "Parameters: command (required); optional timeout in seconds (default 60). "
+        "Pass timeout for longer sync work (e.g. timeout=3600 for a 1h build; max 5h). "
+        "Do NOT use for servers/daemons, foreground services, or jobs with no end — "
+        "use run_background instead. "
+        "On macOS do not use GNU `timeout`; use native tool flags (e.g. go test -timeout) "
+        "or run_background for open-ended jobs."
     )
     args_schema: type[BaseModel] = RunCommandInput
 
@@ -442,7 +493,9 @@ class RunCommandShellTool(ShellTool):
         if shell_error is not None:
             return shell_error
 
-        actual_timeout = timeout if timeout is not None else self.timeout
+        actual_timeout = clamp_execute_timeout(
+            timeout if timeout is not None else self.timeout
+        )
         cwd_raw = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(cwd_raw)) if cwd_raw else None
 
@@ -463,8 +516,8 @@ class RunCommandShellTool(ShellTool):
             return (
                 f"Error: Command timed out after {actual_timeout}s. "
                 "The process group was terminated. "
-                "For long-running operations, use run_background instead, "
-                "or increase the timeout configuration."
+                "For servers/daemons or open-ended jobs, use run_background; "
+                "for bounded sync work, pass a higher timeout argument."
             )
         except OSError as e:
             return f"Error executing command: {e}"
@@ -482,8 +535,11 @@ class RunCommandShellTool(ShellTool):
         timeout: int | None = None,
         *,
         runtime: Annotated[ToolRuntime | None, InjectedToolArg()] = None,
-    ) -> str:  # noqa: ASYNC109
-        return self._run(command, timeout, runtime=runtime)
+    ) -> str:
+        return await run_in_executor(
+            None,
+            functools.partial(self._run, command, timeout, runtime=runtime),
+        )
 
 
 class RunPythonInput(BaseModel):
@@ -534,21 +590,18 @@ class RunPythonREPLTool(PythonREPLTool):
 
 
 class RunBackgroundTool(BaseTool):
-    """Run a long-running command in the background.
-
-    Use this tool for commands that take a long time or need to continue
-    running while you do other tasks. The command will execute in the
-    background and you'll receive a process ID for tracking.
-    """
+    """Background shell execution via ``run_background`` (see tool description)."""
 
     name: str = "run_background"
     description: str = (
-        "Run a long-running command in the background. "
-        "Use for: training scripts, servers, long computations. "
-        "Parameters: command (required) - the command to run. "
-        "Returns: process ID, log_path (stdout/stderr log file), and status. "
-        "The log header (timestamp + command) is written immediately; use read_file "
-        "or tail_background_log for output. Use kill_process to stop."
+        "Start a shell command in the background without waiting for completion. "
+        "Use for: servers/daemons, training jobs, installs/builds you will poll later, "
+        "or any process that may run indefinitely. "
+        "Returns immediately with PID and log_path (stdout/stderr appended to the log). "
+        "Poll output via tail_background_log or read_file on log_path; stop via kill_process. "
+        "Do NOT use when you need exit code/output in the same turn — use run_command "
+        "with an explicit timeout instead. "
+        "Parameters: command (required)."
     )
     workspace_root: str = Field(default="", description="Working directory for shell")
     background_log_dir: str | None = Field(
