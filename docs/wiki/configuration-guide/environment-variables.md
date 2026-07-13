@@ -39,16 +39,15 @@ soothe "hello"
 
 Bootstrap creates provider `openai` and applies the built-in **default** router profile (`openai:gpt-4o-mini`). Vector stores default to embedded `sqlite_vec`.
 
-**OpenAI-compatible endpoints** (DashScope, OpenRouter, local vLLM):
+**OpenAI-compatible endpoints** (Qwen, OpenRouter, local vLLM):
 
 ```bash
-export DASHSCOPE_API_KEY=sk-...
-export OPENAI_API_KEY="$DASHSCOPE_API_KEY"
-export OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+export OPENAI_API_KEY=sk-...
+export OPENAI_BASE_URL="https://your-provider-endpoint/v1"
 export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
 ```
 
-Provider bootstrap names the provider `openai`; router targets must use the `openai:` prefix (e.g. `openai:qwen3.7-plus`, not `dashscope:…`), unless you define a named provider via `SOOTHE_PROVIDERS` JSON.
+Provider bootstrap names the provider `openai`; router targets must use the `openai:` prefix (e.g. `openai:qwen3.7-plus`), unless you define a named provider via `SOOTHE_PROVIDERS` JSON.
 
 **Anthropic:**
 
@@ -102,7 +101,7 @@ Quote carefully in shell and Compose — single quotes around the JSON are safes
 **Replace the profile list (no YAML):**
 
 ```bash
-# DashScope via OPENAI_* bootstrap (provider name "openai")
+# OpenAI-compatible via OPENAI_* bootstrap (provider name "openai")
 export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
 ```
 
@@ -167,9 +166,8 @@ Not `SOOTHE_*` — used by zero-config bootstrap, `${VAR}` in YAML, or LangChain
 
 | Variable | Used for |
 |----------|----------|
-| `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI / compatible APIs |
+| `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI / OpenAI-compatible APIs (Qwen/DashScope, OpenRouter, etc.) |
 | `ANTHROPIC_API_KEY` | Anthropic |
-| `DASHSCOPE_API_KEY`, `DASHSCOPE_BASE_URL` | DashScope (usually via `${...}` in YAML) |
 | `OPENROUTER_API_KEY` | OpenRouter |
 | `TAVILY_API_KEY`, `SERPER_API_KEY`, `JINA_API_KEY` | Web search |
 | `DEEPXIV_API_KEY`, `DEEPXIV_TOKEN` | Academic search |
@@ -215,17 +213,17 @@ After load, `_apply_active_router_profile` copies the selected profile into `rou
 
 ## Docker (Env-Only, No Config File)
 
-**DashScope + `qwen3.7-plus`:**
+**OpenAI-compatible provider + `qwen3.7-plus`:**
 
 ```bash
-export DASHSCOPE_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...
+export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
-  -e DASHSCOPE_API_KEY \
-  -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
-  -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
+  -e OPENAI_API_KEY \
+  -e OPENAI_BASE_URL \
   -e SOOTHE_ROUTER_PROFILES \
   -v soothe-data:/var/lib/soothe \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
@@ -256,14 +254,15 @@ Use this when the CLI runs on the host and the daemon runs in Docker **and** you
 **Env-only (no config file):**
 
 ```bash
+export OPENAI_API_KEY=sk-...
+export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 export CONTAINER_WS=/var/lib/soothe/workspaces
 export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
-  -e DASHSCOPE_API_KEY \
-  -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
-  -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
+  -e OPENAI_API_KEY \
+  -e OPENAI_BASE_URL \
   -e SOOTHE_ROUTER_PROFILES \
   -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOME\",\"container_root\":\"$CONTAINER_WS\"}" \
   -v soothe-data:/var/lib/soothe \

@@ -287,14 +287,14 @@ sudo certbot --nginx -d soothe.your-domain.com
    services:
      soothed:
        environment:
-         DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
          OPENAI_API_KEY: ${OPENAI_API_KEY}
+         OPENAI_BASE_URL: ${OPENAI_BASE_URL}
    ```
    
    **`.env` file** (not committed):
    ```bash
-   DASHSCOPE_API_KEY=sk-...
    OPENAI_API_KEY=sk-...
+   OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1  # Optional for OpenAI-compatible
    ```
 
 2. **Secrets manager** (Kubernetes):
@@ -306,29 +306,28 @@ sudo certbot --nginx -d soothe.your-domain.com
      name: soothe-secrets
    type: Opaque
    data:
-     dashscope-api-key: <base64-encoded>
      openai-api-key: <base64-encoded>
    ```
 
 3. **Vault** (Enterprise):
    ```bash
    # HashiCorp Vault integration
-   vault kv put secret/soothe dashscope_api_key=sk-...
+   vault kv put secret/soothe openai_api_key=sk-...
    
    # Retrieve in deployment
-   DASHSCOPE_API_KEY=$(vault kv get -field=dashscope_api_key secret/soothe)
+   OPENAI_API_KEY=$(vault kv get -field=openai_api_key secret/soothe)
    ```
 
 4. **AWS Secrets Manager**:
    ```bash
    # Store secret
    aws secretsmanager create-secret \
-     --name soothe/dashscope-api-key \
+     --name soothe/openai-api-key \
      --secret-string "sk-..."
    
    # Retrieve in deployment
-   DASHSCOPE_API_KEY=$(aws secretsmanager get-secret-value \
-     --secret-id soothe/dashscope-api-key \
+   OPENAI_API_KEY=$(aws secretsmanager get-secret-value \
+     --secret-id soothe/openai-api-key \
      --query SecretString --output text)
    ```
 

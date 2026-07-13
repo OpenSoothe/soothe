@@ -1,23 +1,23 @@
 # Soothe Production Configuration
-# PostgreSQL persistence + pgvector + DashScope/Coding-Plan providers.
+# PostgreSQL persistence + pgvector + OpenAI-compatible custom provider.
 #
 # This config uses environment variable substitution (${ENV_VAR}).
 # Copy this file to config.yml - no edits needed if .env is configured.
 #
 # Required env vars (set in .env):
-#   DASHSCOPE_API_KEY        - DashScope provider credential
-#   DASHSCOPE_BASE_URL       - DashScope API base URL
+#   OPENAI_API_KEY        - OpenAI-compatible provider credential
+#   OPENAI_BASE_URL       - OpenAI-compatible API base URL
 
 # =============================================================================
 # LLM Providers
 # =============================================================================
 providers:
-  # DashScope - Alibaba's LLM platform (OpenAI-compatible)
-  # Models: Qwen, MiniMax, Kimi, multimodal embedding
-  - name: dashscope
+  # OpenAI-compatible custom provider
+  # Models: GLM, Kimi, MiniMax, multimodal embedding
+  - name: openai-custom
     provider_type: openai
-    api_base_url: "${DASHSCOPE_BASE_URL}"
-    api_key: "${DASHSCOPE_API_KEY}"
+    api_base_url: "${OPENAI_BASE_URL}"
+    api_key: "${OPENAI_API_KEY}"
     models:
       - glm-5.2                  # Zhipu AI GLM model
       - kimi-k2.5                # Moonshot AI model
@@ -30,11 +30,11 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "dashscope:glm-5.2"
-      fast: "dashscope:kimi-k2.5"
-      think: "dashscope:glm-5.2"
-      image: "dashscope:kimi-k2.5"
-      embedding: "dashscope:text-embedding-v4"
+      default: "openai-custom:glm-5.2"
+      fast: "openai-custom:kimi-k2.5"
+      think: "openai-custom:glm-5.2"
+      image: "openai-custom:kimi-k2.5"
+      embedding: "openai-custom:text-embedding-v4"
     embedding_dims: 1536
 
 active_router_profile: production

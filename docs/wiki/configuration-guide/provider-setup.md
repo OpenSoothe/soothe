@@ -16,20 +16,20 @@ Soothe supports three `provider_type` values. The choice is driven by **API comp
 
 | `provider_type` | When to use | Key limitation |
 |-----------------|-------------|----------------|
-| `openai` | OpenAI itself, or any OpenAI-compatible endpoint (DashScope, OpenRouter, vLLM, local oMLX/LMStudio) | None for official OpenAI; local endpoints auto-receive compatibility wrappers (see below) |
+| `openai` | OpenAI itself, or any OpenAI-compatible endpoint (OpenRouter, vLLM, local oMLX/LMStudio) | None for official OpenAI; local endpoints auto-receive compatibility wrappers (see below) |
 | `anthropic` | Anthropic Claude API | Native Claude tool calling |
 | `ollama` | Local Ollama inference | Basic tool calling; depends on model support |
 
 **Custom `api_base_url` on `openai` providers.** When the URL is not `https://api.openai.com`, Soothe automatically applies compatibility wrappers for local servers (oMLX, LMStudio, vLLM) that return structured JSON in `reasoning_content` or only accept string `tool_choice` values. Use `provider_type: openai` plus your local `api_base_url` — no separate provider type is required.
 
-**OpenAI-compatible cloud providers** (DashScope, OpenRouter) all use `provider_type: openai` plus a custom `api_base_url` and an interpolated `api_key`:
+**OpenAI-compatible cloud providers** (Qwen, OpenRouter) all use `provider_type: openai` plus a custom `api_base_url` and an interpolated `api_key`:
 
 ```yaml
 providers:
-  - name: dashscope
+  - name: openai-custom
     provider_type: openai
-    api_base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    api_key: ${DASHSCOPE_API_KEY}
+    api_base_url: https://your-provider-endpoint/v1
+    api_key: ${OPENAI_API_KEY}
     models: [qwen-max]
 ```
 
@@ -70,7 +70,7 @@ The `embedding` role and the top-level `embedding_dims` field are coupled — th
 |-------|------------|
 | OpenAI `text-embedding-3-small` | 1536 |
 | OpenAI `text-embedding-3-large` | 3072 |
-| DashScope `multimodal-embedding-v1` | 1024 |
+| Qwen `text-embedding-v3` | 1024 |
 | Ollama `nomic-embed-text` | 768 |
 
 **Mistake to avoid:** changing the embedding model without updating `embedding_dims` (or vice versa) corrupts the vector store — existing vectors have the old dimensionality and queries fail. When migrating, drop and re-index the collection.
@@ -110,7 +110,7 @@ Provider APIs have their own limits; Soothe's `agent.loop.llm_rate_limit` keeps 
 |----------|-------------|-------------|
 | OpenAI | 500 (tier 2+) | 10–100 |
 | Anthropic | 60 | 5–10 |
-| DashScope | 60 | 5 |
+| OpenAI-compatible | Varies | Varies |
 | Ollama (local) | Unlimited | GPU-bound |
 
 Set `rpm_limit` *below* your tier's ceiling. On 429, Soothe retries with exponential backoff (base 2s, max 60s) and respects `Retry-After` headers. On timeout, it escalates the timeout by `timeout_retry_multiplier` (1.2×) up to `call_timeout_max_seconds`. These defaults (600s base, 10 retries) are tuned for robust step execution — lower them only if you're confident your provider is fast.

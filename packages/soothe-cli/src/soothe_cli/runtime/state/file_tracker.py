@@ -15,6 +15,7 @@ from soothe_cli.tui.preview_limits import APPROVAL_DIFF_MAX_LINES
 logger = logging.getLogger(__name__)
 
 FileOpStatus = Literal["pending", "success", "error"]
+FileChangeLabelPhase = Literal["pending", "success"]
 
 FILE_CHANGE_TOOLS: frozenset[str] = get_file_write_tool_names()
 """Filesystem tools that produce before/after diffs in the TUI chat."""
@@ -429,8 +430,30 @@ def track_file_operation(
     tracker.start_operation(tool_name, args, tcid)
 
 
-def file_change_label(tool_name: str, *, is_new_file: bool = False) -> str:
-    """Single-word past-tense prefix for a file-change card header."""
+def file_change_label(
+    tool_name: str,
+    *,
+    is_new_file: bool = False,
+    phase: FileChangeLabelPhase = "success",
+) -> str:
+    """Single-word action prefix for a file-change card header.
+
+    ``pending`` is used while the tool is still running (progressive tense),
+    and ``success`` is used once the tool completes (past tense).
+    """
+    if phase == "pending":
+        if tool_name in ("delete_file", "delete_lines"):
+            return "Deleting"
+        if tool_name == "write_file":
+            return "Creating" if is_new_file else "Writing"
+        if tool_name in ("edit_file", "edit_file_lines"):
+            return "Editing"
+        if tool_name == "insert_lines":
+            return "Inserting"
+        if tool_name == "apply_diff":
+            return "Patching"
+        return "Changing"
+
     if tool_name in ("delete_file", "delete_lines"):
         return "Deleted"
     if tool_name == "write_file":
@@ -445,9 +468,9 @@ def file_change_label(tool_name: str, *, is_new_file: bool = False) -> str:
 
 
 def file_change_label_from_preview_data(tool_name: str, data: dict[str, Any]) -> str:
-    """Derive a preview header label from renderer-built widget data."""
+    """Derive an in-progress preview header label from renderer-built data."""
     is_new = bool(data.get("is_new_file")) if tool_name == "write_file" else False
-    return file_change_label(tool_name, is_new_file=is_new)
+    return file_change_label(tool_name, is_new_file=is_new, phase="pending")
 
 
 def file_change_action_label(record: FileOperationRecord) -> str:

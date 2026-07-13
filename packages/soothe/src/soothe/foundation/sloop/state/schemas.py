@@ -797,8 +797,9 @@ class GoalComponentStatus(BaseModel):
 
     component: str = Field(max_length=120)
     status: Literal["not_started", "partial", "satisfied", "blocked"]
-    evidence: str = Field(default="", max_length=200)
-    gap: str = Field(default="", max_length=200)
+    # Keep bounded but tolerant: plan-gap evidence can include multi-clause step outcomes.
+    evidence: str = Field(default="", max_length=2048)
+    gap: str = Field(default="", max_length=400)
 
 
 class PlanGapAnalysis(BaseModel):

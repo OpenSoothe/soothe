@@ -36,10 +36,10 @@
 #
 # Environment variables (set in deploy/.env for daemon profile):
 #   POSTGRES_PASSWORD=...            # PostgreSQL password (dev default: postgres)
-#   DASHSCOPE_API_KEY=...            # DashScope provider key
-#   DASHSCOPE_CP_API_KEY=...         # Coding-Plan provider key
-#   DASHSCOPE_BASE_URL=...           # DashScope API base URL
-#   DASHSCOPE_CP_BASE_URL=...        # Coding-Plan API base URL
+#   OPENAI_API_KEY=...               # OpenAI or OpenAI-compatible provider key
+#   OPENAI_CP_API_KEY=...            # Coding-Plan provider key (optional)
+#   OPENAI_BASE_URL=...              # OpenAI-compatible API base URL (optional)
+#   OPENAI_CP_BASE_URL=...           # Coding-Plan API base URL (optional)
 #   TAVILY_API_KEY=...               # Tavily web search (deep_research / wizsearch)
 #   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
 #   SOOTHE_CONFIG_PATH=./config/develop/config.docker.yml   # Dev daemon config (default)

@@ -20,7 +20,7 @@ NOT for:
 - Academic literature (use academic_research instead)
 
 Prerequisites:
-    - Set OPENAI_API_KEY or configure providers in config/develop/config.yml
+    - Set OPENAI_API_KEY (or configure providers in config/develop/config.yml)
     - Set TAVILY_API_KEY for web search (get from https://tavily.com)
 
 Run:

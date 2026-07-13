@@ -46,7 +46,7 @@ class ModelProviderConfig(BaseModel):
     """Configuration for a single model provider.
 
     Args:
-        name: Provider name (e.g., ``dashscope``, ``openrouter``, ``ollama``).
+        name: Provider name (e.g., ``openai``, ``openrouter``, ``ollama``).
         api_base_url: Base URL for the provider's API endpoint.
         api_key: API key. Supports ``${ENV_VAR}`` syntax for env var references.
         provider_type: langchain provider type for ``init_chat_model`` /

@@ -96,8 +96,8 @@ Soothe is organized as a monorepo with multiple packages:
 ### Built-in Capabilities
 
 The `soothe` package includes research (Tavily, Arxiv, Wizsearch), data tools
-(CSV/Excel/Parquet, PDF/DOCX), browser-use, PostgreSQL drivers, and DashScope
-support out of the box.
+(CSV/Excel/Parquet, PDF/DOCX), browser-use, PostgreSQL drivers, and OpenAI-compatible
+provider support out of the box.
 
 **GitHub integration** uses the `gh` CLI (builtin skill) or the GitHub MCP server
 (`mcp_builtins: [github]` with Node.js/npx) — not a Python extra.
@@ -128,8 +128,9 @@ export ANTHROPIC_API_KEY=sk-ant-your-key-here
 # Google Gemini
 export GOOGLE_API_KEY=your-google-api-key
 
-# Alibaba DashScope
-export DASHSCOPE_API_KEY=your-dashscope-key
+# OpenAI-Compatible Providers (e.g., Qwen, OpenRouter, local vLLM)
+export OPENAI_API_KEY=your-openai-compatible-key
+export OPENAI_BASE_URL=https://your-provider-endpoint/v1  # Optional
 
 # Web search (Tavily)
 export TAVILY_API_KEY=tvly-your-key

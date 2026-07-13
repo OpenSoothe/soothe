@@ -159,7 +159,7 @@ metadata:
   namespace: soothe-production
 type: Opaque
 data:
-  dashscope-api-key: <base64>
+  openai-api-key: <base64>
   postgres-password: <base64>
 ```
 
@@ -228,11 +228,11 @@ spec:
       - name: soothed
         image: soothed:latest
         env:
-        - name: DASHSCOPE_API_KEY
+        - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:
               name: soothe-secrets
-              key: dashscope-api-key
+              key: openai-api-key
         - name: SOOTHE_POSTGRES_BASE_DSN
           value: "postgresql://postgres:$(POSTGRES_PASSWORD)@soothe-postgres-0:5432"
         ports:

@@ -67,7 +67,7 @@ Each entry is a `ModelProviderConfig` with `name` (referenced by the router), `p
 | `name` | Identifier referenced by the router |
 | `provider_type` | LangChain provider type; custom `api_base_url` on `openai` auto-enables local-server wrappers |
 | `api_key` | Supports `${VAR}` interpolation |
-| `api_base_url` | Override for compatible APIs (DashScope, OpenRouter, vLLM, LMStudio) |
+| `api_base_url` | Override for compatible APIs (Qwen/DashScope, OpenRouter, vLLM, LMStudio) |
 | `models` | Available model names (documentation; not enforced) |
 
 See [Provider Setup](provider-setup.md) for selection criteria.

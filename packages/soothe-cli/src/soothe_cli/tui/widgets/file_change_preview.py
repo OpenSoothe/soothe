@@ -100,8 +100,8 @@ def _count_diff_stats(diff_lines: list[str], old_string: str, new_string: str) -
 class FileChangePreviewWidget(Vertical):
     """Base class for filesystem change preview cards.
 
-    Renders as a single-line summary in the message stream by default. Click to
-    expand and show diff or content details (IG-544).
+    Renders expanded while the tool call is pending so diff/content is visible.
+    Finalized cards collapse by default; click toggles expanded details (IG-544).
     """
 
     ALLOW_SELECT = True
@@ -147,10 +147,11 @@ class FileChangePreviewWidget(Vertical):
         self.data = data
         self._action_label = action_label.strip()
         self._finalized = False
-        self._expanded = False
+        # Show in-flight diffs/content immediately; collapse once finalized.
+        self._expanded = True
 
     def on_mount(self) -> None:
-        """Start collapsed so file edits stay one line in the transcript."""
+        """Apply expanded/collapsed classes for current preview lifecycle state."""
         self._apply_expand_classes()
 
     def on_click(self, event: Click) -> None:
@@ -186,6 +187,8 @@ class FileChangePreviewWidget(Vertical):
         self._action_label = file_change_action_label(record)
         update_preview_data_from_record(self.data, record)
         self._finalized = True
+        # Finalized cards collapse to keep transcript compact.
+        self._expanded = False
         if not self.is_mounted:
             return
         await self.remove_children()

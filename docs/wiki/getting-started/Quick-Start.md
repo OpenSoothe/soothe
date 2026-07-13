@@ -36,17 +36,18 @@ docker run --rm -d --name soothed \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 ```
 
-### Option B: Docker (DashScope)
+### Option B: Docker (OpenAI-Compatible)
 
-OpenAI-compatible endpoint using `qwen3.7-plus`.
+OpenAI-compatible endpoint using your provider's base URL.
 
 ```bash
-export DASHSCOPE_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...
+export OPENAI_BASE_URL="https://your-provider-endpoint/v1"
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
-  -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
-  -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
+  -e OPENAI_API_KEY \
+  -e OPENAI_BASE_URL \
   -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]' \
   -v soothe-data:/var/lib/soothe \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
@@ -55,14 +56,15 @@ docker run --rm -d --name soothed \
 With workspace access (file tools):
 
 ```bash
-export DASHSCOPE_API_KEY=sk-...
+export OPENAI_API_KEY=sk-...
+export OPENAI_BASE_URL="https://your-provider-endpoint/v1"
 export HOST_WS="$HOME"
 export CONTAINER_WS="/var/lib/soothe/workspaces"
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
-  -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
-  -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
+  -e OPENAI_API_KEY \
+  -e OPENAI_BASE_URL \
   -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]' \
   -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}" \
   -v soothe-data:/var/lib/soothe \
@@ -70,28 +72,7 @@ docker run --rm -d --name soothed \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 ```
 
-### Option C: Docker Compose (dev environment)
-
-Dev environment with PostgreSQL + pgvector:
-
-```bash
-# Start with default profile (pgvector only)
-docker compose up -d
-
-# Or with daemon included (after building image)
-docker compose --profile daemon up -d
-```
-
-Environment variables (set in shell or `.env`):
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key | — |
-| `DASHSCOPE_API_KEY` | DashScope API key | — |
-| `POSTGRES_PASSWORD` | PostgreSQL password | `postgres` |
-| `POSTGRES_PORT` | PostgreSQL port | `6432` |
-
-### Option D: Docker Compose (production full stack)
+### Option C: Docker Compose (production full stack)
 
 Production-ready stack with PostgreSQL + pgvector + Soothe daemon:
 
@@ -112,23 +93,38 @@ docker compose up -d
 **Required environment variables** (in `deploy/.env`):
 
 ```bash
-DASHSCOPE_API_KEY=sk-...           # Required for production
-DASHSCOPE_BASE_URL=...             # Required for production
+OPENAI_API_KEY=sk-...              # Required for production
+OPENAI_BASE_URL=...                # Required for OpenAI-compatible providers
 TAVILY_API_KEY=...                 # Optional (web search)
 SOOTHE_WORKSPACE_HOST_ROOT=...     # Optional (default: $HOME)
 SOOTHE_DEBUG=false                 # Optional (default: false)
 ```
 
-**Database configuration** (production):
+**Persistence configuration** (production):
 
 ```yaml
-# deploy/config.prod.yml (mounted at /app/config.yml)
-database:
-  backend: postgresql
-  url: postgresql://postgres:postgres@soothe-pgvector:5432/soothe
-  pool_size: 8
-  vector:
-    url: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
+# config/config.yml (production)
+persistence:
+  default_backend: postgresql
+  postgres_base_dsn: "postgresql://postgres:postgres@soothe-pgvector:5432"
+  postgres_databases:
+    checkpoints: soothe_checkpoints
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    memory: soothe_memory
+  postgres_pool_min_size: 4
+  checkpoints_pool_size: 32
+  metadata_pool_size: 16
+  vectors_pool_size: 16
+  archive_enabled: true
+  archive_retention_days: 90
+
+agent:
+  protocols:
+    durability:
+      backend: default
+      checkpointer: default
+      thread_inactivity_timeout_hours: 72
 ```
 
 **PostgreSQL tuning** (production defaults):
@@ -141,7 +137,11 @@ work_mem: 64MB
 
 Full production deployment guide: see [`deploy/README.md`](../../../deploy/README.md).
 
-### Option E: Local pip
+---
+
+### Option D: Local pip (development only)
+
+> ⚠️ **Development use only.** For production, use Docker Compose (Option C).
 
 ```bash
 pip install -U soothe soothe-daemon
@@ -159,7 +159,7 @@ transports:
     port: 8765
 ```
 
-#### Option E1: PostgreSQL (localhost)
+#### D1: PostgreSQL (localhost — development)
 
 For a local PostgreSQL database (port 5432):
 
@@ -168,45 +168,34 @@ For a local PostgreSQL database (port 5432):
 createdb soothe
 
 # Start daemon with PostgreSQL backend
-SOOTHE_DATABASE_URL="postgresql://user:password@localhost:5432/soothe" soothed start
+SOOTHE_PERSISTENCE_DEFAULT_BACKEND="postgresql" \
+SOOTHE_PERSISTENCE_POSTGRES_BASE_DSN="postgresql://user:password@localhost:5432" \
+soothed start
 ```
 
-Or with config file (`~/.soothe/config/daemon.yml`):
+Or with config file (`~/.soothe/config/config.yml`):
 
 ```yaml
-transports:
-  websocket:
-    enabled: true
-    host: 127.0.0.1
-    port: 8765
-
-database:
-  backend: postgresql
-  url: postgresql://user:password@localhost:5432/soothe
+persistence:
+  default_backend: postgresql
+  postgres_base_dsn: "postgresql://user:password@localhost:5432"
+  postgres_databases:
+    checkpoints: soothe_checkpoints
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    memory: soothe_memory
 ```
 
-#### Option E2: SQLite (localhost)
+#### D2: SQLite (localhost — development)
 
 For a lightweight SQLite database (no external dependency):
 
 ```bash
-# Start daemon with SQLite backend
-SOOTHE_DATABASE_URL="sqlite:///./soothe.db" soothed start
+# Start daemon with SQLite backend (default)
+soothed start
 ```
 
-Or with config file (`~/.soothe/config/daemon.yml`):
-
-```yaml
-transports:
-  websocket:
-    enabled: true
-    host: 127.0.0.1
-    port: 8765
-
-database:
-  backend: sqlite
-  path: ./soothe.db
-```
+SQLite is the default backend. No configuration required.
 
 Full reference: [Environment variables](../configuration-guide/environment-variables.md).
 
@@ -215,6 +204,74 @@ Full reference: [Environment variables](../configuration-guide/environment-varia
 ```bash
 curl -sf http://127.0.0.1:8765/healthz
 ```
+
+---
+
+## Persistence Verification Notes
+
+### Key Persistence Parameters
+
+| Parameter | Production (Docker Compose) | Development (SQLite) |
+|-----------|------------------------------|----------------------|
+| `default_backend` | `postgresql` | `sqlite` (default) |
+| `archive_enabled` | `true` | `true` |
+| `archive_retention_days` | 90 | 90 |
+| `checkpoints_pool_size` | 32 | N/A |
+| `thread_inactivity_timeout_hours` | 72 | 72 |
+
+### Checkpoint & Durability
+
+The daemon persists loop state automatically:
+
+```yaml
+agent:
+  loop:
+    checkpoint:
+      progressive: true        # Incremental checkpoint writes
+      auto_resume_on_start: false  # Manual resume required
+  protocols:
+    durability:
+      backend: default          # Uses persistence.default_backend
+      checkpointer: default     # Uses persistence backend
+      thread_inactivity_timeout_hours: 72  # Cleanup threshold
+```
+
+### Vector Store Configuration
+
+Default SQLite vector store:
+
+```yaml
+vector_stores:
+- name: sqlite_vec_default
+  provider_type: sqlite_vec
+  index_type: hnsw
+
+vector_store_router:
+  default: sqlite_vec_default:soothe_default
+```
+
+For production PostgreSQL with pgvector:
+
+```yaml
+vector_stores:
+- name: pgvector_default
+  provider_type: pgvector
+  dsn: "postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors"
+
+vector_store_router:
+  default: pgvector_default:soothe_vectors
+```
+
+### Daemon Lifecycle Management
+
+The daemon automatically manages stale resources:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `loop_gc.interval_seconds` | 3600 | Garbage collect ephemeral/empty loops hourly |
+| `loop_gc.ephemeral_idle_hours` | 24 | Threshold for ephemeral loop cleanup |
+| `loop_status_reconciliation.stale_running_seconds` | 180 | Demote stale `running` loops (no heartbeat) |
+| `stale_worker_reap.interval_seconds` | 1800 | Cleanup idle workers every 30 min |
 
 ---
 

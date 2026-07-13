@@ -90,6 +90,27 @@ def test_assess_envelope_includes_gap_analysis_block() -> None:
     assert "build image" in msg
 
 
+def test_plan_gap_allows_long_component_evidence() -> None:
+    long_evidence = "x" * 1800
+    long_gap = "y" * 260
+    gap = PlanGapAnalysis(
+        components=[
+            GoalComponentStatus(
+                component="deploy/docs ref alignment",
+                status="partial",
+                evidence=long_evidence,
+                gap=long_gap,
+            )
+        ],
+        evidence_summary="partial",
+        remaining_gaps=["final pass"],
+        distance_from_goal="moderate",
+        gap_reasoning="still updating references",
+    )
+    assert gap.components[0].evidence == long_evidence
+    assert gap.components[0].gap == long_gap
+
+
 def test_assess_respects_gap_rejects_complete() -> None:
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="tests", status="not_started")],

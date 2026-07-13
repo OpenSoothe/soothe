@@ -67,11 +67,11 @@ POSTGRES_USER=postgres
 POSTGRES_PASSWORD=<secure_password>  # Generate with: openssl rand -base64 32
 
 # LLM provider credentials
-DASHSCOPE_API_KEY=<your_dashscope_key>
-DASHSCOPE_CP_API_KEY=<your_coding_plan_key>
+OPENAI_API_KEY=<your_openai_or_compatible_key>
+OPENAI_BASE_URL=<your_openai_compatible_base_url>  # Optional: for OpenAI-compatible providers
 
-# Optional: OpenAI
-OPENAI_API_KEY=<your_openai_key>  # Only if using OpenAI models
+# Optional: OpenAI (if using official OpenAI API)
+# OPENAI_API_KEY=<your_openai_key>  # Only if using OpenAI models
 
 # Connection strings (auto-generated)
 SOOTHE_POSTGRES_BASE_DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@soothe-pgvector:5432
@@ -90,18 +90,18 @@ vim config.yml  # Optional customization
 **Default configuration** (uses environment variables):
 ```yaml
 providers:
-  - name: dashscope
+  - name: openai-custom
     provider_type: openai
-    api_base_url: "${DASHSCOPE_BASE_URL}"
-    api_key: "${DASHSCOPE_API_KEY}"
+    api_base_url: "${OPENAI_BASE_URL}"
+    api_key: "${OPENAI_API_KEY}"
     models:
       - qwen-max
       - qwen3.7-plus
-      - multimodal-embedding-v1
+      - text-embedding-v3
 
 router:
-  default: "dashscope:qwen-max"
-  embedding: "dashscope:multimodal-embedding-v1"
+  default: "openai-custom:qwen-max"
+  embedding: "openai-custom:text-embedding-v3"
 
 persistence:
   default_backend: postgresql
@@ -555,24 +555,24 @@ user: "1000:1000"  # Match host user UID:GID
 
 ## Production Configuration Examples
 
-### Example 1: Standard Production (DashScope + PostgreSQL)
+### Example 1: Standard Production (OpenAI-Compatible + PostgreSQL)
 
 ```yaml
 providers:
-  - name: dashscope
+  - name: openai-custom
     provider_type: openai
-    api_base_url: "${DASHSCOPE_BASE_URL}"
-    api_key: "${DASHSCOPE_API_KEY}"
+    api_base_url: "${OPENAI_BASE_URL}"
+    api_key: "${OPENAI_API_KEY}"
     models:
       - qwen-max
       - qwen3.7-plus
-      - multimodal-embedding-v1
+      - text-embedding-v3
 
 router:
-  default: "dashscope:qwen-max"
-  fast: "dashscope:qwen3.7-plus"
-  think: "dashscope:qwen-max"
-  embedding: "dashscope:multimodal-embedding-v1"
+  default: "openai-custom:qwen-max"
+  fast: "openai-custom:qwen3.7-plus"
+  think: "openai-custom:qwen-max"
+  embedding: "openai-custom:text-embedding-v3"
 
 persistence:
   default_backend: postgresql

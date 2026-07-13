@@ -221,12 +221,12 @@ aws s3 sync ${BACKUP_DIR}/ s3://soothe-backups/config/
 ```bash
 # Backup secrets
 aws secretsmanager get-secret-value \
-    --secret-id soothe/dashscope-api-key \
+    --secret-id soothe/openai-api-key \
     --query SecretString \
-    --output text > dashscope_api_key_backup.txt
+    --output text > openai_api_key_backup.txt
 
 # Encrypt backup
-gpg --symmetric --cipher-algo AES256 dashscope_api_key_backup.txt
+gpg --symmetric --cipher-algo AES256 openai_api_key_backup.txt
 ```
 
 **HashiCorp Vault**:

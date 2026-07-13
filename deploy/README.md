@@ -15,7 +15,7 @@ Verify: `docker compose ps` — should show soothe-pgvector and soothed running.
 ## Environment Variables
 
 Required (`.env`):
-- `DASHSCOPE_API_KEY` — DashScope provider key
+- `OPENAI_API_KEY` — OpenAI-compatible provider key
 
 Optional:
 - `SOOTHE_WORKSPACE_HOST_ROOT` — Host workspace path (default: `$HOME` via docker-compose)
@@ -48,7 +48,7 @@ All services bound to localhost only. PostgreSQL uses default credentials (postg
 
 ## Config
 
-`config.prod.yml` uses DashScope/Coding-Plan providers with `${ENV_VAR}` substitution.
+`config.prod.yml` uses OpenAI-Custom/Coding-Plan providers with `${ENV_VAR}` substitution.
 
 ## Security
 

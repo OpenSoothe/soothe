@@ -46,8 +46,18 @@ def test_file_change_tools_match_metadata_registry() -> None:
     assert FILE_CHANGE_TOOLS == get_file_write_tool_names()
 
 
-def test_file_change_labels_are_single_word_past_tense() -> None:
-    """File cards use one-word past-tense action prefixes before the path."""
+def test_file_change_labels_support_pending_and_success_tense() -> None:
+    """File cards use progressive labels while running and past tense when done."""
+    assert file_change_label("write_file", phase="pending") == "Writing"
+    assert file_change_label("write_file", is_new_file=True, phase="pending") == "Creating"
+    assert file_change_label("edit_file", phase="pending") == "Editing"
+    assert file_change_label("edit_file_lines", phase="pending") == "Editing"
+    assert file_change_label("insert_lines", phase="pending") == "Inserting"
+    assert file_change_label("delete_lines", phase="pending") == "Deleting"
+    assert file_change_label("apply_diff", phase="pending") == "Patching"
+    assert file_change_label("delete_file", phase="pending") == "Deleting"
+    assert file_change_label("unknown_tool", phase="pending") == "Changing"
+
     assert file_change_label("write_file") == "Written"
     assert file_change_label("write_file", is_new_file=True) == "Created"
     assert file_change_label("edit_file") == "Edited"
@@ -62,7 +72,7 @@ def test_file_change_labels_are_single_word_past_tense() -> None:
             "write_file",
             {"is_new_file": True},
         )
-        == "Created"
+        == "Creating"
     )
 
 
@@ -110,19 +120,19 @@ def test_build_write_file_preview_shows_diff_on_overwrite(tmp_path: Path) -> Non
     assert any(line.startswith("-") or line.startswith("+") for line in data["diff_lines"])
 
 
-def test_write_file_preview_starts_collapsed() -> None:
-    """File previews default to a single-line summary in the message stream."""
+def test_write_file_preview_starts_expanded() -> None:
+    """In-flight file previews default to expanded diff/content view."""
     widget = WriteFilePreviewWidget(
         {"file_path": "src/a.py", "content": "hello", "is_new_file": True},
         action_label="Created",
     )
-    assert widget.is_expanded is False
-    widget.toggle_expand()
     assert widget.is_expanded is True
-    assert widget.has_class("-expanded")
     widget.toggle_expand()
     assert widget.is_expanded is False
     assert widget.has_class("-collapsed")
+    widget.toggle_expand()
+    assert widget.is_expanded is True
+    assert widget.has_class("-expanded")
 
 
 def test_write_file_preview_compose_includes_header_and_body() -> None:
@@ -138,12 +148,13 @@ def test_write_file_preview_compose_includes_header_and_body() -> None:
 
 
 @pytest.mark.asyncio
-async def test_finalize_preserves_collapsed_state() -> None:
-    """Finalizing on-disk results does not force the preview open."""
+async def test_finalize_collapses_preview_after_completion() -> None:
+    """Finalizing on-disk results collapses the preview card."""
     widget = WriteFilePreviewWidget(
         {"file_path": "/tmp/x.txt", "content": "draft", "is_new_file": True},
         action_label="Created",
     )
+    widget._expanded = True
     widget._finalized = False
     record = FileOperationRecord(
         tool_name="write_file",
@@ -336,8 +347,8 @@ def test_build_delete_file_preview_reads_disk(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mount_renders_collapsed_one_line_summary() -> None:
-    """Regression: invalid collapsed border CSS must not prevent preview mount (IG-544)."""
+async def test_mount_renders_expanded_preview_body() -> None:
+    """In-flight preview mounts in expanded mode with visible header/body."""
     from textual.app import App, ComposeResult
     from textual.containers import VerticalScroll
 
@@ -351,18 +362,18 @@ async def test_mount_renders_collapsed_one_line_summary() -> None:
 
     class PreviewApp(App):
         def compose(self) -> ComposeResult:
-            yield VerticalScroll(cls(data, action_label="Edited"))
+            yield VerticalScroll(cls(data, action_label="Editing"))
 
     app = PreviewApp()
     async with app.run_test(size=(100, 10)):
         widget = app.query_one(cls)
         header = app.query_one(".file-change-preview-header")
-        assert widget.has_class("-collapsed")
+        assert widget.has_class("-expanded")
         assert widget.size.height >= 1
         assert header.size.height >= 1
         rendered = str(header.render())
         assert get_glyphs().file_edit_prefix in rendered
-        assert "Edited" in rendered
+        assert "Editing" in rendered
         assert "src/a.py" in rendered
 
 
@@ -407,7 +418,7 @@ async def test_finalize_file_change_preview_upgrades_mounted_widget() -> None:
         assistant_id=None,
     )
     widget = adapter._file_change_widgets["tc-1"]
-    assert widget._action_label == "Created"
+    assert widget._action_label == "Creating"
 
     record = FileOperationRecord(
         tool_name="write_file",

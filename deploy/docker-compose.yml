@@ -7,7 +7,8 @@
 #   docker compose ps                       # Show status
 #
 # Required environment variables (set in deploy/.env):
-#   DASHSCOPE_API_KEY=...                   # DashScope provider key
+#   OPENAI_API_KEY=...                      # OpenAI-compatible provider key
+#   OPENAI_BASE_URL=...                     # OpenAI-compatible API base URL
 # Optional:
 #   TAVILY_API_KEY=...                      # Tavily web search (deep_research / wizsearch)
 #   SOOTHE_WORKSPACE_HOST_ROOT=...          # Host workspace directory (default: $HOME)
@@ -64,8 +65,8 @@ services:
       - soothe-db
       - soothe-app
     environment:
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY}
-      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       SOOTHE_WORKSPACE_HOST_ROOT: ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}
       SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
