@@ -224,8 +224,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: true
           sbom: true
+          # Read GHA cache when available; do not write (mode=max multi-platform
+          # exports can exceed org cache quota and fail the job after a successful push).
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Output image digest
         run: |
