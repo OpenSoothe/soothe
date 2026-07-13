@@ -64,6 +64,25 @@ def test_sort_loops_promotes_active_rows() -> None:
     assert [loop["loop_id"] for loop in ordered] == ["running", "live", "idle"]
 
 
+def test_sort_loops_uses_updated_timestamp_for_recency_descending() -> None:
+    loops = [
+        {
+            "loop_id": "older",
+            "status": "idle",
+            "created": "2026-07-11T01:00:00+00:00",
+            "updated": "2026-07-11T02:00:00+00:00",
+        },
+        {
+            "loop_id": "latest",
+            "status": "idle",
+            "created": "2026-07-10T01:00:00+00:00",
+            "updated": "2026-07-11T09:00:00+00:00",
+        },
+    ]
+    ordered = _sort_loops(loops, sort_key="updated_at")
+    assert [loop["loop_id"] for loop in ordered] == ["latest", "older"]
+
+
 def test_is_active_loop_true_for_live_or_running() -> None:
     assert _is_active_loop({"live": True, "status": "idle"}) is True
     assert _is_active_loop({"status": "running"}) is True

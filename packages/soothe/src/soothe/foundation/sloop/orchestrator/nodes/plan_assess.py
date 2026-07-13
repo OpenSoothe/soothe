@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     intake_label_from_state,
+    no_new_tool_evidence_recently,
     plan_has_minimum_steps_for_intake,
     terminal_assess_may_complete,
 )
@@ -46,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 _PLAN_ASSESS_STATUS_LABEL = "Assessing goal progress"
 _PLAN_CONTINUATION_STATUS_LABEL = "Assessing continuation context"
+_DEFAULT_NO_TOOL_EVIDENCE_RETRY_LIMIT = 2
 
 
 async def _emit_plan_phase_status(
@@ -391,6 +393,7 @@ async def _route_goal_completion_if_terminal(
     state = ctx.loop_state
     plan_manager = ctx.plan_manager
     intake_label = intake_label_from_state(state)
+    force_goal_completion = False
 
     if _reject_ig555_premature_complete(state, assessment, intake_label):
         ctx.scratch.plan_assessment = _downgrade_rejected_terminal_assessment(assessment)
@@ -402,15 +405,39 @@ async def _route_goal_completion_if_terminal(
         ctx.scratch.plan_gap,
         intake_label=intake_label,
     ):
-        logger.warning(
-            "[Plan] Reject terminal assess: structural gates failed "
-            "(status=%s progress=%s iter=%d)",
-            assessment.status,
-            assessment.goal_progress,
-            state.iteration,
-        )
-        ctx.scratch.plan_assessment = _downgrade_rejected_terminal_assessment(assessment)
-        return {"assess_route": "continue_generate"}
+        configured_retry_limit = _DEFAULT_NO_TOOL_EVIDENCE_RETRY_LIMIT
+        try:
+            config_limit = (
+                ctx.strange_loop.config.agent.loop.rules.plan_safety.no_tool_evidence_retry_limit
+            )
+            if isinstance(config_limit, int) and config_limit >= 1:
+                configured_retry_limit = config_limit
+        except Exception:
+            configured_retry_limit = _DEFAULT_NO_TOOL_EVIDENCE_RETRY_LIMIT
+
+        if no_new_tool_evidence_recently(
+            state,
+            retry_limit=configured_retry_limit,
+        ):
+            logger.warning(
+                "[Plan] Override terminal gate after %d no-tool verification retries; "
+                "routing to goal completion (status=%s progress=%s iter=%d)",
+                configured_retry_limit,
+                assessment.status,
+                assessment.goal_progress,
+                state.iteration,
+            )
+            force_goal_completion = True
+        else:
+            logger.warning(
+                "[Plan] Reject terminal assess: structural gates failed "
+                "(status=%s progress=%s iter=%d)",
+                assessment.status,
+                assessment.goal_progress,
+                state.iteration,
+            )
+            ctx.scratch.plan_assessment = _downgrade_rejected_terminal_assessment(assessment)
+            return {"assess_route": "continue_generate"}
 
     if assessment.status == "done" and state.has_remaining_steps():
         logger.warning(
@@ -429,7 +456,7 @@ async def _route_goal_completion_if_terminal(
         else "llm_only"
     )
     require_completion = plan_manager.determine_goal_completion_needs(
-        llm_decision=assessment.require_goal_completion,
+        llm_decision=(assessment.require_goal_completion or force_goal_completion),
         state=state,
         mode=gc_mode,
     )

@@ -20,7 +20,9 @@ from soothe.foundation.sloop.state.checkpoint import (
 from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
+    GoalComponentStatus,
     LoopState,
+    PlanGapAnalysis,
     StatusAssessment,
     StepAction,
     StepResult,
@@ -171,3 +173,57 @@ async def test_simple_mid_goal_allows_complete_with_evidence() -> None:
     )
     result = await node_plan_assess(ctx, {})
     assert result.get("plan_route") == "goal_done"
+
+
+@pytest.mark.asyncio
+async def test_structural_gate_reject_forces_done_after_two_no_tool_retries() -> None:
+    ctx = _make_ctx(
+        iteration=3,
+        intake_label=IntakeLabel.COMPLEX,
+        step_results=[
+            StepResult(step_id="A-01", success=True, duration_ms=1, thread_id="tid"),
+            StepResult(step_id="A-02", success=True, duration_ms=1, thread_id="tid"),
+        ],
+    )
+    ctx.scratch.plan_gap = PlanGapAnalysis(
+        components=[
+            GoalComponentStatus(component="final review", status="partial"),
+        ],
+        evidence_summary="verification notes only",
+        remaining_gaps=["resolve final review"],
+        distance_from_goal="near",
+        gap_reasoning="open component remains",
+    )
+
+    result = await node_plan_assess(ctx, {})
+    assert result.get("plan_route") == "goal_done"
+
+
+@pytest.mark.asyncio
+async def test_structural_gate_reject_keeps_replan_when_new_tool_evidence_exists() -> None:
+    ctx = _make_ctx(
+        iteration=3,
+        intake_label=IntakeLabel.COMPLEX,
+        step_results=[
+            StepResult(step_id="A-01", success=True, duration_ms=1, thread_id="tid"),
+            StepResult(
+                step_id="A-02",
+                success=True,
+                duration_ms=1,
+                thread_id="tid",
+                tool_call_count=1,
+            ),
+        ],
+    )
+    ctx.scratch.plan_gap = PlanGapAnalysis(
+        components=[
+            GoalComponentStatus(component="final review", status="partial"),
+        ],
+        evidence_summary="new tool output says still partial",
+        remaining_gaps=["resolve final review"],
+        distance_from_goal="near",
+        gap_reasoning="open component remains",
+    )
+
+    result = await node_plan_assess(ctx, {})
+    assert result.get("assess_route") == "continue_generate"

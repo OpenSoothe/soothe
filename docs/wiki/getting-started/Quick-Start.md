@@ -22,9 +22,9 @@ pip install -U soothe-cli
 
 ## 2. Start the daemon
 
-Docker image: `registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest`
+Choose your deployment option below. All options run the daemon on port `8765`.
 
-### Docker — OpenAI (zero-config)
+### Option A: Docker (OpenAI — zero-config)
 
 Default model: `gpt-4o-mini`. No config file required.
 
@@ -36,33 +36,112 @@ docker run --rm -d --name soothed \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 ```
 
-### Docker — DashScope
+### Option B: Docker (DashScope)
 
-Uses the OpenAI-compatible endpoint. Router targets are `openai:qwen3.7-plus` (not `dashscope:…`).
+OpenAI-compatible endpoint using `qwen3.7-plus`.
 
 ```bash
 export DASHSCOPE_API_KEY=sk-...
-export CONTAINER_WS=/var/lib/soothe/workspaces
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
-export SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOME\",\"container_root\":\"$CONTAINER_WS\"}"
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
-  -e DASHSCOPE_API_KEY \
   -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
   -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
-  -e SOOTHE_ROUTER_PROFILES \
-  -e SOOTHE_WORKSPACE_MOUNT \
+  -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]' \
   -v soothe-data:/var/lib/soothe \
-  -v "$HOME:$CONTAINER_WS" \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
-
-cd /path/to/project && soothe
 ```
 
-Chat-only (no file tools): omit CONTAINER_WS`, `SOOTHE_WORKSPACE_MOUNT`, and the workspace `-v`.
+With workspace access (file tools):
 
-### Local (pip)
+```bash
+export DASHSCOPE_API_KEY=sk-...
+export HOST_WS="$HOME"
+export CONTAINER_WS="/var/lib/soothe/workspaces"
+
+docker run --rm -d --name soothed \
+  -p 8765:8765 \
+  -e OPENAI_API_KEY="$DASHSCOPE_API_KEY" \
+  -e OPENAI_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1" \
+  -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]' \
+  -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}" \
+  -v soothe-data:/var/lib/soothe \
+  -v "$HOST_WS:$CONTAINER_WS" \
+  registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
+```
+
+### Option C: Docker Compose (dev environment)
+
+Dev environment with PostgreSQL + pgvector:
+
+```bash
+# Start with default profile (pgvector only)
+docker compose up -d
+
+# Or with daemon included (after building image)
+docker compose --profile daemon up -d
+```
+
+Environment variables (set in shell or `.env`):
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_API_KEY` | OpenAI API key | — |
+| `DASHSCOPE_API_KEY` | DashScope API key | — |
+| `POSTGRES_PASSWORD` | PostgreSQL password | `postgres` |
+| `POSTGRES_PORT` | PostgreSQL port | `6432` |
+
+### Option D: Docker Compose (production full stack)
+
+Production-ready stack with PostgreSQL + pgvector + Soothe daemon:
+
+```bash
+cd deploy
+cp env-example .env
+# Edit .env with your API keys
+docker compose up -d
+```
+
+**Production stack components:**
+
+| Component | Image | Port |
+|-----------|-------|------|
+| PostgreSQL + pgvector | `registry.cn-hangzhou.aliyuncs.com/lacogito/pgvector:pg17` | 5432 (internal) |
+| Soothe Daemon | `registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest` | 8765 |
+
+**Required environment variables** (in `deploy/.env`):
+
+```bash
+DASHSCOPE_API_KEY=sk-...           # Required for production
+DASHSCOPE_BASE_URL=...             # Required for production
+TAVILY_API_KEY=...                 # Optional (web search)
+SOOTHE_WORKSPACE_HOST_ROOT=...     # Optional (default: $HOME)
+SOOTHE_DEBUG=false                 # Optional (default: false)
+```
+
+**Database configuration** (production):
+
+```yaml
+# deploy/config.prod.yml (mounted at /app/config.yml)
+database:
+  backend: postgresql
+  url: postgresql://postgres:postgres@soothe-pgvector:5432/soothe
+  pool_size: 8
+  vector:
+    url: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
+```
+
+**PostgreSQL tuning** (production defaults):
+
+```yaml
+max_connections: 200
+shared_buffers: 256MB
+work_mem: 64MB
+```
+
+Full production deployment guide: see [`deploy/README.md`](../../../deploy/README.md).
+
+### Option E: Local pip
 
 ```bash
 pip install -U soothe soothe-daemon
@@ -70,7 +149,66 @@ export OPENAI_API_KEY=sk-...
 soothed start
 ```
 
-More env vars and Compose setups: [Environment variables](../configuration-guide/environment-variables.md).
+Minimal daemon config (`~/.soothe/config/daemon.yml`):
+
+```yaml
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
+```
+
+#### Option E1: PostgreSQL (localhost)
+
+For a local PostgreSQL database (port 5432):
+
+```bash
+# Create database
+createdb soothe
+
+# Start daemon with PostgreSQL backend
+SOOTHE_DATABASE_URL="postgresql://user:password@localhost:5432/soothe" soothed start
+```
+
+Or with config file (`~/.soothe/config/daemon.yml`):
+
+```yaml
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
+
+database:
+  backend: postgresql
+  url: postgresql://user:password@localhost:5432/soothe
+```
+
+#### Option E2: SQLite (localhost)
+
+For a lightweight SQLite database (no external dependency):
+
+```bash
+# Start daemon with SQLite backend
+SOOTHE_DATABASE_URL="sqlite:///./soothe.db" soothed start
+```
+
+Or with config file (`~/.soothe/config/daemon.yml`):
+
+```yaml
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
+
+database:
+  backend: sqlite
+  path: ./soothe.db
+```
+
+Full reference: [Environment variables](../configuration-guide/environment-variables.md).
 
 ### Verify
 
@@ -89,15 +227,16 @@ soothe   # interactive TUI
 
 ---
 
-## Production
+## Optional: Custom configuration
 
-Full stack (PostgreSQL + pgvector + config templates): [`deploy/`](../../../deploy/README.md) or [Production setup](../deployment/production-setup.md).
+Copy the template config for multi-provider routing:
 
 ```bash
-cd deploy && cp env-example .env && vim .env && docker compose up -d
+mkdir -p ~/.soothe/config
+cp config/config.template.yml ~/.soothe/config/config.yml
 ```
 
-Optional: copy `config/config.template.yml` to `~/.soothe/config/config.yml` for multi-provider routing.
+Edit `~/.soothe/config/config.yml` to add providers, models, and router profiles. The daemon loads config from `SOOTHE_CONFIG_PATH` or `~/.soothe/config/config.yml`.
 
 ---
 

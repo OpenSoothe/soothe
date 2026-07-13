@@ -25,7 +25,6 @@ MAX_UNDERSIZED_PLAN_REPLANS = 2
 _DEFAULT_PLAN_SAFETY_RULES = PlanSafetyRulesConfig()
 _PROGRESS_BUCKETS: tuple[str, ...] = ("none", "low", "medium", "high", "complete")
 _MIN_GOAL_PROGRESS_FOR_DONE = "medium"
-_DIGEST_DISAGREEMENT_BUCKET_THRESHOLD = 1
 logger = logging.getLogger(__name__)
 _FILLER_STEP_RES = tuple(
     re.compile(pattern, re.IGNORECASE)
@@ -306,7 +305,7 @@ def terminal_assess_may_complete(
     *,
     intake_label: IntakeLabel | None = None,
 ) -> bool:
-    """Return True when assess may route to goal completion (typed structural gates only)."""
+    """Return True when assess may route to goal completion (minimal hard gates only)."""
     if assessment.status != "done":
         return False
 
@@ -317,16 +316,18 @@ def terminal_assess_may_complete(
     if not assess_may_route_complete(state, assessment, intake_label):
         return False
 
-    if not assess_respects_gap_analysis(assessment, gap):
-        return False
-
+    gap_terminal_proven = False
     if gap is not None:
+        if not assess_respects_gap_analysis(assessment, gap):
+            return False
         if gap.distance_from_goal != "at_goal":
             return False
         if _open_gap_components(gap):
             return False
+        gap_terminal_proven = True
 
-    if not assessment.gap_alignment:
+    # Without a gap snapshot, keep a conservative self-alignment requirement.
+    if not gap_terminal_proven and not assessment.gap_alignment:
         return False
 
     intent = getattr(state, "intent", None)
@@ -335,23 +336,34 @@ def terminal_assess_may_complete(
         if assessment.goal_progress != "complete" or assessment.terminal_readiness != "ready":
             return False
 
-    digest = state.prior_progress
-    if digest is not None:
-        try:
-            hint_idx = _progress_index(digest.derived_progress_hint)
-            llm_idx = _progress_index(assessment.goal_progress)
-        except ValueError:
-            pass
-        else:
-            if abs(hint_idx - llm_idx) > _DIGEST_DISAGREEMENT_BUCKET_THRESHOLD:
-                return False
-
     if state.step_results:
         if any(r.had_recoverable_tool_errors for r in state.step_results):
             if assessment.goal_progress != "complete" or assessment.terminal_readiness != "ready":
                 return False
 
     return True
+
+
+def no_new_tool_evidence_recently(
+    state: LoopState,
+    *,
+    retry_limit: int,
+) -> bool:
+    """True when recent verification attempts added no new tool evidence.
+
+    Uses only structural execution facts:
+    - considers the latest ``retry_limit`` step results
+    - all must be successful (retry loop, not error recovery)
+    - all must have zero main/subgraph tool calls
+    """
+    if retry_limit <= 0:
+        return False
+    recent = state.step_results[-retry_limit:]
+    if len(recent) < retry_limit:
+        return False
+    if any(not step.success for step in recent):
+        return False
+    return all((step.tool_call_count + step.subgraph_tool_call_count) == 0 for step in recent)
 
 
 def assess_may_route_complete(

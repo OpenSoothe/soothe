@@ -767,11 +767,8 @@ class _ExecutionMixin:
                     return
             self._agent_running = True
 
-            # Cancel background event consumer so it doesn't compete for
-            # WebSocket reads with the active turn's iter_turn_chunks().
-            if self._bg_event_worker is not None:
-                self._bg_event_worker.cancel()
-                self._bg_event_worker = None
+            # Stop passive reads so active turn streaming has sole websocket access.
+            await self._stop_bg_event_worker(wait_timeout=2.0)
 
             if self._chat_input:
                 self._chat_input.set_cursor_active(active=False)

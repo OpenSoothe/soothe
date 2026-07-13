@@ -40,6 +40,20 @@ logger = logging.getLogger(__name__)
 class _HistoryMixin:
     """History conversion, loading, and daemon WebSocket event consumption."""
 
+    async def _stop_bg_event_worker(self, *, wait_timeout: float = 2.0) -> None:
+        """Cancel and await the passive daemon event worker, if running.
+
+        This keeps loop re-bootstrap and active turns from racing with an old
+        background reader on the same websocket.
+        """
+        worker = getattr(self, "_bg_event_worker", None)
+        if worker is None:
+            return
+        worker.cancel()
+        with suppress(Exception):
+            await asyncio.wait_for(worker.wait(), timeout=wait_timeout)
+        self._bg_event_worker = None
+
     # ------------------------------------------------------------------
     # Binder delegation (RFC-413).
     # Pure logic lives in `soothe_sdk.display.card_binder`; these wrappers

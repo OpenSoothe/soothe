@@ -129,3 +129,51 @@ async def test_resume_loop_via_daemon_rolls_back_on_switch_failure() -> None:
     app.run_worker.assert_not_called()
     assert app._session_state.loop_id == "prev_loop"
     assert app._lc_loop_id == "prev_loop"
+
+
+@pytest.mark.asyncio
+async def test_resume_loop_via_daemon_cancels_bg_reader_before_switch() -> None:
+    """Loop switch must stop passive reader before websocket re-bootstrap."""
+    app = object.__new__(SootheApp)
+    call_order: list[str] = []
+
+    async def _fake_switch_loop(loop_id: str) -> dict[str, str]:
+        call_order.append(f"switch_loop:{loop_id}")
+        return {"type": "loop_started", "loop_id": loop_id}
+
+    async def _fake_load_history(*, loop_id: str | None = None) -> None:
+        call_order.append(f"load_history:{loop_id}")
+
+    class _FakeBgWorker:
+        def cancel(self) -> None:
+            call_order.append("bg_cancel")
+
+        async def wait(self) -> None:
+            call_order.append("bg_wait")
+
+    daemon_session = MagicMock()
+    daemon_session.switch_loop = AsyncMock(side_effect=_fake_switch_loop)
+    app._daemon_session = daemon_session
+    app._session_state = SimpleNamespace(loop_id="old_loop")
+    app._lc_loop_id = "old_loop"
+    app._loop_switching = False
+    app._chat_input = None
+    app._pending_messages = []
+    app._queued_widgets = []
+    app._tokens_approximate = False
+    app._bg_event_worker = _FakeBgWorker()
+
+    app._clear_messages = AsyncMock()
+    app._mount_message = AsyncMock()
+    app._update_status = MagicMock()
+    app._update_tokens = MagicMock()
+    app._update_welcome_banner = MagicMock()
+    app._clear_loop_model_override = MagicMock()
+    app._load_loop_history = AsyncMock(side_effect=_fake_load_history)
+    app._consume_daemon_events_background = MagicMock()
+    app.run_worker = MagicMock()
+
+    await app._resume_loop_via_daemon("new_loop")
+
+    daemon_session.switch_loop.assert_awaited_once_with("new_loop")
+    assert call_order[:3] == ["bg_cancel", "bg_wait", "switch_loop:new_loop"]

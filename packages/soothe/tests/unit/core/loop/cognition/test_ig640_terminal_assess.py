@@ -140,7 +140,7 @@ def test_terminal_assess_rejects_multi_phase_without_complete_progress() -> None
     )
 
 
-def test_terminal_assess_rejects_digest_disagreement() -> None:
+def test_terminal_assess_allows_prior_progress_lag_when_gap_proves_terminal() -> None:
     state = _loop_state(
         prior_progress=PriorProgressDigest(
             iteration=1,
@@ -148,14 +148,73 @@ def test_terminal_assess_rejects_digest_disagreement() -> None:
         ),
     )
     state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="all docs updated", status="satisfied")],
+        evidence_summary="all goal components verified",
+        distance_from_goal="at_goal",
+        gap_reasoning="terminal evidence complete",
+    )
     assessment = StatusAssessment(
         status="done",
-        goal_progress="none",
+        goal_progress="complete",
         terminal_readiness="ready",
         gap_alignment=True,
     )
-    assessment = normalize_status_assessment(assessment)
-    assert assessment.status == "replan"
+    assert (
+        terminal_assess_may_complete(
+            state,
+            assessment,
+            gap,
+            intake_label=IntakeLabel.COMPLEX,
+        )
+        is True
+    )
+
+
+def test_terminal_assess_allows_gap_terminal_even_when_gap_alignment_false() -> None:
+    state = _loop_state()
+    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="all docs updated", status="satisfied")],
+        evidence_summary="all goal components verified",
+        distance_from_goal="at_goal",
+        gap_reasoning="terminal evidence complete",
+    )
+    assessment = StatusAssessment(
+        status="done",
+        goal_progress="complete",
+        terminal_readiness="ready",
+        gap_alignment=False,
+    )
+    assert (
+        terminal_assess_may_complete(
+            state,
+            assessment,
+            gap,
+            intake_label=IntakeLabel.COMPLEX,
+        )
+        is True
+    )
+
+
+def test_terminal_assess_requires_gap_alignment_when_no_gap_snapshot() -> None:
+    state = _loop_state()
+    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    assessment = StatusAssessment(
+        status="done",
+        goal_progress="high",
+        terminal_readiness="ready",
+        gap_alignment=False,
+    )
+    assert (
+        terminal_assess_may_complete(
+            state,
+            assessment,
+            None,
+            intake_label=IntakeLabel.COMPLEX,
+        )
+        is False
+    )
 
 
 def test_terminal_assess_rejects_recoverable_tool_errors_without_complete() -> None:

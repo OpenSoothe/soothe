@@ -476,6 +476,11 @@ class _ModelMixin:
         try:
             self._update_status(f"Attaching to loop: {loop_id}")
 
+            # Stop any passive stream reader before re-bootstrap on the same
+            # websocket. Otherwise it can consume connection-ack/control frames
+            # intended for ``switch_loop`` and cause intermittent attach timeouts.
+            await self._stop_bg_event_worker(wait_timeout=2.0)
+
             # Clear conversation (similar to /clear, without creating a new loop)
             self._pending_messages.clear()
             self._queued_widgets.clear()

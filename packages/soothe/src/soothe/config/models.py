@@ -1536,6 +1536,14 @@ class PlanSafetyRulesConfig(BaseModel):
         ]
     )
     simple_evidence_min_chars: int = Field(default=200, ge=0)
+    no_tool_evidence_retry_limit: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Consecutive successful verify-only steps with zero tool calls before "
+            "plan_assess stops replanning and routes to goal completion."
+        ),
+    )
 
 
 class StrangeLoopRulesConfig(BaseModel):

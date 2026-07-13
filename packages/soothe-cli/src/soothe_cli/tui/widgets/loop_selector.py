@@ -153,11 +153,31 @@ def _sort_loops(loops: list[dict[str, Any]], *, sort_key: str) -> list[dict[str,
     inactive = [loop for loop in loops if not _is_active_loop(loop)]
 
     def key_fn(loop: dict[str, Any]) -> str:
-        return loop.get(sort_key) or loop.get("created") or ""
+        return _loop_sort_timestamp(loop, sort_key=sort_key)
 
     active.sort(key=key_fn, reverse=True)
     inactive.sort(key=key_fn, reverse=True)
     return active + inactive
+
+
+def _loop_sort_timestamp(loop: dict[str, Any], *, sort_key: str) -> str:
+    """Return the timestamp value used for loop ordering.
+
+    The loop rows may carry daemon fields (`updated`, `created`) while older
+    test fixtures still use `updated_at` / `created_at`.
+    """
+    if sort_key == "updated_at":
+        return str(
+            loop.get("updated")
+            or loop.get("updated_at")
+            or loop.get("last_message_at")
+            or loop.get("created")
+            or loop.get("created_at")
+            or ""
+        )
+    if sort_key == "created_at":
+        return str(loop.get("created") or loop.get("created_at") or "")
+    return str(loop.get(sort_key) or loop.get("updated") or loop.get("created") or "")
 
 
 def _visible_column_keys(columns: dict[str, bool]) -> list[str]:
@@ -924,8 +944,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 scored,
                 key=lambda item: (
                     item[0],
-                    item[1].get(sort_key) or "",
-                    item[1].get("updated_at") or "",
+                    _loop_sort_timestamp(item[1], sort_key=sort_key),
+                    _loop_sort_timestamp(item[1], sort_key="updated_at"),
                     item[1]["loop_id"],
                 ),
                 reverse=True,
@@ -1085,8 +1105,8 @@ class LoopSelectorScreen(ModalScreen[str | None]):
                 scored,
                 key=lambda item: (
                     item[0],
-                    item[1].get(sort_key) or item[1].get("created") or "",
-                    item[1].get("created") or "",
+                    _loop_sort_timestamp(item[1], sort_key=sort_key),
+                    _loop_sort_timestamp(item[1], sort_key="created_at"),
                     item[1]["loop_id"],
                 ),
                 reverse=True,
