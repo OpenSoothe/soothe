@@ -686,6 +686,67 @@ class QueryEngine:
             "skip_redundant_tool_message_wire": streaming_cfg.skip_redundant_tool_message_wire,
         }
 
+    async def _mark_active_context_goals_cancelled(
+        self,
+        loop_id: str,
+        *,
+        reason: str = "user_cancelled",
+    ) -> int:
+        """Mark active ContextEngine goals cancelled and persist the DAG.
+
+        The `/context` popup reads persisted CE DAG state. When a turn is
+        interrupted mid-flight, we need to transition active goals to
+        ``cancelled`` before stream teardown so cancelled attempts remain visible
+        in the DAG view.
+        """
+        lid = str(loop_id or "").strip()
+        if not lid:
+            return 0
+
+        try:
+            from soothe.foundation.context.persistence.factory import (
+                resolve_context_engine_persistence,
+            )
+
+            persistence = resolve_context_engine_persistence(self._daemon._config, lid)
+            try:
+                dag = await persistence.load_dag()
+                if dag is None:
+                    return 0
+
+                now = datetime.now(UTC)
+                cancelled = 0
+                for goal in dag.goals.values():
+                    if str(getattr(goal, "status", "")).strip().lower() != "active":
+                        continue
+                    goal.status = "cancelled"
+                    if getattr(goal, "error", None) in (None, ""):
+                        goal.error = reason
+                    goal.updated_at = now
+                    cancelled += 1
+
+                if cancelled:
+                    await persistence.save_dag(dag)
+                    logger.info(
+                        "Marked %d active CE goal(s) cancelled for loop %s",
+                        cancelled,
+                        lid[:16],
+                    )
+                return cancelled
+            finally:
+                close = getattr(persistence, "close", None)
+                if callable(close):
+                    maybe_coro = close()
+                    if asyncio.iscoroutine(maybe_coro):
+                        await maybe_coro
+        except Exception:
+            logger.warning(
+                "Failed to persist cancelled CE goals for loop %s",
+                lid[:16],
+                exc_info=True,
+            )
+            return 0
+
     async def _enrich_with_vision_throttled(
         self,
         config: Any,
@@ -1318,20 +1379,30 @@ class QueryEngine:
                         effective_loop_id,
                         batch_timeout_s=drain_cfg.get("streaming_interval_ms", 100) / 1000.0,
                     )
+                    if turn_cancelled:
+                        await self._mark_active_context_goals_cancelled(
+                            effective_loop_id,
+                            reason="user_cancelled",
+                        )
                     # RFC-631: freeze live card tail into a goal snapshot before idle.
                     card_manager = getattr(d, "_card_manager", None)
                     if card_manager is not None:
                         try:
-                            goal_completion_text = "".join(goal_completion_response).strip()
-                            if not goal_completion_text:
-                                goal_completion_text = await _peek_goal_completion_from_ledger(
-                                    card_manager,
-                                    effective_loop_id,
-                                )
+                            # Cancelled turns should not infer a synthetic "completion"
+                            # summary from the live ledger.
+                            goal_completion_text = ""
+                            if not turn_cancelled:
+                                goal_completion_text = "".join(goal_completion_response).strip()
+                                if not goal_completion_text:
+                                    goal_completion_text = await _peek_goal_completion_from_ledger(
+                                        card_manager,
+                                        effective_loop_id,
+                                    )
                             await card_manager.freeze_goal_display(
                                 effective_loop_id,
                                 goal_text=effective_text,
                                 goal_completion=goal_completion_text,
+                                status="cancelled" if turn_cancelled else "completed",
                             )
                         except Exception:
                             logger.warning(

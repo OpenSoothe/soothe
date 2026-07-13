@@ -55,12 +55,11 @@ soothe -p "Your first task"   # requires a running daemon
 
 | Resource | Description |
 |----------|-------------|
-| [Wiki](https://mirasoth.github.io/soothe/) | User, operator, and developer guides ([source](docs/wiki/index.md)) |
+| [Wiki](https://mirasoth.github.io/soothe/) | User, operator, and developer guides ([source](docs/wiki/)) |
 | [Quick Start](docs/wiki/getting-started/Quick-Start.md) | Install, daemon, first prompt |
 | [Configuration guide](docs/wiki/configuration-guide/) | YAML, env vars, zero-config |
-| [User Guide](docs/user_guide.md) | End-user usage guide |
 | [RFCs](docs/specs/) | Architecture specs |
-| [CLAUDE.md](CLAUDE.md) | AI agent dev guide |
+| [AGENTS.md](AGENTS.md) | AI agent dev guide |
 
 ## License
 

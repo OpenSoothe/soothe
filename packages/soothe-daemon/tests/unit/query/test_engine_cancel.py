@@ -233,6 +233,39 @@ async def test_cancelled_query_does_not_emit_custom_error_event() -> None:
     assert custom_errors == []
 
 
+@pytest.mark.asyncio
+async def test_cancelled_query_persists_context_goal_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cancelled turns should persist CE goal status updates for /context DAG."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _FakeRunner()
+    daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
+    daemon._thread_registry = _RegistryMapsThreadLoop({"thread-1": "loop-cancel"})
+    freeze_goal_display = AsyncMock(return_value=None)
+    daemon._card_manager = SimpleNamespace(freeze_goal_display=freeze_goal_display)
+
+    engine = QueryEngine(daemon)
+    cancel_ce_goals = AsyncMock(return_value=1)
+    monkeypatch.setattr(engine, "_mark_active_context_goals_cancelled", cancel_ce_goals)
+
+    await engine.run_query("cancel me", loop_id="loop-cancel")
+    task = daemon._current_query_task
+    assert task is not None
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+    cancel_ce_goals.assert_awaited_once_with(
+        "loop-cancel",
+        reason="user_cancelled",
+    )
+    freeze_goal_display.assert_awaited_once()
+    freeze_kwargs = freeze_goal_display.await_args.kwargs
+    assert freeze_kwargs["status"] == "cancelled"
+    assert freeze_kwargs["goal_completion"] == ""
+
+
 def _daemon_factory(
     *,
     runner: Any,
