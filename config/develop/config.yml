@@ -34,6 +34,16 @@ providers:
       - kimi-k2.5
       - MiniMax-M2.5
 
+  - name: agnes
+    provider_type: openai
+    api_base_url: https://apihub.agnes-ai.com/v1
+    api_key: "${AGNESAI_API_KEY}"
+    models:
+      - agnes-2.0-flash
+      - agnes-2.5-flash
+      - agnes-image-2.0-flash
+      - agnes-image-2.1-flash
+
   - name: omlx
     provider_type: openai
     api_base_url: "http://100.75.70.86:9642/v1"
@@ -56,6 +66,14 @@ router_profiles:
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
       embedding: "dashscope:text-embedding-v4"
     embedding_dims: 768  # must match configured embedding output dimension
+
+  - name: agnes
+    router:
+      default: "agnes,agnes-2.5-flash"
+      image: "agnes,agnes-image-2.0-flash"
+      ocr: "omlx:DeepSeek-OCR-4bit"
+      embedding: "dashscope:text-embedding-v4"
+    embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
 
   - name: local-deploy
     router:
