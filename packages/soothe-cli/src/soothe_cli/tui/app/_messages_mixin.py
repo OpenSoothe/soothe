@@ -43,6 +43,57 @@ logger = logging.getLogger(__name__)
 class _MessagesMixin:
     """Message widget lifecycle, store management, queue, interrupt/quit, toggles, editor, and events."""
 
+    def _has_pending_chat_input(self) -> bool:
+        """Return whether chat input has draft content that should be preserved."""
+        chat_input = self._chat_input
+        return bool(
+            chat_input
+            and (
+                chat_input.value.strip()
+                or chat_input.mode != "normal"
+                or chat_input._current_suggestions
+            )
+        )
+
+    def _can_run_queued_goal_now_from_enter(self) -> bool:
+        """Return whether Enter should cancel the current goal for queued-head run."""
+        if not self._agent_running or not self._pending_messages:
+            return False
+        if self._has_pending_chat_input():
+            return False
+        queue_head = self._pending_messages[0]
+        return queue_head.mode == "normal"
+
+    def run_queued_goal_now_from_enter(self) -> bool:
+        """Cancel the running goal so queued head can start immediately.
+
+        Returns:
+            `True` when an interrupt was triggered, otherwise `False`.
+        """
+        if not self._can_run_queued_goal_now_from_enter():
+            return False
+        return self._interrupt_running_goal_preserving_queue()
+
+    def _interrupt_running_goal_preserving_queue(self) -> bool:
+        """Interrupt current agent turn while keeping queued goals intact."""
+        if not (self._agent_running and self._agent_worker):
+            return False
+        if self._daemon_session is not None:
+            self.run_worker(
+                self._interrupt_daemon_agent_turn(discard_queue=False),
+                exclusive=False,
+                group="daemon-interrupt",
+            )
+        else:
+            self.run_worker(
+                self._tear_down_interrupt_ui(),
+                exclusive=False,
+                group="interrupt-ui",
+            )
+            self._cancel_worker(self._agent_worker, discard_queue=False)
+        self._quit_pending = False
+        return True
+
     async def _load_loop_history(
         self,
         *,
@@ -476,11 +527,7 @@ class _MessagesMixin:
         so Ctrl+C is reserved for interrupt/quit only.
         """
         # Check if input has pending content (text, mode, or completion)
-        has_pending_input = self._chat_input and (
-            self._chat_input.value.strip()
-            or self._chat_input.mode != "normal"
-            or self._chat_input._current_suggestions
-        )
+        has_pending_input = self._has_pending_chat_input()
 
         # If shell command is running: clear input first, then kill shell
         if self._shell_running and self._shell_worker:
@@ -498,20 +545,7 @@ class _MessagesMixin:
                 self._chat_input.clear_input()
                 self._quit_pending = False
                 return
-            if self._daemon_session is not None:
-                self.run_worker(
-                    self._interrupt_daemon_agent_turn(discard_queue=False),
-                    exclusive=False,
-                    group="daemon-interrupt",
-                )
-            else:
-                self.run_worker(
-                    self._tear_down_interrupt_ui(),
-                    exclusive=False,
-                    group="interrupt-ui",
-                )
-                self._cancel_worker(self._agent_worker, discard_queue=False)
-            self._quit_pending = False
+            self._interrupt_running_goal_preserving_queue()
             return
 
         # Double Ctrl+C to quit (same detach path as Ctrl+D and /quit)

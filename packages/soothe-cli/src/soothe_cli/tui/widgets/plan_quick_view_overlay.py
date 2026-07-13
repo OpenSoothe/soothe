@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from textual.containers import Vertical, VerticalScroll
@@ -22,11 +23,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _plan_quick_view_header(loop_id: str | None) -> str:
+def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = False) -> str:
     """Build the quick-view header text, including active loop id when known."""
     base = "Plan"
     if loop_id:
         base = f"{base} ({loop_id})"
+    if show_enter_hint:
+        return f"{base}  ·  Enter runs queued goal  ·  Ctrl+t to close"
     return f"{base}  ·  Ctrl+t to close"
 
 
@@ -163,7 +166,17 @@ class PlanQuickViewOverlay(Vertical):
         if not self.is_expanded or self._content is None:
             return
         if self._header is not None:
-            self._header.update(_plan_quick_view_header(getattr(self.app, "_lc_loop_id", None)))
+            show_enter_hint = False
+            can_run_queued = getattr(self.app, "_can_run_queued_goal_now_from_enter", None)
+            if callable(can_run_queued):
+                with suppress(Exception):
+                    show_enter_hint = bool(can_run_queued())
+            self._header.update(
+                _plan_quick_view_header(
+                    getattr(self.app, "_lc_loop_id", None),
+                    show_enter_hint=show_enter_hint,
+                )
+            )
         tree = get_live_goal_tree(self.app)
         if tree is None:
             self._content.update(Content.styled("No active plan.", "dim"))

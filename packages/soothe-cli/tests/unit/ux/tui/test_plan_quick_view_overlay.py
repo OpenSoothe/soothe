@@ -27,6 +27,10 @@ def test_get_live_goal_tree_reads_adapter() -> None:
 def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
     assert _plan_quick_view_header(None) == "Plan  ·  Ctrl+t to close"
     assert _plan_quick_view_header("loop-123") == "Plan (loop-123)  ·  Ctrl+t to close"
+    assert (
+        _plan_quick_view_header("loop-123", show_enter_hint=True)
+        == "Plan (loop-123)  ·  Enter runs queued goal  ·  Ctrl+t to close"
+    )
 
 
 def test_plan_quick_view_content_shows_pending_and_running() -> None:

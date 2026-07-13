@@ -88,6 +88,8 @@ def test_ctrl_c_interrupts_agent_when_input_empty() -> None:
 
     app = _AppStub()
     app.action_quit_or_interrupt()
+    if app.run_worker.call_args:
+        app.run_worker.call_args[0][0].close()
 
     # Should cancel worker, NOT clear input (already empty)
     app._chat_input.clear_input.assert_not_called()
@@ -257,6 +259,8 @@ def test_ctrl_c_preserves_queued_goal_when_interrupting_agent() -> None:
 
     app = _AppStub()
     app.action_quit_or_interrupt()
+    if app.run_worker.call_args:
+        app.run_worker.call_args[0][0].close()
 
     app._agent_worker.cancel.assert_called_once()
     assert len(app._pending_messages) == 1
@@ -291,6 +295,7 @@ def test_ctrl_c_preserves_queue_when_interrupting_via_daemon() -> None:
     app.run_worker.assert_called_once()
     coro = app.run_worker.call_args[0][0]
     assert coro.cr_code.co_name == "_interrupt_daemon_agent_turn"
+    coro.close()
     assert len(app._pending_messages) == 1
 
 
@@ -313,3 +318,70 @@ async def test_interrupt_daemon_turn_preserves_queue_when_requested() -> None:
     app._daemon_session.cancel_remote_query.assert_awaited_once()
     app._agent_worker.cancel.assert_called_once()
     assert len(app._pending_messages) == 1
+
+
+def test_can_run_queued_goal_now_from_enter_requires_normal_queue_head() -> None:
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._agent_running = True
+            self._pending_messages = deque([QueuedMessage(text="/help", mode="command")])
+
+    app = _AppStub()
+    assert app._can_run_queued_goal_now_from_enter() is False
+    app._pending_messages = deque([QueuedMessage(text="next", mode="normal")])
+    assert app._can_run_queued_goal_now_from_enter() is True
+
+
+def test_enter_shortcut_interrupts_running_goal_via_daemon_path() -> None:
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._quit_pending = True
+            self._agent_running = True
+            self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
+            self._agent_worker = MagicMock()
+            self._daemon_session = MagicMock()
+            self.run_worker = MagicMock()
+
+    app = _AppStub()
+    assert app.run_queued_goal_now_from_enter() is True
+
+    app.run_worker.assert_called_once()
+    coro = app.run_worker.call_args[0][0]
+    assert coro.cr_code.co_name == "_interrupt_daemon_agent_turn"
+    coro.close()
+    assert len(app._pending_messages) == 1
+    assert app._quit_pending is False
+
+
+def test_enter_shortcut_interrupts_running_goal_without_daemon() -> None:
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._chat_input = MagicMock()
+            self._chat_input.value = ""
+            self._chat_input.mode = "normal"
+            self._chat_input._current_suggestions = []
+            self._quit_pending = True
+            self._agent_running = True
+            self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
+            self._agent_worker = MagicMock()
+            self._daemon_session = None
+            self.run_worker = MagicMock()
+
+    app = _AppStub()
+    assert app.run_queued_goal_now_from_enter() is True
+
+    app.run_worker.assert_called_once()
+    coro = app.run_worker.call_args[0][0]
+    assert coro.cr_code.co_name == "_tear_down_interrupt_ui"
+    coro.close()
+    app._agent_worker.cancel.assert_called_once()
+    assert len(app._pending_messages) == 1
+    assert app._quit_pending is False

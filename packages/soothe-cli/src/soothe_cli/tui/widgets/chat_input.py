@@ -669,6 +669,17 @@ class ChatTextArea(TextArea):
             event.prevent_default()
             event.stop()
             value = self.text.strip()
+            if not value:
+                trigger = getattr(self.app, "run_queued_goal_now_from_enter", None)
+                if callable(trigger):
+                    try:
+                        if bool(trigger()):
+                            return
+                    except Exception:  # noqa: BLE001
+                        logger.debug(
+                            "Queued-goal Enter shortcut failed; keeping empty-enter noop",
+                            exc_info=True,
+                        )
             if value:
                 self.post_message(self.Submitted(value))
             return
