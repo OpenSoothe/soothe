@@ -60,7 +60,7 @@ router_profiles:
   - name: production-minimax
     router:
       default: "dashscope:MiniMax-M3"
-      fast: "dashscope:kimi-k2.7-code"
+      fast: "dashscope:qwen3.6-flash"
       think: "dashscope:MiniMax-M3"
       image: "dashscope:MiniMax-M3"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
