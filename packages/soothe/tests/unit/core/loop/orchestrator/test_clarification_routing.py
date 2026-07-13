@@ -39,6 +39,13 @@ def test_route_after_plan_loops_on_undersized_replan() -> None:
     assert route_after_plan({"assess_route": "continue_generate"}) == "plan_generate"
 
 
+def test_route_after_plan_fatal_exits_before_undersized_replan() -> None:
+    assert (
+        route_after_plan({"last_outcome": "fatal", "assess_route": "continue_generate"})
+        == "resolve_decision"
+    )
+
+
 def test_route_after_plan_prefers_goal_done_over_replan() -> None:
     from soothe.foundation.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
 

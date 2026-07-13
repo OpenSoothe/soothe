@@ -21,21 +21,12 @@ providers:
     api_base_url: "${DASHSCOPE_BASE_URL}"
     api_key: "${DASHSCOPE_API_KEY}"
     models:
-      - qwen-max              # Premium reasoning model
-      - text-embedding-v4     # Text embedding model (OpenAI-compat endpoint)
-
-  # Coding-Plan - Alibaba's coding-focused endpoint
-  # Models: GLM, DeepSeek, Qwen coding variants
-  - name: coding-plan
-    provider_type: openai
-    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
-    api_key: "${DASHSCOPE_CP_API_KEY}"
-    models:
-      - glm-5                 # Zhipu AI GLM model
-      - qwen3.6-plus          # Coding-optimized Qwen
-      - kimi-k2.5             # Moonshot AI model
-      - MiniMax-M2.5          # Alternative reasoning
-      - deepseek-v3.2         # DeepSeek reasoning model
+      - glm-5.2
+      - qwen3.7-plus
+      - kimi-k2.5
+      - kimi-k2.7-code
+      - MiniMax-M3
+      - text-embedding-v4  # DashScope OpenAI-compatible text embedding (replaces multimodal-embedding-v1, which 404s in compat mode)
 
 # =============================================================================
 # Model Router
@@ -43,12 +34,13 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "coding-plan:glm-5"
-      fast: "coding-plan:kimi-k2.5"
-      think: "coding-plan:glm-5"
-      image: "coding-plan:kimi-k2.5"
+      default: "dashscope:MiniMax-M3"
+      fast: "dashscope:kimi-k2.7-code"
+      think: "dashscope:glm-5.2"
+      image: "dashscope:kimi-k2.7-code"
+      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
       embedding: "dashscope:text-embedding-v4"
-    embedding_dims: 1024
+    embedding_dims: 768  # must match configured embedding output dimension
 
 active_router_profile: production
 

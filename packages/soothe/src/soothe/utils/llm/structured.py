@@ -12,7 +12,6 @@ call `invoke_structured_chat` or `invoke_structured_chat_typed` instead.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -45,6 +44,11 @@ _STRUCTURED_METHODS: tuple[str | None, ...] = (
 # WeakKeyDictionary so cached entries don't pin chat models the caller has discarded.
 _MISSING: Any = object()
 _METHOD_CACHE: WeakKeyDictionary[BaseChatModel, str | None] = WeakKeyDictionary()
+
+# Thinking models (e.g. Kimi via DashScope) often skip tool calls or return empty
+# json_schema content on the first attempt; one immediate retry succeeds often enough
+# to avoid classifier-level or full method-chain fallbacks.
+_MAX_METHOD_INVOKE_ATTEMPTS = 2
 
 
 def _ordered_structured_methods(chat: BaseChatModel) -> tuple[str | None, ...]:
@@ -195,37 +199,9 @@ def _is_retriable_structured_invoke_error(exc: Exception) -> bool:
         return True
     if "json_object" in msg and "must contain" in msg and "json" in msg:
         return True
+    if "empty response for json_schema" in msg:
+        return True
     return "jsondecodeerror" in msg or "unterminated string" in msg
-
-
-def _create_structured_runnable(
-    chat: BaseChatModel,
-    json_schema: dict[str, Any],
-    *,
-    schema_name: str,
-    strict: bool,
-) -> Any:
-    """Build a structured-output runnable, mirroring IntentClassifier method order."""
-    schema_with_title = _schema_with_title(json_schema, schema_name)
-
-    for method in _STRUCTURED_METHODS:
-        try:
-            return _try_create_structured_runnable(
-                chat,
-                schema_with_title,
-                method=method,
-                strict=strict,
-            )
-        except Exception:
-            logger.debug(
-                "with_structured_output failed for method=%s",
-                method,
-                exc_info=True,
-            )
-            continue
-
-    msg = "all structured output methods failed for the configured model"
-    raise StructuredOutputError(msg)
 
 
 async def invoke_structured_chat(
@@ -287,38 +263,59 @@ async def invoke_structured_chat(
             )
             continue
 
-        try:
-            result = await structured.ainvoke(prepared_messages, config=invoke_cfg)
-        except StructuredOutputError:
-            raise
-        except Exception as exc:
-            last_exc = exc
-            if method != last_method and _is_retriable_structured_invoke_error(exc):
+        method_failed = False
+        for attempt in range(_MAX_METHOD_INVOKE_ATTEMPTS):
+            try:
+                result = await structured.ainvoke(prepared_messages, config=invoke_cfg)
+            except StructuredOutputError:
+                raise
+            except Exception as exc:
+                last_exc = exc
+                if (
+                    attempt + 1 < _MAX_METHOD_INVOKE_ATTEMPTS
+                    and _is_retriable_structured_invoke_error(exc)
+                ):
+                    logger.debug(
+                        "structured invoke: method=%s attempt=%d retriable error, retrying",
+                        method,
+                        attempt + 1,
+                    )
+                    continue
+                if method != last_method and _is_retriable_structured_invoke_error(exc):
+                    logger.debug(
+                        "structured invoke: method=%s rejected by provider, falling back",
+                        method,
+                    )
+                    method_failed = True
+                    break
+                msg = f"structured model invoke failed: {exc}"
+                raise StructuredOutputError(msg) from exc
+
+            if result is None:
+                last_exc = StructuredOutputError(f"method={method!r} returned None")
+                if attempt + 1 < _MAX_METHOD_INVOKE_ATTEMPTS:
+                    logger.debug(
+                        "structured invoke: method=%s returned None, retrying",
+                        method,
+                    )
+                    continue
                 logger.debug(
-                    "structured invoke: method=%s rejected by provider, falling back",
+                    "structured invoke: method=%s returned None, falling back",
                     method,
                 )
-                continue
-            msg = f"structured model invoke failed: {exc}"
-            raise StructuredOutputError(msg) from exc
+                method_failed = True
+                break
 
-        _remember_structured_method(chat, method)
-        if result is None:
-            # Provider returned nothing (e.g. model skipped the tool call / JSON
-            # response).  Treat as a retriable failure so we fall through to the
-            # next structured-output method.
-            logger.debug(
-                "structured invoke: method=%s returned None, falling back",
-                method,
-            )
-            last_exc = StructuredOutputError(f"method={method!r} returned None")
+            _remember_structured_method(chat, method)
+            data = normalize_structured_result(result)
+            if normalize is not None:
+                data = normalize(data)
+            if strict:
+                post_validate_structured_dict(data, schema)
+            return data
+
+        if method_failed:
             continue
-        data = normalize_structured_result(result)
-        if normalize is not None:
-            data = normalize(data)
-        if strict:
-            post_validate_structured_dict(data, schema)
-        return data
 
     if last_exc is not None:
         msg = f"structured model invoke failed: {last_exc}"
@@ -370,130 +367,10 @@ async def invoke_structured_chat_typed(
     return schema(**result_dict)
 
 
-def invoke_structured_chat_sync(
-    chat: BaseChatModel,
-    messages: list[Any],
-    *,
-    json_schema: dict[str, Any],
-    schema_name: str | None = None,
-    strict: bool = True,
-    config: dict[str, Any] | None = None,
-    timeout: float | None = None,
-) -> dict[str, Any]:
-    """Sync wrapper for `invoke_structured_chat` (must not run inside a live loop).
-
-    Intended for sync middleware paths (e.g., LangGraph sync `wrap_model_call`).
-    Internally calls `asyncio.run`, optionally bounded by `asyncio.wait_for` so
-    timeouts cancel the underlying coroutine instead of leaking a thread.
-
-    Args:
-        chat: LangChain chat model.
-        messages: Message list.
-        json_schema: Client JSON Schema dict.
-        schema_name: Optional provider schema name override.
-        strict: Post-validate parsed output.
-        config: Optional RunnableConfig.
-        timeout: Optional seconds; raises `TimeoutError` on overshoot.
-
-    Returns:
-        Parsed and validated output as a dict.
-
-    Raises:
-        StructuredOutputError: On provider or validation failure.
-        TimeoutError: When the bounded call exceeds `timeout`.
-        RuntimeError: If invoked from inside a running event loop.
-    """
-
-    async def _run() -> dict[str, Any]:
-        coro = invoke_structured_chat(
-            chat,
-            messages,
-            json_schema=json_schema,
-            schema_name=schema_name,
-            strict=strict,
-            config=config,
-        )
-        if timeout is None:
-            return await coro
-        return await asyncio.wait_for(coro, timeout=timeout)
-
-    try:
-        return asyncio.run(_run())
-    except TimeoutError as exc:
-        msg = f"structured model invoke timed out after {timeout:.0f}s"
-        raise TimeoutError(msg) from exc
-
-
-def invoke_structured_chat_sync_typed(
-    chat: BaseChatModel,
-    messages: list[Any],
-    schema: type[T],
-    *,
-    strict: bool = True,
-    config: dict[str, Any] | None = None,
-    timeout: float | None = None,
-) -> T:
-    """Sync `invoke_structured_chat_typed` for sync middleware paths."""
-    data = invoke_structured_chat_sync(
-        chat,
-        messages,
-        json_schema=schema.model_json_schema(),
-        schema_name=schema.__name__,
-        strict=strict,
-        config=config,
-        timeout=timeout,
-    )
-    return schema(**data)
-
-
-async def invoke_structured(
-    factory: Any,
-    messages: list[Any],
-    json_schema: dict[str, Any],
-    *,
-    role: str = "default",
-    schema_name: str | None = None,
-    strict: bool = True,
-    config: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Create model from factory and invoke structured output.
-
-    Convenience wrapper combining factory model creation with structured output invocation.
-    Use when you have a factory but don't need to reuse the model for multiple calls.
-
-    Args:
-        factory: LLMFactory instance (typed as Any to avoid circular import).
-        messages: Message list for invoke.
-        json_schema: Client JSON Schema dict.
-        role: Model role to use (default, fast, think, image, embedding).
-        schema_name: Optional provider schema name.
-        strict: Post-validate parsed output.
-        config: Optional RunnableConfig.
-
-    Returns:
-        Parsed and validated dict.
-
-    Raises:
-        StructuredOutputError: On provider or validation failure.
-    """
-    chat = factory.create_chat_model(role)
-    return await invoke_structured_chat(
-        chat,
-        messages,
-        json_schema=json_schema,
-        schema_name=schema_name,
-        strict=strict,
-        config=config,
-    )
-
-
 __all__ = [
     "StructuredOutputError",
     "ensure_json_keyword_in_messages",
-    "invoke_structured",
     "invoke_structured_chat",
-    "invoke_structured_chat_sync",
-    "invoke_structured_chat_sync_typed",
     "invoke_structured_chat_typed",
     "messages_contain_json_keyword",
     "normalize_structured_result",

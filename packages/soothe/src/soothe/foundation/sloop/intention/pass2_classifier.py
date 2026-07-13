@@ -15,7 +15,7 @@ from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe.utils.llm.structured import invoke_structured_chat
+from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat
 
 from .models import IntakePass2LLMResult, IntakeScope
 from .prompts import INTAKE_PASS2_HUMAN_TASK, INTAKE_PASS2_SYSTEM_PROMPT
@@ -32,8 +32,8 @@ class IntakePass2Classifier:
     """Pass 2: scope classification for work requests (RFC-630 IG-554).
 
     Classifies as trivial, simple, or complex. Prior-goal projection included
-    for reference resolution ("apply it"). No retry on failure — fail-safe to
-    complex so full pipeline runs.
+    for reference resolution ("apply it"). Retries once on structured-output
+    failure, then fail-safe to complex so full pipeline runs.
 
     Args:
         model: Fast LLM for classification.
@@ -63,7 +63,7 @@ class IntakePass2Classifier:
     ) -> IntakePass2LLMResult:
         """Classify work scope as trivial, simple, or complex.
 
-        No retry on failure — fail-safe to complex (full pipeline runs).
+        Retries once on structured-output failure, then fail-safe to complex.
 
         Args:
             query: User input text.
@@ -78,7 +78,7 @@ class IntakePass2Classifier:
             return self._fallback(query)
 
         try:
-            result = await self._classify_llm(
+            result = await self._classify_llm_with_output_retry(
                 query,
                 prior_projection=prior_projection,
                 observability_metadata=observability_metadata,
@@ -97,6 +97,31 @@ class IntakePass2Classifier:
             )
             logger.debug("Pass2 error: %s", exc, exc_info=True)
             return self._fallback(query, error_context=exc)
+
+    async def _classify_llm_with_output_retry(
+        self,
+        query: str,
+        *,
+        prior_projection: str | None = None,
+        observability_metadata: dict[str, str] | None = None,
+        goal_trace: Any | None = None,
+    ) -> IntakePass2LLMResult:
+        """Run Pass 2 LLM classification with one retry on structured-output failure."""
+        try:
+            return await self._classify_llm(
+                query,
+                prior_projection=prior_projection,
+                observability_metadata=observability_metadata,
+                goal_trace=goal_trace,
+            )
+        except StructuredOutputError:
+            logger.warning("Pass2 structured output failed; retrying classification once")
+            return await self._classify_llm(
+                query,
+                prior_projection=prior_projection,
+                observability_metadata=observability_metadata,
+                goal_trace=goal_trace,
+            )
 
     async def _classify_llm(
         self,

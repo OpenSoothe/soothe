@@ -98,3 +98,23 @@ def test_parse_response_falls_back_to_reasoning_content() -> None:
     response.content = ""
     response.additional_kwargs = {"reasoning_content": '```json\n{"word": "GOJSON"}\n```'}
     assert wrapper._parse_response(response) == {"word": "GOJSON"}
+
+
+def test_parse_response_extracts_json_from_content_blocks() -> None:
+    schema = {"type": "object", "properties": {"word": {"type": "string"}}, "required": ["word"]}
+    wrapper = JsonSchemaModelWrapper(
+        MagicMock(),
+        {
+            "type": "json_schema",
+            "json_schema": {"name": "WordReply", "strict": True, "schema": schema},
+        },
+        schema,
+        strict=False,
+    )
+    response = MagicMock()
+    response.content = [
+        {"type": "thinking", "thinking": "plan"},
+        {"type": "text", "text": '{"word": "GOJSON"}'},
+    ]
+    response.additional_kwargs = {}
+    assert wrapper._parse_response(response) == {"word": "GOJSON"}

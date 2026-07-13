@@ -42,10 +42,7 @@ from soothe.utils.llm.schema_wire import (
 from soothe.utils.llm.structured import (
     StructuredOutputError,
     ensure_json_keyword_in_messages,
-    invoke_structured,
     invoke_structured_chat,
-    invoke_structured_chat_sync,
-    invoke_structured_chat_sync_typed,
     invoke_structured_chat_typed,
     messages_contain_json_keyword,
     normalize_structured_result,
@@ -65,11 +62,8 @@ __all__ = [
     "ProviderType",
     "ModelRole",
     # Structured output
-    "invoke_structured",
     "invoke_structured_chat",
     "invoke_structured_chat_typed",
-    "invoke_structured_chat_sync",
-    "invoke_structured_chat_sync_typed",
     "StructuredOutputError",
     "ensure_json_keyword_in_messages",
     "messages_contain_json_keyword",

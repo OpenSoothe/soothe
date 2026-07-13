@@ -131,6 +131,35 @@ async def test_llm_error_fails_safe_to_complex() -> None:
     assert result.scope == IntakeScope.COMPLEX
 
 
+async def test_structured_output_error_retries_once() -> None:
+    """StructuredOutputError should trigger one retry before fail-safe."""
+    from unittest.mock import patch
+
+    from soothe.utils.llm.structured import StructuredOutputError
+
+    mock_model = MagicMock()
+    classifier = IntakePass2Classifier(model=mock_model)
+    with patch(
+        "soothe.foundation.sloop.intention.pass2_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            side_effect=[
+                StructuredOutputError(
+                    "structured model invoke failed: Provider returned empty response for json_schema format. Response object: AIMessage"
+                ),
+                {
+                    "scope": "simple",
+                    "reasoning": "single file task",
+                    "multi_phase": False,
+                    "requires_tool_use": True,
+                },
+            ]
+        ),
+    ) as mock_invoke:
+        result = await classifier.classify("count files in packages")
+    assert result.scope == IntakeScope.SIMPLE
+    assert mock_invoke.await_count == 2
+
+
 async def test_invalid_scope_fails_safe_to_complex() -> None:
     """Invalid scope value should raise and fail-safe."""
     classifier = create_pass2_classifier_with_raw_result({"scope": "invalid", "reasoning": "test"})

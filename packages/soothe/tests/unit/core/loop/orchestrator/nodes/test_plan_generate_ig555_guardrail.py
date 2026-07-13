@@ -111,4 +111,6 @@ async def test_persistent_undersized_plan_fatals_after_max_replans() -> None:
     ctx = _make_ctx(replan_attempts=MAX_UNDERSIZED_PLAN_REPLANS)
     result = await node_plan_generate(ctx, {})
     assert result.get("last_outcome") == "fatal"
+    assert result.get("assess_route") is None
+    assert route_after_plan(result) == "resolve_decision"
     ctx.emit.assert_awaited()

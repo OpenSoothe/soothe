@@ -19,20 +19,10 @@ providers:
     models:
       - glm-5.2
       - qwen3.7-plus
-      - qwen3.6-plus
       - kimi-k2.5
-      - MiniMax-M2.5
+      - kimi-k2.7-code
+      - MiniMax-M3
       - text-embedding-v4  # DashScope OpenAI-compatible text embedding (replaces multimodal-embedding-v1, which 404s in compat mode)
-
-  - name: coding-plan
-    provider_type: openai
-    api_base_url: "${DASHSCOPE_CP_BASE_URL}"
-    api_key: "${DASHSCOPE_CP_API_KEY}"
-    models:
-      - glm-5
-      - qwen3.6-plus
-      - kimi-k2.5
-      - MiniMax-M2.5
 
   - name: agnes
     provider_type: openai
@@ -59,10 +49,20 @@ providers:
 router_profiles:
   - name: production
     router:
-      default: "coding-plan:MiniMax-M2.5"
-      fast: "coding-plan:kimi-k2.5"
-      think: "coding-plan:glm-5"
-      image: "coding-plan:kimi-k2.5"
+      default: "dashscope:glm-5.2"
+      fast: "dashscope:qwen3.6-flash"
+      think: "dashscope:glm-5.2"
+      image: "dashscope:qwen3.7-plus"
+      ocr: "omlx,PaddleOCR-VL-1.5-4bit"
+      embedding: "dashscope:text-embedding-v4"
+    embedding_dims: 768  # must match configured embedding output dimension
+
+  - name: production-minimax
+    router:
+      default: "dashscope:MiniMax-M3"
+      fast: "dashscope:kimi-k2.7-code"
+      think: "dashscope:MiniMax-M3"
+      image: "dashscope:MiniMax-M3"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
       embedding: "dashscope:text-embedding-v4"
     embedding_dims: 768  # must match configured embedding output dimension

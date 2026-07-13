@@ -25,6 +25,7 @@ from ..state import PLAN_ROUTE_EXECUTE, PLAN_ROUTE_GOAL_DONE, PlanRoute
 logger = logging.getLogger(__name__)
 
 _PLAN_GENERATE_STATUS_LABEL = "Generating plan"
+_PLAN_GENERATE_FATAL: dict[str, Any] = {"last_outcome": "fatal", "assess_route": None}
 
 
 async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
@@ -44,7 +45,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             "fatal_error",
             {"error": "plan_generate invoked without prior assessment", "step_id": ""},
         )
-        return {"last_outcome": "fatal"}
+        return _PLAN_GENERATE_FATAL
 
     # IG-476: Log when using fresh-loop bypass assessment
     if assessment.assessment_reasoning and "Fresh-loop bypass" in assessment.assessment_reasoning:
@@ -123,7 +124,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
                         "step_id": "",
                     },
                 )
-                return {"last_outcome": "fatal"}
+                return _PLAN_GENERATE_FATAL
 
             logger.warning(
                 "[PlanGenerate] Undersized plan (%d step) for complex intake at iter=0; "

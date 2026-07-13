@@ -1,13 +1,10 @@
 """Generic model wrappers for limited OpenAI-compatible providers.
 
-These wrappers handle providers with limited OpenAI API compatibility:
-- Only support string tool_choice values, not object format
-- Require json_schema format, not json_object format
-- May return structured output in alternative fields (reasoning_content)
-
-Custom OpenAI-compatible providers (local oMLX, LMStudio, MLXServer):
-- Return structured JSON in reasoning_content field (thinking tokens)
-- Accept json_schema response_format but may return empty content field
+These wrappers adapt non-standard OpenAI-compatible endpoints (DashScope, oMLX,
+LMStudio, vLLM) that may:
+- Only accept string ``tool_choice`` values, not object format
+- Return structured JSON in ``reasoning_content`` or content block lists
+- Return empty ``content`` when ``json_schema`` is used with thinking models
 """
 
 from __future__ import annotations
@@ -22,6 +19,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
+from soothe.utils.llm.response_text import text_from_message_content
 from soothe.utils.llm.schema_wire import build_json_schema_response_format, validate_response_schema
 from soothe.utils.text_preview import preview_first
 
@@ -53,12 +51,56 @@ def _strip_json_text(raw: str) -> str:
     return text
 
 
+def _build_json_schema_model_wrapper(
+    model: BaseChatModel,
+    schema: Any,
+    *,
+    schema_name: str | None,
+    strict: bool,
+) -> JsonSchemaModelWrapper:
+    """Build ``JsonSchemaModelWrapper`` for wire dict or Pydantic schema."""
+    if isinstance(schema, dict):
+        wire_schema = validate_response_schema(schema)
+        from soothe.utils.llm.schema_wire import resolve_schema_name
+
+        name = resolve_schema_name(wire_schema, schema_name)
+        response_format = build_json_schema_response_format(
+            wire_schema,
+            name=name,
+            strict=bool(strict),
+        )
+        return JsonSchemaModelWrapper(
+            model,
+            response_format,
+            wire_schema,
+            strict=bool(strict),
+        )
+
+    json_schema = schema.model_json_schema()
+    name = (
+        schema_name.strip()
+        if isinstance(schema_name, str) and schema_name.strip()
+        else schema.__name__
+    )
+    response_format = build_json_schema_response_format(
+        json_schema,
+        name=name,
+        strict=bool(strict),
+    )
+    return JsonSchemaModelWrapper(
+        model,
+        response_format,
+        schema,
+        strict=bool(strict),
+    )
+
+
 def _extract_json_str_from_response(response: Any) -> str:
     """Extract JSON text from an AIMessage-like provider response."""
     # Check content field first (primary for AIMessage-like objects)
     if hasattr(response, "content"):
         if response.content:
-            return _strip_json_text(str(response.content))
+            return _strip_json_text(text_from_message_content(response.content))
         # content exists but is empty — check reasoning_content before giving up
         if hasattr(response, "additional_kwargs"):
             rc = response.additional_kwargs.get("reasoning_content")
@@ -247,19 +289,11 @@ class JsonSchemaModelWrapper(Runnable):
 
 
 class OpenAICompatModelWrapper(BaseChatModel):
-    """Wrapper that converts json_mode to json_schema for limited provider compatibility.
+    """Route structured-output methods for limited OpenAI-compatible providers.
 
-    Handles providers with limited OpenAI API support:
-    - Rejects response_format={"type": "json_object"}
-    - Accepts response_format={"type": "json_schema", ...}
-    - Only accepts string tool_choice values: "none", "auto", "required"
-
-    Custom OpenAI-compatible providers (local oMLX, LMStudio):
-    - Return structured JSON in reasoning_content field
-
-    Args:
-        model: The original BaseChatModel to wrap.
-        provider_name: Provider name for logging purposes.
+    - ``function_calling`` / ``json_mode``: delegate to the inner LangChain model.
+    - ``json_schema``: ``JsonSchemaModelWrapper`` for ``reasoning_content`` parsing.
+    - ``bind_tools``: sanitize object-form ``tool_choice`` to string values.
     """
 
     def __init__(self, model: BaseChatModel, provider_name: str = "unknown") -> None:
@@ -273,72 +307,61 @@ class OpenAICompatModelWrapper(BaseChatModel):
         self._provider_name = provider_name
 
     def with_structured_output(self, schema: Any, **kwargs: Any) -> Any:
-        """Convert all methods to json_schema format for limited provider compatibility.
+        """Structured output with provider-specific method routing.
 
-        Limited OpenAI providers MUST use json_schema format because:
-        - Reject response_format={"type": "json_object"}
-        - Return structured JSON in reasoning_content (additional_kwargs)
-        - Langchain's default function_calling/json_mode don't handle reasoning_content
-
-        We intercept ALL methods and convert to JsonSchemaModelWrapper which:
-        - Injects response_format={"type": "json_schema", ...}
-        - Checks additional_kwargs["reasoning_content"] for JSON parsing
+        Limited OpenAI providers differ by method:
+        - ``function_calling`` / ``json_mode``: delegate to the inner model so
+          thinking models (Kimi, MiniMax) can return tool args or json_object
+          output instead of empty ``content`` with reasoning tokens only.
+        - ``json_schema``: use ``JsonSchemaModelWrapper`` which injects
+          ``response_format`` and parses ``reasoning_content`` (oMLX, GLM).
 
         Args:
             schema: Pydantic model class or client JSON Schema dict.
             **kwargs: ``schema_name``, ``strict``, and method (intercepted).
 
         Returns:
-            JsonSchemaModelWrapper with reasoning_content handling.
+            JsonSchemaModelWrapper for ``json_schema``; inner runnable otherwise.
         """
         method = kwargs.pop("method", "json_mode")
         schema_name = kwargs.pop("schema_name", None)
         strict = kwargs.pop("strict", True)
 
-        # ALWAYS use JsonSchemaModelWrapper for custom OpenAI-compatible providers
-        # This ensures we check additional_kwargs["reasoning_content"] field
+        if method in ("function_calling", "json_mode"):
+            delegate_kwargs: dict[str, Any] = {"method": method, **kwargs}
+            if schema_name is not None:
+                delegate_kwargs["schema_name"] = schema_name
+            if method == "function_calling":
+                delegate_kwargs["strict"] = strict
+                if isinstance(kwargs.get("tool_choice"), dict):
+                    logger.debug(
+                        "OpenAICompatModelWrapper sanitizing object-form tool_choice for structured output (provider=%s)",
+                        self._provider_name,
+                    )
+                    delegate_kwargs["tool_choice"] = "auto"
+            # json_mode: omit strict — LangChain rejects it; invoke_structured_chat post-validates.
+            return self._model.with_structured_output(schema, **delegate_kwargs)
+
+        # json_schema (explicit) — JsonSchemaModelWrapper for reasoning_content
         try:
-            if isinstance(schema, dict):
-                wire_schema = validate_response_schema(schema)
-                from soothe.utils.llm.schema_wire import resolve_schema_name
-
-                name = resolve_schema_name(wire_schema, schema_name)
-                response_format = build_json_schema_response_format(
-                    wire_schema,
-                    name=name,
-                    strict=bool(strict),
-                )
-                return JsonSchemaModelWrapper(
-                    self._model,
-                    response_format,
-                    wire_schema,
-                    strict=bool(strict),
-                )
-
-            json_schema = schema.model_json_schema()
-            name = (
-                schema_name.strip()
-                if isinstance(schema_name, str) and schema_name.strip()
-                else schema.__name__
-            )
-            response_format = build_json_schema_response_format(
-                json_schema,
-                name=name,
-                strict=bool(strict),
-            )
-            return JsonSchemaModelWrapper(
+            return _build_json_schema_model_wrapper(
                 self._model,
-                response_format,
                 schema,
-                strict=bool(strict),
+                schema_name=schema_name,
+                strict=strict,
             )
         except Exception:
             logger.debug(
                 "Failed to convert schema to json_schema format, falling back",
                 exc_info=True,
             )
-            # Fallback: delegate to base model (may fail with reasoning_content)
-            return self._model.with_structured_output(schema, method=method, **kwargs)
+            return self._model.with_structured_output(
+                schema,
+                method=method,
+                schema_name=schema_name,
+                strict=strict,
+                **kwargs,
+            )
 
     def bind_tools(self, tools: list[Any], **kwargs: Any) -> Any:
         """Intercept tool_choice parameter for limited providers.

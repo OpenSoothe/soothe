@@ -147,6 +147,8 @@ def route_after_plan(state: dict[str, Any]) -> str:
     """Branch to goal completion synthesis vs execute pipeline."""
     if _pending_clarification(state):
         return "await_clarification"
+    if state.get("last_outcome") == "fatal":
+        return "resolve_decision"
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
         return "goal_completion"
     if state.get("assess_route") == "continue_generate":

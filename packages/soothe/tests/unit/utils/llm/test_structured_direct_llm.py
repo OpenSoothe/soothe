@@ -254,6 +254,27 @@ async def test_invoke_structured_chat_applies_normalize_before_validation() -> N
     inner.ainvoke = AsyncMock(
         return_value=AIMessage(content='{"answers": ["pushed commit to origin"]}'),
     )
+    fc_runnable = MagicMock()
+    fc_runnable.ainvoke = AsyncMock(
+        side_effect=RuntimeError(
+            "tool_choice parameter does not support being set to required in thinking mode"
+        )
+    )
+    json_mode_runnable = MagicMock()
+    json_mode_runnable.ainvoke = AsyncMock(
+        side_effect=RuntimeError("json_object must contain the word json")
+    )
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **_kwargs: object
+    ) -> MagicMock:
+        if method == "function_calling":
+            return fc_runnable
+        if method == "json_mode":
+            return json_mode_runnable
+        return json_mode_runnable
+
+    inner.with_structured_output = MagicMock(side_effect=_with_structured_output)
     chat = OpenAICompatModelWrapper(inner, provider_name="test")
 
     out = await invoke_structured_chat(
@@ -276,8 +297,189 @@ def test_limited_provider_wrapper_dict_schema() -> None:
         _WORD_SCHEMA,
         schema_name="WordReply",
         strict=True,
+        method="json_schema",
     )
     assert isinstance(out, JsonSchemaModelWrapper)
+
+
+def test_limited_provider_wrapper_delegates_function_calling() -> None:
+    inner = MagicMock(spec=["with_structured_output"])
+    inner.with_structured_output.return_value = "fc-runnable"
+    wrapped = OpenAICompatModelWrapper(inner, "dashscope")
+    out = wrapped.with_structured_output(
+        _WORD_SCHEMA,
+        method="function_calling",
+        strict=True,
+        tool_choice="auto",
+    )
+    assert out == "fc-runnable"
+    inner.with_structured_output.assert_called_once_with(
+        _WORD_SCHEMA,
+        method="function_calling",
+        strict=True,
+        tool_choice="auto",
+    )
+
+
+def test_limited_provider_wrapper_delegates_json_mode_without_strict() -> None:
+    """json_mode bind must not pass strict= through the compat wrapper."""
+    inner = MagicMock(spec=["with_structured_output"])
+    inner.with_structured_output.return_value = "json-mode-runnable"
+    wrapped = OpenAICompatModelWrapper(inner, "dashscope")
+
+    out = wrapped.with_structured_output(_WORD_SCHEMA, method="json_mode", strict=True)
+    assert out == "json-mode-runnable"
+    inner.with_structured_output.assert_called_once_with(
+        _WORD_SCHEMA,
+        method="json_mode",
+    )
+
+    inner.with_structured_output.reset_mock()
+    out_default = wrapped.with_structured_output(_WORD_SCHEMA, strict=True)
+    assert out_default == "json-mode-runnable"
+    inner.with_structured_output.assert_called_once_with(_WORD_SCHEMA, method="json_mode")
+
+
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_binds_json_mode_through_compat_wrapper() -> None:
+    """method=None/json_mode must bind on OpenAICompatModelWrapper (no strict=)."""
+    inner = MagicMock()
+    json_mode_runnable = MagicMock()
+    json_mode_runnable.ainvoke = AsyncMock(return_value={"word": "OK"})
+    fc_runnable = MagicMock()
+    fc_runnable.ainvoke = AsyncMock(side_effect=[None, None])
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **kwargs: object
+    ) -> MagicMock:
+        assert "strict" not in kwargs or method == "function_calling"
+        if method == "json_mode" or method is None:
+            return json_mode_runnable
+        if method == "function_calling":
+            return fc_runnable
+        raise RuntimeError(f"unexpected method {method!r}")
+
+    inner.with_structured_output = MagicMock(side_effect=_with_structured_output)
+    chat = OpenAICompatModelWrapper(inner, "dashscope")
+
+    out = await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+    )
+    assert out == {"word": "OK"}
+    assert json_mode_runnable.ainvoke.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_retries_function_calling_after_none() -> None:
+    """Thinking models may skip the tool call once; retry before method fallback."""
+    chat = MagicMock()
+    fc_runnable = MagicMock()
+    fc_runnable.ainvoke = AsyncMock(side_effect=[None, {"word": "OK"}])
+    json_schema_runnable = MagicMock()
+    json_schema_runnable.ainvoke = AsyncMock(
+        side_effect=ValueError(
+            "Provider returned empty response for json_schema format. Response object: AIMessage"
+        )
+    )
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **_kwargs: object
+    ) -> MagicMock:
+        if method == "json_schema":
+            return json_schema_runnable
+        return fc_runnable
+
+    chat.with_structured_output = MagicMock(side_effect=_with_structured_output)
+
+    out = await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+    )
+    assert out == {"word": "OK"}
+    assert fc_runnable.ainvoke.await_count == 2
+    json_schema_runnable.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_retries_empty_json_schema_once() -> None:
+    """Empty json_schema output may succeed on immediate retry (thinking models)."""
+    chat = MagicMock()
+    json_schema_runnable = MagicMock()
+    empty_err = ValueError(
+        "Provider returned empty response for json_schema format. Response object: AIMessage"
+    )
+    json_schema_runnable.ainvoke = AsyncMock(side_effect=[empty_err, {"word": "OK"}])
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **_kwargs: object
+    ) -> MagicMock:
+        if method == "json_schema":
+            return json_schema_runnable
+        raise RuntimeError(f"unexpected method {method!r}")
+
+    chat.with_structured_output = MagicMock(side_effect=_with_structured_output)
+
+    out = await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+    )
+    assert out == {"word": "OK"}
+    assert json_schema_runnable.ainvoke.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_invoke_structured_chat_retries_after_empty_json_schema_response() -> None:
+    """Empty json_schema output is retriable so thinking models can fall back."""
+    chat = MagicMock()
+    json_schema_runnable = MagicMock()
+    fc_runnable = MagicMock()
+    thinking_err = RuntimeError(
+        "tool_choice parameter does not support being set to required in thinking mode"
+    )
+
+    def _with_structured_output(
+        _schema: object, method: str | None = None, **_kwargs: object
+    ) -> MagicMock:
+        if method == "json_schema":
+            return json_schema_runnable
+        if method == "function_calling":
+            return fc_runnable
+        raise RuntimeError(f"unexpected method {method!r}")
+
+    chat.with_structured_output = MagicMock(side_effect=_with_structured_output)
+
+    # Prime cache: function_calling fails, json_schema succeeds.
+    fc_runnable.ainvoke = AsyncMock(side_effect=thinking_err)
+    json_schema_runnable.ainvoke = AsyncMock(return_value={"word": "cached"})
+    await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+    )
+
+    empty_err = ValueError(
+        "Provider returned empty response for json_schema format. Response object: AIMessage"
+    )
+    json_schema_runnable.ainvoke = AsyncMock(side_effect=empty_err)
+    fc_runnable.ainvoke = AsyncMock(return_value={"word": "OK"})
+    fc_calls_before = fc_runnable.ainvoke.await_count
+
+    out = await invoke_structured_chat(
+        chat,
+        [HumanMessage(content="hi")],
+        json_schema=_WORD_SCHEMA,
+        schema_name="WordReply",
+    )
+    assert out == {"word": "OK"}
+    assert fc_runnable.ainvoke.await_count == fc_calls_before + 1
 
 
 @pytest.mark.asyncio
