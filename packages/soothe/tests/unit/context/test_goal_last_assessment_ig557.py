@@ -98,4 +98,4 @@ async def test_assess_status_writes_ce_not_ledger() -> None:
     stored = ce.get_goal_sync(goal.id)
     assert stored is not None
     assert stored.last_assessment["status"] == "continue"
-    assert stored.last_assessment["goal_progress"] == "low"
+    assert stored.last_assessment["goal_progress"] == "none"

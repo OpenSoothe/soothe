@@ -98,7 +98,7 @@ def test_assess_respects_gap_rejects_complete() -> None:
         distance_from_goal="moderate",
         gap_reasoning="tests missing",
     )
-    assessment = StatusAssessment(status="continue", goal_progress="complete")
+    assessment = StatusAssessment(status="done", goal_progress="complete")
     assert assess_respects_gap_analysis(assessment, gap) is False
 
 

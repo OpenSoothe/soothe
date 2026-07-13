@@ -75,7 +75,7 @@ def _make_ctx(
     strange_loop._build_plan_context.return_value = PlanContext()
     strange_loop.plan_phase.assess_status = AsyncMock(
         return_value=StatusAssessment(
-            status="continue",
+            status="done",
             goal_progress="complete",
             assessment_reasoning="Premature complete.",
             require_goal_completion=False,

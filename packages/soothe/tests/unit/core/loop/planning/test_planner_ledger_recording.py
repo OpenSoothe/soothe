@@ -76,7 +76,7 @@ async def test_assess_status_persists_ce_last_assessment_not_ledger() -> None:
     assert stored.last_assessment_iteration == 1
     assert stored.last_assessment is not None
     assert stored.last_assessment["status"] == "continue"
-    assert stored.last_assessment["goal_progress"] == "low"
+    assert stored.last_assessment["goal_progress"] == "none"
     assert "need more evidence" in stored.last_assessment["assessment_reasoning"]
 
 
