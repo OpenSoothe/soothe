@@ -22,6 +22,7 @@ from typing import Any
 LOOP_ASSISTANT_OUTPUT_PHASES: frozenset[str] = frozenset(
     {
         "goal_completion",
+        "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
         "chitchat",
         "autonomous_goal",
         "direct_model",

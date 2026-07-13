@@ -538,3 +538,73 @@ async def test_mount_file_change_preview_propagates_cancelled_error() -> None:
         )
 
     assert "tc-cancel" not in adapter._file_change_previews_shown
+
+
+@pytest.mark.asyncio
+async def test_finalize_file_change_preview_resolves_provider_call_id_alias() -> None:
+    """Finalize finds a widget mounted under a stream-predicted id alias."""
+    adapter = MagicMock()
+    adapter._file_change_previews_shown = set()
+    adapter._file_change_widgets = {}
+    adapter._mount_message = AsyncMock()
+
+    args = {
+        "file_path": "/tmp/baidu.go",
+        "old_string": "before",
+        "new_string": "after",
+    }
+    await mount_file_change_preview(
+        adapter,
+        tool_name="edit_file",
+        args=args,
+        tool_call_id="VSX_07:s:edit_file:0",
+        assistant_id=None,
+    )
+    widget = adapter._file_change_widgets["VSX_07:s:edit_file:0"]
+    assert widget._action_label == "Editing"
+
+    record = FileOperationRecord(
+        tool_name="edit_file",
+        display_path="/tmp/baidu.go",
+        physical_path=None,
+        tool_call_id="VSX_07:s:call_f4315f7a2e5a41f9aba59674",
+        before_content="before",
+        after_content="after",
+    )
+    handled = await finalize_file_change_preview(adapter, record=record)
+
+    assert handled is True
+    assert widget._finalized is True
+    assert widget._action_label == "Edited"
+
+
+@pytest.mark.asyncio
+async def test_mount_file_change_preview_skips_alias_duplicate() -> None:
+    """Wire/provider ids do not mount a second card when stream id already exists."""
+    adapter = MagicMock()
+    adapter._file_change_previews_shown = set()
+    adapter._file_change_widgets = {}
+    adapter._mount_message = AsyncMock()
+
+    args = {
+        "file_path": "/tmp/baidu.go",
+        "old_string": "before",
+        "new_string": "after",
+    }
+    await mount_file_change_preview(
+        adapter,
+        tool_name="edit_file",
+        args=args,
+        tool_call_id="VSX_07:s:edit_file:0",
+        assistant_id=None,
+    )
+    await mount_file_change_preview(
+        adapter,
+        tool_name="edit_file",
+        args=args,
+        tool_call_id="VSX_07:s:call_f4315f7a2e5a41f9aba59674",
+        assistant_id=None,
+    )
+
+    assert adapter._mount_message.await_count == 1
+    assert len(adapter._file_change_widgets) == 1

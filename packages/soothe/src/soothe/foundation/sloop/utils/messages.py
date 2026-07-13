@@ -175,6 +175,7 @@ class LoopHumanMessage(HumanMessage):
             "execute_wave",  # Parallel execution wave
             "execute_step",  # Single step execution
             "goal_completion",  # Goal completion phase
+            "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
             "chitchat",  # Chitchat intake fast-path (piggybacked response)
         ]
         | None

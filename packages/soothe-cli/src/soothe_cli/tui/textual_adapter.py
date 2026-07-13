@@ -115,7 +115,6 @@ from soothe_cli.runtime.presentation.subagent_task_display import (
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOpTracker,
-    file_change_action_label,
     track_file_operation,
 )
 from soothe_cli.runtime.state.session_stats import (
@@ -146,7 +145,7 @@ from soothe_cli.tui._cli_context import CLIContext
 from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
 from soothe_cli.tui.file_change_notify import (
-    finalize_file_change_preview,
+    complete_file_change_preview,
     mount_file_change_preview,
 )
 from soothe_cli.tui.hooks import dispatch_hook
@@ -171,7 +170,6 @@ from soothe_cli.tui.widgets.messages import (
     CognitionGoalTreeMessage,
     CognitionReasonMessage,
     CognitionStepMessage,
-    DiffMessage,
     SummarizationMessage,
     create_subagent_card,
     flush_deferred_tools_refreshes,
@@ -3132,7 +3130,7 @@ async def execute_task_textual(
                                     adapter, clarification_pending=clarification_pending
                                 )
 
-                            # Finalize mounted file previews in place; fall back to DiffMessage
+                            # Finalize mounted file previews in place; mount completed card if needed
                             if record and record.tool_name in FILE_CHANGE_TOOLS:
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
@@ -3144,18 +3142,11 @@ async def execute_task_textual(
                                         router=router,
                                     )
                                     pending_text_by_namespace[ns_key] = ""
-                                finalized = await finalize_file_change_preview(
+                                await complete_file_change_preview(
                                     adapter,
                                     record=record,
+                                    assistant_id=adapter._file_preview_assistant_id,
                                 )
-                                if not finalized and record.diff:
-                                    await adapter._mount_message(
-                                        DiffMessage(
-                                            record.diff,
-                                            record.display_path,
-                                            action_label=file_change_action_label(record),
-                                        )
-                                    )
                             continue
 
                         # Extract token usage (before content_blocks check — usage may

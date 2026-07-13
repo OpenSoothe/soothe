@@ -551,6 +551,19 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             "Fatal error detected, aborting loop: %s",
             fatal_errors[0].error,
         )
+        # RFC-214: write a `goal_interrupted` ledger marker so the next goal's
+        # planning projection can bound this goal's partial segment and surface
+        # what was done. Must precede checkpoint save/emit so the digest reads
+        # the still-current loop state.
+        from soothe.foundation.sloop.engine.goal_interrupt_record import (
+            append_goal_interrupted_ledger_pair,
+        )
+
+        await append_goal_interrupted_ledger_pair(
+            ctx,
+            reason="fatal_error",
+            detail=fatal_errors[0].error or "",
+        )
         if goal_record is not None:
             goal_record.status = "failed"
             goal_record.completed_at = datetime.now(UTC)

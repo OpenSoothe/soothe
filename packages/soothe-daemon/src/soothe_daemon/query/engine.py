@@ -732,6 +732,15 @@ class QueryEngine:
                         cancelled,
                         lid[:16],
                     )
+                    # RFC-214: also write a `goal_interrupted` ledger marker so the
+                    # next goal's planning projection can bound this cancelled
+                    # goal's partial segment and surface what was done. Best-effort;
+                    # failures are swallowed inside the helper.
+                    from soothe_daemon.query.goal_interrupt_persistence import (
+                        mark_cancelled_goal_interrupted,
+                    )
+
+                    await mark_cancelled_goal_interrupted(self._daemon._config, lid, reason=reason)
                 return cancelled
             finally:
                 close = getattr(persistence, "close", None)

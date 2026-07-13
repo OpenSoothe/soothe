@@ -58,6 +58,9 @@ async def emit_rate_limit_terminal(ctx: LoopRuntimeContext) -> None:
     """Emit failure completion after consecutive rate limit errors."""
     from datetime import UTC, datetime
 
+    from soothe.foundation.sloop.engine.goal_interrupt_record import (
+        append_goal_interrupted_ledger_pair,
+    )
     from soothe.foundation.sloop.state.schemas import PlanResult
     from soothe.foundation.sloop.utils.reflection import _default_agent_decision
 
@@ -65,6 +68,14 @@ async def emit_rate_limit_terminal(ctx: LoopRuntimeContext) -> None:
     goal_record = ctx.goal_record
     state_manager = ctx.state_manager
     checkpoint = ctx.checkpoint
+
+    # RFC-214: mark the goal's partial work before the terminal status is set
+    # so the next goal's planning projection can bound this segment.
+    await append_goal_interrupted_ledger_pair(
+        ctx,
+        reason="rate_limited",
+        detail=f"{int(getattr(checkpoint.thread_health_metrics, 'consecutive_rate_limit_errors', 0) or 0)} consecutive rate-limit errors",
+    )
 
     if goal_record is not None:
         goal_record.status = "failed"

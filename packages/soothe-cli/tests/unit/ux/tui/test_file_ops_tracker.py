@@ -179,3 +179,71 @@ def test_apply_diff_produces_diff(tmp_path: Path) -> None:
     assert "-print('old')" in record.diff
     assert "+print('new')" in record.diff
     assert file_change_action_label(record) == "Patched"
+
+
+def test_edit_file_completes_with_provider_call_id_alias(tmp_path: Path) -> None:
+    """Stream-predicted id can complete when ToolMessage uses opaque call_* id."""
+    target = tmp_path / "baidu.go"
+    target.write_text("before\n", encoding="utf-8")
+    tracker = FileOpTracker(assistant_id=None)
+    predicted_id = "VSX_07:s:edit_file:0"
+    provider_id = "VSX_07:s:call_f4315f7a2e5a41f9aba59674"
+    track_file_operation(
+        tracker,
+        "edit_file",
+        {
+            "file_path": str(target),
+            "old_string": "before",
+            "new_string": "after",
+        },
+        predicted_id,
+    )
+
+    target.write_text("after\n", encoding="utf-8")
+    record = tracker.complete_with_message(
+        SimpleNamespace(
+            tool_call_id=provider_id,
+            name="edit_file",
+            content=f"Successfully replaced 1 instance(s) in '{target}'",
+            status="success",
+        )
+    )
+
+    assert record is not None
+    assert predicted_id not in tracker.active
+    assert record.diff is not None
+    assert "-before" in record.diff
+    assert "+after" in record.diff
+
+
+def test_edit_file_alias_requires_unique_match_when_multiple_pending(tmp_path: Path) -> None:
+    """Ambiguous alias candidates without path disambiguation do not complete."""
+    file_a = tmp_path / "a.go"
+    file_b = tmp_path / "b.go"
+    file_a.write_text("a\n", encoding="utf-8")
+    file_b.write_text("b\n", encoding="utf-8")
+    tracker = FileOpTracker(assistant_id=None)
+    track_file_operation(
+        tracker,
+        "edit_file",
+        {"file_path": str(file_a), "old_string": "a", "new_string": "A"},
+        "VSX_07:s:edit_file:0",
+    )
+    track_file_operation(
+        tracker,
+        "edit_file",
+        {"file_path": str(file_b), "old_string": "b", "new_string": "B"},
+        "VSX_07:s:edit_file:1",
+    )
+
+    record = tracker.complete_with_message(
+        SimpleNamespace(
+            tool_call_id="VSX_07:s:call_abc123",
+            name="edit_file",
+            content="ok",
+            status="success",
+        )
+    )
+
+    assert record is None
+    assert len(tracker.active) == 2

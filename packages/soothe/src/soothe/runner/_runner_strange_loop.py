@@ -149,6 +149,119 @@ async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
         logger.debug("Loop interrupt touch failed for %s", loop_id, exc_info=True)
 
 
+async def _mark_interrupted_goal_ledger(config: Any, loop_id: str) -> None:
+    """Best-effort ``goal_interrupted`` ledger marker after a cancelled run.
+
+    The daemon's ``_mark_active_context_goals_cancelled`` is the primary writer,
+    but a hard client disconnect lands in the runner's cancel ``finally`` block
+    without it. This delegates to the same daemon-side helper when available,
+    else falls back to a direct CE-persistence write. Swallows all errors.
+    """
+    try:
+        try:
+            from soothe_daemon.query.goal_interrupt_persistence import (
+                mark_cancelled_goal_interrupted,
+            )
+        except ImportError:
+            # Non-daemon runner (e.g. headless CLI): write directly to CE persistence.
+            await _write_interrupted_marker_via_ce_persistence(
+                config, loop_id, reason="client_disconnect"
+            )
+            return
+        await mark_cancelled_goal_interrupted(config, loop_id, reason="client_disconnect")
+    except Exception:
+        logger.debug("Interrupted-goal ledger marker failed for %s", loop_id, exc_info=True)
+
+
+async def _write_interrupted_marker_via_ce_persistence(
+    config: Any, loop_id: str, *, reason: str
+) -> None:
+    """Direct CE-persistence writer for the non-daemon runner fallback path."""
+    from soothe.foundation.context.persistence.factory import (
+        resolve_context_engine_persistence,
+    )
+
+    persistence = resolve_context_engine_persistence(config, loop_id)
+    try:
+        ledger = await persistence.load_ledger()
+        digest = _build_interrupted_digest_from_ledger_entries(ledger or [], reason=reason)
+        if not digest:
+            return
+        ledger = list(ledger or [])
+        ledger.append(
+            {
+                "type": "human",
+                "content": "Goal interrupted before completion. Partial-work digest follows.",
+                "additional_kwargs": {"phase": "goal_interrupted"},
+                "metadata": {"phase": "goal_interrupted"},
+            }
+        )
+        ledger.append(
+            {
+                "type": "ai",
+                "content": digest,
+                "additional_kwargs": {"phase": "goal_interrupted"},
+                "metadata": {"phase": "goal_interrupted"},
+            }
+        )
+        await persistence.save_ledger(ledger)
+    finally:
+        close = getattr(persistence, "close", None)
+        if callable(close):
+            maybe_coro = close()
+            if asyncio.iscoroutine(maybe_coro):
+                await maybe_coro
+
+
+def _build_interrupted_digest_from_ledger_entries(ledger: list[Any], *, reason: str) -> str:
+    """Deterministic digest of partial execute_step work from serialized ledger rows."""
+    excerpts: list[str] = []
+    seen_prefixes: set[str] = set()
+    for entry in reversed(ledger):
+        if not isinstance(entry, dict):
+            continue
+        if len(excerpts) >= 3:
+            break
+        md = entry.get("additional_kwargs") or {}
+        if not (isinstance(md, dict) and md.get("phase") == "execute_step"):
+            phase = entry.get("phase")
+            if phase != "execute_step":
+                continue
+        t = str(entry.get("type") or "").strip().lower()
+        if t not in ("ai", "aimessage", "loopaimessage"):
+            continue
+        content = entry.get("content")
+        if isinstance(content, list):
+            text = "".join(
+                b["text"] for b in content if isinstance(b, dict) and isinstance(b.get("text"), str)
+            )
+        elif isinstance(content, str):
+            text = content
+        else:
+            text = ""
+        text = text.strip()
+        if not text:
+            continue
+        prefix = text[:64]
+        if prefix in seen_prefixes:
+            continue
+        seen_prefixes.add(prefix)
+        excerpts.append(text[:240])
+    if not excerpts:
+        return ""
+    excerpts.reverse()
+    parts = [
+        f"Goal interrupted ({reason}).",
+        "Evidence produced (oldest first):\n" + "\n\n".join(excerpts),
+        "Remaining: the new request should resume from the last completed step; "
+        "do not redo work whose evidence appears above.",
+    ]
+    digest = "\n\n".join(parts)
+    if len(digest) > 1200:
+        digest = digest[:1199].rstrip() + "…"
+    return digest
+
+
 def _is_tool_stream_chunk(chunk: object) -> bool:
     """Return True if chunk is a ``messages``-mode LangGraph chunk carrying a tool result.
 
@@ -853,6 +966,11 @@ class StrangeLoopMixin:
         finally:
             if interrupted:
                 await _touch_loop_after_interrupt(self._config, strange_loop_id)
+                # RFC-214: best-effort `goal_interrupted` ledger marker for the
+                # cancelled goal's partial work. The daemon cancel path
+                # (``_mark_active_context_goals_cancelled``) normally writes this,
+                # but a hard client disconnect lands here too. Swallowed on failure.
+                await _mark_interrupted_goal_ledger(self._config, strange_loop_id)
             if increment_ai_message_count:
                 await _increment_loop_ai_message_count(self._config, strange_loop_id)
             await heartbeat_handle.stop()

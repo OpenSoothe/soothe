@@ -46,9 +46,18 @@ class ProjectedExecuteStepInput:
 
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
-_NEW_GOAL_LEDGER_PHASES = frozenset({"intent_classify", "plan_generate", "goal_completion"})
+_NEW_GOAL_LEDGER_PHASES = frozenset(
+    {"intent_classify", "plan_generate", "goal_completion", "goal_interrupted"}
+)
 _PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"plan_assess"})
 _MID_GOAL_CURRENT_PHASES = frozenset({"intent_classify", "plan_generate", "execute_step"})
+
+# RFC-214: phases that mark a goal segment boundary. ``goal_completion`` is the
+# success terminal; ``goal_interrupted`` is the non-success terminal marker
+# (cancel/fatal/max-iter) carrying the goal's partial-work digest. Projection
+# treats both as segment boundaries so an interrupted goal's ``execute_step``
+# rows do not bleed into the next goal's "current segment".
+_GOAL_TERMINAL_PHASES: frozenset[str] = frozenset({"goal_completion", "goal_interrupted"})
 
 # IG-555: Boundary marker for prior goal completion in planning projections.
 # Prevents planner anchoring on prior "Recommended next actions" instead of
@@ -279,10 +288,16 @@ def project_loop_messages_for_plan(
 
 
 def _current_goal_segment_start(loop_messages: list[BaseMessage]) -> int:
-    """Return index after the last prior-goal ``goal_completion`` AI row."""
+    """Return index after the last prior-goal terminal AI row.
+
+    A goal segment boundary is marked by either a ``goal_completion`` (success)
+    or ``goal_interrupted`` (cancel/fatal/max-iter) AI row. Both terminate the
+    prior goal's segment so its ``execute_step`` rows do not bleed into the
+    next goal's current-segment projection.
+    """
     for i in range(len(loop_messages) - 1, -1, -1):
         msg = loop_messages[i]
-        if getattr(msg, "phase", None) == "goal_completion" and _is_loop_ai_message(msg):
+        if getattr(msg, "phase", None) in _GOAL_TERMINAL_PHASES and _is_loop_ai_message(msg):
             return i + 1
     return 0
 
@@ -548,21 +563,25 @@ def _compact_goal_completion_units_in_messages(
     *,
     include_boundary: bool,
 ) -> list[BaseMessage]:
-    """Rewrite ``goal_completion`` pairs in a flat ledger slice for planner prompts."""
+    """Rewrite terminal (completion/``interrupted``) pairs in a flat ledger slice.
+
+    Adjacent Human+AI pairs for ``goal_completion`` **or** ``goal_interrupted``
+    are compacted via their phase-specific rewriter; other rows pass through.
+    """
     out: list[BaseMessage] = []
     i = 0
     while i < len(messages):
         msg = messages[i]
         phase = getattr(msg, "phase", None)
         if (
-            phase == "goal_completion"
+            phase in _GOAL_TERMINAL_PHASES
             and _is_loop_human_message(msg)
             and i + 1 < len(messages)
-            and getattr(messages[i + 1], "phase", None) == "goal_completion"
+            and getattr(messages[i + 1], "phase", None) == phase
             and _is_loop_ai_message(messages[i + 1])
         ):
             out.extend(
-                _compact_goal_completion_unit_for_projection(
+                _compact_terminal_unit_for_projection(
                     [msg, messages[i + 1]],
                     include_boundary=include_boundary,
                 )
@@ -602,6 +621,64 @@ def _compact_goal_completion_unit_for_projection(
             copy_msg = _set_message_content(copy_msg, compact_human)
         out.append(copy_msg)
     return out
+
+
+def _compact_goal_interrupted_unit_for_projection(
+    unit: list[BaseMessage],
+    *,
+    include_boundary: bool = False,
+) -> list[BaseMessage]:
+    """Rewrite goal_interrupted human envelopes for downstream prompt projection.
+
+    Unlike completed goals, interrupted goals' leftover work SHOULD anchor the
+    new plan — that is the whole point of carry-forward. So the IG-555
+    anti-anchoring boundary marker is NOT applied by default; the human envelope
+    is rewritten to a short label naming the interrupt cause.
+
+    Args:
+        unit: Human/AI pair for a goal_interrupted ledger phase.
+        include_boundary: When True, prepend IG-555 boundary marker (rarely
+            wanted for interrupted goals; provided for parity).
+
+    Returns:
+        Deep-copied unit with rewritten human envelope.
+    """
+    compact_human = "Prior goal was interrupted before completion. Partial-work digest follows."
+    if include_boundary:
+        compact_human = _GOAL_COMPLETION_CONTEXT_BOUNDARY + compact_human
+    out: list[BaseMessage] = []
+    for msg in unit:
+        copy_msg = _deep_copy_message(msg)
+        if getattr(copy_msg, "phase", None) == "goal_interrupted" and _is_loop_human_message(
+            copy_msg
+        ):
+            copy_msg = _set_message_content(copy_msg, compact_human)
+        out.append(copy_msg)
+    return out
+
+
+def _compact_terminal_unit_for_projection(
+    unit: list[BaseMessage],
+    *,
+    include_boundary: bool = True,
+) -> list[BaseMessage]:
+    """Dispatch a terminal unit to its phase-specific compaction.
+
+    ``goal_completion`` units use the IG-555 anti-anchoring boundary by default;
+    ``goal_interrupted`` units do not (their leftover work should anchor).
+    """
+    # Detect the unit's phase from its first human/AI row.
+    phase = None
+    for msg in unit:
+        p = getattr(msg, "phase", None)
+        if p in _GOAL_TERMINAL_PHASES:
+            phase = p
+            break
+    if phase == "goal_interrupted":
+        return _compact_goal_interrupted_unit_for_projection(
+            unit, include_boundary=include_boundary
+        )
+    return _compact_goal_completion_unit_for_projection(unit, include_boundary=include_boundary)
 
 
 def project_last_goal_completion_for_intake(
@@ -694,30 +771,38 @@ def _execute_plan_tail_index(loop_messages: list[BaseMessage]) -> int:
 
 def _goal_segment_start(loop_messages: list[BaseMessage], unit_start: int) -> int:
     """Return index where the goal segment containing ``unit_start`` began."""
-    seg_after_prev_gc = 0
+    seg_after_prev_terminal = 0
     for i in range(unit_start - 1, -1, -1):
         msg = loop_messages[i]
-        if getattr(msg, "phase", None) == "goal_completion" and _is_loop_ai_message(msg):
-            seg_after_prev_gc = i + 1
+        if getattr(msg, "phase", None) in _GOAL_TERMINAL_PHASES and _is_loop_ai_message(msg):
+            seg_after_prev_terminal = i + 1
             break
-    for i in range(seg_after_prev_gc, unit_start):
+    for i in range(seg_after_prev_terminal, unit_start):
         if getattr(loop_messages[i], "phase", None) == "intent_classify":
             return i
-    return seg_after_prev_gc
+    return seg_after_prev_terminal
 
 
 def _find_last_phase_pair_indices(
     loop_messages: list[BaseMessage],
     before_index: int,
-    phase: str,
+    phase: str | frozenset[str],
 ) -> tuple[int, int] | None:
-    """Return ``(human_idx, ai_idx)`` for the last ``phase`` pair ending before ``before_index``."""
+    """Return ``(human_idx, ai_idx)`` for the last ``phase`` pair ending before ``before_index``.
+
+    ``phase`` may be a single phase string or a frozenset of phases; the AI row
+    matches if its ``phase`` is in the set. ``_GOAL_TERMINAL_PHASES`` (both
+    ``goal_completion`` and ``goal_interrupted``) is the set used by cross-goal
+    projection so interrupted goals' partial-work digests are surfaced alongside
+    completions.
+    """
     if before_index <= 0:
         return None
+    phases = frozenset({phase}) if isinstance(phase, str) else phase
     ai_idx: int | None = None
     for i in range(before_index - 1, -1, -1):
         msg = loop_messages[i]
-        if getattr(msg, "phase", None) == phase and _is_loop_ai_message(msg):
+        if getattr(msg, "phase", None) in phases and _is_loop_ai_message(msg):
             ai_idx = i
             break
     if ai_idx is None:
@@ -725,7 +810,7 @@ def _find_last_phase_pair_indices(
     human_idx: int | None = None
     for j in range(ai_idx - 1, -1, -1):
         msg = loop_messages[j]
-        if getattr(msg, "phase", None) == phase and _is_loop_human_message(msg):
+        if getattr(msg, "phase", None) in phases and _is_loop_human_message(msg):
             human_idx = j
             break
     if human_idx is not None:
@@ -737,8 +822,31 @@ def resolve_goal_completion_unit(
     loop_messages: list[BaseMessage],
     before_index: int,
 ) -> tuple[list[BaseMessage], int] | None:
-    """Resolve one prior-goal ``goal_completion`` unit ending before ``before_index``."""
+    """Resolve one prior-goal ``goal_completion`` unit ending before ``before_index``.
+
+    Completion-only: used by intake classify (``project_last_goal_completion_for_intake``)
+    which must NOT see interrupted goals' digests. Cross-goal Slice A projection
+    uses :func:`resolve_goal_terminal_unit` instead to surface both.
+    """
     idxs = _find_last_phase_pair_indices(loop_messages, before_index, "goal_completion")
+    if idxs is None:
+        return None
+    start, end = idxs
+    unit = [_deep_copy_message(loop_messages[i]) for i in range(start, end + 1)]
+    return unit, start
+
+
+def resolve_goal_terminal_unit(
+    loop_messages: list[BaseMessage],
+    before_index: int,
+) -> tuple[list[BaseMessage], int] | None:
+    """Resolve one prior-goal terminal unit (completion OR interrupted) before ``before_index``.
+
+    Cross-goal Slice A variant: scans both ``goal_completion`` and
+    ``goal_interrupted`` so an interrupted goal's partial-work digest is
+    surfaced to the next goal's planning projection.
+    """
+    idxs = _find_last_phase_pair_indices(loop_messages, before_index, _GOAL_TERMINAL_PHASES)
     if idxs is None:
         return None
     start, end = idxs
@@ -751,14 +859,18 @@ def collect_cross_goal_completion_units(
     *,
     k: int,
 ) -> list[list[BaseMessage]]:
-    """Collect up to ``k`` prior-goal completion units, oldest first."""
+    """Collect up to ``k`` prior-goal terminal units, oldest first.
+
+    Now includes ``goal_interrupted`` units so interrupted goals' partial-work
+    digests are projected beside completions.
+    """
     if k <= 0 or not loop_messages:
         return []
 
     units_rev: list[list[BaseMessage]] = []
     cursor = _execute_plan_tail_index(loop_messages)
     while len(units_rev) < k and cursor > 0:
-        found = resolve_goal_completion_unit(loop_messages, cursor)
+        found = resolve_goal_terminal_unit(loop_messages, cursor)
         if found is None:
             break
         unit, start = found
@@ -773,11 +885,12 @@ def execute_step_ids_subsumed_by_cross_goal_completion(
     *,
     k: int,
 ) -> frozenset[str]:
-    """Return execute ``step_id`` values subsumed by projected ``goal_completion`` units.
+    """Return execute ``step_id`` values subsumed by projected terminal units.
 
-    When Slice A replays a prior goal's terminal ``goal_completion`` report, the
-    ``execute_step`` rows from that same goal segment must not appear again in Slice B
-    (including ``ledger_direct`` goals where the completion body copies execute text).
+    When Slice A replays a prior goal's terminal report (completion **or**
+    interrupted digest), the ``execute_step`` rows from that same goal segment
+    must not appear again in Slice B (including ``ledger_direct`` goals where
+    the completion body copies execute text).
     """
     if k <= 0 or not loop_messages:
         return frozenset()
@@ -786,7 +899,7 @@ def execute_step_ids_subsumed_by_cross_goal_completion(
     cursor = _execute_plan_tail_index(loop_messages)
     collected = 0
     while collected < k and cursor > 0:
-        found = resolve_goal_completion_unit(loop_messages, cursor)
+        found = resolve_goal_terminal_unit(loop_messages, cursor)
         if found is None:
             break
         _unit, start = found
@@ -826,9 +939,7 @@ def project_cross_goal_completion_tail(
     units = collect_cross_goal_completion_units(loop_messages, k=k)
     flat: list[BaseMessage] = []
     for unit in units:
-        flat.extend(
-            _compact_goal_completion_unit_for_projection(unit, include_boundary=include_boundary)
-        )
+        flat.extend(_compact_terminal_unit_for_projection(unit, include_boundary=include_boundary))
     if not flat:
         return []
 

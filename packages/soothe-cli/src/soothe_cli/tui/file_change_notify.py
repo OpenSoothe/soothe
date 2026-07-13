@@ -8,11 +8,17 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
+    file_change_action_label,
     file_change_label_from_preview_data,
+    file_change_preview_alias_already_shown,
+    find_mounted_file_change_widget,
     parse_insert_line_arg,
     parse_line_range_args,
 )
-from soothe_cli.tui.file_change_renderers import build_file_change_preview
+from soothe_cli.tui.file_change_renderers import (
+    build_file_change_preview,
+    update_preview_data_from_record,
+)
 
 if TYPE_CHECKING:
     from soothe_cli.runtime.state.file_tracker import FileOperationRecord
@@ -65,7 +71,11 @@ async def mount_file_change_preview(
     if tool_name not in FILE_CHANGE_TOOLS:
         return
     tcid = str(tool_call_id or "").strip()
-    if not tcid or tcid in adapter._file_change_previews_shown:
+    if not tcid or file_change_preview_alias_already_shown(
+        adapter._file_change_previews_shown,
+        tcid,
+        tool_name=tool_name,
+    ):
         return
     path_str = str(args.get("file_path") or args.get("path") or "").strip()
     if not path_str and tool_name != "write_file":
@@ -96,6 +106,12 @@ async def mount_file_change_preview(
         await adapter._mount_message(widget)
         adapter._file_change_previews_shown.add(tcid)
         adapter._file_change_widgets[tcid] = widget
+        logger.debug(
+            "Mounted file change preview tool=%s tool_call_id=%s path=%s",
+            tool_name,
+            tcid,
+            path_str,
+        )
     except asyncio.CancelledError:
         raise
     except Exception:
@@ -112,13 +128,96 @@ async def finalize_file_change_preview(
     """Upgrade a mounted preview card to its completed state.
 
     Returns:
-        True when an existing preview widget was finalized in place (no ``DiffMessage``).
+        True when an existing preview widget was finalized in place.
     """
     tcid = str(record.tool_call_id or "").strip()
     if not tcid:
         return False
-    widget = adapter._file_change_widgets.get(tcid)
+    widget_key, widget = find_mounted_file_change_widget(
+        adapter._file_change_widgets,
+        tcid,
+        tool_name=str(record.tool_name or ""),
+    )
     if widget is None:
+        logger.debug(
+            "No mounted file preview for completion tool=%s tool_call_id=%s keys=%s",
+            record.tool_name,
+            tcid,
+            sorted(adapter._file_change_widgets),
+        )
         return False
     await widget.finalize_from_record(record)
+    logger.debug(
+        "Finalized file change preview tool=%s mounted_key=%s completed_id=%s",
+        record.tool_name,
+        widget_key,
+        tcid,
+    )
     return True
+
+
+async def mount_completed_file_change_preview(
+    adapter: TextualUIAdapter,
+    *,
+    record: FileOperationRecord,
+    assistant_id: str | None,
+) -> bool:
+    """Mount a collapsed completed preview when no in-flight card was shown.
+
+    Returns:
+        True when a completed preview card was mounted from the tracker record.
+    """
+    tool_name = str(record.tool_name or "").strip()
+    tcid = str(record.tool_call_id or "").strip()
+    if tool_name not in FILE_CHANGE_TOOLS or not tcid:
+        return False
+    if file_change_preview_alias_already_shown(
+        adapter._file_change_previews_shown,
+        tcid,
+        tool_name=tool_name,
+    ):
+        return False
+    if not record.diff:
+        return False
+
+    args = dict(record.args or {})
+    built = build_file_change_preview(tool_name, args, assistant_id=assistant_id)
+    if built is None:
+        return False
+    widget_cls, data = built
+    update_preview_data_from_record(data, record)
+    widget = widget_cls(data, action_label=file_change_action_label(record))
+    widget._finalized = True
+    widget._expanded = False
+    widget.id = textual_widget_id("file-preview", tcid)
+    try:
+        await adapter._mount_message(widget)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.warning("Failed to mount completed file change preview", exc_info=True)
+        return False
+    adapter._file_change_previews_shown.add(tcid)
+    adapter._file_change_widgets[tcid] = widget
+    logger.debug(
+        "Mounted completed file change preview tool=%s tool_call_id=%s",
+        tool_name,
+        tcid,
+    )
+    return True
+
+
+async def complete_file_change_preview(
+    adapter: TextualUIAdapter,
+    *,
+    record: FileOperationRecord,
+    assistant_id: str | None,
+) -> bool:
+    """Finalize an in-flight preview or mount a completed card from the record."""
+    if await finalize_file_change_preview(adapter, record=record):
+        return True
+    return await mount_completed_file_change_preview(
+        adapter,
+        record=record,
+        assistant_id=assistant_id,
+    )
