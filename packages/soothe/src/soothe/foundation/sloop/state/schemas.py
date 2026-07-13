@@ -809,7 +809,7 @@ class PlanGapAnalysis(BaseModel):
     evidence_summary: str = Field(max_length=400)
     remaining_gaps: list[str] = Field(default_factory=list, max_length=6)
     distance_from_goal: Literal["far", "moderate", "near", "at_goal"]
-    gap_reasoning: str = Field(max_length=300)
+    gap_reasoning: str = Field(max_length=2048)
 
 
 class ContinuationAssessment(BaseModel):

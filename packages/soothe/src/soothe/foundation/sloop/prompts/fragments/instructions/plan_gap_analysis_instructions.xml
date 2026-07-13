@@ -17,5 +17,7 @@ full GOAL satisfaction.
 
 **remaining_gaps**: Short list of open work items (≤120 chars each).
 
+**gap_reasoning**: First-person summary of distance from GOAL (≤2048 chars).
+
 Do NOT output routing fields (status, goal_progress) — assessment follows separately.
 </PLAN_GAP_ANALYSIS>

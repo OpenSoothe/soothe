@@ -111,6 +111,24 @@ def test_plan_gap_allows_long_component_evidence() -> None:
     assert gap.components[0].gap == long_gap
 
 
+def test_plan_gap_allows_long_gap_reasoning() -> None:
+    gap_reasoning = (
+        "The technical capability (script logic) is confirmed 'satisfied' via the patch in step 1. "
+        "The failure is purely environmental: the feature flag (cert file) required by the template "
+        "engine is missing. Once a placeholder cert file is placed and the script is re-run, the "
+        "verification should succeed immediately."
+    )
+    assert len(gap_reasoning) == 309
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="verification", status="partial")],
+        evidence_summary="Script logic patched.",
+        remaining_gaps=["add cert placeholder"],
+        distance_from_goal="near",
+        gap_reasoning=gap_reasoning,
+    )
+    assert gap.gap_reasoning == gap_reasoning
+
+
 def test_assess_respects_gap_rejects_complete() -> None:
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="tests", status="not_started")],

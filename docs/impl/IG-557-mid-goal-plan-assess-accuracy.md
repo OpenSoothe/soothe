@@ -659,7 +659,7 @@ class PlanGapAnalysis(BaseModel):
     evidence_summary: str = Field(max_length=400)  # neutral inventory of proven facts
     remaining_gaps: list[str] = Field(max_length=6)  # each ≤120 chars
     distance_from_goal: Literal["far", "moderate", "near", "at_goal"]
-    gap_reasoning: str = Field(max_length=300)  # first-person, no routing jargon
+    gap_reasoning: str = Field(max_length=2048)  # first-person, no routing jargon
 ```
 
 **Decomposition inputs** (prompt context, not schema output):
