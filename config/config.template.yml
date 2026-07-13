@@ -259,7 +259,7 @@ agent:
         grep: 30.0
         read_file: 30.0
         browser_use: 1800.0
-        task: 86400.0
+        task: 18000.0
       skip_tools_with_internal_timeout: true
     # RPM, concurrency, timeouts, 429 retry (LLMRateLimitConfig)
     llm_rate_limit:

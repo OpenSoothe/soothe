@@ -11,13 +11,13 @@ Architecture:
 Default timeouts:
     - Standard tools: 60s
     - Subagent tools: 1800s (30 minutes for exploration/browser)
-    - Task tool: 86400s (24 hours for autonomous subagent work)
+    - Task tool: 18000s (5 hours for autonomous subagent work)
     - Filesystem tools: 30s (read, grep); glob uses deepagents' internal 20s cap
     - Execution tools: 120s default; run_command honors per-call ``timeout`` (max 5h)
 
 Configuration:
     config.agent.tool_timeout.default_seconds: 60.0
-    config.agent.tool_timeout.per_tool: {grep: 30.0, task: 86400.0}
+    config.agent.tool_timeout.per_tool: {grep: 30.0, task: 18000.0}
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from langgraph.types import Command
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import ToolCallRequest
 
-from soothe.config.constants import clamp_execute_timeout
+from soothe.config.constants import DEFAULT_TASK_TIMEOUT_SECONDS, clamp_execute_timeout
 from soothe.foundation.core.filesystem.discovery_hints import (
     format_glob_timeout_error,
 )
@@ -84,7 +84,6 @@ def _emit_subagent_timeout_completion_event(
 # Default timeout values
 DEFAULT_TOOL_TIMEOUT_SECONDS: float = 60.0
 DEFAULT_SUBAGENT_TIMEOUT_SECONDS: float = 1800.0  # Subagent exploration/browser (30 minutes)
-DEFAULT_TASK_TIMEOUT_SECONDS: float = 86400.0  # Task tool for autonomous subagent work (24 hours)
 DEFAULT_FILESYSTEM_TIMEOUT_SECONDS: float = 30.0
 DEFAULT_EXECUTION_TIMEOUT_SECONDS: float = 120.0
 
@@ -230,7 +229,7 @@ class ToolTimeoutMiddleware(AgentMiddleware[ToolTimeoutState, None, Any]):
         if tool_name in EXECUTION_TOOL_NAMES:
             return DEFAULT_EXECUTION_TIMEOUT_SECONDS
 
-        # Check task tool first (24h timeout for autonomous subagent work)
+        # Check task tool first (5h timeout for autonomous subagent work)
         if tool_name == "task":
             return DEFAULT_TASK_TIMEOUT_SECONDS
 

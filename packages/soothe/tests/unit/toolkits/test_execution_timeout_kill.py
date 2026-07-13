@@ -8,7 +8,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.config.constants import MAX_EXECUTE_TIMEOUT, clamp_execute_timeout
+from soothe.config.constants import (
+    DEFAULT_TASK_TIMEOUT_SECONDS,
+    MAX_EXECUTE_TIMEOUT,
+    clamp_execute_timeout,
+)
 from soothe.toolkits.execution import (
     RunCommandShellTool,
     _kill_process_tree,
@@ -18,6 +22,7 @@ from soothe.toolkits.execution import (
 
 def test_max_execute_timeout_is_five_hours() -> None:
     assert MAX_EXECUTE_TIMEOUT == 18_000
+    assert DEFAULT_TASK_TIMEOUT_SECONDS == MAX_EXECUTE_TIMEOUT
 
 
 def test_clamp_execute_timeout_respects_ceiling() -> None:

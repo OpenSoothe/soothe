@@ -11,6 +11,7 @@ from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+    DEFAULT_TASK_TIMEOUT_SECONDS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 
@@ -1490,7 +1491,7 @@ class ToolTimeoutConfig(BaseModel):
             "grep": 30.0,
             "read_file": 30.0,
             "browser_use": 1800.0,  # Browser automation (30 minutes)
-            "task": 86400.0,  # Task tool for autonomous subagent work (24 hours)
+            "task": float(DEFAULT_TASK_TIMEOUT_SECONDS),
         },
         description="Per-tool timeout overrides (tool_name -> seconds)",
     )

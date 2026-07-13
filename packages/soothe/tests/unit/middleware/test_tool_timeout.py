@@ -10,12 +10,11 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.config.constants import MAX_EXECUTE_TIMEOUT
+from soothe.config.constants import DEFAULT_TASK_TIMEOUT_SECONDS, MAX_EXECUTE_TIMEOUT
 from soothe.middleware.tool_timeout import (
     DEFAULT_EXECUTION_TIMEOUT_SECONDS,
     DEFAULT_FILESYSTEM_TIMEOUT_SECONDS,
     DEFAULT_SUBAGENT_TIMEOUT_SECONDS,
-    DEFAULT_TASK_TIMEOUT_SECONDS,
     DEFAULT_TOOL_TIMEOUT_SECONDS,
     FILESYSTEM_TOOL_NAMES,
     SUBAGENT_TOOL_NAMES,
@@ -108,7 +107,7 @@ class TestToolTimeoutMiddleware:
     def test_subagent_category_timeout(self) -> None:
         """Subagent tools should use subagent category timeout."""
         middleware = ToolTimeoutMiddleware()
-        # Task tool has its own 24h timeout, skip it here
+        # Task tool has its own 5h timeout, skip it here
         for tool_name in SUBAGENT_TOOL_NAMES:
             if tool_name == "task":
                 continue
@@ -121,10 +120,10 @@ class TestToolTimeoutMiddleware:
         )
 
     def test_task_tool_timeout(self) -> None:
-        """Task tool should use 24h timeout for autonomous subagent work."""
+        """Task tool should use 5h timeout for autonomous subagent work."""
         middleware = ToolTimeoutMiddleware()
         assert middleware._get_timeout_for_tool("task") == DEFAULT_TASK_TIMEOUT_SECONDS
-        assert DEFAULT_TASK_TIMEOUT_SECONDS == 86400.0  # 24 hours
+        assert DEFAULT_TASK_TIMEOUT_SECONDS == 18_000  # 5 hours
 
     def test_skip_tools_with_internal_timeout(self) -> None:
         """glob should be skipped when skip_tools_with_internal_timeout=True."""

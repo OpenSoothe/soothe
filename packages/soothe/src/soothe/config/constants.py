@@ -23,6 +23,9 @@ DEFAULT_EXECUTE_TIMEOUT = 60  # seconds
 # Upper bound for per-call run_command timeout (LLM arg and middleware ceiling)
 MAX_EXECUTE_TIMEOUT = 18000  # 5 hours
 
+# Default timeout for the task tool (subagent delegation)
+DEFAULT_TASK_TIMEOUT_SECONDS = 18000  # 5 hours
+
 
 def clamp_execute_timeout(seconds: int | float) -> int:
     """Clamp run_command timeout to ``MAX_EXECUTE_TIMEOUT``."""

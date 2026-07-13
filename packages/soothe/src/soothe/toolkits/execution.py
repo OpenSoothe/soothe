@@ -493,9 +493,7 @@ class RunCommandShellTool(ShellTool):
         if shell_error is not None:
             return shell_error
 
-        actual_timeout = clamp_execute_timeout(
-            timeout if timeout is not None else self.timeout
-        )
+        actual_timeout = clamp_execute_timeout(timeout if timeout is not None else self.timeout)
         cwd_raw = _resolve_workspace(self.workspace_root, runtime)
         cwd = str(expand_path(cwd_raw)) if cwd_raw else None
 
