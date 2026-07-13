@@ -74,9 +74,12 @@ class TestTwoPassPrompts:
         assert "chitchat" not in INTAKE_PASS2_SYSTEM_PROMPT.lower()
 
     def test_pass1_human_task_is_compact(self) -> None:
-        assert INTAKE_PASS1_HUMAN_TASK == (
-            "Classify above. Identity replies must use the configured assistant name. JSON only."
-        )
+        assert INTAKE_PASS1_HUMAN_TASK == "Classify the user message above. JSON only."
+        assert "Identity replies" not in INTAKE_PASS1_HUMAN_TASK
+
+    def test_pass1_prompt_has_continuation_led_pivot_examples(self) -> None:
+        assert "Continue and fix the failing unit tests" in INTAKE_PASS1_SYSTEM_PROMPT
+        assert "continuation-led pivot" in INTAKE_PASS1_SYSTEM_PROMPT.lower()
 
     def test_pass2_human_task_mentions_scope(self) -> None:
         assert "scope" in INTAKE_PASS2_HUMAN_TASK.lower()

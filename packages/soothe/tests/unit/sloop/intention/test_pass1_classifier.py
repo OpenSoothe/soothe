@@ -57,6 +57,9 @@ def create_pass1_classifier_with_raw_result(raw_result: dict) -> IntakePass1Clas
         ("got it, so that SessionStore thing...", True),
         ("cool, and the migration script", True),
         ("sure, about the signature change", True),
+        ("Continue and fix the failing unit tests", True),
+        ("Resume the deployment verification", True),
+        ("Proceed with the schema migration", True),
     ],
 )
 async def test_pivot_patterns_are_task(query: str, expected_is_task: bool) -> None:

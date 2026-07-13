@@ -44,6 +44,11 @@ def test_loop_continuation_phrase_matches_common_resume_text() -> None:
     assert is_loop_continuation_phrase("resume the loop")
 
 
+def test_loop_continuation_phrase_matches_embedded_resume_text() -> None:
+    assert is_loop_continuation_phrase("Finish the integration tests, then continue the loop")
+    assert is_loop_continuation_phrase("Run the suite again. continue this loop")
+
+
 def test_loop_continuation_phrase_rejects_unrelated_text() -> None:
     assert not is_loop_continuation_phrase("continue cleaning")
     assert not is_loop_continuation_phrase("thanks")

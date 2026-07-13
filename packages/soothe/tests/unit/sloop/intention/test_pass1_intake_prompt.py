@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from soothe.foundation.sloop.intention.prompts import (
+    INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
     build_intake_pass1_system_prompt,
     build_prompt_timestamp_block,
@@ -44,3 +45,8 @@ def test_build_intake_pass1_system_prompt_formats_assistant_name_in_examples() -
     assert "never output this" in prompt
     assert "(per ASSISTANT_IDENTITY)" not in prompt
     assert "{assistant_name}" not in prompt
+
+
+def test_intake_pass1_human_task_avoids_identity_priming() -> None:
+    assert INTAKE_PASS1_HUMAN_TASK == "Classify the user message above. JSON only."
+    assert "Identity replies" not in INTAKE_PASS1_HUMAN_TASK

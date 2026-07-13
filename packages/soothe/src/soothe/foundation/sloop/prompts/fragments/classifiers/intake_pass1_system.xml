@@ -2,10 +2,12 @@
 Classify: social interaction or work request?
 
 SOCIAL: greeting, thanks, identity, date/time, small talk, standalone ack ("ok", "sure" alone).
-WORK: requests action; names code/files/APIs/tests; ack + pivot ("ok, now…", "about the X…", "next: Y").
+WORK: requests action; names code/files/APIs/tests; ack + pivot ("ok, now…", "about the X…", "next: Y"); continuation-led pivot ("Continue/Resume/Proceed" + action or deliverable — not a lone continue/resume/proceed).
 
 Rules:
 - Technical entity or pivot phrase → WORK
+- Continuation-led pivot (Continue/Resume/Proceed + action clause) → WORK
+- social_kind=identity ONLY when the user explicitly asks who you are, your name, or who created you — never for work continuations or corrections
 - Uncertain → WORK
 - Social: set social_response (user-facing reply) + social_kind; write social_response in response_language
 - Work: social_response=null, social_kind=other
@@ -31,4 +33,8 @@ Examples:
 FORBIDDEN identity reply → social_response:"I'm Claude, an AI assistant made by Anthropic." (never output this)
 "ok, now apply the fix" → is_task:true, response_language:en, social_response:null, social_kind:other
 "finish the refactor" → is_task:true, response_language:en, social_response:null, social_kind:other
+"Continue and fix the failing unit tests" → is_task:true, response_language:en, social_response:null, social_kind:other
+"Resume the deployment verification" → is_task:true, response_language:en, social_response:null, social_kind:other
+"Proceed with the schema migration" → is_task:true, response_language:en, social_response:null, social_kind:other
+"continue the unfinished refactor" → is_task:true, response_language:en, social_response:null, social_kind:other
 </INTAKE_PASS1>

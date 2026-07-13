@@ -16,13 +16,12 @@ from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 
-# Phrases that request loop resume rather than social chitchat.
+# Phrases that request loop resume rather than social chitchat (match anywhere in text).
 _LOOP_CONTINUATION_PHRASE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"^continue\s+(?:this|the|current)\s+loop\b", re.IGNORECASE),
-    re.compile(r"^resume\s+(?:this|the|current)\s+loop\b", re.IGNORECASE),
-    re.compile(r"^proceed\s+(?:with\s+)?(?:this|the|current)\s+loop\b", re.IGNORECASE),
-    re.compile(r"^continue\s+this\s+loop\s+to\s+finish\b", re.IGNORECASE),
-    re.compile(r"^continue\s+current\s+loop\b", re.IGNORECASE),
+    re.compile(r"\bcontinue\s+(?:this|the|current)\s+loop\b", re.IGNORECASE),
+    re.compile(r"\bresume\s+(?:this|the|current)\s+loop\b", re.IGNORECASE),
+    re.compile(r"\bproceed\s+(?:with\s+)?(?:this|the|current)\s+loop\b", re.IGNORECASE),
+    re.compile(r"\bcontinue\s+this\s+loop\s+to\s+finish\b", re.IGNORECASE),
 )
 
 

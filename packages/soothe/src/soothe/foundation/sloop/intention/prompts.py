@@ -29,9 +29,7 @@ INTAKE_PASS1_SYSTEM_PROMPT = _read_classifier_fragment("intake_pass1_system.xml"
 INTAKE_PASS2_SYSTEM_PROMPT = _read_classifier_fragment("intake_pass2_system.xml")
 INTAKE_PASS1_SOCIAL_REPLY_PROMPT = _read_classifier_fragment("intake_pass1_social_reply.xml")
 
-INTAKE_PASS1_HUMAN_TASK = (
-    "Classify above. Identity replies must use the configured assistant name. JSON only."
-)
+INTAKE_PASS1_HUMAN_TASK = "Classify the user message above. JSON only."
 INTAKE_PASS1_PRIOR_LANGUAGE_PREFIX = "PRIOR_RESPONSE_LANGUAGE: {language}"
 
 
