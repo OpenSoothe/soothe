@@ -182,10 +182,10 @@ class CognitionStepMessage(Vertical):
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
         self._card_collapsed: bool = False
         """Whether the entire card body is collapsed (header remains visible)."""
-        self._step_card_user_expanded: bool = False
-        """If True, user manually expanded the collapsed card body."""
         self._step_tool_list_user_expanded: bool = False
         """If True, skip auto-folding the tool-row preview (user expanded the list)."""
+        self._has_clarification_details: bool = False
+        """Whether detail panel currently holds clarification Q/A content."""
 
     def _build_row_index(self) -> StepRowIndex:
         """Classify tool rows once for stats, previews, and activity rendering."""
@@ -311,6 +311,11 @@ class CognitionStepMessage(Vertical):
         event.stop()
         if screen_has_text_selection(self.screen):
             return
+        # If the whole card body is collapsed, always expand it first so one
+        # click reliably reveals details (e.g. clarification Q/A content).
+        if self._card_collapsed:
+            self.toggle_collapse()
+            return
         if (
             STEP_CARD_SHOW_TOOL_ROW_DETAILS
             and self._rows
@@ -333,10 +338,7 @@ class CognitionStepMessage(Vertical):
 
     def toggle_collapse(self) -> None:
         """Toggle the entire card body collapse state."""
-        was_collapsed = self._card_collapsed
         self._card_collapsed = not self._card_collapsed
-        if was_collapsed and not self._card_collapsed:
-            self._step_card_user_expanded = True
         self._refresh_collapse_state()
 
     def _refresh_collapse_state(self) -> None:
@@ -357,6 +359,10 @@ class CognitionStepMessage(Vertical):
                 prose = (self._last_completed_execute_prose or "").strip()
                 if prose:
                     self._detail_widget.update(self._step_branched_execute_body(prose, muted=True))
+                    self._detail_widget.display = True
+                elif self._has_clarification_details:
+                    # Preserve non-prose detail content (e.g. clarification Q/A)
+                    # when toggling collapsed state on completed cards.
                     self._detail_widget.display = True
                 else:
                     self._detail_widget.display = False
@@ -1157,7 +1163,7 @@ class CognitionStepMessage(Vertical):
             self._ensure_running_ui()
             return
         self._status = "running"
-        self._step_card_user_expanded = False
+        self._has_clarification_details = False
         self._step_tool_list_user_expanded = False
         self._start_time = time()
         self._tools_body_collapsed = False
@@ -1270,6 +1276,7 @@ class CognitionStepMessage(Vertical):
             return
         if not questions and not answers:
             return
+        self._has_clarification_details = True
         header_bits = [f"source={source or 'unknown'}"]
         if confidence is not None:
             header_bits.append(f"confidence={confidence:.2f}")

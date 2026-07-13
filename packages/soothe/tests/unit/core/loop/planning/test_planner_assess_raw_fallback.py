@@ -71,24 +71,11 @@ async def test_assess_status_recovers_done_when_structured_invoke_fails() -> Non
 
 
 @pytest.mark.asyncio
-async def test_assess_status_retries_status_only_structured_output() -> None:
-    """Status-only assess output should trigger one corrective structured retry."""
+async def test_assess_status_accepts_status_only_structured_output() -> None:
+    """Status-only assess output should pass through unchanged."""
     planner = LLMPlanner(MagicMock())
-    mock_model = MagicMock()
-    mock_model.bind = MagicMock(return_value=mock_model)
-    planner._model = mock_model
-    planner._plan_assess_model = mock_model
 
-    planner._invoke_structured = AsyncMock(  # type: ignore[method-assign]
-        side_effect=[
-            StatusAssessment(status="replan"),
-            StatusAssessment(
-                status="replan",
-                goal_progress="medium",
-                assessment_reasoning="I'll replan from the verified evidence.",
-            ),
-        ]
-    )
+    planner._invoke_structured = AsyncMock(return_value=StatusAssessment(status="replan"))  # type: ignore[method-assign]
 
     assessment, ai_response = await planner._assess_status_with_response(
         [HumanMessage(content="assess")],
@@ -99,26 +86,18 @@ async def test_assess_status_retries_status_only_structured_output() -> None:
 
     assert isinstance(assessment, StatusAssessment)
     assert assessment.status == "replan"
-    assert assessment.goal_progress == "medium"
+    assert assessment.goal_progress == "none"
+    assert assessment.assessment_reasoning == ""
     assert ai_response is assessment
-    assert planner._invoke_structured.await_count == 2  # type: ignore[attr-defined]
+    planner._invoke_structured.assert_awaited_once()  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
-async def test_assess_status_coerces_after_status_only_retry() -> None:
-    """Repeated status-only assess output should be coerced away from none."""
+async def test_assess_status_accepts_status_only_done_output() -> None:
+    """Status-only done assess output should pass through unchanged."""
     planner = LLMPlanner(MagicMock())
-    mock_model = MagicMock()
-    mock_model.bind = MagicMock(return_value=mock_model)
-    planner._model = mock_model
-    planner._plan_assess_model = mock_model
 
-    planner._invoke_structured = AsyncMock(  # type: ignore[method-assign]
-        side_effect=[
-            StatusAssessment(status="replan"),
-            StatusAssessment(status="replan"),
-        ]
-    )
+    planner._invoke_structured = AsyncMock(return_value=StatusAssessment(status="done"))  # type: ignore[method-assign]
 
     assessment, ai_response = await planner._assess_status_with_response(
         [HumanMessage(content="assess")],
@@ -128,7 +107,8 @@ async def test_assess_status_coerces_after_status_only_retry() -> None:
     )
 
     assert isinstance(assessment, StatusAssessment)
-    assert assessment.status == "replan"
-    assert assessment.goal_progress == "low"
-    assert "omitted required fields" in assessment.assessment_reasoning
+    assert assessment.status == "done"
+    assert assessment.goal_progress == "none"
+    assert assessment.assessment_reasoning == ""
     assert ai_response is assessment
+    planner._invoke_structured.assert_awaited_once()  # type: ignore[attr-defined]
