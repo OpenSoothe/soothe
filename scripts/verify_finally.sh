@@ -55,6 +55,8 @@ NC='\033[0m' # No Color
 OVERALL_STATUS=0
 FAILED_CHECKS=()
 FAILED_LOGS=()
+FAILED_FORMAT_ENTRIES=()
+FAILED_LINT_ENTRIES=()
 FAILED_TEST_ENTRIES=()
 SLOW_TEST_ENTRIES=()
 CHECK_OUTCOMES=()
@@ -170,6 +172,89 @@ record_warning() {
   if [ -n "${VERIFY_RESULTS_DIR:-}" ]; then
     printf '%s\n' "$message" >>"${VERIFY_RESULTS_DIR}/warnings.log"
   fi
+}
+
+_strip_ansi() {
+  sed 's/\x1b\[[0-9;]*[A-Za-z]//g' <<<"$1"
+}
+
+_append_format_entry() {
+  local pkg="$1"
+  local file="$2"
+  if [ -n "${VERIFY_RESULTS_DIR:-}" ]; then
+    printf '%s|%s\n' "$pkg" "$file" >>"${VERIFY_RESULTS_DIR}/format_entries.txt"
+  else
+    FAILED_FORMAT_ENTRIES+=("${pkg}|${file}")
+  fi
+}
+
+_append_lint_entry() {
+  local pkg="$1"
+  local location="$2"
+  local code="$3"
+  local message="$4"
+  if [ -n "${VERIFY_RESULTS_DIR:-}" ]; then
+    printf '%s|%s|%s|%s\n' "$pkg" "$location" "$code" "$message" >>"${VERIFY_RESULTS_DIR}/lint_entries.txt"
+  else
+    FAILED_LINT_ENTRIES+=("${pkg}|${location}|${code}|${message}")
+  fi
+}
+
+_record_format_entries_from_details() {
+  local pkg="$1"
+  local details="$2"
+  local line stripped file
+  while IFS= read -r line; do
+    stripped=$(_strip_ansi "$line")
+    stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+    stripped="${stripped%"${stripped##*[![:space:]]}"}"
+    if [[ "$stripped" =~ ^Would[[:space:]]reformat:[[:space:]]*(.+)$ ]]; then
+      file="${BASH_REMATCH[1]}"
+      file="${file#"${file%%[![:space:]]*}"}"
+      file="${file%"${file##*[![:space:]]}"}"
+      _append_format_entry "$pkg" "$file"
+    fi
+  done <<<"$details"
+}
+
+_record_lint_entries_from_concise() {
+  local pkg="$1"
+  local concise="$2"
+  local line stripped location code message
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    stripped=$(_strip_ansi "$line")
+    stripped="${stripped#"${stripped%%[![:space:]]*}"}"
+    if [[ "$stripped" =~ ^Found[[:space:]] ]] || [[ "$stripped" == \[* ]]; then
+      continue
+    fi
+    if [[ "$stripped" =~ ^([^:]+):([0-9]+):([0-9]+):[[:space:]]+([A-Z][0-9]+)([[:space:]]+\[\*\])?[[:space:]]+(.*)$ ]]; then
+      location="${BASH_REMATCH[1]}:${BASH_REMATCH[2]}"
+      code="${BASH_REMATCH[4]}"
+      message="${BASH_REMATCH[6]}"
+      _append_lint_entry "$pkg" "$location" "$code" "$message"
+    fi
+  done <<<"$concise"
+}
+
+_collect_format_entries_file() {
+  local entries_file="$1"
+  if [ ! -s "$entries_file" ]; then
+    return 0
+  fi
+  while IFS='|' read -r entry_pkg entry_file; do
+    FAILED_FORMAT_ENTRIES+=("${entry_pkg}|${entry_file}")
+  done <"$entries_file"
+}
+
+_collect_lint_entries_file() {
+  local entries_file="$1"
+  if [ ! -s "$entries_file" ]; then
+    return 0
+  fi
+  while IFS='|' read -r entry_pkg entry_location entry_code entry_message; do
+    FAILED_LINT_ENTRIES+=("${entry_pkg}|${entry_location}|${entry_code}|${entry_message}")
+  done <"$entries_file"
 }
 
 _load_recorded_outcomes() {
@@ -500,6 +585,9 @@ _lint_check_pkg() {
   echo "$exit_code" >"$exit_file"
   if [ "$exit_code" -ne 0 ]; then
     printf '\n[%s]\n%s\n' "$pkg" "$output" >"${details_file}.${pkg}"
+    local concise_output
+    concise_output=$(cd "$WORKSPACE_ROOT/packages/$pkg" && "$VENV_RUFF" check --output-format concise $paths 2>&1) || true
+    printf '%s\n' "$concise_output" >"${details_file}.${pkg}.concise"
   fi
 }
 
@@ -682,7 +770,6 @@ check_formatting() {
   fi
 
   local format_failed=false
-  local format_details=""
   local tmpdir
   tmpdir=$(mktemp -d)
   local pids=()
@@ -708,14 +795,13 @@ check_formatting() {
       format_failed=true
       record_check_outcome "format" "$pkg" "fail"
       if [ -f "$tmpdir/details.${pkg}" ]; then
-        format_details+=$(cat "$tmpdir/details.${pkg}")
+        _record_format_entries_from_details "$pkg" "$(cat "$tmpdir/details.${pkg}")"
       fi
     fi
   done
   rm -rf "$tmpdir"
 
   if $format_failed; then
-    record_failure_log "Formatting" "$format_details"
     print_note "run with --fix to auto-fix"
     return 1
   fi
@@ -741,7 +827,6 @@ check_linting() {
   fi
 
   local lint_failed=false
-  local lint_details=""
   local tmpdir
   tmpdir=$(mktemp -d)
   local pids=()
@@ -766,15 +851,14 @@ check_linting() {
       print_fail "lint: $pkg"
       lint_failed=true
       record_check_outcome "lint" "$pkg" "fail"
-      if [ -f "$tmpdir/details.${pkg}" ]; then
-        lint_details+=$(cat "$tmpdir/details.${pkg}")
+      if [ -f "$tmpdir/details.${pkg}.concise" ]; then
+        _record_lint_entries_from_concise "$pkg" "$(cat "$tmpdir/details.${pkg}.concise")"
       fi
     fi
   done
   rm -rf "$tmpdir"
 
   if $lint_failed; then
-    record_failure_log "Linting" "$lint_details"
     print_note "run with --fix to auto-fix"
     return 1
   fi
@@ -947,27 +1031,74 @@ print_slow_tests_summary() {
   echo ""
 }
 
+print_failed_format_summary() {
+  if [ ${#FAILED_FORMAT_ENTRIES[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo -e "  ${BOLD}Format (${#FAILED_FORMAT_ENTRIES[@]}):${NC}"
+  local current_pkg=""
+  for entry in "${FAILED_FORMAT_ENTRIES[@]}"; do
+    IFS='|' read -r pkg file <<<"$entry"
+    if [ "$pkg" != "$current_pkg" ]; then
+      echo -e "    ${BOLD}${pkg}${NC}"
+      current_pkg="$pkg"
+    fi
+    echo -e "      ${RED}✗${NC} ${file}"
+  done
+}
+
+print_failed_lint_summary() {
+  if [ ${#FAILED_LINT_ENTRIES[@]} -eq 0 ]; then
+    return 0
+  fi
+
+  echo -e "  ${BOLD}Lint (${#FAILED_LINT_ENTRIES[@]}):${NC}"
+  local current_pkg=""
+  for entry in "${FAILED_LINT_ENTRIES[@]}"; do
+    IFS='|' read -r pkg location code message <<<"$entry"
+    if [ "$pkg" != "$current_pkg" ]; then
+      echo -e "    ${BOLD}${pkg}${NC}"
+      current_pkg="$pkg"
+    fi
+    echo -e "      ${RED}✗${NC} ${location} ${code} ${message}"
+  done
+}
+
 print_failed_tests_summary() {
   if [ ${#FAILED_TEST_ENTRIES[@]} -eq 0 ]; then
     return 0
   fi
 
-  echo -e "${BOLD}${RED}Failed tests (${#FAILED_TEST_ENTRIES[@]}):${NC}"
+  echo -e "  ${BOLD}Tests (${#FAILED_TEST_ENTRIES[@]}):${NC}"
   local current_pkg=""
   for entry in "${FAILED_TEST_ENTRIES[@]}"; do
     IFS='|' read -r pkg test_id reason <<<"$entry"
     if [ "$pkg" != "$current_pkg" ]; then
-      echo -e "  ${BOLD}${pkg}${NC}"
+      echo -e "    ${BOLD}${pkg}${NC}"
       current_pkg="$pkg"
     fi
     local short_id="${test_id#tests/unit/}"
     if [ -n "$reason" ]; then
-      echo -e "    ${RED}✗${NC} ${short_id}"
-      echo -e "      ${DIM}${reason}${NC}"
+      echo -e "      ${RED}✗${NC} ${short_id}"
+      echo -e "        ${DIM}${reason}${NC}"
     else
-      echo -e "    ${RED}✗${NC} ${short_id}"
+      echo -e "      ${RED}✗${NC} ${short_id}"
     fi
   done
+}
+
+print_failure_summary() {
+  local total_failures
+  total_failures=$((${#FAILED_FORMAT_ENTRIES[@]} + ${#FAILED_LINT_ENTRIES[@]} + ${#FAILED_TEST_ENTRIES[@]}))
+  if [ "$total_failures" -eq 0 ]; then
+    return 0
+  fi
+
+  echo -e "${BOLD}${RED}Failure summary (${total_failures}):${NC}"
+  print_failed_format_summary
+  print_failed_lint_summary
+  print_failed_tests_summary
   echo ""
 }
 
@@ -1135,7 +1266,7 @@ print_final_summary() {
 
   print_results_overview
   print_failed_checks_summary
-  print_failed_tests_summary
+  print_failure_summary
   print_warnings_summary
   print_slow_tests_summary
   print_failure_details_summary
@@ -1226,6 +1357,8 @@ else
   _load_recorded_outcomes "$tmpdir/outcomes.log"
   _load_recorded_warnings "$tmpdir/warnings.log"
   _load_recorded_failure_logs "$tmpdir/failure_logs.txt"
+  _collect_format_entries_file "$tmpdir/format_entries.txt"
+  _collect_lint_entries_file "$tmpdir/lint_entries.txt"
 
   _collect_parallel_check_result "$tmpdir" "format" "format"
   _collect_parallel_check_result "$tmpdir" "lint" "lint"
