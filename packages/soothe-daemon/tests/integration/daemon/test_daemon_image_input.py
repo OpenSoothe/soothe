@@ -51,10 +51,10 @@ def _get_soothe_logo_b64() -> str:
 
 
 def _get_logical_arch_b64() -> str:
-    """Lazy-load logical-arch.png base64."""
+    """Lazy-load logical-arch.jpg base64."""
     global LOGICAL_ARCH_B64
     if LOGICAL_ARCH_B64 is None:
-        LOGICAL_ARCH_B64 = _load_image_b64("logical-arch.png")
+        LOGICAL_ARCH_B64 = _load_image_b64("logical-arch.jpg")
     return LOGICAL_ARCH_B64
 
 
@@ -210,7 +210,7 @@ async def test_websocket_input_with_real_image_attachment(
 async def test_websocket_input_with_multi_image_attachments(
     websocket_daemon_patched: tuple[SootheDaemon, int, list[dict[str, Any]]], requires_llm_api
 ) -> None:
-    """Test agent task execution with multiple image files (soothe-logo.png + logical-arch.png)."""
+    """Test agent task execution with multiple image files (soothe-logo.png + logical-arch.jpg)."""
     daemon, port, vision_calls = websocket_daemon_patched
     _ = daemon
 
@@ -230,7 +230,7 @@ async def test_websocket_input_with_multi_image_attachments(
             "Compare these two images and describe their contents",
             attachments=[
                 {"mime_type": "image/png", "data": soothe_logo_b64},
-                {"mime_type": "image/png", "data": logical_arch_b64},
+                {"mime_type": "image/jpeg", "data": logical_arch_b64},
             ],
         )
         running = await await_status_state(client.read_event, "running", timeout=8.0)
