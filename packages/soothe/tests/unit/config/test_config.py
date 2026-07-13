@@ -18,7 +18,6 @@ from soothe.config import (
     _resolve_env,
     _resolve_provider_env,
 )
-from soothe.config.constants import DEFAULT_TASK_TIMEOUT_SECONDS
 
 
 class TestSootheConfig:
@@ -45,7 +44,7 @@ class TestSootheConfig:
         assert cfg.router.default == "openai:gpt-4o-mini"
         assert cfg.embedding_dims == 1536
         assert cfg.agent.autopilot.enabled is False
-        assert cfg.agent.loop.dispatch_timeout_seconds == float(DEFAULT_TASK_TIMEOUT_SECONDS)
+        assert cfg.agent.loop.dispatch_timeout_seconds == 0.0
         assert len(cfg.vector_stores) == 1
         assert cfg.vector_stores[0].name == "sqlite_vec_default"
         assert cfg.vector_store_router.default == "sqlite_vec_default:soothe_default"

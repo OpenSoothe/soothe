@@ -32,7 +32,6 @@ from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
-    DEFAULT_DISPATCH_TIMEOUT_SECONDS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 from soothe.foundation.sloop.clarification import (
@@ -364,7 +363,7 @@ class Executor:
     def _dispatch_timeout_seconds(self) -> float:
         """Graph stream inactivity watchdog for Execute (0 = disabled)."""
         if self._config is None:
-            return float(DEFAULT_DISPATCH_TIMEOUT_SECONDS)
+            return 0.0
         return max(0.0, float(self._config.agent.loop.dispatch_timeout_seconds))
 
     def _execute_action_retry_max(self) -> int:
@@ -644,8 +643,8 @@ class Executor:
                 subgraphs=True,
                 durability="exit",
             )
-            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: configurable via
-            # agent.loop.dispatch_timeout_seconds (default 5h, aligned with task tool).
+            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: opt-in via
+            # agent.loop.dispatch_timeout_seconds (0 = disabled by default).
             chunk_reader = GraphStreamChunkReader(
                 chunk_iter,
                 dispatch_timeout=self._dispatch_timeout_seconds(),

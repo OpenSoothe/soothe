@@ -121,8 +121,8 @@ agent:
     max_iterations: 99
     max_plan_steps_per_wave: 10
     max_tool_calls_per_step: 999
-    # Graph stream inactivity watchdog during Execute (seconds). 0 = disabled. Default: 5h.
-    dispatch_timeout_seconds: 18000
+    # Graph stream inactivity watchdog during Execute (seconds). 0 = disabled (default).
+    dispatch_timeout_seconds: 0
     execute_action_retry_max: 1
     execute_min_answer_chars: 20
     execute_deliverable_assess: auto

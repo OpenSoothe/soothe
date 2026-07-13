@@ -28,7 +28,7 @@ _STREAM_HEARTBEAT_INTERVAL_S = 10.0
 # (typically a tool-dispatch hang in the LangGraph runtime) and a
 # ``DispatchTimeoutError`` is raised so the step fails gracefully instead of
 # hanging indefinitely. Set to 0 to disable. Configure via
-# ``agent.loop.dispatch_timeout_seconds`` (default: task tool timeout / 5 hours).
+# ``agent.loop.dispatch_timeout_seconds`` (default: 0 = disabled).
 
 
 class DispatchTimeoutError(Exception):

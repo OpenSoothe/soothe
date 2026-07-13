@@ -122,7 +122,7 @@ agent:
         close_timeout_seconds: 30
         durable_flush_timeout: 10
     max_tool_calls_per_step: 999
-    dispatch_timeout_seconds: 18000
+    dispatch_timeout_seconds: 0
     execute_action_retry_max: 1
     execute_min_answer_chars: 20
     execute_deliverable_assess: auto

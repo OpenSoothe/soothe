@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.config.constants import DEFAULT_DISPATCH_TIMEOUT_SECONDS
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.engine.step_wave_types import (
     StreamEvent,
@@ -93,10 +92,10 @@ async def test_interrupt_resume_emits_raw_tuple_on_heartbeat(
 
 
 @pytest.mark.asyncio
-async def test_interrupt_resume_sets_graph_dispatch_timeout(
+async def test_interrupt_resume_dispatch_timeout_disabled_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Graph stream reader should enforce dispatch watchdog by default."""
+    """Graph stream reader disables dispatch watchdog when config is absent."""
 
     class _FakeReader:
         def __init__(
@@ -145,7 +144,7 @@ async def test_interrupt_resume_sets_graph_dispatch_timeout(
     with pytest.raises(StopAsyncIteration):
         await anext(stream)
 
-    assert captured["dispatch_timeout"] == DEFAULT_DISPATCH_TIMEOUT_SECONDS
+    assert captured["dispatch_timeout"] == 0
 
 
 @pytest.mark.asyncio
@@ -192,7 +191,7 @@ async def test_interrupt_resume_uses_config_dispatch_timeout(
     mock_agent.execution_astream = MagicMock(return_value=empty_stream())
     mock_agent.can_read_graph_state = False
     config = SootheConfig()
-    config.agent.loop.dispatch_timeout_seconds = 0
+    config.agent.loop.dispatch_timeout_seconds = 300
     executor = Executor(mock_agent, config=config)
 
     stream = executor._core_agent_astream_with_interrupt_resume(
@@ -203,4 +202,4 @@ async def test_interrupt_resume_uses_config_dispatch_timeout(
     with pytest.raises(StopAsyncIteration):
         await anext(stream)
 
-    assert captured["dispatch_timeout"] == 0
+    assert captured["dispatch_timeout"] == 300

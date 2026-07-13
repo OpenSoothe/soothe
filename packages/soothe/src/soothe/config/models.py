@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
-    DEFAULT_DISPATCH_TIMEOUT_SECONDS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
     DEFAULT_TASK_TIMEOUT_SECONDS,
@@ -1633,11 +1632,12 @@ class StrangeLoopConfig(BaseModel):
     )
 
     dispatch_timeout_seconds: float = Field(
-        default=DEFAULT_DISPATCH_TIMEOUT_SECONDS,
+        default=0.0,
         description=(
             "Max seconds without CoreAgent graph stream chunks during Execute before "
-            "failing the step. 0 disables the dispatch watchdog (rely on tool/LLM "
-            "timeouts and user cancel). Default matches task tool timeout (5 hours)."
+            "failing the step. 0 disables the dispatch watchdog (default; rely on "
+            "tool/LLM timeouts and user cancel). Set a positive value only when "
+            "explicit stream-stall detection is needed."
         ),
         ge=0,
     )
