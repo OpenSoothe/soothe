@@ -92,11 +92,12 @@ Mid-loop follow-ups coordinate **intake label** with optional **continuation-ass
 | Intake (continuation turn) | Route | Continuation-assess LLM |
 |----------------------------|-------|-------------------------|
 | `trivial` | `plan_assess` → bootstrap or `plan_generate` | Only for ambiguous trivial goals |
-| `simple` | `plan_generate` (lightweight) | Skipped |
+| `simple` | `plan_assess` → bootstrap or `plan_generate` | Enabled (same discriminator path) |
 | `complex` | `bounded_evidence_gather` → full spine | Skipped |
 | `continue` keyword | deterministic bootstrap | Skipped |
 
-`assess_continuation()` remains the trivial-path discriminator (`bootstrap` vs `plan_generate`). Simple/complex intake never bootstraps.
+`assess_continuation()` is the continuation discriminator (`bootstrap` vs `plan_generate`) for
+`trivial` and `simple` follow-ups. `complex` still skips discriminator and escalates directly.
 
 ### Progressive Planning with PlanManager
 

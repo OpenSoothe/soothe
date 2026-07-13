@@ -37,6 +37,11 @@ The graph orchestrates a multi-phase iteration:
 
 The graph nodes live in `orchestrator/nodes/` — each node is a discrete phase (e.g., `plan_assess.py`, `plan_generate.py`, `execute_steps.py`, `iteration_gate.py`).
 
+Routing is intake-aware (`route_by_intent`, RFC-630): fresh `simple` turns go to lightweight
+`plan_generate`, while continuation `trivial` and `simple` turns first go through
+`plan_assess` continuation discrimination so the loop can bootstrap a single execute wave when
+prior context is already sufficient.
+
 ---
 
 ## PlanResult — The Structured Decision

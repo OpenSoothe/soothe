@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Authors**: Xiaming Chen
 **Created**: 2026-06-30
-**Last Updated**: 2026-07-07
+**Last Updated**: 2026-07-13
 **Depends on**: RFC-220, RFC-225, RFC-226, RFC-503
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
@@ -33,7 +33,7 @@ This RFC defines:
 - Pass 2 prompt, schema, and context inclusion (prior projection for reference resolution).
 - A `route_by_intent` conditional edge after `init_or_resume` driving four branches.
 - A P0 hard routing guard: block social-path when `loop_state.new_goal_created`.
-- Complexity-tiered planning: `trivial` skips `plan_generate`; `simple` runs lightweight; `complex` runs full spine.
+- Complexity-tiered planning: fresh-loop `trivial` skips `plan_generate`; fresh-loop `simple` runs lightweight; `complex` runs full spine. On continuation turns, `simple` routes through `plan_assess` discriminator first.
 - The trivial-branch plan shape: goal-as-step-action, no synthetic reasoning message.
 - Derived fields: `intake_label` and `has_deliverable` computed at routing.
 
@@ -44,7 +44,7 @@ This RFC defines:
 - Embedding-based pre-filter of intent.
 - Post-execution failure-intent keyword fast-path as primary classifier (migrated to LLM-first in IG-567; keyword path remains offline fallback).
 - Changes to the wire protocol, event envelopes, or daemon transport.
-- Changes to the continuation discriminator (`RFC-226`) or clarification relay (`RFC-622`) — both preserved unchanged.
+- Changes to clarification relay (`RFC-622`) behavior.
 - A feature flag or staged rollout — two-pass replaces one-pass outright.
 - Fine-tuning pipeline for intake classification (future work).
 
@@ -104,9 +104,9 @@ graph TB
     Graph --> Route["route_by_intent"]
     Route -->|"chitchat"| END["END (blocked if new_goal_created)"]
     Route -->|"trivial"| Trivial["resolve_decision → validate → execute"]
-    Route -->|"simple"| Simple["plan_generate(lightweight) → resolve → validate → execute"]
+    Route -->|"simple (fresh)"| Simple["plan_generate(lightweight) → resolve → validate → execute"]
     Route -->|"complex"| Complex["bounded_evidence_gather → plan_assess? → plan_generate → resolve → validate → execute"]
-    Route -->|"continuation overlay"| Cont["plan_assess(cont) → plan_generate → resolve → validate → execute"]
+    Route -->|"continuation overlay (trivial/simple)"| Cont["plan_assess(cont) → bootstrap or plan_generate → resolve → validate → execute"]
 ```
 
 ---
@@ -292,9 +292,11 @@ asyncio.gather(
 3. `route_by_intent` dispatches:
    - `chitchat` → END (social fast-path)
    - `trivial` → `resolve_decision` → `validate` → `execute`
-   - `simple` → `plan_generate(lightweight)` → `resolve` → `validate` → `execute`
+   - `simple` (fresh) → `plan_generate(lightweight)` → `resolve` → `validate` → `execute`
    - `complex` → `bounded_evidence_gather` → `plan_assess?` → `plan_generate` → `resolve` → `validate` → `execute`
-   - continuation overlay → `plan_assess` (RFC-226) → `plan_generate` → ...
+   - continuation overlay:
+     - `trivial` / `simple` → `plan_assess` (RFC-226) → `bootstrap` or `plan_generate`
+     - `complex` → `bounded_evidence_gather` → full spine
 
 ---
 
@@ -396,9 +398,9 @@ completion remains free-form via `ledger_direct` / synthesis.
 init_or_resume --(route_by_intent)--> {
   END                      // chitchat (blocked if new_goal_created)
   resolve_decision         // trivial (synth plan in scratch)
-  plan_generate            // simple
+  plan_generate            // simple (fresh only)
   bounded_evidence_gather  // complex
-  plan_assess              // continuation overlay
+  plan_assess              // continuation trivial/simple overlay
 }
 ```
 

@@ -19,7 +19,7 @@ Evaluated in order; first match wins:
 |----------|-----------|--------|-------|
 | 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
 | 2 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
-| 2b | ``is_continuation`` + ``simple`` | ``plan_generate`` | Skips continuation-assess; lightweight generate |
+| 2b | ``is_continuation`` + ``simple`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
 | 2c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
 | 3 | ``intake_label == trivial`` (fresh) | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
 | 4 | ``intake_label == simple`` (fresh) | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
@@ -39,7 +39,7 @@ flowchart TD
     IOR --> R{route_by_intent}
     R -->|fast_path| END1[__end__ / chitchat response]
     R -->|continuation+trivial| PA[plan_assess]
-    R -->|continuation+simple| PG[plan_generate → execute]
+    R -->|continuation+simple| PA2[plan_assess]
     R -->|continuation+complex| BEG[bounded_evidence_gather → … → execute]
     R -->|trivial| RD[resolve_decision → execute]
     R -->|simple| PG2[plan_generate → execute]
@@ -72,7 +72,8 @@ Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are con
 
 - → ``__end__`` — chitchat fast-path
 - → ``plan_assess`` — continuation + trivial
-- → ``plan_generate`` — continuation + simple, or fresh simple
+- → ``plan_assess`` — continuation + simple
+- → ``plan_generate`` — fresh simple
 - → ``bounded_evidence_gather`` — continuation + complex, or fresh complex
 - → ``resolve_decision`` — fresh trivial pseudo-plan
 

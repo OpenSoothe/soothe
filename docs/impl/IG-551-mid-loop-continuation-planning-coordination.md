@@ -81,10 +81,11 @@ When `is_continuation=true` and `continue_loop_mode` with prior goals:
 | `chitchat` | `END` (fast-path) | Skip | Unchanged |
 | `trivial` + `continue` keyword | `plan_assess` → bootstrap | Skip (deterministic) | Bootstrap from prior completion report |
 | `trivial` (other) | `plan_assess` | **Optional** (ambiguous chat-like follow-ups) | bootstrap or plan_generate |
-| `simple` | `plan_generate` (lightweight) | **Skip** | Multi-step plan, no bootstrap |
+| `simple` | `plan_assess` | **Enabled** | bootstrap or plan_generate |
 | `complex` | `bounded_evidence_gather` → `plan_assess` → `plan_generate` | **Skip** | Full spine, decomposed steps |
 
-`route_by_intent` today forces all continuation turns to `plan_assess`. Replace with matrix above.
+`route_by_intent` now routes continuation turns by intake: `trivial/simple` to `plan_assess`,
+`complex` to `bounded_evidence_gather`.
 
 ### Structural guardrails (P0 — must hold even if LLM runs)
 
@@ -144,18 +145,19 @@ When bootstrap is chosen legitimately (`trivial` or `continue` keyword):
 
 ### P1 — Coordination routing (skip redundant LLM)
 
-**Goal**: Align `route_by_intent` with intake on continuation turns; skip `assess_continuation` when route is deterministic.
+**Goal**: Align `route_by_intent` with intake on continuation turns while preserving
+single-pass bootstrap for continuation `simple` follow-ups.
 
 | File | Change |
 |------|--------|
-| `orchestrator/routing.py` | Continuation-aware `route_by_intent`: simple→`plan_generate`, complex→`bounded_evidence_gather`, trivial→`plan_assess` |
-| `orchestrator/nodes/init_or_resume.py` | Synthesize fresh-loop assessment for continuation+simple (mirror non-continuation simple branch) |
-| `orchestrator/nodes/plan_assess.py` | Only call `assess_continuation` for `trivial` (and `continue` keyword fast-path to bootstrap without LLM) |
+| `orchestrator/routing.py` | Continuation-aware `route_by_intent`: simple/trivial→`plan_assess`, complex→`bounded_evidence_gather` |
+| `orchestrator/nodes/init_or_resume.py` | Keep synthesized assessment for fresh-loop `simple`; skip synthetic continuation `simple` assessment |
+| `orchestrator/nodes/plan_assess.py` | Call `assess_continuation` for continuation `trivial` and `simple`; keep keyword fast-path bootstrap |
 | `tests/unit/core/loop/orchestrator/test_route_by_intent.py` | Extend truth table for continuation × intake_label |
 
 **Acceptance**
 
-- Mid-loop `simple` goal: 1 LLM (intent only) before `plan_generate`.
+- Mid-loop `simple` goal: continuation-assess may bootstrap directly when prior context is sufficient.
 - Mid-loop `complex` goal: intent → evidence_gather → plan_assess → plan_generate (no continuation-assess).
 - Mid-loop `trivial` “create git commit”: bootstrap still works (goal_3 pattern).
 
@@ -215,7 +217,7 @@ flowchart TD
 | Test | Assert |
 |------|--------|
 | `test_route_by_intent_continuation_complex` | Routes to `bounded_evidence_gather`, not `plan_assess` only |
-| `test_route_by_intent_continuation_simple` | Routes to `plan_generate` |
+| `test_route_by_intent_continuation_simple` | Routes to `plan_assess` |
 | `test_plan_assess_continuation_complex_skips_bootstrap` | No `build_continue_loop_bootstrap_plan` |
 | `test_plan_assess_continue_keyword_bootstrap` | `"continue"` → bootstrap without assess_continuation LLM |
 | `test_continuation_assess_lean_projection` | Prior `intent_classify` rows omitted |
@@ -225,7 +227,7 @@ flowchart TD
 
 | Case | Expected route |
 |------|----------------|
-| goal_1: upgrade client (simple) | plan_generate (already worked) |
+| goal_1: upgrade client (simple) | plan_assess → bootstrap or plan_generate |
 | goal_3: create git commit (trivial) | bootstrap |
 | goal_4: docker-build + e2e (complex) | evidence_gather → plan_generate, multi-step |
 

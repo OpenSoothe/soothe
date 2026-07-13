@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from unittest.mock import MagicMock, patch
 
 from soothe.toolkits.execution import (
@@ -27,6 +28,10 @@ class TestRunCommandOutputCap:
 
 
 class TestRunCommandOutputHandling:
+    @staticmethod
+    def _python_print_command(repeat_char: str, count: int) -> str:
+        return f'"{sys.executable}" -c "print(\'{repeat_char}\' * {count})"'
+
     def test_strips_ansi_escape_sequences(self) -> None:
         tool = RunCommandShellTool(max_output_length=10_000)
         raw = "hello \x1b[31mworld\x1b[0m"
@@ -42,7 +47,7 @@ class TestRunCommandOutputHandling:
         from soothe.toolkits.execution import _run_shell_command_sync
 
         completed = _run_shell_command_sync(
-            "python -c \"print('z' * 5000)\"",
+            self._python_print_command("z", 5000),
             cwd=None,
             timeout=30,
             max_output_chars=200,
@@ -52,7 +57,7 @@ class TestRunCommandOutputHandling:
 
     def test_run_command_tool_truncates_large_output(self) -> None:
         tool = RunCommandShellTool(max_output_length=200, timeout=30)
-        result = tool._run("python -c \"print('y' * 10000)\"")
+        result = tool._run(self._python_print_command("y", 10000))
         assert len(result) <= 200 + len("\n... (output truncated)")
         assert result.endswith("... (output truncated)")
 

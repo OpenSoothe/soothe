@@ -53,7 +53,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 - Replaces the binary `IntentClassifier` LLM + its `_is_likely_agentic` heuristic bypass (len>80 / words>15 / newlines≥2) with a single 4-class intake LLM (`quiz | trivial | simple | complex`)
 - Runs the intake LLM `asyncio.gather`-ed with the pre-graph IO cluster (checkpoint load, ContextEngine load, instruction/memory file reads via `to_thread`, git status) so the LLM round-trip is hidden behind IO that must run anyway
-- Adds `route_by_intent` conditional edge after `init_or_resume` dispatching to four branches: `quiz`→END, `trivial`→synthetic 1-step plan (no plan LLM), `simple`→lightweight `plan_generate`, `complex`→full existing spine
+- Adds `route_by_intent` conditional edge after `init_or_resume` dispatching by intake+continuation: `quiz`→END, fresh `trivial`→synthetic 1-step plan (no plan LLM), fresh `simple`→lightweight `plan_generate`, continuation `trivial/simple`→`plan_assess` discriminator, `complex`→full existing spine
 - Continuation remains a structural overlay from the checkpoint (not an LLM label); clarification remains emergent from the planner (not an intake branch)
 - Deletes the `simple_bypass` `"I will complete this goal directly:"` prefix; the `trivial` branch emits the goal itself as the step action; IG-569 replaces the `## Result` execute contract with the Step Deliverable Gate
 - Preserves the fresh-loop skip (IG-476), continuation discriminator (RFC-226), and clarification relay (RFC-622) unchanged
