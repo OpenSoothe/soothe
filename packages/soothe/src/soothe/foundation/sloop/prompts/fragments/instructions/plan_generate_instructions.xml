@@ -6,6 +6,7 @@ If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; 
 STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan only when needed.
 
 **Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
+- If one remaining actionable gap can be completed in one execute wave using projected prior context, emit exactly one step.
 
 **Top-level fields** (only these — never put field names inside ``steps[]``):
 - ``reasoning`` (≤500 chars): First-person cognition for the TUI (I'll / Let me …).

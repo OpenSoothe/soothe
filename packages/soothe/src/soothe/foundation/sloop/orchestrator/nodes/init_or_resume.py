@@ -154,14 +154,14 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             **graph_intake_fields,
         }
 
-    # RFC-630: simple branch — reaches plan_generate directly (skipping
+    # RFC-630: fresh-loop simple branch reaches plan_generate directly (skipping
     # plan_assess), so synthesize the assessment here. Mirrors the fresh-loop
-    # bypass in bounded_evidence_gather. Applies on continuation turns too.
-    if intake_label == IntakeLabel.SIMPLE:
+    # bypass in bounded_evidence_gather.
+    if intake_label == IntakeLabel.SIMPLE and not is_continuation:
         from ..nodes.bounded_evidence_gather import _create_fresh_loop_assessment
 
         ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
-        logger.info("[Intent] Simple branch: synthesized assessment for lightweight plan")
+        logger.info("[Intent] Fresh-loop simple branch: synthesized assessment for lightweight plan")
 
     return {
         "intent_route": "continue_loop",

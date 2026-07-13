@@ -257,7 +257,10 @@ async def _handle_continuation_first_plan(
 
     intake_label = intake_label_from_state(state)
 
-    if intake_label in (IntakeLabel.SIMPLE, IntakeLabel.COMPLEX):
+    # Continuation + complex should always escalate to full planning.
+    # Continuation + simple still runs the discriminator so it can bootstrap
+    # when prior execution context already makes the follow-up single-pass.
+    if intake_label == IntakeLabel.COMPLEX:
         logger.info("[Plan] continuation-assess skipped (intake=%s)", intake_label.value)
         ctx.scratch.plan_assessment = continuation_forced_plan_generate_assessment()
         return {"assess_route": "continue_generate"}

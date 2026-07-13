@@ -35,7 +35,7 @@ def test_route_by_intent_continuation_trivial() -> None:
 
 def test_route_by_intent_continuation_simple() -> None:
     state = {"is_continuation": True, "intake_label": IntakeLabel.SIMPLE}
-    assert route_by_intent(state) == "plan_generate"
+    assert route_by_intent(state) == "plan_assess"
 
 
 def test_route_by_intent_continuation_complex() -> None:
@@ -216,8 +216,8 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 
 
 @pytest.mark.asyncio
-async def test_init_or_resume_simple_synthesizes_assessment_on_continuation() -> None:
-    """Simple intake on continuation turns still synthesizes plan_assessment."""
+async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
+    """Simple intake on continuation turns defers to continuation plan_assess."""
     from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 
     intent = IntentClassification(
@@ -246,8 +246,7 @@ async def test_init_or_resume_simple_synthesizes_assessment_on_continuation() ->
     result = await node_init_or_resume(ctx, {})
 
     assert result["is_continuation"] is True
-    assert scratch.plan_assessment is not None
-    assert scratch.plan_assessment.status == "continue"
+    assert scratch.plan_assessment is None
 
 
 @pytest.mark.asyncio

@@ -405,3 +405,90 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
     assert ctx.scratch.plan_result is not None
     assert len(ctx.scratch.plan_result.decision.steps) == 1
     assess_continuation.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_continuation_simple_routes_to_assess_and_bootstraps() -> None:
+    """Continuation+simple should use continuation-assess and may bootstrap a single step."""
+    now = datetime.now(UTC)
+    ce = ContextEngine(
+        persistence=SqliteContextPersistence(loop_id="loop-simple", db_path=Path(":memory:"))
+    )
+    prior_goal = await ce.create_goal("analyze prior failures", loop_id="loop-simple")
+    await ce.activate_goal(prior_goal.id, loop_id="loop-simple")
+    await ce.complete_goal(prior_goal.id)
+    active_goal = await ce.create_goal("apply previous recommendation", loop_id="loop-simple")
+    await ce.activate_goal(active_goal.id, loop_id="loop-simple")
+
+    prior_record = GoalIndexEntry(
+        goal_id=prior_goal.id,
+        thread_id="tid",
+        status="completed",
+        started_at=now,
+        completed_at=now,
+    )
+    active_record = GoalIndexEntry(
+        goal_id=active_goal.id,
+        thread_id="tid",
+        status="running",
+        started_at=now,
+    )
+
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    loop_state = LoopState(
+        goal="apply previous recommendation",
+        thread_id="tid",
+        iteration=0,
+        continue_loop=True,
+        intent=intent,
+    )
+    loop_state.bind_ce(ce, active_goal.id)
+
+    continuation = MagicMock()
+    continuation.action = "bootstrap"
+    continuation.reasoning = "Prior context already identifies one concrete next action."
+    continuation.goal_progress = "medium"
+
+    assess_continuation = AsyncMock(return_value=continuation)
+    strange_loop = MagicMock()
+    strange_loop._build_plan_context.return_value = PlanContext()
+    strange_loop.loop_planner.assess_continuation = assess_continuation
+    strange_loop.plan_phase.generate_from_assessment = AsyncMock(
+        side_effect=AssertionError("bootstrap path should not call plan_generate")
+    )
+    strange_loop.plan_phase.generate_lightweight = AsyncMock(
+        side_effect=AssertionError("bootstrap path should not call lightweight generate")
+    )
+    strange_loop.config = MagicMock()
+
+    ctx = LoopRuntimeContext(
+        strange_loop=strange_loop,
+        state_manager=MagicMock(loop_id="loop-simple"),
+        anchor_manager=MagicMock(),
+        goal_context_manager=MagicMock(),
+        plan_manager=MagicMock(),
+        checkpoint=_make_checkpoint(prior=prior_record, active=active_record),
+        goal_record=active_record,
+        continue_loop_mode=True,
+        recovery_valid_resume=False,
+        loop_state=loop_state,
+        emit=_noop_emit,
+        scratch=LoopPhaseScratch(),
+        ce=ce,
+        ce_goal_id=active_goal.id,
+    )
+
+    graph_state = {
+        "is_continuation": True,
+        "intake_label": IntakeLabel.SIMPLE,
+    }
+    assert route_by_intent(graph_state) == "plan_assess"
+
+    assess_out = await node_plan_assess(ctx, graph_state)
+    assert assess_out.get("assess_route") == "skip_generate"
+    assert ctx.scratch.plan_result is not None
+    assert len(ctx.scratch.plan_result.decision.steps) == 1
+    assess_continuation.assert_awaited_once()

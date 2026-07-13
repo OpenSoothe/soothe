@@ -70,7 +70,7 @@ def route_by_intent(state: dict[str, Any]) -> str:
     set by ``init_or_resume``. Continuation turns follow intake-aware routing:
 
     - ``trivial`` → ``plan_assess`` (continuation discriminator)
-    - ``simple``  → ``plan_generate`` (lightweight; skip continuation-assess)
+    - ``simple``  → ``plan_assess`` (continuation discriminator; may bootstrap)
     - ``complex`` / missing label → ``bounded_evidence_gather`` (full spine)
 
     Fresh-loop (non-continuation) routing is unchanged:
@@ -109,8 +109,8 @@ def route_by_intent(state: dict[str, Any]) -> str:
 
     if state.get("is_continuation"):
         if label == IntakeLabel.SIMPLE:
-            logger.info("[routing] route_by_intent → plan_generate (continuation+simple)")
-            return "plan_generate"
+            logger.info("[routing] route_by_intent → plan_assess (continuation+simple)")
+            return "plan_assess"
         if label == IntakeLabel.COMPLEX or label is None:
             logger.info(
                 "[routing] route_by_intent → bounded_evidence_gather (continuation+complex)"
