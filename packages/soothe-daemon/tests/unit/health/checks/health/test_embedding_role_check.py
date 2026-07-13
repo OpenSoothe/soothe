@@ -39,6 +39,7 @@ async def test_embedding_role_ok_when_configured() -> None:
             embedding="dashscope:text-embedding-v4",
             default="openai:gpt-4o-mini",
         ),
+        skillify=SimpleNamespace(model_role="embedding"),
         embedding_dims=1024,
         resolve_model=lambda role: (
             "dashscope:text-embedding-v4" if role == "embedding" else "openai:gpt-4o-mini"
@@ -47,3 +48,25 @@ async def test_embedding_role_ok_when_configured() -> None:
     result = await erc.check_embedding_role(config)
     assert result.checks[0].status == CheckStatus.OK
     assert "text-embedding-v4" in result.checks[0].message
+
+
+@pytest.mark.asyncio
+async def test_embedding_role_reports_custom_skillify_model_role() -> None:
+    config = SimpleNamespace(
+        router=SimpleNamespace(
+            embedding="dashscope:text-embedding-v4",
+            default="openai:gpt-4o-mini",
+        ),
+        skillify=SimpleNamespace(model_role="fast"),
+        embedding_dims=1024,
+        resolve_model=lambda role: (
+            "dashscope:text-embedding-v4"
+            if role == "embedding"
+            else ("dashscope:fast-embed" if role == "fast" else "openai:gpt-4o-mini")
+        ),
+    )
+    result = await erc.check_embedding_role(config)
+    details = result.checks[0].details or {}
+    assert result.checks[0].status == CheckStatus.OK
+    assert details["skillify_model_role"] == "fast"
+    assert details["skillify_resolved"] == "dashscope:fast-embed"

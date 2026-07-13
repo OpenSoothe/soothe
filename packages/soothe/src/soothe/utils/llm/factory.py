@@ -236,8 +236,8 @@ class LLMFactory:
 
         return model
 
-    def create_embedding_model(self) -> Embeddings:
-        """Create embedding model using 'embedding' role.
+    def create_embedding_model(self, role: ModelRole = "embedding") -> Embeddings:
+        """Create embedding model using the requested router role.
 
         Handles DashScope special cases:
         - OpenAI-compatible endpoint: DashScopeOpenAIEmbeddings
@@ -250,7 +250,7 @@ class LLMFactory:
         """
         from langchain.embeddings import init_embeddings
 
-        spec = self.resolve_model("embedding")
+        spec = self.resolve_model(role)
         provider_name, _, model_name = spec.partition(":")
         if not model_name:
             model_name = provider_name

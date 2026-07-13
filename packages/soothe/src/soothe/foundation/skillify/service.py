@@ -66,7 +66,10 @@ class SkillifyService:
         warehouse_paths = resolve_warehouse_paths(soothe_home, list(skillify_opts.warehouse_paths))
 
         self._vector_store = config.create_vector_store_for_role("skillify")
-        embeddings_factory = config.create_embedding_model
+        embedding_role = skillify_opts.model_role
+
+        def embeddings_factory() -> Any:
+            return config.create_embedding_model(embedding_role)
         warehouse = SkillWarehouse(paths=warehouse_paths)
 
         self._indexer = SkillIndexer(

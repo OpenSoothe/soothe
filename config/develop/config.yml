@@ -54,8 +54,8 @@ router_profiles:
       think: "coding-plan:glm-5"
       image: "coding-plan:kimi-k2.5"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
-      embedding: "omlx:nomicai-modernbert-embed-base-bf16"
-    embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
+      embedding: "dashscope:text-embedding-v4"
+    embedding_dims: 768  # must match configured embedding output dimension
 
   - name: local-deploy
     router:
@@ -226,6 +226,7 @@ tools:
 # ============================================================
 skillify:
   enabled: true
+  model_role: embedding
   warehouse_paths: []
   index_collection: soothe_skillify
   index_interval_seconds: 300

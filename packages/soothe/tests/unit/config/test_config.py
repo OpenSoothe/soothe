@@ -109,6 +109,7 @@ class TestSootheConfig:
     def test_default_skillify_config(self) -> None:
         cfg = SootheConfig()
         assert cfg.skillify.enabled is True
+        assert cfg.skillify.model_role == "embedding"
         assert cfg.skillify.retrieval_top_k == 10
 
     def test_legacy_subagents_skillify_is_stripped(self) -> None:

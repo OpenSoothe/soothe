@@ -2573,6 +2573,10 @@ class SkillifyConfig(BaseModel):
     """Configuration for the daemon-shared Skillify semantic skill search service."""
 
     enabled: bool = True
+    model_role: ModelRole = Field(
+        default="embedding",
+        description="Router model role used for Skillify embedding calls.",
+    )
     warehouse_paths: list[str] = Field(
         default_factory=list,
         description=(

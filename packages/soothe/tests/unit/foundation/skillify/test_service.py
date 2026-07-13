@@ -94,6 +94,17 @@ async def test_retrieve_deduplicates_inflight_queries() -> None:
     service._retriever.retrieve.assert_awaited_once()  # noqa: SLF001
 
 
+def test_service_uses_configured_skillify_model_role_for_embeddings() -> None:
+    config = SootheConfig(skillify={"model_role": "fast"})
+
+    with patch.object(SootheConfig, "create_vector_store_for_role", return_value=MagicMock()):
+        with patch.object(SootheConfig, "create_embedding_model", return_value=MagicMock()) as create:
+            service = SkillifyService(config)
+            service._indexer._embeddings._factory()  # noqa: SLF001
+
+    create.assert_called_once_with("fast")
+
+
 @pytest.mark.asyncio
 async def test_indexer_stop_skips_shared_pool_close() -> None:
     from soothe.foundation.skillify.indexer import SkillIndexer

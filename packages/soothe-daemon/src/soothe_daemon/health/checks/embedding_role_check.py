@@ -11,9 +11,10 @@ from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 async def check_embedding_role(config: SootheConfig | None = None) -> CategoryResult:
     """Verify the daemon has a dedicated ``embedding`` router role configured.
 
-    Skillify, MemU, and vector stores use ``config.create_embedding_model()``, which
-    resolves the ``embedding`` role from router profiles. When unset, Soothe falls
-    back to the default chat model — which is unsuitable for embeddings.
+    MemU and vector stores resolve the ``embedding`` router role by default.
+    Skillify defaults to ``embedding`` but can override via ``skillify.model_role``.
+    When the ``embedding`` role is unset, Soothe falls back to the default chat
+    model — which is unsuitable for embeddings.
 
     Args:
         config: Agent configuration to inspect.
@@ -37,6 +38,8 @@ async def check_embedding_role(config: SootheConfig | None = None) -> CategoryRe
 
     explicit = getattr(config.router, "embedding", None)
     resolved = config.resolve_model("embedding")
+    skillify_model_role = getattr(getattr(config, "skillify", None), "model_role", "embedding")
+    skillify_resolved = config.resolve_model(skillify_model_role)
 
     if not explicit:
         checks = [
@@ -48,6 +51,8 @@ async def check_embedding_role(config: SootheConfig | None = None) -> CategoryRe
                 ),
                 details={
                     "resolved": resolved,
+                    "skillify_model_role": skillify_model_role,
+                    "skillify_resolved": skillify_resolved,
                     "embedding_dims": config.embedding_dims,
                     "remediation": (
                         "Set router_profiles.*.router.embedding to a dedicated embedding model "
@@ -63,6 +68,8 @@ async def check_embedding_role(config: SootheConfig | None = None) -> CategoryRe
                 status=CheckStatus.OK,
                 message=f"Embedding role configured ({resolved})",
                 details={
+                    "skillify_model_role": skillify_model_role,
+                    "skillify_resolved": skillify_resolved,
                     "embedding_dims": config.embedding_dims,
                 },
             )

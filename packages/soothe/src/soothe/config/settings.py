@@ -918,8 +918,8 @@ class SootheConfig(BaseSettings):
         """
         return self.llm_factory.create_chat_model_for_spec(model_spec, model_params)
 
-    def create_embedding_model(self) -> Embeddings:
-        """Create an ``Embeddings`` instance using the ``embedding`` role with caching.
+    def create_embedding_model(self, role: ModelRole = "embedding") -> Embeddings:
+        """Create an ``Embeddings`` instance for the requested role with caching.
 
         Delegates to ``llm_factory.create_embedding_model``. All embedding creation logic
         (DashScope special handling, caching) is handled by LLMFactory per RFC-627.
@@ -927,7 +927,7 @@ class SootheConfig(BaseSettings):
         Returns:
             A configured langchain ``Embeddings`` instance.
         """
-        return self.llm_factory.create_embedding_model()
+        return self.llm_factory.create_embedding_model(role)
 
     def resolve_system_prompt(self) -> str:
         """Return the effective system prompt with current date context.
