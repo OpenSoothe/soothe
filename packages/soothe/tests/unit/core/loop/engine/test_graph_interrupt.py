@@ -9,6 +9,7 @@ import pytest
 
 from soothe.foundation.sloop.engine.graph_interrupt import (
     _STREAM_HEARTBEAT_SENTINEL,
+    DispatchTimeoutError,
     GraphStreamChunkReader,
     build_auto_resume_payload,
     is_ask_user_interrupt,
@@ -59,6 +60,27 @@ async def test_graph_stream_chunk_reader_cancel_closes_pending_read() -> None:
 
     with pytest.raises(StopAsyncIteration):
         await reader.read_next()
+
+
+@pytest.mark.asyncio
+async def test_graph_stream_chunk_reader_dispatch_timeout_raises() -> None:
+    """Dispatch watchdog raises when no chunk arrives within the deadline."""
+    reader = GraphStreamChunkReader(
+        _slow_single_chunk(delay=10.0),
+        dispatch_timeout=0.4,
+        heartbeat_interval=0.2,
+        step_id="KFD-05",
+    )
+
+    with pytest.raises(DispatchTimeoutError) as exc_info:
+        while True:
+            chunk = await reader.read_next()
+            if chunk is _STREAM_HEARTBEAT_SENTINEL:
+                continue
+            break  # pragma: no cover
+
+    assert exc_info.value.timeout_seconds == 0.4
+    assert exc_info.value.step_id == "KFD-05"
 
 
 def test_auto_resume_tool_interrupt_payload() -> None:

@@ -26,6 +26,9 @@ MAX_EXECUTE_TIMEOUT = 18000  # 5 hours
 # Default timeout for the task tool (subagent delegation)
 DEFAULT_TASK_TIMEOUT_SECONDS = 18000  # 5 hours
 
+# Default CoreAgent graph stream inactivity watchdog during Execute (aligned with task tool)
+DEFAULT_DISPATCH_TIMEOUT_SECONDS = DEFAULT_TASK_TIMEOUT_SECONDS
+
 
 def clamp_execute_timeout(seconds: int | float) -> int:
     """Clamp run_command timeout to ``MAX_EXECUTE_TIMEOUT``."""

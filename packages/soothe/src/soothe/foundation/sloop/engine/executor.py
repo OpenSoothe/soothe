@@ -32,6 +32,7 @@ from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_DISPATCH_TIMEOUT_SECONDS,
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 from soothe.foundation.sloop.clarification import (
@@ -61,9 +62,9 @@ from soothe.foundation.sloop.engine.continuation_context import (
     ledger_goal_completion_text,
 )
 from soothe.foundation.sloop.engine.graph_interrupt import (
-    _DEFAULT_DISPATCH_TIMEOUT_S,
     _MAX_INTERRUPT_ITERATIONS,
     _STREAM_HEARTBEAT_SENTINEL,
+    DispatchTimeoutError,
     GraphStreamChunkReader,
     build_auto_resume_payload,
     is_ask_user_interrupt,
@@ -360,6 +361,12 @@ class Executor:
             return _DEFAULT_MAX_TOOL_CALLS_PER_STEP
         return max(0, int(self._config.agent.loop.max_tool_calls_per_step))
 
+    def _dispatch_timeout_seconds(self) -> float:
+        """Graph stream inactivity watchdog for Execute (0 = disabled)."""
+        if self._config is None:
+            return float(DEFAULT_DISPATCH_TIMEOUT_SECONDS)
+        return max(0.0, float(self._config.agent.loop.dispatch_timeout_seconds))
+
     def _execute_action_retry_max(self) -> int:
         if self._config is None:
             return 1
@@ -637,11 +644,11 @@ class Executor:
                 subgraphs=True,
                 durability="exit",
             )
-            # IG-506: LLM timeout handled by LLMRateLimitMiddleware, not chunk timeout.
-            # IG-549: Heartbeat interval keeps stream alive during long tool execution.
+            # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: configurable via
+            # agent.loop.dispatch_timeout_seconds (default 5h, aligned with task tool).
             chunk_reader = GraphStreamChunkReader(
                 chunk_iter,
-                dispatch_timeout=_DEFAULT_DISPATCH_TIMEOUT_S,
+                dispatch_timeout=self._dispatch_timeout_seconds(),
                 step_id=step_id,
             )
             try:
@@ -2652,6 +2659,9 @@ class Executor:
         """
         from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
 
+        if isinstance(exc, DispatchTimeoutError):
+            return f"CoreAgent stream stalled for {exc.timeout_seconds:.0f}s without graph chunks"
+
         if _is_recoverable_tool_network_error(exc):
             return _format_tool_network_error(exc)
 
@@ -2672,7 +2682,7 @@ class Executor:
         if "invalid_parameter_error" in error_str or "Range of input length should be" in error_str:
             return "Input exceeded model context limit (too large)"
 
-        # IG-506: Check for plain TimeoutError from graph_interrupt (middleware disabled case).
+        # Check for plain TimeoutError when LLM middleware is disabled.
         # Check for timeout BEFORE rate_limit check to avoid false positives.
         # TimeoutError messages may contain "llm_rate_limit middleware" suggestion text
         # which would incorrectly trigger the rate_limit detection below.

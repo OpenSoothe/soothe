@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
+    DEFAULT_DISPATCH_TIMEOUT_SECONDS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
     DEFAULT_TASK_TIMEOUT_SECONDS,
@@ -1565,6 +1566,8 @@ class StrangeLoopConfig(BaseModel):
         max_iterations: Maximum agent loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
         max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
+        dispatch_timeout_seconds: Max seconds without CoreAgent graph stream chunks during Execute
+            before failing the step. 0 disables the dispatch watchdog.
         execute_action_retry_max: Extra Execute passes when the step deliverable gate fails (0 = disabled).
         execute_min_answer_chars: Minimum final assistant text length for deliverable satisfaction.
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
@@ -1627,6 +1630,16 @@ class StrangeLoopConfig(BaseModel):
         ),
         ge=0,
         le=10_000,
+    )
+
+    dispatch_timeout_seconds: float = Field(
+        default=DEFAULT_DISPATCH_TIMEOUT_SECONDS,
+        description=(
+            "Max seconds without CoreAgent graph stream chunks during Execute before "
+            "failing the step. 0 disables the dispatch watchdog (rely on tool/LLM "
+            "timeouts and user cancel). Default matches task tool timeout (5 hours)."
+        ),
+        ge=0,
     )
 
     execute_action_retry_max: int = Field(

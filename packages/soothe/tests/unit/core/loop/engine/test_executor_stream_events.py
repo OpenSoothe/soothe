@@ -8,8 +8,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from soothe.config import SootheConfig
+from soothe.config.constants import DEFAULT_DISPATCH_TIMEOUT_SECONDS
 from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.graph_interrupt import _DEFAULT_DISPATCH_TIMEOUT_S
 from soothe.foundation.sloop.engine.step_wave_types import (
     StreamEvent,
     _append_parallel_stream_event,
@@ -144,4 +145,62 @@ async def test_interrupt_resume_sets_graph_dispatch_timeout(
     with pytest.raises(StopAsyncIteration):
         await anext(stream)
 
-    assert captured["dispatch_timeout"] == _DEFAULT_DISPATCH_TIMEOUT_S
+    assert captured["dispatch_timeout"] == DEFAULT_DISPATCH_TIMEOUT_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_interrupt_resume_uses_config_dispatch_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Graph stream reader should honor agent.loop.dispatch_timeout_seconds."""
+
+    class _FakeReader:
+        def __init__(
+            self,
+            _chunk_iter: AsyncIterator[str],
+            *,
+            dispatch_timeout: float | None = None,
+            step_id: str | None = None,
+            heartbeat_interval: float | None = None,
+        ) -> None:
+            _ = step_id, heartbeat_interval
+            self.dispatch_timeout = dispatch_timeout
+
+        async def read_next(self) -> str:
+            raise StopAsyncIteration
+
+        async def cancel(self) -> None:
+            return None
+
+    captured: dict[str, float | None] = {}
+
+    def _reader_factory(*args: object, **kwargs: object) -> _FakeReader:
+        reader = _FakeReader(*args, **kwargs)
+        captured["dispatch_timeout"] = reader.dispatch_timeout
+        return reader
+
+    monkeypatch.setattr(
+        "soothe.foundation.sloop.engine.executor.GraphStreamChunkReader",
+        _reader_factory,
+    )
+
+    async def empty_stream() -> AsyncIterator[str]:
+        if False:  # pragma: no cover
+            yield "never"
+
+    mock_agent = MagicMock()
+    mock_agent.execution_astream = MagicMock(return_value=empty_stream())
+    mock_agent.can_read_graph_state = False
+    config = SootheConfig()
+    config.agent.loop.dispatch_timeout_seconds = 0
+    executor = Executor(mock_agent, config=config)
+
+    stream = executor._core_agent_astream_with_interrupt_resume(
+        {"messages": []},
+        {},
+        step_id="S-01",
+    )
+    with pytest.raises(StopAsyncIteration):
+        await anext(stream)
+
+    assert captured["dispatch_timeout"] == 0

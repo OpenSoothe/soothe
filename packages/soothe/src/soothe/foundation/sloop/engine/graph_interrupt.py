@@ -24,12 +24,11 @@ _MAX_INTERRUPT_ITERATIONS = 50
 # the stream alive and prevent client disconnects.
 _STREAM_HEARTBEAT_INTERVAL_S = 10.0
 
-# Default inactivity timeout for graph stream chunks (seconds).
 # When no chunk arrives within this window, the stream is considered stalled
 # (typically a tool-dispatch hang in the LangGraph runtime) and a
 # ``DispatchTimeoutError`` is raised so the step fails gracefully instead of
-# hanging indefinitely. Set to 0 to disable.
-_DEFAULT_DISPATCH_TIMEOUT_S: float = 300.0
+# hanging indefinitely. Set to 0 to disable. Configure via
+# ``agent.loop.dispatch_timeout_seconds`` (default: task tool timeout / 5 hours).
 
 
 class DispatchTimeoutError(Exception):
@@ -115,16 +114,6 @@ class GraphStreamChunkReader:
                     await self._cancel_pending()
                     raise asyncio.CancelledError
 
-                heartbeat_elapsed = time.perf_counter() - self._heartbeat_start
-                if heartbeat_elapsed >= self._heartbeat_interval:
-                    logger.debug(
-                        "CoreAgent stream heartbeat: no chunks for %.1fs%s, emitting sentinel",
-                        heartbeat_elapsed,
-                        f" (step={self._step_id})" if self._step_id else "",
-                    )
-                    self._heartbeat_start = time.perf_counter()
-                    return _STREAM_HEARTBEAT_SENTINEL
-
                 if self._dispatch_timeout and self._dispatch_timeout > 0:
                     elapsed = time.perf_counter() - self._watchdog_start
                     if elapsed >= self._dispatch_timeout:
@@ -136,6 +125,16 @@ class GraphStreamChunkReader:
                         )
                         await self._cancel_pending()
                         raise DispatchTimeoutError(self._dispatch_timeout, step_id=self._step_id)
+
+                heartbeat_elapsed = time.perf_counter() - self._heartbeat_start
+                if heartbeat_elapsed >= self._heartbeat_interval:
+                    logger.debug(
+                        "CoreAgent stream heartbeat: no chunks for %.1fs%s, emitting sentinel",
+                        heartbeat_elapsed,
+                        f" (step={self._step_id})" if self._step_id else "",
+                    )
+                    self._heartbeat_start = time.perf_counter()
+                    return _STREAM_HEARTBEAT_SENTINEL
 
             try:
                 return anext_task.result()
@@ -248,7 +247,6 @@ def build_auto_resume_payload(pending_interrupts: Mapping[str, Any]) -> dict[str
 
 
 __all__ = [
-    "_DEFAULT_DISPATCH_TIMEOUT_S",
     "_MAX_INTERRUPT_ITERATIONS",
     "_STREAM_HEARTBEAT_INTERVAL_S",
     "_STREAM_HEARTBEAT_SENTINEL",
