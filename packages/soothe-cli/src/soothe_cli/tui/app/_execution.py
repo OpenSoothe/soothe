@@ -179,6 +179,7 @@ class _ExecutionMixin:
             self._pending_messages.append(QueuedMessage(text=value, mode=mode))
             queued_widget = QueuedUserMessage(value)
             self._queued_widgets.append(queued_widget)
+            self._refresh_queued_goal_tips()
             await self._mount_message(queued_widget)
             return
 
@@ -417,12 +418,14 @@ class _ExecutionMixin:
         if self._agent_running or self._shell_running:
             queued_widget = QueuedUserMessage(command)
             self._queued_widgets.append(queued_widget)
+            self._refresh_queued_goal_tips()
             await self._mount_message(queued_widget)
 
             async def _mount_output() -> None:
                 # Remove the ephemeral queued widget, then mount real output.
                 if queued_widget in self._queued_widgets:
                     self._queued_widgets.remove(queued_widget)
+                    self._refresh_queued_goal_tips()
                 with suppress(Exception):
                     await queued_widget.remove()
                 await self._mount_message(UserMessage(command))
@@ -908,6 +911,7 @@ class _ExecutionMixin:
             if self._queued_widgets:
                 widget = self._queued_widgets.popleft()
                 await widget.remove()
+                self._refresh_queued_goal_tips()
 
             await self._process_message(msg.text, msg.mode)
         except Exception:

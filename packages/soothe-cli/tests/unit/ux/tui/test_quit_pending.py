@@ -301,11 +301,33 @@ def test_ctrl_c_preserves_queue_when_interrupting_via_daemon() -> None:
 
 @pytest.mark.asyncio
 async def test_interrupt_daemon_turn_preserves_queue_when_requested() -> None:
-    """_interrupt_daemon_agent_turn(discard_queue=False) keeps pending messages."""
+    """Queue-preserving daemon interrupt keeps queue and local worker alive."""
 
     class _AppStub(_MessagesMixin):
         def __init__(self) -> None:
             self._daemon_session = AsyncMock()
+            self._agent_worker = MagicMock()
+            self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
+            self._queued_widgets = deque()
+            self._deferred_actions = []
+            self._set_spinner = AsyncMock()
+
+    app = _AppStub()
+    await app._interrupt_daemon_agent_turn(discard_queue=False)
+
+    app._daemon_session.cancel_remote_query.assert_awaited_once()
+    app._agent_worker.cancel.assert_not_called()
+    assert len(app._pending_messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_interrupt_daemon_turn_cancels_worker_when_remote_cancel_fails() -> None:
+    """Fallback to local worker cancel when daemon /cancel cannot be sent."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self._daemon_session = AsyncMock()
+            self._daemon_session.cancel_remote_query.side_effect = RuntimeError("boom")
             self._agent_worker = MagicMock()
             self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
             self._queued_widgets = deque()

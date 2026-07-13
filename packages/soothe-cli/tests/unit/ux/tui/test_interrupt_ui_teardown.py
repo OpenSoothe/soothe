@@ -63,4 +63,4 @@ async def test_interrupt_daemon_turn_tears_down_ui_before_cancel() -> None:
     app._ui_adapter.finalize_pending_steps_with_error.assert_called_once_with("Stream cancelled")
     app._set_spinner.assert_awaited_once_with(None)
     app._daemon_session.cancel_remote_query.assert_awaited_once()
-    app._agent_worker.cancel.assert_called_once()
+    app._agent_worker.cancel.assert_not_called()

@@ -684,6 +684,18 @@ class ChatTextArea(TextArea):
                 self.post_message(self.Submitted(value))
             return
 
+        # Up on empty input can pull the latest queued goal back for editing.
+        if event.key == "up" and not self.text:
+            trigger_edit = getattr(self.app, "edit_queued_goal_from_up", None)
+            if callable(trigger_edit):
+                try:
+                    if bool(trigger_edit()):
+                        event.prevent_default()
+                        event.stop()
+                        return
+                except Exception:  # noqa: BLE001
+                    logger.debug("Queued-goal edit shortcut failed", exc_info=True)
+
         # Up/Down arrow: only navigate history at input boundaries.
         # Up requires cursor at position (0, 0); Down requires cursor at
         # the very end.  When already browsing history, either boundary

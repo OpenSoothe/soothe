@@ -43,6 +43,19 @@ logger = logging.getLogger(__name__)
 class _MessagesMixin:
     """Message widget lifecycle, store management, queue, interrupt/quit, toggles, editor, and events."""
 
+    def _refresh_queued_goal_tips(self) -> None:
+        """Show queue interaction tips on the most recently queued goal only."""
+        if not self._queued_widgets:
+            return
+        tip_index = -1
+        if self._pending_messages and self._pending_messages[-1].mode == "normal":
+            pending_tail_index = len(self._pending_messages) - 1
+            if pending_tail_index < len(self._queued_widgets):
+                tip_index = pending_tail_index
+        for index, widget in enumerate(self._queued_widgets):
+            with suppress(Exception):
+                widget.set_show_queue_tips(index == tip_index if tip_index >= 0 else False)
+
     def _has_pending_chat_input(self) -> bool:
         """Return whether chat input has draft content that should be preserved."""
         chat_input = self._chat_input
@@ -373,40 +386,42 @@ class _MessagesMixin:
                 "Messages container (#messages) not found during clear; UI may be out of sync with message store"
             )
 
-    def _pop_last_queued_message(self) -> None:
-        """Remove the most recently queued message (LIFO).
-
-        If the chat input is empty the evicted text is restored there so the
-        user can edit and re-submit. Otherwise the message is discarded. The
-        toast message distinguishes between the two outcomes.
-
-        Caller must ensure `_pending_messages` is non-empty. A defensive guard
-        is included in case of async TOCTOU races.
-        """
+    def _pop_last_queued_entry(self) -> Any | None:
+        """Pop the latest queued message and paired widget, if available."""
         if not self._pending_messages:
-            return
+            return None
         msg = self._pending_messages.pop()
         if self._queued_widgets:
             widget = self._queued_widgets.pop()
             widget.remove()
+            self._refresh_queued_goal_tips()
         else:
             logger.warning(
                 "Queued-widget deque empty while pending-messages was not; widget/message tracking may be out of sync"
             )
+        return msg
+
+    def _restore_last_queued_goal_to_input(self) -> bool:
+        """Restore the latest queued goal into an empty chat input for editing."""
+        msg = self._pop_last_queued_entry()
+        if msg is None:
+            return False
 
         if not self._chat_input:
             logger.warning(
                 "Chat input unavailable during queue pop; message text cannot be restored: %s",
                 msg.text[:60],
             )
-            self.notify("Queued message discarded", timeout=2)
-            return
+            return False
 
-        if not self._chat_input.value.strip():
-            self._chat_input.value = msg.text
-            self.notify("Queued message moved to input", timeout=2)
-        else:
-            self.notify("Queued message discarded (input not empty)", timeout=3)
+        if self._has_pending_chat_input():
+            logger.warning(
+                "Queue restore requested while input has draft content; skipping restore"
+            )
+            return False
+        self._chat_input.value = msg.text
+        self.notify("Queued goal moved to input", timeout=2)
+        return True
 
     def _discard_queue(self) -> None:
         """Clear pending messages, deferred actions, and queued widgets."""
@@ -415,6 +430,25 @@ class _MessagesMixin:
             w.remove()
         self._queued_widgets.clear()
         self._deferred_actions.clear()
+
+    def _cancel_last_queued_message(self) -> bool:
+        """Cancel the most recently queued goal without restoring it to input."""
+        msg = self._pop_last_queued_entry()
+        if msg is None:
+            return False
+        self.notify(f"Cancelled queued goal: {msg.text[:60]}", timeout=2)
+        return True
+
+    def edit_queued_goal_from_up(self) -> bool:
+        """Move the latest queued goal back to input for editing."""
+        if not self._pending_messages:
+            return False
+        if self._has_pending_chat_input():
+            return False
+        queue_tail = self._pending_messages[-1]
+        if queue_tail.mode != "normal":
+            return False
+        return self._restore_last_queued_goal_to_input()
 
     def _defer_action(self, action: DeferredAction) -> None:
         """Queue a deferred action, replacing any existing action of the same kind.
@@ -485,7 +519,7 @@ class _MessagesMixin:
             worker.cancel()
 
     async def _interrupt_daemon_agent_turn(self, *, discard_queue: bool = True) -> None:
-        """Stop in-flight UI, send daemon ``/cancel``, then cancel the local worker.
+        """Stop in-flight UI and request daemon-side cancel.
 
         UI teardown runs first so Ctrl+C does not leave the thinking spinner or
         goal-tree running rows active while the daemon winds down (which can take
@@ -493,17 +527,24 @@ class _MessagesMixin:
 
         Args:
             discard_queue: When ``False``, preserve queued user goals so they
-                run after the cancelled turn finishes cleanup.
+                run after the cancelled turn finishes cleanup. In this mode,
+                the local worker is left running when daemon cancel succeeds.
         """
         await self._tear_down_interrupt_ui()
         session = self._daemon_session
         worker = self._agent_worker
+        cancel_sent = False
         if session is not None:
             try:
                 await session.cancel_remote_query()
+                cancel_sent = True
             except Exception:
                 logger.warning("Failed to send cancel to daemon", exc_info=True)
-        if worker is not None:
+        # For Enter-triggered queued-goal handoff (discard_queue=False), avoid
+        # force-cancelling the local worker after /cancel is accepted.
+        # Let the active stream finish naturally so queue-drain ordering stays
+        # stable and the loop subscription is not torn down mid-handoff.
+        if worker is not None and (discard_queue or not cancel_sent):
             self._cancel_worker(worker, discard_queue=discard_queue)
 
     def action_copy_selection(self) -> None:
@@ -568,13 +609,14 @@ class _MessagesMixin:
         self.set_timer(quit_timeout, lambda: setattr(self, "_quit_pending", False))
 
     def action_dismiss_ui(self) -> None:
-        """Handle Escape — dismiss overlays and modals only (never cancel agent work).
+        """Handle Escape — dismiss overlays and optionally cancel queued goals.
 
         Priority order:
         1. If modal screen is active, dismiss it
         2. If plan quick-view overlay is open, collapse it
-        3. If completion popup is open, dismiss it
-        4. If input is in command/shell mode, exit to normal mode
+        3. If input is idle and queue has a normal goal, cancel queued tail
+        4. If completion popup is open, dismiss it
+        5. If input is in command/shell mode, exit to normal mode
         """
         from contextlib import suppress
 
@@ -602,6 +644,13 @@ class _MessagesMixin:
 
         # Close completion popup or exit slash/shell command mode
         if self._chat_input:
+            # When queue has pending goals and input is idle, Esc cancels the
+            # latest queued normal goal (without interrupting current work).
+            if not self._has_pending_chat_input():
+                queue_tail = self._pending_messages[-1] if self._pending_messages else None
+                if queue_tail is not None and queue_tail.mode == "normal":
+                    if self._cancel_last_queued_message():
+                        return
             if self._chat_input.dismiss_completion():
                 return
             if self._chat_input.exit_mode():

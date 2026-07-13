@@ -155,6 +155,14 @@ class QueuedUserMessage(Static):
         """
         super().__init__(**kwargs)
         self._content = content
+        self._show_queue_tips = False
+
+    def set_show_queue_tips(self, show: bool) -> None:
+        """Toggle whether queue interaction tips are rendered."""
+        if self._show_queue_tips == show:
+            return
+        self._show_queue_tips = show
+        self.refresh(layout=False)
 
     def on_mount(self) -> None:
         """Add ASCII border class when in ASCII mode."""
@@ -168,6 +176,7 @@ class QueuedUserMessage(Static):
             Styled Content with dimmed prefix and body matching the welcome banner.
         """
         content = self._content
+        colors = theme.get_theme_colors(self)
         mode = PREFIX_TO_MODE.get(content[:1]) if content else None
         if mode:
             glyph = MODE_DISPLAY_GLYPHS.get(mode, content[0])
@@ -175,4 +184,12 @@ class QueuedUserMessage(Static):
             content = content[1:]
         else:
             prefix = ("> ", "dim")
-        return Content.assemble(prefix, (content, "dim"))
+        parts: list[str | tuple[str, str]] = [prefix, (content, "dim")]
+        if self._show_queue_tips:
+            tips_text = (
+                "  ·  enter send now | ^ edit | esc cancel"
+                if is_ascii_mode()
+                else "  ·  enter send now · ↑ edit · esc cancel"
+            )
+            parts.append((tips_text, f"italic {colors.warning}"))
+        return Content.assemble(*parts)
