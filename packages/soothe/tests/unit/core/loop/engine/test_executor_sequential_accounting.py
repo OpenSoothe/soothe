@@ -128,11 +128,7 @@ def test_ledger_execute_ai_content_single_step_fills_from_chunks_ig373() -> None
         AIMessageChunk(content="A\nB\n"),
         AIMessage(content=""),
     ]
-    body = executor._ledger_execute_ai_content(
-        messages=messages,
-        final_ai_msg=messages[-1],
-        total_steps=1,
-    )
+    body = executor._extract_final_assistant_text_from_step_messages(messages)
     assert "Here are the first lines" in body
     assert "A\nB" in body
 

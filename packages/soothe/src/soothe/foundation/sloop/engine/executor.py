@@ -95,6 +95,8 @@ from soothe.foundation.sloop.engine.step_wave_types import (
     _StreamCollectChunk,
     all_tool_outcomes_failed,
     max_tool_calls_for_step,
+    wave_gather_failed,
+    wave_gather_slot,
 )
 from soothe.foundation.sloop.engine.thread_selection import (
     _select_thread_for_step,
@@ -1154,13 +1156,13 @@ class Executor:
         Args:
             state: Loop state whose ``loop_messages`` list is extended in wave order.
             steps: Ready steps for this wave (same order as ``gather_results``).
-            gather_results: Results from ``asyncio.gather`` over per-step tasks — each entry is
-                either an exception or the :class:`_ExecuteStepResult` from ``_execute_step_collecting_events``.
+            gather_results: Per-step payloads from parallel execute — each entry is
+                ``None``, a :class:`BaseException`, or :class:`_ExecuteStepResult`.
         """
         from langchain_core.messages import AIMessage
 
         for i, step in enumerate(steps):
-            raw = gather_results[i]
+            raw = wave_gather_slot(gather_results, i)
             envelope = self._compose_execute_step_envelope(
                 step,
                 loop_state=state,
@@ -1181,11 +1183,11 @@ class Executor:
                 step_id=step.id,
                 core_agent_message_id=(
                     None
-                    if isinstance(raw, Exception)
+                    if wave_gather_failed(raw)
                     else getattr(raw, "human_core_agent_message_id", None)
                 ),
             )
-            if isinstance(raw, Exception):
+            if wave_gather_failed(raw):
                 ai_err_msg = LoopAIMessage(
                     content=self._finalize_execute_step_ledger_ai_content(""),
                     thread_id=state.thread_id,
@@ -1411,11 +1413,13 @@ class Executor:
             ]
             status: Literal["completed", "failed", "unknown"] = "unknown"
             outcome_preview = ""
-            raw = gather_results[i] if i < len(gather_results) else None
-            if raw is None or isinstance(raw, Exception):
+            raw = wave_gather_slot(gather_results, i)
+            if wave_gather_failed(raw):
                 steps_failed += 1
                 status = "failed"
-                outcome_preview = str(raw)[:200] if isinstance(raw, Exception) else "step failed"
+                outcome_preview = (
+                    str(raw)[:200] if isinstance(raw, BaseException) else "step failed"
+                )
             else:
                 result: _ExecuteStepResult = raw
                 if result.step_result and result.step_result.success:
@@ -1589,7 +1593,6 @@ class Executor:
             while completed < n_steps:
                 item = await live_queue.get()
                 if isinstance(item, _ParallelStepDone):
-                    completed += 1
                     sid = item.step_id
                     wave_i = step_wave_index.get(sid)
                     if wave_i is None:
@@ -1598,6 +1601,7 @@ class Executor:
                             sid,
                         )
                         continue
+                    completed += 1
                     result = item.payload
                     gather_results[wave_i] = result
                     if isinstance(result, Exception):
@@ -1665,11 +1669,9 @@ class Executor:
                     task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
 
-        results = gather_results
-
         # RFC-214: parallel waves must update the ledger so Plan-assess
         # receives prior execute evidence via ``state.loop_messages`` (IG-374).
-        self._append_parallel_wave_ledger(state, steps, results)
+        self._append_parallel_wave_ledger(state, steps, gather_results)
 
         parallel_multi = len(steps) > 1
         merged_parallel_delegate = "\n\n---\n\n".join(wave_delegate_parts)
@@ -2632,65 +2634,6 @@ class Executor:
             has_error=has_tool_error,
             subgraph_tool_count=subgraph_tool_call_count,
         )
-
-    async def _build_batch_human_messages(
-        self,
-        steps: list,
-        state: LoopState,
-    ) -> list[LoopHumanMessage]:
-        """Build N LoopHumanMessage inputs for batch execution (RFC-214).
-
-        Each step gets its own LoopHumanMessage with the user message envelope:
-        <USER_QUERY>, then ``--- Context ---`` and <DYNAMIC_CONTEXT>
-        (execution hints, timestamp, and related context).
-
-        Args:
-            steps: Steps to execute in this wave
-            state: Current loop state with iteration/thread context
-
-        Returns:
-            List of LoopHumanMessage instances (one per step)
-        """
-        routing = getattr(state, "routing_classification", None)
-        workspace = state.workspace
-        messages = []
-        for step in steps:
-            wire_subagent = resolve_wire_subagent_for_step(step, routing)
-            envelope = self._compose_execute_step_envelope(
-                step,
-                loop_state=state,
-                wire_subagent=wire_subagent,
-                workspace=workspace,
-            )
-            msg = LoopHumanMessage(
-                content=envelope,
-                thread_id=state.thread_id,
-                iteration=state.iteration,
-                goal_summary=state.goal[:200] if state.goal else None,
-                workspace=state.workspace,
-                phase="execute_step",
-                step_id=step.id,
-            )
-            messages.append(msg)
-
-        return messages
-
-    def _ledger_execute_ai_content(
-        self,
-        *,
-        messages: list[BaseMessage],
-        final_ai_msg: BaseMessage,
-        total_steps: int,
-    ) -> str:
-        """Backward-compatible wrapper for execute-step assistant extraction.
-
-        Ledger write path now uses modular helpers:
-        `_resolve_execute_step_ledger_ai_content()` +
-        `_finalize_execute_step_ledger_ai_content()`.
-        This wrapper remains for tests that assert chunk/final-AI extraction behavior.
-        """
-        _ = final_ai_msg, total_steps
-        return self._extract_final_assistant_text_from_step_messages(messages)
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:
         """Extract meaningful error message from exception.

@@ -241,5 +241,5 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
     )
     assess_human = msgs[-1].content
     assert "PRIOR PROGRESS:" in assess_human
-    # Evidence comes from chunked assistant text via _ledger_execute_ai_content.
+    # Evidence comes from chunked assistant text via execute-step extraction.
     assert "1139 Python files" in assess_human

@@ -18,7 +18,11 @@ from soothe.foundation.sloop.engine.act_wave_finalize import (
     _outcome_summary_text,
 )
 from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult
+from soothe.foundation.sloop.engine.step_wave_types import (
+    _ExecuteStepResult,
+    wave_gather_failed,
+    wave_gather_slot,
+)
 from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
 
 
@@ -27,6 +31,16 @@ def _make_ce() -> ContextEngine:
     return ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
     )
+
+
+def test_wave_gather_helpers() -> None:
+    payloads: list = [_ExecuteStepResult(), RuntimeError("boom")]
+    assert wave_gather_slot(payloads, 0) is payloads[0]
+    assert wave_gather_slot(payloads, 1) is payloads[1]
+    assert wave_gather_slot(payloads, 9) is None
+    assert wave_gather_failed(None) is True
+    assert wave_gather_failed(RuntimeError("x")) is True
+    assert wave_gather_failed(_ExecuteStepResult()) is False
 
 
 def test_append_parallel_wave_ledger_success_and_exception() -> None:
@@ -376,6 +390,60 @@ def test_append_parallel_wave_ledger_mixed_task_and_tool_uses_core_assistant_tex
 
     ai_body = (ce.ledger.get_messages()[1].content or "").strip()
     assert ai_body == "Final assistant summary from core agent."
+
+
+def test_append_parallel_wave_ledger_none_gather_result_records_error_pair() -> None:
+    """Missing gather slot (None) must not crash ledger append."""
+    mock_agent = object()
+    ce = _make_ce()
+    ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
+    state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
+    from soothe.foundation.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+
+    steps = [StepAction(id="s1", description="glob READMEs", expected_output="paths")]
+    ex._append_parallel_wave_ledger(state, steps, [None])
+
+    ledger_msgs = ce.ledger.get_messages()
+    assert len(ledger_msgs) == 2
+    human, ai = ledger_msgs
+    assert human.content.startswith("EXECUTION TASK:\n")
+    assert ai.content == ""
+
+
+def test_append_parallel_wave_ledger_none_messages_uses_output_fallback() -> None:
+    """Explicit messages=None on result must not crash ledger append."""
+    mock_agent = object()
+    ce = _make_ce()
+    ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
+    state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
+    from soothe.foundation.context.models import GoalNode
+
+    goal = GoalNode(description="test")
+    ce._dag.add_goal(goal)
+    state.bind_ce(ce, goal.id)
+
+    steps = [StepAction(id="s1", description="glob READMEs", expected_output="paths")]
+    result = _ExecuteStepResult(
+        events=[],
+        step_result=StepResult(
+            step_id="s1",
+            success=True,
+            outcome={"type": "generic"},
+            duration_ms=10,
+            thread_id="t1",
+        ),
+        messages=None,  # type: ignore[arg-type]
+        output="fallback output",
+    )
+    ex._append_parallel_wave_ledger(state, steps, [result])
+
+    ledger_msgs = ce.ledger.get_messages()
+    assert len(ledger_msgs) == 2
+    assert "fallback output" in (ledger_msgs[1].content or "")
 
 
 def test_append_parallel_wave_ledger_empty_final_records_empty_ai() -> None:

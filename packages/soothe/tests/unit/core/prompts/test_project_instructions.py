@@ -144,11 +144,19 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
         StepAction(id="02", description="b", expected_output="o"),
     ]
 
-    messages = await executor._build_batch_human_messages(steps, state)
-    assert len(messages) == 2
+    envelopes = [
+        executor._compose_execute_step_envelope(
+            step,
+            loop_state=state,
+            wire_subagent=None,
+            workspace=state.workspace,
+        )
+        for step in steps
+    ]
+    assert len(envelopes) == 2
     # No project_instructions in envelope - it's in system prompt
-    assert "<AGENT_INSTRUCTIONS>" not in messages[0].content
-    assert "<AGENT_INSTRUCTIONS>" not in messages[1].content
+    assert "<AGENT_INSTRUCTIONS>" not in envelopes[0]
+    assert "<AGENT_INSTRUCTIONS>" not in envelopes[1]
 
 
 def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:

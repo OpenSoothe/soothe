@@ -43,6 +43,12 @@ class _ExecuteStepResult:
     human_core_agent_message_id: str | None = None
     ai_core_agent_message_id: str | None = None
 
+    def __post_init__(self) -> None:
+        if self.events is None:
+            self.events = []
+        if self.messages is None:
+            self.messages = []
+
 
 @dataclass
 class _ActStreamBudget:
@@ -198,6 +204,18 @@ def max_tool_calls_for_step(
     return default
 
 
+def wave_gather_slot(gather_results: list[Any], index: int) -> Any:
+    """Return one parallel-wave result slot, or ``None`` when missing."""
+    if index >= len(gather_results):
+        return None
+    return gather_results[index]
+
+
+def wave_gather_failed(raw: Any) -> bool:
+    """True when a parallel wave slot has no usable :class:`_ExecuteStepResult`."""
+    return raw is None or isinstance(raw, BaseException)
+
+
 __all__ = [
     "_ActStreamBudget",
     "_DELEGATE_FINAL_PER_TASK_CAP",
@@ -216,4 +234,6 @@ __all__ = [
     "StepWaveStart",
     "_append_parallel_stream_event",
     "max_tool_calls_for_step",
+    "wave_gather_failed",
+    "wave_gather_slot",
 ]
