@@ -70,6 +70,7 @@ class SkillifyService:
 
         def embeddings_factory() -> Any:
             return config.create_embedding_model(embedding_role)
+
         warehouse = SkillWarehouse(paths=warehouse_paths)
 
         self._indexer = SkillIndexer(

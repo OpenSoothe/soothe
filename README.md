@@ -3,6 +3,8 @@
 
   #
 
+  [![CI](https://github.com/mirasoth/soothe/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mirasoth/soothe/actions/workflows/ci.yml)
+  [![PyPI version](https://img.shields.io/pypi/v/soothe)](https://pypi.org/project/soothe/)
   [![Python](https://img.shields.io/pypi/pyversions/soothe)](https://pypi.org/project/soothe/)
   [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/mirasoth/soothe)
 
