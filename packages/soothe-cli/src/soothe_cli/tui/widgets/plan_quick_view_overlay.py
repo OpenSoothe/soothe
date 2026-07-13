@@ -22,6 +22,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _plan_quick_view_header(loop_id: str | None) -> str:
+    """Build the quick-view header text, including active loop id when known."""
+    base = "Plan"
+    if loop_id:
+        base = f"{base} ({loop_id})"
+    return f"{base}  ·  Ctrl+t to close"
+
+
 def get_live_goal_tree(app: Any) -> CognitionGoalTreeMessage | None:
     """Return the active goal tree widget from the UI adapter, if any."""
     adapter = getattr(app, "_ui_adapter", None)
@@ -95,11 +103,12 @@ class PlanQuickViewOverlay(Vertical):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._refresh_timer: Timer | None = None
+        self._header: Static | None = None
         self._content: Static | None = None
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "Plan  ·  Ctrl+t to close",
+            _plan_quick_view_header(None),
             classes="plan-quick-view-header",
             id="plan-quick-view-header",
         )
@@ -107,6 +116,7 @@ class PlanQuickViewOverlay(Vertical):
             yield Static("", classes="plan-quick-view-content", id="plan-quick-view-content")
 
     def on_mount(self) -> None:
+        self._header = self.query_one("#plan-quick-view-header", Static)
         self._content = self.query_one("#plan-quick-view-content", Static)
         self.query_one("#plan-quick-view-body", VerticalScroll).can_focus = False
         self.display = False
@@ -152,6 +162,8 @@ class PlanQuickViewOverlay(Vertical):
         """Repaint the plan snapshot from the live goal tree."""
         if not self.is_expanded or self._content is None:
             return
+        if self._header is not None:
+            self._header.update(_plan_quick_view_header(getattr(self.app, "_lc_loop_id", None)))
         tree = get_live_goal_tree(self.app)
         if tree is None:
             self._content.update(Content.styled("No active plan.", "dim"))

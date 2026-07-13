@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 from soothe_cli.tui.widgets.messages.cognition_goal_tree import CognitionGoalTreeMessage
 from soothe_cli.tui.widgets.plan_quick_view_overlay import (
     PlanQuickViewOverlay,
+    _plan_quick_view_header,
     get_live_goal_tree,
 )
 
@@ -21,6 +22,11 @@ def test_get_live_goal_tree_reads_adapter() -> None:
     app._ui_adapter = adapter
 
     assert get_live_goal_tree(app) is tree
+
+
+def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
+    assert _plan_quick_view_header(None) == "Plan  ·  Ctrl+t to close"
+    assert _plan_quick_view_header("loop-123") == "Plan (loop-123)  ·  Ctrl+t to close"
 
 
 def test_plan_quick_view_content_shows_pending_and_running() -> None:
