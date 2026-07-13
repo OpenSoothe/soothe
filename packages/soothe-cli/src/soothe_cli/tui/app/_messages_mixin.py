@@ -47,14 +47,14 @@ class _MessagesMixin:
         """Show queue interaction tips on the most recently queued goal only."""
         if not self._queued_widgets:
             return
-        tip_index = -1
+        tip_index: int | None = None
         if self._pending_messages and self._pending_messages[-1].mode == "normal":
             pending_tail_index = len(self._pending_messages) - 1
             if pending_tail_index < len(self._queued_widgets):
                 tip_index = pending_tail_index
         for index, widget in enumerate(self._queued_widgets):
             with suppress(Exception):
-                widget.set_show_queue_tips(index == tip_index if tip_index >= 0 else False)
+                widget.set_show_queue_tips(tip_index is not None and index == tip_index)
 
     def _has_pending_chat_input(self) -> bool:
         """Return whether chat input has draft content that should be preserved."""

@@ -16,6 +16,9 @@ from soothe_cli.tui.config import (
 from soothe_cli.tui.input import EMAIL_PREFIX_PATTERN, INPUT_HIGHLIGHT_PATTERN
 from soothe_cli.tui.widgets.messages._helpers import _mode_color
 
+_QUEUE_TIPS_ASCII = "  ·  enter send now | ^ edit | esc cancel"
+_QUEUE_TIPS_UNICODE = "  ·  enter send now · ↑ edit · esc cancel"
+
 
 class UserMessage(Static):
     """Widget displaying a user message with enhanced styling."""
@@ -186,10 +189,7 @@ class QueuedUserMessage(Static):
             prefix = ("> ", "dim")
         parts: list[str | tuple[str, str]] = [prefix, (content, "dim")]
         if self._show_queue_tips:
-            tips_text = (
-                "  ·  enter send now | ^ edit | esc cancel"
-                if is_ascii_mode()
-                else "  ·  enter send now · ↑ edit · esc cancel"
-            )
-            parts.append((tips_text, f"italic {colors.warning}"))
+            tips_text = _QUEUE_TIPS_ASCII if is_ascii_mode() else _QUEUE_TIPS_UNICODE
+            # Avoid italic: some terminal/terminfo combos map it to reverse video.
+            parts.append((tips_text, f"dim {colors.warning}"))
         return Content.assemble(*parts)
