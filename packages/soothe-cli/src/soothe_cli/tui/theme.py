@@ -99,7 +99,7 @@ LC_TOOL = LC_AMBER
 # Design principles:
 # - Consistent visual style across all four card types
 # - Restrained grayscale for secondary activity text
-# - Stateful ``⏺`` dot prefixes for card headers; ``⎿`` gutter for body lines
+# - Stateful card-prefix glyphs for card headers; ``⎿`` gutter for body lines
 # ---------------------------------------------------------------------------
 
 # Grayscale base colors (neutral, non-distracting)

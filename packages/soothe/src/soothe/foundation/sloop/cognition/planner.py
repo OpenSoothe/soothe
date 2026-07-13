@@ -18,6 +18,7 @@ from soothe.foundation.sloop.cognition.plan_generation_wire import (
     plan_generation_wire_to_model,
 )
 from soothe.foundation.sloop.cognition.plan_step_safety import (
+    derive_goal_progress_from_status,
     filter_filler_plan_steps,
     intake_label_from_state,
     normalize_status_assessment,
@@ -97,6 +98,29 @@ def _parse_status_assessment_from_raw_message(response: Any) -> Any:
 
     parsed = _load_llm_json_dict(_extract_json_str_from_response(response))
     return StatusAssessment(**parsed)
+
+
+def _is_status_only_assessment(assessment: Any) -> bool:
+    """Return True when assess output is structurally underspecified.
+
+    Some providers occasionally return only ``{"status": ...}`` and rely on
+    schema defaults for all other fields. Treat this as incomplete because it
+    repeatedly collapses progress to ``none`` and triggers noisy replan waves.
+    """
+    if assessment is None:
+        return True
+    goal_progress = getattr(assessment, "goal_progress", "none")
+    reasoning = (getattr(assessment, "assessment_reasoning", "") or "").strip()
+    require_goal_completion = bool(getattr(assessment, "require_goal_completion", False))
+    terminal_readiness = getattr(assessment, "terminal_readiness", "not_ready")
+    gap_alignment = bool(getattr(assessment, "gap_alignment", True))
+    return (
+        goal_progress == "none"
+        and reasoning == ""
+        and not require_goal_completion
+        and terminal_readiness == "not_ready"
+        and gap_alignment
+    )
 
 
 def _detect_stuck_loop(state: LoopState) -> str | None:
@@ -439,6 +463,42 @@ class LLMPlanner:
                 if assessment is None:
                     raise ValueError("StatusAssessment returned None")
 
+                if _is_status_only_assessment(assessment):
+                    logger.warning(
+                        "[LLMPlanner] StatusAssessment underspecified (status=%s); retrying with field reminder",
+                        assessment.status,
+                    )
+                    retry_messages = list(messages) + [
+                        HumanMessage(
+                            content=(
+                                "Return all StatusAssessment fields explicitly. "
+                                "Do not return status-only JSON."
+                            )
+                        )
+                    ]
+                    assessment = await self._invoke_structured(
+                        model,
+                        retry_messages,
+                        StatusAssessment,
+                        config=lf_cfg,
+                        thread_id=thread_id,
+                    )
+                    if assessment is None:
+                        raise ValueError("StatusAssessment retry returned None")
+                    if _is_status_only_assessment(assessment):
+                        logger.warning(
+                            "[LLMPlanner] StatusAssessment still underspecified after retry; coercing progress to low"
+                        )
+                        assessment = assessment.model_copy(
+                            update={
+                                "goal_progress": "low",
+                                "assessment_reasoning": (
+                                    "I'll continue with conservative progress because the assess "
+                                    "response omitted required fields."
+                                ),
+                            }
+                        )
+
                 logger.debug(
                     "[Assess] status=%s prog=%s",
                     assessment.status,
@@ -704,16 +764,11 @@ class LLMPlanner:
                     normalize=coerce_plan_generation_wire_dict,
                 )
                 plan_result = plan_generation_wire_to_model(plan_wire)
-
-                if plan_result is None:
-                    if attempt < max_retries:
-                        logger.warning(
-                            "[LLMPlanner] PlanGeneration returned None (attempt %d/%d), retrying",
-                            attempt + 1,
-                            max_retries,
-                        )
-                        continue
-                    raise ValueError("PlanGeneration returned None after retries")
+                if plan_result.type == "final" and assessment.status != "done":
+                    raise ValueError(
+                        "plan returned final without terminal assessment; "
+                        "provide execute steps when status is not done"
+                    )
 
                 logger.debug(
                     "[Plan] steps=%d next=%s",
@@ -743,20 +798,7 @@ class LLMPlanner:
                         attempt + 1,
                         max_retries,
                     )
-                    if (
-                        "requires non-empty steps" in detail
-                        or "non-empty steps or clarify" in detail
-                    ):
-                        attempt_messages = [
-                            *attempt_messages,
-                            HumanMessage(
-                                content=(
-                                    "Return non-empty steps (each with description and dependencies) "
-                                    "or clarify.questions — not both."
-                                )
-                            ),
-                        ]
-                    elif "steps" in detail and "object" in detail:
+                    if "steps" in detail and "object" in detail:
                         attempt_messages = [
                             *attempt_messages,
                             HumanMessage(
@@ -764,6 +806,16 @@ class LLMPlanner:
                                     "steps[] must contain only step objects with description and "
                                     "dependencies (use [] when none). Do not put field names like "
                                     "reasoning or execution_mode inside steps[]."
+                                )
+                            ),
+                        ]
+                    elif "returned final without terminal assessment" in detail:
+                        attempt_messages = [
+                            *attempt_messages,
+                            HumanMessage(
+                                content=(
+                                    "Use empty steps only when goal is fully complete. "
+                                    "Otherwise return non-empty execute steps."
                                 )
                             ),
                         ]
@@ -1070,7 +1122,8 @@ class LLMPlanner:
             state.iteration,
             thread_id=state.thread_id,
         )
-        assessment = normalize_status_assessment(assessment)
+        assessment = normalize_status_assessment(assessment, plan_gap)
+        assessment.goal_progress = derive_goal_progress_from_status(state, assessment, plan_gap)
 
         if ai_response is not None and context_engine is not None:
             goal_id = getattr(state, "_ce_goal_id", None)
@@ -1299,21 +1352,6 @@ class LLMPlanner:
         ):
             ai_response = plan_result
 
-        # Guard: reject premature type="final" at iteration 0 with no execution
-        if plan_result.type == "final":
-            if state.iteration == 0 and len(state.step_results) == 0:
-                logger.warning(
-                    "[Guard] Reject 'final' type at iter=0 no execution; forcing execute_steps"
-                )
-                plan_result = PlanGeneration(
-                    type="execute_steps",
-                    execution_mode="parallel",
-                    reasoning="I'll start by gathering evidence for this goal.",
-                    steps=step_actions_to_plan_generate_steps(
-                        _default_agent_decision(goal, state.iteration).steps
-                    ),
-                )
-
         # RFC-214: Record plan-generate pair in ledger (not injected into CoreAgent)
         human_msg = None
         for msg in reversed(generate_messages):
@@ -1466,6 +1504,7 @@ class LLMPlanner:
                     assess_messages, goal, state.iteration, thread_id=state.thread_id
                 )
                 assessment = normalize_status_assessment(assessment)
+                assessment.goal_progress = derive_goal_progress_from_status(state, assessment, None)
                 assess_ms = (time.perf_counter() - t_assess) * 1000
                 plan_gen_ms = 0.0
                 llm_calls = 1

@@ -113,7 +113,7 @@ class CognitionGoalTreeMessage(Vertical):
     """Two-level Goal → steps tree; one aggregate block updates in place.
 
     Title line matches ``CognitionStepMessage`` / ``CognitionReasonMessage``:
-    stateful ``⏺`` dot plus goal text, with optional ``· iter<=N`` when
+    stateful card-prefix glyph plus goal text, with optional ``· iter<=N`` when
     ``max_iterations`` is set.
     """
 

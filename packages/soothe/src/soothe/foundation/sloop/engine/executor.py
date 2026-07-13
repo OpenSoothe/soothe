@@ -61,6 +61,7 @@ from soothe.foundation.sloop.engine.continuation_context import (
     ledger_goal_completion_text,
 )
 from soothe.foundation.sloop.engine.graph_interrupt import (
+    _DEFAULT_DISPATCH_TIMEOUT_S,
     _MAX_INTERRUPT_ITERATIONS,
     _STREAM_HEARTBEAT_SENTINEL,
     GraphStreamChunkReader,
@@ -636,7 +637,11 @@ class Executor:
             )
             # IG-506: LLM timeout handled by LLMRateLimitMiddleware, not chunk timeout.
             # IG-549: Heartbeat interval keeps stream alive during long tool execution.
-            chunk_reader = GraphStreamChunkReader(chunk_iter, step_id=step_id)
+            chunk_reader = GraphStreamChunkReader(
+                chunk_iter,
+                dispatch_timeout=_DEFAULT_DISPATCH_TIMEOUT_S,
+                step_id=step_id,
+            )
             try:
                 while True:
                     try:

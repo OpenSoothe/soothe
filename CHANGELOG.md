@@ -91,13 +91,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI/CD**: Docker release workflow fixes
 - **Code quality**: System-wide formatting pass
 
-[Unreleased]: https://github.com/mirasurf/soothe/compare/v0.7.15...HEAD
-[v0.7.15]: https://github.com/mirasurf/soothe/releases/tag/v0.7.15
-[v0.7.14]: https://github.com/mirasurf/soothe/releases/tag/v0.7.14
-[v0.7.13]: https://github.com/mirasurf/soothe/releases/tag/v0.7.13
-[v0.7.12]: https://github.com/mirasurf/soothe/releases/tag/v0.7.12
-[v0.7.11]: https://github.com/mirasurf/soothe/releases/tag/v0.7.11
-[v0.7.10]: https://github.com/mirasurf/soothe/releases/tag/v0.7.10
+[Unreleased]: https://github.com/mirasoth/soothe/compare/v0.7.15...HEAD
+[v0.7.15]: https://github.com/mirasoth/soothe/releases/tag/v0.7.15
+[v0.7.14]: https://github.com/mirasoth/soothe/releases/tag/v0.7.14
+[v0.7.13]: https://github.com/mirasoth/soothe/releases/tag/v0.7.13
+[v0.7.12]: https://github.com/mirasoth/soothe/releases/tag/v0.7.12
+[v0.7.11]: https://github.com/mirasoth/soothe/releases/tag/v0.7.11
+[v0.7.10]: https://github.com/mirasoth/soothe/releases/tag/v0.7.10
 [v0.7.9]: https://github.com/mirasurf/soothe/releases/tag/v0.7.9
 [v0.7.8]: https://github.com/mirasurf/soothe/releases/tag/v0.7.8
 [v0.7.7]: https://github.com/mirasurf/soothe/releases/tag/v0.7.7

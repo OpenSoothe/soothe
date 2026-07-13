@@ -52,7 +52,7 @@ STATUS_ICONS: dict[str, str] = {
     "failed": "✗",
     "cancelled": "⊘",
     "suspended": "⏸",
-    "blocked": "⏺",
+    "blocked": "●",
     "awaiting_clarification": "?",
     "validated": "◆",
 }
@@ -115,6 +115,7 @@ class TokenUsagePanel(Static):
     TokenUsagePanel {
         width: 1fr;
         height: auto;
+        min-height: 3;
         padding: 0 1;
         margin-bottom: 1;
     }
@@ -200,6 +201,7 @@ class StatusPanel(Static):
     StatusPanel {
         width: 1fr;
         height: auto;
+        min-height: 3;
         padding: 0 1;
         margin-bottom: 1;
     }
@@ -286,8 +288,8 @@ class ContextViewerScreen(ModalScreen[None]):
     ContextViewerScreen > Vertical {
         width: 96;
         max-width: 96%;
-        height: 88%;
-        max-height: 94%;
+        height: 84%;
+        max-height: 90%;
         background: $surface;
         border: solid $primary;
         padding: 1 2;
@@ -301,14 +303,16 @@ class ContextViewerScreen(ModalScreen[None]):
     }
 
     ContextViewerScreen .context-summary {
+        height: 1fr;
+        min-height: 8;
         background: $background;
         padding: 0 1;
         margin-bottom: 1;
     }
 
     ContextViewerScreen ScrollableContainer {
-        height: 1fr;
-        min-height: 10;
+        height: 2fr;
+        min-height: 12;
         scrollbar-gutter: stable;
         background: $background;
         padding: 0 1;
@@ -325,9 +329,18 @@ class ContextViewerScreen(ModalScreen[None]):
     ContextViewerScreen.compact > Vertical {
         width: 98%;
         max-width: 98%;
-        height: 94%;
+        height: 91%;
         max-height: 96%;
         padding: 0 1;
+    }
+
+    ContextViewerScreen.compact .context-summary {
+        min-height: 6;
+        margin-bottom: 0;
+    }
+
+    ContextViewerScreen.compact ScrollableContainer {
+        min-height: 9;
     }
 
     ContextViewerScreen.compact .context-title {

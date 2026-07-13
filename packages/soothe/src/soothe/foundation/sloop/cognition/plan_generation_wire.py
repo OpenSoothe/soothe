@@ -68,9 +68,6 @@ class PlanGenerationWire(BaseModel):
         if has_clarify and has_steps:
             msg = "clarify and non-empty steps are mutually exclusive"
             raise ValueError(msg)
-        if not has_clarify and not has_steps:
-            msg = "plan requires non-empty steps or clarify.questions"
-            raise ValueError(msg)
         return self
 
 
@@ -191,6 +188,14 @@ def plan_generation_wire_to_model(wire: PlanGenerationWire) -> PlanGeneration:
                     dependencies=[],
                 )
             ],
+        )
+
+    if not wire.steps:
+        return PlanGeneration(
+            type="final",
+            execution_mode="parallel",
+            reasoning=wire.reasoning or "",
+            steps=[],
         )
 
     plan_steps: list[PlanGenerateStep] = []

@@ -157,15 +157,16 @@ def _card_dot_prefix_content(
     status: str,
     *,
     accent: str | None = None,
+    glyph_override: str | None = None,
     spinner_position: int = 0,
     animate_running: bool = False,
 ) -> Content:
-    """Build a stateful colored card prefix dot (Claude Code ``⏺`` style)."""
+    """Build a stateful colored card-prefix glyph."""
     try:
         colors = theme.get_theme_colors(widget)
     except Exception:  # noqa: BLE001
         colors = theme.DARK_COLORS
-    glyph = get_glyphs().tool_prefix
+    glyph = glyph_override or get_glyphs().tool_prefix
     tone = _card_dot_tone(
         status,
         colors,
@@ -182,21 +183,22 @@ def _assemble_card_header(
     *,
     status: str = "running",
     accent: str | None = None,
+    glyph_override: str | None = None,
     spinner_position: int = 0,
     animate_running: bool = False,
 ) -> Content:
-    """Build a card title: stateful dot prefix plus foreground body (no bold).
+    """Build a card title: stateful prefix glyph plus foreground body (no bold).
 
-    Used for Goal, Plan, Step, and tool (including Task) headers. The dot color
+    Used for Goal, Plan, Step, and tool (including Task) headers. The glyph color
     reflects lifecycle status; body lines below use the ``⎿`` tree gutter.
 
     Args:
         widget: Mounted widget (or any object accepted by ``get_theme_colors``).
         body_part: Header text (goal, step description, etc.).
-        status: Card lifecycle phase for dot color/glyph.
-        accent: Optional override tone for the dot (e.g. skill/error accent).
+        status: Card lifecycle phase for glyph color/shape.
+        accent: Optional override tone for the glyph (e.g. skill/error accent).
         spinner_position: Toggles gray flash while ``animate_running`` is true.
-        animate_running: Flash the dot gray while running (step/task/assistant cards).
+        animate_running: Flash the glyph gray while running (step/task/assistant cards).
 
     Returns:
         Assembled ``Content`` for a ``Static`` header.
@@ -210,6 +212,7 @@ def _assemble_card_header(
             widget,
             status,
             accent=accent,
+            glyph_override=glyph_override,
             spinner_position=spinner_position,
             animate_running=animate_running,
         ),

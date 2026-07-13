@@ -10,6 +10,7 @@ from __future__ import annotations
 from time import time
 from typing import Any
 
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 
@@ -61,6 +62,7 @@ def create_subagent_card(
         card,
         f"{card._subagent_type}({description})",
         status=getattr(card, "_status", "running"),
+        glyph_override=get_glyphs().subagent_prefix,
         spinner_position=getattr(card, "_spinner_position", 0),
         animate_running=getattr(card, "_status", "") == "running",
     )

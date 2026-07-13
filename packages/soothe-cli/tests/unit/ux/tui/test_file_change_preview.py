@@ -20,6 +20,7 @@ from soothe_cli.runtime.state.file_tracker import (
     file_change_label,
     file_change_label_from_preview_data,
 )
+from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.file_change_notify import (
     finalize_file_change_preview,
     mount_file_change_preview,
@@ -360,6 +361,7 @@ async def test_mount_renders_collapsed_one_line_summary() -> None:
         assert widget.size.height >= 1
         assert header.size.height >= 1
         rendered = str(header.render())
+        assert get_glyphs().file_edit_prefix in rendered
         assert "Edited" in rendered
         assert "src/a.py" in rendered
 

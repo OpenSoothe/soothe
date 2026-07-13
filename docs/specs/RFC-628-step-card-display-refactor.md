@@ -72,7 +72,7 @@ CognitionStepMessage
 
 | Zone | Visible when | Content |
 |------|--------------|---------|
-| Header | Always | `🚀 {description}` via `_assemble_card_header` |
+| Header | Always | `● {description}` via `_assemble_card_header` |
 | Activity tree | Tool rows, task delegations, or subagent notes exist | `StepActivityTree.render` |
 | Tools panel | `STEP_CARD_SHOW_TOOL_ROW_DETAILS = True` | Full nested tool list (default **off**) |
 | Detail | Execute streaming, clarification Q&A, or error prose | `branched_prose_body` |
@@ -300,7 +300,7 @@ The flattened model:
 
 ```
 SubAgentMessage (extends CognitionStepMessage)
-├── subagent-header          🎯 SubAgentName(description)
+├── subagent-header          ◆ SubAgentName(description)
 ├── subagent-activity        activity tree (tool rows only)
 ├── subagent-detail          execute prose (optional)
 └── subagent-status          footer: running → completed/failed
@@ -308,7 +308,7 @@ SubAgentMessage (extends CognitionStepMessage)
 
 | Zone | Visible when | Content |
 |------|--------------|---------|
-| Header | Always | `🎯 {subagent_type}({description})` via `_assemble_card_header` |
+| Header | Always | `◆ {subagent_type}({description})` via `_assemble_card_header` |
 | Activity | Tool rows exist | Flat tool activity lines |
 | Detail | Execute streaming prose | `branched_prose_body` |
 | Footer | Not bare header | `StepCardStatusLine` (running → success/error) |
@@ -320,18 +320,18 @@ SubAgentMessage (extends CognitionStepMessage)
 ## Display Layout
 
 ```
-⎿ 🚀 Step: search and analyze
+⎿ ● Step: search and analyze
   ○ read_file(query.txt)
   ○ Task(search_web)              ← flat row, peer with tools
   ○ write_file(results.md)
   ○ Running... · 3 tools, 1 task
 
-⎿ 🎯 Task(search_web)             ← SubAgent card, after parent step
+⎿ ◆ Task(search_web)              ← SubAgent card, after parent step
   ○ web_search("query")
   ○ read_search_results()
   ✓ Completed (1.2s) · 2 tools
 
-⎿ 🚀 Step: summarize findings     ← next step
+⎿ ● Step: summarize findings     ← next step
   ...
 ```
 
@@ -340,14 +340,14 @@ SubAgentMessage (extends CognitionStepMessage)
 Sequential cards after parent step:
 
 ```
-⎿ 🚀 Step: research
+⎿ ● Step: research
   ○ Task(search_web)
   ○ Task(analyze_papers)
 
-⎿ 🎯 Task(search_web)
+⎿ ◆ Task(search_web)
   ○ ...tools...
 
-⎿ 🎯 Task(analyze_papers)
+⎿ ◆ Task(analyze_papers)
   ○ ...tools...
 ```
 

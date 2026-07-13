@@ -54,7 +54,7 @@ def _compact_header(
     extra: str = "",
     finalized: bool = False,
 ) -> Static:
-    """Build a single-line header: dot prefix, action, path, optional suffix, and diff stats."""
+    """Build a single-line header: prefix glyph, action, path, optional suffix, and diff stats."""
     header_parts: list[str] = []
     if action_label:
         header_parts.append(f"{action_label}  ")
@@ -72,6 +72,7 @@ def _compact_header(
         body,
         status="success" if finalized else "running",
         accent=colors.tool,
+        glyph_override=get_glyphs().file_edit_prefix,
     )
     parts: list[str | tuple[str, str] | Content] = [dot_header]
     stats = _format_stats(additions, deletions)

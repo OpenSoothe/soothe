@@ -206,7 +206,7 @@ class AssistantMessage(Vertical):
                 self._render_markdown = render_markdown
 
     def compose(self) -> ComposeResult:  # noqa: PLR6301  # Textual widget method convention
-        """Compose inline dot prefix and body on one row."""
+        """Compose inline prefix glyph and body on one row."""
         with Horizontal(classes="assistant-row"):
             yield Static("", classes="assistant-dot", id="assistant-dot")
             yield _SelectableMarkdownBody(

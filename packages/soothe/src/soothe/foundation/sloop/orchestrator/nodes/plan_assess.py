@@ -383,8 +383,8 @@ async def _route_goal_completion_if_terminal(
     assessment: StatusAssessment,
     context: Any,
 ) -> dict[str, Any] | None:
-    """Unified terminal routing for status=done and goal_progress=complete (IG-640)."""
-    if assessment.status != "done" and assessment.goal_progress != "complete":
+    """Terminal routing keyed on authoritative assess status (IG-640)."""
+    if assessment.status != "done":
         return None
 
     strange_loop = ctx.strange_loop
@@ -433,13 +433,9 @@ async def _route_goal_completion_if_terminal(
         state=state,
         mode=gc_mode,
     )
-    next_action = (
-        "Goal achieved successfully"
-        if assessment.status == "done"
-        else "Goal progress sufficient for completion"
-    )
+    next_action = "Goal achieved successfully"
     plan_result = PlanResult(
-        status=assessment.status if assessment.status == "done" else "done",
+        status=assessment.status,
         goal_progress=assessment.goal_progress,
         assessment_reasoning="",
         plan_reasoning="",

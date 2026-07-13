@@ -67,6 +67,16 @@ def test_wire_clarify_maps_to_ask_user_step() -> None:
     assert plan.steps[0].questions == ["Which format should I use?"]
 
 
+def test_wire_empty_steps_maps_to_final_plan() -> None:
+    wire = PlanGenerationWire(
+        reasoning="Goal is complete; no additional execution needed.",
+        steps=[],
+    )
+    plan = plan_generation_wire_to_model(wire)
+    assert plan.type == "final"
+    assert plan.steps == []
+
+
 def test_coerce_salvages_pseudo_fields_in_steps_array() -> None:
     raw = {
         "reasoning": "I'll fetch weather.",

@@ -145,30 +145,147 @@ def _progress_index(progress: str) -> int:
     return _PROGRESS_BUCKETS.index(progress)
 
 
-def normalize_status_assessment(assessment: StatusAssessment) -> StatusAssessment:
+def _clamp_progress(progress: str) -> str:
+    return progress if progress in _PROGRESS_BUCKETS else "none"
+
+
+def _progress_from_gap(gap: PlanGapAnalysis | None) -> str | None:
+    if gap is None:
+        return None
+    distance = gap.distance_from_goal
+    if distance == "far":
+        return "none"
+    if distance == "moderate":
+        return "low"
+    if distance == "near":
+        return "medium"
+    if distance == "at_goal":
+        return "high"
+    return None
+
+
+def derive_goal_progress_from_status(
+    state: LoopState,
+    assessment: StatusAssessment,
+    gap: PlanGapAnalysis | None = None,
+) -> str:
+    """Derive goal progress deterministically from status + structural evidence.
+
+    ``status`` is authoritative from assess output. ``goal_progress`` is computed
+    from deterministic state signals (gap distance, prior progress digest, and
+    step outcomes) to avoid LLM field omission drift.
+    """
+    status = assessment.status
+    if status == "done":
+        if (
+            gap is not None
+            and gap.distance_from_goal == "at_goal"
+            and not _open_gap_components(gap)
+            and assessment.gap_alignment
+            and assessment.terminal_readiness == "ready"
+        ):
+            return "complete"
+        if (
+            gap is not None
+            and gap.distance_from_goal == "at_goal"
+            and not _open_gap_components(gap)
+        ):
+            return "high"
+        digest_hint = (
+            _clamp_progress(state.prior_progress.derived_progress_hint)
+            if state.prior_progress is not None
+            else "none"
+        )
+        return "high" if _progress_index(digest_hint) >= _progress_index("high") else "medium"
+
+    gap_hint = _progress_from_gap(gap)
+    digest_hint = (
+        _clamp_progress(state.prior_progress.derived_progress_hint)
+        if state.prior_progress is not None
+        else "none"
+    )
+    progress = digest_hint
+    if gap_hint is not None:
+        # Gap analysis is read-only and should cap optimistic digest estimates.
+        progress = _PROGRESS_BUCKETS[min(_progress_index(progress), _progress_index(gap_hint))]
+        if _progress_index(digest_hint) == 0:
+            progress = gap_hint
+
+    successes = sum(1 for result in state.step_results if result.success)
+    failures = sum(1 for result in state.step_results if not result.success)
+    if status == "continue":
+        if successes > 0 and _progress_index(progress) < _progress_index("low"):
+            progress = "low"
+        if (
+            failures == 0
+            and successes > 0
+            and _progress_index(progress) < _progress_index("medium")
+        ):
+            progress = "medium"
+        return progress
+
+    # status == "replan"
+    if failures > 0:
+        return "low"
+    if successes > 0 and _progress_index(progress) < _progress_index("low"):
+        return "low"
+    return progress
+
+
+def normalize_status_assessment(
+    assessment: StatusAssessment,
+    gap: PlanGapAnalysis | None = None,
+) -> StatusAssessment:
     """Coerce structurally inconsistent assess output (IG-640, no content heuristics)."""
     if assessment.status != "done":
         return assessment
 
+    gap_confirms_terminal = bool(
+        gap is not None and gap.distance_from_goal == "at_goal" and not _open_gap_components(gap)
+    )
+    goal_progress = assessment.goal_progress
+    terminal_readiness = assessment.terminal_readiness
+    if gap_confirms_terminal and assessment.gap_alignment:
+        # Gap analysis is stricter and read-only; when it already proves at_goal,
+        # treat missing done-side fields from assess as an omission, not a replan trigger.
+        if goal_progress in ("none", "low"):
+            goal_progress = "complete"
+        if terminal_readiness == "not_ready":
+            terminal_readiness = "ready"
+
     updates: dict[str, object] = {}
-    if assessment.goal_progress in ("none", "low"):
+    if goal_progress in ("none", "low"):
         updates["status"] = "replan"
         updates["goal_progress"] = "none"
-    elif assessment.terminal_readiness != "ready":
+    elif terminal_readiness != "ready":
         updates["status"] = "replan"
     elif not assessment.gap_alignment:
         updates["status"] = "replan"
 
     if not updates:
+        if (
+            goal_progress != assessment.goal_progress
+            or terminal_readiness != assessment.terminal_readiness
+        ):
+            return assessment.model_copy(
+                update={
+                    "goal_progress": goal_progress,
+                    "terminal_readiness": terminal_readiness,
+                }
+            )
         return assessment
 
     logger.warning(
         "[Plan] Coerce inconsistent assess: status=done prog=%s readiness=%s gap_align=%s → %s",
-        assessment.goal_progress,
-        assessment.terminal_readiness,
+        goal_progress,
+        terminal_readiness,
         assessment.gap_alignment,
         updates.get("status", assessment.status),
     )
+    if goal_progress != assessment.goal_progress:
+        updates["goal_progress"] = goal_progress
+    if terminal_readiness != assessment.terminal_readiness:
+        updates["terminal_readiness"] = terminal_readiness
     return assessment.model_copy(update=updates)
 
 
@@ -190,14 +307,12 @@ def terminal_assess_may_complete(
     intake_label: IntakeLabel | None = None,
 ) -> bool:
     """Return True when assess may route to goal completion (typed structural gates only)."""
-    is_terminal = assessment.status == "done" or assessment.goal_progress == "complete"
-    if not is_terminal:
+    if assessment.status != "done":
         return False
 
-    if assessment.status == "done":
-        min_idx = _progress_index(_MIN_GOAL_PROGRESS_FOR_DONE)
-        if _progress_index(assessment.goal_progress) < min_idx:
-            return False
+    min_idx = _progress_index(_MIN_GOAL_PROGRESS_FOR_DONE)
+    if _progress_index(assessment.goal_progress) < min_idx:
+        return False
 
     if not assess_may_route_complete(state, assessment, intake_label):
         return False
@@ -244,8 +359,8 @@ def assess_may_route_complete(
     assessment: StatusAssessment,
     intake_label: IntakeLabel | None,
 ) -> bool:
-    """Return False when routing ``goal_progress=complete`` would be premature."""
-    if assessment.goal_progress != "complete":
+    """Return False when routing ``status=done`` would be premature."""
+    if assessment.status != "done":
         return True
 
     if intake_label != IntakeLabel.COMPLEX:
@@ -268,9 +383,9 @@ def assess_respects_gap_analysis(
     if gap is None:
         return True
     if gap.distance_from_goal in ("far", "moderate", "near"):
-        if assessment.goal_progress == "complete" or assessment.status == "done":
+        if assessment.status == "done":
             return False
     open_components = _open_gap_components(gap)
-    if open_components and (assessment.goal_progress == "complete" or assessment.status == "done"):
+    if open_components and assessment.status == "done":
         return False
     return True

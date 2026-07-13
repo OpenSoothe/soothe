@@ -8,6 +8,7 @@ import pytest
 
 import soothe.config as soothe_config
 from soothe.foundation.workspace.loop_workspace import (
+    _workspace_mount_from_config,
     compute_scoped_workspace_dir_name,
     normalize_user_id,
     resolve_loop_workspace,
@@ -124,3 +125,25 @@ def test_resolve_loop_workspace_uses_workspace_mapping_from_metadata(
         },
     )
     assert ws == mapped.resolve()
+
+
+def test_workspace_mount_from_config_returns_none_when_config_absent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing_config = tmp_path / "missing-config.yml"
+    monkeypatch.setattr(soothe_config, "DEFAULT_CONFIG_PATH", missing_config)
+    assert _workspace_mount_from_config() == (None, None)
+
+
+def test_workspace_mount_from_config_reads_config_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path = tmp_path / "config.yml"
+    config_path.write_text(
+        "workspace_mount:\n  host_root: /host/work\n  container_root: /container/work\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(soothe_config, "DEFAULT_CONFIG_PATH", config_path)
+    assert _workspace_mount_from_config() == ("/host/work", "/container/work")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from soothe.foundation.context.planning.completion import _dag_requires_synthesis
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     assess_respects_gap_analysis,
+    derive_goal_progress_from_status,
     normalize_status_assessment,
     terminal_assess_may_complete,
 )
@@ -45,6 +46,20 @@ def test_normalize_coerces_done_without_terminal_readiness() -> None:
     )
     normalized = normalize_status_assessment(raw)
     assert normalized.status == "replan"
+
+
+def test_normalize_accepts_done_when_gap_confirms_at_goal() -> None:
+    raw = StatusAssessment(status="done", goal_progress="none", terminal_readiness="not_ready")
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="file exists", status="satisfied")],
+        evidence_summary="confirmed",
+        distance_from_goal="at_goal",
+        gap_reasoning="all components satisfied",
+    )
+    normalized = normalize_status_assessment(raw, gap)
+    assert normalized.status == "done"
+    assert normalized.goal_progress == "complete"
+    assert normalized.terminal_readiness == "ready"
 
 
 def test_terminal_assess_rejects_done_with_low_progress() -> None:
@@ -201,6 +216,48 @@ def test_terminal_assess_allows_complete_with_at_goal_gap() -> None:
         )
         is True
     )
+
+
+def test_terminal_assess_ignores_progress_without_done_status() -> None:
+    state = _loop_state()
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="all tests pass", status="satisfied")],
+        evidence_summary="exit 0",
+        distance_from_goal="at_goal",
+        gap_reasoning="satisfied",
+    )
+    assessment = StatusAssessment(
+        status="continue",
+        goal_progress="complete",
+        terminal_readiness="ready",
+        gap_alignment=True,
+    )
+    assert (
+        terminal_assess_may_complete(
+            state,
+            assessment,
+            gap,
+            intake_label=IntakeLabel.COMPLEX,
+        )
+        is False
+    )
+
+
+def test_derive_goal_progress_from_status_done_uses_gap_completion() -> None:
+    state = _loop_state()
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="all tests pass", status="satisfied")],
+        evidence_summary="exit 0",
+        distance_from_goal="at_goal",
+        gap_reasoning="satisfied",
+    )
+    assessment = StatusAssessment(
+        status="done",
+        goal_progress="none",
+        terminal_readiness="ready",
+        gap_alignment=True,
+    )
+    assert derive_goal_progress_from_status(state, assessment, gap) == "complete"
 
 
 def test_dag_requires_synthesis_skips_replan_when_not_terminal() -> None:

@@ -80,7 +80,7 @@ class CognitionStepMessage(Vertical):
     manual whole-card collapse; cards do not auto-collapse.
 
     Pure rendering and classification live in ``cognition_step_activity.py``.
-    Card headers use a stateful ``⏺`` dot (see ``_assemble_card_header``); body
+    Card headers use a stateful card-prefix glyph (see ``_assemble_card_header``); body
     lines use the goal-tree gutter (``⎿``) plus hollow/filled circles when shown.
     Prose / notes keep ``⎿ ○`` continuation lines.
     """

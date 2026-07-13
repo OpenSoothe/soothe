@@ -221,10 +221,10 @@ class CharsetMode(StrEnum):
     """Character set mode for TUI display."""
 
     UNICODE = "unicode"
-    """Always use Unicode glyphs (e.g. `⏺`, `✓`, `…`)."""
+    """Always use Unicode glyphs (e.g. `●`, `✓`, `…`)."""
 
     ASCII = "ascii"
-    """Always use ASCII-safe fallbacks (e.g. `(*)`, `[OK]`, `...`)."""
+    """Always use ASCII-safe fallbacks (e.g. `[*]`, `[OK]`, `...`)."""
 
     AUTO = "auto"
     """Detect charset support at runtime and pick Unicode or ASCII."""
@@ -234,7 +234,9 @@ class CharsetMode(StrEnum):
 class Glyphs:
     """Character glyphs for TUI display."""
 
-    tool_prefix: str  # ⏺ vs (*)
+    tool_prefix: str  # ● vs [*]
+    file_edit_prefix: str  # ■ vs [#]
+    subagent_prefix: str  # ◆ vs [S]
     ellipsis: str  # … vs ...
     checkmark: str  # ✓ vs [OK]
     error: str  # ✗ vs [X]
@@ -270,7 +272,9 @@ class Glyphs:
 
 
 UNICODE_GLYPHS = Glyphs(
-    tool_prefix="⏺",
+    tool_prefix="●",
+    file_edit_prefix="■",
+    subagent_prefix="◆",
     ellipsis="…",
     checkmark="✓",
     error="✗",
@@ -301,7 +305,9 @@ UNICODE_GLYPHS = Glyphs(
 """Glyph set for terminals with full Unicode support."""
 
 ASCII_GLYPHS = Glyphs(
-    tool_prefix="(*)",
+    tool_prefix="[*]",
+    file_edit_prefix="[#]",
+    subagent_prefix="[S]",
     ellipsis="...",
     checkmark="[OK]",
     error="[X]",

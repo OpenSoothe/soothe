@@ -1,8 +1,8 @@
-"""Card prefix dot helpers (Claude Code-style ⏺ headers)."""
+"""Card-prefix glyph helpers for message headers."""
 
 from __future__ import annotations
 
-from soothe_cli.tui.config import get_glyphs
+from soothe_cli.tui.config import ASCII_GLYPHS, UNICODE_GLYPHS, get_glyphs
 from soothe_cli.tui.theme import DARK_COLORS
 from soothe_cli.tui.widgets.messages._helpers import (
     _assemble_card_header,
@@ -34,6 +34,28 @@ def test_assemble_card_header_includes_dot_and_body() -> None:
     plain = content.plain
     assert plain.startswith(get_glyphs().tool_prefix)
     assert "Scan workspace" in plain
+
+
+def test_assemble_card_header_allows_glyph_override() -> None:
+    glyph = get_glyphs().subagent_prefix
+    content = _assemble_card_header(
+        None,
+        "browser(Collect examples)",
+        status="running",
+        glyph_override=glyph,
+    )
+    plain = content.plain
+    assert plain.startswith(glyph)
+    assert "Collect examples" in plain
+
+
+def test_glyph_sets_define_distinct_card_prefix_symbols() -> None:
+    assert UNICODE_GLYPHS.tool_prefix == "●"
+    assert UNICODE_GLYPHS.file_edit_prefix == "■"
+    assert UNICODE_GLYPHS.subagent_prefix == "◆"
+    assert ASCII_GLYPHS.tool_prefix == "[*]"
+    assert ASCII_GLYPHS.file_edit_prefix == "[#]"
+    assert ASCII_GLYPHS.subagent_prefix == "[S]"
 
 
 def test_stream_cards_use_flush_horizontal_padding() -> None:

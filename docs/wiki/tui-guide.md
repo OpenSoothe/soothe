@@ -140,7 +140,7 @@ Each step card has five zones (header always visible; others hide when manually 
 
 | Zone | Content |
 |------|---------|
-| **Header** | Step description only (`🚀 …`) |
+| **Header** | Step description with card prefix (`● …`) |
 | **Activity tree** | Task branches, tool previews, branch status lines |
 | **Detail** | Streaming execute prose, clarification Q&A, or errors |
 | **Footer** | Pending / Queued / Running / Completed status |
@@ -157,7 +157,7 @@ Click the card to manually collapse or expand the body. Cards do **not** auto-co
 **Example** (running step with one task delegation and main tools):
 
 ```
-🚀 Survey RFCs and update wiki
+● Survey RFCs and update wiki
 ⎿ ✓ Explore(enumerate docs)
 ⎿   ○ ReadFile(docs/specs/RFC-628…)
 ⎿   ○ Glob(**/*.md)
@@ -194,6 +194,7 @@ When files are modified, the TUI displays a diff preview widget:
 - Line numbers for reference
 - Collapsed context around changes
 - Summary statistics (files changed, insertions, deletions)
+- Dedicated file-change header prefix (`■`) and subagent-card prefix (`◆`)
 
 ## Streaming Performance
 

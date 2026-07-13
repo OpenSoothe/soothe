@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class CognitionReasonMessage(Vertical):
     """Single card for plan assessment and plan reasoning.
 
-    Header uses the same stateful dot prefix plus foreground body as ``CognitionStepMessage``.
+    Header uses the same stateful prefix glyph plus foreground body as ``CognitionStepMessage``.
     """
 
     ALLOW_SELECT = True
