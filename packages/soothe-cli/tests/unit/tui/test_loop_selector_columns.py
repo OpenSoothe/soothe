@@ -77,7 +77,7 @@ def test_format_column_value_shows_only_resume_columns() -> None:
         "updated": "2026-06-30T09:00:45+00:00",
         "topic": "Auth bug fix",
     }
-    assert "019f1b8a" in _format_column_value(loop, "loop_id")
+    assert _format_column_value(loop, "loop_id") == "019f1b8a83...b036"
     assert _format_column_value(loop, "topic") == "Auth bug fix"
 
 

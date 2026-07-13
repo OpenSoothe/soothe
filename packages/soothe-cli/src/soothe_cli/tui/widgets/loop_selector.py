@@ -47,7 +47,11 @@ _column_widths_cache: _LoopColumnWidthsCache | None = None
 """Module-level cache so repeated `/resume` opens skip column-width computation
 when the inputs (loop data + config) haven't changed."""
 
-_COL_LID = 15
+_LOOP_ID_HEAD_CHARS = 10
+_LOOP_ID_TAIL_CHARS = 4
+_LOOP_ID_SEPARATOR = "..."
+_LOOP_ID_COMPACT_CHARS = _LOOP_ID_HEAD_CHARS + _LOOP_ID_TAIL_CHARS
+_COL_LID = _LOOP_ID_COMPACT_CHARS + len(_LOOP_ID_SEPARATOR)
 _COL_MESSAGES = 4
 _COL_TIMESTAMP = None
 _COL_TOPIC = None  # flex column
@@ -205,11 +209,11 @@ def _truncate_value(value: str, width: int | None) -> str:
 
 
 def _abbreviate_loop_id(value: str) -> str:
-    """Render loop IDs as ``8-char prefix + ... + 4-char suffix``."""
+    """Render loop IDs as ``10-char prefix + ... + 4-char suffix``."""
     text = _collapse_whitespace(value)
-    if len(text) <= 15:
+    if len(text) <= _COL_LID:
         return text
-    return f"{text[:8]}...{text[-4:]}"
+    return f"{text[:_LOOP_ID_HEAD_CHARS]}{_LOOP_ID_SEPARATOR}{text[-_LOOP_ID_TAIL_CHARS:]}"
 
 
 def _format_column_value(loop: dict[str, Any], key: str, *, relative_time: bool = False) -> str:
