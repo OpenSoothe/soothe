@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 _INDEXING_WAIT_TIMEOUT = 10.0
 _VECTOR_SEARCH_MAX_ATTEMPTS = 3
 _VECTOR_SEARCH_BACKOFF_BASE = 0.5
+_EMBEDDING_MAX_ATTEMPTS = 3
+_EMBEDDING_BACKOFF_BASE = 0.5
+_INDEXING_IN_PROGRESS_PREFIX = "[Indexing in progress]"
+_EMBEDDING_UNAVAILABLE_PREFIX = "[Embedding unavailable]"
 _vector_search_semaphore: asyncio.Semaphore | None = None
 
 
@@ -108,7 +112,8 @@ class SkillRetriever:
                 )
                 return SkillBundle(
                     query=(
-                        "[Indexing in progress] The skill warehouse is still being indexed. "
+                        f"{_INDEXING_IN_PROGRESS_PREFIX} "
+                        "The skill warehouse is still being indexed. "
                         "Please retry shortly."
                     ),
                 )
@@ -116,10 +121,28 @@ class SkillRetriever:
         limit = top_k or self._top_k
 
         try:
-            vector = await self._embeddings.aembed_query(query)
-        except Exception:
+            vector = await self._embed_query_with_retry(query)
+        except Exception as exc:
+            if self._is_transient_embedding_error(exc):
+                logger.warning(
+                    "Skillify embedding service temporarily unavailable (%s): %s",
+                    type(exc).__name__,
+                    exc,
+                )
+                return SkillBundle(
+                    query=(
+                        f"{_EMBEDDING_UNAVAILABLE_PREFIX} "
+                        "Semantic skill search is temporarily unavailable. "
+                        "Falling back to keyword matching."
+                    ),
+                )
             logger.exception("Query embedding failed for: %s", query[:100])
-            return SkillBundle(query=query)
+            return SkillBundle(
+                query=(
+                    f"{_EMBEDDING_UNAVAILABLE_PREFIX} "
+                    "Semantic skill search is unavailable due to an embedding provider error."
+                ),
+            )
 
         try:
             records = await self._search_with_retry(
@@ -189,6 +212,40 @@ class SkillRetriever:
         if last_exc is not None:
             raise last_exc
         return []
+
+    @staticmethod
+    def _is_transient_embedding_error(exc: Exception) -> bool:
+        exc_name = type(exc).__name__
+        if exc_name in {"APIConnectionError", "APITimeoutError"}:
+            return True
+        # Compatibility for HTTP client wrappers raised by OpenAI/LangChain.
+        msg = str(exc)
+        return any(token in msg for token in ("ConnectError", "ReadTimeout", "PoolTimeout"))
+
+    async def _embed_query_with_retry(self, query: str) -> list[float]:
+        last_exc: Exception | None = None
+        for attempt in range(_EMBEDDING_MAX_ATTEMPTS):
+            try:
+                return await self._embeddings.aembed_query(query)
+            except Exception as exc:
+                last_exc = exc
+                is_transient = self._is_transient_embedding_error(exc)
+                if not is_transient or attempt >= _EMBEDDING_MAX_ATTEMPTS - 1:
+                    raise
+                delay = _EMBEDDING_BACKOFF_BASE * (2**attempt)
+                logger.warning(
+                    "Skillify embedding transient failure (%s, attempt %d/%d), retrying in %.1fs",
+                    type(exc).__name__,
+                    attempt + 1,
+                    _EMBEDDING_MAX_ATTEMPTS,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+        if last_exc is not None:
+            raise last_exc
+        msg = "Unexpected empty embedding retry loop."
+        raise RuntimeError(msg)
 
     def _check_policy(self, query: str) -> None:
         if self._policy is None:

@@ -36,7 +36,7 @@ providers:
 
   - name: agnes
     provider_type: openai
-    api_base_url: https://apihub.agnes-ai.com/v1
+    api_base_url: "https://apihub.agnes-ai.com/v1"
     api_key: "${AGNESAI_API_KEY}"
     models:
       - agnes-2.0-flash
@@ -67,10 +67,10 @@ router_profiles:
       embedding: "dashscope:text-embedding-v4"
     embedding_dims: 768  # must match configured embedding output dimension
 
-  - name: agnes
+  - name: agnes-eval
     router:
-      default: "agnes,agnes-2.5-flash"
-      image: "agnes,agnes-image-2.0-flash"
+      default: "agnes:agnes-2.0-flash"
+      image: "agnes:agnes-image-2.0-flash"
       ocr: "omlx:DeepSeek-OCR-4bit"
       embedding: "dashscope:text-embedding-v4"
     embedding_dims: 768  # nomicai-modernbert-embed-base-bf16 output size
@@ -243,7 +243,7 @@ tools:
 # SKILLIFY (daemon-shared semantic skill search)
 # ============================================================
 skillify:
-  enabled: true
+  enabled: false
   model_role: embedding
   warehouse_paths: []
   index_collection: soothe_skillify

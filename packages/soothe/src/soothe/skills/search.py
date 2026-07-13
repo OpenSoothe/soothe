@@ -198,7 +198,9 @@ async def search_deferred_skills(
         logger.debug("[Skill] Skillify retrieve failed", exc_info=True)
         return substring
 
-    if bundle.query.startswith("[Indexing in progress]"):
+    if bundle.query.startswith("[Indexing in progress]") or bundle.query.startswith(
+        "[Embedding unavailable]"
+    ):
         return substring
 
     semantic: list[tuple[float, SkillIndexEntry]] = []

@@ -210,6 +210,41 @@ class TestSemanticSearch:
         assert len(matches) == 1
         assert matches[0].name == "vector-only"
 
+    @pytest.mark.asyncio
+    async def test_falls_back_to_substring_when_embedding_service_unavailable(self) -> None:
+        registry = ProgressiveSkillRegistry()
+        deferred = [_entry("vector-only")]
+        config = SootheConfig()
+        config.progressive_skills.semantic_search_enabled = True
+
+        mock_service = MagicMock()
+        mock_service.retrieve = AsyncMock(
+            return_value=SkillBundle(
+                query=(
+                    "[Embedding unavailable] Semantic skill search is temporarily unavailable. "
+                    "Falling back to keyword matching."
+                ),
+                results=[],
+            )
+        )
+
+        with patch(
+            "soothe.foundation.skillify.start_skillify_service",
+            return_value=mock_service,
+        ):
+            matches = await search_deferred_skills(
+                "vector-only",
+                deferred,
+                discovered=set(),
+                limit=5,
+                registry=registry,
+                config=config,
+                catalog_by_name={entry.name: entry for entry in deferred},
+            )
+
+        assert len(matches) == 1
+        assert matches[0].name == "vector-only"
+
 
 class TestIntentPrefetch:
     @pytest.fixture

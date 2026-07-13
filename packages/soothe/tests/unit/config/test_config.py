@@ -108,7 +108,7 @@ class TestSootheConfig:
 
     def test_default_skillify_config(self) -> None:
         cfg = SootheConfig()
-        assert cfg.skillify.enabled is True
+        assert cfg.skillify.enabled is False
         assert cfg.skillify.model_role == "embedding"
         assert cfg.skillify.retrieval_top_k == 10
 
@@ -122,7 +122,7 @@ class TestSootheConfig:
             }
         )
         assert "skillify" not in cfg.subagents
-        assert cfg.skillify.enabled is True
+        assert cfg.skillify.enabled is False
 
     def test_legacy_claude_core_agent_fields_stripped(self) -> None:
         cfg = SootheConfig(

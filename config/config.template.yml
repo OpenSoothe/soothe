@@ -407,7 +407,7 @@ subagents:
 
 # SkillifyConfig — daemon-shared semantic skill warehouse indexing and retrieval
 skillify:
-  enabled: true
+  enabled: false
   model_role: embedding
   warehouse_paths: []
   index_collection: soothe_skillify

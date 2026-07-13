@@ -2572,7 +2572,7 @@ class VeritasConfig(BaseModel):
 class SkillifyConfig(BaseModel):
     """Configuration for the daemon-shared Skillify semantic skill search service."""
 
-    enabled: bool = True
+    enabled: bool = False
     model_role: ModelRole = Field(
         default="embedding",
         description="Router model role used for Skillify embedding calls.",
