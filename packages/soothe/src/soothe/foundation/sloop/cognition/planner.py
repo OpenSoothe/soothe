@@ -20,7 +20,9 @@ from soothe.foundation.sloop.cognition.plan_generation_wire import (
 from soothe.foundation.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
+    normalize_status_assessment,
     simple_intake_should_force_done,
+    terminal_assess_may_complete,
 )
 from soothe.foundation.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.foundation.sloop.state.schemas import (
@@ -1068,6 +1070,7 @@ class LLMPlanner:
             state.iteration,
             thread_id=state.thread_id,
         )
+        assessment = normalize_status_assessment(assessment)
 
         if ai_response is not None and context_engine is not None:
             goal_id = getattr(state, "_ce_goal_id", None)
@@ -1462,6 +1465,7 @@ class LLMPlanner:
                 assessment = await self._assess_status(
                     assess_messages, goal, state.iteration, thread_id=state.thread_id
                 )
+                assessment = normalize_status_assessment(assessment)
                 assess_ms = (time.perf_counter() - t_assess) * 1000
                 plan_gen_ms = 0.0
                 llm_calls = 1
@@ -1473,8 +1477,26 @@ class LLMPlanner:
                         assessment.status = "replan"
                         assessment.goal_progress = "none"
 
-                # Early completion: apply goal-completion policy (IG-298)
+                can_complete_early = False
                 if assessment.status == "done":
+                    intake_label = intake_label_from_state(state)
+                    can_complete_early = terminal_assess_may_complete(
+                        state,
+                        assessment,
+                        None,
+                        intake_label=intake_label,
+                    )
+                    if not can_complete_early:
+                        logger.warning(
+                            "[Plan] Reject terminal assess in one-shot plan: structural gates failed "
+                            "(status=%s progress=%s iter=%d)",
+                            assessment.status,
+                            assessment.goal_progress,
+                            state.iteration,
+                        )
+
+                # Early completion: apply goal-completion policy (IG-298)
+                if can_complete_early:
                     from soothe.foundation.context.planning.completion import (
                         determine_goal_completion_needs,
                     )

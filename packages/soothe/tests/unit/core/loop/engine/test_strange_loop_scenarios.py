@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from soothe.config.models import (
     ExecutePromptLedgerConfig,
@@ -15,6 +16,7 @@ from soothe.foundation.sloop import StrangeLoop
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
+    PriorProgressDigest,
     StatusAssessment,
     StepAction,
 )
@@ -57,6 +59,29 @@ class MockLoopPlanner:
         # StrangeLoop goal completion constructs ``SynthesisGenerator(loop_planner._model, ...)``.
         self._model = MagicMock()
 
+    @staticmethod
+    def _terminal_done_assessment(**kwargs: Any) -> StatusAssessment:
+        """Assess output that satisfies structural terminal-completion gates."""
+        return StatusAssessment(
+            status="done",
+            goal_progress="complete",
+            terminal_readiness="ready",
+            gap_alignment=True,
+            require_goal_completion=True,
+            **kwargs,
+        )
+
+    @staticmethod
+    def _seed_prior_progress_for_terminal_assess(state) -> None:
+        """Mirror executor digest when mock steps succeed but omit stream messages."""
+        if not state.step_results or not all(r.success for r in state.step_results):
+            return
+        state.prior_progress = PriorProgressDigest(
+            iteration=state.iteration,
+            derived_progress_hint="high",
+            steps_completed=len(state.step_results),
+        )
+
     async def assess_status(
         self,
         goal: str,
@@ -72,7 +97,7 @@ class MockLoopPlanner:
         self._assess_count += 1
 
         if self.scenario == "success":
-            # First assess: need work, second assess: done
+            # First assess: need work, second assess: done when digest supports it
             if self._assess_count == 1:
                 return StatusAssessment(
                     status="continue",
@@ -80,11 +105,9 @@ class MockLoopPlanner:
                     assessment_reasoning="Starting work",
                     require_goal_completion=False,
                 )
-            return StatusAssessment(
-                status="done",
-                goal_progress="complete",
+            self._seed_prior_progress_for_terminal_assess(state)
+            return self._terminal_done_assessment(
                 assessment_reasoning="All work complete",
-                require_goal_completion=True,
             )
 
         if self.scenario == "replan":
@@ -103,11 +126,9 @@ class MockLoopPlanner:
                     assessment_reasoning="First approach failed, need replan",
                     require_goal_completion=False,
                 )
-            return StatusAssessment(
-                status="done",
-                goal_progress="complete",
+            self._seed_prior_progress_for_terminal_assess(state)
+            return self._terminal_done_assessment(
                 assessment_reasoning="Revised plan succeeded",
-                require_goal_completion=True,
             )
 
         if self.scenario == "continue":
@@ -119,18 +140,13 @@ class MockLoopPlanner:
                     assessment_reasoning="Starting work",
                     require_goal_completion=False,
                 )
-            return StatusAssessment(
-                status="done",
-                goal_progress="complete",
+            self._seed_prior_progress_for_terminal_assess(state)
+            return self._terminal_done_assessment(
                 assessment_reasoning="Work complete",
-                require_goal_completion=True,
             )
 
-        return StatusAssessment(
-            status="done",
-            goal_progress="complete",
+        return self._terminal_done_assessment(
             assessment_reasoning="Default done",
-            require_goal_completion=True,
         )
 
     async def generate_from_assessment(
@@ -308,10 +324,28 @@ class MockCoreAgent:
 
         async def mock_stream():
             self.call_count += 1
-            # Use message format expected by executor
-            yield {"messages": [{"content": f"Mock execute output for: {user_input}"}]}
+            yield {
+                "messages": [
+                    AIMessage(
+                        content="Completed step with verifiable output: 42 items processed.",
+                        tool_calls=[
+                            {
+                                "name": "run_command",
+                                "args": {"command": "echo done"},
+                                "id": f"tc-{self.call_count}",
+                            }
+                        ],
+                    )
+                ]
+            }
 
         return mock_stream()
+
+    async def execution_aget_state(self, config: dict | None = None) -> Any:
+        """Stub graph state for interrupt resume checks in the executor."""
+        state = MagicMock()
+        state.tasks = []
+        return state
 
 
 def _make_config(max_iterations: int = 8) -> MagicMock:

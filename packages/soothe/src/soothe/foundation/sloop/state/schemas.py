@@ -786,6 +786,10 @@ class StatusAssessment(BaseModel):
     """Brief status justification."""
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
+    terminal_readiness: Literal["not_ready", "ready_with_gaps", "ready"] = "not_ready"
+    """IG-640: explicit terminal readiness when status may be done."""
+    gap_alignment: bool = True
+    """IG-640: assess agrees with latest PlanGapAnalysis (structured self-report)."""
 
 
 class GoalComponentStatus(BaseModel):
@@ -1002,6 +1006,7 @@ class StepResult(BaseModel):
     subagent_task_completions: int = 0
     hit_subagent_cap: bool = False
     hit_tool_budget: bool = False
+    had_recoverable_tool_errors: bool = False
 
     def to_evidence_string(self, *, truncate: bool = True) -> str:
         """Convert to evidence string for judgment.

@@ -14,10 +14,9 @@ import random
 from typing import Any, Literal
 
 from soothe.foundation.sloop.cognition.plan_step_safety import (
-    assess_may_route_complete,
-    assess_respects_gap_analysis,
     intake_label_from_state,
     plan_has_minimum_steps_for_intake,
+    terminal_assess_may_complete,
 )
 from soothe.foundation.sloop.engine.continuation_context import (
     build_continue_bootstrap_step_briefs,
@@ -340,11 +339,143 @@ async def _handle_continuation_first_plan(
     return {"assess_route": "continue_generate"}
 
 
+def _downgrade_rejected_terminal_assessment(assessment: StatusAssessment) -> StatusAssessment:
+    """Align scratch assessment with continue_generate after a rejected terminal route."""
+    updates: dict[str, object] = {"goal_progress": "medium"}
+    if assessment.status == "done":
+        updates["status"] = "continue"
+    return assessment.model_copy(update=updates)
+
+
+def _reject_ig555_premature_complete(
+    state: LoopState,
+    assessment: StatusAssessment,
+    intake_label: IntakeLabel | None,
+) -> bool:
+    """IG-555 iter=0 complex guards. Returns True when routing must continue_generate."""
+    if state.iteration == 0 and intake_label == IntakeLabel.COMPLEX and not state.step_results:
+        logger.warning(
+            "[Plan] Reject terminal assess for complex intake at iter=0 "
+            "(prior completion anchoring); forcing replan"
+        )
+        return True
+
+    if not plan_has_minimum_steps_for_intake(
+        state.current_decision,
+        intake_label,
+        state.iteration,
+    ):
+        logger.warning(
+            "[Plan] Reject terminal assess: undersized plan (%d step) "
+            "for complex intake at iter=0, forcing replan",
+            len(state.current_decision.steps) if state.current_decision else 0,
+        )
+        return True
+    return False
+
+
+async def _route_goal_completion_if_terminal(
+    ctx: LoopRuntimeContext,
+    *,
+    assessment: StatusAssessment,
+    context: Any,
+) -> dict[str, Any] | None:
+    """Unified terminal routing for status=done and goal_progress=complete (IG-640)."""
+    if assessment.status != "done" and assessment.goal_progress != "complete":
+        return None
+
+    strange_loop = ctx.strange_loop
+    state = ctx.loop_state
+    plan_manager = ctx.plan_manager
+    intake_label = intake_label_from_state(state)
+
+    if _reject_ig555_premature_complete(state, assessment, intake_label):
+        ctx.scratch.plan_assessment = _downgrade_rejected_terminal_assessment(assessment)
+        return {"assess_route": "continue_generate"}
+
+    if not terminal_assess_may_complete(
+        state,
+        assessment,
+        ctx.scratch.plan_gap,
+        intake_label=intake_label,
+    ):
+        logger.warning(
+            "[Plan] Reject terminal assess: structural gates failed "
+            "(status=%s progress=%s iter=%d)",
+            assessment.status,
+            assessment.goal_progress,
+            state.iteration,
+        )
+        ctx.scratch.plan_assessment = _downgrade_rejected_terminal_assessment(assessment)
+        return {"assess_route": "continue_generate"}
+
+    if assessment.status == "done" and state.has_remaining_steps():
+        logger.warning(
+            "[Plan] LLM returned status=done but %d step(s) remain; proceeding to goal completion",
+            len(state.current_decision.steps) - len(state.completed_step_ids),
+        )
+
+    logger.info(
+        "[Plan] terminal assess routing to goal completion (status=%s progress=%s)",
+        assessment.status,
+        assessment.goal_progress,
+    )
+    gc_mode = (
+        strange_loop.config.agent.loop.goal_completion_mode
+        if strange_loop.config is not None
+        else "llm_only"
+    )
+    require_completion = plan_manager.determine_goal_completion_needs(
+        llm_decision=assessment.require_goal_completion,
+        state=state,
+        mode=gc_mode,
+    )
+    next_action = (
+        "Goal achieved successfully"
+        if assessment.status == "done"
+        else "Goal progress sufficient for completion"
+    )
+    plan_result = PlanResult(
+        status=assessment.status if assessment.status == "done" else "done",
+        goal_progress=assessment.goal_progress,
+        assessment_reasoning="",
+        plan_reasoning="",
+        plan_action="keep",
+        decision=None,
+        next_action=next_action,
+        require_goal_completion=require_completion,
+        full_output=last_ledger_ai_content(state) or None,
+    )
+    plan_result = strange_loop.plan_phase.finalize_plan_result(
+        state=state,
+        context=context,
+        result=plan_result,
+    )
+    ctx.scratch.plan_result = plan_result
+    plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
+    if ctx.ce is not None:
+        try:
+            ctx.ce.defer_save()
+        except Exception:
+            logger.warning("[plan_assess] CE save failed", exc_info=True)
+    await ctx.emit(
+        "plan",
+        {
+            "iteration": state.iteration,
+            "status": plan_result.status,
+            "progress": plan_result.goal_progress,
+            "next_action": plan_result.next_action,
+            "plan_reasoning": plan_result.plan_reasoning,
+            "plan_action": plan_result.plan_action,
+        },
+    )
+    return {"plan_route": PLAN_ROUTE_GOAL_DONE}
+
+
 async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Run assess phase and decide whether generation is needed."""
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
-    plan_manager = ctx.plan_manager
     context = strange_loop._build_plan_context(state)
 
     continuation_result = await _handle_continuation_first_plan(
@@ -377,151 +508,12 @@ async def node_plan_assess(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> d
             },
         )
 
-    if assessment.status == "done":
-        if state.has_remaining_steps():
-            logger.warning(
-                "[Plan] LLM returned status=done but %d step(s) remain; proceeding to goal completion (no new plan will be generated)",
-                len(state.current_decision.steps) - len(state.completed_step_ids),
-            )
-
-        gc_mode = (
-            strange_loop.config.agent.loop.goal_completion_mode
-            if strange_loop.config is not None
-            else "llm_only"
-        )
-        require_completion = plan_manager.determine_goal_completion_needs(
-            llm_decision=assessment.require_goal_completion,
-            state=state,
-            mode=gc_mode,
-        )
-        plan_result = PlanResult(
-            status=assessment.status,
-            goal_progress=assessment.goal_progress,
-            assessment_reasoning="",
-            plan_reasoning="",
-            plan_action="keep",
-            decision=None,
-            next_action="Goal achieved successfully",
-            require_goal_completion=require_completion,
-            full_output=last_ledger_ai_content(state) or None,
-        )
-        plan_result = strange_loop.plan_phase.finalize_plan_result(
-            state=state,
-            context=context,
-            result=plan_result,
-        )
-        ctx.scratch.plan_result = plan_result
-        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
-        # RFC-624 Phase 4: persist CE state after plan ingestion
-        if ctx.ce is not None:
-            try:
-                ctx.ce.defer_save()
-            except Exception:
-                logger.warning("[plan_assess] CE save failed", exc_info=True)
-        await ctx.emit(
-            "plan",
-            {
-                "iteration": state.iteration,
-                "status": plan_result.status,
-                "progress": plan_result.goal_progress,
-                "next_action": plan_result.next_action,
-                "plan_reasoning": plan_result.plan_reasoning,
-                "plan_action": plan_result.plan_action,
-            },
-        )
-        return {"plan_route": PLAN_ROUTE_GOAL_DONE}
-
-    # goal_progress-based early routing: when progress is complete, go to goal completion
-    # IG-555: Guardrail rejects premature "complete" for complex intake at iter=0
-    if assessment.goal_progress == "complete":
-        intake_label = intake_label_from_state(state)
-        if state.iteration == 0 and intake_label == IntakeLabel.COMPLEX and not state.step_results:
-            logger.warning(
-                "[Plan] Reject goal_progress=complete for complex intake at iter=0 "
-                "(prior completion anchoring); forcing replan"
-            )
-            assessment.goal_progress = "medium"
-            return {"assess_route": "continue_generate"}
-
-        # Check undersized plan for complex intake (IG-555)
-        if not plan_has_minimum_steps_for_intake(
-            state.current_decision,
-            intake_label,
-            state.iteration,
-        ):
-            logger.warning(
-                "[Plan] Reject goal_progress=complete: undersized plan (%d step) "
-                "for complex intake at iter=0, forcing replan",
-                len(state.current_decision.steps) if state.current_decision else 0,
-            )
-            assessment.goal_progress = "medium"
-            return {"assess_route": "continue_generate"}
-
-        if not assess_may_route_complete(state, assessment, intake_label):
-            logger.warning(
-                "[Plan] Reject goal_progress=complete: insufficient execution evidence (iter=%d)",
-                state.iteration,
-            )
-            assessment.goal_progress = "medium"
-            return {"assess_route": "continue_generate"}
-
-        if not assess_respects_gap_analysis(assessment, ctx.scratch.plan_gap):
-            gap = ctx.scratch.plan_gap
-            logger.warning(
-                "[Plan] Reject assessment: contradicts gap analysis (distance=%s)",
-                gap.distance_from_goal if gap is not None else "n/a",
-            )
-            assessment.goal_progress = "medium"
-            return {"assess_route": "continue_generate"}
-
-        logger.info(
-            "[Plan] goal_progress=%s routing to goal completion",
-            assessment.goal_progress,
-        )
-        gc_mode = (
-            strange_loop.config.agent.loop.goal_completion_mode
-            if strange_loop.config is not None
-            else "llm_only"
-        )
-        require_completion = plan_manager.determine_goal_completion_needs(
-            llm_decision=assessment.require_goal_completion,
-            state=state,
-            mode=gc_mode,
-        )
-        plan_result = PlanResult(
-            status=assessment.status,
-            goal_progress=assessment.goal_progress,
-            assessment_reasoning="",
-            plan_reasoning="",
-            plan_action="keep",
-            decision=None,
-            next_action="Goal progress sufficient for completion",
-            require_goal_completion=require_completion,
-        )
-        plan_result = strange_loop.plan_phase.finalize_plan_result(
-            state=state,
-            context=context,
-            result=plan_result,
-        )
-        ctx.scratch.plan_result = plan_result
-        plan_manager.ingest_plan(plan_result, state.plan_id, state.iteration)
-        # RFC-624 Phase 4: persist CE state after plan ingestion
-        if ctx.ce is not None:
-            try:
-                ctx.ce.defer_save()
-            except Exception:
-                logger.warning("[plan_assess] CE save failed", exc_info=True)
-        await ctx.emit(
-            "plan",
-            {
-                "iteration": state.iteration,
-                "status": plan_result.status,
-                "progress": plan_result.goal_progress,
-                "next_action": plan_result.next_action,
-                "plan_reasoning": plan_result.plan_reasoning,
-                "plan_action": plan_result.plan_action,
-            },
-        )
-        return {"plan_route": PLAN_ROUTE_GOAL_DONE}
+    terminal_route = await _route_goal_completion_if_terminal(
+        ctx,
+        assessment=assessment,
+        context=context,
+    )
+    if terminal_route is not None:
+        return terminal_route
 
     return {"assess_route": "continue_generate"}

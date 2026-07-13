@@ -256,6 +256,13 @@ class StepPlanningSubengine:
 
         ledger_text = last_ledger_ai_content(state) if state else None
 
+        assessment_terminal = False
+        if plan_result is not None:
+            assessment_terminal = (
+                getattr(plan_result, "status", None) == "done"
+                or getattr(plan_result, "goal_progress", None) == "complete"
+            )
+
         strategy_str = _determine_completion_strategy(
             plan_result_require_goal_completion=(
                 plan_result.require_goal_completion if plan_result else True
@@ -276,6 +283,7 @@ class StepPlanningSubengine:
             ledger_text=ledger_text,
             final_response_mode=mode,
             last_wave_tool_call_count=int(getattr(state, "last_wave_tool_call_count", 0) or 0),
+            assessment_terminal=assessment_terminal,
         )
 
         return CompletionStrategy(strategy_str)

@@ -1,44 +1,44 @@
 <PLAN_ASSESS>
 Judge **current** goal (GOAL:) progress via execute ledger and optional PRIOR PROGRESS:. Fulfill
-GOAL: completely — do not stop or mark done/complete until every part is fully resolved in the
-ledger. Prior goals/recommended actions are context only, not completion criteria.
+GOAL: completely — do not mark done/complete until every part is resolved in the ledger.
 
-Output schema only: status, goal_progress, assessment_reasoning, require_goal_completion.
+Output: status, goal_progress, assessment_reasoning, require_goal_completion,
+terminal_readiness, gap_alignment.
+
+**terminal_readiness**: "not_ready" | "ready_with_gaps" | "ready"
+- not_ready / ready_with_gaps: more work remains; do not use status="done".
+- ready: all GOAL components satisfied in ledger evidence (required for status="done").
+
+**gap_alignment**: true when your judgment agrees with GAP ANALYSIS; false if you mark
+done/complete while gap shows open components or distance not at_goal.
 
 **status**
-- "done": Ledger shows concrete evidence the goal is satisfied (file output, command result,
-  subagent result matching the ask). Prefer "done" when the literal request is visibly fulfilled.
-- "continue": Partial evidence; next execute step still needed on the current strategy.
-- "replan": Approach wrong, blocked, or contradicted by evidence — choose a different strategy.
+- "done": Ledger shows concrete evidence the goal is satisfied.
+- "continue": Partial evidence; next execute step still needed.
+- "replan": Approach wrong, blocked, or contradicted by evidence.
 
-**goal_progress** (descriptive, not numeric): "none" | "low" | "medium" | "high" | "complete"
-- none: no progress (empty ledger or irrelevant evidence)
-- low: early exploration (&lt;20%)
-- medium: partial (20–60%, key components identified)
-- high: near complete (60–90%, answer present may need polish)
-- complete: fully satisfied (≥90%)
-Use "high" when the answer is in evidence; "low" when little toward the goal has been produced.
+**goal_progress**: "none" | "low" | "medium" | "high" | "complete"
+- none: no progress; low: early exploration; medium: partial (20–60%);
+- high: near complete (60–90%); complete: fully satisfied (≥90%).
 
 **require_goal_completion**: true only when status="done" but the user still needs a separate
-synthesis pass for the final reply; else false. Read-only/extract goals where tool output is
-the deliverable → prefer false.
+synthesis pass; else false.
 
-**assessment_reasoning** (≤2 sentences, ≤500 chars): First-person plan-reason card text
-("I see…", "I checked…", "I'll continue because…"). No third-person ("The assistant…") or
-schema jargon ("status=done", "goal_progress=high").
-- Sentence 1: Summarize PRIOR PROGRESS: / ledger — cite a tool that ran or an evidence excerpt.
-  Do NOT restate the user's request (GOAL: holds that).
+**assessment_reasoning** (≤2 sentences, ≤500 chars): First-person plan-reason card
+("I see…", "I'll continue because…"). No third-person or schema jargon.
+- Sentence 1: Summarize PRIOR PROGRESS: / ledger — cite a tool or evidence excerpt.
 - Sentence 2: Justify status in first person.
-- No PRIOR PROGRESS: (first assess): say starting fresh in first person; base on GOAL: only.
 
 **Guards**
 - Multi-part goals: every GOAL: component needs ledger evidence before done/complete.
 - Partial success ≠ full resolution — prefer status="continue" until fully done.
 - GOAL: iter 1 with no tool/subagent results: NEVER status="done".
 - Never status="done" or goal_progress="complete" without full-goal ledger evidence.
-- Do NOT restate the user's request in ``assessment_reasoning``. Cite ledger or PRIOR PROGRESS: instead.
-- First person ("I…"), not third person ("The agent…", "The assistant…").
+- status="done" requires goal_progress at least "medium" and terminal_readiness="ready".
+- Plan steps complete ≠ goal complete — judge outcome evidence, not step coverage alone.
+- Do NOT restate the user's request in ``assessment_reasoning``.
+- First person ("I…"), not third person.
 
-**Tone**: ✅ "I counted 1247 source vs 612 test files — I'll continue for the breakdown."
-❌ "Evidence shows partial progress; status=continue." ❌ Restating what the user asked for.
+**Tone**: ✅ "I counted 1247 source files — I'll continue for the breakdown."
+❌ "Evidence shows partial progress; status=continue."
 </PLAN_ASSESS>

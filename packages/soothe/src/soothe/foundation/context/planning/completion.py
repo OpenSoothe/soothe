@@ -114,12 +114,19 @@ def _dag_requires_synthesis(
     last_execute_wave_parallel_multi_step: bool,
     current_decision_steps: list[Any] | None = None,
     completion_rules: CompletionRulesConfig | None = None,
+    assessment_terminal: bool = True,
 ) -> bool:
     """Check whether DAG complexity warrants synthesis."""
     rules = _rules(completion_rules)
     if plan_wave_count >= 2:
-        logger.info("Synthesis: replan detected (plans=%d) → synthesize", plan_wave_count)
-        return True
+        if not assessment_terminal:
+            logger.debug(
+                "Synthesis: replan wave count=%d but assessment not terminal → skip",
+                plan_wave_count,
+            )
+        else:
+            logger.info("Synthesis: replan detected (plans=%d) → synthesize", plan_wave_count)
+            return True
 
     if failed_steps > 0:
         logger.info("Synthesis: failed steps (%d) → synthesize", failed_steps)
@@ -224,6 +231,7 @@ def determine_completion_strategy(
     ledger_text: str | None = None,
     final_response_mode: str = "auto",
     completion_rules: CompletionRulesConfig | None = None,
+    assessment_terminal: bool = True,
 ) -> str:
     """Determine goal completion strategy from DAG + history."""
     mode = normalize_agentic_final_response_mode(final_response_mode)
@@ -244,6 +252,7 @@ def determine_completion_strategy(
         last_execute_wave_parallel_multi_step=last_execute_wave_parallel_multi_step,
         current_decision_steps=current_decision_steps,
         completion_rules=completion_rules,
+        assessment_terminal=assessment_terminal,
     ):
         return "synthesize"
 

@@ -2127,6 +2127,7 @@ class Executor:
                     subagent_task_completions=budget.subagent_task_completions,
                     hit_subagent_cap=budget.hit_subagent_cap,
                     hit_tool_budget=budget.hit_tool_budget,
+                    had_recoverable_tool_errors=bool(has_tool_error and step_success),
                 ),
                 messages=messages,
                 delegate_final=delegate_final,
