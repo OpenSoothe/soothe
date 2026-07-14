@@ -18,6 +18,7 @@ from soothe.mcp.budget import MCPToolDescriptor
 from soothe.mcp.discovery_tools import create_search_mcp_tools_tool
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.middleware.mcp_activation import MCPActivationMiddleware
+from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
 from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
 from soothe.middleware.system_prompt import SystemPromptMiddleware
 
@@ -77,15 +78,21 @@ def mcp_surfacing_config(test_config: SootheConfig) -> SootheConfig:
 
 def _middleware_instances(
     config: SootheConfig, registry: MagicMock
-) -> tuple[ProgressiveToolMiddleware, MCPActivationMiddleware, SystemPromptMiddleware]:
+) -> tuple[
+    ProgressiveToolMiddleware,
+    MCPActivationMiddleware,
+    ProgressiveListingMiddleware,
+    SystemPromptMiddleware,
+]:
     stack = build_soothe_middleware_stack(config, policy=None, mcp_registry=registry)
     progressive = next(m for m in stack if isinstance(m, ProgressiveToolMiddleware))
     mcp_activation = next(m for m in stack if isinstance(m, MCPActivationMiddleware))
+    progressive_listing = next(m for m in stack if isinstance(m, ProgressiveListingMiddleware))
     system_prompt = next(m for m in stack if isinstance(m, SystemPromptMiddleware))
     catalog = _full_catalog(registry)
     progressive.set_tool_catalog(catalog)
     mcp_activation.set_tool_catalog()
-    return progressive, mcp_activation, system_prompt
+    return progressive, mcp_activation, progressive_listing, system_prompt
 
 
 class _ModelRequest:
@@ -104,7 +111,7 @@ async def test_cold_start_binds_discovery_stub_not_deferred_mcp(
 ) -> None:
     """search_mcp_tools stays bound; 50 deferred mcp__ tools are filtered."""
     registry = _mock_mcp_registry()
-    progressive, mcp_activation, _ = _middleware_instances(mcp_surfacing_config, registry)
+    progressive, mcp_activation, _, _ = _middleware_instances(mcp_surfacing_config, registry)
     catalog = _full_catalog(registry)
     state = {"mcp_activation": {"sent": set(), "promoted": set()}}
 
@@ -131,7 +138,7 @@ async def test_search_mcp_tools_promotes_and_next_hop_binds(
 ) -> None:
     """search_mcp_tools promotes matches; subsequent model hop binds them."""
     registry = _mock_mcp_registry()
-    progressive, mcp_activation, _ = _middleware_instances(mcp_surfacing_config, registry)
+    progressive, mcp_activation, _, _ = _middleware_instances(mcp_surfacing_config, registry)
     catalog = _full_catalog(registry)
     state: dict = {
         "mcp_activation": {"sent": set(), "promoted": set()},
@@ -178,16 +185,19 @@ async def test_system_prompt_lists_deferred_delta_then_excludes_promoted(
 ) -> None:
     """<AVAILABLE_MCP_TOOLS> lists unsent deferred tools and skips promoted ones."""
     registry = _mock_mcp_registry(deferred_count=50)
-    _, _, system_prompt = _middleware_instances(mcp_surfacing_config, registry)
+    _, _, progressive_listing, _ = _middleware_instances(mcp_surfacing_config, registry)
 
     state: dict = {
         "mcp_activation": {
             "sent": {f"mcp__mock__tool_{i:02d}" for i in range(10)},
             "promoted": {"mcp__mock__tool_07"},
-        }
+        },
+        "routing_classification": {"task_complexity": "simple"},
     }
-    block = system_prompt._compose_mcp_tools_block(state)
-    assert block is not None
+    request = _ModelRequest(_full_catalog(registry), state)
+    progressive_listing.modify_request(request)  # type: ignore[arg-type]
+    block = state.get("_available_mcp_tools_block")
+    assert isinstance(block, str)
     assert "<AVAILABLE_MCP_TOOLS>" in block
     assert "mcp__mock__tool_07" not in block
     assert "mcp__mock__tool_00" not in block

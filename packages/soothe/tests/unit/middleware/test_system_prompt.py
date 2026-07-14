@@ -11,6 +11,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from soothe.config import SootheConfig
 from soothe.foundation.sloop.intention import RoutingClassification
 from soothe.middleware import SystemPromptMiddleware
+from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
+from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 _VOLATILE_PROMPT_SECTION_RE = re.compile(
     r"<(?:ENVIRONMENT|TIMESTAMP)>.*?</(?:ENVIRONMENT|TIMESTAMP)>\n?",
@@ -293,6 +295,7 @@ def test_minimal_task_complexity_uses_compact_prompt():
 def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     """Explicit slash-style routing narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
+    enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -308,9 +311,10 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    modified = middleware.modify_request(request)
-    assert len(modified.tools) == 1
-    assert getattr(modified.tools[0], "name", None) == "task"
+    enforced = enforcement.modify_request(request)
+    modified = middleware.modify_request(enforced)
+    assert len(enforced.tools) == 1
+    assert getattr(enforced.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
     assert "MUST use" in modified.system_message.content
 
@@ -318,6 +322,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
 def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
     """After the first model reply, restore full tools and omit routing directive."""
     config = SootheConfig()
+    enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -333,14 +338,16 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    modified = middleware.modify_request(request)
-    assert len(modified.tools) == 2
+    enforced = enforcement.modify_request(request)
+    modified = middleware.modify_request(enforced)
+    assert len(enforced.tools) == 2
     assert "SUBAGENT_ROUTING_DIRECTIVE" not in modified.system_message.content
 
 
 def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
     """StrangeLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
     config = SootheConfig()
+    enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -357,9 +364,10 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
     )
     lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "deep_research"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        modified = middleware.modify_request(request)
-    assert len(modified.tools) == 1
-    assert getattr(modified.tools[0], "name", None) == "task"
+        enforced = enforcement.modify_request(request)
+        modified = middleware.modify_request(enforced)
+    assert len(enforced.tools) == 1
+    assert getattr(enforced.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
     assert "deep_research" in modified.system_message.content
 
@@ -367,6 +375,7 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
 def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
     """Wired step subagents stay task-only after the first model hop."""
     config = SootheConfig()
+    enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -387,15 +396,17 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
     )
     lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "browser_use"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        modified = middleware.modify_request(request)
-    assert len(modified.tools) == 1
-    assert getattr(modified.tools[0], "name", None) == "task"
+        enforced = enforcement.modify_request(request)
+        modified = middleware.modify_request(enforced)
+    assert len(enforced.tools) == 1
+    assert getattr(enforced.tools[0], "name", None) == "task"
     assert "browser_use" in modified.system_message.content
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     """``soothe_step_subagent`` configurable wins over wire ``preferred_subagent`` on first hop."""
     config = SootheConfig()
+    enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -413,7 +424,8 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     )
     lg_config = {"configurable": {"soothe_step_subagent": "deep_research"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        modified = middleware.modify_request(request)
+        enforced = enforcement.modify_request(request)
+        modified = middleware.modify_request(enforced)
     content = modified.system_message.content
     assert "subagent_type='deep_research'" in content
 
@@ -421,6 +433,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
 def test_goal_synthesis_disables_all_tools() -> None:
     """Goal-completion synthesis must not expose tools (read-only ledger synthesis)."""
     config = SootheConfig()
+    enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
@@ -433,7 +446,9 @@ def test_goal_synthesis_disables_all_tools() -> None:
     )
     lg_config = {"configurable": {"soothe_goal_synthesis": True}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        modified = middleware.modify_request(request)
+        enforced = enforcement.modify_request(request)
+        modified = middleware.modify_request(enforced)
+    assert enforced.tools == []
     assert modified.tools == []
 
 
@@ -570,6 +585,7 @@ class TestComposeSkillsBlockJustInvokedExclusion:
         from soothe.middleware.system_prompt import SystemPromptMiddleware
 
         config = SootheConfig()
+        listing = ProgressiveListingMiddleware(config=config)
         middleware = SystemPromptMiddleware(config=config)
         state = {
             "skill_activation": {
@@ -580,6 +596,14 @@ class TestComposeSkillsBlockJustInvokedExclusion:
                 "just_invoked": set(),
             }
         }
+        request = ModelRequest(
+            model=GenericFakeChatModel(messages=iter([AIMessage(content="x")])),
+            messages=[HumanMessage(content="hi")],
+            system_message=SystemMessage(content="base"),
+            tools=[],
+            state=state,
+        )
+        listing.modify_request(request)
         prompt = middleware._get_prompt_for_complexity("medium", state)
         assert "<SKILL_CONTEXT_GUIDE>" in prompt
         assert '<SKILL_CONTEXT name="weather">' in prompt
@@ -740,14 +764,15 @@ def test_available_tools_block_when_progressive_enabled() -> None:
     config.progressive_tools.enabled = True
     config.progressive_tools.core_tools = ["run_command", "read_file", "search_tools"]
     progressive = ProgressiveToolMiddleware(config=config)
+    listing = ProgressiveListingMiddleware(
+        config=config,
+        progressive_tool_middleware=progressive,
+    )
     core = SimpleNamespace(name="run_command", description="Shell")
     deferred = SimpleNamespace(name="wizsearch_search", description="Web search tool")
     progressive.set_tool_catalog([core, deferred])
 
-    middleware = SystemPromptMiddleware(
-        config=config,
-        progressive_tool_middleware=progressive,
-    )
+    middleware = SystemPromptMiddleware(config=config)
     request = MockModelRequest(
         state={"routing_classification": RoutingClassification(task_complexity="simple")},
         system_message=SystemMessage(content="base"),
@@ -755,6 +780,7 @@ def test_available_tools_block_when_progressive_enabled() -> None:
     # Simulate ProgressiveToolMiddleware filtering bound tools to core only.
     request.tools = [core]
 
+    listing.modify_request(request)
     modified = middleware.modify_request(request)
     content = modified.system_message.content
     assert "<AVAILABLE_TOOLS>" in content

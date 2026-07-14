@@ -7,13 +7,10 @@ from contextvars import Token
 from typing import TYPE_CHECKING, Annotated, Any, NotRequired
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AnyMessage, SystemMessage, ToolMessage
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from soothe.mcp.progressive_registry import merge_mcp_activation
-from soothe.skills.registry import merge_skill_activation
-from soothe.toolkits.progressive.registry import merge_tool_activation
 from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
@@ -38,76 +35,6 @@ _VALID_TASK_COMPLEXITY = frozenset({"minimal", "simple", "medium", "complex"})
 # Cap >= number of distinct sections in the trigger registry, with headroom.
 RECENT_TOOL_MESSAGE_WINDOW = 25
 RECENT_TOOL_NAME_CAP = 10
-
-
-def _configurable_goal_synthesis() -> bool:
-    """Return True when CoreAgent is running goal-completion synthesis (read-only).
-
-    ``SynthesisGenerator`` sets ``soothe_goal_synthesis`` in ``config.configurable``.
-    """
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return False
-    if not isinstance(lg_cfg, dict):
-        return False
-    conf = lg_cfg.get("configurable")
-    if not isinstance(conf, dict):
-        return False
-    return bool(conf.get("soothe_goal_synthesis"))
-
-
-def _configurable_step_subagent() -> str | None:
-    """Return StrangeLoop per-step subagent hint from LangGraph RunnableConfig when set.
-
-    Executor passes ``soothe_step_subagent`` in ``config.configurable`` (from wire
-    ``preferred_subagent`` when ``routing_hint=subagent``). This must drive the same task-only enforcement as
-    wire ``routing_hint=subagent`` (IG-386).
-
-    Returns:
-        Stripped subagent name, or None if unset/blank or config unavailable.
-    """
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return None
-    if not isinstance(lg_cfg, dict):
-        return None
-    conf = lg_cfg.get("configurable")
-    if not isinstance(conf, dict):
-        return None
-    raw = conf.get("soothe_step_subagent")
-    if not isinstance(raw, str):
-        return None
-    stripped = raw.strip()
-    return stripped or None
-
-
-def _last_message_is_human(messages: list[AnyMessage] | None) -> bool:
-    """True when the model is about to produce the first reply to the latest user turn."""
-    if not messages:
-        return False
-    return isinstance(messages[-1], HumanMessage)
-
-
-def _filter_tools_to_task_only(
-    tools: list[Any],
-) -> list[Any]:
-    """Keep only the ``task`` tool so the model cannot substitute ``search_web`` etc."""
-    kept: list[Any] = []
-    for tool in tools:
-        name: str | None
-        if isinstance(tool, dict):
-            name = tool.get("name")
-        else:
-            name = getattr(tool, "name", None)
-        if name == _TASK_TOOL_NAME:
-            kept.append(tool)
-    return kept
 
 
 class _SystemPromptState(TypedDict):
@@ -141,11 +68,10 @@ class _SystemPromptState(TypedDict):
     routing_classification: NotRequired[Any]  # Type: RoutingClassification
     response_language: NotRequired[Any]  # Type: ResponseLanguage
     workspace: NotRequired[str | None]
-    mcp_activation: NotRequired[Annotated[dict[str, Any], merge_mcp_activation]]
-    disabled_mcp_servers: NotRequired[set[str]]
-    cached_mcp_resources: NotRequired[dict[str, str]]
-    tool_activation: NotRequired[Annotated[dict[str, Any], merge_tool_activation]]
-    skill_activation: NotRequired[Annotated[dict[str, Any], merge_skill_activation]]
+    _available_tools_block: NotRequired[str]
+    _available_skills_block: NotRequired[str]
+    _skill_context_blocks: NotRequired[list[str]]
+    _available_mcp_tools_block: NotRequired[str]
 
 
 class SystemPromptMiddleware(AgentMiddleware):
@@ -172,8 +98,6 @@ class SystemPromptMiddleware(AgentMiddleware):
         config: SootheConfig,
         tool_trigger_registry: ToolTriggerRegistry | None = None,
         tool_context_registry: ToolContextRegistry | None = None,
-        mcp_registry: Any | None = None,
-        progressive_tool_middleware: Any | None = None,
     ) -> None:
         """Initialize the system prompt middleware.
 
@@ -181,19 +105,10 @@ class SystemPromptMiddleware(AgentMiddleware):
             config: Soothe configuration instance.
             tool_trigger_registry: Optional registry for tool→section triggers.
             tool_context_registry: Optional registry for tool→context fragments.
-            mcp_registry: Optional MCPRegistry for MCP tool listing (RFC-412).
-            progressive_tool_middleware: Optional ``ProgressiveToolMiddleware`` for
-                deferred-tool listing from the full catalog (unfiltered).
         """
         self._config = config
         self._tool_trigger_registry = tool_trigger_registry
         self._tool_context_registry = tool_context_registry
-        self._mcp_registry = mcp_registry
-        self._progressive_tool_middleware = progressive_tool_middleware
-        # IG-519: Instance-level caching for SkillIndex/ProgressiveSkillRegistry
-        # Preserves cache across hops, avoiding re-instantiation overhead (~2.5ms/hop)
-        self._skill_index: Any = None  # Type: SkillIndex (lazy import)
-        self._skill_registry: Any = None  # Type: ProgressiveSkillRegistry (lazy import)
 
     @staticmethod
     def _langfuse_runnable_config() -> dict[str, Any] | None:
@@ -503,8 +418,7 @@ class SystemPromptMiddleware(AgentMiddleware):
             build_response_language_hint(response_language),
         ]
 
-        deferred_tools = state.get("_deferred_tools_for_listing") if state else None
-        tools_block = self._compose_available_tools_block(state, deferred_tools=deferred_tools)
+        tools_block = state.get("_available_tools_block") if state else None
         if tools_block:
             static_sections.append(tools_block)
 
@@ -603,7 +517,8 @@ class SystemPromptMiddleware(AgentMiddleware):
                     semi_static_sections.append(tool_section.strip())
 
         # RFC-105: Progressive skill loading blocks
-        avail_block, skill_ctx_blocks = self._compose_skills_block(state)
+        avail_block = state.get("_available_skills_block") if state else None
+        skill_ctx_blocks = (state.get("_skill_context_blocks") or []) if state else []
         if avail_block:
             static_sections.append(avail_block)
         if skill_ctx_blocks:
@@ -615,7 +530,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         semi_static_sections.extend(skill_ctx_blocks)
 
         # RFC-412: MCP deferred tool listing
-        mcp_block = self._compose_mcp_tools_block(state)
+        mcp_block = state.get("_available_mcp_tools_block") if state else None
         if mcp_block:
             static_sections.append(mcp_block)
 
@@ -749,218 +664,6 @@ class SystemPromptMiddleware(AgentMiddleware):
         # No specific scenario guidance
         return None
 
-    def _compose_skills_block(self, state: dict[str, Any] | None) -> tuple[str | None, list[str]]:
-        """RFC-105: Compose <AVAILABLE_SKILLS> static block + <SKILL_CONTEXT> semi-static blocks.
-
-        Args:
-            state: Request state dict (may contain ``skill_activation``).
-
-        Returns:
-            Tuple of (available_skills_block_or_None, list_of_skill_context_blocks).
-        """
-        if not state:
-            return None, []
-        activation = state.get("skill_activation")
-        if not isinstance(activation, dict):
-            return None, []
-
-        activation.setdefault("sent", set())
-        activated = activation.get("activated", set())
-        invoked = activation.get("invoked", set())
-        just_invoked = activation.get("just_invoked", set())
-        bodies = activation.get("invoked_bodies", {})
-
-        # IG-519: Use cached SkillIndex/ProgressiveSkillRegistry instances
-        # rebuild_if_stale() checks mtime on every call, so stale files are re-parsed
-        if self._skill_index is None:
-            from soothe.skills.index import SkillIndex
-
-            self._skill_index = SkillIndex()
-        if self._skill_registry is None:
-            from soothe.skills.registry import ProgressiveSkillRegistry, resolve_core_skill_names
-
-            self._skill_registry = ProgressiveSkillRegistry()
-        else:
-            from soothe.skills.registry import resolve_core_skill_names
-
-        entries = self._skill_index.rebuild_if_stale()
-        core_names = resolve_core_skill_names(self._config.progressive_skills.core_skills)
-        core_entries, _deferred = self._skill_registry.partition_core_deferred(entries, core_names)
-        activated_entries = [entry for entry in entries if entry.name in activated]
-        by_name = {entry.name: entry for entry in core_entries}
-        by_name.update({entry.name: entry for entry in activated_entries})
-        candidates = sorted(by_name.values(), key=lambda entry: entry.name.lower())
-
-        new_entries = self._skill_registry.new_for_thread(activation, candidates)
-
-        available_block: str | None = None
-        if new_entries:
-            # Exclude just-invoked skills from listing — their body is in the
-            # user message this turn (via <SKILL_REFERENCE> or <SKILL_CONTEXT>).
-            listing_entries = [e for e in new_entries if e.name not in just_invoked]
-
-            ctx_limit = int(self._config.agent.loop.context_window_limit)
-            budget_pct = float(self._config.progressive_skills.budget_pct)
-            budget_chars = max(0, int(ctx_limit * budget_pct))
-            per_entry_cap = int(self._config.progressive_skills.max_listing_chars_per_entry)
-            min_per_entry = int(self._config.progressive_skills.min_listing_chars_per_entry)
-
-            if listing_entries:
-                from soothe.skills.budget import format_skills_within_budget
-
-                text, _telemetry = format_skills_within_budget(
-                    listing_entries,
-                    budget_chars=budget_chars,
-                    per_entry_cap_chars=per_entry_cap,
-                    min_per_entry_chars=min_per_entry,
-                )
-                if text:
-                    available_block = f"<AVAILABLE_SKILLS>\n{text}\n</AVAILABLE_SKILLS>"
-
-            # Mark ALL new entries as sent (including just-invoked ones excluded from listing)
-            self._skill_registry.mark_sent(activation, [e.name for e in new_entries])
-
-        skill_context_blocks: list[str] = []
-        for name in sorted(invoked - just_invoked):
-            body = bodies.get(name)
-            if not body:
-                continue
-            skill_context_blocks.append(f'<SKILL_CONTEXT name="{name}">\n{body}\n</SKILL_CONTEXT>')
-
-        # Clear transient just_invoked at end of compose
-        activation["just_invoked"] = set()
-        state["skill_activation"] = activation
-
-        return available_block, skill_context_blocks
-
-    def _compose_mcp_tools_block(self, state: dict[str, Any] | None) -> str | None:
-        """RFC-412: Compose <AVAILABLE_MCP_TOOLS> block for deferred MCP tools.
-
-        Only deferred tools (defer=True) need listing — always-loaded tools
-        are bound via MCPActivationMiddleware on every hop.
-
-        Args:
-            state: Request state dict (may contain ``mcp_activation``).
-
-        Returns:
-            XML block string, or None if no MCP tools or registry.
-        """
-        if not self._mcp_registry or not state:
-            return None
-
-        from soothe.mcp.progressive_registry import ProgressiveMCPRegistry
-        from soothe.middleware.mcp_activation import stash_mcp_activation_update
-
-        core_names = frozenset(
-            t.name for t in self._mcp_registry.always_loaded_tools() if getattr(t, "name", None)
-        )
-        progressive = ProgressiveMCPRegistry(always_loaded_names=core_names)
-
-        activation = state.get("mcp_activation")
-        if not isinstance(activation, dict):
-            activation = ProgressiveMCPRegistry.init_activation_state()
-            state["mcp_activation"] = activation
-
-        descriptors = self._mcp_registry.deferred_tools()
-        if not descriptors:
-            return None
-
-        new_descriptors = progressive.new_for_thread(activation, descriptors)
-        if not new_descriptors:
-            return None
-
-        ctx_limit = int(self._config.agent.loop.context_window_limit)
-        budget_pct = (
-            float(self._config.progressive_mcp.budget_pct) if self._config.progressive_mcp else 0.02
-        )
-        budget_chars = max(0, int(ctx_limit * budget_pct))
-        per_entry_cap = (
-            int(self._config.progressive_mcp.max_listing_chars_per_entry)
-            if self._config.progressive_mcp
-            else 250
-        )
-        min_per_entry = (
-            int(self._config.progressive_mcp.min_listing_chars_per_entry)
-            if self._config.progressive_mcp
-            else 20
-        )
-
-        from soothe.mcp.budget import format_mcp_tools_within_budget
-
-        text, _telemetry = format_mcp_tools_within_budget(
-            new_descriptors,
-            budget_chars=budget_chars,
-            per_entry_cap_chars=per_entry_cap,
-            min_per_entry_chars=min_per_entry,
-        )
-        if not text:
-            return None
-
-        progressive.mark_sent(activation, [d.name for d in new_descriptors])
-        state["mcp_activation"] = activation
-        stash_mcp_activation_update(activation)
-
-        return f"<AVAILABLE_MCP_TOOLS>\n{text}\n</AVAILABLE_MCP_TOOLS>"
-
-    def _compose_available_tools_block(
-        self,
-        state: dict[str, Any] | None,
-        deferred_tools: list[Any] | None,
-    ) -> str | None:
-        """Compose ``<AVAILABLE_TOOLS>`` for deferred builtin tools."""
-        if not self._config.progressive_tools.enabled or not state:
-            return None
-
-        from soothe.toolkits.progressive.budget import format_tools_within_budget
-        from soothe.toolkits.progressive.registry import ProgressiveToolRegistry
-
-        pt = self._config.progressive_tools
-        core = list(pt.core_tools) if pt.core_tools else None
-        if pt.search_tools_enabled:
-            if core is None:
-                from soothe.toolkits.progressive.registry import DEFAULT_CORE_TOOL_NAMES
-
-                core = list(DEFAULT_CORE_TOOL_NAMES)
-            elif "search_tools" not in core:
-                core.append("search_tools")
-        registry = ProgressiveToolRegistry(core_tools=core)
-
-        if deferred_tools is None:
-            return None
-
-        descriptors = registry.descriptors_from_tools(deferred_tools)
-        _, deferred = registry.partition(descriptors)
-        if not deferred:
-            return None
-
-        activation = state.get("tool_activation")
-        if not isinstance(activation, dict):
-            activation = ProgressiveToolRegistry.init_activation_state()
-            state["tool_activation"] = activation
-
-        new_entries = registry.new_for_thread(activation, deferred)
-        if not new_entries:
-            return None
-
-        ctx_limit = int(self._config.agent.loop.context_window_limit)
-        budget_chars = max(0, int(ctx_limit * float(pt.budget_pct)))
-        text, _telemetry = format_tools_within_budget(
-            new_entries,
-            budget_chars=budget_chars,
-            per_entry_cap_chars=int(pt.max_listing_chars_per_entry),
-            min_per_entry_chars=int(pt.min_listing_chars_per_entry),
-            include_preamble=True,
-        )
-        if not text:
-            return None
-
-        registry.mark_sent(activation, [e.name for e in new_entries])
-        state["tool_activation"] = activation
-        from soothe.middleware.progressive_tools import stash_tool_activation_update
-
-        stash_tool_activation_update(activation)
-        return f"<AVAILABLE_TOOLS>\n{text}\n</AVAILABLE_TOOLS>"
-
     def _build_strange_loop_output_contract_section(
         self, config: SootheConfig | None = None
     ) -> str | None:
@@ -1022,22 +725,13 @@ class SystemPromptMiddleware(AgentMiddleware):
         )
 
         complexity: str
-        routing_hint: str | None
-        preferred_subagent: str | None
-
         if classification:
             if isinstance(classification, dict):
                 complexity = classification.get("task_complexity") or "medium"
-                routing_hint = classification.get("routing_hint")
-                preferred_subagent = classification.get("preferred_subagent")
             else:
                 complexity = classification.task_complexity
-                routing_hint = getattr(classification, "routing_hint", None)
-                preferred_subagent = getattr(classification, "preferred_subagent", None)
         else:
             complexity = "medium"
-            routing_hint = None
-            preferred_subagent = None
             logger.debug(
                 "No routing_classification on state; using task_complexity=%s for system prompt",
                 complexity,
@@ -1046,45 +740,6 @@ class SystemPromptMiddleware(AgentMiddleware):
         if complexity not in _VALID_TASK_COMPLEXITY:
             logger.debug("Normalizing invalid task_complexity %r to medium", complexity)
             complexity = "medium"
-
-        # Check for direct subagent routing hint (preferred_subagent + routing_hint='subagent')
-        msgs_for_hop = getattr(request, "messages", None) or []
-        first_after_user = _last_message_is_human(msgs_for_hop)
-        explicit_subagent = routing_hint == "subagent" and bool(preferred_subagent)
-        step_subagent = _configurable_step_subagent()
-        # Wired step subagents stay task-only for the whole execute step so the
-        # model cannot silently fall back to shell tools after an empty subagent run.
-        step_enforce = step_subagent is not None
-        wire_enforce = explicit_subagent and first_after_user
-
-        goal_synthesis = _configurable_goal_synthesis()
-
-        # Per-step hint wins over wire routing when both apply (IG-386).
-        if goal_synthesis:
-            logger.info("Goal synthesis read-only: disabling model tools")
-        elif step_enforce:
-            directive = step_subagent
-            logger.info(
-                "StrangeLoop step subagent hint (enforce): soothe_step_subagent=%s",
-                step_subagent,
-            )
-            request.state["_subagent_routing_directive"] = directive
-        elif wire_enforce:
-            directive = (
-                preferred_subagent.strip()
-                if isinstance(preferred_subagent, str)
-                else preferred_subagent
-            )
-            logger.info(
-                "Explicit subagent routing (enforce): preferred_subagent=%s",
-                directive,
-            )
-            request.state["_subagent_routing_directive"] = directive
-        else:
-            try:
-                request.state.pop("_subagent_routing_directive", None)
-            except (AttributeError, TypeError):
-                pass
 
         # Extract state for XML section building
         state_dict: dict[str, Any] = {}
@@ -1105,20 +760,14 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "tool_activation": request.state.get("tool_activation"),
                 "mcp_activation": request.state.get("mcp_activation"),
                 "response_language": request.state.get("response_language"),
+                "_available_tools_block": request.state.get("_available_tools_block"),
+                "_available_skills_block": request.state.get("_available_skills_block"),
+                "_skill_context_blocks": request.state.get("_skill_context_blocks"),
+                "_available_mcp_tools_block": request.state.get("_available_mcp_tools_block"),
             }
             resolved_workspace = self._resolve_workspace_for_prompt(state_dict)
             if resolved_workspace:
                 state_dict["workspace"] = resolved_workspace
-
-        # Pass deferred tools through state so AVAILABLE_TOOLS can be inserted
-        # in the correct position (between RESPONSE_LANGUAGE_HINT and WORKSPACE_RULES)
-        if self._config.progressive_tools.enabled:
-            listing_tools: list[Any] = getattr(request, "tools", None) or []
-            if self._progressive_tool_middleware is not None:
-                full_catalog = self._progressive_tool_middleware.full_tools_for_listing()
-                if full_catalog:
-                    listing_tools = full_catalog
-            state_dict["_deferred_tools_for_listing"] = listing_tools
 
         optimized_prompt = self._get_prompt_for_complexity(complexity, state_dict)
 
@@ -1128,26 +777,7 @@ class SystemPromptMiddleware(AgentMiddleware):
             request.state["_soothe_execution_hints"] = hints_text
 
         new_system_message = SystemMessage(content=optimized_prompt)
-        overrides: dict[str, Any] = {"system_message": new_system_message}
-
-        if goal_synthesis:
-            overrides["tools"] = []
-        elif step_enforce or wire_enforce:
-            tool_list = getattr(request, "tools", None) or []
-            task_only = _filter_tools_to_task_only(tool_list)
-            if task_only:
-                overrides["tools"] = task_only
-                logger.info(
-                    "Subagent delegation enforcement: model tools narrowed to '%s' only",
-                    _TASK_TOOL_NAME,
-                )
-            else:
-                logger.warning(
-                    "Subagent delegation enforcement but '%s' tool not in request; leaving full tool set",
-                    _TASK_TOOL_NAME,
-                )
-
-        return request.override(**overrides)
+        return request.override(system_message=new_system_message)
 
     def wrap_model_call(
         self,

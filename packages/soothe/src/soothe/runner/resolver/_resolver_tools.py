@@ -17,6 +17,11 @@ from soothe.foundation.workspace.tool_path_resolution import (
     max_file_size_mb_for_filesystem_backend,
     resolve_effective_tool_workspace,
 )
+from soothe.toolkits.file_ops_catalog import (
+    SURGICAL_FILE_OP_TOOL_NAME_SET,
+    build_filesystem_tools,
+    build_surgical_file_ops_tools,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -46,10 +51,12 @@ def _workspace_backend_factory(
     return factory
 
 
-def _build_soothe_file_middleware(config: SootheConfig | None) -> Any:
-    """Create ``SootheFilesystemMiddleware`` bound to the effective workspace."""
-    from soothe.middleware.filesystem import SootheFilesystemMiddleware
-
+def _build_soothe_file_tools(
+    config: SootheConfig | None,
+    *,
+    surgical_only: bool = False,
+) -> list[BaseTool]:
+    """Create filesystem tools bound to the effective workspace."""
     resolved_cwd = str(resolve_effective_tool_workspace(config))
     virtual_mode = filesystem_virtual_mode_from_soothe_config(config) if config else False
     max_file_size_mb = max_file_size_mb_for_filesystem_backend(config) if config else 10
@@ -57,7 +64,18 @@ def _build_soothe_file_middleware(config: SootheConfig | None) -> Any:
         virtual_mode=virtual_mode,
         max_file_size_mb=max_file_size_mb,
     )(resolved_cwd)
-    return SootheFilesystemMiddleware(
+    if surgical_only:
+        return build_surgical_file_ops_tools(
+            backend=backend,
+            backup_enabled=True,
+            workspace_root=resolved_cwd,
+            workspace_backend_factory=_workspace_backend_factory(
+                virtual_mode=virtual_mode,
+                max_file_size_mb=max_file_size_mb,
+            ),
+            tool_token_limit_before_evict=20000,
+        )
+    return build_filesystem_tools(
         backend=backend,
         backup_enabled=True,
         workspace_root=resolved_cwd,
@@ -399,19 +417,7 @@ def _resolve_single_tool_group_uncached(
         return []
 
     if name == "file_ops":
-        middleware = _build_soothe_file_middleware(config)
-
-        # Extract surgical tools only (not ls, read_file, etc. from FilesystemMiddleware)
-        surgical_tool_names = [
-            "delete",
-            "file_info",
-            "edit_lines",
-            "insert_lines",
-            "delete_lines",
-            "apply_diff",
-        ]
-        tools = [t for t in middleware.tools if t.name in surgical_tool_names]
-        return tools
+        return _build_soothe_file_tools(config, surgical_only=True)
 
     # Support individual tool names (map to consolidated group)
     if name in (
@@ -426,32 +432,18 @@ def _resolve_single_tool_group_uncached(
         "delete_lines",
         "apply_diff",
     ):
-        middleware = _build_soothe_file_middleware(config)
-
-        # Extract surgical tools only
-        surgical_tool_names = [
-            "delete",
-            "file_info",
-            "edit_lines",
-            "insert_lines",
-            "delete_lines",
-            "apply_diff",
-        ]
-        all_tools = [t for t in middleware.tools if t.name in surgical_tool_names]
-        tool_map = {tool.name: tool for tool in all_tools}
-
-        # For read_file/write_file/edit_file/search_files/list_files, these come from the middleware
-        # so we need to get them from the middleware's full tools list
-        if name in ("read_file", "write_file", "edit_file", "search_files", "list_files"):
-            full_tool_map = {tool.name: tool for tool in middleware.tools}
-            if name in full_tool_map:
-                return [full_tool_map[name]]
-            logger.warning("Tool '%s' not found in SootheFilesystemMiddleware", name)
+        if name in SURGICAL_FILE_OP_TOOL_NAME_SET:
+            surgical_tools = _build_soothe_file_tools(config, surgical_only=True)
+            surgical_tool_map = {tool.name: tool for tool in surgical_tools}
+            if name in surgical_tool_map:
+                return [surgical_tool_map[name]]
+            logger.warning("Tool '%s' not found in surgical file_ops catalog", name)
             return []
 
-        if name in tool_map:
-            return [tool_map[name]]
-        logger.warning("Tool '%s' not found in surgical tools", name)
+        full_tool_map = {tool.name: tool for tool in _build_soothe_file_tools(config)}
+        if name in full_tool_map:
+            return [full_tool_map[name]]
+        logger.warning("Tool '%s' not found in filesystem tools", name)
         return []
 
     if name == "data":

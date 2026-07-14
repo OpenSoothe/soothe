@@ -287,13 +287,7 @@ class TestApplyDiffTool:
     ) -> None:
         test_file = tmp_path / "fallback.txt"
         test_file.write_text("old line\n")
-        diff = (
-            "--- fallback.txt\n"
-            "+++ fallback.txt\n"
-            "@@ -1 +1 @@\n"
-            "-old line\n"
-            "+new line\n"
-        )
+        diff = "--- fallback.txt\n+++ fallback.txt\n@@ -1 +1 @@\n-old line\n+new line\n"
 
         tool = self._get_tool(middleware)
         result = _invoke_tool(

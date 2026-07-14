@@ -129,7 +129,9 @@ class TestDeleteFileTool:
 
     def test_delete_nonexistent_file(self, delete_tool) -> None:
         """Test deleting a non-existent file."""
-        result = _invoke_tool(delete_tool, {"file_path": "/nonexistent/file.txt"}, tool_call_id="delete_2")
+        result = _invoke_tool(
+            delete_tool, {"file_path": "/nonexistent/file.txt"}, tool_call_id="delete_2"
+        )
         text = str(getattr(result, "content", result))
 
         assert "Error" in text
@@ -140,7 +142,9 @@ class TestDeleteFileTool:
         file_path = tmp_path / "test.txt"
         file_path.write_text("Hello, World!")
 
-        result = _invoke_tool(delete_tool, {"file_path": str(file_path), "backup": True}, tool_call_id="delete_3")
+        result = _invoke_tool(
+            delete_tool, {"file_path": str(file_path), "backup": True}, tool_call_id="delete_3"
+        )
         text = str(getattr(result, "content", result))
 
         assert "backup" in text.lower()
@@ -186,7 +190,9 @@ class TestFileInfoTool:
 
     def test_get_nonexistent_file_info(self, info_tool) -> None:
         """Test getting info for non-existent file."""
-        result = _invoke_tool(info_tool, {"path": "/nonexistent/file.txt"}, tool_call_id="file_info_2")
+        result = _invoke_tool(
+            info_tool, {"path": "/nonexistent/file.txt"}, tool_call_id="file_info_2"
+        )
         text = str(getattr(result, "content", result))
 
         assert "Error" in text
@@ -282,8 +288,7 @@ class TestEditFileLinesTool:
 
         result = _invoke_tool(
             edit_tool,
-            {"file_path": str(test_file), "start_line": 5, "end_line": 6, "new_content": "x"}
-            ,
+            {"file_path": str(test_file), "start_line": 5, "end_line": 6, "new_content": "x"},
             tool_call_id="edit_lines_4",
         )
         text = str(getattr(result, "content", result))
@@ -292,8 +297,7 @@ class TestEditFileLinesTool:
 
         result = _invoke_tool(
             edit_tool,
-            {"file_path": str(test_file), "start_line": 1, "end_line": 5, "new_content": "x"}
-            ,
+            {"file_path": str(test_file), "start_line": 1, "end_line": 5, "new_content": "x"},
             tool_call_id="edit_lines_5",
         )
         text = str(getattr(result, "content", result))

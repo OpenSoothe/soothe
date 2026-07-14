@@ -2,13 +2,6 @@
 
 This module provides the `FileOpsPlugin` class, which supplies surgical file operation
 tools (delete, file_info, edit_lines, insert_lines, delete_lines, apply_diff).
-
-All tools are created via `SootheFilesystemMiddleware` from `soothe.middleware.filesystem`,
-which implements them using `StructuredTool.from_function()` with proper Schema classes
-for validation. This approach extends the base functionality rather than reinventing file operations.
-
-The plugin extracts only surgical tools (not basic read/write/list/search operations)
-from the middleware, as those are provided by FilesystemMiddleware.
 """
 
 from __future__ import annotations
@@ -17,6 +10,8 @@ import logging
 
 from langchain_core.tools import BaseTool
 from soothe_sdk.plugin import plugin
+
+from soothe.toolkits.file_ops_catalog import build_surgical_file_ops_tools
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +45,6 @@ class FileOpsPlugin:
             filesystem_virtual_mode_from_soothe_config,
             max_file_size_mb_for_filesystem_backend,
         )
-        from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
         sc = context.soothe_config
         workspace_root = context.config.get("workspace_root") or str(resolve_daemon_workspace())
@@ -66,7 +60,7 @@ class FileOpsPlugin:
             max_file_size_mb=max_file_size_mb,
         )
 
-        middleware = SootheFilesystemMiddleware(
+        self._tools = build_surgical_file_ops_tools(
             backend=backend,
             backup_enabled=fs_config.get("backup_enabled", True),
             backup_dir=fs_config.get("backup_dir"),
@@ -74,19 +68,8 @@ class FileOpsPlugin:
             tool_token_limit_before_evict=fs_config.get("tool_token_limit_before_evict", 20000),
         )
 
-        # Extract surgical tools only (not ls, read_file, etc. from FilesystemMiddleware)
-        surgical_tool_names = [
-            "delete",
-            "file_info",
-            "edit_lines",
-            "insert_lines",
-            "delete_lines",
-            "apply_diff",
-        ]
-        self._tools = [t for t in middleware.tools if t.name in surgical_tool_names]
-
         context.logger.info(
-            "Loaded %d file_ops tools via SootheFilesystemMiddleware (workspace=%s)",
+            "Loaded %d file_ops surgical tools (workspace=%s)",
             len(self._tools),
             workspace_root,
         )

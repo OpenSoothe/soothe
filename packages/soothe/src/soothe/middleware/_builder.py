@@ -74,24 +74,30 @@ def build_soothe_middleware_stack(
        other middleware processes them. Uses PolicyProtocol.check() on every
        tool/subagent call.
 
-    2. **SystemPromptMiddleware** - Modifies prompts BEFORE the
+    2. **ToolEnforcementMiddleware** - Applies request-time tool narrowing
+       policies (goal synthesis read-only mode, explicit subagent delegation).
+
+    3. **ProgressiveListingMiddleware** - Prepares deferred tools/skills/MCP
+       listing blocks before prompt assembly.
+
+    4. **SystemPromptMiddleware** - Modifies prompts BEFORE the
        LLM call. Requires ``routing_classification`` state injected by StrangeLoop / runner
        runner during pre-stream phase. Only enabled when performance features
        are fully configured.
 
-    3. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
+    5. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
        not thread level. Uses sliding window for RPM and semaphore for concurrent
        requests. Solves thread hanging issues from thread-level blocking.
 
-    4. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
+    6. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
        for programmatic tool calling. Enabled when ``code_interpreter.enabled``
        is True. Exposes allowlisted tools via ``tools.*`` namespace.
 
-    5. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
+    7. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
        abefore_agent/aafter_agent hooks. Must be set before tools run to
        enable thread-aware filesystem operations.
 
-    6. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
+    8. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
        for the current asyncio Task (daemon per-turn ``input``), replaces the
        chat model for that stream via ``ModelRequest.override``.
 
@@ -214,7 +220,25 @@ def build_soothe_middleware_stack(
         stack.append(progressive_tool_middleware)
         logger.info("[Middleware] Progressive tool loading enabled")
 
-    # 3. System prompt assembly (requires routing_classification from StrangeLoop / runner)
+    # 3. Request-time tool enforcement (goal synthesis + delegated subagent routing)
+    from .tool_enforcement import ToolEnforcementMiddleware
+
+    stack.append(ToolEnforcementMiddleware())
+    logger.info("[Middleware] Tool enforcement middleware enabled")
+
+    # 4. Progressive listing prep (deferred tools/skills/MCP listing state)
+    from .progressive_listing import ProgressiveListingMiddleware
+
+    stack.append(
+        ProgressiveListingMiddleware(
+            config=config,
+            mcp_registry=mcp_registry,
+            progressive_tool_middleware=progressive_tool_middleware,
+        )
+    )
+    logger.info("[Middleware] Progressive listing middleware enabled")
+
+    # 5. System prompt assembly (requires routing_classification from StrangeLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(
@@ -222,8 +246,6 @@ def build_soothe_middleware_stack(
             config=config,
             tool_trigger_registry=trigger_registry,
             tool_context_registry=context_registry,
-            mcp_registry=mcp_registry,
-            progressive_tool_middleware=progressive_tool_middleware,
         )
     )
     logger.info("[Middleware] System prompt middleware enabled")

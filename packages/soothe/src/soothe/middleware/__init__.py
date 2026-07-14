@@ -11,6 +11,8 @@ This package provides middleware implementations:
 - CodeInterpreterMiddleware: Embedded QuickJS interpreter for programmatic tool calling (IG-423)
 - MCPActivationMiddleware: MCP progressive disclosure search, promote, bind (RFC-412)
 - ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-511)
+- ToolEnforcementMiddleware: Request-time tool narrowing policies
+- ProgressiveListingMiddleware: Prepare deferred listing blocks for system prompt
 
 Utility functions:
 - create_llm_call_metadata: Create standardized metadata for LLM calls
@@ -43,7 +45,9 @@ if TYPE_CHECKING:
     )
     from soothe.middleware.per_turn_model import PerTurnModelMiddleware
     from soothe.middleware.policy import SoothePolicyMiddleware
+    from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
     from soothe.middleware.system_prompt import SystemPromptMiddleware
+    from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
     from soothe.middleware.tool_timeout import ToolTimeoutMiddleware
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
@@ -65,6 +69,8 @@ __all__ = [
     "TokenConfig",
     "ThreadContextProvider",
     "ToolTimeoutMiddleware",
+    "ToolEnforcementMiddleware",
+    "ProgressiveListingMiddleware",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
     "create_llm_call_metadata",
@@ -98,9 +104,17 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "soothe.middleware.system_prompt",
         "SystemPromptMiddleware",
     ),
+    "ProgressiveListingMiddleware": (
+        "soothe.middleware.progressive_listing",
+        "ProgressiveListingMiddleware",
+    ),
     "TokenConfig": ("soothe.middleware.identity", "TokenConfig"),
     "ThreadContextProvider": ("soothe.middleware.identity", "ThreadContextProvider"),
     "ToolTimeoutMiddleware": ("soothe.middleware.tool_timeout", "ToolTimeoutMiddleware"),
+    "ToolEnforcementMiddleware": (
+        "soothe.middleware.tool_enforcement",
+        "ToolEnforcementMiddleware",
+    ),
     "WorkspaceContextMiddleware": (
         "soothe.middleware.workspace_context",
         "WorkspaceContextMiddleware",

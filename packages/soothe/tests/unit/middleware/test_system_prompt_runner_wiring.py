@@ -4,7 +4,9 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.middleware import build_soothe_middleware_stack
+from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
 from soothe.middleware.system_prompt import SystemPromptMiddleware
+from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 from soothe.runner import SootheRunner
 
 
@@ -13,6 +15,8 @@ async def test_end_to_end_prompt_optimization_enabled(test_config: SootheConfig)
     """System prompt optimization middleware is always present on the Soothe stack."""
     stack = build_soothe_middleware_stack(test_config, policy=None)
     assert any(isinstance(m, SystemPromptMiddleware) for m in stack)
+    assert any(isinstance(m, ToolEnforcementMiddleware) for m in stack)
+    assert any(isinstance(m, ProgressiveListingMiddleware) for m in stack)
 
     runner = SootheRunner(config=test_config)
 
