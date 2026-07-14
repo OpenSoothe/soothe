@@ -28,7 +28,7 @@ async def _emit_plan_phase_status(ctx: LoopRuntimeContext, *, label: str) -> Non
 async def node_plan_gap_analysis(ctx: LoopRuntimeContext, _state: dict[str, Any]) -> dict[str, Any]:
     """Run structured gap analysis and stash on scratch for plan-assess.
 
-    Structured-output failures must not abort the graph (IG-644): continue to
+    Structured-output failures must not abort the graph (IG-593): continue to
     plan-assess without a gap map rather than ending the turn incomplete.
     """
     strange_loop = ctx.strange_loop

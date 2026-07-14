@@ -385,7 +385,7 @@ async def _route_goal_completion_if_terminal(
     assessment: StatusAssessment,
     context: Any,
 ) -> dict[str, Any] | None:
-    """Terminal routing keyed on authoritative assess status (IG-640)."""
+    """Terminal routing keyed on authoritative assess status (IG-589)."""
     if assessment.status != "done":
         return None
 

@@ -11,7 +11,7 @@
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
 **Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine)
-**Amended by**: IG-650 (wired-subagent direct route after Pass 2), IG-651 (intake-only exposure), IG-652 (intake-only dual registry / direct invoke)
+**Amended by**: IG-599 (wired-subagent direct route after Pass 2), IG-600 (intake-only exposure), IG-601 (intake-only dual registry / direct invoke)
 
 ---
 
@@ -32,7 +32,7 @@ This RFC defines:
 - A **two-pass intake architecture**: Pass 1 (social vs task) → Pass 2 (scope: trivial|simple|complex).
 - Pass 1 prompt, schema, and context exclusion (no prior projection).
 - Pass 2 prompt, schema, and context inclusion (prior projection for reference resolution).
-- A `route_by_intent` conditional edge after `init_or_resume` driving intake branches (including wired-subagent, IG-650).
+- A `route_by_intent` conditional edge after `init_or_resume` driving intake branches (including wired-subagent, IG-599).
 - A P0 hard routing guard: block social-path when `loop_state.new_goal_created`.
 - Complexity-tiered planning: fresh-loop `trivial` skips `plan_generate`; fresh-loop `simple` runs lightweight; `complex` runs full spine. On continuation turns, `simple` routes through `plan_assess` discriminator first.
 - The trivial-branch plan shape: goal-as-step-action, no synthetic reasoning message.
@@ -229,7 +229,7 @@ if loop_state.new_goal_created and intake_label == "chitchat":
 - Provides: conditional-edge target string for `init_or_resume`.
 - Requires: `LoopGraphState.intake_label`, `intent_route`, `ctx.loop_state.new_goal_created`.
 
-### 6.3.1 Wired-subagent direct route (IG-650 / IG-652)
+### 6.3.1 Wired-subagent direct route (IG-599 / IG-601)
 
 When Pass 2 `wire_subagent` or slash/daemon `preferred_subagent` resolves to an allowlisted specialist (`planner`, `browser_use`, `deep_research`, `academic_research`):
 
@@ -242,7 +242,7 @@ When Pass 2 `wire_subagent` or slash/daemon `preferred_subagent` resolves to an 
 
 Content judgment for *which* specialist stays on the Pass 2 structured field (or explicit slash). Validation/coerce of names is deterministic allowlist filtering.
 
-### 6.3.2 Intake-only vs task-catalog exposure (IG-651 / IG-652)
+### 6.3.2 Intake-only vs task-catalog exposure (IG-600 / IG-601)
 
 Built-in wire specialists have two exposure modes:
 
@@ -253,7 +253,7 @@ Built-in wire specialists have two exposure modes:
 | `deep_research` | Yes (direct `ainvoke`) | No | No |
 | `academic_research` | Yes (direct `ainvoke`) | No | No |
 
-- Intake-only specialists live on a **parallel registry** (`CodingCoreAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-652). Wired intake invokes their runnable directly.
+- Intake-only specialists live on a **parallel registry** (`CodingCoreAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake invokes their runnable directly.
 - `planner` remains on the open CoreAgent `task` catalog and may still use resolve → execute.
 - Open-hop `task` to intake-only names fails naturally (not registered); ToolEnforcement still rejects them as belt-and-suspenders.
 - Plan-wave `delegate` / `resolve_step_wire_subagent` never wires intake-only names; those are intake/slash only.
@@ -368,7 +368,7 @@ for the execute deliverable gate.
 `wire_subagent` is set when the GOAL's **primary intent** is to run one wired
 specialist end-to-end (explicit name, slash such as `/plan` → `planner`, or a
 clear single-purpose specialist ask). Unknown names coerce to `null`. When
-resolved (Pass 2 or slash `preferred_subagent`), IG-650 routes through
+resolved (Pass 2 or slash `preferred_subagent`), IG-599 routes through
 `invoke_wired_subagent` instead of the plan spine.
 
 ### 8.3 Derived fields at routing
@@ -437,7 +437,7 @@ completion remains free-form via `ledger_direct` / synthesis.
 ```
 init_or_resume --(route_by_intent)--> {
   END                      // chitchat (blocked if new_goal_created)
-  invoke_wired_subagent    // IG-650/652 specialist (intake-only → goal_completion; planner → resolve)
+  invoke_wired_subagent    // IG-599/652 specialist (intake-only → goal_completion; planner → resolve)
   resolve_decision         // trivial (synth plan in scratch)
   plan_generate            // simple (fresh only)
   bounded_evidence_gather  // complex

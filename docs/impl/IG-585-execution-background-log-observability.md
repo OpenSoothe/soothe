@@ -1,4 +1,4 @@
-# IG-636: Background execution log observability (phase 2)
+# IG-585: Background execution log observability (phase 2)
 
 ## Goal
 

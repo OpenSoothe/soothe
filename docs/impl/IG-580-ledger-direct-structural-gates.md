@@ -1,4 +1,4 @@
-# IG-631: Ledger-Direct Structural Gates & Auto Final Response
+# IG-580: Ledger-Direct Structural Gates & Auto Final Response
 
 **RFC**: [RFC-219](../specs/RFC-219-goal-completion-module.md)
 **Created**: 2026-07-11

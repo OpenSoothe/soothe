@@ -1053,7 +1053,7 @@ class Executor:
         state.last_wave_output_length = output_length
         state.last_wave_error_count = error_count
 
-        # Context window metrics with actual token usage (IG-151, IG-630)
+        # Context window metrics with actual token usage (IG-151, IG-579)
         from soothe.foundation.sloop.utils.token_usage import extract_token_usage_from_messages
 
         token_usage = extract_token_usage_from_messages(messages)

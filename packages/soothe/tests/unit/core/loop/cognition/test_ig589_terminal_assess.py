@@ -1,4 +1,4 @@
-"""IG-640: plan-assess terminal consistency structural gates."""
+"""IG-589: plan-assess terminal consistency structural gates."""
 
 from __future__ import annotations
 

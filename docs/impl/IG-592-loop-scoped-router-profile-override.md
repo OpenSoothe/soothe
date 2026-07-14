@@ -1,4 +1,4 @@
-# IG-643: Loop-Scoped Router Profile Override
+# IG-592: Loop-Scoped Router Profile Override
 
 **IG**: 643  
 **Title**: Loop-Scoped Router Profile Override  

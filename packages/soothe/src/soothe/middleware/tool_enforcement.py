@@ -106,7 +106,7 @@ class ToolEnforcementMiddleware(AgentMiddleware):
     - Goal synthesis: disable all tools.
     - Explicit wire subagent routing on first hop: task-only tools (catalog only).
     - Per-step configured subagent routing: task-only tools for full step.
-    - Intake-only specialists (IG-652): always reject ``task`` invokes — they are
+    - Intake-only specialists (IG-601): always reject ``task`` invokes — they are
       not on the CoreAgent graph and run only via wired direct invoke.
     """
 
@@ -127,7 +127,7 @@ class ToolEnforcementMiddleware(AgentMiddleware):
                 preferred_subagent = getattr(classification, "preferred_subagent", None)
 
         if isinstance(preferred_subagent, str) and is_intake_only_wire_subagent(preferred_subagent):
-            # IG-652: intake-only never rides CoreAgent task enforcement.
+            # IG-601: intake-only never rides CoreAgent task enforcement.
             preferred_subagent = None
 
         msgs_for_hop = getattr(request, "messages", None) or []
@@ -213,7 +213,7 @@ class ToolEnforcementMiddleware(AgentMiddleware):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], Awaitable[Any]],
     ) -> Any:
-        """Reject ``task`` calls to intake-only specialists (IG-652 belt-and-suspenders)."""
+        """Reject ``task`` calls to intake-only specialists (IG-601 belt-and-suspenders)."""
         tool_call = getattr(request, "tool_call", None)
         tool_name = tool_call.get("name") if isinstance(tool_call, dict) else None
         if tool_name != _TASK_TOOL_NAME:

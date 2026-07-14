@@ -1,4 +1,4 @@
-# IG-633: Remove fastembed — unify on embedding LLM role
+# IG-582: Remove fastembed — unify on embedding LLM role
 
 **Created**: 2026-07-12  
 **Status**: Implemented  

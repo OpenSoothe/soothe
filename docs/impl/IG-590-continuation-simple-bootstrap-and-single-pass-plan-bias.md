@@ -1,4 +1,4 @@
-# IG-641 Continuation Simple Bootstrap and Single-Pass Plan Bias
+# IG-590 Continuation Simple Bootstrap and Single-Pass Plan Bias
 
 ## Context
 

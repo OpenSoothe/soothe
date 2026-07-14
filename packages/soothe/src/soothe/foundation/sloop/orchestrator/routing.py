@@ -61,7 +61,7 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_by_intent(state: dict[str, Any]) -> str:
-    """RFC-630 IG-554/IG-650: branch dispatch after init_or_resume by intake.
+    """RFC-630 IG-554/IG-599: branch dispatch after init_or_resume by intake.
 
     Routing guard (P0): block chitchat fast-path when new_goal_created. If daemon
     has committed to starting agentic work, chitchat is structurally invalid.
@@ -69,7 +69,7 @@ def route_by_intent(state: dict[str, Any]) -> str:
     Priority (first match wins):
 
     1. ``intent_route == fast_path`` → END (chitchat)
-    2. ``intent_route == wired_subagent`` → ``invoke_wired_subagent`` (IG-650)
+    2. ``intent_route == wired_subagent`` → ``invoke_wired_subagent`` (IG-599)
     3. Continuation overlay from structural ``is_continuation``:
 
        - ``trivial`` / ``simple`` → ``plan_assess``
@@ -105,7 +105,7 @@ def route_by_intent(state: dict[str, Any]) -> str:
         logger.info("[routing] route_by_intent → END (chitchat fast-path)")
         return END
 
-    # IG-650: dedicated specialist — after chitchat, before continuation overlays.
+    # IG-599: dedicated specialist — after chitchat, before continuation overlays.
     if state.get("intent_route") == "wired_subagent":
         logger.info("[routing] route_by_intent → invoke_wired_subagent")
         return "invoke_wired_subagent"
@@ -179,7 +179,7 @@ def route_after_resolve_decision(state: dict[str, Any]) -> str:
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
-    """IG-652: intake-only direct invoke → goal_completion; catalog wire → resolve."""
+    """IG-601: intake-only direct invoke → goal_completion; catalog wire → resolve."""
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END

@@ -1,4 +1,4 @@
-"""Tests for loop-scoped router profile overlay (RFC-632 / IG-643)."""
+"""Tests for loop-scoped router profile overlay (RFC-632 / IG-592)."""
 
 from __future__ import annotations
 

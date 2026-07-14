@@ -289,7 +289,7 @@ Wraps ContextEngine to satisfy the `PlanManager` interface. The existing orchest
 | `get_planning_context() → DagPlanningContext` | Reads `GoalStepDAG` stats and constructs `DagPlanningContext` with identical fields: `pending_step_ids`, `failed_step_ids`, `ready_step_ids`, `chain_depth`, `success_rate`, `replan_count`, `total_steps`, `completed_steps` |
 | `format_completion_dag_report() → str` | Renders from `GoalStepDAG` instead of `PlanDAG`, same output format |
 | `determine_goal_completion_needs(...)` | Delegates to existing heuristics (unchanged logic) |
-| `determine_completion_strategy(...)` | Delegates to structural completion gates (IG-631) |
+| `determine_completion_strategy(...)` | Delegates to structural completion gates (IG-580) |
 
 The adapter also maintains `plan_history: list[PlanResult]` and computes `replan_count` from plan history length — matching `PlanManager.plan_history`.
 
@@ -586,7 +586,7 @@ Create a `soothe.context.planning` submodule that absorbs step-level planning in
 | `is_simple_execution(...)` | Check if the DAG represents a single-plan execution |
 | `dag_requires_synthesis(...)` | Check whether DAG complexity warrants synthesis |
 | `determine_goal_completion_needs(...)` | Decide whether goal-completion synthesis is required |
-| `determine_completion_strategy(...)` | Determine final response strategy from DAG + structural gates (IG-631) |
+| `determine_completion_strategy(...)` | Determine final response strategy from DAG + structural gates (IG-580) |
 
 Threshold constants defined once: `LOW_SUCCESS_RATE_THRESHOLD = 0.6`, `DAG_DEPENDENCY_THRESHOLD = 3`, `SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS = 2`.
 

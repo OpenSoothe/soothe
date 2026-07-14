@@ -1,4 +1,4 @@
-# IG-638: Execution tools phase 4 — retention, tail, capped stdout
+# IG-587: Execution tools phase 4 — retention, tail, capped stdout
 
 **Status:** Complete
 

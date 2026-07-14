@@ -338,7 +338,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Depends on: RFC-450, RFC-454, RFC-500, RFC-503, RFC-627
   - Extends: RFC-450 (`input.router_profile` per-turn overlay, parallel to `model` / `model_params`)
   - Design: [docs/drafts/2026-07-14-loop-scoped-router-profile-design.md](../drafts/2026-07-14-loop-scoped-router-profile-design.md)
-  - Implemented by: IG-643
+  - Implemented by: IG-592
   - Authors: xiaming (with Cursor)
 
 - **RFC-450**: [Unified Daemon Communication Protocol for WebSocket IPC](RFC-450-daemon-communication-protocol.md)
@@ -579,7 +579,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Created: 2026-07-14
   - Depends on: RFC-450, RFC-454, RFC-500, RFC-503, RFC-627
   - Extends: RFC-450 (`input.router_profile`)
-  - Implemented by: IG-643
+  - Implemented by: IG-592
   - Authors: xiaming (with Cursor)
 
 ---

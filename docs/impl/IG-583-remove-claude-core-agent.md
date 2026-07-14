@@ -1,4 +1,4 @@
-# IG-634: Remove Claude Code Core Agent
+# IG-583: Remove Claude Code Core Agent
 
 **Created**: 2026-07-12  
 **Status**: Implemented  
@@ -18,7 +18,7 @@ Removed the alternate `ClaudeCoreAgent` backend (`core_agent_backend: claude`) a
 - Config: `core_agent_backend`, `claude_*` agent fields, `always_claude` planner routing
 - `ThreadMetadata.claude_sessions` and executor/daemon session bridge
 - `soothe[claude]` optional extra and `claude-agent-sdk` dependency
-- `soothed warmup` was already removed in IG-633 (unrelated)
+- `soothed warmup` was already removed in IG-582 (unrelated)
 
 ---
 

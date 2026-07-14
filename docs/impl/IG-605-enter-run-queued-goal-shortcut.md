@@ -1,8 +1,8 @@
-# IG-656: Enter Shortcut to Run Queued Goal Head
+# IG-605: Enter Shortcut to Run Queued Goal Head
 
 **Created**: 2026-07-13  
 **Status**: Implemented  
-**Related**: [IG-632](IG-632-cancel-queued-goal-lifecycle.md), [IG-544](IG-544-tui-step-flow-and-plan-quick-view.md)
+**Related**: [IG-581](IG-581-cancel-queued-goal-lifecycle.md), [IG-544](IG-544-tui-step-flow-and-plan-quick-view.md)
 
 ---
 

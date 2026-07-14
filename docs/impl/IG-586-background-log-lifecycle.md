@@ -1,4 +1,4 @@
-# IG-637: Background log lifecycle hardening (phase 3)
+# IG-586: Background log lifecycle hardening (phase 3)
 
 ## Goal
 

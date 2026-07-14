@@ -1,4 +1,4 @@
-"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554, IG-650).
+"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554, IG-599).
 
 Hydrates intent/routing from intake classified in the graph entry node.
 Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
@@ -124,7 +124,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             **graph_intake_fields,
         }
 
-    # IG-650: wired specialist — route only; plan is built in invoke_wired_subagent.
+    # IG-599: wired specialist — route only; plan is built in invoke_wired_subagent.
     # Wins over continuation / trivial / simple / complex once chitchat is out.
     if intake_label != IntakeLabel.CHITCHAT and not is_continue_keyword(ctx.loop_state.goal):
         wire = resolve_user_requested_wire_subagent(

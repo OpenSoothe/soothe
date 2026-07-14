@@ -1,4 +1,4 @@
-"""Tests for PlanGapAnalysis wire coercion (IG-644)."""
+"""Tests for PlanGapAnalysis wire coercion (IG-593)."""
 
 from __future__ import annotations
 

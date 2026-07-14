@@ -1,4 +1,4 @@
-# IG-632: Cancel + Queued Goal Lifecycle Hardening
+# IG-581: Cancel + Queued Goal Lifecycle Hardening
 
 **RFC**: [RFC-450](../specs/RFC-450-daemon-communication-protocol.md), [RFC-631](../specs/RFC-631-goal-display-snapshots.md)  
 **Created**: 2026-07-12  

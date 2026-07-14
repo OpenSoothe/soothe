@@ -3,7 +3,7 @@
 **Status**: Complete  
 **RFC**: RFC-619 §11  
 **Branch**: `feat/opt-deep-research`  
-**Depends on**: IG-654 (deep_research)
+**Depends on**: IG-603 (deep_research)
 
 ## Scope
 

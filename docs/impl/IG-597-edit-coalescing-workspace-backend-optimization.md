@@ -1,4 +1,4 @@
-# IG-648: Edit Coalescing Workspace Backend Optimization
+# IG-597: Edit Coalescing Workspace Backend Optimization
 
 ## Goal
 

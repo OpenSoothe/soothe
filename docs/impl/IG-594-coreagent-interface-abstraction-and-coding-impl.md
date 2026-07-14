@@ -1,4 +1,4 @@
-# IG-645: CoreAgent Interface Abstraction and Coding Implementation
+# IG-594: CoreAgent Interface Abstraction and Coding Implementation
 
 ## Goal
 

@@ -6,7 +6,7 @@
 **Kind**: Architecture Design
 **Created**: 2026-04-28
 **Dependencies**: RFC-201, RFC-603
-**Related**: IG-199, IG-295, IG-296, IG-355, IG-400, IG-631
+**Related**: IG-199, IG-295, IG-296, IG-355, IG-400, IG-580
 
 ---
 
@@ -121,7 +121,7 @@ class PlanManager:
 5. Structural `_ledger_direct_eligible` (single plan wave, no DAG deps, zero hard failures, `total_steps <= simple_ledger_direct_max_steps`, `last_wave_tool_call_count <= ledger_direct_max_tool_calls`) **and** non-empty ledger → `LEDGER_DIRECT`
 6. Default → `SYNTHESIZE`
 
-**Removed (IG-631):** content heuristics `is_rich_enough`, `overlaps_with_plan_output`, and `can_return_directly_from_ledger` (regex/token overlap on prose). `final_response: adaptive` is a deprecated alias for `auto`.
+**Removed (IG-580):** content heuristics `is_rich_enough`, `overlaps_with_plan_output`, and `can_return_directly_from_ledger` (regex/token overlap on prose). `final_response: adaptive` is a deprecated alias for `auto`.
 
 **Config** (`agent.loop.rules.completion`):
 

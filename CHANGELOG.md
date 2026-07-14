@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cancelled goal persistence to disk for audit and resumption
 - Queue interaction tips with actionable cues in UI
 - Skill root prioritization for runtime discovery
-- IG-640 structural gating for agent lifecycle
+- IG-589 structural gating for agent lifecycle
 
 ### Changed
 - Scripts/VERSION synchronization for release consistency

@@ -1,9 +1,9 @@
-# IG-640: Plan-Assess Terminal Consistency & Multi-Wave Goal Continuation
+# IG-589: Plan-Assess Terminal Consistency & Multi-Wave Goal Continuation
 
 **RFCs**: RFC-220 (loop graph), RFC-604 (`StatusAssessment`), RFC-219 (goal completion), RFC-624 (completion policy), RFC-630 (intake / structured light-LLM), RFC-227 (prior-progress digest)
 **Created**: 2026-07-13
 **Status**: Implemented
-**Related**: IG-557 (mid-goal assess accuracy), IG-555 (iter=0 prior-completion bias), IG-567 (heuristic-to-rules migration), IG-631 (ledger-direct structural gates), IG-549 (goal-boundary hardening)
+**Related**: IG-557 (mid-goal assess accuracy), IG-555 (iter=0 prior-completion bias), IG-567 (heuristic-to-rules migration), IG-580 (ledger-direct structural gates), IG-549 (goal-boundary hardening)
 **Motivating observation**: Loop `2a71` goals 4–7 (“fix failed cases / make all tests pass”) terminated after 1–2 execute waves while work remained. Assess returned `status=done` with `goal_progress=none`; gap analysis reported `at_goal` from plan-step satisfaction; multi-wave goals closed without outcome proof.
 
 ---

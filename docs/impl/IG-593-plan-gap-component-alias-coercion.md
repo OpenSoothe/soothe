@@ -1,4 +1,4 @@
-# IG-644: Plan-Gap Component Alias Coercion
+# IG-593: Plan-Gap Component Alias Coercion
 
 **IG**: 644  
 **Title**: Plan-Gap Component Alias Coercion  

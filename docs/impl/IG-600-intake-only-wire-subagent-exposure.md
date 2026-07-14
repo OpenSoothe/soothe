@@ -1,8 +1,8 @@
-# IG-651: Intake-Only Wire Subagent Exposure
+# IG-600: Intake-Only Wire Subagent Exposure
 
 **Created**: 2026-07-14
-**Status**: Implemented (superseded for registration by [IG-652](IG-652-intake-only-subagent-dual-registry.md))
-**Related**: [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md), [IG-650](IG-650-pass2-wired-subagent-direct-route.md), [IG-652](IG-652-intake-only-subagent-dual-registry.md)
+**Status**: Implemented (superseded for registration by [IG-601](IG-601-intake-only-subagent-dual-registry.md))
+**Related**: [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md), [IG-599](IG-599-pass2-wired-subagent-direct-route.md), [IG-601](IG-601-intake-only-subagent-dual-registry.md)
 
 ---
 
@@ -10,7 +10,7 @@
 
 Specialist wire subagents `browser_use`, `deep_research`, and `academic_research` become **intake-only**: reachable via Pass 2 / slash → `invoke_wired_subagent`, but hidden from the open CoreAgent `task` catalog and StrangeLoop plan `delegate` surface. **`planner` stays dual-exposed** (intake route **and** open task catalog / plan delegate).
 
-IG-652 completes true invisibility: intake-only specs are not passed to `create_deep_agent` at all.
+IG-601 completes true invisibility: intake-only specs are not passed to `create_deep_agent` at all.
 
 ---
 
@@ -22,12 +22,12 @@ IG-652 completes true invisibility: intake-only specs are not passed to `create_
 - Filter advertised CoreAgent capabilities / StrangeLoop `PlanContext`.
 - Prompt updates (`_SUBAGENT_GUIDE`, plan-generate `delegate`).
 - RFC-630 exposure section; unit tests.
-- ~~deepagents advertise-subset catalog filter~~ — removed in IG-652 (registration partition is enough).
+- ~~deepagents advertise-subset catalog filter~~ — removed in IG-601 (registration partition is enough).
 
 ### Out of Scope
 
 - Plugin subagents (remain task-catalog by default).
-- Changing IG-650 graph topology (see IG-652 for direct invoke).
+- Changing IG-599 graph topology (see IG-601 for direct invoke).
 
 ---
 
@@ -42,11 +42,11 @@ IG-652 completes true invisibility: intake-only specs are not passed to `create_
 
 ---
 
-## Design (historical → IG-652)
+## Design (historical → IG-601)
 
-1. ~~Keep registering all four in CoreAgent~~ → IG-652: partition; intake-only on parallel registry only.
+1. ~~Keep registering all four in CoreAgent~~ → IG-601: partition; intake-only on parallel registry only.
 2. Catalog advertisement omits intake-only names.
-3. ~~Allow `task` when wired directive matches~~ → IG-652: always reject intake-only `task` (belt-and-suspenders); wired path uses direct `ainvoke`.
+3. ~~Allow `task` when wired directive matches~~ → IG-601: always reject intake-only `task` (belt-and-suspenders); wired path uses direct `ainvoke`.
 4. Planner prompts / PlanContext never advertise the three intake-only names.
 
 ---
@@ -55,7 +55,7 @@ IG-652 completes true invisibility: intake-only specs are not passed to `create_
 
 - Plan-generate `delegate` schema + execution policies: drop browser/deep_research as open delegates.
 - `_apply_preferred_subagent_to_decision` no-ops for intake-only names.
-- IG-652: removed `wired_directive_allows_intake_only` and wired-allow exception in ToolEnforcement.
+- IG-601: removed `wired_directive_allows_intake_only` and wired-allow exception in ToolEnforcement.
 
 ## Verification
 
@@ -70,5 +70,5 @@ IG-652 completes true invisibility: intake-only specs are not passed to `create_
 - [x] Intake-only set excludes `planner`
 - [x] Open hops cannot freely invoke the three
 - [x] RFC-630 updated
-- [x] Related dead dual-path plumbing cleansed (continued in IG-652)
+- [x] Related dead dual-path plumbing cleansed (continued in IG-601)
 - [x] Verify green

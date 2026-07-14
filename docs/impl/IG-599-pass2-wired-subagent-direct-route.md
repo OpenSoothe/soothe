@@ -1,4 +1,4 @@
-# IG-650: Pass 2 Wired-Subagent Direct Route
+# IG-599: Pass 2 Wired-Subagent Direct Route
 
 **Created**: 2026-07-14
 **Status**: Implemented

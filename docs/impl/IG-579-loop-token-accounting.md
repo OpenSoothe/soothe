@@ -1,4 +1,4 @@
-# IG-630: Full-loop token accounting (TUI ↔ Langfuse)
+# IG-579: Full-loop token accounting (TUI ↔ Langfuse)
 
 ## Scope
 

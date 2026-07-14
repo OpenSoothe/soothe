@@ -1,4 +1,4 @@
-"""Wired-subagent intake branch (RFC-630, IG-650 / IG-652).
+"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601).
 
 Catalog wires (``planner``): build the 1-step terminal plan and continue to
 ``resolve_decision`` → execute → ``goal_completion``.
@@ -108,7 +108,7 @@ async def _invoke_intake_only_direct(
     wire: str,
     goal_text: str,
 ) -> dict[str, Any]:
-    """Run intake-only CompiledSubAgent and hand off to goal_completion (IG-652)."""
+    """Run intake-only CompiledSubAgent and hand off to goal_completion (IG-601)."""
     lookup = getattr(ctx.core_agent, "lookup_intake_only_subagent", None)
     spec = lookup(wire) if callable(lookup) else None
     if spec is None:

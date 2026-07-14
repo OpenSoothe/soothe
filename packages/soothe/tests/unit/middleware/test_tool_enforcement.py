@@ -55,7 +55,7 @@ def test_wire_subagent_routing_after_first_hop_keeps_full_tools() -> None:
 
 
 def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
-    """IG-652: intake-only preferred_subagent is ignored for CoreAgent task enforcement."""
+    """IG-601: intake-only preferred_subagent is ignored for CoreAgent task enforcement."""
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
         task_complexity="medium",

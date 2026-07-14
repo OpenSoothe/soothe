@@ -371,8 +371,8 @@ class LLMPlanner:
     ) -> AgentDecision:
         """Apply wire ``preferred_subagent`` to ``AgentDecision`` step descriptions (IG-349).
 
-        Intake-only specialists are skipped here (IG-651); they never reach plan-generate
-        under the wired-subagent route (IG-650).
+        Intake-only specialists are skipped here (IG-600); they never reach plan-generate
+        under the wired-subagent route (IG-599).
         """
         from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent
 

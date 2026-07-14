@@ -48,7 +48,7 @@ LoopState snapshot field names are unchanged (`activated_skill_names` = discover
 | `skills/catalog.py` | Modify — expose `core` in metadata parse |
 | `skills/discovery_tools.py` | **Create** — `create_search_skills_tool`, `create_invoke_skill_tool` |
 | `skills/search.py` | **Create** — unified substring + Skillify semantic search |
-| `subagents/skillify/runtime.py` | **Removed** — replaced by `foundation/skillify/service.py` (IG-655) |
+| `subagents/skillify/runtime.py` | **Removed** — replaced by `foundation/skillify/service.py` (IG-604) |
 | `middleware/skill_activation.py` | Modify — handle search/invoke; path uses `discover` |
 | `middleware/system_prompt.py` | Modify — core/deferred in `_compose_skills_block` |
 | `foundation/core/agent/_builder.py` | Modify — register discovery tools when enabled |

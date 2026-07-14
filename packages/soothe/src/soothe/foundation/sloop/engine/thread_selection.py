@@ -40,7 +40,7 @@ def resolve_wire_subagent_for_step(
 ) -> str | None:
     """Resolve catalog subagent wiring for execute: step hint wins over wire routing.
 
-    Intake-only specialists never become ``soothe_step_subagent`` (IG-652): they
+    Intake-only specialists never become ``soothe_step_subagent`` (IG-601): they
     run via ``invoke_wired_subagent`` direct ``ainvoke``, not CoreAgent ``task``.
     """
     from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent

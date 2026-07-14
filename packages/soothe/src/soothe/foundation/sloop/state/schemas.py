@@ -30,7 +30,7 @@ _BUILTIN_WIRE_SUBAGENTS = frozenset(
     }
 )
 
-# IG-651: specialists reachable only via Pass 2 / slash → invoke_wired_subagent.
+# IG-600: specialists reachable only via Pass 2 / slash → invoke_wired_subagent.
 # ``planner`` is intentionally excluded — it stays in the open task catalog.
 INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
     {
@@ -75,7 +75,7 @@ def spec_subagent_name(spec: Any) -> str | None:
 
 
 def partition_subagent_specs(specs: list[Any]) -> tuple[list[Any], list[Any]]:
-    """Split specs into (task-catalog, intake-only) lists (IG-652)."""
+    """Split specs into (task-catalog, intake-only) lists (IG-601)."""
     catalog: list[Any] = []
     intake_only: list[Any] = []
     for spec in specs:
@@ -167,7 +167,7 @@ def resolve_step_wire_subagent(
 ) -> str | None:
     """Map planner execution hints to executor subagent wiring.
 
-    Intake-only specialists cannot be plan-wave delegates (IG-651); they are
+    Intake-only specialists cannot be plan-wave delegates (IG-600); they are
     reached only via intake / slash → ``invoke_wired_subagent``.
     """
     if execution_hint != "subagent":
@@ -213,7 +213,7 @@ def strip_unrequested_step_delegates(
 ) -> list[StepAction]:
     """Clear planner-chosen subagent wiring unless the user requested a catalog subagent.
 
-    Intake-only specialists (IG-651) never count as a plan-wave user request —
+    Intake-only specialists (IG-600) never count as a plan-wave user request —
     those goals take the wired-subagent route instead.
     """
     catalog_user_wire = (
@@ -851,9 +851,9 @@ class StatusAssessment(BaseModel):
     require_goal_completion: bool = Field(default=False)
     """Dynamic goal completion decision (optimization to skip extra LLM call when not needed)."""
     terminal_readiness: Literal["not_ready", "ready_with_gaps", "ready"] = "not_ready"
-    """IG-640: explicit terminal readiness when status may be done."""
+    """IG-589: explicit terminal readiness when status may be done."""
     gap_alignment: bool = True
-    """IG-640: assess agrees with latest PlanGapAnalysis (structured self-report)."""
+    """IG-589: assess agrees with latest PlanGapAnalysis (structured self-report)."""
 
 
 class GoalComponentStatus(BaseModel):
@@ -1332,7 +1332,7 @@ class LoopState(BaseModel):
         description="Chronological action descriptions for progression tracking",
     )
 
-    # Last Execute wave provenance for auto final response (IG-199, IG-355, IG-631)
+    # Last Execute wave provenance for auto final response (IG-199, IG-355, IG-580)
     last_wave_answer_from_delegate_final: bool = False
     last_execute_wave_parallel_multi_step: bool = False
     continue_loop: bool = False  # RFC-225: True when loop has prior goals

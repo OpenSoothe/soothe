@@ -431,7 +431,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
 
 
 def test_intake_only_step_subagent_hint_does_not_narrow_tools() -> None:
-    """IG-652: intake-only names never force CoreAgent task-only enforcement."""
+    """IG-601: intake-only names never force CoreAgent task-only enforcement."""
     enforcement = ToolEnforcementMiddleware()
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]

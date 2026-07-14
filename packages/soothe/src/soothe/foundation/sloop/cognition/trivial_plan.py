@@ -1,4 +1,4 @@
-"""Terminal 1-step plan builder (RFC-630 §11, IG-650).
+"""Terminal 1-step plan builder (RFC-630 §11, IG-599).
 
 Used by:
 - ``trivial`` intake branch (``init_or_resume``) — direct execute, no planning

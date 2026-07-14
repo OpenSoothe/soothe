@@ -102,7 +102,7 @@ class TestExecutorHints:
 
     @pytest.mark.asyncio
     async def test_executor_ignores_intake_only_step_wire(self):
-        """IG-652: intake-only wire on a step never becomes soothe_step_subagent."""
+        """IG-601: intake-only wire on a step never becomes soothe_step_subagent."""
         mock_agent = MagicMock()
         mock_agent.execution_astream = MagicMock(side_effect=lambda *a, **k: _empty_async_gen())
         mock_agent.execution_aget_state = AsyncMock(return_value=MagicMock())

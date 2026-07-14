@@ -1,7 +1,7 @@
 # Deep Research Subagent — Design Draft
 
 **Date**: 2026-07-07  
-**Status**: Implemented (RFC-619, IG-654/559)  
+**Status**: Implemented (RFC-619, IG-603/559)  
 **RFC**: RFC-619 revised in place (2026-07-07)  
 **Phase**: 1 — `deep_research` only; phase 2 — `academic_research`
 

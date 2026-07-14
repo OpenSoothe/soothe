@@ -1,4 +1,4 @@
-# IG-655: Skillify Daemon Shared Service
+# IG-604: Skillify Daemon Shared Service
 
 **Created**: 2026-07-07  
 **Status**: Implemented  

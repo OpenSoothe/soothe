@@ -93,7 +93,7 @@ async def run_with_progress(...):
 
 When the Plan phase returns `status: done`, StrangeLoop must produce the user-visible completion text. Two strategies exist:
 
-1. **Reuse last Execute assistant text** (`ledger_direct`): After each Execute wave, assistant-visible text is recorded in the CE ledger. Used only when `final_response: auto` and structural gates pass (single plan wave, no hard failures, step count within cap, last-wave tool calls ≤ `ledger_direct_max_tool_calls`). See RFC-219 / IG-631.
+1. **Reuse last Execute assistant text** (`ledger_direct`): After each Execute wave, assistant-visible text is recorded in the CE ledger. Used only when `final_response: auto` and structural gates pass (single plan wave, no hard failures, step count within cap, last-wave tool calls ≤ `ledger_direct_max_tool_calls`). See RFC-219 / IG-580.
 2. **Final thread synthesis** (`synthesize`): A CoreAgent turn produces a consolidated report. Used when the planner sets `require_goal_completion=True`, DAG complexity vetoes apply, the last wave exceeded the tool-call budget, or ledger text is empty.
 
 Configuration (`agent.loop.final_response`): `auto` (default) applies the structural policy above; `always_synthesize` always runs the report turn. Legacy alias: `adaptive` → `auto`. Removed modes: `always_last_execute` (pre-IG-299).

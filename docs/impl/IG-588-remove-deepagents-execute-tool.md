@@ -1,4 +1,4 @@
-# IG-639: Remove deepagents execute tool
+# IG-588: Remove deepagents execute tool
 
 **Status:** Complete
 

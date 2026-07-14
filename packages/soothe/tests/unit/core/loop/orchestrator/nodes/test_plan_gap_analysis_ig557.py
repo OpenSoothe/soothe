@@ -1,4 +1,4 @@
-"""IG-557 / IG-644: plan-gap-analysis routing, soft-fail, and assess feed-forward."""
+"""IG-557 / IG-593: plan-gap-analysis routing, soft-fail, and assess feed-forward."""
 
 from __future__ import annotations
 

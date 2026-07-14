@@ -1,4 +1,4 @@
-"""StrangeLoop auto final response wiring (IG-199, IG-299, IG-631)."""
+"""StrangeLoop auto final response wiring (IG-199, IG-299, IG-580)."""
 
 from unittest.mock import AsyncMock, Mock, patch
 

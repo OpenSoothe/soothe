@@ -1,4 +1,4 @@
-# IG-647: Filesystem Artifact Prefix Portability Migration
+# IG-596: Filesystem Artifact Prefix Portability Migration
 
 ## Goal
 

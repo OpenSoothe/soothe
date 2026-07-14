@@ -1613,7 +1613,7 @@ class StrangeLoopConfig(BaseModel):
         execute_deliverable_assess: Fast LLM assess mode when structural deliverable checks are inconclusive.
         strange_loop_output_contract_enabled: Append anti-repetition instructions to sequential Act prompts.
         final_response: Whether to always synthesize a final CoreAgent report, reuse last Execute
-            assistant text when structurally eligible, or use auto heuristics (IG-199, IG-631).
+            assistant text when structurally eligible, or use auto heuristics (IG-199, IG-580).
         working_memory: Working memory / spill configuration (RFC-203).
         goal_context: Goal context injection for Plan/Execute phases (RFC-217).
         report_output: Goal report display and synthesis limits.

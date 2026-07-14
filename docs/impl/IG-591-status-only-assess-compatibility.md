@@ -1,4 +1,4 @@
-# IG-642: Status-Only Assess Compatibility Restoration
+# IG-591: Status-Only Assess Compatibility Restoration
 
 **RFC**: RFC-604, RFC-640
 **Created**: 2026-07-13

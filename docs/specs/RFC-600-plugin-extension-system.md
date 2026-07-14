@@ -291,7 +291,7 @@ class WidgetPlugin:
 - [ ] Modify `core/agent.py`, `core/resolver/` to use plugin registry
 
 ### Migration
-- [x] Migrate optional heavy delegated agents to soothe-plugins (IG-415); Skillify is core `foundation.skillify` (IG-655), weaver is community
+- [x] Migrate optional heavy delegated agents to soothe-plugins (IG-415); Skillify is core `foundation.skillify` (IG-604), weaver is community
 
 ### Testing
 - [ ] Unit tests for manifest, decorators, registry, lifecycle

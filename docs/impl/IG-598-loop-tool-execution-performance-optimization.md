@@ -1,4 +1,4 @@
-# IG-649: Loop Tool Execution Performance Optimization
+# IG-598: Loop Tool Execution Performance Optimization
 
 ## Goal
 

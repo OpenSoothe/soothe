@@ -1,4 +1,4 @@
-# IG-646 Foundation Core Module Removal and Layout Polish
+# IG-595 Foundation Core Module Removal and Layout Polish
 
 ## Goal
 

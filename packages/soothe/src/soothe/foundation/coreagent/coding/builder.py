@@ -193,7 +193,7 @@ class AgentBuilder:
 
         install_model_call_profiler(enabled=is_profiler_enabled(self._config))
 
-        # IG-652: intake-only specialists stay off the main CoreAgent graph.
+        # IG-601: intake-only specialists stay off the main CoreAgent graph.
         catalog_subagents, intake_only_subagents = partition_subagent_specs(all_subagents)
         catalog_names = self._collect_subagent_names(catalog_subagents)
 
@@ -234,7 +234,7 @@ class AgentBuilder:
 
         capabilities = CoreAgentCapabilities(
             tools=tuple(self._collect_tool_names(all_tools)),
-            # Open catalog only — intake-only names never appear (IG-652).
+            # Open catalog only — intake-only names never appear (IG-601).
             subagents=tuple(catalog_names),
             features=(
                 "langgraph",

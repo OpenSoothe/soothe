@@ -494,7 +494,7 @@ class TestPlanGeneration:
         assert (
             resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") == "planner"
         )
-        # IG-651: intake-only specialists are not plan-wave delegates
+        # IG-600: intake-only specialists are not plan-wave delegates
         assert (
             resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
         )

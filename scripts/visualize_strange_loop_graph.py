@@ -249,7 +249,7 @@ Every goal turn runs:
 2. ``init_or_resume`` — surface label on graph state; inject trivial pseudo-plan or select wired-subagent route; emit chitchat fast-path event
 3. ``route_by_intent`` — branch dispatch (conditional edge from ``init_or_resume``)
 
-## ``route_by_intent`` priority (RFC-630 / IG-650)
+## ``route_by_intent`` priority (RFC-630 / IG-599)
 
 Evaluated in order; first match wins:
 

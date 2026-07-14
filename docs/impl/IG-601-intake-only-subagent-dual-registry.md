@@ -1,8 +1,8 @@
-# IG-652: Intake-Only Subagent Dual Registry (True Invisibility)
+# IG-601: Intake-Only Subagent Dual Registry (True Invisibility)
 
 **Created**: 2026-07-14
 **Status**: Implemented
-**Related**: [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md), [IG-650](IG-650-pass2-wired-subagent-direct-route.md), [IG-651](IG-651-intake-only-wire-subagent-exposure.md)
+**Related**: [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md), [IG-599](IG-599-pass2-wired-subagent-direct-route.md), [IG-600](IG-600-intake-only-wire-subagent-exposure.md)
 
 ---
 
@@ -20,7 +20,7 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
 2. `invoke_wired_subagent`:
    - **intake-only wire**: `runnable.ainvoke` → ledger Human/AI execute-step → route `goal_completion`
    - **catalog wire (`planner`)**: inject trivial plan → route `resolve_decision` (unchanged)
-3. StrangeLoop `PlanContext` remains catalog-filtered (IG-651).
+3. StrangeLoop `PlanContext` remains catalog-filtered (IG-600).
 4. Open-hop `task` for those names fails naturally (not registered); keep middleware guard as belt-and-suspenders.
 
 ---
@@ -34,7 +34,7 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
 | `foundation/coreagent/coding/core_agent.py` + `lazy.py` | Hold intake-only registry + lookup |
 | `orchestrator/nodes/invoke_wired_subagent.py` | Direct invoke path |
 | `orchestrator/builder.py` + `routing.py` + `state.py` | Conditional edge after wired node |
-| RFC-630 / IG-651 notes | Exposure: not on CoreAgent graph |
+| RFC-630 / IG-600 notes | Exposure: not on CoreAgent graph |
 
 ---
 
@@ -44,7 +44,7 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
 - `resolve_wire_subagent_for_step` / step-hint enforcement ignore intake-only names (never `soothe_step_subagent`).
 - Prompt wording: intake-only specialists are not available via `task` at all.
 - Catalog builder uses partitioned lists only (no post-filter of intake-only from catalog).
-- Removed deepagents `task_catalog_subagents` / `catalog_subagent_names` (IG-651 advertise-subset API); listing == registration after dual registry.
+- Removed deepagents `task_catalog_subagents` / `catalog_subagent_names` (IG-600 advertise-subset API); listing == registration after dual registry.
 - Tests: planner for CoreAgent task-path fixtures; assert intake-only `task` always blocked.
 
 ## Acceptance

@@ -1,4 +1,4 @@
-# IG-654: Deep Research Subagent (Phase 1)
+# IG-603: Deep Research Subagent (Phase 1)
 
 **Status**: Complete  
 **RFC**: RFC-619 (revised 2026-07-07)  
