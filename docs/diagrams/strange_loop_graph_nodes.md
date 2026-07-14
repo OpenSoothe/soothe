@@ -36,14 +36,19 @@ When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is 
 ```mermaid
 flowchart TD
     IC[intent_classify] --> IOR[init_or_resume]
-    IOR --> R{route_by_intent}
+    IOR --> R{{route_by_intent}}
     R -->|fast_path| END1[__end__ / chitchat response]
     R -->|continuation+trivial| PA[plan_assess]
     R -->|continuation+simple| PA2[plan_assess]
-    R -->|continuation+complex| BEG[bounded_evidence_gather → … → execute]
+    R -->|continuation+complex| BEG[bounded_evidence_gather]
     R -->|trivial| RD[resolve_decision → execute]
     R -->|simple| PG2[plan_generate → execute]
-    R -->|complex| BEG2[bounded_evidence_gather → … → execute]
+    R -->|complex| BEG2[bounded_evidence_gather]
+    BEG --> PGA{{route_after_evidence_gather}}
+    BEG2 --> PGA
+    PGA -->|plan_assess| PA3[plan_assess]
+    PGA -->|plan_gap_analysis| PGA2[plan_gap_analysis → plan_assess]
+    PGA -->|plan_generate| PG3[plan_generate → execute]
 ```
 
 ## Nodes
@@ -54,6 +59,7 @@ flowchart TD
 - `iteration_gate`
 - `iteration_start`
 - `bounded_evidence_gather`
+- `plan_gap_analysis`
 - `plan_assess`
 - `plan_generate`
 - `goal_completion`
@@ -71,8 +77,7 @@ Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are con
 ### From ``init_or_resume`` (`route_by_intent`)
 
 - → ``__end__`` — chitchat fast-path
-- → ``plan_assess`` — continuation + trivial
-- → ``plan_assess`` — continuation + simple
+- → ``plan_assess`` — continuation + trivial, or continuation + simple
 - → ``plan_generate`` — fresh simple
 - → ``bounded_evidence_gather`` — continuation + complex, or fresh complex
 - → ``resolve_decision`` — fresh trivial pseudo-plan
@@ -83,8 +88,10 @@ Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are con
 - `await_clarification` → `__end__`
 - `await_clarification` → `execute`
 - `await_clarification` → `plan_assess`
+- `await_clarification` → `plan_gap_analysis`
 - `await_clarification` → `plan_generate`
 - `bounded_evidence_gather` → `plan_assess`
+- `bounded_evidence_gather` → `plan_gap_analysis`
 - `bounded_evidence_gather` → `plan_generate`
 - `execute` → `__end__`
 - `execute` → `await_clarification`
@@ -104,8 +111,10 @@ Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are con
 - `plan_assess` → `goal_completion`
 - `plan_assess` → `plan_generate`
 - `plan_assess` → `resolve_decision`
+- `plan_gap_analysis` → `plan_assess`
 - `plan_generate` → `await_clarification`
 - `plan_generate` → `goal_completion`
+- `plan_generate` → `plan_generate`
 - `plan_generate` → `resolve_decision`
 - `record_iteration` → `__end__`
 - `record_iteration` → `goal_completion`

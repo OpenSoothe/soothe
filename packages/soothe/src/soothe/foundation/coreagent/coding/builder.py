@@ -210,6 +210,7 @@ class AgentBuilder:
                 filesystem_tools=_FILESYSTEM_TOOLS_NO_EXECUTE,
                 parent_owned_state_keys=_PARENT_OWNED_STATE_KEYS,
                 debug=self._config.debug,
+                recursion_limit=int(self._config.agent.runtime.recursion_limit),
             )
 
         deep_agent_start = time.perf_counter()

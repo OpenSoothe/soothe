@@ -157,6 +157,14 @@ class TestSootheConfig:
         cfg = SootheConfig(agent={"runtime": {"general_purpose_subagent": True}})
         assert cfg.agent.runtime.general_purpose_subagent is True
 
+    def test_core_agent_recursion_limit_default(self) -> None:
+        cfg = SootheConfig()
+        assert cfg.agent.runtime.recursion_limit == 99
+
+    def test_core_agent_recursion_limit_config_override(self) -> None:
+        cfg = SootheConfig(agent={"runtime": {"recursion_limit": 200}})
+        assert cfg.agent.runtime.recursion_limit == 200
+
     def test_resolve_system_prompt_default(self) -> None:
         cfg = SootheConfig()
         prompt = cfg.resolve_system_prompt()

@@ -92,6 +92,7 @@ agent:
   runtime:
     lazy_core_agent: true  # pair with daemon thread_pool.warmup_core_agent for fast TUI
     general_purpose_subagent: false
+    recursion_limit: 99
     role_routing:
       enabled: true
       orchestration_model_role: fast

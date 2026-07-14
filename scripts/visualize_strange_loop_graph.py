@@ -257,7 +257,7 @@ Evaluated in order; first match wins:
 |----------|-----------|--------|-------|
 | 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
 | 2 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
-| 2b | ``is_continuation`` + ``simple`` | ``plan_generate`` | Skips continuation-assess; lightweight generate |
+| 2b | ``is_continuation`` + ``simple`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
 | 2c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
 | 3 | ``intake_label == trivial`` (fresh) | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
 | 4 | ``intake_label == simple`` (fresh) | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
@@ -271,6 +271,24 @@ When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is 
 - Runner streams the piggybacked reply directly — **no** ``plan_assess``, ``plan_generate``, or ``execute``
 - Applies on **first and subsequent goals** in the same loop (continuation does not override chitchat)
 
+```mermaid
+flowchart TD
+    IC[intent_classify] --> IOR[init_or_resume]
+    IOR --> R{{route_by_intent}}
+    R -->|fast_path| END1[__end__ / chitchat response]
+    R -->|continuation+trivial| PA[plan_assess]
+    R -->|continuation+simple| PA2[plan_assess]
+    R -->|continuation+complex| BEG[bounded_evidence_gather]
+    R -->|trivial| RD[resolve_decision → execute]
+    R -->|simple| PG2[plan_generate → execute]
+    R -->|complex| BEG2[bounded_evidence_gather]
+    BEG --> PGA{{route_after_evidence_gather}}
+    BEG2 --> PGA
+    PGA -->|plan_assess| PA3[plan_assess]
+    PGA -->|plan_gap_analysis| PGA2[plan_gap_analysis → plan_assess]
+    PGA -->|plan_generate| PG3[plan_generate → execute]
+```
+
 ## Nodes
 
 """
@@ -283,8 +301,8 @@ When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is 
     summary += "Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are conditional.\n\n"
     summary += "### From ``init_or_resume`` (`route_by_intent`)\n\n"
     summary += "- → ``__end__`` — chitchat fast-path\n"
-    summary += "- → ``plan_assess`` — continuation + trivial\n"
-    summary += "- → ``plan_generate`` — continuation + simple, or fresh simple\n"
+    summary += "- → ``plan_assess`` — continuation + trivial, or continuation + simple\n"
+    summary += "- → ``plan_generate`` — fresh simple\n"
     summary += "- → ``bounded_evidence_gather`` — continuation + complex, or fresh complex\n"
     summary += "- → ``resolve_decision`` — fresh trivial pseudo-plan\n\n"
     summary += "### All edges\n\n"

@@ -131,3 +131,118 @@ async def test_outer_tool_call_args_records_before_coalescing_intercepts_edit_fi
     assert recorded.get("old_string") == "foo"
     assert recorded.get("new_string") == "bar"
     inner_handler.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_lookup_tools_reuse_identical_args_within_scope() -> None:
+    middleware = ToolCallArgsMiddleware()
+    runtime = MagicMock()
+    runtime.config = {"configurable": {"thread_id": "t1", "checkpoint_ns": "execute:1"}}
+    request = ToolCallRequest(
+        tool_call={
+            "name": "grep",
+            "args": {"pattern": "tool_prefix", "path": "/repo/pkg"},
+            "id": "functions.grep:1",
+        },
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    handler = AsyncMock(
+        return_value=ToolMessage(content="packages/x.py:\n  0:", tool_call_id="functions.grep:1")
+    )
+
+    first = await middleware.awrap_tool_call(request, handler)
+    request_second = ToolCallRequest(
+        tool_call={**request.tool_call, "id": "functions.grep:2"},
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    second = await middleware.awrap_tool_call(request_second, handler)
+
+    assert isinstance(first, ToolMessage)
+    assert isinstance(second, ToolMessage)
+    assert first.content == second.content
+    # Second call should be served from middleware reuse cache.
+    assert handler.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_lookup_reuse_cache_invalidates_after_mutation() -> None:
+    middleware = ToolCallArgsMiddleware()
+    runtime = MagicMock()
+    runtime.config = {"configurable": {"thread_id": "t2", "checkpoint_ns": "execute:2"}}
+    grep_request = ToolCallRequest(
+        tool_call={
+            "name": "grep",
+            "args": {"pattern": "foo", "path": "/repo/file.py"},
+            "id": "functions.grep:10",
+        },
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    edit_request = ToolCallRequest(
+        tool_call={
+            "name": "edit_file",
+            "args": {"file_path": "/repo/file.py", "old_string": "a", "new_string": "b"},
+            "id": "functions.edit_file:11",
+        },
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    grep_handler = AsyncMock(
+        return_value=ToolMessage(content="packages/x.py:\n12:foo", tool_call_id="functions.grep:10")
+    )
+    edit_handler = AsyncMock(
+        return_value=ToolMessage(content="ok", tool_call_id="functions.edit_file:11")
+    )
+
+    await middleware.awrap_tool_call(grep_request, grep_handler)
+    await middleware.awrap_tool_call(edit_request, edit_handler)
+    grep_request_second = ToolCallRequest(
+        tool_call={**grep_request.tool_call, "id": "functions.grep:12"},
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    await middleware.awrap_tool_call(grep_request_second, grep_handler)
+
+    # grep executes twice because edit_file invalidates lookup cache.
+    assert grep_handler.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_lookup_reuse_cache_is_scoped_by_checkpoint_namespace() -> None:
+    middleware = ToolCallArgsMiddleware()
+    runtime = MagicMock()
+    grep_handler = AsyncMock(
+        return_value=ToolMessage(content="packages/x.py:\n12:foo", tool_call_id="functions.grep:20")
+    )
+
+    request_ns1 = ToolCallRequest(
+        tool_call={
+            "name": "grep",
+            "args": {"pattern": "foo", "path": "/repo"},
+            "id": "functions.grep:20",
+        },
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    runtime.config = {"configurable": {"thread_id": "t3", "checkpoint_ns": "execute:scope-1"}}
+    await middleware.awrap_tool_call(request_ns1, grep_handler)
+
+    request_ns2 = ToolCallRequest(
+        tool_call={**request_ns1.tool_call, "id": "functions.grep:21"},
+        tool=None,
+        state={"messages": []},
+        runtime=runtime,
+    )
+    runtime.config = {"configurable": {"thread_id": "t3", "checkpoint_ns": "execute:scope-2"}}
+    await middleware.awrap_tool_call(request_ns2, grep_handler)
+
+    # New checkpoint namespace resets cache; handler runs again.
+    assert grep_handler.await_count == 2

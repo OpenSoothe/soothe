@@ -11,6 +11,7 @@ from textual.content import Content
 from textual.widgets import Static
 
 from soothe_cli.runtime.presentation.id_format import abbreviate_compact_id
+from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.tui.widgets.messages._helpers import _RUNNING_SPINNER_INTERVAL_SECONDS
@@ -25,7 +26,13 @@ logger = logging.getLogger(__name__)
 
 
 def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = False) -> Content:
-    """Build the quick-view header: bold title, abbreviated loop id, dim hints."""
+    """Build the quick-view header: bold title, abbreviated loop id, dim hints.
+
+    The title (including the abbreviated loop id) is rendered with the same
+    `SECONDARY_TEXT_STYLE` dim style used by the welcome-area Loop ID, then
+    bolded via `bold dim` so the title stands out while staying de-emphasized.
+    """
+    dim_style = theme.SECONDARY_TEXT_STYLE
     title = "Plan"
     abbreviated = abbreviate_compact_id(loop_id or "")
     if abbreviated:
@@ -35,8 +42,8 @@ def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = Fals
         hints.append("Enter runs queued goal")
     hints.append("Ctrl+t to close")
     return Content.assemble(
-        Content.styled(title, "bold"),
-        Content.styled(f"  ·  {'  ·  '.join(hints)}", "dim"),
+        Content.styled(title, f"bold {dim_style}"),
+        Content.styled(f"  ·  {'  ·  '.join(hints)}", dim_style),
     )
 
 

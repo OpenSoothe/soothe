@@ -2432,6 +2432,7 @@ class AgentRuntimeConfig(BaseModel):
     Args:
         lazy_core_agent: Defer ``create_deep_agent`` until first Layer-1 execution.
         general_purpose_subagent: Expose soothe_deepagents ``general-purpose`` delegate via ``task``.
+        recursion_limit: LangGraph recursion limit for CoreAgent graph execution.
         role_routing: Per-hop orchestration vs generation model roles (IG-545).
     """
 
@@ -2444,6 +2445,15 @@ class AgentRuntimeConfig(BaseModel):
         description=(
             "When true, register soothe_deepagents general-purpose subagent on the task tool. "
             "When false (default), general-purpose is hidden and blocked."
+        ),
+    )
+    recursion_limit: int = Field(
+        default=99,
+        ge=1,
+        le=10_000,
+        description=(
+            "LangGraph recursion limit for CoreAgent runs; higher values allow deeper "
+            "ReAct/tool-call loops before GraphRecursionError."
         ),
     )
     role_routing: RoleRoutingConfig = Field(
