@@ -1,12 +1,17 @@
-"""IG-557 Phase E: plan-gap-analysis routing and assess feed-forward."""
+"""IG-557 / IG-644: plan-gap-analysis routing, soft-fail, and assess feed-forward."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from soothe.foundation.sloop.cognition.plan_step_safety import assess_respects_gap_analysis
 from soothe.foundation.sloop.orchestrator.nodes.bounded_evidence_gather import (
     _should_run_gap_analysis,
+)
+from soothe.foundation.sloop.orchestrator.nodes.plan_gap_analysis import (
+    node_plan_gap_analysis,
 )
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
@@ -20,6 +25,7 @@ from soothe.foundation.sloop.state.schemas import (
     StepResult,
 )
 from soothe.protocols.planner import PlanContext
+from soothe.utils.llm.structured import StructuredOutputError
 
 
 def test_should_skip_gap_at_iter0_without_execution() -> None:
@@ -153,3 +159,61 @@ def test_build_plan_messages_gap_kind_uses_gap_instructions() -> None:
     assert "<PLAN_GAP_ANALYSIS>" in msgs[0].content
     assert "TASK:" in msgs[-1].content
     assert "remaining_gaps" in msgs[-1].content
+
+
+def _gap_node_ctx(*, plan_phase: MagicMock) -> LoopRuntimeContext:
+    strange_loop = MagicMock()
+    strange_loop.plan_phase = plan_phase
+    strange_loop._build_plan_context = MagicMock(return_value=MagicMock())
+    return LoopRuntimeContext(
+        strange_loop=strange_loop,
+        state_manager=MagicMock(),
+        anchor_manager=MagicMock(),
+        goal_context_manager=MagicMock(),
+        plan_manager=MagicMock(),
+        checkpoint=None,
+        goal_record=None,
+        continue_loop_mode=False,
+        recovery_valid_resume=False,
+        loop_state=LoopState(goal="verify readiness", thread_id="t-e217", iteration=2),
+        emit=AsyncMock(),
+        scratch=LoopPhaseScratch(),
+        ce=None,
+        ce_goal_id=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_node_soft_fails_structured_output_error() -> None:
+    plan_phase = MagicMock()
+    plan_phase.analyze_plan_gap = AsyncMock(
+        side_effect=StructuredOutputError(
+            "structured_output_validation_failed: 'component' is a required property"
+        )
+    )
+    ctx = _gap_node_ctx(plan_phase=plan_phase)
+
+    result = await node_plan_gap_analysis(ctx, {})
+
+    assert result == {}
+    assert ctx.scratch.plan_gap is None
+    plan_phase.analyze_plan_gap.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_node_stashes_gap_on_success() -> None:
+    gap = PlanGapAnalysis(
+        components=[GoalComponentStatus(component="api", status="satisfied")],
+        evidence_summary="ok",
+        remaining_gaps=[],
+        distance_from_goal="at_goal",
+        gap_reasoning="complete",
+    )
+    plan_phase = MagicMock()
+    plan_phase.analyze_plan_gap = AsyncMock(return_value=gap)
+    ctx = _gap_node_ctx(plan_phase=plan_phase)
+
+    result = await node_plan_gap_analysis(ctx, {})
+
+    assert result == {}
+    assert ctx.scratch.plan_gap is gap

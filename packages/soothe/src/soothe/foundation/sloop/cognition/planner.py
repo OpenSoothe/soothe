@@ -12,6 +12,9 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 
 from soothe.config.models import LLMRateLimitConfig
+from soothe.foundation.sloop.cognition.plan_gap_wire import (
+    coerce_plan_gap_analysis_wire_dict,
+)
 from soothe.foundation.sloop.cognition.plan_generation_wire import (
     capped_plan_generation_wire_model,
     coerce_plan_generation_wire_dict,
@@ -1148,6 +1151,7 @@ class LLMPlanner:
             PlanGapAnalysis,
             config=lf_cfg,
             thread_id=state.thread_id,
+            normalize=coerce_plan_gap_analysis_wire_dict,
         )
         if gap is None:
             raise ValueError("PlanGapAnalysis returned None")
