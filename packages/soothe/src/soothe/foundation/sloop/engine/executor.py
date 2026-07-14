@@ -1861,7 +1861,7 @@ class Executor:
                 )
 
                 projected = project_execute_step_graph_input(
-                    loop_state.loop_messages,
+                    await loop_state.get_loop_messages(),
                     state=loop_state,
                     step=step,
                     decision=loop_state.current_decision,

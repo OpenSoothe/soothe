@@ -733,7 +733,9 @@ class TestYamlEnvExpansion:
 class TestPropagateEnv:
     def test_propagate_openai_provider_standard_endpoint(self, monkeypatch) -> None:
         """Standard OpenAI endpoint (no custom base_url) sets OPENAI_* env vars."""
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        # Pre-set via monkeypatch so propagate_env's setdefault is a no-op
+        # and the env var is auto-cleaned at test teardown (prevents env leakage).
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         cfg = SootheConfig(
             providers=[
@@ -754,8 +756,8 @@ class TestPropagateEnv:
 
     def test_propagate_openai_provider_explicit_standard_endpoint(self, monkeypatch) -> None:
         """Explicit standard OpenAI endpoint sets OPENAI_* env vars."""
-        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         cfg = SootheConfig(
             providers=[
                 ModelProviderConfig(

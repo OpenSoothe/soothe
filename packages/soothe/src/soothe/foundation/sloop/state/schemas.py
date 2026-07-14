@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import secrets
@@ -799,14 +800,14 @@ class GoalComponentStatus(BaseModel):
     status: Literal["not_started", "partial", "satisfied", "blocked"]
     # Keep bounded but tolerant: plan-gap evidence can include multi-clause step outcomes.
     evidence: str = Field(default="", max_length=2048)
-    gap: str = Field(default="", max_length=400)
+    gap: str = Field(default="", max_length=2048)
 
 
 class PlanGapAnalysis(BaseModel):
     """Explicit evidence inventory + distance from GOAL (feeds plan-assess, IG-557)."""
 
     components: list[GoalComponentStatus] = Field(min_length=1, max_length=8)
-    evidence_summary: str = Field(max_length=400)
+    evidence_summary: str = Field(max_length=2048)
     remaining_gaps: list[str] = Field(default_factory=list, max_length=6)
     distance_from_goal: Literal["far", "moderate", "near", "at_goal"]
     gap_reasoning: str = Field(max_length=2048)
@@ -1204,6 +1205,13 @@ class LoopState(BaseModel):
     # Temporary storage for property kwargs captured by the before-validator.
     # Not thread-safe but LoopState is not shared across threads.
     _pending_kwargs: dict[str, Any] = PrivateAttr(default_factory=dict)
+    # Memoization for CE-backed loop_messages rebuild (RFC-214 performance):
+    # caches the rebuilt list keyed on the ledger's revision counter so
+    # repeated accesses between mutations return O(1) instead of O(n).
+    _loop_msg_cache_revision: int | None = PrivateAttr(default=None)
+    _loop_msg_cache_result: list[LoopHumanMessage | LoopAIMessage] = PrivateAttr(
+        default_factory=list
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -1329,6 +1337,9 @@ class LoopState(BaseModel):
         self._loop_messages_cache.clear()
         self._step_results_cache.clear()
         self._completed_step_ids_cache.clear()
+        # Invalidate CE-backed memoization
+        self._loop_msg_cache_revision = None
+        self._loop_msg_cache_result.clear()
 
     @property
     def loop_messages(self) -> list[LoopHumanMessage | LoopAIMessage]:
@@ -1336,15 +1347,61 @@ class LoopState(BaseModel):
 
         When CE is bound, queries the CE ledger (fresh data each call).
         When CE is not bound, returns the local cache.
+
+        For callers in async contexts, prefer ``await state.get_loop_messages()``
+        which runs the CE rebuild off the event loop via ``asyncio.to_thread``.
+        This sync property returns the memoized cache when valid, or falls back
+        to a synchronous rebuild for callers that cannot await.
         """
         if self._ce is None:
             return self._loop_messages_cache
-        return self._build_loop_messages_from_ce()
+        # Memoize the CE rebuild keyed on the ledger's revision counter:
+        # repeated accesses between mutations return the cached list (O(1))
+        # instead of rebuilding the full list from the ledger (O(n)).
+        try:
+            current_revision = self._ce.ledger.revision
+        except Exception:
+            current_revision = None
+        if current_revision is not None and current_revision == self._loop_msg_cache_revision:
+            return self._loop_msg_cache_result
+        # Synchronous fallback rebuild for sync callers.  Async callers should
+        # use get_loop_messages() to avoid blocking the event loop.
+        result = self._build_loop_messages_from_ce_sync()
+        if current_revision is not None:
+            self._loop_msg_cache_revision = current_revision
+            self._loop_msg_cache_result = result
+        return result
 
     @loop_messages.setter
     def loop_messages(self, value: list[LoopHumanMessage | LoopAIMessage]) -> None:
         """Allow legacy assignment (e.g., constructor). Writes to cache only."""
         self._loop_messages_cache = value
+
+    async def get_loop_messages(self) -> list[LoopHumanMessage | LoopAIMessage]:
+        """Async accessor for ``loop_messages`` that runs CE rebuild off-loop.
+
+        Returns the memoized cache when the ledger revision is unchanged.  When
+        a rebuild is needed, the CPU-bound ``_build_loop_messages_from_ce_sync``
+        runs in a worker thread via ``asyncio.to_thread`` so the event loop is
+        not blocked — critical for large ledgers.
+
+        When CE is not bound, returns the local cache directly (no thread hop).
+        """
+        if self._ce is None:
+            return self._loop_messages_cache
+        try:
+            current_revision = self._ce.ledger.revision
+        except Exception:
+            current_revision = None
+        if current_revision is not None and current_revision == self._loop_msg_cache_revision:
+            return self._loop_msg_cache_result
+        # Offload the synchronous CE rebuild to a worker thread so the event
+        # loop is not blocked during large ledger scans.
+        result = await asyncio.to_thread(self._build_loop_messages_from_ce_sync)
+        if current_revision is not None:
+            self._loop_msg_cache_revision = current_revision
+            self._loop_msg_cache_result = result
+        return result
 
     @property
     def step_results(self) -> list[StepResult]:
@@ -1377,8 +1434,15 @@ class LoopState(BaseModel):
         """Allow legacy assignment. Writes to cache only."""
         self._completed_step_ids_cache = value
 
-    def _build_loop_messages_from_ce(self) -> list[LoopHumanMessage | LoopAIMessage]:
-        """Convert CE ledger entries to Loop message types."""
+    def _build_loop_messages_from_ce_sync(self) -> list[LoopHumanMessage | LoopAIMessage]:
+        """Convert CE ledger entries to Loop message types (synchronous).
+
+        This is the CPU-bound worker that scans the CE ledger and converts
+        each entry to a ``LoopHumanMessage`` or ``LoopAIMessage``.  It should
+        not be called directly from async contexts — use
+        ``await get_loop_messages()`` which wraps this via
+        ``asyncio.to_thread`` to avoid blocking the event loop.
+        """
         from langchain_core.messages import AIMessage, HumanMessage
 
         result: list[LoopHumanMessage | LoopAIMessage] = []
@@ -1425,6 +1489,17 @@ class LoopState(BaseModel):
             logger.warning("loop_messages property: CE query failed", exc_info=True)
             return self._loop_messages_cache
         return result
+
+    async def _build_loop_messages_from_ce(self) -> list[LoopHumanMessage | LoopAIMessage]:
+        """Convert CE ledger entries to Loop message types (async, non-blocking).
+
+        Wraps ``_build_loop_messages_from_ce_sync`` via ``asyncio.to_thread``
+        so the synchronous ledger scan runs in a worker thread, leaving the
+        event loop free to process I/O and other coroutines.  Prefer calling
+        ``await get_loop_messages()`` (which memoizes) over this low-level
+        method.
+        """
+        return await asyncio.to_thread(self._build_loop_messages_from_ce_sync)
 
     def _build_step_results_from_ce(self) -> list[StepResult]:
         """Map CE StepNode + StepExecution to StepResult."""

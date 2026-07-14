@@ -25,3 +25,6 @@ class CLIContext(TypedDict, total=False):
     model_params: dict[str, Any]
     """Invocation params (e.g. `temperature`, `max_tokens`) to merge
     into `model_settings`."""
+
+    router_profile: str | None
+    """Named ``router_profiles`` entry for chat-role overlay this turn."""

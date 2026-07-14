@@ -11,6 +11,7 @@ SESSION_TIPS: list[str] = [
     "Use /context to check token usage and goal status",
     "Use /mcp to see your loaded tools and servers",
     "Use /model to switch models mid-conversation",
+    "Use /model-router to switch role presets for this loop",
     "Press ctrl+x to compose prompts in your external editor",
     "Press ctrl+u to delete to the start of the line in the chat input",
     "Use /skill:<name> to invoke a skill directly",

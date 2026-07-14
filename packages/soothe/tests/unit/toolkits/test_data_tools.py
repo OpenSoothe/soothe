@@ -202,8 +202,13 @@ class TestDocumentQA:
 
         return AskAboutFileTool()
 
+    @pytest.mark.integration
     def test_ask_about_text_file(self, qa_tool) -> None:
-        """Test asking questions about text file content."""
+        """Test asking questions about text file content.
+
+        This test makes real LLM API calls and requires API keys.
+        Marked as integration to skip in unit test runs.
+        """
         import os
 
         if not (os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY")):

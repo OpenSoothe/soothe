@@ -213,6 +213,8 @@ class SootheApp(
 
         self._model_params_override: dict[str, Any] | None = None
 
+        self._router_profile_override: str | None = None
+
         # RFC-622: clarification relay mode. Seeded from --mode flag (CLIConfig);
         # default to Auto so loops keep moving when the user hasn't opted in.
         self._clarification_mode: str = getattr(daemon_config, "clarification_mode", None) or "auto"

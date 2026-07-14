@@ -813,16 +813,30 @@ class SootheConfig(BaseSettings):
         Looks up the role in the router. Falls back to ``default`` if the
         role has no explicit mapping.
 
+        When a stream router-profile overlay is active (loop-scoped
+        ``/model-router``), chat roles resolve against that profile's
+        ``ModelRouter``. The ``embedding`` role always uses the process
+        active profile so vector indexes stay consistent.
+
         Args:
             role: Purpose role — one of the :data:`~soothe.config.models.ModelRole` values.
 
         Returns:
             A ``provider_name:model_name`` string.
         """
-        value = getattr(self.router, role, None)
+        router = self.router
+        if role != "embedding":
+            from soothe.middleware._router_profile_override import get_stream_router_profile
+
+            overlay = get_stream_router_profile()
+            if overlay:
+                profile = next((p for p in self.router_profiles if p.name == overlay), None)
+                if profile is not None:
+                    router = profile.router
+        value = getattr(router, role, None)
         if value:
             return value
-        return self.router.default
+        return router.default
 
     def resolve_backend(self, backend: str) -> str:
         """Resolve backend value, inheriting from persistence.default_backend if 'default'.

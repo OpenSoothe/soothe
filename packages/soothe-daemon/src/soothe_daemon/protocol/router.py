@@ -123,7 +123,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Keys to merge into the internal queue payload: ``autonomous``,
         ``max_iterations``, ``preferred_subagent``, ``model``,
-        ``model_params``, ``intent_hint`` (normalized to lowercase when set),
+        ``model_params``, ``router_profile``, ``intent_hint`` (normalized to lowercase when set),
         ``clarification_mode`` (RFC-622, normalized to ``"auto"``/``"manual"`` or ``None``).
     """
     max_iterations = msg.get("max_iterations")
@@ -144,6 +144,12 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
     model = raw_model.strip() if isinstance(raw_model, str) and raw_model.strip() else None
     raw_params = msg.get("model_params")
     model_params = raw_params if isinstance(raw_params, dict) else None
+    raw_router_profile = msg.get("router_profile")
+    router_profile = (
+        raw_router_profile.strip()
+        if isinstance(raw_router_profile, str) and raw_router_profile.strip()
+        else None
+    )
     raw_hint = msg.get("intent_hint")
     intent_hint = (
         raw_hint.strip().lower() if isinstance(raw_hint, str) and raw_hint.strip() else None
@@ -174,6 +180,7 @@ def _queue_options_from_daemon_message(msg: dict[str, Any]) -> dict[str, Any]:
         "preferred_subagent": preferred_norm,
         "model": model,
         "model_params": model_params,
+        "router_profile": router_profile,
         "intent_hint": intent_hint,
         "response_schema": response_schema,
         "response_schema_name": response_schema_name,
@@ -1102,6 +1109,8 @@ class MessageRouter:
             {
                 "models": payload["models"],
                 "default_model": payload.get("default_model"),
+                "router_profiles": payload.get("router_profiles") or [],
+                "active_router_profile": payload.get("active_router_profile"),
             },
         )
 

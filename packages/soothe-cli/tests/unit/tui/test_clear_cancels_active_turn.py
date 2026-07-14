@@ -31,7 +31,7 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app._reset_loop_token_usage = MagicMock()
     app._update_status = MagicMock()
     app._lc_loop_id = "old-loop"
-    app._clear_loop_model_override = MagicMock()
+    app._clear_loop_session_overrides = MagicMock()
     app._mount_message = AsyncMock()
     app.query_one = MagicMock(side_effect=NoMatches())
 
@@ -41,4 +41,5 @@ async def test_clear_cancels_agent_before_new_loop() -> None:
     app._interrupt_daemon_agent_turn.assert_awaited_once()
     app._cleanup_agent_task.assert_awaited_once()
     app._daemon_session.new_loop.assert_awaited_once()
+    app._clear_loop_session_overrides.assert_called_once()
     assert app._session_state.loop_id == "new-loop"

@@ -207,6 +207,7 @@ class LoopInputParams(ParamsBase):
         preferred_subagent: Routing hint.
         model: Provider:model override.
         model_params: Additional model parameters.
+        router_profile: Named ``router_profiles`` overlay for chat roles this turn.
         attachments: Image attachments.
         intent_hint: Daemon direct-model hint (text_completion, image_to_text, ocr, embed).
         response_schema: Structured output schema.
@@ -224,6 +225,7 @@ class LoopInputParams(ParamsBase):
     preferred_subagent: str | None = None
     model: str | None = None
     model_params: dict[str, Any] | None = None
+    router_profile: str | None = None
     attachments: list[dict[str, str]] | None = None
     intent_hint: str | None = None
     response_schema: dict[str, Any] | None = None

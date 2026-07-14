@@ -223,30 +223,37 @@ def _thread_worker_body(
                 timeout_ctx = asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
                 async def _stream() -> None:
-                    async for chunk in runner.astream(
-                        req.user_input,
-                        thread_id=req.thread_id,
-                        workspace=req.resolve_workspace_path(),
-                        max_iterations=req.max_iterations,
-                        preferred_subagent=req.preferred_subagent,
-                        client_loop_id=req.loop_id,
-                        autopilot_job=req.autopilot_job,  # RFC-222 revised
-                        clarification_mode=req.clarification_mode,
-                        clarification_answer=req.clarification_answer,
-                        clarification_answers=req.clarification_answers,
-                    ):
-                        # COOPERATIVE CANCELLATION: Check cancel_event between chunks
-                        if cancel_event.is_set():
-                            logger.info(
-                                "Thread worker %s: cancellation requested for loop=%s request_id=%s",
-                                worker_id,
-                                req.loop_id,
-                                request_id,
-                            )
-                            _emit("cancelled")
-                            return
+                    from soothe.middleware._stream_turn_overrides import stream_turn_overrides
 
-                        _emit("chunk", chunk)
+                    with stream_turn_overrides(
+                        model=req.model,
+                        model_params=req.model_params or None,
+                        router_profile=req.router_profile,
+                    ):
+                        async for chunk in runner.astream(
+                            req.user_input,
+                            thread_id=req.thread_id,
+                            workspace=req.resolve_workspace_path(),
+                            max_iterations=req.max_iterations,
+                            preferred_subagent=req.preferred_subagent,
+                            client_loop_id=req.loop_id,
+                            autopilot_job=req.autopilot_job,  # RFC-222 revised
+                            clarification_mode=req.clarification_mode,
+                            clarification_answer=req.clarification_answer,
+                            clarification_answers=req.clarification_answers,
+                        ):
+                            # COOPERATIVE CANCELLATION: Check cancel_event between chunks
+                            if cancel_event.is_set():
+                                logger.info(
+                                    "Thread worker %s: cancellation requested for loop=%s request_id=%s",
+                                    worker_id,
+                                    req.loop_id,
+                                    request_id,
+                                )
+                                _emit("cancelled")
+                                return
+
+                            _emit("chunk", chunk)
 
                     _emit("done")
 

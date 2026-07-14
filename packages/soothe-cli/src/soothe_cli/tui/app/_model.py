@@ -493,7 +493,7 @@ class _ModelMixin:
                 raise RuntimeError(str(status.get("message", "loop switch failed")))
             self._session_state.loop_id = loop_id
             self._lc_loop_id = loop_id
-            self._clear_loop_model_override()
+            self._clear_loop_session_overrides()
 
             self._update_welcome_banner(
                 loop_id,
@@ -568,6 +568,95 @@ class _ModelMixin:
                 provider=settings.model_provider or "",
                 model=settings.model_name or "",
             )
+
+    def _clear_loop_router_profile_override(self) -> None:
+        """Drop per-loop router profile override; next turns use config active."""
+        self._router_profile_override = None
+
+    def _clear_loop_session_overrides(self) -> None:
+        """Clear per-loop ``/model`` and ``/model-router`` session overrides."""
+        self._clear_loop_model_override()
+        self._clear_loop_router_profile_override()
+
+    async def _switch_router_profile(self, profile_name: str) -> None:
+        """Set the loop-scoped router profile override.
+
+        Args:
+            profile_name: Name from daemon ``router_profiles``.
+        """
+        name = profile_name.strip()
+        if not name:
+            await self._mount_message(ErrorMessage("Model router name is empty."))
+            return
+        if self._router_profile_override == name:
+            await self._mount_message(
+                AppMessage(f"Already using model router {name} for this loop")
+            )
+            return
+        self._router_profile_override = name
+        await self._mount_message(
+            AppMessage(
+                f"Switched this loop to model router {name} "
+                "(session only; config active profile unchanged)."
+            )
+        )
+
+    async def _show_router_profile_selector(self) -> None:
+        """Open the router profile selector modal."""
+        from soothe_cli.tui.widgets.router_profile_selector import RouterProfileSelectorScreen
+
+        profiles, active_default = await self._load_router_profile_catalog()
+        if not profiles:
+            await self._mount_message(
+                ErrorMessage("No model router profiles available from the daemon.")
+            )
+            return
+
+        screen = RouterProfileSelectorScreen(
+            profiles,
+            active_default=active_default,
+            current_override=self._router_profile_override,
+        )
+
+        def handle_result(result: str | None) -> None:
+            if result is None:
+                return
+
+            async def _apply() -> None:
+                if result == "--clear":
+                    self._clear_loop_router_profile_override()
+                    await self._mount_message(
+                        AppMessage("Cleared loop model router; using config active profile.")
+                    )
+                    return
+                await self._switch_router_profile(result)
+
+            self.run_worker(_apply(), exclusive=False)
+
+        self.push_screen(screen, handle_result)
+
+    async def _load_router_profile_catalog(self) -> tuple[list[str], str | None]:
+        """Fetch router profile names and active default from the daemon."""
+        if self._daemon_session is None:
+            return [], None
+        try:
+            resp = await self._daemon_session.list_models()
+        except Exception:
+            logger.exception("Failed to load router profiles from daemon")
+            return [], None
+        rows = resp.get("router_profiles") if isinstance(resp, dict) else None
+        names: list[str] = []
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict):
+                    n = str(row.get("name", "")).strip()
+                else:
+                    n = str(row).strip()
+                if n and n not in names:
+                    names.append(n)
+        active = resp.get("active_router_profile") if isinstance(resp, dict) else None
+        active_s = active.strip() if isinstance(active, str) and active.strip() else None
+        return names, active_s
 
     async def _switch_model(
         self,

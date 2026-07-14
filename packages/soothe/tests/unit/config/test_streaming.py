@@ -13,7 +13,7 @@ def test_create_chat_model_with_streaming_enabled():
             ModelProviderConfig(
                 name="test-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )
@@ -33,7 +33,7 @@ def test_create_chat_model_for_spec_with_streaming():
             ModelProviderConfig(
                 name="test-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )
@@ -53,7 +53,7 @@ def test_create_chat_model_for_spec_with_params_streaming():
             ModelProviderConfig(
                 name="test-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )
@@ -76,7 +76,7 @@ def test_model_cache_includes_streaming_key():
             ModelProviderConfig(
                 name="test-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )
@@ -102,7 +102,7 @@ def test_create_chat_model_for_spec_cache_key_streaming():
             ModelProviderConfig(
                 name="test-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )
@@ -143,7 +143,7 @@ def test_multiple_roles_all_streaming():
             ModelProviderConfig(
                 name="test-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )
@@ -162,7 +162,7 @@ def test_streaming_with_provider_wrapper():
             ModelProviderConfig(
                 name="limited-provider",
                 provider_type="openai",
-                api_key="${OPENAI_API_KEY}",
+                api_key="test-key",
             )
         ],
     )

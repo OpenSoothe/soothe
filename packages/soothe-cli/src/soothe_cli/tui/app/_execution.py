@@ -542,12 +542,26 @@ class _ExecutionMixin:
                         banner.update_loop_id(new_loop_id)
                     except NoMatches:
                         pass
-                    self._clear_loop_model_override()
+                    self._clear_loop_session_overrides()
                     await self._mount_message(AppMessage(f"Started new loop: {new_loop_id}"))
         elif cmd == "/editor":
             await self.action_open_editor()
         elif cmd == "/resume":
             await self._show_loop_selector()
+        elif cmd == "/model-router" or cmd.startswith("/model-router "):
+            await self._mount_message(UserMessage(command))
+            arg = ""
+            if cmd.startswith("/model-router "):
+                arg = command.strip()[len("/model-router ") :].strip()
+            if not arg:
+                await self._show_router_profile_selector()
+            elif arg == "--clear":
+                self._clear_loop_router_profile_override()
+                await self._mount_message(
+                    AppMessage("Cleared loop model router; using config active profile.")
+                )
+            else:
+                await self._switch_router_profile(arg)
         elif cmd == "/update":
             await self._handle_update_command()
         elif cmd == "/auto-update":
@@ -837,6 +851,7 @@ class _ExecutionMixin:
                         context=CLIContext(
                             model=self._model_override,
                             model_params=self._model_params_override or {},
+                            router_profile=self._router_profile_override,
                         ),
                         turn_stats=turn_stats,
                         skip_daemon_send_turn=skip_daemon_send_turn,

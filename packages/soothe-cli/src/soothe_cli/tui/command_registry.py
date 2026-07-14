@@ -103,6 +103,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.IMMEDIATE_UI,
     ),
     SlashCommand(
+        name="/model-router",
+        description="Select model router profile for this loop (--clear)",
+        bypass_tier=BypassTier.IMMEDIATE_UI,
+        hidden_keywords="router profile models roles",
+    ),
+    SlashCommand(
         name="/notifications",
         description="Configure startup warning preferences",
         bypass_tier=BypassTier.IMMEDIATE_UI,

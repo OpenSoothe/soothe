@@ -83,4 +83,9 @@ def build_models_list_payload(cfg: SootheConfig) -> dict[str, Any]:
     except Exception:
         logger.debug("Could not resolve default model for catalog", exc_info=True)
 
-    return {"models": rows, "default_model": default_model}
+    return {
+        "models": rows,
+        "default_model": default_model,
+        "router_profiles": [{"name": p.name} for p in (cfg.router_profiles or [])],
+        "active_router_profile": cfg.active_router_profile,
+    }

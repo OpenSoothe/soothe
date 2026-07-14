@@ -80,6 +80,8 @@ class LoopRunRequest:
     preferred_subagent: str | None = None
     model: str | None = None
     model_params: dict[str, Any] = field(default_factory=dict)
+    # Loop-scoped chat-role overlay (``/model-router``); embedding stays process-active.
+    router_profile: str | None = None
     # Worker pool timeout and cancellation support
     timeout_seconds: float | None = None
     # RFC-622: per-request clarification mode ("auto" / "manual" / None for daemon default)

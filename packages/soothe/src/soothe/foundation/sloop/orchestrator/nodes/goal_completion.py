@@ -442,7 +442,7 @@ async def node_goal_completion(
 
         final_output = reconcile_synthesis_with_step_ledger(
             final_output,
-            loop_messages=state.loop_messages,
+            loop_messages=await state.get_loop_messages(),
         )
 
         logger.info(

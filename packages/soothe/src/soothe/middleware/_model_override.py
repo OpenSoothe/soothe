@@ -1,8 +1,9 @@
 """Per-async-task model override for daemon / runner streaming.
 
-``QueryEngine`` sets a `ContextVar` for the duration of ``SootheRunner.astream`` so
-``PerTurnModelMiddleware`` can swap the chat model without threading kwargs through
-``StrangeLoop`` and every ``astream`` callsite.
+Loop workers set a `ContextVar` for the duration of ``SootheRunner.astream``
+(via ``stream_turn_overrides``) so ``PerTurnModelMiddleware`` can swap the chat
+model without threading kwargs through ``StrangeLoop`` and every ``astream``
+callsite.
 """
 
 from __future__ import annotations

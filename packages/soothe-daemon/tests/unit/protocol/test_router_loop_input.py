@@ -46,6 +46,7 @@ def test_queue_options_from_daemon_message_defaults() -> None:
         "preferred_subagent": None,
         "model": None,
         "model_params": None,
+        "router_profile": None,
         "intent_hint": None,
         "response_schema": None,
         "response_schema_name": None,

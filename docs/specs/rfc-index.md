@@ -331,6 +331,16 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Implemented by: IG-548
   - Authors: xiaming (with Claude)
 
+- **RFC-632**: [Loop-Scoped Router Profile Override](RFC-632-loop-scoped-router-profile-override.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-07-14
+  - Depends on: RFC-450, RFC-454, RFC-500, RFC-503, RFC-627
+  - Extends: RFC-450 (`input.router_profile` per-turn overlay, parallel to `model` / `model_params`)
+  - Design: [docs/drafts/2026-07-14-loop-scoped-router-profile-design.md](../drafts/2026-07-14-loop-scoped-router-profile-design.md)
+  - Implemented by: IG-643
+  - Authors: xiaming (with Cursor)
+
 - **RFC-450**: [Unified Daemon Communication Protocol for WebSocket IPC](RFC-450-daemon-communication-protocol.md)
   - Kind: Architecture Design + Protocol Specification
   - Status: Draft
@@ -563,6 +573,15 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Implemented by: IG-548
   - Authors: xiaming (with Claude)
 
+- **RFC-632**: [Loop-Scoped Router Profile Override](RFC-632-loop-scoped-router-profile-override.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-07-14
+  - Depends on: RFC-450, RFC-454, RFC-500, RFC-503, RFC-627
+  - Extends: RFC-450 (`input.router_profile`)
+  - Implemented by: IG-643
+  - Authors: xiaming (with Cursor)
+
 ---
 
 ### Product & Applications (7xx)
@@ -723,7 +742,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | 3xx | Protocols | 8 |
 | 4xx | Daemon & Transport | 8 |
 | 5xx | CLI & TUI | 6 |
-| 6xx | Plugin System & Extensions | 21 |
+| 6xx | Plugin System & Extensions | 22 |
 | 7xx | Product & Applications | 1 |
 | 8xx | Persistence & Backends | 3 |
 | 9xx | Security & Policy | 2 |
@@ -732,6 +751,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 
 ## Recently Added
 
+- **RFC-632**: Loop-Scoped Router Profile Override (2026-07-14, Draft)
 - **RFC-631**: Goal-Bound Display Snapshots (2026-07-05, Draft)
 - **RFC-630**: Start-Phase LLM Intake and Branch Routing (2026-06-30, Draft)
 - **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) (2026-06-30, Draft)

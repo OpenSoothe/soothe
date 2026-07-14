@@ -143,7 +143,13 @@ class TestCoreAgentClass:
                                 mock_create.return_value = mock_graph
 
                                 config = SootheConfig()
-                                agent = create_soothe_agent(config)
+                                mock_model = MagicMock()
+                                with patch.object(
+                                    SootheConfig,
+                                    "create_chat_model",
+                                    return_value=mock_model,
+                                ):
+                                    agent = create_soothe_agent(config, model=mock_model)
 
                                 assert isinstance(agent, CoreAgent)
                                 assert agent.graph is mock_graph

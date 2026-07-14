@@ -69,12 +69,16 @@ def _format_step_summary_lines(prior_progress: Any) -> list[str]:
     return lines
 
 
-def _collect_execute_evidence_excerpts(state: LoopState) -> list[str]:
+async def _collect_execute_evidence_excerpts(state: LoopState) -> list[str]:
     """Return up to N short AI-text excerpts from the goal's execute_step rows.
 
     Walks ``state.loop_messages`` backward collecting ``execute_step`` AI body
     text (the user-facing synthesis of each wave), deduped by a 64-char prefix
     so repeated narration does not crowd the digest.
+
+    Uses ``await state.get_loop_messages()`` so the CE ledger rebuild runs off
+    the event loop via ``asyncio.to_thread`` — critical for large ledgers where
+    a synchronous scan would block the loop.
     """
     from soothe.foundation.sloop.utils.stream_normalize import (
         extract_text_from_message_content,
@@ -82,7 +86,8 @@ def _collect_execute_evidence_excerpts(state: LoopState) -> list[str]:
 
     excerpts: list[str] = []
     seen_prefixes: set[str] = set()
-    for msg in reversed(state.loop_messages):
+    messages = await state.get_loop_messages()
+    for msg in reversed(messages):
         if len(excerpts) >= _MAX_EVIDENCE_EXCERPTS:
             break
         if getattr(msg, "phase", None) != "execute_step":
@@ -101,7 +106,7 @@ def _collect_execute_evidence_excerpts(state: LoopState) -> list[str]:
     return excerpts
 
 
-def _build_interrupted_digest(
+async def _build_interrupted_digest(
     state: LoopState,
     *,
     reason: str,
@@ -115,7 +120,7 @@ def _build_interrupted_digest(
     """
     prior_progress = getattr(state, "prior_progress", None)
     step_lines = _format_step_summary_lines(prior_progress) if prior_progress else []
-    evidence = _collect_execute_evidence_excerpts(state)
+    evidence = await _collect_execute_evidence_excerpts(state)
 
     if not step_lines and not evidence:
         return ""
@@ -167,7 +172,7 @@ async def append_goal_interrupted_ledger_pair(
     """
     state = ctx.loop_state
     ce = getattr(ctx, "ce", None)
-    digest = _build_interrupted_digest(state, reason=reason, detail=detail)
+    digest = await _build_interrupted_digest(state, reason=reason, detail=detail)
     if not digest:
         logger.debug(
             "goal_interrupted marker skipped (no execute evidence) loop=%s goal=%s reason=%s",

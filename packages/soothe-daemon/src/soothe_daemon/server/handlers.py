@@ -223,6 +223,7 @@ class DaemonHandlersMixin:
                     client_id=msg.get("client_id"),
                     model=model_kw,
                     model_params=model_params,
+                    router_profile=qo.get("router_profile"),
                     attachments=attachments,
                     checkpoint_thread_id=checkpoint_thread_id,
                     intent_hint=intent_hint,

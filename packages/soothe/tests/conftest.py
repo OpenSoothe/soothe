@@ -125,6 +125,53 @@ def force_isolated_home(home: Path) -> None:
     thread_manager.SOOTHE_HOME = home_str
 
 
+@pytest.fixture(autouse=True)
+def _isolate_llm_env(monkeypatch):
+    """Prevent LLM API key env leakage and rate-limit state across tests.
+
+    Two problems solved:
+
+    1. ``SootheConfig.propagate_env()`` uses ``os.environ.setdefault()``
+       — a direct mutation that bypasses monkeypatch and persists for
+       the session.  When a test sets a fake ``OPENAI_API_KEY`` this way,
+       later tests that call ``config.create_chat_model()`` attempt real
+       network calls, blocking for minutes on timeouts.
+
+    2. ``LLMRateLimitRegistry`` is a process-wide singleton whose
+       ``ThreadBudget.request_times`` accumulates across tests.  After 60
+       mock LLM calls within 60s, ``wait_for_rpm_slot()`` blocks for up
+       to 60s, causing tests to appear to hang.
+    """
+    _llm_env_vars = (
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "OPENAI_ADMIN_KEY",
+        "ANTHROPIC_API_KEY",
+        "DASHSCOPE_API_KEY",
+        "DASHSCOPE_CP_API_KEY",
+        "DASHSCOPE_CP_BASE_URL",
+        "OLLAMA_HOST",
+    )
+    saved = {k: os.environ.get(k) for k in _llm_env_vars}
+
+    # Reset the LLM rate-limit registry singleton so ThreadBudget state
+    # from prior tests (request_times, semaphores) doesn't leak forward.
+    try:
+        from soothe.middleware.llm_rate_limit import LLMRateLimitRegistry
+
+        LLMRateLimitRegistry.reset_for_tests()
+    except Exception:
+        pass
+
+    yield
+
+    for key, val in saved.items():
+        if val is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = val
+
+
 @pytest.fixture
 def requires_postgresql():
     if not _has_postgresql():

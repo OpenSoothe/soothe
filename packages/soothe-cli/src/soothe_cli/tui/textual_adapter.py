@@ -2969,6 +2969,7 @@ async def execute_task_textual(
             ctx_model = context.get("model") if context else None
             raw_mp = context.get("model_params") if context else None
             mp = raw_mp if isinstance(raw_mp, dict) else None
+            ctx_profile = context.get("router_profile") if context else None
             image_attachments: list[dict[str, str]] | None = None
             if images_to_send:
                 image_attachments = [
@@ -2983,6 +2984,9 @@ async def execute_task_textual(
                 preferred_subagent=subagent_name,
                 model=ctx_model if isinstance(ctx_model, str) and ctx_model.strip() else None,
                 model_params=mp,
+                router_profile=(
+                    ctx_profile if isinstance(ctx_profile, str) and ctx_profile.strip() else None
+                ),
                 attachments=image_attachments,
                 clarification_mode=clarification_mode,
                 clarification_answer=sending_clarification_answer,

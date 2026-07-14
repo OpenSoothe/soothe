@@ -20,6 +20,7 @@ def _get_router_config_for_available_credentials() -> dict:
     return {}
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_parallel_tools_config_propagation(requires_llm_api):
     """Verify concurrency config propagates correctly."""
@@ -45,6 +46,7 @@ async def test_parallel_tools_config_propagation(requires_llm_api):
     # We'll verify this works by checking that agent doesn't crash
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_parallel_tools_performance_improvement(requires_llm_api):
     """Verify parallel execution is faster than sequential.
@@ -106,6 +108,7 @@ async def test_parallel_tools_performance_improvement(requires_llm_api):
     # This test verifies configuration and agent creation work
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_parallel_tools_mixed_sync_async(requires_llm_api):
     """Verify middleware works with both sync and async tools."""
@@ -140,6 +143,7 @@ async def test_parallel_tools_mixed_sync_async(requires_llm_api):
     # Verify agent creation succeeds with mixed tools
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_parallel_tools_default_parallelism(requires_llm_api):
     """Verify default configuration uses max_parallel_steps=4."""
@@ -159,6 +163,7 @@ async def test_parallel_tools_default_parallelism(requires_llm_api):
     # Agent should use default concurrency settings
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_parallel_tools_extreme_cases(requires_llm_api):
     """Test edge cases: max_parallel_steps=1 (sequential) and max_parallel_steps=10 (high)."""
@@ -194,6 +199,7 @@ async def test_parallel_tools_extreme_cases(requires_llm_api):
     # Both should create successfully
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_parallel_tools_zero_means_unlimited(requires_llm_api):
     """Verify that max_parallel_steps=0 means unlimited (valid special value)."""

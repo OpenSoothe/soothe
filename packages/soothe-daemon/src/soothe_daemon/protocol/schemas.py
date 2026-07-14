@@ -167,6 +167,7 @@ class LoopInputParams(ParamsBase):
     preferred_subagent: str | None = None
     model: str | None = None  # Provider:model string; handler does the validation
     model_params: dict[str, Any] | None = None
+    router_profile: str | None = None
     attachments: list[dict[str, str]] | None = None
     intent_hint: str | None = None
     response_schema: dict[str, Any] | None = None

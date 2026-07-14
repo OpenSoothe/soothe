@@ -809,6 +809,7 @@ class QueryEngine:
         client_id: str | None = None,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
+        router_profile: str | None = None,
         attachments: list[dict[str, str]] | None = None,
         checkpoint_thread_id: str | None = None,
         intent_hint: str | None = None,
@@ -867,6 +868,32 @@ class QueryEngine:
         thread_logger = d._thread_logger  # local ref — safe against concurrent overwrites
 
         # IG-054: Admit before vision preflight (IG-327) to avoid wasted image API calls.
+        profile_name = (
+            router_profile.strip()
+            if isinstance(router_profile, str) and router_profile.strip()
+            else None
+        )
+        if profile_name is not None:
+            known = {p.name for p in (d._config.router_profiles or [])}
+            if profile_name not in known:
+                msg = f"Unknown router profile: {profile_name!r}"
+                logger.warning("[Query] %s", msg)
+                if client_id:
+                    await d._send_client_message(
+                        client_id,
+                        {
+                            "type": "error",
+                            "code": "UNKNOWN_ROUTER_PROFILE",
+                            "message": msg,
+                        },
+                    )
+                if effective_loop_id:
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
+                    )
+                return
+
         await self.await_loop_ready_for_turn(effective_loop_id or "")
         admission, turn_generation = await self._admit_query(
             effective_loop_id=effective_loop_id,
@@ -986,15 +1013,12 @@ class QueryEngine:
 
         async def _run_stream() -> None:
             nonlocal turn_stream_end_emitted, turn_cancelled
-            from soothe.middleware._model_override import (
-                attach_stream_model_override,
-                reset_stream_model_override,
-            )
 
             if effective_loop_id:
                 d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
-            m_clean = model.strip() if isinstance(model, str) and model.strip() else None
-            override_token = attach_stream_model_override(m_clean, model_params)
+            # Stream model / router-profile overlays are attached inside the loop
+            # worker from ``LoopRunRequest`` (``stream_turn_overrides``). Parent
+            # process ContextVars do not cross pool/thread/ray workers.
 
             async def _ensure_turn_stream_end() -> None:
                 nonlocal turn_stream_end_emitted
@@ -1014,7 +1038,6 @@ class QueryEngine:
                     "Query for loop %s cancelled before stream start",
                     effective_loop_id[:16],
                 )
-                reset_stream_model_override(override_token)
                 if effective_loop_id:
                     d._active_stream_loop_ids.discard(effective_loop_id)
                     subscribed_clients = await d._session_manager.get_clients_for_loop(
@@ -1090,6 +1113,7 @@ class QueryEngine:
                     preferred_subagent=stream_kwargs.get("preferred_subagent"),
                     model=model,
                     model_params=model_params or {},
+                    router_profile=profile_name,
                     clarification_mode=stream_kwargs.get("clarification_mode"),
                     clarification_answer=clarification_answer,
                     clarification_answers=clarification_answers,
@@ -1302,7 +1326,6 @@ class QueryEngine:
                         },
                     )
             finally:
-                reset_stream_model_override(override_token)
                 # Turn ownership guards every shared-state teardown below: a
                 # superseded turn (Ctrl+C + queued goal admitted a successor on
                 # the same loop) must not evict the successor's task, admission,

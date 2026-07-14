@@ -34,21 +34,28 @@ class LoopRunnerActor:
         configure_loop_runner_worker_logging(self._runner.config, request.loop_id)
 
         try:
-            async for chunk in self._runner.astream(
-                request.user_input,
-                thread_id=request.thread_id,
-                workspace=request.resolve_workspace_path(),
-                max_iterations=request.max_iterations,
-                preferred_subagent=request.preferred_subagent,
-                client_loop_id=request.loop_id,
-                autopilot_job=request.autopilot_job,  # RFC-222 revised
-                clarification_mode=request.clarification_mode,
-                clarification_answer=request.clarification_answer,
-                clarification_answers=request.clarification_answers,
+            from soothe.middleware._stream_turn_overrides import stream_turn_overrides
+
+            with stream_turn_overrides(
+                model=request.model,
+                model_params=request.model_params or None,
+                router_profile=request.router_profile,
             ):
-                if self._cancelled:
-                    break
-                await queue.put_async(("chunk", chunk))
+                async for chunk in self._runner.astream(
+                    request.user_input,
+                    thread_id=request.thread_id,
+                    workspace=request.resolve_workspace_path(),
+                    max_iterations=request.max_iterations,
+                    preferred_subagent=request.preferred_subagent,
+                    client_loop_id=request.loop_id,
+                    autopilot_job=request.autopilot_job,  # RFC-222 revised
+                    clarification_mode=request.clarification_mode,
+                    clarification_answer=request.clarification_answer,
+                    clarification_answers=request.clarification_answers,
+                ):
+                    if self._cancelled:
+                        break
+                    await queue.put_async(("chunk", chunk))
         except Exception as exc:  # noqa: BLE001
             await queue.put_async(("error", exc))
             return

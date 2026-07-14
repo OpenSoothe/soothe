@@ -939,6 +939,7 @@ class WebSocketClient:
         preferred_subagent: str | None = None,
         model: str | None = None,
         model_params: dict[str, Any] | None = None,
+        router_profile: str | None = None,
         attachments: list[dict[str, str]] | None = None,
         intent_hint: str | None = None,
         response_schema: dict[str, Any] | None = None,
@@ -958,6 +959,7 @@ class WebSocketClient:
             preferred_subagent: Preferred subagent hint for routing.
             model: Provider:model override string.
             model_params: Additional model parameters.
+            router_profile: Named router profile for chat-role overlay this turn.
             attachments: Image attachments (mime_type + base64 data).
             intent_hint: Daemon-only direct model hint. Supported values:
                 ``text_completion`` (``default`` role, text-only),
@@ -1001,6 +1003,8 @@ class WebSocketClient:
             params["model"] = model
         if model_params:
             params["model_params"] = model_params
+        if router_profile:
+            params["router_profile"] = router_profile
         if attachments:
             params["attachments"] = attachments
         if intent_hint:

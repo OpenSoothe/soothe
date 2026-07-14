@@ -38,12 +38,19 @@ class LedgerManager:
     compact_fn: Callable[[list[_LedgerEntry]], str | None] | None = None
     _entries: list[_LedgerEntry] = field(default_factory=list)
     _step_lines: list[str] = field(default_factory=list)
+    _revision: int = field(default=0)
 
     def record_message(self, message: BaseMessage, phase: str) -> None:
         """Append a message to the ledger with phase metadata."""
         self._entries.append(_LedgerEntry(message=message, phase=phase))
+        self._revision += 1
         if self.max_entries > 0 and len(self._entries) > self.max_entries:
             self.compact()
+
+    @property
+    def revision(self) -> int:
+        """Monotonic revision counter; changes on every mutation."""
+        return self._revision
 
     def get_messages(self, phases: list[str] | None = None) -> list[BaseMessage]:
         """Return messages, optionally filtered by phase."""
@@ -119,15 +126,18 @@ class LedgerManager:
             except Exception:
                 logger.warning("Compaction function failed, dropping oldest entries", exc_info=True)
                 self._entries = self._entries[excess:]
+                self._revision += 1
                 return
             if summary:
                 self._entries = [
                     _LedgerEntry(message=SystemMessage(content=summary), phase="compacted"),
                     *self._entries[excess:],
                 ]
+                self._revision += 1
                 return
 
         self._entries = self._entries[excess:]
+        self._revision += 1
 
     def entries(self, phases: list[str] | None = None) -> list[tuple[BaseMessage, str | None]]:
         """Return (message, phase) tuples, optionally filtered by phase."""
@@ -176,6 +186,7 @@ class LedgerManager:
         """Remove all entries."""
         self._entries.clear()
         self._step_lines.clear()
+        self._revision += 1
 
     @staticmethod
     def _cap_message(msg: BaseMessage, max_chars: int) -> BaseMessage:
