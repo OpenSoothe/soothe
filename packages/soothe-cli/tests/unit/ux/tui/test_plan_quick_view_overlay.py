@@ -125,6 +125,41 @@ def test_plan_quick_view_running_status_ticks_like_thinking_row() -> None:
     assert second.plain.count("Running...") == 1
 
 
+def test_plan_quick_view_running_status_ticks_between_steps() -> None:
+    """Running... (Xs) keeps ticking while the goal loop is up, even between steps."""
+    tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-between-steps")
+    tree.mark_loop_started(time() - 20)
+    tree.sync_plan_steps(
+        [
+            {"id": "STEP-1", "description": "Done work"},
+            {"id": "STEP-2", "description": "Next work"},
+        ]
+    )
+    tree.complete_step("STEP-1", True, 5_000, 2, "ok")
+    # STEP-2 still pending — no step is in ``running``, but the loop is live.
+    assert tree._goal_tree_status() == "running"
+    assert tree._loop_executing()
+
+    content = tree.plan_quick_view_content()
+    assert "Running..." in content.plain
+    assert "(20s)" in content.plain
+
+    pos_before = tree._spinner_position
+    tree.tick_running_spinner()
+    assert tree._spinner_position != pos_before
+
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=1,
+    )
+    assert not tree._loop_executing()
+    finished = tree.plan_quick_view_content()
+    assert "Running..." not in finished.plain
+    assert "Done" in finished.plain
+
+
 def test_plan_quick_view_dedupes_done_tools_summary() -> None:
     tree = CognitionGoalTreeMessage(goal="Finish", id="gt-dedupe")
     tree.complete_step("STEP-1", True, 72_000, 15, "Done [15 tools]")

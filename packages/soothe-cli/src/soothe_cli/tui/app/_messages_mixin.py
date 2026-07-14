@@ -493,7 +493,7 @@ class _MessagesMixin:
         """Immediately stop in-flight step/goal UI when the user interrupts a turn.
 
         Daemon cancel and worker teardown can take several seconds; without an
-        eager UI pass the thinking spinner and goal-tree running rows stay live.
+        eager UI pass the thinking spinner and plan running status stay live.
         """
         label = message or self._INTERRUPT_UI_MESSAGE
         adapter = getattr(self, "_ui_adapter", None)
@@ -522,7 +522,7 @@ class _MessagesMixin:
         """Stop in-flight UI and request daemon-side cancel.
 
         UI teardown runs first so Ctrl+C does not leave the thinking spinner or
-        goal-tree running rows active while the daemon winds down (which can take
+        plan running status active while the daemon winds down (which can take
         several seconds on long execute steps).
 
         Args:

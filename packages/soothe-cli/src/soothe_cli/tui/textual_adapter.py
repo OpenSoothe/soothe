@@ -1313,37 +1313,6 @@ def _ensure_subagent_card_for_task_row(
     return subagent_card
 
 
-def _create_subagent_cards_for_step_tasks(
-    adapter: TextualUIAdapter,
-    step_w: CognitionStepMessage,
-) -> list[Any]:
-    """Create SubAgent cards for all task rows on a step card (IG-515 fix).
-
-    Called after routing buffered main tools to a newly-mounted step card.
-    Returns list of newly-created SubAgent cards that need async mounting.
-
-    Args:
-        adapter: TextualUIAdapter with `_subagent_cards_by_key` registry.
-        step_w: Step card with potential task delegation rows.
-
-    Returns:
-        List of newly-created SubAgentMessage widgets to mount.
-    """
-    cards_to_mount: list[Any] = []
-    rows = getattr(step_w, "_rows", []) or []
-    for row in rows:
-        if not getattr(row, "is_task_row", False):
-            continue
-        tcid = str(row.tool_call_id or "").strip()
-        if not tcid:
-            continue
-        args = dict(row.args or {})
-        subagent_card = _ensure_subagent_card_for_task_row(adapter, step_w, tcid, args)
-        if subagent_card is not None:
-            cards_to_mount.append(subagent_card)
-    return cards_to_mount
-
-
 def _register_main_tool_on_step_card(
     adapter: TextualUIAdapter,
     router: StepTaskRouter,
@@ -2194,12 +2163,6 @@ async def _maybe_set_thinking_spinner(
             SPINNER_LABEL_THINKING,
             hint_extra=_execute_progress_hint(adapter),
         )
-
-
-def _mark_step_tool_rows_running(adapter: TextualUIAdapter) -> None:
-    """Mark step-aggregated tool rows running after graph interrupt resume."""
-    for tcid, stw in list(adapter._tool_to_step.items()):
-        stw.set_tool_running(tcid)
 
 
 def _reject_step_tool_rows(adapter: TextualUIAdapter) -> None:
@@ -4364,7 +4327,7 @@ async def execute_task_textual(
                 adapter.finalize_pending_steps_with_error(stream_end_error)
             elif (
                 adapter._goal_tree_message is not None
-                and adapter._goal_tree_message._goal_tree_status() == "running"
+                and adapter._goal_tree_message._loop_executing()
             ):
                 adapter._goal_tree_message.set_interrupted(stream_end_error)
             if stream_end_error == "Stream cancelled" and adapter._set_spinner:

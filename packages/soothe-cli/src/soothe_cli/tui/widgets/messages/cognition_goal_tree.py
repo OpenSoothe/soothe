@@ -188,18 +188,25 @@ class CognitionGoalTreeMessage(Vertical):
             return "…"
         return t[: max_len - 1].rstrip() + "…"
 
+    def _loop_executing(self) -> bool:
+        """True from loop start until a terminal footer (done / interrupted)."""
+        return self._loop_started_at is not None and not self._footer_visible
+
     def _goal_tree_status(self) -> str:
         """Aggregate lifecycle status for the goal header dot."""
-        if self._footer_tone == "error":
-            return "error"
-        if self._footer_tone == "success" and self._footer_visible:
-            return "success"
-        phases = [st.phase for st in self._steps.values()]
-        if any(p == "running" for p in phases):
+        if self._footer_visible:
+            if self._footer_tone == "error":
+                return "error"
+            if self._footer_tone == "success":
+                return "success"
+        # Keep the goal "running" for the whole StrangeLoop — including planning
+        # gaps between steps — so the plan panel / header match the thinking row.
+        if self._loop_executing():
             return "running"
+        phases = [st.phase for st in self._steps.values()]
         if any(p == "error" for p in phases):
             return "error"
-        if phases and all(p in ("done", "success") for p in phases):
+        if phases and all(p == "done" for p in phases):
             return "success"
         if any(p == "queued" for p in phases):
             return "queued"
@@ -219,13 +226,11 @@ class CognitionGoalTreeMessage(Vertical):
             body,
             status=status,
             spinner_position=self._spinner_position,
-            animate_running=status == "running",
+            animate_running=self._loop_executing(),
         )
 
     def _goal_footer_styled_content(self) -> Content:
         """Footer content for loop finished / interrupted (parity with step/tool status lines)."""
-        if not self._footer_visible or not self._footer_plain:
-            return Content("")
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
@@ -240,16 +245,13 @@ class CognitionGoalTreeMessage(Vertical):
             return Content.styled(f"{gutter}{mark} {plain}", colors.error)
         return Content.styled(f"{gutter}{plain}", "dim")
 
-    def _running_elapsed_start(self) -> float | None:
-        """Wall-clock anchor for the plan running status (loop start or earliest step)."""
-        if self._loop_started_at is not None:
-            return self._loop_started_at
-        starts = [
-            st.started_at
-            for st in self._steps.values()
-            if st.phase == "running" and st.started_at is not None
-        ]
-        return min(starts) if starts else None
+    def _plan_status_line_content(self) -> Content | None:
+        """Terminal footer, or live ``Running... (Xs)`` while the goal loop is open."""
+        if self._footer_visible and self._footer_plain:
+            return self._goal_footer_styled_content()
+        if self._loop_executing():
+            return self._running_status_content()
+        return None
 
     def _running_status_content(self) -> Content:
         """Thinking-row style live status: ``spinner Running... (12s)``."""
@@ -260,14 +262,13 @@ class CognitionGoalTreeMessage(Vertical):
         gutter = self._indent_prefix()
         frames = get_glyphs().spinner_frames
         frame = frames[self._spinner_position % len(frames)]
-        start = self._running_elapsed_start()
-        hint = ""
-        if start is not None:
-            hint = f" ({format_running_elapsed(time() - start)})"
+        # Caller is ``_plan_status_line_content`` only while ``_loop_executing``.
+        started = self._loop_started_at or time()
+        hint = f" ({format_running_elapsed(time() - started)})"
         return Content.assemble(
             Content.styled(f"{gutter}{frame}", colors.primary),
             Content.styled(" Running... ", colors.primary),
-            Content.styled(hint, colors.muted) if hint else Content(""),
+            Content.styled(hint, colors.muted),
         )
 
     def mark_loop_started(self, started_at: float | None = None) -> None:
@@ -429,10 +430,9 @@ class CognitionGoalTreeMessage(Vertical):
         steps = self._assemble_steps_content(max_line_width=max_line_width)
         if steps.plain.strip():
             parts.extend([Content("\n"), steps])
-        if self._footer_visible and self._footer_plain:
-            parts.extend([Content("\n"), self._goal_footer_styled_content()])
-        elif self._goal_tree_status() == "running":
-            parts.extend([Content("\n"), self._running_status_content()])
+        status_line = self._plan_status_line_content()
+        if status_line is not None:
+            parts.extend([Content("\n"), status_line])
         return Content.assemble(*parts)
 
     def sync_running_live_stats(
@@ -452,9 +452,10 @@ class CognitionGoalTreeMessage(Vertical):
         """Advance the running spinner frame for the next plan-quick-view paint.
 
         Live trees stay unmounted (Ctrl+T overlay snapshots ``plan_quick_view_content``);
-        only the spinner index is updated here.
+        only the spinner index is updated here. Ticks for the whole goal loop, not just
+        while a step row is in ``running`` phase (parity with the thinking-row clock).
         """
-        if not any(st.phase == "running" for st in self._steps.values()):
+        if not self._loop_executing():
             return
         frames = get_glyphs().spinner_frames
         self._spinner_position = (self._spinner_position + 1) % len(frames)
@@ -478,22 +479,16 @@ class CognitionGoalTreeMessage(Vertical):
         if not self.is_mounted:
             return
         try:
-            hdr = self.query_one("#cognition-goal-tree-header", Static)
-            hdr.update(self._goal_header_content())
-        except Exception:
-            logger.debug("goal tree header sync failed", exc_info=True)
-        try:
             ft = self.query_one("#cognition-goal-tree-footer", Static)
-            if self._footer_visible and self._footer_plain:
-                ft.update(self._goal_footer_styled_content())
-                ft.display = True
-            elif self._goal_tree_status() == "running":
-                ft.update(self._running_status_content())
+            status_line = self._plan_status_line_content()
+            if status_line is not None:
+                ft.update(status_line)
                 ft.display = True
             else:
                 ft.display = False
         except Exception:
             logger.debug("goal tree footer sync failed", exc_info=True)
+        # Header + steps (single path; avoids a duplicate header update).
         self._refresh_steps_display()
 
     def snapshot_dict(self) -> dict[str, Any]:
@@ -627,9 +622,9 @@ class CognitionGoalTreeMessage(Vertical):
             st.phase = phase
             if desc:
                 st.description = desc
-        if phase == "running" and st.started_at is None:
-            st.started_at = time()
         if phase == "running":
+            if st.started_at is None:
+                st.started_at = time()
             self.mark_loop_started()
         self._refresh_steps_display()
 
