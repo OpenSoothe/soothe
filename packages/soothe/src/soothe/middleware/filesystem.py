@@ -20,8 +20,10 @@ from soothe_deepagents.backends.protocol import BackendProtocol
 from soothe_deepagents.backends.utils import validate_path
 from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
-from soothe.foundation.core.agent._execute_filter import apply_execute_tool_removal_patch
-from soothe.foundation.core.filesystem.discovery_hints import GLOB_TOOL_DESCRIPTION
+from soothe.foundation.coreagent.coding.patches.execute_filter import (
+    apply_execute_tool_removal_patch,
+)
+from soothe.foundation.filesystem.discovery_hints import GLOB_TOOL_DESCRIPTION
 
 # OpenAI-compatible chat APIs used by many Soothe providers (e.g. coding-plan) reject
 # LangChain ``file`` / ``audio`` tool-result blocks. ``read_file`` on PDFs returns those.

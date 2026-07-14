@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.core.security.enforcement import (
+from soothe.foundation.security.enforcement import (
     RateLimiter,
     SecurityContext,
     SecurityEnforcer,
     SecurityError,
     create_enforcer,
 )
-from soothe.foundation.core.security.policy import (
+from soothe.foundation.security.policy import (
     PERMISSIVE_POLICY,
     STRICT_POLICY,
     PolicyAction,

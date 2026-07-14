@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.core.filesystem import (
+from soothe.foundation.filesystem import (
     DirectoryNotEmptyError,
     FilesystemError,
     GrepResult,
@@ -15,7 +15,7 @@ from soothe.foundation.core.filesystem import (
     PathNotFoundError,
     PathTraversalError,
 )
-from soothe.foundation.core.filesystem.local import LocalFilesystem
+from soothe.foundation.filesystem.local import LocalFilesystem
 
 
 class TestUnifiedFilesystem:

@@ -164,7 +164,7 @@ class TestEditCoalescingConfig:
 
     def test_middleware_lock_registry_injected(self) -> None:
         """Middleware should accept and use injected lock registry."""
-        from soothe.foundation.core.filesystem._lock_registry import FileEditLockRegistry
+        from soothe.foundation.filesystem._lock_registry import FileEditLockRegistry
 
         registry = FileEditLockRegistry()
         middleware = EditCoalescingMiddleware(lock_registry=registry)
@@ -787,7 +787,7 @@ class TestFileEditLockRegistryIntegration:
     @pytest.mark.asyncio
     async def test_external_lock_registry_accepted(self) -> None:
         """Middleware should accept an externally provided lock registry."""
-        from soothe.foundation.core.filesystem._lock_registry import FileEditLockRegistry
+        from soothe.foundation.filesystem._lock_registry import FileEditLockRegistry
 
         registry = FileEditLockRegistry()
         middleware = EditCoalescingMiddleware(lock_registry=registry)

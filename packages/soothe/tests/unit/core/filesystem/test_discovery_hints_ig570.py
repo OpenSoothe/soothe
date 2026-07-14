@@ -9,7 +9,7 @@ from langchain.tools import ToolRuntime
 from langchain_core.messages import ToolMessage
 from soothe_deepagents.backends import FilesystemBackend
 
-from soothe.foundation.core.filesystem.discovery_hints import (
+from soothe.foundation.filesystem.discovery_hints import (
     GLOB_DISCOVERY_FALLBACK_HINT,
     GLOB_TOOL_DESCRIPTION,
     format_glob_timeout_error,

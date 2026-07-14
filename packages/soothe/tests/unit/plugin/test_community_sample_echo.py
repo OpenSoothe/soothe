@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 
 from soothe.config import SootheConfig
 from soothe.config.models import SubagentConfig, ToolsConfig
-from soothe.foundation.core.agent import create_soothe_agent
+from soothe.foundation.coreagent import create_soothe_agent
 from soothe.plugin.global_registry import load_plugins
 from soothe.runner.resolver import resolve_subagents
 

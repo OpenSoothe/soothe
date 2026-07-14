@@ -17,8 +17,8 @@ from pathlib import Path
 import aiofiles
 import pytest
 
-from soothe.foundation.core.filesystem._lock_registry import FileEditLockRegistry
-from soothe.foundation.core.filesystem.local import LocalFilesystem
+from soothe.foundation.filesystem._lock_registry import FileEditLockRegistry
+from soothe.foundation.filesystem.local import LocalFilesystem
 
 # ======================================================================
 # FileEditLockRegistry unit tests

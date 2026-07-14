@@ -450,8 +450,8 @@ class AutopilotProtocol(Protocol):
 |------------------|--------------|----------------|
 | `soothe.core.agent/` | `soothe.foundation.core.agent/` | Core |
 | `soothe.core.context/` | `soothe.foundation.core.context/` | Core |
-| `soothe.core.security/` | `soothe.foundation.core.security/` | Core |
-| `soothe.core.filesystem/` | `soothe.foundation.core.filesystem/` | Core |
+| `soothe.core.security/` | `soothe.foundation.security/` | Core |
+| `soothe.core.filesystem/` | `soothe.foundation.filesystem/` | Core |
 | `soothe.core.quiz_messages.py` | `soothe.foundation.core.quiz_messages.py` | Core |
 | `soothe.core.loop/` | `soothe.foundation.sloop/` | Loop |
 | `soothe.core.prompts/` | `soothe.foundation.sloop.prompts/` | Loop |

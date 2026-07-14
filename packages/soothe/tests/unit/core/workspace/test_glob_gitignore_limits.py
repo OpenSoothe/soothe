@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from soothe.foundation.core.filesystem.protocol import GlobResult
-from soothe.foundation.core.filesystem.workspace import WorkspaceFilesystem
+from soothe.foundation.filesystem.protocol import GlobResult
+from soothe.foundation.filesystem.workspace import WorkspaceFilesystem
 from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
 
 

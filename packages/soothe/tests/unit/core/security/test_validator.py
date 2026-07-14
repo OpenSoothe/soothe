@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.core.security.validator import (
+from soothe.foundation.security.validator import (
     PathValidationError,
     PathValidator,
     ValidationSeverity,

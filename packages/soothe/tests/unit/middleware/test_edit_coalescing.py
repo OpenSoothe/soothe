@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.core.filesystem.protocol import BatchedEditOperation
+from soothe.foundation.filesystem.protocol import BatchedEditOperation
 from soothe.middleware.edit_coalescing import (
     DEFAULT_DETECTION_WINDOW_MS,
     EDIT_TOOL_NAMES,

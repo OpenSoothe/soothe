@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.core.agent._patch_summarization import (
+from soothe.foundation.coreagent.coding.patches.summarization import (
     _TOOLS_TOKEN_CACHE,
     _cached_tools_token_count,
     _split_conversation_token_count,

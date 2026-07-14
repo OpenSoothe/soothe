@@ -1,13 +1,13 @@
 """Tests for policy implementation (ConfigDrivenPolicy)."""
 
-from soothe.foundation.core.security import (
+from soothe.foundation.security import (
     DEFAULT_PROFILES,
     PRIVILEGED_PROFILE,
     READONLY_PROFILE,
     STANDARD_PROFILE,
     ConfigDrivenPolicy,
 )
-from soothe.foundation.core.security.config_policy import _extract_required_permission
+from soothe.foundation.security.config_policy import _extract_required_permission
 from soothe.protocols.policy import (
     ActionRequest,
     Permission,

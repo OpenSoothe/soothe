@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.foundation.core.filesystem.grep_search import (
+from soothe.foundation.filesystem.grep_search import (
     GREP_UNAVAILABLE_ERROR,
     get_ag_bin,
     get_rg_bin,
@@ -18,8 +18,8 @@ from soothe.foundation.core.filesystem.grep_search import (
     reset_grep_backend_cache,
     run_grep,
 )
-from soothe.foundation.core.filesystem.local import LocalFilesystem
-from soothe.foundation.core.filesystem.protocol import GrepResult
+from soothe.foundation.filesystem.local import LocalFilesystem
+from soothe.foundation.filesystem.protocol import GrepResult
 
 _AG_BIN = "/usr/bin/ag"
 _RG_BIN = "/usr/bin/rg"
@@ -40,9 +40,9 @@ def _ag_patch(fake_run: Callable[[list[str]], Any]) -> Iterator[None]:
         return fake_run(cmd)
 
     with (
-        patch("soothe.foundation.core.filesystem.grep_search.get_ag_bin", return_value=_AG_BIN),
+        patch("soothe.foundation.filesystem.grep_search.get_ag_bin", return_value=_AG_BIN),
         patch(
-            "soothe.foundation.core.filesystem.grep_search._run_grep_subprocess",
+            "soothe.foundation.filesystem.grep_search._run_grep_subprocess",
             side_effect=_wrapped,
         ),
     ):
@@ -55,10 +55,10 @@ def _rg_patch(fake_run: Callable[[list[str]], Any]) -> Iterator[None]:
         return fake_run(cmd)
 
     with (
-        patch("soothe.foundation.core.filesystem.grep_search.get_ag_bin", return_value=None),
-        patch("soothe.foundation.core.filesystem.grep_search.get_rg_bin", return_value=_RG_BIN),
+        patch("soothe.foundation.filesystem.grep_search.get_ag_bin", return_value=None),
+        patch("soothe.foundation.filesystem.grep_search.get_rg_bin", return_value=_RG_BIN),
         patch(
-            "soothe.foundation.core.filesystem.grep_search._run_grep_subprocess",
+            "soothe.foundation.filesystem.grep_search._run_grep_subprocess",
             side_effect=_wrapped,
         ),
     ):
@@ -68,20 +68,18 @@ def _rg_patch(fake_run: Callable[[list[str]], Any]) -> Iterator[None]:
 def test_is_grep_available_reflects_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SOOTHE_AG_PATH", raising=False)
     monkeypatch.delenv("SOOTHE_RG_PATH", raising=False)
-    monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search.shutil.which", lambda _: None
-    )
-    monkeypatch.setattr("soothe.foundation.core.filesystem.grep_search._AG_COMMON_PATHS", ())
-    monkeypatch.setattr("soothe.foundation.core.filesystem.grep_search._RG_COMMON_PATHS", ())
+    monkeypatch.setattr("soothe.foundation.filesystem.grep_search.shutil.which", lambda _: None)
+    monkeypatch.setattr("soothe.foundation.filesystem.grep_search._AG_COMMON_PATHS", ())
+    monkeypatch.setattr("soothe.foundation.filesystem.grep_search._RG_COMMON_PATHS", ())
     reset_grep_backend_cache()
     assert is_grep_available() is False
 
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search.shutil.which",
+        "soothe.foundation.filesystem.grep_search.shutil.which",
         lambda name: "/usr/bin/ag" if name == "ag" else None,
     )
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search._normalize_executable",
+        "soothe.foundation.filesystem.grep_search._normalize_executable",
         lambda path: path if path == "/usr/bin/ag" else None,
     )
     reset_grep_backend_cache()
@@ -97,7 +95,7 @@ def test_resolve_ag_prefers_soothe_ag_path_env(
     custom_ag.chmod(0o755)
     monkeypatch.setenv("SOOTHE_AG_PATH", str(custom_ag))
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search.shutil.which", lambda _: "/usr/bin/ag"
+        "soothe.foundation.filesystem.grep_search.shutil.which", lambda _: "/usr/bin/ag"
     )
     reset_grep_backend_cache()
     assert get_ag_bin() == str(custom_ag.resolve())
@@ -112,11 +110,9 @@ def test_get_ag_bin_is_cached(monkeypatch: pytest.MonkeyPatch) -> None:
         return "/usr/bin/ag" if name == "ag" else None
 
     monkeypatch.delenv("SOOTHE_AG_PATH", raising=False)
+    monkeypatch.setattr("soothe.foundation.filesystem.grep_search.shutil.which", counting_which)
     monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search.shutil.which", counting_which
-    )
-    monkeypatch.setattr(
-        "soothe.foundation.core.filesystem.grep_search._normalize_executable", lambda path: path
+        "soothe.foundation.filesystem.grep_search._normalize_executable", lambda path: path
     )
     reset_grep_backend_cache()
     assert get_ag_bin() == "/usr/bin/ag"
@@ -204,9 +200,9 @@ def test_local_grep_delegates_to_run_grep(tmp_path: Path) -> None:
     fs.write("needle.txt", "find the needle here")
 
     with (
-        patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=True),
+        patch("soothe.foundation.filesystem.local.is_grep_available", return_value=True),
         patch(
-            "soothe.foundation.core.filesystem.local.run_grep", return_value=["needle.txt"]
+            "soothe.foundation.filesystem.local.run_grep", return_value=["needle.txt"]
         ) as mock_ag,
     ):
         result = fs.grep("needle", output_mode="files_with_matches")
@@ -219,7 +215,7 @@ def test_local_grep_errors_when_backend_unavailable(tmp_path: Path) -> None:
     fs = LocalFilesystem(workspace=tmp_path, virtual_mode=True)
     fs.write("needle.txt", "find the needle here")
 
-    with patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=False):
+    with patch("soothe.foundation.filesystem.local.is_grep_available", return_value=False):
         result = fs.grep("needle", output_mode="files_with_matches")
 
     assert isinstance(result, GrepResult)
@@ -233,8 +229,8 @@ async def test_agrep_runs_in_thread(tmp_path: Path) -> None:
     fs.write("async.txt", "async needle")
 
     with (
-        patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=True),
-        patch("soothe.foundation.core.filesystem.local.run_grep", return_value=["async.txt"]),
+        patch("soothe.foundation.filesystem.local.is_grep_available", return_value=True),
+        patch("soothe.foundation.filesystem.local.run_grep", return_value=["async.txt"]),
     ):
         result = await fs.agrep("needle", output_mode="files_with_matches")
 
@@ -358,7 +354,7 @@ def test_grep_host_absolute_file_outside_workspace(tmp_path: Path) -> None:
 
 
 def test_grep_write_rejects_host_absolute_outside_workspace(tmp_path: Path) -> None:
-    from soothe.foundation.core.filesystem.exceptions import FilesystemError
+    from soothe.foundation.filesystem.exceptions import FilesystemError
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -382,7 +378,7 @@ def test_normalized_backend_grep_via_ag(tmp_path: Path) -> None:
 
     backend = NormalizedPathBackend(root_dir=tmp_path, virtual_mode=True)
     with (
-        patch("soothe.foundation.core.filesystem.local.is_grep_available", return_value=True),
+        patch("soothe.foundation.filesystem.local.is_grep_available", return_value=True),
         _ag_patch(fake_run),
     ):
         result = backend.grep("AgentLoop", path=".", output_mode="content")

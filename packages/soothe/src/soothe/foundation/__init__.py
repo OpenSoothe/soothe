@@ -1,7 +1,7 @@
 """Foundation package - three-layer architecture + shared utilities.
 
 This package contains:
-- foundation.core: Layer 1 CoreAgent runtime
+- foundation.coreagent: CoreAgent runtime implementations
 - foundation.sloop: Layer 2 StrangeLoop orchestration
 - foundation.autopilot: Layer 3 Goal lifecycle and dispatch (RFC-625)
 - foundation.context: Unified goal/step state management (RFC-625)
@@ -11,7 +11,7 @@ This package contains:
 
 RFC-625: GoalEngine deleted. ContextEngine is the sole source of truth.
 Import paths:
-    from soothe.foundation.core import CoreAgent, create_soothe_agent
+    from soothe.foundation.coreagent import CoreAgent, create_soothe_agent
     from soothe.foundation.sloop import StrangeLoop, LoopState
     from soothe.foundation.autopilot import AutopilotService, AutopilotMonitor
     from soothe.foundation.context import ContextEngine, GoalNode
@@ -64,11 +64,11 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     """Lazy import for modules with potential circular deps."""
     if name == "CoreAgent":
-        from soothe.foundation.core.agent._core import CoreAgent
+        from soothe.foundation.coreagent.coding.core_agent import CoreAgent
 
         return CoreAgent
     if name == "create_soothe_agent":
-        from soothe.foundation.core.agent._builder import create_soothe_agent
+        from soothe.foundation.coreagent.coding.builder import create_soothe_agent
 
         return create_soothe_agent
     if name == "StrangeLoop":

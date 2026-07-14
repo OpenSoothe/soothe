@@ -245,7 +245,7 @@ class PhasesMixin:
 
         Raises ConfigurationError if checkpointer initialization fails.
         """
-        from soothe.foundation.core.agent._lazy import LazyCoreAgent
+        from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent) and not self._core_agent.is_materialized:
             return

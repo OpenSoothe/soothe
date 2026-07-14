@@ -18,7 +18,7 @@ class TestCoreAgentClass:
 
     def test_core_agent_has_typed_properties(self) -> None:
         """CoreAgent exposes typed properties for protocols."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         # Create mock graph and protocols
         mock_graph = _mock_graph()
@@ -44,7 +44,7 @@ class TestCoreAgentClass:
 
     def test_core_agent_handles_none_protocols(self) -> None:
         """CoreAgent handles None protocol values gracefully."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
         mock_config = MagicMock()
@@ -66,7 +66,7 @@ class TestCoreAgentClass:
     @pytest.mark.asyncio
     async def test_core_agent_astream_delegates_to_graph(self) -> None:
         """CoreAgent.astream() delegates to underlying graph."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
 
@@ -94,7 +94,7 @@ class TestCoreAgentClass:
     @pytest.mark.asyncio
     async def test_core_agent_astream_with_none_config(self) -> None:
         """CoreAgent.astream() handles None config."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
 
@@ -131,7 +131,7 @@ class TestCoreAgentClass:
     def test_create_factory_returns_core_agent(self) -> None:
         """create_soothe_agent() returns CoreAgent instance."""
         from soothe.config import SootheConfig
-        from soothe.foundation.core.agent import CoreAgent, create_soothe_agent
+        from soothe.foundation.coreagent import CoreAgent, create_soothe_agent
 
         with patch("soothe.runner.resolver.resolve_tools", return_value=[]):
             with patch("soothe.runner.resolver.resolve_subagents", return_value=[]):
@@ -157,7 +157,7 @@ class TestCoreAgentClass:
 
     def test_no_goal_engine_in_core_agent(self) -> None:
         """CoreAgent does NOT have goal_engine (Layer 3 responsibility)."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
         mock_config = MagicMock()
@@ -173,7 +173,7 @@ class TestCoreAgentClass:
 
     def test_no_soothe_star_attributes(self) -> None:
         """CoreAgent uses properties, not soothe_* attributes."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
         mock_config = MagicMock()
@@ -199,7 +199,7 @@ class TestCoreAgentStateRetrieval:
     @pytest.mark.asyncio
     async def test_aget_state_returns_none_without_checkpointer(self) -> None:
         """No checkpointer → None without raising or noisy logs."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
         mock_graph.checkpointer = None
@@ -217,7 +217,7 @@ class TestCoreAgentStateRetrieval:
         from langgraph._internal._constants import CONFIG_KEY_CHECKPOINTER
         from langgraph.checkpoint.memory import MemorySaver
 
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         mock_graph = _mock_graph()
         mock_graph.checkpointer = MemorySaver()
@@ -244,21 +244,23 @@ class TestCoreAgentModuleExports:
 
     def test_core_agent_exported_from_core(self) -> None:
         """CoreAgent is exported from soothe.core."""
-        from soothe.foundation.core import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
         assert CoreAgent is not None
 
     def test_create_soothe_agent_exported(self) -> None:
         """create_soothe_agent is exported from soothe.core."""
-        from soothe.foundation.core import create_soothe_agent
+        from soothe.foundation.coreagent import create_soothe_agent
 
         assert create_soothe_agent is not None
 
     def test_core_agent_create_factory_method(self) -> None:
         """CoreAgent.create() factory method works."""
-        from soothe.foundation.core.agent import CoreAgent
+        from soothe.foundation.coreagent import CoreAgent
 
-        with patch("soothe.foundation.core.agent._builder.create_soothe_agent") as mock_factory:
+        with patch(
+            "soothe.foundation.coreagent.coding.builder.create_soothe_agent"
+        ) as mock_factory:
             mock_agent = MagicMock(spec=CoreAgent)
             mock_factory.return_value = mock_agent
 

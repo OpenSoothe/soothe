@@ -10,7 +10,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.core.agent._core import CodingCoreAgent
+from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
 
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
@@ -30,11 +30,7 @@ MaterializeHook = Callable[[CodingCoreAgent], Awaitable[None] | None]
 
 
 class LazyCoreAgent:
-    """Proxy that compiles the real CoreAgent on first Layer-1 use.
-
-    StrangeLoop planning and loop-graph orchestration can proceed without paying
-    the ``create_deep_agent`` compile cost up front.
-    """
+    """Proxy that compiles the real CoreAgent on first Layer-1 use."""
 
     def __init__(
         self,
@@ -56,18 +52,15 @@ class LazyCoreAgent:
 
     @property
     def is_materialized(self) -> bool:
-        """Return True once the underlying CoreAgent has been compiled."""
         return self._delegate is not None
 
     def materialize(self) -> CodingCoreAgent:
-        """Compile and cache the underlying CoreAgent."""
         if self._delegate is None:
             self._delegate = self._factory()
             logger.info("[Init] LazyCoreAgent materialized")
         return self._delegate
 
     async def amaterialize(self) -> CodingCoreAgent:
-        """Materialize and run optional async hook (e.g. checkpointer attach)."""
         agent = self.materialize()
         if self._materialize_hook is not None:
             result = self._materialize_hook(agent)

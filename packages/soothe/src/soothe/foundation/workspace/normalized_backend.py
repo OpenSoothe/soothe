@@ -28,7 +28,7 @@ _DEFAULT_READ_LINE_LIMIT = 2000
 
 def _coerce_fs_grep_to_da_matches(result: Any) -> list[dict[str, Any]]:
     """Convert filesystem grep results to soothe_deepagents ``GrepMatch`` dicts."""
-    from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
+    from soothe.foundation.filesystem.protocol import GrepResult as FsGrepResult
 
     matches: list[dict[str, Any]] = []
     if isinstance(result, FsGrepResult):
@@ -62,7 +62,7 @@ def _read_result_for_path(
     display_path: str,
 ) -> ReadResult:
     """Build soothe_deepagents ``ReadResult`` using line-based offset/limit semantics."""
-    from soothe.foundation.core.filesystem.exceptions import (
+    from soothe.foundation.filesystem.exceptions import (
         FilesystemError,
         NotAFileError,
         PathNotFoundError,
@@ -131,7 +131,7 @@ class NormalizedPathBackend:
 
         # Use WorkspaceFilesystem (not bare LocalFilesystem) so glob gets
         # gitignore filtering, result caps, and host-absolute path output.
-        from soothe.foundation.core.filesystem.workspace import WorkspaceFilesystem
+        from soothe.foundation.filesystem.workspace import WorkspaceFilesystem
 
         self._fs = WorkspaceFilesystem(
             workspace=root_dir,
@@ -226,7 +226,7 @@ class NormalizedPathBackend:
 
     def write(self, path: str, content: str | bytes) -> WriteResult:
         """Write content to file (soothe_deepagents BackendProtocol)."""
-        from soothe.foundation.core.filesystem.exceptions import FilesystemError
+        from soothe.foundation.filesystem.exceptions import FilesystemError
 
         normalized = self._normalize_path(path)
         try:
@@ -237,7 +237,7 @@ class NormalizedPathBackend:
 
     async def awrite(self, path: str, content: str | bytes) -> WriteResult:
         """Async write content to file (soothe_deepagents BackendProtocol)."""
-        from soothe.foundation.core.filesystem.exceptions import FilesystemError
+        from soothe.foundation.filesystem.exceptions import FilesystemError
 
         normalized = self._normalize_path(path)
         try:
@@ -342,7 +342,7 @@ class NormalizedPathBackend:
         Returns:
             BatchedEditResult with details of all operations applied.
         """
-        from soothe.foundation.core.filesystem.protocol import BatchedEditResult
+        from soothe.foundation.filesystem.protocol import BatchedEditResult
 
         normalized = self._normalize_path(path)
 
@@ -514,7 +514,7 @@ class NormalizedPathBackend:
         """
         from soothe_deepagents.backends.protocol import GrepResult as DaGrepResult
 
-        from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
+        from soothe.foundation.filesystem.protocol import GrepResult as FsGrepResult
 
         normalized = self._normalize_path(path)
         try:
@@ -549,7 +549,7 @@ class NormalizedPathBackend:
         """
         from soothe_deepagents.backends.protocol import GrepResult as DaGrepResult
 
-        from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
+        from soothe.foundation.filesystem.protocol import GrepResult as FsGrepResult
 
         normalized = self._normalize_path(path)
         try:

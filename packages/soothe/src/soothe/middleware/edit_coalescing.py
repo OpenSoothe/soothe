@@ -23,8 +23,8 @@ from typing import TYPE_CHECKING, Any
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.core.filesystem._lock_registry import FileEditLockRegistry
-from soothe.foundation.core.filesystem.protocol import BatchedEditOperation
+from soothe.foundation.filesystem._lock_registry import FileEditLockRegistry
+from soothe.foundation.filesystem.protocol import BatchedEditOperation
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable

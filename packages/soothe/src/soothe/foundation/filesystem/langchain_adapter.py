@@ -5,8 +5,8 @@ to implement the UnifiedFilesystem interface, enabling seamless integration
 with LangChain-based applications.
 
 Example:
-    >>> from soothe.foundation.core.filesystem import create_filesystem
-    >>> from soothe.foundation.core.filesystem.langchain_adapter import LangChainAdapter
+    >>> from soothe.foundation.filesystem import create_filesystem
+    >>> from soothe.foundation.filesystem.langchain_adapter import LangChainAdapter
     >>> # Create underlying filesystem
     >>> fs = create_filesystem("/workspace")
     >>> # Wrap with LangChain adapter
@@ -54,8 +54,8 @@ class LangChainAdapter(UnifiedFilesystem):
         max_file_size_mb: Maximum file size in megabytes.
 
     Example:
-        >>> from soothe.foundation.core.filesystem import LocalFilesystem
-        >>> from soothe.foundation.core.filesystem.langchain_adapter import LangChainAdapter
+        >>> from soothe.foundation.filesystem import LocalFilesystem
+        >>> from soothe.foundation.filesystem.langchain_adapter import LangChainAdapter
         >>> underlying = LocalFilesystem("/workspace")
         >>> adapter = LangChainAdapter(underlying)
         >>> # Use UnifiedFilesystem methods

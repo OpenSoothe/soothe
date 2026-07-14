@@ -1,8 +1,4 @@
-"""CoreAgent construction logic (internal).
-
-Encapsulates protocol resolution, middleware stack, and backend initialization.
-This module separates construction concerns from the CoreAgent interface.
-"""
+"""Coding CoreAgent construction logic."""
 
 from __future__ import annotations
 
@@ -11,18 +7,18 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
-from soothe.foundation.core.agent._execute_filter import (
+from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
+from soothe.foundation.coreagent.coding.patches.execute_filter import (
     apply_execute_tool_removal_patch,
     without_deepagents_execute_tool,
 )
-from soothe.foundation.core.agent._patch_summarization import (
-    apply_summarization_patches,
-)
-from soothe.foundation.core.agent._patch_task_tool import (
+from soothe.foundation.coreagent.coding.patches.summarization import apply_summarization_patches
+from soothe.foundation.coreagent.coding.patches.task_tool import (
     apply_task_tool_patch,
     general_purpose_subagent_build_context,
 )
 from soothe.middleware import build_soothe_middleware_stack
+from soothe.protocols.core_agent import CoreAgentCapabilities
 from soothe.runner.resolver import (
     resolve_memory,
     resolve_planner,
@@ -47,14 +43,8 @@ if TYPE_CHECKING:
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
 
-# Runtime imports placed after TYPE_CHECKING block to avoid circular imports
-# (CoreAgent pulls in the loop engine + protocols chain).
 from langchain_core.language_models import BaseChatModel  # noqa: E402
 
-from soothe.foundation.core.agent._core import CodingCoreAgent  # noqa: E402
-from soothe.protocols.core_agent import CoreAgentCapabilities  # noqa: E402
-
-# Apply all patches at module import time (after all imports complete)
 apply_summarization_patches()
 apply_task_tool_patch()
 apply_execute_tool_removal_patch()
@@ -63,35 +53,13 @@ logger = logging.getLogger(__name__)
 
 
 class AgentBuilder:
-    """Builder for CoreAgent instances.
-
-    Encapsulates all construction concerns in a single class:
-    - Protocol resolution (memory, planner, policy)
-    - Middleware stack construction
-    - Backend initialization
-    - Plugin loading
-    - Tools/subagents resolution
-    - MCP registry integration (RFC-412)
-
-    This separates the complex construction logic from the simple CoreAgent
-    interface, making both easier to understand and maintain.
-
-    Example:
-        builder = AgentBuilder(config)
-        agent = builder.build(checkpointer=my_checkpointer)
-    """
+    """Builder for CodingCoreAgent instances."""
 
     def __init__(
         self,
         config: SootheConfig | None = None,
         mcp_registry: Any | None = None,
     ) -> None:
-        """Initialize builder with configuration.
-
-        Args:
-            config: Soothe configuration. If None, uses defaults.
-            mcp_registry: MCPRegistry instance for MCP tool integration (RFC-412).
-        """
         self._config = config or SootheConfig()
         self._config.propagate_env()
         self._mcp_registry = mcp_registry
@@ -114,40 +82,6 @@ class AgentBuilder:
         identity_runtime: IdentityRuntime | None = None,
         core_agent_kind: str | None = None,
     ) -> CodingCoreAgent:
-        """Build CoreAgent with all components.
-
-        Layer 1 Responsibilities:
-            - Execute tools/subagents via LangGraph Model → Tools → Model loop
-            - Apply middlewares (context, memory, policy, planner, hints)
-            - Manage thread state (sequential vs parallel execution)
-            - Consider execution hints from Layer 2 (advisory suggestions)
-
-        Built-in Capabilities:
-            - Tools: execution, websearch, research, etc.
-            - Subagents: browser_use, planner, deep_research
-            - MCP servers: loaded via configuration
-            - Middlewares: policy, system prompt optimization, hints, context, memory
-
-        Args:
-            model: Override the model from config. Passed to ``create_deep_agent``.
-            tools: Additional tools beyond what config specifies.
-            subagents: Additional subagents beyond what config specifies.
-            middleware: Additional middleware appended after the standard stack.
-            checkpointer: LangGraph checkpointer for persistence.
-            store: LangGraph store for persistent storage.
-            backend: Backend for file/execution operations.
-            interrupt_on: Optional tool interrupt configuration.
-            memory_store: Override MemoryProtocol implementation. None uses config.
-            planner: Override PlannerProtocol implementation. None uses config.
-            policy: Override PolicyProtocol implementation. None uses config.
-            mcp_registry: Override MCPRegistry. None uses builder's instance (RFC-412).
-            identity_runtime: Optional identity bundle (RFC-307). When enabled,
-                IdentityMiddleware is prepended to the stack.
-            core_agent_kind: Runtime implementation kind (default: ``coding``).
-
-        Returns:
-            CodingCoreAgent instance wrapping CompiledStateGraph.
-        """
         from soothe_deepagents import create_deep_agent
 
         create_start = time.perf_counter()
@@ -159,14 +93,12 @@ class AgentBuilder:
             )
             raise ValueError(msg)
 
-        # Resolve model
         resolved_model: str | BaseChatModel
         resolved_model = model if model is not None else self._config.create_chat_model("default")
         default_model_instance = (
             resolved_model if isinstance(resolved_model, BaseChatModel) else None
         )
 
-        # Resolve protocols
         resolve_start = time.perf_counter()
         resolved_memory = memory_store or self._resolve_memory()
         resolved_planner = planner or self._resolve_planner(default_model_instance)
@@ -174,52 +106,34 @@ class AgentBuilder:
         resolve_ms = (time.perf_counter() - resolve_start) * 1000
         logger.debug("[Init] Protocols resolved (%.1fms)", resolve_ms)
 
-        if resolved_memory:
-            logger.info("[Init] Memory: %s", type(resolved_memory).__name__)
-        if resolved_planner:
-            logger.info("[Init] Planner: %s", type(resolved_planner).__name__)
-        if resolved_policy:
-            logger.info("[Init] Policy: %s", type(resolved_policy).__name__)
-
-        # Load plugins
         self._load_plugins()
 
-        # Resolve tools (NO goal_tools - Layer 3 responsibility)
         tools_start = time.perf_counter()
         config_tools = resolve_tools(
             self._config.tools,
-            lazy=True,  # Always load tools in parallel (default behavior)
+            lazy=True,
             config=self._config,
         )
         all_tools: list[BaseTool | Callable | dict[str, Any]] = list(config_tools)
         if tools:
             all_tools.extend(tools)
 
-        # RFC-412: Full MCP catalog; per-hop binding via MCPActivationMiddleware
         registry = mcp_registry or self._mcp_registry
         if registry is not None:
             mcp_tools = registry.all_tools()
             if mcp_tools:
                 all_tools.extend(mcp_tools)
-                logger.debug("[Init] MCP tools: %d in catalog", len(mcp_tools))
 
             if registry.deferred_tools():
                 from soothe.mcp.discovery_tools import create_search_mcp_tools_tool
 
                 all_tools.append(create_search_mcp_tools_tool())
-                logger.debug("[Init] search_mcp_tools added (deferred MCP tools present)")
 
-            # Synthetic MCP resource tools (list + read)
             from soothe.mcp.tools import create_mcp_resource_tools
 
             all_tools.extend(create_mcp_resource_tools(registry))
-            logger.debug("[Init] MCP resource tools added")
 
-        # soothe_deepagents registers ``execute``; Soothe uses host execution tools instead.
-        before = len(all_tools)
         all_tools = without_deepagents_execute_tool(all_tools)
-        if len(all_tools) < before:
-            logger.debug("Removed soothe_deepagents execute tool from resolver tool list")
 
         if (
             self._config.progressive_tools.enabled
@@ -228,7 +142,6 @@ class AgentBuilder:
             from soothe.toolkits.progressive.search_tool import create_search_tools_tool
 
             all_tools.append(create_search_tools_tool())
-            logger.debug("[Init] Progressive search_tools added")
 
         if self._config.progressive_skills.search_skills_enabled:
             from soothe.skills.discovery_tools import (
@@ -238,17 +151,15 @@ class AgentBuilder:
 
             all_tools.append(create_search_skills_tool())
             all_tools.append(create_invoke_skill_tool())
-            logger.debug("[Init] Progressive search_skills + invoke_skill added")
 
         tools_ms = (time.perf_counter() - tools_start) * 1000
         logger.info("[Init] Tools resolved: %d tools (%.1fms)", len(all_tools), tools_ms)
 
-        # Resolve subagents
         subagents_start = time.perf_counter()
         config_subagents = resolve_subagents(
             self._config,
             default_model=default_model_instance,
-            lazy=True,  # Always load subagents in parallel (default behavior)
+            lazy=True,
         )
         all_subagents: list[SubAgent | CompiledSubAgent] = list(config_subagents)
         if subagents:
@@ -258,12 +169,8 @@ class AgentBuilder:
             "[Init] Subagents resolved: %d agents (%.1fms)", len(all_subagents), subagents_ms
         )
 
-        registry = mcp_registry or self._mcp_registry
-
-        # Initialize backend
         resolved_backend = backend or self._initialize_backend(resolved_policy)
 
-        # Build middleware stack (RFC-412: pass mcp_registry; RFC-307: pass identity)
         default_middleware = build_soothe_middleware_stack(
             self._config,
             resolved_policy,
@@ -281,11 +188,6 @@ class AgentBuilder:
                     mw.set_tool_catalog()
         all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
 
-        # RFC-105: Skill emission is owned by SystemPromptMiddleware via
-        # ProgressiveSkillRegistry. Deepagents' SkillsMiddleware must not also emit.
-        # Pass skills=None so the middleware is never installed.
-
-        # Create deep_agent graph
         from soothe.middleware.model_call_profiler import (
             install_model_call_profiler,
             is_profiler_enabled,
@@ -342,7 +244,6 @@ class AgentBuilder:
             },
         )
 
-        # Wrap graph in coding runtime with typed protocol properties
         agent = CodingCoreAgent(
             graph=graph,
             config=self._config,
@@ -357,7 +258,6 @@ class AgentBuilder:
 
         total_ms = (time.perf_counter() - create_start) * 1000
         logger.info("[Init] CoreAgent ready (%.1fms total)", total_ms)
-
         return agent
 
     def _resolve_core_agent_kind(self) -> str:
@@ -394,8 +294,6 @@ class AgentBuilder:
         return sorted(set(names))
 
     def _resolve_memory(self) -> MemoryProtocol | None:
-        """Resolve MemoryProtocol with parallel resolution support (always enabled)."""
-        # Always resolve in parallel (default behavior)
         try:
             import asyncio
 
@@ -409,8 +307,6 @@ class AgentBuilder:
             return resolve_memory(self._config)
 
     def _resolve_planner(self, default_model: BaseChatModel | None) -> PlannerProtocol | None:
-        """Resolve PlannerProtocol with parallel resolution support (always enabled)."""
-        # Always resolve in parallel (default behavior)
         try:
             import asyncio
 
@@ -426,8 +322,6 @@ class AgentBuilder:
             return resolve_planner(self._config, default_model)
 
     def _resolve_policy(self) -> PolicyProtocol | None:
-        """Resolve PolicyProtocol with parallel resolution support (always enabled)."""
-        # Always resolve in parallel (default behavior)
         try:
             import asyncio
 
@@ -441,11 +335,6 @@ class AgentBuilder:
             return resolve_policy(self._config)
 
     def _load_plugins(self) -> None:
-        """Load plugins from global registry.
-
-        Uses thread pool when already in async context (e.g., daemon thread runner)
-        to avoid skipping plugin loading entirely.
-        """
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
 
@@ -457,14 +346,12 @@ class AgentBuilder:
             try:
                 asyncio.get_running_loop()
 
-                # Already in async context: run on a worker thread with fresh loop
                 def _run_async_on_fresh_loop() -> None:
                     asyncio.run(coro)
 
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     pool.submit(_run_async_on_fresh_loop).result()
             except RuntimeError:
-                # No running loop, safe to use asyncio.run()
                 asyncio.run(coro)
         except RuntimeError:
             logger.debug("[Init] Plugin loading failed, will load on demand")
@@ -475,7 +362,6 @@ class AgentBuilder:
         self,
         policy: PolicyProtocol | None,
     ) -> BackendProtocol | BackendFactory:
-        """Initialize FrameworkFilesystem backend."""
         from soothe.foundation.workspace import FrameworkFilesystem
 
         return FrameworkFilesystem.initialize(
@@ -501,33 +387,6 @@ def create_soothe_agent(
     identity_runtime: IdentityRuntime | None = None,
     core_agent_kind: str | None = None,
 ) -> CodingCoreAgent:
-    """Factory that creates Soothe's Layer 1 CoreAgent runtime.
-
-    This is a thin wrapper delegating to AgentBuilder.
-    See AgentBuilder.build() for full parameter documentation.
-
-    Note: Goal management (ContextEngine, goal_tools) is NOT included.
-    That is Layer 3 responsibility - resolve separately in SootheRunner.
-
-    Args:
-        config: Soothe configuration. If ``None``, uses defaults.
-        model: Override the model from config.
-        tools: Additional tools beyond config.
-        subagents: Additional subagents beyond config.
-        middleware: Additional middleware after standard stack.
-        checkpointer: LangGraph checkpointer for persistence.
-        store: LangGraph store for persistent storage.
-        backend: Backend for file/execution operations.
-        interrupt_on: Optional tool interrupt configuration.
-        memory_store: Override MemoryProtocol implementation.
-        planner: Override PlannerProtocol implementation.
-        policy: Override PolicyProtocol implementation.
-        identity_runtime: Optional identity bundle (RFC-307).
-        core_agent_kind: Runtime implementation kind (default: ``coding``).
-
-    Returns:
-        CodingCoreAgent instance wrapping CompiledStateGraph.
-    """
     return AgentBuilder(config).build(
         model=model,
         tools=tools,

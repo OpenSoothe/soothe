@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.core.filesystem.local import LocalFilesystem
-from soothe.foundation.core.filesystem.protocol import BatchedEditOperation, BatchedEditResult
+from soothe.foundation.filesystem.local import LocalFilesystem
+from soothe.foundation.filesystem.protocol import BatchedEditOperation, BatchedEditResult
 
 
 class TestBatchedEditOperations:

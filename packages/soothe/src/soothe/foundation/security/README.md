@@ -14,8 +14,8 @@ symlink escapes, and unauthorized filesystem access. It consists of three main c
 ## Quick Start
 
 ```python
-from soothe.foundation.core.security import SecurityEnforcer
-from soothe.foundation.core.security.policy import STRICT_POLICY
+from soothe.foundation.security import SecurityEnforcer
+from soothe.foundation.security.policy import STRICT_POLICY
 
 # Create enforcer with strict policy
 enforcer = SecurityEnforcer(
@@ -44,7 +44,7 @@ except SecurityError as e:
 Low-level path validation with comprehensive security checks:
 
 ```python
-from soothe.foundation.core.security import PathValidator
+from soothe.foundation.security import PathValidator
 
 validator = PathValidator(
     workspace="/safe/workspace",
@@ -76,7 +76,7 @@ if not result.is_valid:
 Configurable policy rules for access control:
 
 ```python
-from soothe.foundation.core.security.policy import SecurityPolicy, PolicyAction
+from soothe.foundation.security.policy import SecurityPolicy, PolicyAction
 
 policy = SecurityPolicy(
     name="custom",
@@ -106,8 +106,8 @@ decision = policy.evaluate("../secret.key", "read")
 High-level enforcement with comprehensive logging:
 
 ```python
-from soothe.foundation.core.security import SecurityEnforcer
-from soothe.foundation.core.security.policy import STRICT_POLICY
+from soothe.foundation.security import SecurityEnforcer
+from soothe.foundation.security.policy import STRICT_POLICY
 
 enforcer = SecurityEnforcer(
     workspace="/safe/workspace",
@@ -139,7 +139,7 @@ stats = enforcer.get_stats()
 | `SANDBOX_POLICY` | Strict sandbox | Running untrusted code |
 
 ```python
-from soothe.foundation.core.security.policy import (
+from soothe.foundation.security.policy import (
     STRICT_POLICY,
     PERMISSIVE_POLICY,
     READONLY_POLICY,
@@ -152,7 +152,7 @@ from soothe.foundation.core.security.policy import (
 ### With FilesystemBackend
 
 ```python
-from soothe.foundation.core.security.integration import SecureFilesystemWrapper
+from soothe.foundation.security.integration import SecureFilesystemWrapper
 from soothe_deepagents.backends.filesystem import FilesystemBackend
 
 backend = FilesystemBackend("/workspace")
@@ -169,7 +169,7 @@ secure_backend.read("../etc/passwd")  # Raises SecurityError
 ### As Decorator
 
 ```python
-from soothe.foundation.core.security.integration import secure_operation
+from soothe.foundation.security.integration import secure_operation
 
 @secure_operation("read")
 def read_config(path: str) -> dict:
@@ -184,7 +184,7 @@ config = read_config("../secret.json")  # Raises SecurityError
 ### Context Manager
 
 ```python
-from soothe.foundation.core.security.enforcement import SecurityContext
+from soothe.foundation.security.enforcement import SecurityContext
 
 with SecurityContext(enforcer, PERMISSIVE_POLICY):
     # Temporarily use permissive policy
@@ -261,7 +261,7 @@ print(f"Blocked: {stats['blocked_operations']}")
 
 ```python
 import pytest
-from soothe.foundation.core.security import PathValidator
+from soothe.foundation.security import PathValidator
 
 @pytest.fixture
 def validator():

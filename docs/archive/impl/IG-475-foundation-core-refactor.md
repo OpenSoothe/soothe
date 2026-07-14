@@ -62,8 +62,8 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 **Moves:**
 - `soothe.core.agent/` → `soothe.foundation.core.agent/`
 - `soothe.core.context/` → `soothe.foundation.core.context/`
-- `soothe.core.security/` → `soothe.foundation.core.security/`
-- `soothe.core.filesystem/` → `soothe.foundation.core.filesystem/`
+- `soothe.core.security/` → `soothe.foundation.security/`
+- `soothe.core.filesystem/` → `soothe.foundation.filesystem/`
 - `soothe.core.quiz_messages.py` → `soothe.foundation.core.quiz_messages.py`
 
 ### Phase 5: Move Loop (Layer 2)

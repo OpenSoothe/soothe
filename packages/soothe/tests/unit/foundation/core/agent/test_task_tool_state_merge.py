@@ -7,7 +7,7 @@ def test_task_tool_excludes_parent_owned_keys_from_subagent_merge() -> None:
     """Parallel explore completions must not write ``workspace`` to parent graph state."""
     from soothe_deepagents.middleware import subagents as sm
 
-    from soothe.foundation.core.agent import _patch_task_tool as patch_mod
+    from soothe.foundation.coreagent.coding.patches import task_tool as patch_mod
 
     patch_mod._patch_task_tool_propagates_parent_runnable_config()
     assert getattr(sm._build_task_tool, "_soothe_patched_config", False)

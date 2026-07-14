@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 from soothe_deepagents.backends import FilesystemBackend
 from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
-from soothe.foundation.core.agent._execute_filter import (
+from soothe.foundation.coreagent.coding.patches.execute_filter import (
     apply_execute_tool_removal_patch,
     tool_entry_name,
     without_deepagents_execute_tool,

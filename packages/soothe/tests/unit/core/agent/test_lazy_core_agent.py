@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.core.agent._lazy import LazyCoreAgent
+from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
 
 
 def test_lazy_core_agent_defers_factory_until_graph_access() -> None:

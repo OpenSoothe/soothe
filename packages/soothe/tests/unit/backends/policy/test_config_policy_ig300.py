@@ -3,7 +3,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from soothe.foundation.core.security.config_policy import (
+from soothe.foundation.security.config_policy import (
     ConfigDrivenPolicy,
     _extract_required_permission,
 )

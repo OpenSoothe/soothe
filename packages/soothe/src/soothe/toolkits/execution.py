@@ -51,7 +51,7 @@ from soothe.config.constants import (
     DEFAULT_EXECUTE_TIMEOUT,
     clamp_execute_timeout,
 )
-from soothe.foundation.core.security.operation_security import WorkspaceToolOperationSecurity
+from soothe.foundation.security.operation_security import WorkspaceToolOperationSecurity
 from soothe.protocols.operation_security import OperationSecurityContext, OperationSecurityRequest
 from soothe.toolkits.shell_compat import macos_shell_compatibility_error
 from soothe.utils import expand_path

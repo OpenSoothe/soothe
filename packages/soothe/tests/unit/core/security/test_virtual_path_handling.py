@@ -16,8 +16,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.foundation.core.security.policy import SecurityPolicy
-from soothe.foundation.core.security.validator import PathValidator
+from soothe.foundation.security.policy import SecurityPolicy
+from soothe.foundation.security.validator import PathValidator
 
 # ---------------------------------------------------------------------------
 # SecurityPolicy.evaluate

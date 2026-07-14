@@ -103,7 +103,7 @@ async def test_warmup_worker_core_agent_touches_execution_graph(
     config.agent.runtime.lazy_core_agent = True
 
     monkeypatch.setattr(
-        "soothe.foundation.core.agent._lazy.LazyCoreAgent",
+        "soothe.foundation.coreagent.coding.lazy.LazyCoreAgent",
         _FakeLazyCoreAgent,
     )
     monkeypatch.setattr(
@@ -137,7 +137,7 @@ async def test_warmup_worker_core_agent_skips_execution_graph_when_disabled(
     config.agent.runtime.lazy_core_agent = True
 
     monkeypatch.setattr(
-        "soothe.foundation.core.agent._lazy.LazyCoreAgent",
+        "soothe.foundation.coreagent.coding.lazy.LazyCoreAgent",
         _FakeLazyCoreAgent,
     )
     monkeypatch.setattr(

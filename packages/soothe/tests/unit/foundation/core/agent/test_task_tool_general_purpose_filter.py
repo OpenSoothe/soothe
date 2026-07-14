@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.core.agent import _patch_task_tool as patch_mod
+from soothe.foundation.coreagent.coding.patches import task_tool as patch_mod
 
 
 @pytest.fixture(autouse=True)

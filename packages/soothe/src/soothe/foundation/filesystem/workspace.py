@@ -58,7 +58,7 @@ class WorkspaceFilesystem(UnifiedFilesystem):
         _gitignore_spec: Cached gitignore patterns.
 
     Example:
-        >>> from soothe.foundation.core.filesystem import WorkspaceFilesystem
+        >>> from soothe.foundation.filesystem import WorkspaceFilesystem
         >>> fs = WorkspaceFilesystem("/workspace", virtual_mode=True)
         >>> result = fs.read("config.json")
         >>> print(result.content)
