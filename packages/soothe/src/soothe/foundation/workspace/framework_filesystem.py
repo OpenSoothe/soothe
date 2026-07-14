@@ -149,4 +149,3 @@ class FrameworkFilesystem:
         from soothe.foundation.workspace.context import reset_workspace_context
 
         reset_workspace_context(token)
-

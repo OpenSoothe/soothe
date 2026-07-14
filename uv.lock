@@ -8354,7 +8354,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-deepagents", specifier = ">=0.7.17,<1.0.0" },
+    { name = "soothe-deepagents", directory = "../soothe-deepagents" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", specifier = ">=0.5.0" },
@@ -8491,8 +8491,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
-version = "0.7.17"
-source = { registry = "https://pypi.org/simple" }
+source = { directory = "../soothe-deepagents" }
 dependencies = [
     { name = "langchain" },
     { name = "langchain-anthropic" },
@@ -8501,9 +8500,41 @@ dependencies = [
     { name = "langsmith" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4d/a4/2029345c8faa0e6ed6cc94f4045810b3e99e71b9c0dbee97f96265bed251/soothe_deepagents-0.7.17.tar.gz", hash = "sha256:8706d0fc76f440840c5028a320e28c17600681ae62fdc343d483015a34d3043f", size = 265186, upload-time = "2026-07-14T04:16:49.652Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9a/9f/47fa183d31c7b6c0a7ab09c37e1f4fdc04e478be767d2f75553d2683d348/soothe_deepagents-0.7.17-py3-none-any.whl", hash = "sha256:f356bf3bc7172cf6fc773208b4d0902b3f509a063604178a3510b8edf2c2784c", size = 292789, upload-time = "2026-07-14T04:16:47.977Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "av", marker = "extra == 'video'", specifier = ">=17.0.0,<18.0.0" },
+    { name = "langchain", specifier = ">=1.3.12,<2.0.0" },
+    { name = "langchain-anthropic", specifier = ">=1.4.8,<2.0.0" },
+    { name = "langchain-aws", marker = "extra == 'aws'", specifier = ">=1.6.2,<2.0.0" },
+    { name = "langchain-core", specifier = ">=1.4.9,<2.0.0" },
+    { name = "langchain-google-genai", specifier = ">=4.2.7,<5.0.0" },
+    { name = "langchain-quickjs", marker = "extra == 'quickjs'", specifier = ">=0.3.2" },
+    { name = "langsmith", specifier = ">=0.9.3" },
+    { name = "pillow", marker = "extra == 'video'", specifier = ">=10.0.0,<13.0.0" },
+    { name = "wcmatch", specifier = ">=10.1" },
+]
+provides-extras = ["aws", "quickjs", "video"]
+
+[package.metadata.requires-dev]
+test = [
+    { name = "av", specifier = ">=17.0.0,<18.0.0" },
+    { name = "build" },
+    { name = "langchain-openai" },
+    { name = "langchain-tests", specifier = ">=1.1.9" },
+    { name = "pillow", specifier = ">=10.0.0,<13.0.0" },
+    { name = "pytest" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-benchmark" },
+    { name = "pytest-codspeed", specifier = ">=5.0.3,<6.0.0" },
+    { name = "pytest-cov" },
+    { name = "pytest-socket" },
+    { name = "pytest-timeout", specifier = ">=2.4.0,<3.0.0" },
+    { name = "pytest-watcher", specifier = ">=0.6.3,<1.0.0" },
+    { name = "pytest-xdist" },
+    { name = "ruff", specifier = ">=0.15.20,<0.16.0" },
+    { name = "twine" },
+    { name = "ty", specifier = ">=0.0.54,<1.0.0" },
 ]
 
 [[package]]

@@ -20,9 +20,6 @@ from soothe_deepagents.backends.protocol import BackendProtocol
 from soothe_deepagents.backends.utils import validate_path
 from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
-from soothe.foundation.coreagent.coding.patches.execute_filter import (
-    apply_execute_tool_removal_patch,
-)
 from soothe.foundation.filesystem.discovery_hints import GLOB_TOOL_DESCRIPTION
 
 # OpenAI-compatible chat APIs used by many Soothe providers (e.g. coding-plan) reject
@@ -249,10 +246,13 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 resolution without callable backend deprecation.
             **kwargs: Passed to FilesystemMiddleware (backend, system_prompt, etc.)
         """
-        apply_execute_tool_removal_patch()
         custom_descriptions = dict(kwargs.pop("custom_tool_descriptions", None) or {})
         custom_descriptions.setdefault("glob", GLOB_TOOL_DESCRIPTION)
         kwargs["custom_tool_descriptions"] = custom_descriptions
+        kwargs.setdefault(
+            "tools",
+            ["ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep"],
+        )
         super().__init__(**kwargs)
 
         # Override soothe_deepagents' default "/large_tool_results" and "/conversation_history"

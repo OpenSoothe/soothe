@@ -26,6 +26,7 @@ soothe-sdk = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
 soothe-daemon = { workspace = true }
+soothe-deepagents = { path = "../soothe-deepagents" }
 
 [dependency-groups]
 dev = [

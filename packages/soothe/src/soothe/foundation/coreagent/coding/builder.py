@@ -8,15 +8,6 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
 from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
-from soothe.foundation.coreagent.coding.patches.execute_filter import (
-    apply_execute_tool_removal_patch,
-    without_deepagents_execute_tool,
-)
-from soothe.foundation.coreagent.coding.patches.summarization import apply_summarization_patches
-from soothe.foundation.coreagent.coding.patches.task_tool import (
-    apply_task_tool_patch,
-    general_purpose_subagent_build_context,
-)
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.protocols.core_agent import CoreAgentCapabilities
 from soothe.runner.resolver import (
@@ -36,6 +27,7 @@ if TYPE_CHECKING:
     from langgraph.store.base import BaseStore
     from langgraph.types import Checkpointer
     from soothe_deepagents.backends.protocol import BackendFactory, BackendProtocol
+    from soothe_deepagents.middleware.filesystem import FsToolName
     from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
     from soothe.middleware.identity import IdentityRuntime
@@ -45,9 +37,16 @@ if TYPE_CHECKING:
 
 from langchain_core.language_models import BaseChatModel  # noqa: E402
 
-apply_summarization_patches()
-apply_task_tool_patch()
-apply_execute_tool_removal_patch()
+_FILESYSTEM_TOOLS_NO_EXECUTE: list[FsToolName] = [
+    "ls",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "delete",
+    "glob",
+    "grep",
+]
+_PARENT_OWNED_STATE_KEYS = frozenset({"workspace"})
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +132,6 @@ class AgentBuilder:
 
             all_tools.extend(create_mcp_resource_tools(registry))
 
-        all_tools = without_deepagents_execute_tool(all_tools)
-
         if (
             self._config.progressive_tools.enabled
             and self._config.progressive_tools.search_tools_enabled
@@ -197,21 +194,23 @@ class AgentBuilder:
 
         def _compile_deep_agent(cp: Checkpointer | None) -> Any:
             gp_enabled = self._config.agent.runtime.general_purpose_subagent
-            with general_purpose_subagent_build_context(gp_enabled):
-                return create_deep_agent(
-                    model=resolved_model,
-                    tools=all_tools or None,
-                    system_prompt=self._config.resolve_system_prompt(),
-                    middleware=all_middleware,
-                    subagents=all_subagents or None,
-                    skills=None,
-                    memory=self._config.memory or None,
-                    checkpointer=cp,
-                    store=store,
-                    backend=resolved_backend,
-                    interrupt_on=interrupt_on,
-                    debug=self._config.debug,
-                )
+            return create_deep_agent(
+                model=resolved_model,
+                tools=all_tools or None,
+                system_prompt=self._config.resolve_system_prompt(),
+                middleware=all_middleware,
+                subagents=all_subagents or None,
+                skills=None,
+                memory=self._config.memory or None,
+                checkpointer=cp,
+                store=store,
+                backend=resolved_backend,
+                interrupt_on=interrupt_on,
+                enable_general_purpose_subagent=gp_enabled,
+                filesystem_tools=_FILESYSTEM_TOOLS_NO_EXECUTE,
+                parent_owned_state_keys=_PARENT_OWNED_STATE_KEYS,
+                debug=self._config.debug,
+            )
 
         deep_agent_start = time.perf_counter()
         graph = _compile_deep_agent(checkpointer)

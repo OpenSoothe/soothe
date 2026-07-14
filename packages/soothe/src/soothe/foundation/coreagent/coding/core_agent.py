@@ -354,4 +354,3 @@ class CodingCoreAgent:
         from soothe.foundation.coreagent.coding.builder import create_soothe_agent
 
         return create_soothe_agent(config, **kwargs)
-
