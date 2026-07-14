@@ -818,3 +818,59 @@ class TestBatchEditErrorSignals:
         assert "EDIT_OLD_STRING_NOT_FOUND" in str(bad_result.content)
         with open(file_path) as f:
             assert "ALPHA" in f.read()
+
+
+class TestWorkspaceBackendIntegration:
+    """Tests for workspace-context backend usage in batched edit paths."""
+
+    @pytest.mark.asyncio
+    async def test_read_file_for_batch_uses_backend_file_data(self) -> None:
+        middleware = EditCoalescingMiddleware()
+
+        class _BackendResult:
+            error = None
+            file_data = {"content": "from-backend"}
+
+        class _Backend:
+            async def aread(self, path: str) -> _BackendResult:
+                assert path == "/tmp/test.txt"
+                return _BackendResult()
+
+        middleware._get_context_backend = lambda: _Backend()  # type: ignore[assignment]
+        content = await middleware._read_file_for_batch("/tmp/test.txt")
+        assert content == "from-backend"
+
+    @pytest.mark.asyncio
+    async def test_get_context_backend_uses_cached_workspace_backend(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: object,
+    ) -> None:
+        from soothe.foundation.workspace.context import (
+            reset_workspace_context,
+            set_workspace_context,
+        )
+
+        middleware = EditCoalescingMiddleware()
+        sentinel_backend = object()
+        captured: dict[str, object] = {}
+
+        def _fake_get_workspace_backend(*, workspace, virtual_mode, max_file_size_mb=10):
+            captured["workspace"] = workspace
+            captured["virtual_mode"] = virtual_mode
+            captured["max_file_size_mb"] = max_file_size_mb
+            return sentinel_backend
+
+        monkeypatch.setattr(
+            "soothe.foundation.workspace.normalized_backend.get_workspace_backend",
+            _fake_get_workspace_backend,
+        )
+
+        token = set_workspace_context(workspace=tmp_path, virtual_mode=True)  # type: ignore[arg-type]
+        try:
+            backend = middleware._get_context_backend()
+            assert backend is sentinel_backend
+            assert captured["workspace"] == tmp_path
+            assert captured["virtual_mode"] is True
+        finally:
+            reset_workspace_context(token)

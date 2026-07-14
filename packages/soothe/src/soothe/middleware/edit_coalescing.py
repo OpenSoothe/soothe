@@ -302,6 +302,20 @@ class EditCoalescingMiddleware(AgentMiddleware):
                 return path
         return None
 
+    def _get_context_backend(self) -> Any | None:
+        """Get cached backend for the current workspace context."""
+        from soothe.foundation.workspace.context import get_workspace_context
+        from soothe.foundation.workspace.normalized_backend import get_workspace_backend
+
+        ctx = get_workspace_context()
+        if ctx.workspace is None:
+            return None
+
+        return get_workspace_backend(
+            workspace=ctx.workspace,
+            virtual_mode=ctx.virtual_mode,
+        )
+
     async def awrap_tool_call(
         self,
         request: ToolCallRequest,
@@ -498,47 +512,27 @@ class EditCoalescingMiddleware(AgentMiddleware):
             edits: List of pending edit_file edits for this file.
             replacements: Staged string replacements for this file.
         """
-        # Detect overlapping string replacements before touching the filesystem
-        try:
-            content = await self._read_file_for_batch(file_path)
-        except Exception as e:
-            for edit in edits:
-                _resolve_edit_future(
-                    edit,
-                    ToolMessage(
-                        content=f"Error: {e}",
-                        tool_call_id=edit.tool_call_id,
-                        name=edit.tool_name,
-                        status="error",
-                    ),
-                )
-            return
-
-        # Compute character ranges for each replacement in the original content
-        conflict = self._find_string_overlaps(content, replacements)
-        if conflict:
-            conflicting_ids, ranges = conflict
-            for edit in edits:
-                _resolve_edit_future(
-                    edit,
-                    ToolMessage(
-                        content=(
-                            f"Error: Edit conflict in {file_path}. "
-                            f"Overlapping string replacements detected. "
-                            f"Submit edits sequentially to avoid conflicts."
-                        ),
-                        tool_call_id=edit.tool_call_id,
-                        name=edit.tool_name,
-                        status="error",
-                    ),
-                )
-            return
-
-        # Acquire per-file lock and apply all replacements atomically
         try:
             async with self._lock_registry.acquire(file_path):
-                # Re-read under the lock to get the authoritative content
                 content = await self._read_file_for_batch(file_path)
+
+                # Detect overlap against the authoritative in-lock content.
+                if self._find_string_overlaps(content, replacements):
+                    for edit in edits:
+                        _resolve_edit_future(
+                            edit,
+                            ToolMessage(
+                                content=(
+                                    f"Error: Edit conflict in {file_path}. "
+                                    "Overlapping string replacements detected. "
+                                    "Submit edits sequentially to avoid conflicts."
+                                ),
+                                tool_call_id=edit.tool_call_id,
+                                name=edit.tool_name,
+                                status="error",
+                            ),
+                        )
+                    return
 
                 outcomes: dict[str, tuple[bool, str]] = {}
                 applied_any = False
@@ -617,8 +611,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
     async def _read_file_for_batch(self, file_path: str) -> str:
         """Read file content for batch processing.
 
-        Attempts to use the workspace filesystem backend; falls back to direct
-        file read if no workspace context is available.
+        Uses workspace backend when context is available; otherwise reads directly.
 
         Args:
             file_path: Path to the file to read.
@@ -629,27 +622,24 @@ class EditCoalescingMiddleware(AgentMiddleware):
         Raises:
             Exception: If the file cannot be read.
         """
-        try:
-            from soothe.foundation.workspace.framework_filesystem import (
-                FrameworkFilesystem,
-            )
-            from soothe.foundation.workspace.normalized_backend import (
-                NormalizedPathBackend,
-            )
+        backend = self._get_context_backend()
+        if backend is not None:
+            result = await backend.aread(file_path)
+            error = getattr(result, "error", None)
+            if error:
+                raise RuntimeError(str(error))
 
-            current_workspace = FrameworkFilesystem.get_current_workspace()
-            if current_workspace is not None:
-                backend = NormalizedPathBackend(
-                    workspace=current_workspace,
-                    virtual_mode=True,
-                )
-                result = await backend.aread(file_path)
-                if hasattr(result, "error") and getattr(result, "error", None):
-                    raise Exception(result.error)
-                return result.content
-        except Exception:
-            # Fall back to direct read if no workspace context or read error
-            pass
+            file_data = getattr(result, "file_data", None)
+            if isinstance(file_data, dict):
+                return str(file_data.get("content", ""))
+            if isinstance(file_data, str):
+                return file_data
+
+            content = getattr(result, "content", None)
+            if isinstance(content, str):
+                return content
+
+            return ""
 
         # Direct file read fallback
         import aiofiles
@@ -660,8 +650,8 @@ class EditCoalescingMiddleware(AgentMiddleware):
     async def _atomic_write(self, file_path: str, content: str) -> None:
         """Write content atomically via the backend's write path.
 
-        Attempts to use the workspace filesystem backend's ``awrite`` (which
-        uses temp-file + ``os.replace``); falls back to direct write.
+        Uses workspace backend's ``awrite`` when context is available; otherwise
+        falls back to direct temp-file + ``os.replace``.
 
         Args:
             file_path: Path to the file to write.
@@ -670,27 +660,13 @@ class EditCoalescingMiddleware(AgentMiddleware):
         Raises:
             Exception: If the write fails.
         """
-        try:
-            from soothe.foundation.workspace.framework_filesystem import (
-                FrameworkFilesystem,
-            )
-            from soothe.foundation.workspace.normalized_backend import (
-                NormalizedPathBackend,
-            )
-
-            current_workspace = FrameworkFilesystem.get_current_workspace()
-            if current_workspace is not None:
-                backend = NormalizedPathBackend(
-                    workspace=current_workspace,
-                    virtual_mode=True,
-                )
-                result = await backend.awrite(file_path, content)
-                if hasattr(result, "error") and getattr(result, "error", None):
-                    raise Exception(result.error)
-                return
-        except Exception:
-            # Fall back to direct write if no workspace context or write error
-            pass
+        backend = self._get_context_backend()
+        if backend is not None:
+            result = await backend.awrite(file_path, content)
+            error = getattr(result, "error", None)
+            if error:
+                raise RuntimeError(str(error))
+            return
 
         # Direct write fallback (still atomic via temp + rename)
         import os
@@ -837,24 +813,13 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
         # Execute batched operation
         try:
-            # Import filesystem backend resolver
-            from soothe.foundation.workspace.framework_filesystem import FrameworkFilesystem
-            from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
-
-            # Get current workspace from context
-            current_workspace = FrameworkFilesystem.get_current_workspace()
-            if current_workspace is None:
+            backend = self._get_context_backend()
+            if backend is None:
                 # No workspace context, fall back to individual handlers
                 for edit in edits:
                     result = await edit.handler(edit.request)
                     _resolve_edit_future(edit, result)
                 return
-
-            # Create backend for the current workspace
-            backend = NormalizedPathBackend(
-                workspace=current_workspace,
-                virtual_mode=True,  # Sandbox to workspace
-            )
 
             # Execute batched edit via async filesystem
             result = await backend.aedit_batched(file_path, operations, backup=True)
