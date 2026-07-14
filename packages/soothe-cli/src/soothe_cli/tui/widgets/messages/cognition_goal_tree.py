@@ -225,6 +225,7 @@ class CognitionGoalTreeMessage(Vertical):
             self,
             body,
             status=status,
+            glyph_override="🎯",
             spinner_position=self._spinner_position,
             animate_running=self._loop_executing(),
         )

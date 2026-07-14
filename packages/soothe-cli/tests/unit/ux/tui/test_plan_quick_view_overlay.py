@@ -41,6 +41,14 @@ def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
     )
 
 
+def test_plan_quick_view_goal_header_uses_target_glyph() -> None:
+    """Goal header in plan quick-view renders the 🎯 prefix instead of the dot."""
+    tree = CognitionGoalTreeMessage(goal="Ship feature", id="gt-glyph")
+    content = tree.plan_quick_view_content()
+    assert content.plain.startswith("🎯")
+    assert "Ship feature" in content.plain
+
+
 def test_plan_quick_view_content_shows_pending_and_running() -> None:
     """Goal tree snapshot includes planned steps and execution mode."""
     tree = CognitionGoalTreeMessage(goal="Refactor module", max_iterations=3, id="gt-2")
