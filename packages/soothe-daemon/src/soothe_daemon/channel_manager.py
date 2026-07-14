@@ -223,6 +223,9 @@ class ChannelManager:
             title="Soothe Daemon",
             description="WebSocket API for Soothe",
             version="1.0.0",
+            docs_url=None,
+            redoc_url=None,
+            openapi_url=None,
         )
 
         # Add simple /healthz endpoint for Docker healthcheck (RFC-620)
