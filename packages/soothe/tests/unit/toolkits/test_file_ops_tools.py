@@ -1,7 +1,7 @@
 """Integration tests for file operation tools.
 
 Tests surgical file manipulation tools from soothe.toolkits.file_ops:
-- delete_file: Delete files with optional backup
+- delete: Delete files/directories with optional backup
 - file_info: Get file metadata
 - edit_lines: Replace specific line range in a file
 - insert_lines: Insert content at a specific line
@@ -43,8 +43,8 @@ def middleware(tmp_path):
 
 @pytest.fixture
 def delete_tool(middleware):
-    """Get delete_file tool from middleware."""
-    return next(t for t in middleware.tools if t.name == "delete_file")
+    """Get delete tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "delete")
 
 
 @pytest.fixture
@@ -83,14 +83,14 @@ def apply_diff_tool(middleware):
 
 
 class TestDeleteFileTool:
-    """Integration tests for delete_file tool."""
+    """Integration tests for delete tool."""
 
     def test_delete_existing_file(self, delete_tool, tmp_path) -> None:
         """Test deleting an existing file."""
         test_file = tmp_path / "delete_me.txt"
         test_file.write_text("content")
 
-        result = delete_tool.invoke({"file_path": str(test_file)})
+        result = delete_tool.invoke({"file_path": str(test_file), "backup": True})
 
         assert not test_file.exists()
         assert "Deleted" in result or "deleted" in result.lower()

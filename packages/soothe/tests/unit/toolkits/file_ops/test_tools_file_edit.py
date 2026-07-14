@@ -1,7 +1,7 @@
 """Tests for File Ops tools functionality.
 
 Tests surgical file operations provided by soothe.toolkits.file_ops:
-- delete_file: Delete files with optional backup
+- delete: Delete files/directories with optional backup
 - file_info: Get file metadata
 - edit_lines: Replace specific line ranges
 - insert_lines: Insert content at specific line
@@ -15,6 +15,7 @@ Note: This toolkit does NOT provide read_file, write_file, search_files, list_fi
 import asyncio
 
 import pytest
+from langchain.tools import ToolRuntime
 
 # ---------------------------------------------------------------------------
 # Middleware Fixture (Reference Implementation)
@@ -37,8 +38,8 @@ def middleware(tmp_path):
 
 @pytest.fixture
 def delete_tool(middleware):
-    """Get delete_file tool from middleware."""
-    return next(t for t in middleware.tools if t.name == "delete_file")
+    """Get delete tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "delete")
 
 
 @pytest.fixture
@@ -71,17 +72,46 @@ def apply_diff_tool(middleware):
     return next(t for t in middleware.tools if t.name == "apply_diff")
 
 
+def _runtime(tool_call_id: str) -> ToolRuntime:
+    return ToolRuntime(
+        state={"messages": [], "files": {}},
+        context=None,
+        tool_call_id=tool_call_id,
+        store=None,
+        stream_writer=lambda _: None,
+        config={},
+    )
+
+
+def _invoke_tool(tool, args: dict[str, object], *, tool_call_id: str) -> object:
+    try:
+        return tool.invoke(args)
+    except TypeError as exc:
+        if "missing 1 required positional argument: 'runtime'" not in str(exc):
+            raise
+        return tool.func(runtime=_runtime(tool_call_id), **args)
+
+
+def _ainvoke_tool(tool, args: dict[str, object], *, tool_call_id: str) -> object:
+    try:
+        return asyncio.run(tool.ainvoke(args))
+    except TypeError as exc:
+        if "missing 1 required positional argument: 'runtime'" not in str(exc):
+            raise
+        return asyncio.run(tool.coroutine(runtime=_runtime(tool_call_id), **args))
+
+
 # ---------------------------------------------------------------------------
 # Delete File Tool Tests
 # ---------------------------------------------------------------------------
 
 
 class TestDeleteFileTool:
-    """Test delete_file tool functionality."""
+    """Test delete tool functionality."""
 
     def test_tool_metadata(self, delete_tool) -> None:
         """Test tool metadata."""
-        assert delete_tool.name == "delete_file"
+        assert delete_tool.name == "delete"
         assert "delete" in delete_tool.description.lower()
 
     def test_delete_existing_file(self, delete_tool, tmp_path) -> None:
@@ -89,35 +119,41 @@ class TestDeleteFileTool:
         file_path = tmp_path / "test.txt"
         file_path.write_text("Hello, World!")
 
-        result = delete_tool.invoke({"file_path": str(file_path)})
+        result = _invoke_tool(
+            delete_tool, {"file_path": str(file_path), "backup": True}, tool_call_id="delete_1"
+        )
+        text = str(getattr(result, "content", result))
 
-        assert "Deleted" in result or "deleted" in result.lower()
+        assert "Deleted" in text or "deleted" in text.lower()
         assert not file_path.exists()
 
     def test_delete_nonexistent_file(self, delete_tool) -> None:
         """Test deleting a non-existent file."""
-        result = delete_tool.invoke({"file_path": "/nonexistent/file.txt"})
+        result = _invoke_tool(delete_tool, {"file_path": "/nonexistent/file.txt"}, tool_call_id="delete_2")
+        text = str(getattr(result, "content", result))
 
-        assert "Error" in result
-        assert "not found" in result.lower()
+        assert "Error" in text
+        assert "not_found" in text.lower() or "not found" in text.lower()
 
     def test_delete_with_backup(self, delete_tool, tmp_path) -> None:
         """Test deleting file with backup."""
         file_path = tmp_path / "test.txt"
         file_path.write_text("Hello, World!")
 
-        result = delete_tool.invoke({"file_path": str(file_path)})
+        result = _invoke_tool(delete_tool, {"file_path": str(file_path), "backup": True}, tool_call_id="delete_3")
+        text = str(getattr(result, "content", result))
 
-        assert "backup" in result.lower()
+        assert "backup" in text.lower()
 
     def test_async_delete_works(self, delete_tool, tmp_path) -> None:
         """Async invoke should work correctly."""
         file_path = tmp_path / "test.txt"
         file_path.write_text("Hello, World!")
 
-        result = asyncio.run(delete_tool.ainvoke({"file_path": str(file_path)}))
+        result = _ainvoke_tool(delete_tool, {"file_path": str(file_path)}, tool_call_id="delete_4")
+        text = str(getattr(result, "content", result))
 
-        assert "Deleted" in result or "deleted" in result.lower()
+        assert "Deleted" in text or "deleted" in text.lower()
         assert not file_path.exists()
 
 
@@ -141,18 +177,20 @@ class TestFileInfoTool:
         file_path = tmp_path / "test.txt"
         file_path.write_text("Hello, World!")
 
-        result = info_tool.invoke({"path": str(file_path)})
+        result = _invoke_tool(info_tool, {"path": str(file_path)}, tool_call_id="file_info_1")
+        text = str(getattr(result, "content", result))
 
-        assert "Path:" in result
-        assert "Size:" in result
-        assert "Modified:" in result
+        assert "Path:" in text
+        assert "Size:" in text
+        assert "Modified:" in text
 
     def test_get_nonexistent_file_info(self, info_tool) -> None:
         """Test getting info for non-existent file."""
-        result = info_tool.invoke({"path": "/nonexistent/file.txt"})
+        result = _invoke_tool(info_tool, {"path": "/nonexistent/file.txt"}, tool_call_id="file_info_2")
+        text = str(getattr(result, "content", result))
 
-        assert "Error" in result
-        assert "not found" in result.lower()
+        assert "Error" in text
+        assert "not_found" in text.lower() or "not found" in text.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -168,17 +206,20 @@ class TestEditFileLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\nline3\n")
 
-        result = edit_tool.invoke(
+        result = _invoke_tool(
+            edit_tool,
             {
                 "file_path": str(test_file),
                 "start_line": 2,
                 "end_line": 2,
                 "new_content": "modified_line2",
-            }
+            },
+            tool_call_id="edit_lines_1",
         )
+        text = str(getattr(result, "content", result))
 
-        assert "Updated" in result or "updated" in result.lower()
-        assert "1 removed, 1 added" in result
+        assert "Updated" in text or "updated" in text.lower()
+        assert "1 removed, 1 added" in text
 
         content = test_file.read_text()
         assert "modified_line2" in content
@@ -190,17 +231,20 @@ class TestEditFileLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\nline3\nline4\nline5\n")
 
-        result = edit_tool.invoke(
+        result = _invoke_tool(
+            edit_tool,
             {
                 "file_path": str(test_file),
                 "start_line": 2,
                 "end_line": 4,
                 "new_content": "new2\nnew3\nnew4",
-            }
+            },
+            tool_call_id="edit_lines_2",
         )
+        text = str(getattr(result, "content", result))
 
-        assert "Updated" in result or "updated" in result.lower()
-        assert "3 removed, 3 added" in result
+        assert "Updated" in text or "updated" in text.lower()
+        assert "3 removed, 3 added" in text
 
         content = test_file.read_text()
         assert "line1" in content
@@ -214,16 +258,19 @@ class TestEditFileLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\nline3\n")
 
-        result = edit_tool.invoke(
+        result = _invoke_tool(
+            edit_tool,
             {
                 "file_path": str(test_file),
                 "start_line": 2,
                 "end_line": 3,
                 "new_content": "new1\nnew2\nnew3\nnew4",
-            }
+            },
+            tool_call_id="edit_lines_3",
         )
+        text = str(getattr(result, "content", result))
 
-        assert "2 removed, 4 added" in result
+        assert "2 removed, 4 added" in text
 
         lines = test_file.read_text().splitlines()
         assert len(lines) == 5
@@ -233,30 +280,41 @@ class TestEditFileLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\n")
 
-        result = edit_tool.invoke(
+        result = _invoke_tool(
+            edit_tool,
             {"file_path": str(test_file), "start_line": 5, "end_line": 6, "new_content": "x"}
+            ,
+            tool_call_id="edit_lines_4",
         )
-        assert "Error" in result
-        assert "Invalid start_line" in result
+        text = str(getattr(result, "content", result))
+        assert "Error" in text
+        assert "exceeds file length" in text or "Invalid start_line" in text
 
-        result = edit_tool.invoke(
+        result = _invoke_tool(
+            edit_tool,
             {"file_path": str(test_file), "start_line": 1, "end_line": 5, "new_content": "x"}
+            ,
+            tool_call_id="edit_lines_5",
         )
-        assert "Error" in result
-        assert "Invalid end_line" in result
+        text = str(getattr(result, "content", result))
+        assert "Error" in text
+        assert "exceeds file length" in text or "Invalid end_line" in text
 
     def test_file_not_found(self, edit_tool) -> None:
         """Test error handling for missing file."""
-        result = edit_tool.invoke(
+        result = _invoke_tool(
+            edit_tool,
             {
                 "file_path": "/nonexistent/file.py",
                 "start_line": 1,
                 "end_line": 1,
                 "new_content": "x",
-            }
+            },
+            tool_call_id="edit_lines_6",
         )
-        assert "Error" in result
-        assert "File not found" in result
+        text = str(getattr(result, "content", result))
+        assert "Error" in text
+        assert "not found" in text.lower()
 
 
 class TestInsertLinesTool:
@@ -267,7 +325,11 @@ class TestInsertLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\n")
 
-        insert_tool.invoke({"file_path": str(test_file), "line": 1, "content": "new_first"})
+        _invoke_tool(
+            insert_tool,
+            {"file_path": str(test_file), "line": 1, "content": "new_first"},
+            tool_call_id="insert_lines_1",
+        )
 
         lines = test_file.read_text().splitlines()
         assert lines[0] == "new_first"
@@ -278,7 +340,11 @@ class TestInsertLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\nline3\n")
 
-        insert_tool.invoke({"file_path": str(test_file), "line": 2, "content": "inserted"})
+        _invoke_tool(
+            insert_tool,
+            {"file_path": str(test_file), "line": 2, "content": "inserted"},
+            tool_call_id="insert_lines_2",
+        )
 
         content = test_file.read_text()
         assert content == "line1\ninserted\nline2\nline3\n"
@@ -288,7 +354,11 @@ class TestInsertLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\n")
 
-        insert_tool.invoke({"file_path": str(test_file), "line": 3, "content": "new_last"})
+        _invoke_tool(
+            insert_tool,
+            {"file_path": str(test_file), "line": 3, "content": "new_last"},
+            tool_call_id="insert_lines_3",
+        )
 
         content = test_file.read_text()
         assert content == "line1\nline2\nnew_last\n"
@@ -302,7 +372,11 @@ class TestDeleteLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\nline3\n")
 
-        delete_lines_tool.invoke({"file_path": str(test_file), "start_line": 2, "end_line": 2})
+        _invoke_tool(
+            delete_lines_tool,
+            {"file_path": str(test_file), "start_line": 2, "end_line": 2},
+            tool_call_id="delete_lines_1",
+        )
 
         content = test_file.read_text()
         assert content == "line1\nline3\n"
@@ -312,7 +386,11 @@ class TestDeleteLinesTool:
         test_file = tmp_path / "test.py"
         test_file.write_text("line1\nline2\nline3\nline4\nline5\n")
 
-        delete_lines_tool.invoke({"file_path": str(test_file), "start_line": 2, "end_line": 4})
+        _invoke_tool(
+            delete_lines_tool,
+            {"file_path": str(test_file), "start_line": 2, "end_line": 4},
+            tool_call_id="delete_lines_2",
+        )
 
         content = test_file.read_text()
         assert content == "line1\nline5\n"
@@ -334,7 +412,11 @@ class TestApplyDiffTool:
 +    print('hello')
 """
 
-        apply_diff_tool.invoke({"file_path": str(test_file), "diff": diff})
+        _invoke_tool(
+            apply_diff_tool,
+            {"file_path": str(test_file), "diff": diff},
+            tool_call_id="apply_diff_1",
+        )
 
         content = test_file.read_text()
         assert "print('hello')" in content
@@ -343,7 +425,12 @@ class TestApplyDiffTool:
     def test_apply_diff_file_not_found(self, apply_diff_tool) -> None:
         """Test applying diff to non-existent file."""
         diff = "--- nonexistent.py\n+++ nonexistent.py\n@@ -1 +1 @@\n-old\n+new\n"
-        result = apply_diff_tool.invoke({"file_path": "/nonexistent/file.py", "diff": diff})
+        result = _invoke_tool(
+            apply_diff_tool,
+            {"file_path": "/nonexistent/file.py", "diff": diff},
+            tool_call_id="apply_diff_2",
+        )
+        text = str(getattr(result, "content", result))
 
-        assert "Error" in result
-        assert "File not found" in result
+        assert "Error" in text
+        assert "not found" in text.lower()

@@ -4,12 +4,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from langchain.tools import ToolRuntime
+
 from soothe.foundation.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     join_workspace_normalized_path,
     resolve_backend_os_path,
     should_use_virtual_path_resolution,
 )
+
+
+def _tool_runtime(tool_call_id: str = "tc") -> ToolRuntime:
+    return ToolRuntime(
+        state={"messages": [], "files": {}},
+        context=None,
+        tool_call_id=tool_call_id,
+        store=None,
+        stream_writer=lambda _: None,
+        config={},
+    )
 
 
 def test_resolve_backend_os_path_virtual_mode_maps_absolute(tmp_path: Path) -> None:
@@ -108,9 +121,10 @@ def test_filesystem_middleware_file_info_virtual_path(tmp_path: Path) -> None:
     )
     mw = SootheFilesystemMiddleware(backend=backend, workspace_root=str(ws))
     tool = next(t for t in mw.tools if t.name == "file_info")
-    out = tool.invoke({"path": "/note.txt"})
-    assert "File not found" not in out
-    assert "note.txt" in out
+    out = tool.func(path="/note.txt", runtime=_tool_runtime())
+    assert out is not None
+    assert "File not found" not in out.content
+    assert "note.txt" in out.content
 
 
 def test_filesystem_virtual_mode_from_soothe_config() -> None:
@@ -139,9 +153,10 @@ def test_resolve_file_ops_file_info_virtual_path_with_soothe_config(tmp_path: Pa
 
     tools = _resolve_single_tool_group_uncached("file_ops", config=cfg)
     file_info = next(t for t in tools if t.name == "file_info")
-    out = file_info.invoke({"path": "/marks.csv"})
-    assert "File not found" not in out
-    assert "marks.csv" in out or "bytes" in out.lower()
+    out = file_info.func(path="/marks.csv", runtime=_tool_runtime())
+    assert out is not None
+    assert "File not found" not in out.content
+    assert "marks.csv" in out.content or "bytes" in out.content.lower()
 
 
 def test_get_data_info_resolves_virtual_path(tmp_path: Path) -> None:

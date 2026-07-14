@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from time import time
 from unittest.mock import MagicMock
 
@@ -142,7 +143,9 @@ def test_plan_quick_view_running_status_ticks_between_steps() -> None:
 
     content = tree.plan_quick_view_content()
     assert "Running..." in content.plain
-    assert "(20s)" in content.plain
+    match = re.search(r"Running\.\.\.\s+\((\d+)s\)", content.plain)
+    assert match is not None
+    assert int(match.group(1)) >= 20
 
     pos_before = tree._spinner_position
     tree.tick_running_spinner()

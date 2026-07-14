@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from langchain.tools import ToolRuntime
+
 from soothe.toolkits.data import DataToolkit, InspectDataTool
 from soothe.toolkits.wizsearch import WizsearchCrawlTool, WizsearchSearchTool
 
@@ -45,7 +47,7 @@ class TestFileOpsToolkit:
     """
 
     def test_delete_tool(self, tmp_path: Path) -> None:
-        """Test delete tool via compatibility alias."""
+        """Test delete tool."""
         from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
@@ -55,9 +57,20 @@ class TestFileOpsToolkit:
 
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
-        tool = next(t for t in middleware.tools if t.name == "delete_file")
-        result = tool.invoke({"file_path": str(test_file)})
-        assert "Deleted" in result or "deleted" in result.lower()
+        tool = next(t for t in middleware.tools if t.name == "delete")
+        result = tool.func(
+            file_path=str(test_file),
+            runtime=ToolRuntime(
+                state={"messages": [], "files": {}},
+                context=None,
+                tool_call_id="delete",
+                store=None,
+                stream_writer=lambda _: None,
+                config={},
+            ),
+        )
+        text = str(getattr(result, "content", result))
+        assert "Deleted" in text or "deleted" in text.lower()
         assert not test_file.exists()
 
     def test_file_info_tool(self, tmp_path: Path) -> None:
@@ -72,9 +85,20 @@ class TestFileOpsToolkit:
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
         tool = next(t for t in middleware.tools if t.name == "file_info")
-        result = tool.invoke({"path": str(test_file)})
+        result = tool.func(
+            path=str(test_file),
+            runtime=ToolRuntime(
+                state={"messages": [], "files": {}},
+                context=None,
+                tool_call_id="file_info",
+                store=None,
+                stream_writer=lambda _: None,
+                config={},
+            ),
+        )
 
-        assert "Size" in result or "Path" in result or "size" in result.lower()
+        text = str(getattr(result, "content", result))
+        assert "Size" in text or "Path" in text or "size" in text.lower()
 
     def test_edit_lines_tool(self, tmp_path: Path) -> None:
         """Test edit_lines tool."""
@@ -88,8 +112,19 @@ class TestFileOpsToolkit:
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
         tool = next(t for t in middleware.tools if t.name == "edit_lines")
-        tool.invoke(
-            {"file_path": str(test_file), "start_line": 2, "end_line": 2, "new_content": "modified"}
+        tool.func(
+            file_path=str(test_file),
+            start_line=2,
+            end_line=2,
+            new_content="modified",
+            runtime=ToolRuntime(
+                state={"messages": [], "files": {}},
+                context=None,
+                tool_call_id="edit_lines",
+                store=None,
+                stream_writer=lambda _: None,
+                config={},
+            ),
         )
 
         assert "modified" in test_file.read_text()
@@ -106,7 +141,19 @@ class TestFileOpsToolkit:
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
         tool = next(t for t in middleware.tools if t.name == "insert_lines")
-        tool.invoke({"file_path": str(test_file), "line": 2, "content": "inserted"})
+        tool.func(
+            file_path=str(test_file),
+            line=2,
+            content="inserted",
+            runtime=ToolRuntime(
+                state={"messages": [], "files": {}},
+                context=None,
+                tool_call_id="insert_lines",
+                store=None,
+                stream_writer=lambda _: None,
+                config={},
+            ),
+        )
 
         assert "inserted" in test_file.read_text()
 
@@ -122,7 +169,19 @@ class TestFileOpsToolkit:
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
         tool = next(t for t in middleware.tools if t.name == "delete_lines")
-        tool.invoke({"file_path": str(test_file), "start_line": 2, "end_line": 2})
+        tool.func(
+            file_path=str(test_file),
+            start_line=2,
+            end_line=2,
+            runtime=ToolRuntime(
+                state={"messages": [], "files": {}},
+                context=None,
+                tool_call_id="delete_lines",
+                store=None,
+                stream_writer=lambda _: None,
+                config={},
+            ),
+        )
 
         content = test_file.read_text()
         assert "keep1" in content

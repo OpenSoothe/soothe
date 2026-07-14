@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from langchain.tools import ToolRuntime
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
@@ -13,11 +14,6 @@ from soothe_deepagents.backends.filesystem import FilesystemBackend
 
 from soothe.middleware.filesystem import (
     ApplyDiffSchema,
-    DeleteFileSchema,
-    DeleteLinesSchema,
-    EditFileLinesSchema,
-    FileInfoSchema,
-    InsertLinesSchema,
     SootheFilesystemMiddleware,
     coerce_provider_safe_tool_message,
 )
@@ -67,22 +63,7 @@ class TestCoerceProviderSafeToolMessage:
 
 
 class TestSootheFilesystemMiddlewareSchemas:
-    """Test tool schemas follow soothe_deepagents pattern."""
-
-    def test_delete_file_schema_is_basemodel(self) -> None:
-        assert issubclass(DeleteFileSchema, BaseModel)
-
-    def test_file_info_schema_is_basemodel(self) -> None:
-        assert issubclass(FileInfoSchema, BaseModel)
-
-    def test_edit_lines_schema_is_basemodel(self) -> None:
-        assert issubclass(EditFileLinesSchema, BaseModel)
-
-    def test_insert_lines_schema_is_basemodel(self) -> None:
-        assert issubclass(InsertLinesSchema, BaseModel)
-
-    def test_delete_lines_schema_is_basemodel(self) -> None:
-        assert issubclass(DeleteLinesSchema, BaseModel)
+    """Test soothe-specific tool schemas."""
 
     def test_apply_diff_schema_is_basemodel(self) -> None:
         assert issubclass(ApplyDiffSchema, BaseModel)
@@ -90,17 +71,38 @@ class TestSootheFilesystemMiddlewareSchemas:
     def test_schema_fields_have_descriptions(self) -> None:
         """All schema fields must have descriptions (soothe_deepagents pattern)."""
         for schema_cls in [
-            DeleteFileSchema,
-            FileInfoSchema,
-            EditFileLinesSchema,
-            InsertLinesSchema,
-            DeleteLinesSchema,
             ApplyDiffSchema,
         ]:
             for field_name, field_info in schema_cls.model_fields.items():
                 assert field_info.description, (
                     f"{schema_cls.__name__}.{field_name} missing description"
                 )
+
+
+def _tool_output_text(result: object) -> str:
+    if isinstance(result, ToolMessage):
+        return str(result.content)
+    return str(result)
+
+
+def _runtime(tool_call_id: str = "tc") -> ToolRuntime:
+    return ToolRuntime(
+        state={"messages": [], "files": {}},
+        context=None,
+        tool_call_id=tool_call_id,
+        store=None,
+        stream_writer=lambda _: None,
+        config={},
+    )
+
+
+def _invoke_tool(tool: BaseTool, args: dict[str, object], *, tool_call_id: str = "tc") -> object:
+    try:
+        return tool.invoke(args)
+    except TypeError as exc:
+        if "missing 1 required positional argument: 'runtime'" not in str(exc):
+            raise
+        return tool.func(runtime=_runtime(tool_call_id), **args)
 
 
 class TestSootheFilesystemMiddlewareToolCreation:
@@ -131,7 +133,7 @@ class TestSootheFilesystemMiddlewareToolCreation:
     def test_adds_surgical_tools(self, middleware: SootheFilesystemMiddleware) -> None:
         """Verify all Soothe surgical tools exist."""
         soothe_tool_names = [
-            "delete_file",
+            "delete",
             "file_info",
             "edit_lines",
             "insert_lines",
@@ -151,8 +153,8 @@ class TestSootheFilesystemMiddlewareToolCreation:
                 )
 
 
-class TestDeleteFileTool:
-    """Test delete_file tool with backup support."""
+class TestDeleteTool:
+    """Test delete tool with backup support."""
 
     @pytest.fixture()
     def middleware(self, tmp_path: Path) -> SootheFilesystemMiddleware:
@@ -164,36 +166,36 @@ class TestDeleteFileTool:
         backend = FilesystemBackend(root_dir=tmp_path)
         return SootheFilesystemMiddleware(backend=backend, backup_enabled=False)
 
-    def _get_tool(
-        self, middleware: SootheFilesystemMiddleware, name: str = "delete_file"
-    ) -> BaseTool:
+    def _get_tool(self, middleware: SootheFilesystemMiddleware, name: str = "delete") -> BaseTool:
         return next(t for t in middleware.tools if t.name == name)
 
-    def test_delete_file_with_backup(
+    def test_delete_with_backup(
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware
     ) -> None:
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
         tool = self._get_tool(middleware)
-        result = tool.invoke({"file_path": str(test_file)})
+        result = _invoke_tool(tool, {"file_path": str(test_file), "backup": True})
+        text = _tool_output_text(result)
 
-        assert "Deleted" in result
-        assert "backup:" in result
+        assert "Deleted" in text
+        assert "backup:" in text
         assert not test_file.exists()
-        assert any(tmp_path.glob(".backups/*.txt"))
+        assert any(tmp_path.glob(".backups/*"))
 
-    def test_delete_file_without_backup(
+    def test_delete_without_backup(
         self, tmp_path: Path, middleware_no_backup: SootheFilesystemMiddleware
     ) -> None:
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
         tool = self._get_tool(middleware_no_backup)
-        result = tool.invoke({"file_path": str(test_file)})
+        result = _invoke_tool(tool, {"file_path": str(test_file)})
+        text = _tool_output_text(result)
 
-        assert "Deleted" in result
-        assert "backup:" not in result
+        assert "Deleted" in text
+        assert "backup:" not in text
         assert not test_file.exists()
         assert not any(tmp_path.glob(".backups/*"))
 
@@ -201,22 +203,25 @@ class TestDeleteFileTool:
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware
     ) -> None:
         tool = self._get_tool(middleware)
-        result = tool.invoke({"file_path": str(tmp_path / "nonexistent.txt")})
+        result = _invoke_tool(tool, {"file_path": str(tmp_path / "nonexistent.txt")})
+        text = _tool_output_text(result)
 
-        assert "Error" in result
-        assert "not found" in result.lower()
+        assert "Error" in text
+        assert "not found" in text.lower()
 
-    def test_delete_directory_fails(
+    def test_delete_directory_recursively(
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware
     ) -> None:
         test_dir = tmp_path / "mydir"
         test_dir.mkdir()
+        (test_dir / "nested.txt").write_text("x")
 
         tool = self._get_tool(middleware)
-        result = tool.invoke({"file_path": str(test_dir)})
+        result = _invoke_tool(tool, {"file_path": str(test_dir)})
+        text = _tool_output_text(result)
 
-        assert "Error" in result
-        assert "Not a file" in result
+        assert "Deleted" in text
+        assert not test_dir.exists()
 
     def test_backup_file_naming(
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware
@@ -225,314 +230,19 @@ class TestDeleteFileTool:
         test_file.write_text("content")
 
         tool = self._get_tool(middleware)
-        tool.invoke({"file_path": str(test_file)})
+        _invoke_tool(tool, {"file_path": str(test_file), "backup": True})
 
-        backup_files = list(tmp_path.glob(".backups/*.txt"))
+        backup_files = list(tmp_path.glob(".backups/*"))
         assert len(backup_files) == 1
 
-        # Check timestamp format: myname_YYYYMMDD_HHMMSS.txt
+        # Check backup naming format: original_name.YYYYMMDD_HHMMSS.bak
         backup_name = backup_files[0].name
-        assert backup_name.startswith("myfile_")
-        assert backup_name.endswith(".txt")
+        assert backup_name.startswith("myfile.txt.")
+        assert backup_name.endswith(".bak")
 
         # Verify timestamp is parseable
-        timestamp_part = backup_name.replace("myfile_", "").replace(".txt", "")
+        timestamp_part = backup_name.replace("myfile.txt.", "").replace(".bak", "")
         datetime.strptime(timestamp_part, "%Y%m%d_%H%M%S")
-
-
-class TestFileInfoTool:
-    """Test file_info tool for metadata retrieval."""
-
-    @pytest.fixture()
-    def middleware(self, tmp_path: Path) -> SootheFilesystemMiddleware:
-        backend = FilesystemBackend(root_dir=tmp_path)
-        return SootheFilesystemMiddleware(backend=backend)
-
-    def _get_tool(self, middleware: SootheFilesystemMiddleware) -> BaseTool:
-        return next(t for t in middleware.tools if t.name == "file_info")
-
-    def test_file_info(self, tmp_path: Path, middleware: SootheFilesystemMiddleware) -> None:
-        test_file = tmp_path / "test.txt"
-        test_file.write_text("hello world")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke({"path": str(test_file)})
-
-        assert "Size:" in result
-        assert "Modified:" in result
-        assert "Is File: True" in result
-        assert "Is Directory: False" in result
-
-    def test_file_info_directory(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_dir = tmp_path / "mydir"
-        test_dir.mkdir()
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke({"path": str(test_dir)})
-
-        assert "Is File: False" in result
-        assert "Is Directory: True" in result
-
-    def test_file_info_nonexistent(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        tool = self._get_tool(middleware)
-        result = tool.invoke({"path": str(tmp_path / "nonexistent.txt")})
-
-        assert "Error" in result
-
-
-class TestEditFileLinesTool:
-    """Test edit_lines tool for surgical line replacement."""
-
-    @pytest.fixture()
-    def middleware(self, tmp_path: Path) -> SootheFilesystemMiddleware:
-        backend = FilesystemBackend(root_dir=tmp_path)
-        return SootheFilesystemMiddleware(backend=backend)
-
-    def _get_tool(self, middleware: SootheFilesystemMiddleware) -> BaseTool:
-        return next(t for t in middleware.tools if t.name == "edit_lines")
-
-    def test_replace_single_line(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\nline3\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 2,
-                "end_line": 2,
-                "new_content": "new_line2\n",
-            }
-        )
-
-        assert "Updated" in result
-        assert "replaced" in result
-        assert test_file.read_text() == "line1\nnew_line2\nline3\n"
-
-    def test_replace_multiple_lines(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\nline3\nline4\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 2,
-                "end_line": 3,
-                "new_content": "new_line2\nnew_line3\n",
-            }
-        )
-
-        assert "Updated" in result
-        assert "2 removed" in result
-        assert "2 added" in result
-        assert test_file.read_text() == "line1\nnew_line2\nnew_line3\nline4\n"
-
-    def test_invalid_start_line(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 0,
-                "end_line": 1,
-                "new_content": "x\n",
-            }
-        )
-
-        assert "Error" in result
-        assert "Invalid start_line" in result
-
-    def test_end_line_before_start(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 2,
-                "end_line": 1,
-                "new_content": "x\n",
-            }
-        )
-
-        assert "Error" in result
-
-    def test_file_not_found(self, tmp_path: Path, middleware: SootheFilesystemMiddleware) -> None:
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(tmp_path / "nonexistent.py"),
-                "start_line": 1,
-                "end_line": 1,
-                "new_content": "x\n",
-            }
-        )
-
-        assert "Error" in result
-        assert "not found" in result.lower()
-
-
-class TestInsertLinesTool:
-    """Test insert_lines tool."""
-
-    @pytest.fixture()
-    def middleware(self, tmp_path: Path) -> SootheFilesystemMiddleware:
-        backend = FilesystemBackend(root_dir=tmp_path)
-        return SootheFilesystemMiddleware(backend=backend)
-
-    def _get_tool(self, middleware: SootheFilesystemMiddleware) -> BaseTool:
-        return next(t for t in middleware.tools if t.name == "insert_lines")
-
-    def test_insert_at_beginning(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line2\nline3\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "line": 1,
-                "content": "line1\n",
-            }
-        )
-
-        assert "Inserted 1 lines" in result
-        assert test_file.read_text() == "line1\nline2\nline3\n"
-
-    def test_insert_at_end(self, tmp_path: Path, middleware: SootheFilesystemMiddleware) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "line": 3,
-                "content": "line3\n",
-            }
-        )
-
-        assert "Inserted" in result
-        assert test_file.read_text() == "line1\nline2\nline3\n"
-
-    def test_insert_defaults_line_to_one(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "doc.md"
-        test_file.write_text("body\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "content": "---\ntitle: Example\n---\n",
-            }
-        )
-
-        assert "Inserted" in result
-        assert test_file.read_text().startswith("---\n")
-
-    def test_invalid_line_number(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "line": 5,
-                "content": "x\n",
-            }
-        )
-
-        assert "Error" in result
-        assert "Invalid line" in result
-
-
-class TestDeleteLinesTool:
-    """Test delete_lines tool."""
-
-    @pytest.fixture()
-    def middleware(self, tmp_path: Path) -> SootheFilesystemMiddleware:
-        backend = FilesystemBackend(root_dir=tmp_path)
-        return SootheFilesystemMiddleware(backend=backend)
-
-    def _get_tool(self, middleware: SootheFilesystemMiddleware) -> BaseTool:
-        return next(t for t in middleware.tools if t.name == "delete_lines")
-
-    def test_delete_single_line(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\nline3\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 2,
-                "end_line": 2,
-            }
-        )
-
-        assert "Deleted lines 2-2" in result
-        assert "1 lines" in result
-        assert test_file.read_text() == "line1\nline3\n"
-
-    def test_delete_multiple_lines(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\nline2\nline3\nline4\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 2,
-                "end_line": 3,
-            }
-        )
-
-        assert "2 lines" in result
-        assert test_file.read_text() == "line1\nline4\n"
-
-    def test_invalid_line_range(
-        self, tmp_path: Path, middleware: SootheFilesystemMiddleware
-    ) -> None:
-        test_file = tmp_path / "test.py"
-        test_file.write_text("line1\n")
-
-        tool = self._get_tool(middleware)
-        result = tool.invoke(
-            {
-                "file_path": str(test_file),
-                "start_line": 5,
-                "end_line": 5,
-            }
-        )
-
-        assert "Error" in result
 
 
 class TestApplyDiffTool:
@@ -557,29 +267,79 @@ class TestApplyDiffTool:
         )
 
         tool = self._get_tool(middleware)
-        result = tool.invoke(
+        result = _invoke_tool(
+            tool,
             {
                 "file_path": str(test_file),
                 "diff": diff,
-            }
+            },
+            tool_call_id="ad_ok",
+        )
+        text = _tool_output_text(result)
+
+        assert "Applied diff" in text
+        assert test_file.read_text() == "modified content\n"
+
+    def test_apply_diff_basic_unified_diff_format(
+        self,
+        tmp_path: Path,
+        middleware: SootheFilesystemMiddleware,
+    ) -> None:
+        test_file = tmp_path / "fallback.txt"
+        test_file.write_text("old line\n")
+        diff = (
+            "--- fallback.txt\n"
+            "+++ fallback.txt\n"
+            "@@ -1 +1 @@\n"
+            "-old line\n"
+            "+new line\n"
         )
 
-        # Patch may succeed or fail depending on format, just verify no crash
-        assert isinstance(result, str)
+        tool = self._get_tool(middleware)
+        result = _invoke_tool(
+            tool,
+            {"file_path": str(test_file), "diff": diff},
+            tool_call_id="ad_basic",
+        )
+        text = _tool_output_text(result)
+
+        assert "Applied diff" in text
+        assert test_file.read_text() == "new line\n"
 
     def test_apply_diff_file_not_found(
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware
     ) -> None:
         tool = self._get_tool(middleware)
-        result = tool.invoke(
+        result = _invoke_tool(
+            tool,
             {
                 "file_path": str(tmp_path / "nonexistent.txt"),
                 "diff": "--- a\n+++ b\n@@\n-x\n+y\n",
-            }
+            },
+            tool_call_id="ad_missing",
         )
+        text = _tool_output_text(result)
 
-        assert "Error" in result
-        assert "not found" in result.lower()
+        assert "Error" in text
+        assert "not found" in text.lower()
+
+    def test_apply_diff_invalid_unified_diff_returns_error(
+        self,
+        tmp_path: Path,
+        middleware: SootheFilesystemMiddleware,
+    ) -> None:
+        test_file = tmp_path / "bad_diff.txt"
+        test_file.write_text("line\n")
+
+        tool = self._get_tool(middleware)
+        result = _invoke_tool(
+            tool,
+            {"file_path": str(test_file), "diff": "invalid diff"},
+            tool_call_id="ad_bad",
+        )
+        text = _tool_output_text(result)
+
+        assert "Failed to apply diff with Python fallback" in text
 
 
 class TestCustomBackupDir:
@@ -597,9 +357,16 @@ class TestCustomBackupDir:
         test_file = tmp_path / "test.txt"
         test_file.write_text("content")
 
-        tool = next(t for t in middleware.tools if t.name == "delete_file")
-        tool.invoke({"file_path": str(test_file)})
+        tool = next(t for t in middleware.tools if t.name == "delete")
+        _invoke_tool(
+            tool,
+            {
+                "file_path": str(test_file),
+                "backup": True,
+                "backup_dir": str(backup_dir),
+            },
+        )
 
         # Backup should be in custom dir, not .backups
         assert not any(tmp_path.glob(".backups/*"))
-        assert any(backup_dir.glob("*.txt"))
+        assert any(backup_dir.glob("*"))
