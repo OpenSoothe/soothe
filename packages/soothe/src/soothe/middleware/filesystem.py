@@ -37,11 +37,11 @@ def __getattr__(name: str) -> Any:
     if name == "ApplyDiffSchema":
         try:
             from soothe_deepagents.middleware.filesystem import (
-                ApplyDiffSchema as apply_diff_schema,
+                ApplyDiffSchema,
             )
         except ImportError as exc:
             raise ImportError(_apply_diff_requirement_message()) from exc
-        return apply_diff_schema
+        return ApplyDiffSchema
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -72,9 +72,8 @@ def _ensure_upstream_apply_diff_support() -> None:
     if not hasattr(da_filesystem, "ApplyDiffSchema") or not hasattr(
         FilesystemMiddleware, "_create_apply_diff_tool"
     ):
-        raise ImportError(
-            f"{_apply_diff_requirement_message()} (module={filesystem_mod!r})"
-        )
+        raise ImportError(f"{_apply_diff_requirement_message()} (module={filesystem_mod!r})")
+
 
 # OpenAI-compatible chat APIs used by many Soothe providers (e.g. coding-plan) reject
 # LangChain ``file`` / ``audio`` tool-result blocks. ``read_file`` on PDFs returns those.

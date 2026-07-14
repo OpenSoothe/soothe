@@ -99,9 +99,9 @@ class TestApplyDiffUpstreamContract:
 
     def test_pyproject_requires_deepagents_with_apply_diff(self) -> None:
         """Keep soothe-deepagents floor at the ApplyDiffSchema release."""
-        pyproject = (
-            Path(__file__).resolve().parents[3] / "pyproject.toml"
-        ).read_text(encoding="utf-8")
+        pyproject = (Path(__file__).resolve().parents[3] / "pyproject.toml").read_text(
+            encoding="utf-8"
+        )
         match = re.search(
             r'"soothe-deepagents(?P<spec>[^"]+)"',
             pyproject,
