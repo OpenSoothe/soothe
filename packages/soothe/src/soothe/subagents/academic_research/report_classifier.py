@@ -119,7 +119,8 @@ async def classify_report_scenario(
     soothe_config: Any | None = None,
     timeout_sec: float = 30.0,
 ) -> ReportScenarioClassification:
-    from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+    from soothe_deepagents.middleware.llm_rate_limit import EnhancedTimeoutError
+
     from soothe.utils.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,

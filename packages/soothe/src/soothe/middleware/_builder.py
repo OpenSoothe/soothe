@@ -105,6 +105,7 @@ def build_soothe_middleware_stack(
     Returns:
         Tuple of middleware instances in execution order.
     """
+    from soothe_deepagents.middleware.llm_rate_limit import LLMRateLimitMiddleware
     from soothe_deepagents.middleware.reliability import (
         InvalidToolHintsMiddleware,
         NetworkToolErrorsMiddleware,
@@ -115,7 +116,6 @@ def build_soothe_middleware_stack(
     )
 
     from .edit_coalescing import EditCoalescingMiddleware
-    from .llm_rate_limit import LLMRateLimitMiddleware
     from .model_call_profiler import is_profiler_enabled
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware

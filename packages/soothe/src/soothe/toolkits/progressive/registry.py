@@ -19,8 +19,8 @@ DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
         "write_todos",
         "task",
         # soothe surgical file ops
-        "delete_file",
-        "edit_file_lines",
+        "delete",
+        "edit_lines",
         "insert_lines",
         "delete_lines",
         "apply_diff",

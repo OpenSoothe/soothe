@@ -7,7 +7,7 @@ from typing import Any
 from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOperationRecord,
-    apply_edit_file_lines_to_content,
+    apply_edit_lines_to_content,
     apply_insert_lines_to_content,
     extract_line_range_text,
     parse_insert_line_arg,
@@ -80,7 +80,7 @@ def build_file_change_preview(
             "new_string": new_string,
         }
 
-    if tool_name == "edit_file_lines":
+    if tool_name == "edit_lines":
         line_range = parse_line_range_args(args)
         if line_range is None:
             return None
@@ -128,9 +128,7 @@ def build_file_change_preview(
         if physical and physical.is_file():
             before = read_physical_file_text(physical) or ""
         old_segment = extract_line_range_text(before, start_line, end_line) if before else ""
-        after_text = (
-            apply_edit_file_lines_to_content(before, start_line, end_line, "") if before else ""
-        )
+        after_text = apply_edit_lines_to_content(before, start_line, end_line, "") if before else ""
         if after_text is None:
             after_text = before
         return EditFileLinesPreviewWidget, {
@@ -203,7 +201,7 @@ def update_preview_data_from_record(data: dict[str, Any], record: FileOperationR
         data["total_lines"] = len(lines)
         return
 
-    if record.tool_name == "edit_file_lines":
+    if record.tool_name == "edit_lines":
         line_range = parse_line_range_args(record.args)
         if line_range is not None:
             data["start_line"], data["end_line"] = line_range

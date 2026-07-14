@@ -102,7 +102,7 @@ class FileInfoSchema(BaseModel):
 
 
 class EditFileLinesSchema(BaseModel):
-    """Input schema for the `edit_file_lines` tool."""
+    """Input schema for the `edit_lines` tool."""
 
     file_path: str = Field(
         description="Absolute path to the file to edit. Must be absolute, not relative."
@@ -202,11 +202,6 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
     """Extended filesystem middleware with surgical file operations.
 
     Inherits from FilesystemMiddleware and adds:
-    - delete_file: Delete files with optional backup
-    - file_info: Get file metadata (size, mtime, permissions)
-    - edit_file_lines: Replace specific line ranges (surgical edit)
-    - insert_lines: Insert content at specific line number
-    - delete_lines: Delete specific line ranges from a file
     - apply_diff: Apply unified diff patches
 
     All tools follow standard patterns:
@@ -251,7 +246,19 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         kwargs["custom_tool_descriptions"] = custom_descriptions
         kwargs.setdefault(
             "tools",
-            ["ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep"],
+            [
+                "ls",
+                "read_file",
+                "write_file",
+                "edit_file",
+                "delete",
+                "glob",
+                "grep",
+                "file_info",
+                "edit_lines",
+                "insert_lines",
+                "delete_lines",
+            ],
         )
         super().__init__(**kwargs)
 
@@ -268,17 +275,24 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         self._workspace_root = workspace_root
         self._workspace_backend_factory = workspace_backend_factory
 
-        # Add surgical file tools
-        self.tools.extend(
-            [
-                self._create_delete_file_tool(),
-                self._create_file_info_tool(),
-                self._create_edit_file_lines_tool(),
-                self._create_insert_lines_tool(),
-                self._create_delete_lines_tool(),
-                self._create_apply_diff_tool(),
-            ]
-        )
+        # Prefer deepagents-native surgical tools when available, but keep a
+        # compatibility fallback for environments pinned to older deepagents.
+        existing_tool_names = {tool.name for tool in self.tools}
+        fallback_factories: list[Callable[[], BaseTool]] = [
+            self._create_file_info_tool,
+            self._create_edit_lines_tool,
+            self._create_insert_lines_tool,
+            self._create_delete_lines_tool,
+        ]
+        for factory in fallback_factories:
+            tool = factory()
+            if tool.name not in existing_tool_names:
+                self.tools.append(tool)
+                existing_tool_names.add(tool.name)
+
+        # Retain delete_file as a compatibility alias and keep soothe-specific
+        # apply_diff.
+        self.tools.extend([self._create_delete_file_tool(), self._create_apply_diff_tool()])
 
     def _get_backend(self, runtime: ToolRuntime | None = None) -> BackendProtocol:
         """Get backend, resolving the effective stream workspace when available.
@@ -489,10 +503,10 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             args_schema=FileInfoSchema,
         )
 
-    def _create_edit_file_lines_tool(self) -> BaseTool:
-        """Create the edit_file_lines tool for surgical line replacement."""
+    def _create_edit_lines_tool(self) -> BaseTool:
+        """Create the edit_lines tool for surgical line replacement."""
 
-        def sync_edit_file_lines(
+        def sync_edit_lines(
             file_path: Annotated[
                 str, "Absolute path to the file to edit. Must be absolute, not relative."
             ],
@@ -501,7 +515,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             new_content: Annotated[str, "New content to insert."],
             runtime: ToolRuntime | None = None,
         ) -> str:
-            """Synchronous wrapper for edit_file_lines tool."""
+            """Synchronous wrapper for edit_lines tool."""
             try:
                 validated_path = validate_path(file_path)
             except ValueError as e:
@@ -563,24 +577,22 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 f"({lines_removed} removed, {lines_added} added)"
             )
 
-        async def async_edit_file_lines(
+        async def async_edit_lines(
             file_path: Annotated[str, "Absolute path to the file to edit."],
             start_line: Annotated[int, "First line to replace (1-indexed)."],
             end_line: Annotated[int, "Last line to replace (1-indexed)."],
             new_content: Annotated[str, "New content to insert."],
             runtime: ToolRuntime | None = None,
         ) -> str:
-            """Asynchronous wrapper for edit_file_lines tool."""
+            """Asynchronous wrapper for edit_lines tool."""
             # File read/line ops are synchronous, delegate
-            return sync_edit_file_lines(
-                file_path, start_line, end_line, new_content, runtime=runtime
-            )
+            return sync_edit_lines(file_path, start_line, end_line, new_content, runtime=runtime)
 
         return StructuredTool.from_function(
-            name="edit_file_lines",
+            name="edit_lines",
             description=EDIT_FILE_LINES_TOOL_DESCRIPTION,
-            func=sync_edit_file_lines,
-            coroutine=async_edit_file_lines,
+            func=sync_edit_lines,
+            coroutine=async_edit_lines,
             infer_schema=False,
             args_schema=EditFileLinesSchema,
         )

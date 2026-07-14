@@ -124,7 +124,8 @@ async def classify_report_scenario(
     timeout_sec: float = 30.0,
 ) -> ReportScenarioClassification:
     """Classify report scenario using fast model with heuristic fallback."""
-    from soothe.middleware.llm_rate_limit import EnhancedTimeoutError
+    from soothe_deepagents.middleware.llm_rate_limit import EnhancedTimeoutError
+
     from soothe.utils.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,

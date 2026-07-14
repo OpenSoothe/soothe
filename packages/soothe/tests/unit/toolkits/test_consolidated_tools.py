@@ -44,8 +44,8 @@ class TestFileOpsToolkit:
     (those are provided by soothe_deepagents FilesystemMiddleware).
     """
 
-    def test_delete_file_tool(self, tmp_path: Path) -> None:
-        """Test delete_file tool."""
+    def test_delete_tool(self, tmp_path: Path) -> None:
+        """Test delete tool via compatibility alias."""
         from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
@@ -57,7 +57,6 @@ class TestFileOpsToolkit:
         middleware = SootheFilesystemMiddleware(backend=backend)
         tool = next(t for t in middleware.tools if t.name == "delete_file")
         result = tool.invoke({"file_path": str(test_file)})
-
         assert "Deleted" in result or "deleted" in result.lower()
         assert not test_file.exists()
 
@@ -77,8 +76,8 @@ class TestFileOpsToolkit:
 
         assert "Size" in result or "Path" in result or "size" in result.lower()
 
-    def test_edit_file_lines_tool(self, tmp_path: Path) -> None:
-        """Test edit_file_lines tool."""
+    def test_edit_lines_tool(self, tmp_path: Path) -> None:
+        """Test edit_lines tool."""
         from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
@@ -88,7 +87,7 @@ class TestFileOpsToolkit:
 
         backend = FilesystemBackend(root_dir=tmp_path)
         middleware = SootheFilesystemMiddleware(backend=backend)
-        tool = next(t for t in middleware.tools if t.name == "edit_file_lines")
+        tool = next(t for t in middleware.tools if t.name == "edit_lines")
         tool.invoke(
             {"file_path": str(test_file), "start_line": 2, "end_line": 2, "new_content": "modified"}
         )
@@ -253,9 +252,9 @@ class TestResolverToolkitNames:
         assert len(tools) == 6
         tool_names = {t.name for t in tools}
         # Surgical file operations (not basic read/write)
-        assert "delete_file" in tool_names
+        assert "delete" in tool_names
         assert "file_info" in tool_names
-        assert "edit_file_lines" in tool_names
+        assert "edit_lines" in tool_names
         assert "insert_lines" in tool_names
         assert "delete_lines" in tool_names
         assert "apply_diff" in tool_names

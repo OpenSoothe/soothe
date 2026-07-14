@@ -9,7 +9,7 @@
 
 ## Overview
 
-Extend deepagents' `FilesystemMiddleware` to provide surgical file manipulation tools (delete_file, file_info, edit_file_lines, insert_lines, delete_lines, apply_diff) with backup support, following deepagents' implementation patterns and integrating with Soothe's configuration system.
+Extend deepagents' `FilesystemMiddleware` to provide surgical file manipulation tools (delete_file, file_info, edit_lines, insert_lines, delete_lines, apply_diff) with backup support, following deepagents' implementation patterns and integrating with Soothe's configuration system.
 
 ## Implementation Scope
 
@@ -158,7 +158,7 @@ def _create_xxx_tool(self) -> BaseTool:
 
 **No backend usage** (metadata not in BackendProtocol)
 
-### Step 5: Implement edit_file_lines Tool
+### Step 5: Implement edit_lines Tool
 
 **Logic**:
 1. `validate_path(file_path)`
@@ -186,17 +186,17 @@ def _create_xxx_tool(self) -> BaseTool:
 7. `modified_content = "".join(lines)`
 8. `backend.write(file_path, modified_content)`
 
-**Backend usage**: Same as edit_file_lines
+**Backend usage**: Same as edit_lines
 
 ### Step 7: Implement delete_lines Tool
 
 **Logic**:
-1-3: Same as edit_file_lines
+1-3: Same as edit_lines
 4. Validate `start_line` and `end_line`
 5. `del lines[start_line-1:end_line]`
-6-8: Same as edit_file_lines
+6-8: Same as edit_lines
 
-**Backend usage**: Same as edit_file_lines
+**Backend usage**: Same as edit_lines
 
 ### Step 8: Implement apply_diff Tool
 
@@ -284,7 +284,7 @@ class FileOpsPlugin:
 
         # Extract surgical tools only
         surgical_names = [
-            "delete_file", "file_info", "edit_file_lines",
+            "delete_file", "file_info", "edit_lines",
             "insert_lines", "delete_lines", "apply_diff",
         ]
 
@@ -320,7 +320,7 @@ class TestSootheFilesystemMiddleware:
     def test_file_info(self, tmp_path):
         # Test metadata retrieval
 
-    def test_edit_file_lines(self, tmp_path):
+    def test_edit_lines(self, tmp_path):
         # Test line replacement
 
     def test_insert_lines(self, tmp_path):

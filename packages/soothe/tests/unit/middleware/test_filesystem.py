@@ -75,7 +75,7 @@ class TestSootheFilesystemMiddlewareSchemas:
     def test_file_info_schema_is_basemodel(self) -> None:
         assert issubclass(FileInfoSchema, BaseModel)
 
-    def test_edit_file_lines_schema_is_basemodel(self) -> None:
+    def test_edit_lines_schema_is_basemodel(self) -> None:
         assert issubclass(EditFileLinesSchema, BaseModel)
 
     def test_insert_lines_schema_is_basemodel(self) -> None:
@@ -133,7 +133,7 @@ class TestSootheFilesystemMiddlewareToolCreation:
         soothe_tool_names = [
             "delete_file",
             "file_info",
-            "edit_file_lines",
+            "edit_lines",
             "insert_lines",
             "delete_lines",
             "apply_diff",
@@ -285,7 +285,7 @@ class TestFileInfoTool:
 
 
 class TestEditFileLinesTool:
-    """Test edit_file_lines tool for surgical line replacement."""
+    """Test edit_lines tool for surgical line replacement."""
 
     @pytest.fixture()
     def middleware(self, tmp_path: Path) -> SootheFilesystemMiddleware:
@@ -293,7 +293,7 @@ class TestEditFileLinesTool:
         return SootheFilesystemMiddleware(backend=backend)
 
     def _get_tool(self, middleware: SootheFilesystemMiddleware) -> BaseTool:
-        return next(t for t in middleware.tools if t.name == "edit_file_lines")
+        return next(t for t in middleware.tools if t.name == "edit_lines")
 
     def test_replace_single_line(
         self, tmp_path: Path, middleware: SootheFilesystemMiddleware

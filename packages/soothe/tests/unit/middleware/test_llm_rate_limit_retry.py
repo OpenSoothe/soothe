@@ -7,8 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from langchain_core.messages import AIMessage
-
-from soothe.middleware.llm_rate_limit import (
+from soothe_deepagents.middleware.llm_rate_limit import (
     EnhancedTimeoutError,
     LLMRateLimitMiddleware,
     LLMRateLimitRegistry,
@@ -18,6 +17,7 @@ from soothe.middleware.llm_rate_limit import (
     calc_rate_limit_backoff,
     effective_llm_call_timeout,
 )
+
 from soothe.utils.llm.structured import StructuredOutputError
 
 

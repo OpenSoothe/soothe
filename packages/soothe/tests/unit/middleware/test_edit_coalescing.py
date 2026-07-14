@@ -64,12 +64,12 @@ class TestPendingEdit:
         """PendingEdit should store all required fields."""
         loop = asyncio.get_running_loop()
         future: asyncio.Future[ToolMessage] = loop.create_future()
-        request = _make_request("edit_file_lines", {"file_path": "/test.txt"})
+        request = _make_request("edit_lines", {"file_path": "/test.txt"})
         handler = _make_async_handler()
 
         pending = PendingEdit(
             tool_call_id="call-123",
-            tool_name="edit_file_lines",
+            tool_name="edit_lines",
             file_path="/test.txt",
             args={"start": 1, "end": 5, "new_content": "test"},
             result_future=future,
@@ -78,7 +78,7 @@ class TestPendingEdit:
         )
 
         assert pending.tool_call_id == "call-123"
-        assert pending.tool_name == "edit_file_lines"
+        assert pending.tool_name == "edit_lines"
         assert pending.file_path == "/test.txt"
         assert pending.args["start"] == 1
         assert pending.args["end"] == 5
@@ -148,14 +148,12 @@ class TestEditBatch:
         future: asyncio.Future[ToolMessage] = loop.create_future()
         pending = PendingEdit(
             tool_call_id="rep-1",
-            tool_name="edit_file_lines",
+            tool_name="edit_lines",
             file_path="/test.txt",
             args={"start": 1, "end": 3, "new_content": "replaced"},
             result_future=future,
             handler=_make_async_handler(),
-            request=_make_request(
-                "edit_file_lines", {"start": 1, "end": 3, "new_content": "replaced"}
-            ),
+            request=_make_request("edit_lines", {"start": 1, "end": 3, "new_content": "replaced"}),
         )
 
         batch = EditBatch(file_path="/test.txt", edits=[pending])
@@ -198,14 +196,12 @@ class TestEditBatch:
         rep_future: asyncio.Future[ToolMessage] = loop.create_future()
         replacement = PendingEdit(
             tool_call_id="rep-1",
-            tool_name="edit_file_lines",
+            tool_name="edit_lines",
             file_path="/test.txt",
             args={"start": 1, "end": 1, "new_content": "replaced"},
             result_future=rep_future,
             handler=_make_async_handler(),
-            request=_make_request(
-                "edit_file_lines", {"start": 1, "end": 1, "new_content": "replaced"}
-            ),
+            request=_make_request("edit_lines", {"start": 1, "end": 1, "new_content": "replaced"}),
         )
 
         # Add in random order
@@ -228,13 +224,13 @@ class TestEditBatch:
         replacements = [
             PendingEdit(
                 tool_call_id=f"rep-{i}",
-                tool_name="edit_file_lines",
+                tool_name="edit_lines",
                 file_path="/test.txt",
                 args={"start": start, "end": start + 2, "new_content": f"content-{i}"},
                 result_future=futures[i],
                 handler=_make_async_handler(),
                 request=_make_request(
-                    "edit_file_lines",
+                    "edit_lines",
                     {"start": start, "end": start + 2, "new_content": f"content-{i}"},
                 ),
             )
@@ -345,7 +341,7 @@ class TestEditCoalescingMiddleware:
         middleware = EditCoalescingMiddleware()
 
         assert middleware._is_edit_tool("edit_file") is True
-        assert middleware._is_edit_tool("edit_file_lines") is True
+        assert middleware._is_edit_tool("edit_lines") is True
         assert middleware._is_edit_tool("insert_lines") is True
         assert middleware._is_edit_tool("delete_lines") is True
         assert middleware._is_edit_tool("read_file") is False
@@ -385,7 +381,7 @@ class TestEditCoalescingMiddleware:
     async def test_edit_tool_without_path_passes_through(self) -> None:
         """Edit tool without file path should pass through without coalescing."""
         middleware = EditCoalescingMiddleware()
-        request = _make_request("edit_file_lines", {})  # No path
+        request = _make_request("edit_lines", {})  # No path
 
         result = await middleware.awrap_tool_call(request, _make_async_handler("edited"))
 
@@ -459,7 +455,7 @@ class TestEditToolNames:
     def test_edit_tool_names_contains_expected(self) -> None:
         """EDIT_TOOL_NAMES should contain expected tool names."""
         assert "edit_file" in EDIT_TOOL_NAMES
-        assert "edit_file_lines" in EDIT_TOOL_NAMES
+        assert "edit_lines" in EDIT_TOOL_NAMES
         assert "insert_lines" in EDIT_TOOL_NAMES
         assert "delete_lines" in EDIT_TOOL_NAMES
 

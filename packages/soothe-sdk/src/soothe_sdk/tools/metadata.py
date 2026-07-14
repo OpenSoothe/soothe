@@ -269,7 +269,7 @@ _register(
 
 _register(
     ToolMeta(
-        name="edit_file_lines",
+        name="edit_lines",
         display_name="EditFileLines",
         arg_keys=("path", "file_path"),
         path_arg_keys=("path", "file_path"),

@@ -14,7 +14,7 @@ This implementation guide provides step-by-step instructions for the tool interf
 ### What Was Implemented
 
 1. **Single-Purpose Tools**: Replaced unified dispatch tools with direct tools
-2. **Surgical Editing**: Line-precise editing capabilities (edit_file_lines, insert_lines, delete_lines, apply_diff)
+2. **Surgical Editing**: Line-precise editing capabilities (edit_lines, insert_lines, delete_lines, apply_diff)
 3. **Python Session Persistence**: Variables persist across calls within threads
 4. **Error Recovery**: Contextual error messages with actionable suggestions
 5. **Tool Consolidation**: Grouped related tools following image.py/audio.py pattern
@@ -219,7 +219,7 @@ tools:
   - search_files
   - list_files
   - file_info
-  - edit_file_lines
+  - edit_lines
   - insert_lines
   - delete_lines
 ```
@@ -242,7 +242,7 @@ class EditFileLinesInput(BaseModel):
     new_content: str = Field(description="New content to insert")
 
 class EditFileLinesTool(BaseTool):
-    name = "edit_file_lines"
+    name = "edit_lines"
     description = (
         "Replace specific line range in a file. "
         "Use for: surgical code modifications without full rewrite. "
@@ -284,7 +284,7 @@ TOOL_USAGE_GUIDE = """
 ## File Editing Strategy
 
 When modifying code:
-1. Use `edit_file_lines` for surgical line replacements
+1. Use `edit_lines` for surgical line replacements
 2. Use `insert_lines` to add new code
 3. Use `delete_lines` to remove code
 4. Avoid `write_file` for existing files unless rewriting entirely
@@ -297,7 +297,7 @@ read_file(path="utils.py")  # Get entire file
 write_file(path="utils.py", content=FULL_FILE)  # Risk of corruption
 
 # Use:
-edit_file_lines(
+edit_lines(
     path="utils.py",
     start_line=45,
     end_line=50,
@@ -452,7 +452,7 @@ def file_exists_error(path: str, action: str) -> ToolError:
         },
         suggestions=[
             "Use read_file first to check current contents",
-            "Use edit_file_lines to modify specific sections",
+            "Use edit_lines to modify specific sections",
             "Use write_file with mode='overwrite' to replace entirely"
         ],
         recoverable=True,
@@ -530,7 +530,7 @@ def test_run_python_session_isolation():
     assert "y" not in result  # Different session
 
 # tests/tools/test_code_edit.py
-def test_edit_file_lines():
+def test_edit_lines():
     # Create test file
     test_file = Path("/tmp/test_edit.py")
     test_file.write_text("line1\nline2\nline3\nline4\n")
@@ -575,7 +575,7 @@ def test_surgical_editing_workflow():
     result = agent.run(prompt)
 
     # Verify surgical edit was used
-    assert "edit_file_lines" in result.tool_calls[0].name
+    assert "edit_lines" in result.tool_calls[0].name
     assert result.tool_calls[0].args.get("start_line") == 45
 
     # Verify only 1 tool call (not 3: read, modify, write)
@@ -641,7 +641,7 @@ tools:
   - search_files
   - list_files
   - file_info
-  - edit_file_lines
+  - edit_lines
   - insert_lines
   - delete_lines
 ```

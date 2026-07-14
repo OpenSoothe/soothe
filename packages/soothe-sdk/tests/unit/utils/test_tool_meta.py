@@ -64,7 +64,7 @@ class TestOutcomeTypeCoverage:
             "write_file",
             "edit_file",
             "delete_file",
-            "edit_file_lines",
+            "edit_lines",
             "insert_lines",
             "delete_lines",
             "apply_diff",

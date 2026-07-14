@@ -7,9 +7,12 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from soothe_deepagents.middleware.llm_rate_limit import (
+    EnhancedTimeoutError,
+    LLMRateLimitRegistry,
+)
 
 from soothe.config.models import LLMRateLimitConfig
-from soothe.middleware.llm_rate_limit import EnhancedTimeoutError, LLMRateLimitRegistry
 from soothe.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
@@ -130,7 +133,10 @@ async def test_invoke_policy_429_retry_uses_shorter_timeout() -> None:
 
     with (
         patch("asyncio.sleep", new_callable=AsyncMock),
-        patch("soothe.middleware.llm_rate_limit.asyncio.wait_for", side_effect=tracking_wait_for),
+        patch(
+            "soothe_deepagents.middleware.llm_rate_limit.asyncio.wait_for",
+            side_effect=tracking_wait_for,
+        ),
     ):
         result = await await_with_llm_call_policy(
             rate_limited_then_ok,

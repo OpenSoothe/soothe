@@ -15,7 +15,7 @@ from soothe_cli.runtime.state.file_tracker import (
     FILE_CHANGE_TOOLS,
     FileOperationRecord,
     FileOpMetrics,
-    apply_edit_file_lines_to_content,
+    apply_edit_lines_to_content,
     apply_insert_lines_to_content,
     extract_line_range_text,
     file_change_action_label,
@@ -54,7 +54,7 @@ def test_file_change_labels_support_pending_and_success_tense() -> None:
     assert file_change_label("write_file", phase="pending") == "Writing"
     assert file_change_label("write_file", is_new_file=True, phase="pending") == "Creating"
     assert file_change_label("edit_file", phase="pending") == "Editing"
-    assert file_change_label("edit_file_lines", phase="pending") == "Editing"
+    assert file_change_label("edit_lines", phase="pending") == "Editing"
     assert file_change_label("insert_lines", phase="pending") == "Inserting"
     assert file_change_label("delete_lines", phase="pending") == "Deleting"
     assert file_change_label("apply_diff", phase="pending") == "Patching"
@@ -64,7 +64,7 @@ def test_file_change_labels_support_pending_and_success_tense() -> None:
     assert file_change_label("write_file") == "Written"
     assert file_change_label("write_file", is_new_file=True) == "Created"
     assert file_change_label("edit_file") == "Edited"
-    assert file_change_label("edit_file_lines") == "Edited"
+    assert file_change_label("edit_lines") == "Edited"
     assert file_change_label("insert_lines") == "Inserted"
     assert file_change_label("delete_lines") == "Deleted"
     assert file_change_label("apply_diff") == "Patched"
@@ -218,12 +218,12 @@ def test_edit_file_preview_diff_rows_align_context_and_additions() -> None:
     assert context.index(content) == added.index(content)
 
 
-def test_build_edit_file_lines_preview_uses_line_range(tmp_path: Path) -> None:
-    """edit_file_lines preview diffs the replaced segment against new_content."""
+def test_build_edit_lines_preview_uses_line_range(tmp_path: Path) -> None:
+    """edit_lines preview diffs the replaced segment against new_content."""
     target = tmp_path / "lines.py"
     target.write_text("keep\nold_a\nold_b\ntail\n", encoding="utf-8")
     built = build_file_change_preview(
-        "edit_file_lines",
+        "edit_lines",
         {
             "file_path": str(target),
             "start_line": 2,
@@ -242,9 +242,7 @@ def test_build_edit_file_lines_preview_uses_line_range(tmp_path: Path) -> None:
 
     segment = extract_line_range_text(target.read_text(encoding="utf-8"), 2, 3)
     assert "old_a" in segment
-    after = apply_edit_file_lines_to_content(
-        target.read_text(encoding="utf-8"), 2, 3, "new_a\nnew_b"
-    )
+    after = apply_edit_lines_to_content(target.read_text(encoding="utf-8"), 2, 3, "new_a\nnew_b")
     assert after is not None
     assert "new_a" in after
     assert "old_a" not in after

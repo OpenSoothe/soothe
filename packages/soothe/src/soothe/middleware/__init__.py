@@ -24,6 +24,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from soothe_deepagents.middleware.llm_rate_limit import LLMRateLimitMiddleware
+
     from soothe.middleware._builder import (
         build_soothe_middleware_stack as build_soothe_middleware_stack,
     )
@@ -31,7 +33,6 @@ if TYPE_CHECKING:
     from soothe.middleware.code_interpreter import CodeInterpreterMiddleware
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
     from soothe.middleware.identity import IdentityMiddleware
-    from soothe.middleware.llm_rate_limit import LLMRateLimitMiddleware
     from soothe.middleware.mcp_activation import MCPActivationMiddleware
     from soothe.middleware.model_call_profiler import (
         InnerModelCallProfilerMiddleware,
@@ -86,7 +87,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "IdentityConfig": ("soothe.middleware.identity", "IdentityConfig"),
     "IdentityMiddleware": ("soothe.middleware.identity", "IdentityMiddleware"),
     "IdentityRuntime": ("soothe.middleware.identity", "IdentityRuntime"),
-    "LLMRateLimitMiddleware": ("soothe.middleware.llm_rate_limit", "LLMRateLimitMiddleware"),
+    "LLMRateLimitMiddleware": (
+        "soothe_deepagents.middleware.llm_rate_limit",
+        "LLMRateLimitMiddleware",
+    ),
     "MCPActivationMiddleware": ("soothe.middleware.mcp_activation", "MCPActivationMiddleware"),
     "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
     "SoothePolicyMiddleware": ("soothe.middleware.policy", "SoothePolicyMiddleware"),

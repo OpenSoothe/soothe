@@ -132,7 +132,7 @@ class EditCoalescingMiddleware:
 
 **Edit Types Covered:**
 
-- `edit_file_lines` — Replace specific line ranges
+- `edit_lines` — Replace specific line ranges
 - `insert_lines` — Insert content at specific line number
 - `delete_lines` — Delete specific line range
 - `apply_diff` — Apply unified diff patch (future: merge into batched diff)
@@ -154,7 +154,7 @@ def merge_edits(edits: list[EditOperation]) -> BatchedEdit:
     # Tool argument names: path, start, end, line_number, content
     deletions = [e for e in edits if e.tool_name == "delete_lines"]
     insertions = [e for e in edits if e.tool_name == "insert_lines"]
-    replacements = [e for e in edits if e.tool_name == "edit_file_lines"]
+    replacements = [e for e in edits if e.tool_name == "edit_lines"]
 
     # Check overlaps within each category
     if has_overlaps(replacements):
@@ -180,7 +180,7 @@ Two edits overlap if their line ranges intersect:
 
 ```python
 def ranges_overlap(a: EditOperation, b: EditOperation) -> bool:
-    # For edit_file_lines: start/end define the range
+    # For edit_lines: start/end define the range
     # For delete_lines: start/end define the range
     a_start = a.args.get("start") or a.args.get("line_number", 0)
     a_end = a.args.get("end") or a_start + 1

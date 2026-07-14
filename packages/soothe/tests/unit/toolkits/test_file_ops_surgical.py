@@ -1,7 +1,7 @@
 """Integration tests for code editing tools.
 
 Tests tools from soothe.toolkits.file_ops:
-- edit_file_lines: Replace specific line range in a file
+- edit_lines: Replace specific line range in a file
 - insert_lines: Insert lines at specific positions
 - delete_lines: Delete specific line ranges
 """
@@ -33,8 +33,8 @@ def middleware(tmp_path):
 
 @pytest.fixture
 def edit_tool(middleware):
-    """Get edit_file_lines tool from middleware."""
-    return next(t for t in middleware.tools if t.name == "edit_file_lines")
+    """Get edit_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "edit_lines")
 
 
 @pytest.fixture
@@ -318,7 +318,7 @@ class TestCodeEditErrorHandling:
 
     def test_edit_nonexistent_file(self, middleware) -> None:
         """Test editing non-existent file."""
-        edit_tool = next(t for t in middleware.tools if t.name == "edit_file_lines")
+        edit_tool = next(t for t in middleware.tools if t.name == "edit_lines")
         result = edit_tool.invoke(
             {
                 "file_path": "/nonexistent/file.txt",

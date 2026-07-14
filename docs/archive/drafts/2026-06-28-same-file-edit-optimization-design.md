@@ -228,13 +228,13 @@ open(p, "w").write(c)
 
 ---
 
-### Strategy 3: `edit_file_lines` for Contiguous Ranges
+### Strategy 3: `edit_lines` for Contiguous Ranges
 
-**Mechanism**: When multiple edits target contiguous or nearby line ranges in the same file, combine them into a single `edit_file_lines` call with a broader range. Instead of editing lines 5-7 and 9-11 separately, edit lines 5-11 in one call with the merged content.
+**Mechanism**: When multiple edits target contiguous or nearby line ranges in the same file, combine them into a single `edit_lines` call with a broader range. Instead of editing lines 5-7 and 9-11 separately, edit lines 5-11 in one call with the merged content.
 
 **Strengths**: Uses an existing tool. Reduces call count. No new code.
 
-**Weaknesses**: Only works for line-number-based edits (not string-match `edit_file`). The LLM must know exact line numbers, which drift after each edit. Non-contiguous edits can't be merged. Does not solve the race — two `edit_file_lines` calls still race unless combined by the caller.
+**Weaknesses**: Only works for line-number-based edits (not string-match `edit_file`). The LLM must know exact line numbers, which drift after each edit. Non-contiguous edits can't be merged. Does not solve the race — two `edit_lines` calls still race unless combined by the caller.
 
 ---
 
@@ -392,7 +392,7 @@ edit_file(path, old, new):
 |---|----------|------------------------|-------------|---------|-----------|-----------------|------------|
 | 1 | **Serialize-per-file** (asyncio.Lock) | ~30 LOC, 0 deps | 1 read + 1 write per edit | Low (no contention) / blocks under contention | ✅ Yes (within process) | ✅ Lock released on exception | ❌ No (retry may double-apply) |
 | 2 | **Single-write Python script** | ~0 LOC (uses run_command) | 1 read + 1 write total | Lowest (single call) | ✅ Yes (single process) | ❌ Script failure = all lost, no per-edit feedback | ❌ No |
-| 3 | **edit_file_lines contiguous** | ~0 LOC (uses existing tool) | 1 read + 1 write per call | Low | ❌ No (only if caller merges) | ❌ All-or-nothing per call | ❌ No |
+| 3 | **edit_lines contiguous** | ~0 LOC (uses existing tool) | 1 read + 1 write per call | Low | ❌ No (only if caller merges) | ❌ All-or-nothing per call | ❌ No |
 | 4 | **Unified diff / patch** | ~0 LOC (uses apply_diff) | 1 process invocation | Low | ❌ No (patch not guarded) | ✅ `patch` rejects on context mismatch | ✅ Yes (patch is idempotent with `--reject`) |
 | 5 | **File locking (flock/fcntl)** | ~50 LOC, 0 deps | 1 read + 1 write per edit | Low / blocks under contention | ✅ Yes (across processes, local FS) | ✅ Lock released on crash (advisory) | ❌ No |
 | 6 | **Optimistic concurrency** (version stamps) | ~60 LOC, 0 deps | 1 read + 1 write per attempt (2-3 on conflict) | Lowest (no contention) / retries on conflict | ⚠️ TOCTOU gap unless paired with atomic rename | ✅ Conflict error returned to caller | ✅ Yes (retry re-reads) |
@@ -582,7 +582,7 @@ Incoming edit_file call
 | Strategy | Why Not Primary |
 |----------|----------------|
 | **2. Single-write Python script** | Bypasses security policy, audit logging, backup creation. LLM unreliable at generating correct edit scripts. No per-edit feedback. **Rejected.** |
-| **3. edit_file_lines contiguous** | Only works for line-based edits; LLM line numbers drift. Doesn't solve the race. **Subsumed by Layer 3 coalescing** (which merges any edit types). |
+| **3. edit_lines contiguous** | Only works for line-based edits; LLM line numbers drift. Doesn't solve the race. **Subsumed by Layer 3 coalescing** (which merges any edit types). |
 | **4. Unified diff / patch** | LLM unreliable at generating correct diffs. `patch` binary dependency. Not guarded against concurrent invocation. **Optional fallback** for agents that prefer diff-based editing, but guarded by Layer 2 lock. |
 | **5. flock / fcntl** | Synchronous (needs `to_thread`). Doesn't work on NFS/virtual filesystems. Lock file cleanup burden. **Subsumed by Layer 2** (`asyncio.Lock` is simpler and sufficient for in-process races). Can be added as an option for cross-process safety if needed. |
 | **9. Transactional edit queue** | 300 LOC of queue infrastructure for a problem that Layer 2+3 solves in ~80 LOC. Overkill for 1-3 edits per file per turn. **Deferred** — if future multi-agent workloads create high contention, upgrade Layer 3's coalescing into a full transaction queue. |
@@ -661,7 +661,7 @@ Result mapping → resolve futures for edit_A, edit_B, edit_C
 1. **Lock registry is per-`LocalFilesystem` instance** — not global. This is correct because each daemon process has one `LocalFilesystem`, and cross-process safety is handled by `FileLockMiddleware` (autopilot) or version stamps (Layer 1).
 2. **`os.replace` is atomic on POSIX only** — on Windows, `os.replace` is also atomic (Python 3.3+). No platform-specific code needed.
 3. **Temp file naming** — uses `.soothe.tmp` suffix to avoid collisions with user files. Temp file is in the same directory (required for `rename` to be atomic — cross-filesystem rename is not atomic).
-4. **`aedit_batched()` is the only write path** — all edit tools (`edit_file`, `edit_file_lines`, `insert_lines`, `delete_lines`) route through `aedit_batched()` when coalescing is active. Direct `aedit()` calls (bypassing middleware) still benefit from Layer 1+2 if the lock+atomic-write is added to `aedit()` itself.
+4. **`aedit_batched()` is the only write path** — all edit tools (`edit_file`, `edit_lines`, `insert_lines`, `delete_lines`) route through `aedit_batched()` when coalescing is active. Direct `aedit()` calls (bypassing middleware) still benefit from Layer 1+2 if the lock+atomic-write is added to `aedit()` itself.
 
 ---
 

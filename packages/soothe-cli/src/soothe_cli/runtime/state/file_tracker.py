@@ -226,7 +226,7 @@ def apply_insert_lines_to_content(content: str, line: int, insert_content: str) 
     return "".join(lines)
 
 
-def apply_edit_file_lines_to_content(
+def apply_edit_lines_to_content(
     content: str,
     start_line: int,
     end_line: int,
@@ -747,7 +747,7 @@ def file_change_label(
             return "Deleting"
         if tool_name == "write_file":
             return "Creating" if is_new_file else "Writing"
-        if tool_name in ("edit_file", "edit_file_lines"):
+        if tool_name in ("edit_file", "edit_lines"):
             return "Editing"
         if tool_name == "insert_lines":
             return "Inserting"
@@ -759,7 +759,7 @@ def file_change_label(
         return "Deleted"
     if tool_name == "write_file":
         return "Created" if is_new_file else "Written"
-    if tool_name in ("edit_file", "edit_file_lines"):
+    if tool_name in ("edit_file", "edit_lines"):
         return "Edited"
     if tool_name == "insert_lines":
         return "Inserted"

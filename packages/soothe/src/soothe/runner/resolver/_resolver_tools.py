@@ -403,9 +403,9 @@ def _resolve_single_tool_group_uncached(
 
         # Extract surgical tools only (not ls, read_file, etc. from FilesystemMiddleware)
         surgical_tool_names = [
-            "delete_file",
+            "delete",
             "file_info",
-            "edit_file_lines",
+            "edit_lines",
             "insert_lines",
             "delete_lines",
             "apply_diff",
@@ -417,11 +417,11 @@ def _resolve_single_tool_group_uncached(
     if name in (
         "read_file",
         "write_file",
-        "delete_file",
+        "delete",
         "search_files",
         "list_files",
         "file_info",
-        "edit_file_lines",
+        "edit_lines",
         "insert_lines",
         "delete_lines",
         "apply_diff",
@@ -430,9 +430,9 @@ def _resolve_single_tool_group_uncached(
 
         # Extract surgical tools only
         surgical_tool_names = [
-            "delete_file",
+            "delete",
             "file_info",
-            "edit_file_lines",
+            "edit_lines",
             "insert_lines",
             "delete_lines",
             "apply_diff",

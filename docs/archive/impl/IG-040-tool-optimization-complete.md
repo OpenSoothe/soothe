@@ -48,7 +48,7 @@ tools/
 tools/
 ├── execution.py         # 4 tools: run_command, run_python, run_background, kill_process (moved impls)
 ├── file_ops.py          # 6 tools: read_file, write_file, delete_file, search_files, list_files, file_info (moved impls)
-├── code_edit.py         # 4 tools: edit_file_lines, insert_lines, delete_lines, apply_diff
+├── code_edit.py         # 4 tools: edit_lines, insert_lines, delete_lines, apply_diff
 ├── data.py              # 6 tools: inspect_data, summarize_data, check_data_quality, extract_text, get_data_info, ask_about_file (split)
 ├── goals.py             # 4 tools: create_goal, list_goals, complete_goal, fail_goal (split)
 ├── websearch.py         # 2 tools: search_web, crawl_web (renamed)
@@ -128,7 +128,7 @@ tools/
 - Updated tool names and class names: WebSearchTool → SearchWebTool, WebCrawlTool → CrawlWebTool
 
 ### Surgical Editing (`code_edit.py`)
-- `edit_file_lines`: Replace specific line ranges
+- `edit_lines`: Replace specific line ranges
 - `insert_lines`: Insert at specific line number
 - `delete_lines`: Delete line ranges
 - `apply_diff`: Apply unified diff patches

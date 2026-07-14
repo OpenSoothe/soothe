@@ -157,7 +157,7 @@ def _isolate_llm_env(monkeypatch):
     # Reset the LLM rate-limit registry singleton so ThreadBudget state
     # from prior tests (request_times, semaphores) doesn't leak forward.
     try:
-        from soothe.middleware.llm_rate_limit import LLMRateLimitRegistry
+        from soothe_deepagents.middleware.llm_rate_limit import LLMRateLimitRegistry
 
         LLMRateLimitRegistry.reset_for_tests()
     except Exception:

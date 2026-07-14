@@ -3,7 +3,7 @@
 Tests surgical file operations provided by soothe.toolkits.file_ops:
 - delete_file: Delete files with optional backup
 - file_info: Get file metadata
-- edit_file_lines: Replace specific line ranges
+- edit_lines: Replace specific line ranges
 - insert_lines: Insert content at specific line
 - delete_lines: Delete specific line ranges
 - apply_diff: Apply unified diff patches
@@ -49,8 +49,8 @@ def info_tool(middleware):
 
 @pytest.fixture
 def edit_tool(middleware):
-    """Get edit_file_lines tool from middleware."""
-    return next(t for t in middleware.tools if t.name == "edit_file_lines")
+    """Get edit_lines tool from middleware."""
+    return next(t for t in middleware.tools if t.name == "edit_lines")
 
 
 @pytest.fixture
@@ -161,7 +161,7 @@ class TestFileInfoTool:
 
 
 class TestEditFileLinesTool:
-    """Tests for edit_file_lines tool."""
+    """Tests for edit_lines tool."""
 
     def test_replace_single_line(self, edit_tool, tmp_path) -> None:
         """Test replacing a single line."""

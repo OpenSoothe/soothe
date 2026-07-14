@@ -141,9 +141,9 @@ Emit a single `run_command` call that runs a Python script applying all edits in
 **Strengths**: Zero race window (single process, single read-write). No new infrastructure.
 **Weaknesses**: Bypasses filesystem abstraction (security policy, audit logging, backup creation). LLMs are unreliable at generating correct edit scripts. No per-edit feedback. **Rejected.**
 
-### Strategy 3: `edit_file_lines` for Contiguous Ranges
+### Strategy 3: `edit_lines` for Contiguous Ranges
 
-When multiple edits target contiguous line ranges, combine them into a single `edit_file_lines` call.
+When multiple edits target contiguous line ranges, combine them into a single `edit_lines` call.
 
 **Strengths**: Uses an existing tool. Reduces call count.
 **Weaknesses**: Only works for line-number-based edits. LLM line numbers drift. Non-contiguous edits can't be merged. Does not solve the race. **Subsumed by Layer 3.**
@@ -196,7 +196,7 @@ All edit operations submitted to a per-file transaction queue. ACID-like guarant
 |---|----------|------------------------|-------------|-----------|-----------------|------------|
 | 1 | Serialize-per-file (asyncio.Lock) | ~30 LOC, 0 deps | 1 read + 1 write per edit | Yes (within process) | Lock released on exception | No |
 | 2 | Single-write Python script | ~0 LOC | 1 read + 1 write total | Yes (single process) | No per-edit feedback | No |
-| 3 | edit_file_lines contiguous | ~0 LOC | 1 read + 1 write per call | No | All-or-nothing per call | No |
+| 3 | edit_lines contiguous | ~0 LOC | 1 read + 1 write per call | No | All-or-nothing per call | No |
 | 4 | Unified diff / patch | ~0 LOC | 1 process invocation | No (patch not guarded) | Patch rejects on mismatch | Yes |
 | 5 | File locking (flock/fcntl) | ~50 LOC, 0 deps | 1 read + 1 write per edit | Yes (across processes, local FS) | Lock released on crash | No |
 | 6 | Optimistic concurrency | ~60 LOC, 0 deps | 1 read + 1 write per attempt | TOCTOU gap unless paired with atomic rename | Conflict error returned | Yes |
@@ -272,7 +272,7 @@ The coalescing middleware groups same-file edits within a 50 ms detection window
 | Strategy | Why Not Primary |
 |----------|----------------|
 | 2. Single-write Python script | Bypasses security policy, audit logging, backup creation. LLM unreliable at generating correct edit scripts. No per-edit feedback. **Rejected.** |
-| 3. edit_file_lines contiguous | Only works for line-based edits; LLM line numbers drift. Doesn't solve the race. **Subsumed by Layer 3.** |
+| 3. edit_lines contiguous | Only works for line-based edits; LLM line numbers drift. Doesn't solve the race. **Subsumed by Layer 3.** |
 | 4. Unified diff / patch | LLM unreliable at generating correct diffs. `patch` binary dependency. **Optional fallback** guarded by Layer 2 lock. |
 | 5. flock / fcntl | Synchronous (needs `to_thread`). Doesn't work on NFS/virtual filesystems. Lock file cleanup burden. **Subsumed by Layer 2.** Can be added for cross-process safety. |
 | 9. Transactional edit queue | 300 LOC of queue infrastructure for a problem that Layer 2+3 solves in ~80 LOC. Overkill for 1-3 edits per file per turn. **Deferred.** |
@@ -293,7 +293,7 @@ The recommended action: install `FileLockMiddleware` in autopilot mode (as origi
 1. **Lock registry is per-`LocalFilesystem` instance** — not global. Each daemon process has one `LocalFilesystem`. Cross-process safety is handled by `FileLockMiddleware` (autopilot) or version stamps (Layer 1).
 2. **`os.replace` is atomic on POSIX and Windows** (Python 3.3+). No platform-specific code needed.
 3. **Temp file naming** — uses `.soothe.tmp` suffix to avoid collisions with user files. Temp file is in the **same directory** as the target (required for `rename` to be atomic — cross-filesystem rename is not atomic).
-4. **`aedit_batched()` is the only write path** — all edit tools (`edit_file`, `edit_file_lines`, `insert_lines`, `delete_lines`) route through `aedit_batched()` when coalescing is active. Direct `aedit()` calls (bypassing middleware) still benefit from Layer 1+2 if the lock+atomic-write is added to `aedit()` itself.
+4. **`aedit_batched()` is the only write path** — all edit tools (`edit_file`, `edit_lines`, `insert_lines`, `delete_lines`) route through `aedit_batched()` when coalescing is active. Direct `aedit()` calls (bypassing middleware) still benefit from Layer 1+2 if the lock+atomic-write is added to `aedit()` itself.
 5. **Lock registry key must be `os.path.realpath()`** — resolved canonical path, not raw input path. This ensures `./config.py` and `./symlink_to_config.py` map to the same lock.
 
 ---
@@ -521,7 +521,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
 
     EDIT_TOOL_NAMES: frozenset[str] = frozenset({
         "edit_file",
-        "edit_file_lines",
+        "edit_lines",
         "insert_lines",
         "delete_lines",
     })

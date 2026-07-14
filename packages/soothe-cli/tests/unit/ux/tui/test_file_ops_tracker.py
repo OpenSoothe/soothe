@@ -58,14 +58,14 @@ def test_edit_file_produces_diff(tmp_path: Path) -> None:
     assert file_change_action_label(record) == "Edited"
 
 
-def test_edit_file_lines_produces_diff(tmp_path: Path) -> None:
-    """Tracked edit_file_lines shows a unified diff after the tool result."""
+def test_edit_lines_produces_diff(tmp_path: Path) -> None:
+    """Tracked edit_lines shows a unified diff after the tool result."""
     target = tmp_path / "surgical.txt"
     target.write_text("line1\nline2\nline3\n", encoding="utf-8")
     tracker = FileOpTracker(assistant_id=None)
     track_file_operation(
         tracker,
-        "edit_file_lines",
+        "edit_lines",
         {
             "file_path": str(target),
             "start_line": 2,

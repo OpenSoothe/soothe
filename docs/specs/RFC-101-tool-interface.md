@@ -78,7 +78,7 @@ Pattern: `{verb}_{noun}` or single verb for obvious operations.
 | Shell execution | `run_command`, `run_background`, `tail_background_log`, `kill_process` | `{verb}_{noun}` |
 | Python execution | `run_python` | `{verb}_{noun}` |
 | File operations | `read_file`, `write_file`, `delete_file`, `search_files` | `{verb}_{noun}` |
-| Code editing | `edit_file_lines`, `insert_lines`, `delete_lines`, `apply_diff` | `{verb}_{context}` |
+| Code editing | `edit_lines`, `insert_lines`, `delete_lines`, `apply_diff` | `{verb}_{context}` |
 | Media analysis | `analyze_image`, `transcribe_audio` | `{verb}_{noun}` |
 
 ### 4.2 Event Naming Convention
@@ -327,7 +327,7 @@ class SearchFilesTool(BaseTool):
 
 ```python
 class EditFileLinesTool(BaseTool):
-    name: str = "edit_file_lines"
+    name: str = "edit_lines"
     description: str = "Replace specific lines in file."
 
     def _run(
@@ -513,7 +513,7 @@ tools/
 │   ├── __init__.py
 │   ├── events.py
 │   └── implementation.py
-├── code_edit/           # edit_file_lines, insert_lines, delete_lines, apply_diff
+├── code_edit/           # edit_lines, insert_lines, delete_lines, apply_diff
 │   ├── __init__.py
 │   ├── events.py
 │   └── implementation.py
@@ -552,7 +552,7 @@ After (single-purpose): run_command(command="ls")
 ## 10. Open Questions
 
 1. Should `run_command` auto-detect long-running commands and suggest `run_background`?
-2. Should `edit_file_lines` support regex replacement within line range?
+2. Should `edit_lines` support regex replacement within line range?
 3. Maximum concurrent Python sessions per thread?
 4. Event throttling for high-frequency operations?
 

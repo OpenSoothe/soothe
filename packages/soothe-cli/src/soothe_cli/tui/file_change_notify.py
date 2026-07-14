@@ -115,7 +115,7 @@ async def mount_file_change_preview(
         str(args.get("old_string") or "") or str(args.get("new_string") or "")
     ):
         return
-    if tool_name == "edit_file_lines" and parse_line_range_args(args) is None:
+    if tool_name == "edit_lines" and parse_line_range_args(args) is None:
         return
     if tool_name == "insert_lines" and parse_insert_line_arg(args) is None:
         return

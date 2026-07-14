@@ -40,7 +40,7 @@ FILE_OP_TOOLS: frozenset[str] = frozenset(
         "edit_file",
         "glob",
         "grep",
-        "delete_file",
+        "delete",
         "insert_lines",
         "apply_diff",
         "file_info",

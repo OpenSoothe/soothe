@@ -406,7 +406,7 @@ class EditFilePreviewWidget(FileChangePreviewWidget):
 
 
 class EditFileLinesPreviewWidget(EditFilePreviewWidget):
-    """Preview for edit_file_lines / delete_lines — line range + segment diff."""
+    """Preview for edit_lines / delete_lines — line range + segment diff."""
 
     def compose(self) -> ComposeResult:
         """Compose line-range edit preview."""

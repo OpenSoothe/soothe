@@ -45,7 +45,7 @@ DEFAULT_STAGING_BUFFER_EVICTION_POLICY: str = "reject_newest"
 EDIT_TOOL_NAMES: frozenset[str] = frozenset(
     {
         "edit_file",
-        "edit_file_lines",
+        "edit_lines",
         "insert_lines",
         "delete_lines",
     }
@@ -194,7 +194,7 @@ class EditBatch:
                         original_call_id=edit.tool_call_id,
                     )
                 )
-            elif edit.tool_name == "edit_file_lines":
+            elif edit.tool_name == "edit_lines":
                 replacements.append(
                     BatchedEditOperation(
                         operation_type="replace",
@@ -215,7 +215,7 @@ class EditBatch:
 class EditConflictError(Exception):
     """Raised when edits have overlapping ranges.
 
-    This covers both line-range overlaps (for edit_file_lines / insert_lines /
+    This covers both line-range overlaps (for edit_lines / insert_lines /
     delete_lines) and string-replacement overlaps (for edit_file where one
     edit's old_string spans text that another edit also modifies).
     """
@@ -313,7 +313,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
         edit_file (string-replacement) calls are accumulated in the staging
         buffer and dispatched as a single atomic batch after the detection
         window.
-        Other edit tools (edit_file_lines, insert_lines, delete_lines) are
+        Other edit tools (edit_lines, insert_lines, delete_lines) are
         collected, grouped, and batched after the detection window.
 
         Args:
@@ -407,7 +407,7 @@ class EditCoalescingMiddleware(AgentMiddleware):
             # Wait for result (filled by batch execution)
             return await result_future
 
-        # Other edit tools (edit_file_lines, insert_lines, delete_lines)
+        # Other edit tools (edit_lines, insert_lines, delete_lines)
         # Create future for result (will be filled after batch execution)
         result_future: asyncio.Future[ToolMessage | Command[Any]] = asyncio.Future()
 

@@ -52,7 +52,7 @@ _FILE_OPS_GUIDE = """\
 File operation tools:
 - read_file: Read file contents (optional start_line, end_line for ranges).
 - write_file: Write to files (mode='overwrite' or 'append').
-- delete_file: Delete files (automatic backups created).
+- delete: Delete files (use backup=true to create automatic backup).
 - search_files: Search for pattern in files (grep-like).
 - list_files: List files matching pattern.
 - file_info: Get file metadata.
@@ -60,13 +60,13 @@ File operation tools:
 
 _SURGICAL_EDIT_GUIDE = """\
 Surgical editing tools (PREFERRED over full-file rewrites):
-- edit_file_lines: Replace specific line range (safer than read→modify→write).
+- edit_lines: Replace specific line range (safer than read→modify→write).
 - insert_lines: Insert content at specific line.
 - delete_lines: Delete specific line range.
 - apply_diff: Apply unified diff patch.
 
 When to use surgical editing:
-- Changing a specific function → use edit_file_lines
+- Changing a specific function → use edit_lines
 - Adding imports → use insert_lines at line 1
 - Removing unused code → use delete_lines
 - Applying code review patches → use apply_diff
@@ -130,7 +130,7 @@ Progressive tool binding:
 
 Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
-- Use surgical editing (edit_file_lines) instead of full-file rewrites.
+- Use surgical editing (edit_lines) instead of full-file rewrites.
 - Use websearch for quick lookups; use deep_research for thorough public web research reports.
 - Use run_command for sync shell (pass timeout when the job may exceed 60s); use run_background for servers/daemons and jobs you poll via tail_background_log; kill_process stops background PIDs; run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\

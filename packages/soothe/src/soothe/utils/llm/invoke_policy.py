@@ -12,12 +12,13 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
-from soothe.config.models import LLMRateLimitConfig
-from soothe.middleware.llm_rate_limit import (
+from soothe_deepagents.middleware.llm_rate_limit import (
     EnhancedTimeoutError,
     resolve_llm_budget_key,
     run_llm_call_with_policy,
 )
+
+from soothe.config.models import LLMRateLimitConfig
 
 logger = logging.getLogger(__name__)
 

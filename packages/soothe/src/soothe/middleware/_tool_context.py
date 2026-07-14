@@ -25,7 +25,7 @@ BUILTIN_TOOL_TRIGGERS: dict[str, list[str]] = {
     "glob": ["WORKSPACE"],
     "grep": ["WORKSPACE"],
     "edit_file": ["WORKSPACE"],
-    "delete_file": ["WORKSPACE"],
+    "delete": ["WORKSPACE"],
     "insert_lines": ["WORKSPACE"],
     "apply_diff": ["WORKSPACE"],
     "file_info": ["WORKSPACE"],

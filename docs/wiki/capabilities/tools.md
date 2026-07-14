@@ -52,7 +52,7 @@ A defining design decision: **Soothe only builds tools that the langchain ecosys
 | `wizsearch_search` | from `wizsearch` library |
 | `transcribe_audio` | OpenAI Whisper |
 
-Soothe's custom additions — `edit_file_lines`, `insert_lines`, `delete_lines`, `apply_diff` — extend langchain's file tools with **surgical editing** capabilities that don't exist in the ecosystem. These enable precise line-range edits instead of full-file rewrites, which is critical for large files where token efficiency matters.
+Soothe's custom additions — `edit_lines`, `insert_lines`, `delete_lines`, `apply_diff` — extend langchain's file tools with **surgical editing** capabilities that don't exist in the ecosystem. These enable precise line-range edits instead of full-file rewrites, which is critical for large files where token efficiency matters.
 
 ## Security Model
 
