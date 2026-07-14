@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from soothe_deepagents.backends.protocol import (
     EditResult,
@@ -17,9 +17,6 @@ from soothe_deepagents.backends.protocol import (
     ReadResult,
     WriteResult,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

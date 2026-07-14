@@ -108,11 +108,6 @@ class SootheDaemon(DaemonHandlersMixin):
         self._daemon_workspace = resolve_daemon_workspace()
         logger.info("Daemon workspace: %s", self._daemon_workspace)
 
-        # Migrate persisted workspaces from workspaces/ to data/workspaces/ (RFC-621)
-        from soothe.foundation.workspace.migration import migrate_workspaces_to_data_dir
-
-        migrate_workspaces_to_data_dir()
-
         # Incremental skill index (mtime-cached, global user skills only)
         from soothe.skills.index import SkillIndex
 

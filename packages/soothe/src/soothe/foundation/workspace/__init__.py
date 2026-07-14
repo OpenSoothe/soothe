@@ -18,7 +18,6 @@ __all__ = [
     "cleanup_anonymous_workspaces",
     "clear_virtual_mode_context",
     "compute_scoped_workspace_dir_name",
-    "migrate_workspaces_to_data_dir",
     "normalize_user_id",
     "resolve_loop_workspace",
     "resolve_persisted_loop_workspace",
@@ -68,8 +67,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     # Shared resolution core
     "WorkspacePrecedence": (".core_resolution", "WorkspacePrecedence"),
     "resolve_workspace": (".core_resolution", "resolve_workspace"),
-    # Migration
-    "migrate_workspaces_to_data_dir": (".migration", "migrate_workspaces_to_data_dir"),
 }
 
 

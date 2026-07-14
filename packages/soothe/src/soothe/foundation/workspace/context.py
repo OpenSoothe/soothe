@@ -11,12 +11,6 @@ from __future__ import annotations
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
-
-_DEFAULT = None  # sentinel for unset
 
 
 @dataclass
