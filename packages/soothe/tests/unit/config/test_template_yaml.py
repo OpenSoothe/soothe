@@ -23,8 +23,13 @@ def _normalize_for_default_compare(data: dict) -> dict:
 
 
 @pytest.mark.skipif(not _repo_config_template_path().is_file(), reason="template not in checkout")
-def test_config_template_matches_pydantic_defaults() -> None:
+def test_config_template_matches_pydantic_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """Template mirrors ``SootheConfig`` defaults; only providers / vector examples differ."""
+    # Keep this regression deterministic even when developer machines export provider keys.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+
     path = _repo_config_template_path()
     loaded = SootheConfig.from_yaml_file(str(path))
     baseline = SootheConfig()

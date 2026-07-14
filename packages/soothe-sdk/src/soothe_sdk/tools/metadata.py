@@ -35,7 +35,7 @@ class ToolMeta:
         outcome_type: Outcome classification for agent reasoning
             (``file_read``, ``file_write``, ``web_search``, ``code_exec``,
             ``subagent``, ``generic``). If ``None``, derived from category.
-        source: Origin package -- ``deepagents`` or ``soothe``.
+        source: Origin package -- ``soothe_deepagents`` or ``soothe``.
         has_header_info: True when ``format_tool_display()`` already renders
             the key information in the header line, so the args body
             should be suppressed in ``ToolCallMessage``.
@@ -74,7 +74,7 @@ def _register(meta: ToolMeta) -> ToolMeta:
 
 
 # ---------------------------------------------------------------------------
-# deepagents tools
+# soothe_deepagents tools
 # ---------------------------------------------------------------------------
 
 _register(
@@ -103,7 +103,7 @@ _register(
         ),
         category="file_ops",
         outcome_type="file_read",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -116,7 +116,7 @@ _register(
         path_arg_keys=("file_path", "path"),
         category="file_ops",
         outcome_type="file_write",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -129,7 +129,7 @@ _register(
         path_arg_keys=("file_path", "path"),
         category="file_ops",
         outcome_type="file_write",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -143,7 +143,7 @@ _register(
         aliases=("list_files",),
         category="file_ops",
         outcome_type="file_read",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -157,7 +157,7 @@ _register(
         aliases=("search_files",),
         category="file_ops",
         outcome_type="file_read",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -179,7 +179,7 @@ _register(
         path_arg_keys=("path", "file_path", "directory", "target_directory", "dir"),
         category="file_ops",
         outcome_type="file_read",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -209,7 +209,7 @@ _register(
         aliases=("search_web",),
         category="web",
         outcome_type="web_search",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -222,7 +222,7 @@ _register(
         aliases=("crawl_web",),
         category="web",
         outcome_type="web_search",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )
@@ -234,7 +234,7 @@ _register(
         arg_keys=("subagent_type", "description", "prompt"),
         category="subagent",
         outcome_type="subagent",
-        source="deepagents",
+        source="soothe_deepagents",
         has_header_info=True,
     )
 )

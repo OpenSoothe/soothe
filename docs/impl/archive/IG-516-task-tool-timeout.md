@@ -26,7 +26,7 @@ The explore subagent was synthesizing results (takes ~20s for LLM call) when the
 The timeout middleware's `SUBAGENT_TOOL_NAMES` included:
 - `browser_use`, `explore`, `plan`, `deep_research`, `delegate`
 
-But when the agent invokes subagents, it uses the **`task` tool** from deepagents, which wraps the actual subagent invocation. The `task` tool name was missing from the list, so it fell through to the default 60s timeout.
+But when the agent invokes subagents, it uses the **`task` tool** from soothe_deepagents, which wraps the actual subagent invocation. The `task` tool name was missing from the list, so it fell through to the default 60s timeout.
 
 ### Part 2: Subagent Card/Step Status Inconsistency
 

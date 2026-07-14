@@ -89,7 +89,7 @@ Defines an LLM-callable tool within a plugin. The decorator captures a name (def
 
 ### `@subagent` — Subagent Definition
 
-Defines a subagent factory. Unlike tools (which are simple functions), subagents are async factory functions that receive a `model`, `config`, and `context`, and return a `CompiledSubAgent` from deepagents. This is because subagents need their own tool set, system prompt, and model configuration.
+Defines a subagent factory. Unlike tools (which are simple functions), subagents are async factory functions that receive a `model`, `config`, and `context`, and return a `CompiledSubAgent` from soothe_deepagents. This is because subagents need their own tool set, system prompt, and model configuration.
 
 ### `@tool_group` — Tool Grouping
 

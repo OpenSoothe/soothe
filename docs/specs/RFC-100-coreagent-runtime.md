@@ -179,7 +179,7 @@ await core_agent.astream(
 
 **Status**: ✅ Implemented
 
-Factory assembles tools (`soothe.tools.*`), subagents (`soothe.subagents.*`), MCP servers, middlewares, protocols (`soothe.protocols.*`). Uses `create_deep_agent()` from deepagents, wires protocols as middleware, attaches instances to graph. Follows RFC-000 Principle 2: "Extend deepagents, don't fork it".
+Factory assembles tools (`soothe.tools.*`), subagents (`soothe.subagents.*`), MCP servers, middlewares, protocols (`soothe.protocols.*`). Uses `create_deep_agent()` from soothe_deepagents, wires protocols as middleware, attaches instances to graph. Follows RFC-000 Principle 2: "Extend deepagents, don't fork it".
 
 ## Configuration
 

@@ -1,11 +1,11 @@
-"""Tests for deepagents execute tool removal."""
+"""Tests for soothe_deepagents execute tool removal."""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from deepagents.backends import FilesystemBackend
-from deepagents.middleware.filesystem import FilesystemMiddleware
+from soothe_deepagents.backends import FilesystemBackend
+from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
 from soothe.foundation.core.agent._execute_filter import (
     apply_execute_tool_removal_patch,

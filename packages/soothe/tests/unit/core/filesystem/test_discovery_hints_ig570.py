@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from deepagents.backends import FilesystemBackend
 from langchain.tools import ToolRuntime
 from langchain_core.messages import ToolMessage
+from soothe_deepagents.backends import FilesystemBackend
 
 from soothe.foundation.core.filesystem.discovery_hints import (
     GLOB_DISCOVERY_FALLBACK_HINT,

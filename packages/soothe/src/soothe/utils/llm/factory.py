@@ -45,7 +45,7 @@ class LLMFactory:
     - Embedding model creation with DashScope special handling
 
     Args:
-        config: SootheConfig instance holding providers, router, and embedding_dims.
+        config: SootheConfig instance holding providers, router, embedding model, and dims.
     """
 
     def __init__(self, config: SootheConfig) -> None:

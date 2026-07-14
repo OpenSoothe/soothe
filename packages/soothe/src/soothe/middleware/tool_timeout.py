@@ -12,7 +12,7 @@ Default timeouts:
     - Standard tools: 60s
     - Subagent tools: 1800s (30 minutes for exploration/browser)
     - Task tool: 18000s (5 hours for autonomous subagent work)
-    - Filesystem tools: 30s (read, grep); glob uses deepagents' internal 20s cap
+    - Filesystem tools: 30s (read, grep); glob uses soothe_deepagents' internal 20s cap
     - Execution tools: 120s default; run_command honors per-call ``timeout`` (max 5h)
 
 Configuration:
@@ -143,7 +143,7 @@ def _parse_tool_timeout_arg(tool_args: object) -> float | None:
 # Tools that already have robust internal timeouts - skip middleware wrapping
 TOOLS_WITH_INTERNAL_TIMEOUT: frozenset[str] = frozenset(
     {
-        "glob",  # deepagents FilesystemMiddleware enforces GLOB_TIMEOUT (20s)
+        "glob",  # soothe_deepagents FilesystemMiddleware enforces GLOB_TIMEOUT (20s)
     }
 )
 

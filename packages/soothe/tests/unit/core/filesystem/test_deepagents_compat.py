@@ -1,7 +1,7 @@
-"""Tests for deepagents middleware compatibility with Soothe filesystem backends.
+"""Tests for soothe_deepagents middleware compatibility with Soothe filesystem backends.
 
 These tests verify that Soothe's UnifiedFilesystem implementations work correctly
-with deepagents.middleware.filesystem.FilesystemMiddleware, which expects:
+with soothe_deepagents.middleware.filesystem.FilesystemMiddleware, which expects:
 - ls/als to return LsResult (with .error and .entries attributes)
 - edit/aedit to return EditResult (with .error, .path, .occurrences attributes)
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from deepagents.backends.protocol import EditResult, LsResult, WriteResult
+from soothe_deepagents.backends.protocol import EditResult, LsResult, WriteResult
 
 from soothe.foundation.workspace.normalized_backend import (
     NormalizedPathBackend,
@@ -20,7 +20,7 @@ from soothe.foundation.workspace.normalized_backend import (
 
 
 class TestNormalizedPathBackendReadResult:
-    """Test line-based read/aread returning deepagents ReadResult."""
+    """Test line-based read/aread returning soothe_deepagents ReadResult."""
 
     @pytest.fixture
     def backend(self, tmp_path: Path) -> NormalizedPathBackend:
@@ -31,7 +31,7 @@ class TestNormalizedPathBackendReadResult:
 
     def test_read_returns_read_result(self, backend: NormalizedPathBackend) -> None:
         """read() returns ReadResult with file_data."""
-        from deepagents.backends.protocol import ReadResult
+        from soothe_deepagents.backends.protocol import ReadResult
 
         result = backend.read("/sample.txt", offset=0, limit=5)
         assert isinstance(result, ReadResult)
@@ -68,9 +68,9 @@ class TestNormalizedPathBackendReadResult:
 
 
 class TestNormalizedPathBackendWriteResult:
-    """Test that write/awrite return deepagents WriteResult per BackendProtocol.
+    """Test that write/awrite return soothe_deepagents WriteResult per BackendProtocol.
 
-    deepagents.middleware.filesystem._aprocess_large_message reads
+    soothe_deepagents.middleware.filesystem._aprocess_large_message reads
     ``result.error`` to decide whether to evict a large tool result. Returning
     a bare ``str`` (the old behaviour) crashes that codepath with
     ``AttributeError: 'str' object has no attribute 'error'``.
@@ -297,7 +297,7 @@ class TestNormalizedPathBackendEditResult:
 
 
 class TestWorkspaceAwareBackendCompat:
-    """Test that WorkspaceAwareBackend returns deepagents-compatible results."""
+    """Test that WorkspaceAwareBackend returns soothe_deepagents-compatible results."""
 
     @pytest.fixture
     def temp_dir(self, tmp_path: Path) -> Path:
@@ -351,10 +351,10 @@ class TestWorkspaceAwareBackendCompat:
 
 
 class TestDeepagentsMiddlewareIntegration:
-    """Test that backend results are compatible with deepagents FilesystemMiddleware expectations.
+    """Test that backend results are compatible with soothe_deepagents FilesystemMiddleware expectations.
 
     These tests verify that NormalizedPathBackend and WorkspaceAwareBackend return
-    result types that deepagents middleware can consume without errors.
+    result types that soothe_deepagents middleware can consume without errors.
     """
 
     @pytest.fixture
@@ -366,7 +366,7 @@ class TestDeepagentsMiddlewareIntegration:
         return tmp_path
 
     def test_ls_result_deepagents_compatible(self, temp_dir: Path) -> None:
-        """Verify LsResult structure matches deepagents expectations."""
+        """Verify LsResult structure matches soothe_deepagents expectations."""
         backend = NormalizedPathBackend(root_dir=temp_dir, virtual_mode=False)
         result = backend.ls(".")
 
@@ -383,7 +383,7 @@ class TestDeepagentsMiddlewareIntegration:
             assert "is_dir" in entry, "Entry must have 'is_dir' key"
 
     def test_edit_result_deepagents_compatible(self, temp_dir: Path) -> None:
-        """Verify EditResult structure matches deepagents expectations."""
+        """Verify EditResult structure matches soothe_deepagents expectations."""
         backend = NormalizedPathBackend(root_dir=temp_dir, virtual_mode=False)
         result = backend.edit("readme.md", "# Project", "# Updated Project")
 
@@ -395,7 +395,7 @@ class TestDeepagentsMiddlewareIntegration:
         assert result.path is not None, "path should be set on success"
 
     def test_error_result_deepagents_compatible(self, temp_dir: Path) -> None:
-        """Verify error EditResult structure matches deepagents expectations."""
+        """Verify error EditResult structure matches soothe_deepagents expectations."""
         backend = NormalizedPathBackend(root_dir=temp_dir, virtual_mode=False)
         result = backend.edit("nonexistent.txt", "old", "new")
 
@@ -405,7 +405,7 @@ class TestDeepagentsMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_async_ls_result_deepagents_compatible(self, temp_dir: Path) -> None:
-        """Verify async LsResult structure matches deepagents expectations."""
+        """Verify async LsResult structure matches soothe_deepagents expectations."""
         backend = NormalizedPathBackend(root_dir=temp_dir, virtual_mode=False)
         result = await backend.als(".")
 
@@ -415,7 +415,7 @@ class TestDeepagentsMiddlewareIntegration:
 
     @pytest.mark.asyncio
     async def test_async_edit_result_deepagents_compatible(self, temp_dir: Path) -> None:
-        """Verify async EditResult structure matches deepagents expectations."""
+        """Verify async EditResult structure matches soothe_deepagents expectations."""
         # Reset file content first
         (temp_dir / "readme.md").write_text("# Async Test Project\n\nDescription.")
         backend = NormalizedPathBackend(root_dir=temp_dir, virtual_mode=False)
@@ -427,10 +427,10 @@ class TestDeepagentsMiddlewareIntegration:
 
 
 class TestBackendTypeCompatibility:
-    """Test that Soothe backends work with deepagents type annotations."""
+    """Test that Soothe backends work with soothe_deepagents type annotations."""
 
     def test_ls_result_is_dataclass(self, tmp_path: Path) -> None:
-        """Verify LsResult is a dataclass (deepagents expectation)."""
+        """Verify LsResult is a dataclass (soothe_deepagents expectation)."""
         from dataclasses import is_dataclass
 
         backend = NormalizedPathBackend(root_dir=tmp_path)
@@ -438,7 +438,7 @@ class TestBackendTypeCompatibility:
         assert is_dataclass(result), "LsResult should be a dataclass"
 
     def test_edit_result_is_dataclass(self, tmp_path: Path) -> None:
-        """Verify EditResult is a dataclass (deepagents expectation)."""
+        """Verify EditResult is a dataclass (soothe_deepagents expectation)."""
         from dataclasses import is_dataclass
 
         (tmp_path / "test.txt").write_text("content")
@@ -447,8 +447,8 @@ class TestBackendTypeCompatibility:
         assert is_dataclass(result), "EditResult should be a dataclass"
 
     def test_result_importable_from_deepagents(self) -> None:
-        """Verify result types can be imported from deepagents."""
-        from deepagents.backends.protocol import EditResult, LsResult
+        """Verify result types can be imported from soothe_deepagents."""
+        from soothe_deepagents.backends.protocol import EditResult, LsResult
 
         # Should be able to create instances
         ls = LsResult(error=None, entries=[{"path": "test", "is_dir": False}])

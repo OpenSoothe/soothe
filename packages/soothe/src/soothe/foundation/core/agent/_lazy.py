@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Any
 from soothe.foundation.core.agent._core import CoreAgent
 
 if TYPE_CHECKING:
-    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain_core.runnables import RunnableConfig
     from langgraph.graph.state import CompiledStateGraph
     from langgraph.pregel.base import BaseCheckpointSaver
+    from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
     from soothe.config import SootheConfig
     from soothe.protocols.memory import MemoryProtocol

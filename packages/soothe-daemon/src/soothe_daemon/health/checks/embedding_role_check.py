@@ -9,12 +9,11 @@ from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
 async def check_embedding_role(config: SootheConfig | None = None) -> CategoryResult:
-    """Verify the daemon has a dedicated ``embedding`` router role configured.
+    """Verify the daemon has a dedicated embedding profile configured.
 
-    MemU and vector stores resolve the ``embedding`` router role by default.
-    Skillify defaults to ``embedding`` but can override via ``skillify.model_role``.
-    When the ``embedding`` role is unset, Soothe falls back to the default chat
-    model — which is unsuitable for embeddings.
+    Embedding model + dimensions are sourced from top-level ``embedding_profile``.
+    Router profile switching only affects chat/image/ocr roles and must not mutate
+    embedding settings.
 
     Args:
         config: Agent configuration to inspect.
@@ -36,18 +35,18 @@ async def check_embedding_role(config: SootheConfig | None = None) -> CategoryRe
             checks=checks,
         )
 
-    explicit = getattr(config.router, "embedding", None)
+    embedding_profiles = getattr(config, "embedding_profile", None) or []
     resolved = config.resolve_model("embedding")
     skillify_model_role = getattr(getattr(config, "skillify", None), "model_role", "embedding")
     skillify_resolved = config.resolve_model(skillify_model_role)
 
-    if not explicit:
+    if not embedding_profiles:
         checks = [
             CheckResult(
                 name="embedding_role_configured",
                 status=CheckStatus.WARNING,
                 message=(
-                    "router.embedding is not set; embeddings resolve to the default chat model"
+                    "embedding_profile is not configured; embeddings may drift across restarts"
                 ),
                 details={
                     "resolved": resolved,
@@ -55,8 +54,8 @@ async def check_embedding_role(config: SootheConfig | None = None) -> CategoryRe
                     "skillify_resolved": skillify_resolved,
                     "embedding_dims": config.embedding_dims,
                     "remediation": (
-                        "Set router_profiles.*.router.embedding to a dedicated embedding model "
-                        "(e.g. dashscope:text-embedding-v4 or omlx:nomicai-modernbert-embed-base-bf16)"
+                        "Set top-level embedding_profile with a stable model + dimensions, "
+                        "for example model_role=openai:text-embedding-3-small and embedding_dims=1536"
                     ),
                 },
             )
@@ -68,6 +67,7 @@ async def check_embedding_role(config: SootheConfig | None = None) -> CategoryRe
                 status=CheckStatus.OK,
                 message=f"Embedding role configured ({resolved})",
                 details={
+                    "embedding_profile_entries": len(embedding_profiles),
                     "skillify_model_role": skillify_model_role,
                     "skillify_resolved": skillify_resolved,
                     "embedding_dims": config.embedding_dims,

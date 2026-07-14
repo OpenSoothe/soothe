@@ -128,7 +128,7 @@ For agent-based plugins:
 
 ```python
 from langgraph.graph import StateGraph
-from deepagents import CompiledSubAgent
+from soothe_deepagents import CompiledSubAgent
 
 def create_your_subagent(config, **kwargs) -> dict:
     """Create and return a compiled subagent.

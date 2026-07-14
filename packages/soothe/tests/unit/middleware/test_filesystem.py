@@ -6,10 +6,10 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from deepagents.backends.filesystem import FilesystemBackend
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
+from soothe_deepagents.backends.filesystem import FilesystemBackend
 
 from soothe.middleware.filesystem import (
     ApplyDiffSchema,
@@ -67,7 +67,7 @@ class TestCoerceProviderSafeToolMessage:
 
 
 class TestSootheFilesystemMiddlewareSchemas:
-    """Test tool schemas follow deepagents pattern."""
+    """Test tool schemas follow soothe_deepagents pattern."""
 
     def test_delete_file_schema_is_basemodel(self) -> None:
         assert issubclass(DeleteFileSchema, BaseModel)
@@ -88,7 +88,7 @@ class TestSootheFilesystemMiddlewareSchemas:
         assert issubclass(ApplyDiffSchema, BaseModel)
 
     def test_schema_fields_have_descriptions(self) -> None:
-        """All schema fields must have descriptions (deepagents pattern)."""
+        """All schema fields must have descriptions (soothe_deepagents pattern)."""
         for schema_cls in [
             DeleteFileSchema,
             FileInfoSchema,
@@ -104,7 +104,7 @@ class TestSootheFilesystemMiddlewareSchemas:
 
 
 class TestSootheFilesystemMiddlewareToolCreation:
-    """Test tool creation follows deepagents pattern."""
+    """Test tool creation follows soothe_deepagents pattern."""
 
     @pytest.fixture()
     def middleware(self) -> SootheFilesystemMiddleware:
@@ -142,7 +142,7 @@ class TestSootheFilesystemMiddlewareToolCreation:
             assert any(t.name == name for t in middleware.tools), f"Missing surgical tool: {name}"
 
     def test_tools_have_args_schema(self, middleware: SootheFilesystemMiddleware) -> None:
-        """All tools must have args_schema (deepagents pattern)."""
+        """All tools must have args_schema (soothe_deepagents pattern)."""
         for tool in middleware.tools:
             if hasattr(tool, "args_schema"):
                 assert tool.args_schema is not None, f"Tool {tool.name} missing args_schema"

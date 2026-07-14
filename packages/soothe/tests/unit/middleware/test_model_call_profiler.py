@@ -1,4 +1,4 @@
-"""Tests for unified model call profiler (Soothe middleware + deepagents patches)."""
+"""Tests for unified model call profiler (Soothe middleware + soothe_deepagents patches)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from soothe.middleware.model_call_profiler import (
 
 
 class _FakeMiddleware:
-    """Minimal middleware stand-in for deepagents patch tests."""
+    """Minimal middleware stand-in for soothe_deepagents patch tests."""
 
     _soothe_deepagents_profiler_patched = False
 
@@ -48,8 +48,8 @@ def test_implements_model_call_hook() -> None:
 
 
 def test_install_skips_patch_tool_calls_middleware() -> None:
-    from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
     from langchain.agents.middleware.types import AgentMiddleware
+    from soothe_deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 
     from soothe.middleware.model_call_profiler import _DEEPAGENTS_PATCHED_ATTR
 

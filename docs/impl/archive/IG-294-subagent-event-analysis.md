@@ -86,7 +86,7 @@
 
 ### Current Task Display
 
-Task tool is from deepagents, not Soothe-defined.
+Task tool is from soothe_deepagents, not Soothe-defined.
 
 **Current CLI output** (IG-257 tree structure):
 ```

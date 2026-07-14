@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from .models import AgentManifest
 
 if TYPE_CHECKING:
-    from deepagents.middleware.subagents import SubAgent
+    from soothe_deepagents.middleware.subagents import SubAgent
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class GeneratedAgentRegistry:
         logger.info("Registered generated agent '%s' at %s", manifest.name, path)
 
     def load_as_subagent(self, name: str) -> "SubAgent" | None:
-        """Load a generated agent as a deepagents SubAgent dict.
+        """Load a generated agent as a soothe_deepagents SubAgent dict.
 
         Args:
             name: Agent name to load.

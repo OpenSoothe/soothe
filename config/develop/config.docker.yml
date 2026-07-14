@@ -39,10 +39,12 @@ router_profiles:
       think: "dashscope:glm-5.2"
       image: "dashscope:kimi-k2.7-code"
       ocr: "omlx,PaddleOCR-VL-1.5-4bit"
-      embedding: "dashscope:text-embedding-v4"
-    embedding_dims: 768  # must match configured embedding output dimension
 
 active_router_profile: production
+
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 
 # =============================================================================
 # Persistence Backend

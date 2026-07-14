@@ -15,7 +15,7 @@
 
 ## 1. Abstract
 
-This RFC defines a **loop-scoped router profile override**: the TUI command `/model-router` selects a named entry from configured `router_profiles` for the current StrangeLoop. Subsequent turns in that loop resolve **chat** `ModelRouter` roles from the selected preset. Process-wide `active_router_profile` (and its embedding model / `embedding_dims`) remains the daemon/host default. New loops and `/clear` drop the override.
+This RFC defines a **loop-scoped router profile override**: the TUI command `/model-router` selects a named entry from configured `router_profiles` for the current StrangeLoop. Subsequent turns in that loop resolve **chat** `ModelRouter` roles from the selected preset. Process-wide `active_router_profile` and `embedding_profile` remain the daemon/host defaults. New loops and `/clear` drop the override.
 
 The mechanism mirrors the existing per-turn `/model` path: client session memory + optional wire field on `input`, validated and applied as a **turn-scoped overlay** on the daemon—not a mutation of loaded YAML.
 
@@ -35,7 +35,7 @@ The mechanism mirrors the existing per-turn `/model` path: client session memory
 ### 2.2 Non-Goals
 
 * Persisting the override on loop metadata or restoring it on `/resume` / TUI restart.
-* Switching process-wide `embedding` role or `embedding_dims` for the override (indexes stay on the process active profile).
+* Switching process-wide embedding model or dimensions for the override (indexes stay on the process embedding profile).
 * Writing `active_router_profile` back to `config.yml` (no `--default` in this RFC).
 * Changing how `router_profiles` are declared or how load-time `_apply_active_router_profile` works.
 * Requiring autopilot / Discord / other channels to pass the field (optional for them).
@@ -80,8 +80,8 @@ input.router_profile  ──►  daemon validate name
                                 │
               ┌─────────────────┴──────────────────┐
               ▼                                    ▼
-   resolve_model(chat roles)          embedding / embedding_dims
-   (+ RoleRoutingMiddleware)          = process active profile
+   resolve_model(chat roles)          embedding model / embedding_dims
+   (+ RoleRoutingMiddleware)          = process embedding_profile
               ▲
               │
    optional input.model ──► PerTurnModelMiddleware (wins for stream default)
@@ -119,7 +119,7 @@ Override applies on the **next** user turn / daemon query that carries the field
 2. Else stream router-profile overlay set → use that profile’s `ModelRouter` for chat `resolve_model(role)`.
 3. Else process `active_router_profile` / derived `router`.
 
-For `role == embedding` (and process `embedding_dims`): always (3), never (2).
+For `role == embedding` (and process `embedding_profile`): always (3), never (2).
 
 ### 6.4 Independence
 

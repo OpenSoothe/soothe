@@ -8,14 +8,14 @@ from typing import Any
 
 DEFAULT_CORE_TOOL_NAMES: frozenset[str] = frozenset(
     {
-        # deepagents filesystem
+        # soothe_deepagents filesystem
         "ls",
         "read_file",
         "write_file",
         "edit_file",
         "glob",
         "grep",
-        # deepagents other
+        # soothe_deepagents other
         "write_todos",
         "task",
         # soothe surgical file ops

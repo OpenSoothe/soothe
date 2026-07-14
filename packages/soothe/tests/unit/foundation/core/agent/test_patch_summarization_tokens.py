@@ -48,8 +48,8 @@ def test_split_conversation_token_count_adds_messages_and_tools() -> None:
 
 
 def test_truncate_args_skips_token_count_for_message_trigger() -> None:
-    pytest.importorskip("deepagents")
-    from deepagents.middleware.summarization import SummarizationMiddleware
+    pytest.importorskip("soothe_deepagents")
+    from soothe_deepagents.middleware.summarization import SummarizationMiddleware
 
     middleware = MagicMock()
     middleware._truncate_args_trigger = ("messages", 20)

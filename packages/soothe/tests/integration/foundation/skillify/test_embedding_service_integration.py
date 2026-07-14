@@ -23,7 +23,7 @@ async def test_local_config_wires_skillify_embedding_role_and_retries(
     # tests/conftest.py loads config/develop/config.yml as test_config by default.
     assert test_config.active_router_profile == "production"
     assert test_config.skillify.model_role == "embedding"
-    assert test_config.resolve_model("embedding") == "dashscope:text-embedding-v4"
+    assert test_config.resolve_model("embedding") == "openai:text-embedding-3-small"
 
     vector_store = MagicMock()
     vector_store.search = AsyncMock(return_value=[])

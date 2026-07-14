@@ -1,9 +1,9 @@
-"""Runtime patch for deepagents task tool config propagation.
+"""Runtime patch for soothe_deepagents task tool config propagation.
 
 This patch ensures parent runnable config is propagated to subagent invocations,
 enabling proper stream event forwarding in nested graph execution.
 
-When ``agent.runtime.general_purpose_subagent`` is false (default), the deepagents
+When ``agent.runtime.general_purpose_subagent`` is false (default), the soothe_deepagents
 ``general-purpose`` delegate is removed from the task tool listing and blocked at
 invoke time.
 
@@ -42,7 +42,7 @@ _general_purpose_subagent_enabled: contextvars.ContextVar[bool] = contextvars.Co
 
 
 def general_purpose_subagent_enabled() -> bool:
-    """Return whether deepagents general-purpose subagent is active for this build."""
+    """Return whether soothe_deepagents general-purpose subagent is active for this build."""
     return _general_purpose_subagent_enabled.get()
 
 
@@ -72,7 +72,7 @@ def _task_tool_description_template(base_template: str, *, include_general_purpo
 
 def _patch_subagent_middleware_filters_general_purpose() -> None:
     try:
-        from deepagents.middleware import subagents as sm
+        from soothe_deepagents.middleware import subagents as sm
     except ImportError:
         return
 
@@ -107,11 +107,11 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
     LangGraph's tool node injects it; see ``_get_all_injected_args`` in tool_node.
     """
     try:
-        from deepagents.middleware import subagents as sm
         from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
         from langchain_core.runnables import Runnable
         from langchain_core.tools import StructuredTool
         from langgraph.types import Command
+        from soothe_deepagents.middleware import subagents as sm
     except ImportError:
         return
 
@@ -137,10 +137,10 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
         if not include_general_purpose:
             subagents = _filter_general_purpose_subagents(subagents)
 
-        # Combine excluded_state_keys (deepagents default) with private_state_keys
+        # Combine excluded_state_keys (soothe_deepagents default) with private_state_keys
         all_excluded_keys = excluded_state_keys | private_state_keys | parent_owned_state_keys
 
-        # Compile raw SubAgent specs first (deepagents 0.6.10+ API)
+        # Compile raw SubAgent specs first (soothe_deepagents 0.6.10+ API)
         # Raw specs lack 'runnable'; they need create_sub_agent() compilation.
         def _compile_spec(spec: Any) -> Any:
             if "runnable" in spec:
@@ -193,7 +193,7 @@ def _patch_task_tool_propagates_parent_runnable_config() -> None:
 
             state_update = {k: v for k, v in result.items() if k not in all_excluded_keys}
 
-            # Handle structured_response serialization (deepagents 0.6.10+)
+            # Handle structured_response serialization (soothe_deepagents 0.6.10+)
             structured = result.get("structured_response")
             if structured is not None:
                 if hasattr(structured, "model_dump_json"):

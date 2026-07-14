@@ -44,7 +44,8 @@ Bootstrap creates provider `openai` and applies the built-in **default** router 
 ```bash
 export OPENAI_API_KEY=sk-...
 export OPENAI_BASE_URL="https://your-provider-endpoint/v1"
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'
+export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 ```
 
 Provider bootstrap names the provider `openai`; router targets must use the `openai:` prefix (e.g. `openai:qwen3.7-plus`), unless you define a named provider via `SOOTHE_PROVIDERS` JSON.
@@ -82,6 +83,7 @@ Pydantic Settings accepts JSON for complex fields. Prefix is still `SOOTHE_`.
 |-------|---------|---------|
 | `providers` | `SOOTHE_PROVIDERS` | `'[{"name":"openai","api_key":"sk-..."}]'` |
 | `router_profiles` | `SOOTHE_ROUTER_PROFILES` | See [Router overrides](#router-overrides-env-only) |
+| `embedding_profile` | `SOOTHE_EMBEDDING_PROFILE` | `'[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'` |
 | `persistence` | `SOOTHE_PERSISTENCE` | `'{"default_backend":"postgresql","postgres_base_dsn":"postgresql://..."}'` |
 | `vector_stores` | `SOOTHE_VECTOR_STORES` | `'[{"name":"pgvector","provider_type":"pgvector"}]'` |
 | `vector_store_router` | `SOOTHE_VECTOR_STORE_ROUTER` | `'{"default":"pgvector:soothe_default"}'` |
@@ -102,13 +104,15 @@ Quote carefully in shell and Compose — single quotes around the JSON are safes
 
 ```bash
 # OpenAI-compatible via OPENAI_* bootstrap (provider name "openai")
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'
+export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 ```
 
 Generic OpenAI example:
 
 ```bash
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:gpt-4o","think":"openai:gpt-4o"},"embedding_dims":1536}]'
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:gpt-4o","think":"openai:gpt-4o"}}]'
+export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 ```
 
 **Switch a named profile** (profiles defined in YAML or via `SOOTHE_ROUTER_PROFILES`):
@@ -209,7 +213,7 @@ Resolution order, highest to lowest:
 3. **YAML file** (with `${VAR}` already interpolated)
 4. **Pydantic model defaults** (+ zero-config provider bootstrap)
 
-After load, `_apply_active_router_profile` copies the selected profile into `router` and `embedding_dims`. Env cannot patch individual router roles afterward unless you replace `SOOTHE_ROUTER_PROFILES` or edit YAML.
+After load, `_apply_active_router_profile` copies the selected profile into derived `router`, while `_apply_embedding_profile` resolves `embedding_model` and `embedding_dims` from `embedding_profile`. Env cannot patch individual router roles afterward unless you replace `SOOTHE_ROUTER_PROFILES` or edit YAML.
 
 ## Docker (Env-Only, No Config File)
 
@@ -218,13 +222,15 @@ After load, `_apply_active_router_profile` copies the selected profile into `rou
 ```bash
 export OPENAI_API_KEY=sk-...
 export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'
+export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
   -e OPENAI_API_KEY \
   -e OPENAI_BASE_URL \
   -e SOOTHE_ROUTER_PROFILES \
+  -e SOOTHE_EMBEDDING_PROFILE \
   -v soothe-data:/var/lib/soothe \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 ```
@@ -257,13 +263,15 @@ Use this when the CLI runs on the host and the daemon runs in Docker **and** you
 export OPENAI_API_KEY=sk-...
 export OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 export CONTAINER_WS=/var/lib/soothe/workspaces
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]'
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]'
+export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 
 docker run --rm -d --name soothed \
   -p 8765:8765 \
   -e OPENAI_API_KEY \
   -e OPENAI_BASE_URL \
   -e SOOTHE_ROUTER_PROFILES \
+  -e SOOTHE_EMBEDDING_PROFILE \
   -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOME\",\"container_root\":\"$CONTAINER_WS\"}" \
   -v soothe-data:/var/lib/soothe \
   -v "$HOME:$CONTAINER_WS" \
@@ -320,7 +328,7 @@ export SOOTHE_PERSISTENCE='{"default_backend":"sqlite"}'
 **Variable not applied?**
 
 1. Top-level field? Must match exactly (`SOOTHE_DEBUG`, not `SOOTHE_DEBUG_MODE`).
-2. Nested field? Use JSON (`SOOTHE_PERSISTENCE`, `SOOTHE_ROUTER_PROFILES`) or YAML — not `SOOTHE_FOO_BAR_BAZ` dotted paths.
+2. Nested field? Use JSON (`SOOTHE_PERSISTENCE`, `SOOTHE_ROUTER_PROFILES`, `SOOTHE_EMBEDDING_PROFILE`) or YAML — not `SOOTHE_FOO_BAR_BAZ` dotted paths.
 3. Router model unchanged? `SOOTHE_ROUTER_DEFAULT` is ignored; use `SOOTHE_ROUTER_PROFILES` or YAML `router_profiles`.
 4. Daemon transport? Use `SOOTHE_DAEMON_*` with `__` nesting.
 5. Shell exported the var? `source ~/.zshrc` or restart the daemon container.

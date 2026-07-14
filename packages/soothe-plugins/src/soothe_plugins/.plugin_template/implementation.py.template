@@ -6,7 +6,7 @@ and the node functions that make up your agent graph.
 
 from typing import Any
 
-from deepagents import CompiledSubAgent
+from soothe_deepagents import CompiledSubAgent
 from langgraph.graph import END, StateGraph
 
 from .events import YourCustomEvent

@@ -55,9 +55,10 @@ router_profiles:
       fast: null
       image: null
       ocr: null
-      embedding: null
-    embedding_dims: 1536
 active_router_profile: default
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 ```
 
 ### Added - Environment-First Provider Bootstrap

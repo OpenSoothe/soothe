@@ -1,8 +1,8 @@
-"""Remove deepagents ``execute`` from agent tool surfaces.
+"""Remove soothe_deepagents ``execute`` from agent tool surfaces.
 
 Soothe uses host execution tools (``run_command``, ``run_python``,
 ``run_background``, ``tail_background_log``, ``kill_process``) instead of
-deepagents' sandbox-backed ``execute`` tool.
+soothe_deepagents' sandbox-backed ``execute`` tool.
 
 ``create_deep_agent`` and ``FilesystemMiddleware`` register ``execute`` by
 default; this module strips it at build time and via a runtime patch on
@@ -27,14 +27,14 @@ def tool_entry_name(item: Any) -> str | None:
 
 
 def without_deepagents_execute_tool(items: Sequence[_T]) -> list[_T]:
-    """Return a shallow copy with deepagents ``execute`` removed."""
+    """Return a shallow copy with soothe_deepagents ``execute`` removed."""
     return [t for t in items if tool_entry_name(t) != _DEEPAGENTS_EXECUTE_TOOL]
 
 
 def _patch_filesystem_middleware_strips_execute() -> None:
     """Strip ``execute`` from ``FilesystemMiddleware.tools`` after init."""
     try:
-        from deepagents.middleware.filesystem import FilesystemMiddleware
+        from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
     except ImportError:
         return
 
@@ -52,7 +52,7 @@ def _patch_filesystem_middleware_strips_execute() -> None:
 
 
 def apply_execute_tool_removal_patch() -> None:
-    """Apply patches that keep deepagents ``execute`` off agent tool catalogs."""
+    """Apply patches that keep soothe_deepagents ``execute`` off agent tool catalogs."""
     _patch_filesystem_middleware_strips_execute()
 
 

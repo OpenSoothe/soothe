@@ -120,7 +120,7 @@ Key property: the context ledger is theoretically unlimited. Only projections ar
 
 ### Memory (`MemoryProtocol`)
 
-Cross-thread long-term memory. Stores important knowledge that should survive beyond a single thread. Queryable by semantic relevance. Separate from deepagents' `MemoryMiddleware` (which loads static AGENTS.md instructions) and separate from `ContextProtocol` (which is within-thread).
+Cross-thread long-term memory. Stores important knowledge that should survive beyond a single thread. Queryable by semantic relevance. Separate from soothe_deepagents' `MemoryMiddleware` (which loads static AGENTS.md instructions) and separate from `ContextProtocol` (which is within-thread).
 
 ### Planner (`PlannerProtocol`)
 

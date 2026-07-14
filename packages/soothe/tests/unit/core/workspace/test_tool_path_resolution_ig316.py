@@ -93,7 +93,7 @@ def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path:
 
 def test_filesystem_middleware_file_info_virtual_path(tmp_path: Path) -> None:
     """Surgical ``file_info`` resolves virtual absolute paths via backend (IG-316)."""
-    from deepagents.backends.filesystem import FilesystemBackend
+    from soothe_deepagents.backends.filesystem import FilesystemBackend
 
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -166,13 +166,13 @@ def test_get_data_info_resolves_virtual_path(tmp_path: Path) -> None:
 def test_soothe_filesystem_middleware_uses_workspace_relative_artifact_prefix(
     tmp_path: Path,
 ) -> None:
-    """SootheFilesystemMiddleware overrides deepagents' root-absolute artifact prefixes.
+    """SootheFilesystemMiddleware overrides soothe_deepagents' root-absolute artifact prefixes.
 
     Deepagents defaults `_large_tool_results_prefix` to "/large_tool_results" when
     the backend is not a CompositeBackend. On read-only root filesystems (macOS), this
     causes OSError. SootheFilesystemMiddleware must override to workspace-relative paths.
     """
-    from deepagents.backends.filesystem import FilesystemBackend
+    from soothe_deepagents.backends.filesystem import FilesystemBackend
 
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
 

@@ -184,7 +184,7 @@ class SkillIndexer:
         if actual_dims != self._embedding_dims:
             logger.error(
                 "Embedding dimension mismatch: model returned %d but config embedding_dims=%d. "
-                "Update router_profiles[].embedding_dims or switch embedding model.",
+                "Update embedding_profile[].embedding_dims or switch embedding model.",
                 actual_dims,
                 self._embedding_dims,
             )

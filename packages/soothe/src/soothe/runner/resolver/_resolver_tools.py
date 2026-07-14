@@ -21,9 +21,9 @@ from soothe.foundation.workspace.tool_path_resolution import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain_core.language_models import BaseChatModel
     from langchain_core.tools import BaseTool
+    from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
 logger = logging.getLogger(__name__)
 

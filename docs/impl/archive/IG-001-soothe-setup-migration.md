@@ -145,7 +145,7 @@ Thin wrapper around `create_deep_agent()`:
 
 ## Phase 3: MCP Integration
 
-Port the config-driven MCP loading pattern from deepagents CLI (`mcp_tools.py`):
+Port the config-driven MCP loading pattern from soothe_deepagents CLI (`mcp_tools.py`):
 
 - Support Claude Desktop format `.mcp.json` files
 - Support stdio and HTTP/SSE transports
@@ -248,7 +248,7 @@ Configure via `SootheConfig.skills` paths.
 
 ```python
 from soothe import create_soothe_agent
-from deepagents.middleware.subagents import SubAgent
+from soothe_deepagents.middleware.subagents import SubAgent
 
 my_subagent: SubAgent = {
     "name": "my_agent",

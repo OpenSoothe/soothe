@@ -34,13 +34,13 @@ from soothe.runner.resolver import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from deepagents.backends.protocol import BackendFactory, BackendProtocol
-    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain.agents.middleware import InterruptOnConfig
     from langchain.agents.middleware.types import AgentMiddleware
     from langchain_core.tools import BaseTool
     from langgraph.store.base import BaseStore
     from langgraph.types import Checkpointer
+    from soothe_deepagents.backends.protocol import BackendFactory, BackendProtocol
+    from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
     from soothe.middleware.identity import IdentityRuntime
     from soothe.protocols.memory import MemoryProtocol
@@ -145,7 +145,7 @@ class AgentBuilder:
         Returns:
             CoreAgent instance wrapping CompiledStateGraph with typed properties.
         """
-        from deepagents import create_deep_agent
+        from soothe_deepagents import create_deep_agent
 
         create_start = time.perf_counter()
 
@@ -205,11 +205,11 @@ class AgentBuilder:
             all_tools.extend(create_mcp_resource_tools(registry))
             logger.debug("[Init] MCP resource tools added")
 
-        # deepagents registers ``execute``; Soothe uses host execution tools instead.
+        # soothe_deepagents registers ``execute``; Soothe uses host execution tools instead.
         before = len(all_tools)
         all_tools = without_deepagents_execute_tool(all_tools)
         if len(all_tools) < before:
-            logger.debug("Removed deepagents execute tool from resolver tool list")
+            logger.debug("Removed soothe_deepagents execute tool from resolver tool list")
 
         if (
             self._config.progressive_tools.enabled

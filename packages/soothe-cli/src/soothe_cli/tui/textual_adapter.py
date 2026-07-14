@@ -2440,7 +2440,7 @@ async def _handle_interrupt_cleanup(
             )
             loop_id = _loop_id_for_remote_state(config, daemon_session)
             if loop_id:
-                # Attribute the write to the deepagents ``model`` node — the owner of
+                # Attribute the write to the soothe_deepagents ``model`` node — the owner of
                 # the ``messages`` channel — so LangGraph does not raise
                 # ``Ambiguous update, specify as_node`` when multiple nodes have
                 # checkpointed at the current version (e.g. tool node + model node).

@@ -37,7 +37,7 @@ Three coordinated fixes improve tool-call efficiency and TUI accuracy for readon
 | In scope | Out of scope |
 |----------|--------------|
 | `PlanGenerateStep` / `StepAction` execution routing fields | Grep-failure keyword heuristic policy |
-| `resolve_wire_subagent_for_step()` (planner hint > wire routing) | Demoting/removing `general-purpose` from deepagents tool description |
+| `resolve_wire_subagent_for_step()` (planner hint > wire routing) | Demoting/removing `general-purpose` from soothe_deepagents tool description |
 | Explore workspace-relative path hints in execution envelope | SubAgent card footer changes (IG-515) |
 | `general-purpose` → `explore` remap in task tool patch | |
 | Split `StepResult.tool_call_count` / `subgraph_tool_call_count` | |

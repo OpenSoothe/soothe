@@ -213,7 +213,7 @@ def build_explore_engine(
 ) -> CompiledStateGraph:
 ```
 
-The engine creates a `ToolNode` with the read-only tools injected via the builder. Tools are obtained from deepagents' `FilesystemMiddleware` (glob, grep, ls, read_file) and Soothe's `SootheFilesystemMiddleware` (file_info).
+The engine creates a `ToolNode` with the read-only tools injected via the builder. Tools are obtained from soothe_deepagents' `FilesystemMiddleware` (glob, grep, ls, read_file) and Soothe's `SootheFilesystemMiddleware` (file_info).
 
 **Tool binding**: Use `model.bind_tools(tools)` in the `plan_search` node so the LLM can generate structured tool calls.
 

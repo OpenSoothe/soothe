@@ -33,7 +33,8 @@ Soothe bootstraps an OpenAI provider from the environment when `providers` is em
 Change the default model without YAML:
 
 ```bash
-export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:gpt-4o"},"embedding_dims":1536}]'
+export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:gpt-4o"}}]'
+export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 ```
 
 (`SOOTHE_ROUTER_DEFAULT` does not work — `router` is derived from profiles.) Copy `config/config.template.yml` when you need multi-provider routing, Postgres, Langfuse, or other overrides.
@@ -48,9 +49,12 @@ router_profiles:
     router:
       default: openai:gpt-4o-mini
       think: openai:gpt-4o      # reasoning tasks use the bigger model
-    embedding_dims: 1536
 
 active_router_profile: default
+
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 
 agent:
   loop:
@@ -113,7 +117,7 @@ For pgvector, define a `pgvector` provider with a `dsn` and `index_type: hnsw`, 
 - **Weaviate Cloud:** when you want managed vector storage decoupled from your Postgres.
 - **in_memory:** tests and ephemeral sessions only — data is lost on restart.
 
-`embedding_dims` **must** match your embedding model's output (1536 for `text-embedding-3-small`, 3072 for `-large`, 1024 for DashScope). A mismatch causes silent corruption or errors at insert time.
+`embedding_profile.embedding_dims` **must** match your embedding model's output (1536 for `text-embedding-3-small`, 3072 for `-large`, 1024 for DashScope). A mismatch causes silent corruption or errors at insert time.
 
 ## Subagent Model Assignment
 
@@ -158,7 +162,7 @@ For integration tests, point at a real provider but cap `global_max_llm_calls` t
 
 ## Common Mistakes
 
-- **Mismatched `embedding_dims`** — the most common silent failure. Verify against your embedding model's spec.
+- **Mismatched `embedding_profile.embedding_dims`** — the most common silent failure. Verify against your embedding model's spec.
 - **Forgetting `think`/`fast`** — leaving them null makes *everything* use `default`, which is often the most expensive model.
 - **SQLite under parallel autonomous goals** — works for one goal, deadlocks under concurrency. Switch to Postgres.
 - **Hardcoding keys in YAML** — use `${VAR}`. See [Environment Variables](environment-variables.md).

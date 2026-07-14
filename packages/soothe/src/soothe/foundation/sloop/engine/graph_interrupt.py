@@ -1,6 +1,6 @@
 """LangGraph interrupt detection and auto-resume for CoreAgent streams.
 
-Action-approval interrupts (deepagents tool review) are auto-approved here.
+Action-approval interrupts (soothe_deepagents tool review) are auto-approved here.
 ``ask_user`` interrupts are no longer handled in this module — they bubble up
 through :class:`ClarificationCapture` to the ``await_clarification`` loop node
 (RFC-622).

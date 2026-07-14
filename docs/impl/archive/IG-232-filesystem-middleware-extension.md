@@ -41,9 +41,9 @@ Extend deepagents' `FilesystemMiddleware` to provide surgical file manipulation 
 **Structure**:
 ```python
 # 1. Module imports (deepagents patterns)
-from deepagents.backends.filesystem import FilesystemBackend
-from deepagents.backends.utils import validate_path
-from deepagents.middleware.filesystem import FilesystemMiddleware
+from soothe_deepagents.backends.filesystem import FilesystemBackend
+from soothe_deepagents.backends.utils import validate_path
+from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.tools import ToolRuntime
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
@@ -263,7 +263,7 @@ class FileOpsPlugin:
 
     async def on_load(self, context):
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         workspace_root = context.config.get("workspace_root", "")
         fs_config = context.config.get("filesystem_middleware", {})

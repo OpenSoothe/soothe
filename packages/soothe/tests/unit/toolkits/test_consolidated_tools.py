@@ -38,15 +38,15 @@ class TestWizsearchToolkit:
 
 
 class TestFileOpsToolkit:
-    """Tests for file_ops toolkit - surgical file operations not in deepagents.
+    """Tests for file_ops toolkit - surgical file operations not in soothe_deepagents.
 
     Note: file_ops does NOT include read_file, write_file, search_files, list_files
-    (those are provided by deepagents FilesystemMiddleware).
+    (those are provided by soothe_deepagents FilesystemMiddleware).
     """
 
     def test_delete_file_tool(self, tmp_path: Path) -> None:
         """Test delete_file tool."""
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -63,7 +63,7 @@ class TestFileOpsToolkit:
 
     def test_file_info_tool(self, tmp_path: Path) -> None:
         """Test file_info tool."""
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -79,7 +79,7 @@ class TestFileOpsToolkit:
 
     def test_edit_file_lines_tool(self, tmp_path: Path) -> None:
         """Test edit_file_lines tool."""
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -97,7 +97,7 @@ class TestFileOpsToolkit:
 
     def test_insert_lines_tool(self, tmp_path: Path) -> None:
         """Test insert_lines tool."""
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -113,7 +113,7 @@ class TestFileOpsToolkit:
 
     def test_delete_lines_tool(self, tmp_path: Path) -> None:
         """Test delete_lines tool."""
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -132,7 +132,7 @@ class TestFileOpsToolkit:
 
     def test_apply_diff_tool(self, tmp_path: Path) -> None:
         """Test apply_diff tool."""
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
@@ -259,7 +259,7 @@ class TestResolverToolkitNames:
         assert "insert_lines" in tool_names
         assert "delete_lines" in tool_names
         assert "apply_diff" in tool_names
-        # NOT included (provided by deepagents)
+        # NOT included (provided by soothe_deepagents)
         assert "read_file" not in tool_names
         assert "write_file" not in tool_names
         assert "search_files" not in tool_names

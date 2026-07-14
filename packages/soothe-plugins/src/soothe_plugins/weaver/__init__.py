@@ -45,7 +45,7 @@ from .registry import GeneratedAgentRegistry
 from .reuse import ReuseIndex
 
 if TYPE_CHECKING:
-    from deepagents.middleware.subagents import CompiledSubAgent
+    from soothe_deepagents.middleware.subagents import CompiledSubAgent
     from langchain_core.language_models import BaseChatModel
 
     from .models import (
@@ -269,7 +269,7 @@ def _build_weaver_graph(
             system_prompt = prompt_path.read_text(encoding="utf-8")
 
         try:
-            from deepagents import create_deep_agent
+            from soothe_deepagents import create_deep_agent
             from langchain_core.messages import HumanMessage
 
             agent = create_deep_agent(

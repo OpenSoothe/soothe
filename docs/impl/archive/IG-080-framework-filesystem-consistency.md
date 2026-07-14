@@ -111,7 +111,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from deepagents.backends.filesystem import FilesystemBackend
+from soothe_deepagents.backends.filesystem import FilesystemBackend
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig

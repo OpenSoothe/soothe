@@ -20,9 +20,7 @@ def _config_with_two_profiles() -> SootheConfig:
                     "default": "dashscope:prod-default",
                     "fast": "dashscope:prod-fast",
                     "think": "dashscope:prod-think",
-                    "embedding": "dashscope:prod-embed",
                 },
-                "embedding_dims": 768,
             },
             {
                 "name": "local",
@@ -30,11 +28,10 @@ def _config_with_two_profiles() -> SootheConfig:
                     "default": "omlx:local-default",
                     "fast": "omlx:local-fast",
                     "think": "omlx:local-think",
-                    "embedding": "omlx:local-embed",
                 },
-                "embedding_dims": 384,
             },
         ],
+        embedding_profile=[{"model_role": "dashscope:prod-embed", "embedding_dims": 768}],
         active_router_profile="production",
     )
 

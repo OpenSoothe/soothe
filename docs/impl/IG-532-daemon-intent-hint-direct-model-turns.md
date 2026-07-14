@@ -100,12 +100,17 @@ Appkit deliverable phases extended: `DEFAULT_DELIVERABLE_PHASES` / `DefaultDeliv
 ## Config Example (`local-deploy`)
 
 ```yaml
-router:
-  default: "omlx:Qwen3.6-27B-OptiQ-4bit"
-  fast: "omlx:gemma-4-12b-coder-fable5-composer2.5"
-  image: "omlx:GLM-4.6V-Flash-4bit"
-  ocr: "omlx:DeepSeek-OCR-4bit"
-  embedding: "omlx:nomicai-modernbert-embed-base-bf16"
+router_profiles:
+  - name: local-deploy
+    router:
+      default: "omlx:Qwen3.6-27B-OptiQ-4bit"
+      fast: "omlx:gemma-4-12b-coder-fable5-composer2.5"
+      image: "omlx:GLM-4.6V-Flash-4bit"
+      ocr: "omlx:DeepSeek-OCR-4bit"
+active_router_profile: local-deploy
+embedding_profile:
+  - model_role: "omlx:nomicai-modernbert-embed-base-bf16"
+    embedding_dims: 768
 ```
 
 ## Tests

@@ -41,7 +41,7 @@ def test_build_passes_filesystem_backend_to_deepagents(
         captured.update(kwargs)
         return MagicMock()
 
-    monkeypatch.setattr("deepagents.create_deep_agent", _fake_create_deep_agent)
+    monkeypatch.setattr("soothe_deepagents.create_deep_agent", _fake_create_deep_agent)
 
     monkeypatch.setattr(
         SootheConfig,

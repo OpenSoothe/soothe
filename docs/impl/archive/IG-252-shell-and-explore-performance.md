@@ -34,7 +34,7 @@ soothe --no-tui -p "/explore count soothe readme files"
 
 ### Issue 3: Tool Duplication
 
-Explore subagent had custom implementations of `glob`, `grep`, `ls`, `read_file` instead of reusing existing tools from deepagents FilesystemMiddleware.
+Explore subagent had custom implementations of `glob`, `grep`, `ls`, `read_file` instead of reusing existing tools from soothe_deepagents FilesystemMiddleware.
 
 ---
 
@@ -126,8 +126,8 @@ def file_info(path: str) -> dict:
     ...
 
 # AFTER: Reuse existing tools (45 lines)
-from deepagents.backends.filesystem import FilesystemBackend
-from deepagents.middleware.filesystem import FilesystemMiddleware
+from soothe_deepagents.backends.filesystem import FilesystemBackend
+from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
 def get_explore_tools(workspace: str | None = None) -> list[Any]:
     """Get filesystem tools for explore subagent."""

@@ -63,9 +63,9 @@ def test_factory_applies_compat_wrapper_for_custom_openai_endpoint() -> None:
             {
                 "name": "test",
                 "router": {"default": "omlx:test-model"},
-                "embedding_dims": 1536,
             }
         ],
+        embedding_profile=[{"model_role": "openai:text-embedding-3-small", "embedding_dims": 1536}],
         active_router_profile="test",
     )
 

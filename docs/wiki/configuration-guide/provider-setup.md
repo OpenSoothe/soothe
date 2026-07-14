@@ -40,13 +40,18 @@ Self-hosted vLLM is identical — just point `api_base_url` at your server and s
 Soothe never asks for a model by name at runtime. It asks for a **role**, and the router maps roles to `provider:model` pairs. This indirection is the whole point: swap models without touching agent code.
 
 ```yaml
-router:
-  default: openai:gpt-4o-mini
-  think: openai:o3-mini
-  embedding: openai:text-embedding-3-small
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+      think: openai:o3-mini
+active_router_profile: default
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 ```
 
-Each role is a field on the `router` block (`default`, `think`, `fast`, `image`, `embedding`) holding a `"provider:model"` string.
+Chat/image roles live under `router_profiles[].router` (`default`, `think`, `fast`, `image`, `ocr`), while embedding is configured once in `embedding_profile`.
 
 The five roles and their typical cost/quality profile:
 
@@ -56,15 +61,15 @@ The five roles and their typical cost/quality profile:
 | `fast` | Classification, subagents, memory | Yes — latency-sensitive |
 | `think` | Planning, consensus validation | No — quality matters |
 | `image` | Vision tasks | Must be vision-capable |
-| `embedding` | Vector search, semantic memory | Must match `embedding_dims` |
+| `embedding_profile.model_role` | Vector search, semantic memory | Must match `embedding_profile.embedding_dims` |
 
-**Fallback rule:** unset roles inherit `default`. So you can start with only `default` configured and add `think`/`image`/`embedding` as needed. But beware: if `default` is your most expensive model, leaving `fast` unset makes every cheap operation expensive.
+**Fallback rule:** unset chat/image/ocr roles inherit `default`. So you can start with only `default` configured and add `think`/`image` as needed. But beware: if `default` is your most expensive model, leaving `fast` unset makes every cheap operation expensive.
 
 **Cost strategy:** set `default` and `fast` to a cheap model, reserve `think` for a strong one. The local+cloud hybrid pushes this further — local model for `default`/`fast`, cloud only for `think`/`image` (e.g. `default: ollama:llama3.1:8b`, `think: openai:o3-mini`).
 
 ## Embeddings
 
-The `embedding` role and the top-level `embedding_dims` field are coupled — the dimension *must* match the model's output vector size or inserts fail silently or noisily.
+`embedding_profile.model_role` and `embedding_profile.embedding_dims` are coupled — the dimension *must* match the model's output vector size or inserts fail silently or noisily.
 
 | Model | Dimensions |
 |-------|------------|
@@ -73,7 +78,7 @@ The `embedding` role and the top-level `embedding_dims` field are coupled — th
 | Qwen `text-embedding-v3` | 1024 |
 | Ollama `nomic-embed-text` | 768 |
 
-**Mistake to avoid:** changing the embedding model without updating `embedding_dims` (or vice versa) corrupts the vector store — existing vectors have the old dimensionality and queries fail. When migrating, drop and re-index the collection.
+**Mistake to avoid:** changing `embedding_profile.model_role` without updating `embedding_profile.embedding_dims` (or vice versa) corrupts the vector store — existing vectors have the old dimensionality and queries fail. When migrating, drop and re-index the collection.
 
 ## Vector Stores
 
@@ -133,7 +138,7 @@ Run `soothed doctor` to validate config and connectivity, `soothe --debug "test"
 | `Timeout waiting for LLM response` | Provider slow or down | Raise `call_timeout_seconds`; check provider status |
 | `Model 'xxx' not available` | Model not listed in `providers[].models` or misspelled | Add it to the `models` list; check provider's model catalog |
 | Empty tool calls on local server | Missing `api_base_url` or wrapper not applied | Ensure `provider_type: openai` with explicit local `api_base_url`; restart daemon after config change |
-| Vector insert errors | `embedding_dims` ≠ model output | Align the two; re-index existing collections |
+| Vector insert errors | `embedding_profile.embedding_dims` ≠ model output | Align the two; re-index existing collections |
 
 ## See Also
 

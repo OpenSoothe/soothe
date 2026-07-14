@@ -15,6 +15,7 @@ from soothe.config.models import (
     AgentConfig,
     ConsoleLoggingConfig,
     CronConfig,
+    EmbeddingProfile,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
     MCPServerConfig,
@@ -54,6 +55,15 @@ def default_router_profiles() -> list[RouterProfile]:
         RouterProfile(
             name="default",
             router=ModelRouter(default="openai:gpt-4o-mini"),
+        )
+    ]
+
+
+def default_embedding_profile() -> list[EmbeddingProfile]:
+    """Built-in embedding profile used when YAML omits ``embedding_profile``."""
+    return [
+        EmbeddingProfile(
+            model_role="openai:text-embedding-3-small",
             embedding_dims=1536,
         )
     ]
@@ -198,7 +208,10 @@ class SootheConfig(BaseSettings):
     """Model provider configurations."""
 
     router_profiles: list[RouterProfile] = Field(default_factory=default_router_profiles)
-    """Named router presets (router + embedding_dims)."""
+    """Named router presets for chat/image/ocr roles."""
+
+    embedding_profile: list[EmbeddingProfile] = Field(default_factory=default_embedding_profile)
+    """Embedding model + vector dimensions (independent from router profile switching)."""
 
     active_router_profile: str = "default"
     """Name of the router profile to apply. Overridable via ``SOOTHE_ACTIVE_ROUTER_PROFILE``."""
@@ -207,7 +220,10 @@ class SootheConfig(BaseSettings):
     """Resolved role → ``provider:model`` map from the active router profile."""
 
     embedding_dims: int = Field(default=1536, init=False)
-    """Resolved embedding width from the active router profile."""
+    """Resolved embedding width from the active embedding profile."""
+
+    embedding_model: str = Field(default="openai:text-embedding-3-small", init=False)
+    """Resolved embedding model spec from the active embedding profile."""
 
     # --- Agent behaviour (unified) ---
 
@@ -260,7 +276,6 @@ class SootheConfig(BaseSettings):
                     {
                         "name": "default",
                         "router": {"default": "anthropic:claude-sonnet-4-20250514"},
-                        "embedding_dims": 1536,
                     }
                 ]
             _logger.info("No providers in config; using ANTHROPIC_API_KEY from environment.")
@@ -386,7 +401,7 @@ class SootheConfig(BaseSettings):
 
     @model_validator(mode="after")
     def _apply_active_router_profile(self) -> SootheConfig:
-        """Apply the selected router profile to ``router`` and ``embedding_dims``.
+        """Apply the selected router profile to ``router``.
 
         ``SOOTHE_ACTIVE_ROUTER_PROFILE`` overrides the YAML ``active_router_profile`` value
         when set, so deployments can switch presets without editing config files.
@@ -414,6 +429,16 @@ class SootheConfig(BaseSettings):
 
         object.__setattr__(self, "active_router_profile", effective_profile)
         object.__setattr__(self, "router", profile.router)
+        return self
+
+    @model_validator(mode="after")
+    def _apply_embedding_profile(self) -> SootheConfig:
+        """Apply the active embedding profile to ``embedding_model`` + ``embedding_dims``."""
+        if not self.embedding_profile:
+            msg = "embedding_profile must contain at least one profile."
+            raise ValueError(msg)
+        profile = self.embedding_profile[0]
+        object.__setattr__(self, "embedding_model", profile.model_role)
         object.__setattr__(self, "embedding_dims", profile.embedding_dims)
         return self
 
@@ -824,15 +849,17 @@ class SootheConfig(BaseSettings):
         Returns:
             A ``provider_name:model_name`` string.
         """
-        router = self.router
-        if role != "embedding":
-            from soothe.middleware._router_profile_override import get_stream_router_profile
+        if role == "embedding":
+            return self.embedding_model
 
-            overlay = get_stream_router_profile()
-            if overlay:
-                profile = next((p for p in self.router_profiles if p.name == overlay), None)
-                if profile is not None:
-                    router = profile.router
+        router = self.router
+        from soothe.middleware._router_profile_override import get_stream_router_profile
+
+        overlay = get_stream_router_profile()
+        if overlay:
+            profile = next((p for p in self.router_profiles if p.name == overlay), None)
+            if profile is not None:
+                router = profile.router
         value = getattr(router, role, None)
         if value:
             return value

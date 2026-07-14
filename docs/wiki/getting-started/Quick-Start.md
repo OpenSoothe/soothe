@@ -48,7 +48,8 @@ docker run --rm -d --name soothed \
   -p 8765:8765 \
   -e OPENAI_API_KEY \
   -e OPENAI_BASE_URL \
-  -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]' \
+  -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]' \
+  -e SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]' \
   -v soothe-data:/var/lib/soothe \
   registry.cn-hangzhou.aliyuncs.com/lacogito/soothed:latest
 ```
@@ -65,7 +66,8 @@ docker run --rm -d --name soothed \
   -p 8765:8765 \
   -e OPENAI_API_KEY \
   -e OPENAI_BASE_URL \
-  -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"},"embedding_dims":1536}]' \
+  -e SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:qwen3.7-plus","fast":"openai:qwen3.7-plus","think":"openai:qwen3.7-plus"}}]' \
+  -e SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]' \
   -e SOOTHE_WORKSPACE_MOUNT="{\"host_root\":\"$HOST_WS\",\"container_root\":\"$CONTAINER_WS\"}" \
   -v soothe-data:/var/lib/soothe \
   -v "$HOST_WS:$CONTAINER_WS" \

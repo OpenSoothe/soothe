@@ -1,4 +1,4 @@
-"""Runtime patches for deepagents SummarizationMiddleware.
+"""Runtime patches for soothe_deepagents SummarizationMiddleware.
 
 These patches fix upstream issues in SummarizationMiddleware that affect
 Soothe's execution performance and correctness.
@@ -31,8 +31,8 @@ def _patch_summarization_overwrite_handling() -> None:
     This is a temporary workaround until fixed upstream.
     """
     try:
-        from deepagents.middleware.summarization import SummarizationMiddleware
         from langgraph.types import Overwrite
+        from soothe_deepagents.middleware.summarization import SummarizationMiddleware
     except ImportError:
         return
 
@@ -125,7 +125,7 @@ def _patch_summarization_token_count_optimization() -> None:
     Langfuse ``model`` span gap (~12s in recent loops).
     """
     try:
-        from deepagents.middleware.summarization import SummarizationMiddleware
+        from soothe_deepagents.middleware.summarization import SummarizationMiddleware
     except ImportError:
         return
 

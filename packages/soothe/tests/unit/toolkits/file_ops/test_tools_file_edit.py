@@ -9,7 +9,7 @@ Tests surgical file operations provided by soothe.toolkits.file_ops:
 - apply_diff: Apply unified diff patches
 
 Note: This toolkit does NOT provide read_file, write_file, search_files, list_files
-(those are provided by deepagents FilesystemMiddleware).
+(those are provided by soothe_deepagents FilesystemMiddleware).
 """
 
 import asyncio
@@ -27,7 +27,7 @@ def middleware(tmp_path):
 
     This is the reference pattern for testing file_ops tools.
     """
-    from deepagents.backends.filesystem import FilesystemBackend
+    from soothe_deepagents.backends.filesystem import FilesystemBackend
 
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
 

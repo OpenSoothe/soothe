@@ -14,7 +14,7 @@ import time
 from typing import TYPE_CHECKING, Annotated, Any, TypedDict
 
 if TYPE_CHECKING:
-    from deepagents.middleware.subagents import CompiledSubAgent
+    from soothe_deepagents.middleware.subagents import CompiledSubAgent
 
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
@@ -559,7 +559,7 @@ def create_browser_use_subagent(
         soothe_config: SootheConfig used to resolve ``subagents.browser_use.model_role``.
 
     Returns:
-        `CompiledSubAgent` dict compatible with deepagents.
+        `CompiledSubAgent` dict compatible with soothe_deepagents.
     """
     runnable = _build_browser_use_graph(
         headless=headless,

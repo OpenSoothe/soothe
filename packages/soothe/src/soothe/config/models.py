@@ -115,7 +115,6 @@ class ModelRouter(BaseModel):
         fast: Cheap/fast model for classification and scoring.
         image: Vision-capable model for image understanding.
         ocr: OCR model for document text extraction.
-        embedding: Embedding model for vector operations.
     """
 
     default: str = "openai:gpt-4o-mini"
@@ -123,11 +122,22 @@ class ModelRouter(BaseModel):
     fast: str | None = None
     image: str | None = None
     ocr: str | None = None
-    embedding: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy_embedding_role(cls, data: Any) -> Any:
+        """Reject removed ``router.embedding`` mappings."""
+        if isinstance(data, dict) and "embedding" in data:
+            msg = (
+                "router.embedding has been removed. "
+                "Configure embeddings via top-level embedding_profile instead."
+            )
+            raise ValueError(msg)
+        return data
 
 
 class RouterProfile(BaseModel):
-    """Named preset combining a :class:`ModelRouter` with matching ``embedding_dims``.
+    """Named preset combining a :class:`ModelRouter`.
 
     Use with ``active_router_profile`` on :class:`~soothe.config.settings.SootheConfig`
     to switch between deployment targets (cloud vs local) without editing role mappings.
@@ -135,12 +145,43 @@ class RouterProfile(BaseModel):
     Args:
         name: Unique profile identifier (e.g. ``production``, ``local-deploy``).
         router: Role → ``provider:model`` mapping for this preset.
-        embedding_dims: Vector size for the profile's embedding model; must match output.
     """
 
     name: str
     router: ModelRouter
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy_embedding_dims(cls, data: Any) -> Any:
+        """Reject removed ``router_profiles[].embedding_dims`` values."""
+        if isinstance(data, dict) and "embedding_dims" in data:
+            msg = (
+                "router_profiles[].embedding_dims has been removed. "
+                "Configure embeddings via top-level embedding_profile instead."
+            )
+            raise ValueError(msg)
+        return data
+
+
+class EmbeddingProfile(BaseModel):
+    """Embedding model + vector dimension configuration.
+
+    Args:
+        model_role: Embedding model spec in ``provider:model`` form.
+        embedding_dims: Output vector dimension for the embedding model.
+    """
+
+    model_role: str = "openai:text-embedding-3-small"
     embedding_dims: int = 1536
+
+    @field_validator("model_role")
+    @classmethod
+    def _validate_model_role(cls, value: str) -> str:
+        spec = str(value or "").strip()
+        if ":" not in spec:
+            msg = "embedding_profile.model_role must use 'provider:model' format."
+            raise ValueError(msg)
+        return spec
 
 
 class VectorStoreRouter(BaseModel):
@@ -2390,7 +2431,7 @@ class AgentRuntimeConfig(BaseModel):
 
     Args:
         lazy_core_agent: Defer ``create_deep_agent`` until first Layer-1 execution.
-        general_purpose_subagent: Expose deepagents ``general-purpose`` delegate via ``task``.
+        general_purpose_subagent: Expose soothe_deepagents ``general-purpose`` delegate via ``task``.
         role_routing: Per-hop orchestration vs generation model roles (IG-545).
     """
 
@@ -2401,7 +2442,7 @@ class AgentRuntimeConfig(BaseModel):
     general_purpose_subagent: bool = Field(
         default=False,
         description=(
-            "When true, register deepagents general-purpose subagent on the task tool. "
+            "When true, register soothe_deepagents general-purpose subagent on the task tool. "
             "When false (default), general-purpose is hidden and blocked."
         ),
     )

@@ -149,12 +149,17 @@ See [Configuration Guide - Provider Setup](configuration-guide/provider-setup.md
 Use **model router** to map purpose roles to models:
 
 ```yaml
-router:
-  default: "openai:gpt-4o-mini"     # Main orchestrator
-  think: "openai:o3-mini"            # Complex reasoning
-  fast: "openai:gpt-4o-mini"         # Classification
-  image: "openai:gpt-4o"             # Vision
-  embedding: "openai:text-embedding-3-small"
+router_profiles:
+  - name: default
+    router:
+      default: "openai:gpt-4o-mini"   # Main orchestrator
+      think: "openai:o3-mini"          # Complex reasoning
+      fast: "openai:gpt-4o-mini"       # Classification
+      image: "openai:gpt-4o"           # Vision
+active_router_profile: default
+embedding_profile:
+  - model_role: "openai:text-embedding-3-small"
+    embedding_dims: 1536
 ```
 
 **Roles**:
@@ -571,7 +576,7 @@ See [Channel Plugin Guide](channel-plugin-guide.md).
 
 ```python
 from soothe_sdk.plugin import subagent
-from deepagents import CompiledSubAgent
+from soothe_deepagents import CompiledSubAgent
 
 @subagent(name="my_agent", description="Custom agent")
 async def create_agent(model, config, context):

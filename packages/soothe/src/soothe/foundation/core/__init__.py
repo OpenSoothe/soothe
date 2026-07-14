@@ -3,7 +3,7 @@
 CoreAgent is the foundational execution runtime, unaware of Loop or
 Autopilot concepts. It provides:
 - Tool invocation
-- Subagent delegation (via deepagents task tool)
+- Subagent delegation (via soothe_deepagents task tool)
 - Middleware processing
 - Streaming execution
 

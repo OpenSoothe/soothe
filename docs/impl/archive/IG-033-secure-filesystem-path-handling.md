@@ -203,7 +203,7 @@ def _check_filesystem_permission(self, action: ActionRequest, context: PolicyCon
 
 ```python
 from soothe.backends.filesystem_secure import SecureFilesystemBackend
-from deepagents.backends.filesystem import FilesystemBackend
+from soothe_deepagents.backends.filesystem import FilesystemBackend
 
 # Setup
 base = FilesystemBackend(root_dir="/workspace", virtual_mode=True)

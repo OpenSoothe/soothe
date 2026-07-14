@@ -490,9 +490,14 @@ providers:
     provider_type: ollama
     models: [llama3.2]
 
-router:
-  default: openai:gpt-4o-mini
-  think: anthropic:claude-opus-4-6
-  fast: openai:gpt-4o-mini
-  embedding: openai:text-embedding-3-small
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+      think: anthropic:claude-opus-4-6
+      fast: openai:gpt-4o-mini
+active_router_profile: default
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 ```

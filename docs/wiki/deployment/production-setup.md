@@ -99,9 +99,14 @@ providers:
       - qwen3.7-plus
       - text-embedding-v3
 
-router:
-  default: "openai-custom:qwen-max"
-  embedding: "openai-custom:text-embedding-v3"
+router_profiles:
+  - name: production
+    router:
+      default: "openai-custom:qwen-max"
+active_router_profile: production
+embedding_profile:
+  - model_role: "openai-custom:text-embedding-v3"
+    embedding_dims: 1024
 
 persistence:
   default_backend: postgresql
@@ -568,11 +573,16 @@ providers:
       - qwen3.7-plus
       - text-embedding-v3
 
-router:
-  default: "openai-custom:qwen-max"
-  fast: "openai-custom:qwen3.7-plus"
-  think: "openai-custom:qwen-max"
-  embedding: "openai-custom:text-embedding-v3"
+router_profiles:
+  - name: production
+    router:
+      default: "openai-custom:qwen-max"
+      fast: "openai-custom:qwen3.7-plus"
+      think: "openai-custom:qwen-max"
+active_router_profile: production
+embedding_profile:
+  - model_role: "openai-custom:text-embedding-v3"
+    embedding_dims: 1024
 
 persistence:
   default_backend: postgresql
@@ -611,12 +621,17 @@ providers:
     models:
       - claude-sonnet-4-20250514
 
-router:
-  default: "openai:gpt-4o-mini"
-  think: "anthropic:claude-sonnet-4-20250514"
-  fast: "openai:gpt-4o-mini"
-  image: "openai:gpt-4o"
-  embedding: "openai:text-embedding-3-small"
+router_profiles:
+  - name: production
+    router:
+      default: "openai:gpt-4o-mini"
+      think: "anthropic:claude-sonnet-4-20250514"
+      fast: "openai:gpt-4o-mini"
+      image: "openai:gpt-4o"
+active_router_profile: production
+embedding_profile:
+  - model_role: "openai:text-embedding-3-small"
+    embedding_dims: 1536
 
 persistence:
   default_backend: postgresql

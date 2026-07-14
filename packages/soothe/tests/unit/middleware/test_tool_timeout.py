@@ -170,7 +170,7 @@ class TestToolTimeoutMiddleware:
 
     @pytest.mark.asyncio
     async def test_skip_internal_timeout_glob(self) -> None:
-        """glob should bypass middleware timeout wrapper (deepagents internal cap)."""
+        """glob should bypass middleware timeout wrapper (soothe_deepagents internal cap)."""
         middleware = ToolTimeoutMiddleware(
             default_timeout_seconds=0.05,
             skip_tools_with_internal_timeout=True,
@@ -342,7 +342,7 @@ class TestTimeoutCategories:
         assert "write_file" in FILESYSTEM_TOOL_NAMES
 
     def test_glob_has_internal_timeout(self) -> None:
-        """glob uses deepagents internal timeout; middleware should skip by default."""
+        """glob uses soothe_deepagents internal timeout; middleware should skip by default."""
         assert "glob" in TOOLS_WITH_INTERNAL_TIMEOUT
 
     def test_subagent_tool_names(self) -> None:

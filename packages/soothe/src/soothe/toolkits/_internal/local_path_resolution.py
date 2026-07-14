@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from deepagents.backends.utils import validate_path
+from soothe_deepagents.backends.utils import validate_path
 
 from soothe.foundation.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,

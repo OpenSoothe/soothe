@@ -21,7 +21,7 @@ async def test_embedding_role_skipped_without_config() -> None:
 @pytest.mark.asyncio
 async def test_embedding_role_warning_when_unset() -> None:
     config = SimpleNamespace(
-        router=SimpleNamespace(embedding=None, default="openai:gpt-4o-mini"),
+        embedding_profile=[],
         embedding_dims=1536,
         resolve_model=lambda role: (
             "openai:gpt-4o-mini" if role == "embedding" else "openai:gpt-4o-mini"
@@ -29,16 +29,13 @@ async def test_embedding_role_warning_when_unset() -> None:
     )
     result = await erc.check_embedding_role(config)
     assert result.checks[0].status == CheckStatus.WARNING
-    assert "not set" in result.checks[0].message
+    assert "not configured" in result.checks[0].message
 
 
 @pytest.mark.asyncio
 async def test_embedding_role_ok_when_configured() -> None:
     config = SimpleNamespace(
-        router=SimpleNamespace(
-            embedding="dashscope:text-embedding-v4",
-            default="openai:gpt-4o-mini",
-        ),
+        embedding_profile=[{"model_role": "dashscope:text-embedding-v4", "embedding_dims": 1024}],
         skillify=SimpleNamespace(model_role="embedding"),
         embedding_dims=1024,
         resolve_model=lambda role: (
@@ -53,10 +50,7 @@ async def test_embedding_role_ok_when_configured() -> None:
 @pytest.mark.asyncio
 async def test_embedding_role_reports_custom_skillify_model_role() -> None:
     config = SimpleNamespace(
-        router=SimpleNamespace(
-            embedding="dashscope:text-embedding-v4",
-            default="openai:gpt-4o-mini",
-        ),
+        embedding_profile=[{"model_role": "dashscope:text-embedding-v4", "embedding_dims": 1024}],
         skillify=SimpleNamespace(model_role="fast"),
         embedding_dims=1024,
         resolve_model=lambda role: (

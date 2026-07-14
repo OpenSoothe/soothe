@@ -32,7 +32,7 @@ def _sample_subagents() -> list[dict[str, object]]:
 
 
 def test_build_task_tool_hides_general_purpose_when_disabled() -> None:
-    from deepagents.middleware import subagents as sm
+    from soothe_deepagents.middleware import subagents as sm
 
     with patch_mod.general_purpose_subagent_build_context(False):
         tool = sm._build_task_tool(_sample_subagents())
@@ -43,7 +43,7 @@ def test_build_task_tool_hides_general_purpose_when_disabled() -> None:
 
 
 def test_build_task_tool_includes_general_purpose_when_enabled() -> None:
-    from deepagents.middleware import subagents as sm
+    from soothe_deepagents.middleware import subagents as sm
 
     with patch_mod.general_purpose_subagent_build_context(True):
         tool = sm._build_task_tool(_sample_subagents())

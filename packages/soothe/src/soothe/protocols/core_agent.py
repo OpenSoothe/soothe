@@ -23,7 +23,7 @@ class CoreAgentProtocol(Protocol):
 
     CoreAgent provides pure execution runtime for:
     - Tool invocation
-    - Subagent delegation (via deepagents task tool)
+    - Subagent delegation (via soothe_deepagents task tool)
     - Middleware processing
     - Streaming execution
 

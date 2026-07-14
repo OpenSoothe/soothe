@@ -29,12 +29,13 @@ providers:
   - gpt-4o
   - gpt-4o-mini
   - o3-mini
+  - text-embedding-3-small
 
 # ============================================================
 # ROUTER PROFILES
 # ============================================================
-# RouterProfile — named preset of ModelRouter + embedding_dims.
-# ModelRole keys: default | think | fast | image | ocr | embedding (null → default).
+# RouterProfile — named preset of ModelRouter for chat/image/ocr routing.
+# ModelRole keys: default | think | fast | image | ocr (null → default).
 # active_router_profile selects preset; env SOOTHE_ACTIVE_ROUTER_PROFILE overrides YAML.
 
 router_profiles:
@@ -45,9 +46,12 @@ router_profiles:
     fast: null
     image: null
     ocr: null
-    embedding: null
-  embedding_dims: 1536
+
 active_router_profile: default
+
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 
 # ============================================================
 # AGENT

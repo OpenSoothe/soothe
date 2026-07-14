@@ -27,7 +27,7 @@ def _echo_node(state: EchoState) -> dict[str, Any]:
 
 
 def create_echo_subagent_spec() -> dict[str, Any]:
-    """Build a compiled subgraph spec for deepagents ``task`` delegation.
+    """Build a compiled subgraph spec for soothe_deepagents ``task`` delegation.
 
     Returns:
         Subagent dict with ``name``, ``description``, and ``runnable``.

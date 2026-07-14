@@ -42,6 +42,7 @@ class TestSootheConfig:
         assert cfg.memory == []
         assert cfg.providers == []
         assert cfg.router.default == "openai:gpt-4o-mini"
+        assert cfg.embedding_model == "openai:text-embedding-3-small"
         assert cfg.embedding_dims == 1536
         assert cfg.agent.autopilot.enabled is False
         assert cfg.agent.loop.dispatch_timeout_seconds == 0.0
@@ -341,8 +342,8 @@ class TestModelRouter:
                 fast="e:f",
                 image="g:h",
                 ocr="k:l",
-                embedding="i:j",
-            )
+            ),
+            embedding_profile=[{"model_role": "i:j", "embedding_dims": 1536}],
         )
         assert cfg.resolve_model("default") == "a:b"
         assert cfg.resolve_model("think") == "c:d"
@@ -406,21 +407,21 @@ class TestRouterProfiles:
                     "router": {
                         "default": "dashscope:glm-5.2",
                         "fast": "dashscope:kimi-k2.5",
-                        "embedding": "dashscope:multimodal-embedding-v1",
                     },
-                    "embedding_dims": 768,
                 },
                 {
                     "name": "local-deploy",
                     "router": {"default": "omlx:glm"},
-                    "embedding_dims": 384,
                 },
+            ],
+            embedding_profile=[
+                {"model_role": "dashscope:multimodal-embedding-v1", "embedding_dims": 768}
             ],
             active_router_profile="production",
         )
         assert cfg.router.default == "dashscope:glm-5.2"
         assert cfg.router.fast == "dashscope:kimi-k2.5"
-        assert cfg.router.embedding == "dashscope:multimodal-embedding-v1"
+        assert cfg.resolve_model("embedding") == "dashscope:multimodal-embedding-v1"
         assert cfg.embedding_dims == 768
         assert cfg.resolve_model("fast") == "dashscope:kimi-k2.5"
 
@@ -430,13 +431,14 @@ class TestRouterProfiles:
                 {
                     "name": "cloud",
                     "router": {"default": "dashscope:glm-5.2"},
-                    "embedding_dims": 768,
                 },
                 {
                     "name": "local",
                     "router": {"default": "omlx:glm"},
-                    "embedding_dims": 384,
                 },
+            ],
+            embedding_profile=[
+                {"model_role": "openai:text-embedding-3-small", "embedding_dims": 384}
             ],
             active_router_profile="local",
         )
@@ -453,6 +455,40 @@ class TestRouterProfiles:
         p = tmp_path / "cfg.yml"
         p.write_text("embedding_dims: 1536\n", encoding="utf-8")
         with pytest.raises(ValueError, match="Top-level embedding_dims removed"):
+            SootheConfig.from_yaml_file(str(p))
+
+    def test_legacy_router_profile_embedding_dims_rejected(self, tmp_path: Path) -> None:
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "router_profiles:\n"
+            "  - name: legacy\n"
+            "    router:\n"
+            "      default: openai:gpt-4o-mini\n"
+            "    embedding_dims: 1536\n"
+            "embedding_profile:\n"
+            "  - model_role: openai:text-embedding-3-small\n"
+            "    embedding_dims: 1536\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(
+            ValueError, match="router_profiles\\[\\]\\.embedding_dims has been removed"
+        ):
+            SootheConfig.from_yaml_file(str(p))
+
+    def test_legacy_router_embedding_rejected(self, tmp_path: Path) -> None:
+        p = tmp_path / "cfg.yml"
+        p.write_text(
+            "router_profiles:\n"
+            "  - name: legacy\n"
+            "    router:\n"
+            "      default: openai:gpt-4o-mini\n"
+            "      embedding: openai:text-embedding-3-small\n"
+            "embedding_profile:\n"
+            "  - model_role: openai:text-embedding-3-small\n"
+            "    embedding_dims: 1536\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="router.embedding has been removed"):
             SootheConfig.from_yaml_file(str(p))
 
     def test_missing_active_profile_raises(self) -> None:
@@ -478,14 +514,15 @@ class TestRouterProfiles:
             "  - name: local\n"
             "    router:\n"
             "      default: omlx:test\n"
-            "      embedding: omlx:embed\n"
+            "embedding_profile:\n"
+            "  - model_role: omlx:embed\n"
             "    embedding_dims: 768\n"
             "active_router_profile: local\n",
             encoding="utf-8",
         )
         cfg = SootheConfig.from_yaml_file(str(p))
         assert cfg.router.default == "omlx:test"
-        assert cfg.router.embedding == "omlx:embed"
+        assert cfg.resolve_model("embedding") == "omlx:embed"
         assert cfg.embedding_dims == 768
 
     def test_env_overrides_yaml_active_profile(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -495,13 +532,14 @@ class TestRouterProfiles:
                 {
                     "name": "production",
                     "router": {"default": "dashscope:glm-5.2"},
-                    "embedding_dims": 768,
                 },
                 {
                     "name": "local-deploy",
                     "router": {"default": "omlx:glm"},
-                    "embedding_dims": 384,
                 },
+            ],
+            embedding_profile=[
+                {"model_role": "openai:text-embedding-3-small", "embedding_dims": 384}
             ],
             active_router_profile="production",
         )

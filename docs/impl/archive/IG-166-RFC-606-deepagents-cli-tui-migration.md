@@ -82,7 +82,7 @@ Keep from Soothe:
 #### Actions
 
 1. Create backup of old TUI files
-2. Copy ~25-30 files from deepagents_cli
+2. Copy ~25-30 files from soothe_deepagents_cli
 3. Delete old Soothe TUI files
 4. Update `__init__.py`
 5. Verify imports resolve (no syntax errors)

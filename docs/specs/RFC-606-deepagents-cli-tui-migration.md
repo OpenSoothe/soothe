@@ -64,10 +64,10 @@ Execution Layer (unchanged)
     ├─ daemon.py → daemon client connection
     └─ headless.py → non-TUI execution
 
-TUI Layer (MIGRATED from deepagents)
+TUI Layer (MIGRATED from soothe_deepagents)
   src/soothe/ux/tui/
-    ├─ app.py (copied from deepagents_cli/app.py, modified)
-    ├─ widgets/ (copied from deepagents_cli/widgets/, 20 files)
+    ├─ app.py (copied from soothe_deepagents_cli/app.py, modified)
+    ├─ widgets/ (copied from soothe_deepagents_cli/widgets/, 20 files)
     ├─ input.py, sessions.py, theme.py (copied supporting modules)
     ├─ autopilot_screen.py (kept from Soothe)
     ├─ autopilot_dashboard.py (kept from Soothe)
@@ -114,7 +114,7 @@ Widgets render (ConversationPanel, StatusBar, PlanTree)
 
 ## Section 1: File Migration Specification
 
-### Files to Copy from deepagents-cli
+### Files to Copy from soothe_deepagents-cli
 
 **Source**: `/Users/xiamingchen/Workspace/mirasurf/deepagents/libs/cli/deepagents_cli/`
 **Target**: `src/soothe/ux/tui/`
@@ -279,7 +279,7 @@ class SootheBackendAdapter:
 
 ```python
 # deepagents original:
-# from deepagents_cli.textual_adapter import TextualUIAdapter
+# from soothe_deepagents_cli.textual_adapter import TextualUIAdapter
 # self.agent = create_agent(...)
 # self.ui_adapter = TextualUIAdapter(self.agent, ...)
 
@@ -350,7 +350,7 @@ async def _handle_stream_event(self, namespace: str, mode: str, data: dict):
 
 ```python
 # deepagents original (in thread selector widget):
-# from deepagents_cli.sessions import SessionManager
+# from soothe_deepagents_cli.sessions import SessionManager
 # threads = await self.session_manager.list_threads()
 
 # SOOTHE: Use thread backend bridge
@@ -474,7 +474,7 @@ class ProtocolEventWidget(Widget):
 
 ### StatusBar Integration
 
-**File**: `src/soothe/ux/tui/widgets/status.py` (modified from deepagents)
+**File**: `src/soothe/ux/tui/widgets/status.py` (modified from soothe_deepagents)
 
 **Modification**: Add protocol event queue to status bar.
 
@@ -713,13 +713,13 @@ class ThreadBackendBridge:
 
 ### thread_selector.py Modifications
 
-**File**: `src/soothe/ux/tui/widgets/thread_selector.py` (copied from deepagents)
+**File**: `src/soothe/ux/tui/widgets/thread_selector.py` (copied from soothe_deepagents)
 
 **Modification**: Replace backend connection with ThreadBackendBridge.
 
 ```python
 # deepagents original (lines ~100-150):
-# from deepagents_cli.sessions import SessionManager
+# from soothe_deepagents_cli.sessions import SessionManager
 # self.session_manager = SessionManager(...)
 # threads = await self.session_manager.list_threads()
 
@@ -827,7 +827,7 @@ def action_edit_tags(self):
 ```python
 from soothe.ux.tui.autopilot_screen import AutopilotScreen
 
-class SootheApp(App):  # Modified from deepagents App
+class SootheApp(App):  # Modified from soothe_deepagents App
 
     # SOOTHE: Add autopilot mode flag
     _autopilot_mode: bool = False
@@ -1082,7 +1082,7 @@ self.command_registry.register("/detach", self.action_detach)
 
 **Duration**: 1 day
 **Actions**:
-1. Copy 25-30 files from deepagents-cli to `src/soothe/ux/tui/`
+1. Copy 25-30 files from soothe_deepagents-cli to `src/soothe/ux/tui/`
 2. Delete 7 old Soothe TUI files
 3. Update `__init__.py` imports
 4. Verify imports resolve

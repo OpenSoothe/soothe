@@ -12,7 +12,7 @@ Simple queries like "read first 10 lines of readme" run for 10 iterations withou
 
 **Location**: `src/soothe/cognition/agent_loop/executor.py:349`
 
-The method checks `isinstance(data, list)` but the actual format from deepagents streaming is:
+The method checks `isinstance(data, list)` but the actual format from soothe_deepagents streaming is:
 ```python
 # Actual format (tuple):
 data = (msg, metadata)  # e.g., (ToolMessage(...), {"langgraph_node": "tools"})

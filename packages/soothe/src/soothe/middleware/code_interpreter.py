@@ -10,6 +10,7 @@ Reference: https://www.langchain.com/blog/give-your-agents-an-interpreter
 
 from __future__ import annotations
 
+import inspect
 import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
@@ -131,15 +132,17 @@ class CodeInterpreterMiddleware(AgentMiddleware):
         try:
             from langchain_quickjs import CodeInterpreterMiddleware as QuickJSMiddleware
 
-            self._inner_middleware = QuickJSMiddleware(
-                ptc=self._ptc_allowlist or None,
-                memory_limit=self._memory_limit_mb * 1024 * 1024,
-                timeout=float(self._timeout_seconds),
-                max_ptc_calls=self._max_ptc_calls,
-                max_result_chars=self._max_result_size,
-                capture_console=self._console_capture,
-                snapshot_between_turns=self._snapshot_between_turns,
-            )
+            quickjs_kwargs: dict[str, Any] = {
+                "ptc": self._ptc_allowlist or None,
+                "memory_limit": self._memory_limit_mb * 1024 * 1024,
+                "timeout": float(self._timeout_seconds),
+                "max_ptc_calls": self._max_ptc_calls,
+                "max_result_chars": self._max_result_size,
+                "capture_console": self._console_capture,
+            }
+            if "snapshot_between_turns" in inspect.signature(QuickJSMiddleware).parameters:
+                quickjs_kwargs["snapshot_between_turns"] = self._snapshot_between_turns
+            self._inner_middleware = QuickJSMiddleware(**quickjs_kwargs)
             self.tools = list(self._inner_middleware.tools)
             self.state_schema = self._inner_middleware.state_schema
             logger.info(

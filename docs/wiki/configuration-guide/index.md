@@ -58,9 +58,12 @@ router_profiles:
   - name: default
     router:
       default: openai:gpt-4o-mini
-    embedding_dims: 1536
 
 active_router_profile: default
+
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 ```
 
 Top-level `router:` was removed — use `router_profiles` + `active_router_profile`. Env-only model changes: `SOOTHE_ROUTER_PROFILES` (JSON) or `SOOTHE_ACTIVE_ROUTER_PROFILE`; see [Environment Variables](environment-variables.md).

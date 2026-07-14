@@ -517,7 +517,7 @@ class SootheRunner(
             thread_id: Thread identifier to update.
             values: Partial state values to write.
             as_node: Node to attribute the write to. Defaults to ``"model"``,
-                the deepagents/langchain agent node that owns the ``messages``
+                the soothe_deepagents/langchain agent node that owns the ``messages``
                 channel. LangGraph requires this when multiple nodes have
                 written at the current checkpoint version.
         """

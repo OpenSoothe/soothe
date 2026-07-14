@@ -43,7 +43,7 @@ class FileOpsPlugin:
         Args:
             context: Plugin context with config and logger.
         """
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         from soothe.foundation.workspace.resolution import resolve_daemon_workspace
         from soothe.foundation.workspace.tool_path_resolution import (

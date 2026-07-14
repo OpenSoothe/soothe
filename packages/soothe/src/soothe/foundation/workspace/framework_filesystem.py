@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from deepagents.backends.protocol import BackendProtocol
+    from soothe_deepagents.backends.protocol import BackendProtocol
 
     from soothe.config import SootheConfig
     from soothe.protocols.policy import PolicyContext, PolicyProtocol

@@ -1,7 +1,7 @@
 """Normalized path backend for workspace filesystem operations.
 
 This module provides workspace-aware filesystem operations using the native
-Soothe UnifiedFilesystem interface with deepagents compatibility.
+Soothe UnifiedFilesystem interface with soothe_deepagents compatibility.
 """
 
 from __future__ import annotations
@@ -10,7 +10,13 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from deepagents.backends.protocol import EditResult, FileData, LsResult, ReadResult, WriteResult
+from soothe_deepagents.backends.protocol import (
+    EditResult,
+    FileData,
+    LsResult,
+    ReadResult,
+    WriteResult,
+)
 
 if TYPE_CHECKING:
     pass
@@ -21,7 +27,7 @@ _DEFAULT_READ_LINE_LIMIT = 2000
 
 
 def _coerce_fs_grep_to_da_matches(result: Any) -> list[dict[str, Any]]:
-    """Convert filesystem grep results to deepagents ``GrepMatch`` dicts."""
+    """Convert filesystem grep results to soothe_deepagents ``GrepMatch`` dicts."""
     from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
 
     matches: list[dict[str, Any]] = []
@@ -55,7 +61,7 @@ def _read_result_for_path(
     limit: int,
     display_path: str,
 ) -> ReadResult:
-    """Build deepagents ``ReadResult`` using line-based offset/limit semantics."""
+    """Build soothe_deepagents ``ReadResult`` using line-based offset/limit semantics."""
     from soothe.foundation.core.filesystem.exceptions import (
         FilesystemError,
         NotAFileError,
@@ -190,7 +196,7 @@ class NormalizedPathBackend:
         offset: int = 0,
         limit: int | None = None,
     ) -> ReadResult:
-        """Read file contents for a line range (deepagents BackendProtocol)."""
+        """Read file contents for a line range (soothe_deepagents BackendProtocol)."""
         normalized = self._normalize_path(path)
         line_limit = limit if limit is not None else _DEFAULT_READ_LINE_LIMIT
         return _read_result_for_path(
@@ -207,7 +213,7 @@ class NormalizedPathBackend:
         offset: int = 0,
         limit: int | None = None,
     ) -> ReadResult:
-        """Async read file contents for a line range (deepagents BackendProtocol)."""
+        """Async read file contents for a line range (soothe_deepagents BackendProtocol)."""
         normalized = self._normalize_path(path)
         line_limit = limit if limit is not None else _DEFAULT_READ_LINE_LIMIT
         return _read_result_for_path(
@@ -219,7 +225,7 @@ class NormalizedPathBackend:
         )
 
     def write(self, path: str, content: str | bytes) -> WriteResult:
-        """Write content to file (deepagents BackendProtocol)."""
+        """Write content to file (soothe_deepagents BackendProtocol)."""
         from soothe.foundation.core.filesystem.exceptions import FilesystemError
 
         normalized = self._normalize_path(path)
@@ -230,7 +236,7 @@ class NormalizedPathBackend:
         return WriteResult(path=result.path)
 
     async def awrite(self, path: str, content: str | bytes) -> WriteResult:
-        """Async write content to file (deepagents BackendProtocol)."""
+        """Async write content to file (soothe_deepagents BackendProtocol)."""
         from soothe.foundation.core.filesystem.exceptions import FilesystemError
 
         normalized = self._normalize_path(path)
@@ -251,7 +257,7 @@ class NormalizedPathBackend:
     ) -> EditResult:
         """Apply edits to file.
 
-        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        Returns EditResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         normalized = self._normalize_path(path)
 
@@ -264,14 +270,14 @@ class NormalizedPathBackend:
                     new = edit_item.get("new_string", "")
                     result = self._fs.edit(normalized, old, new)
                     # Soothe filesystem returns EditResult without error field,
-                    # deepagents returns EditResult with error field
+                    # soothe_deepagents returns EditResult with error field
                     if hasattr(result, "error") and result.error:
                         return EditResult(error=result.error)
                     total_occurrences += 1
                 return EditResult(path=normalized, occurrences=total_occurrences)
             elif old_string is not None and new_string is not None:
                 result = self._fs.edit(normalized, old_string, new_string)
-                # Check if result has error attribute (deepagents style)
+                # Check if result has error attribute (soothe_deepagents style)
                 if hasattr(result, "error") and result.error:
                     return EditResult(error=result.error)
                 # Soothe EditResult has path and lines_changed
@@ -293,7 +299,7 @@ class NormalizedPathBackend:
     ) -> EditResult:
         """Async apply edits to file.
 
-        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        Returns EditResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         normalized = self._normalize_path(path)
 
@@ -350,7 +356,7 @@ class NormalizedPathBackend:
     def ls(self, path: str = ".") -> LsResult:
         """List directory contents.
 
-        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        Returns LsResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         normalized = self._normalize_path(path)
         try:
@@ -381,7 +387,7 @@ class NormalizedPathBackend:
     async def als(self, path: str = ".") -> LsResult:
         """Async list directory contents.
 
-        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        Returns LsResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         normalized = self._normalize_path(path)
         try:
@@ -455,15 +461,15 @@ class NormalizedPathBackend:
     def glob(self, pattern: str, path: str = "/") -> Any:
         """Glob pattern matching.
 
-        Returns deepagents-compatible GlobResult with FileInfo dicts.
+        Returns soothe_deepagents-compatible GlobResult with FileInfo dicts.
         """
-        from deepagents.backends.protocol import GlobResult as DaGlobResult
+        from soothe_deepagents.backends.protocol import GlobResult as DaGlobResult
 
         normalized = self._normalize_path(path)
         result = self._fs.glob(pattern, path=normalized)
 
-        # Convert string matches to FileInfo dicts for deepagents compatibility
-        # deepagents expects matches: list[FileInfo] where FileInfo is a TypedDict with "path" key
+        # Convert string matches to FileInfo dicts for soothe_deepagents compatibility
+        # soothe_deepagents expects matches: list[FileInfo] where FileInfo is a TypedDict with "path" key
         file_infos = [{"path": p, "is_dir": False} for p in (result.matches or [])]
 
         return DaGlobResult(
@@ -474,14 +480,14 @@ class NormalizedPathBackend:
     async def aglob(self, pattern: str, path: str = "/") -> Any:
         """Async glob pattern matching.
 
-        Returns deepagents-compatible GlobResult with FileInfo dicts.
+        Returns soothe_deepagents-compatible GlobResult with FileInfo dicts.
         """
-        from deepagents.backends.protocol import GlobResult as DaGlobResult
+        from soothe_deepagents.backends.protocol import GlobResult as DaGlobResult
 
         normalized = self._normalize_path(path)
         result = await self._fs.aglob(pattern, path=normalized)
 
-        # Convert string matches to FileInfo dicts for deepagents compatibility
+        # Convert string matches to FileInfo dicts for soothe_deepagents compatibility
         file_infos = [{"path": p, "is_dir": False} for p in (result.matches or [])]
 
         return DaGlobResult(
@@ -498,15 +504,15 @@ class NormalizedPathBackend:
     ) -> Any:
         """Search for pattern in files.
 
-        Returns deepagents-compatible GrepResult.
+        Returns soothe_deepagents-compatible GrepResult.
 
         Args:
             pattern: Search pattern.
             path: Directory to search.
             output_mode: Output format.
-            glob: Glob pattern to filter files (deepagents parameter name).
+            glob: Glob pattern to filter files (soothe_deepagents parameter name).
         """
-        from deepagents.backends.protocol import GrepResult as DaGrepResult
+        from soothe_deepagents.backends.protocol import GrepResult as DaGrepResult
 
         from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
 
@@ -533,15 +539,15 @@ class NormalizedPathBackend:
     ) -> Any:
         """Async search for pattern in files.
 
-        Returns deepagents-compatible GrepResult.
+        Returns soothe_deepagents-compatible GrepResult.
 
         Args:
             pattern: Search pattern.
             path: Directory to search.
             output_mode: Output format.
-            glob: Glob pattern to filter files (deepagents parameter name).
+            glob: Glob pattern to filter files (soothe_deepagents parameter name).
         """
-        from deepagents.backends.protocol import GrepResult as DaGrepResult
+        from soothe_deepagents.backends.protocol import GrepResult as DaGrepResult
 
         from soothe.foundation.core.filesystem.protocol import GrepResult as FsGrepResult
 
@@ -677,7 +683,7 @@ class WorkspaceAwareBackend:
         offset: int = 0,
         limit: int | None = None,
     ) -> ReadResult:
-        """Read file contents for a line range (deepagents BackendProtocol)."""
+        """Read file contents for a line range (soothe_deepagents BackendProtocol)."""
         return self._get_backend().read(path, offset, limit)
 
     async def aread(
@@ -686,15 +692,15 @@ class WorkspaceAwareBackend:
         offset: int = 0,
         limit: int | None = None,
     ) -> ReadResult:
-        """Async read file contents for a line range (deepagents BackendProtocol)."""
+        """Async read file contents for a line range (soothe_deepagents BackendProtocol)."""
         return await self._get_backend().aread(path, offset, limit)
 
     def write(self, path: str, content: str | bytes) -> WriteResult:
-        """Write content to file (deepagents BackendProtocol)."""
+        """Write content to file (soothe_deepagents BackendProtocol)."""
         return self._get_backend().write(path, content)
 
     async def awrite(self, path: str, content: str | bytes) -> WriteResult:
-        """Async write content to file (deepagents BackendProtocol)."""
+        """Async write content to file (soothe_deepagents BackendProtocol)."""
         return await self._get_backend().awrite(path, content)
 
     def edit(
@@ -708,7 +714,7 @@ class WorkspaceAwareBackend:
     ) -> EditResult:
         """Apply edits to file.
 
-        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        Returns EditResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         if edits:
             return self._get_backend().edit(path, edits=edits, replace_all=replace_all)
@@ -727,7 +733,7 @@ class WorkspaceAwareBackend:
     ) -> EditResult:
         """Async apply edits to file.
 
-        Returns EditResult for deepagents.middleware.filesystem compatibility.
+        Returns EditResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         if edits:
             return await self._get_backend().aedit(path, edits=edits, replace_all=replace_all)
@@ -738,14 +744,14 @@ class WorkspaceAwareBackend:
     def ls(self, path: str = ".") -> LsResult:
         """List directory contents.
 
-        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        Returns LsResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         return self._get_backend().ls(path)
 
     async def als(self, path: str = ".") -> LsResult:
         """Async list directory contents.
 
-        Returns LsResult for deepagents.middleware.filesystem compatibility.
+        Returns LsResult for soothe_deepagents.middleware.filesystem compatibility.
         """
         return await self._get_backend().als(path)
 

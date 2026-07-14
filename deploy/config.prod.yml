@@ -34,10 +34,12 @@ router_profiles:
       fast: "openai-custom:kimi-k2.5"
       think: "openai-custom:glm-5.2"
       image: "openai-custom:kimi-k2.5"
-      embedding: "openai-custom:text-embedding-v4"
-    embedding_dims: 1536
 
 active_router_profile: production
+
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 
 # =============================================================================
 # Persistence Backend

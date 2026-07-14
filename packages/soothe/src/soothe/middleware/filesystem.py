@@ -10,15 +10,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
-from deepagents.backends.protocol import BackendProtocol
-from deepagents.backends.utils import validate_path
-from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.tools import ToolRuntime
 from langchain.tools.tool_node import ToolCallRequest
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 from pydantic import BaseModel, Field
+from soothe_deepagents.backends.protocol import BackendProtocol
+from soothe_deepagents.backends.utils import validate_path
+from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
 from soothe.foundation.core.agent._execute_filter import apply_execute_tool_removal_patch
 from soothe.foundation.core.filesystem.discovery_hints import GLOB_TOOL_DESCRIPTION
@@ -253,7 +253,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         kwargs["custom_tool_descriptions"] = custom_descriptions
         super().__init__(**kwargs)
 
-        # Override deepagents' default "/large_tool_results" and "/conversation_history"
+        # Override soothe_deepagents' default "/large_tool_results" and "/conversation_history"
         # prefixes which assume CompositeBackend or root-writable filesystem.
         # With NormalizedPathBackend in non-virtual mode, absolute paths outside workspace
         # are passed as-is, causing OSError on read-only root filesystems (e.g., macOS).

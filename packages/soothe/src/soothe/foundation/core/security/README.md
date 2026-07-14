@@ -153,7 +153,7 @@ from soothe.foundation.core.security.policy import (
 
 ```python
 from soothe.foundation.core.security.integration import SecureFilesystemWrapper
-from deepagents.backends.filesystem import FilesystemBackend
+from soothe_deepagents.backends.filesystem import FilesystemBackend
 
 backend = FilesystemBackend("/workspace")
 secure_backend = SecureFilesystemWrapper(

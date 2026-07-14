@@ -361,7 +361,7 @@ class TestGetToolMeta:
         assert meta is not None
         assert meta.name == "read_file"
         assert meta.category == "file_ops"
-        assert meta.source == "deepagents"
+        assert meta.source == "soothe_deepagents"
 
     def test_returns_none_for_unknown_tool(self) -> None:
         assert get_tool_meta("nonexistent_tool") is None

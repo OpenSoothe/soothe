@@ -17,7 +17,7 @@ The top-level `SootheConfig` (in `config/settings.py`) is a Pydantic `BaseSettin
 
 **Zero-config:** with no YAML file, set `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) and run. Soothe synthesizes a provider and uses built-in router/vector-store defaults. Explicit YAML `providers` always wins.
 
-A minimal YAML file (when you need multi-provider or non-env secrets) touches only `providers` and `router_profiles`:
+A minimal YAML file (when you need multi-provider or non-env secrets) touches `providers`, `router_profiles`, and `embedding_profile`:
 
 ```yaml
 providers:
@@ -28,8 +28,10 @@ router_profiles:
   - name: default
     router:
       default: openai:gpt-4o-mini
-    embedding_dims: 1536
 active_router_profile: default
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
 ```
 
 Internal tuning (`agent.loop.*`, pool sizes, security deny lists, etc.) lives in Pydantic defaults — see `models.py`, not the template.
@@ -39,9 +41,10 @@ The full set of sections:
 | Section | Source model | What it controls |
 |---------|--------------|------------------|
 | `providers` | `ModelProviderConfig` | LLM/embedding API endpoints and keys |
-| `router_profiles` / `active_router_profile` | `RouterProfile` | Named presets; resolved into `router` + `embedding_dims` at load |
+| `router_profiles` / `active_router_profile` | `RouterProfile` | Named chat/image/ocr presets; resolved into derived `router` at load |
+| `embedding_profile` | `EmbeddingProfile` (list) | Stable embedding model + vector dimensions |
 | `router` | `ModelRouter` | **Derived** (not in YAML) — role → `provider:model` mapping |
-| `embedding_dims` | int | **Derived** from active profile; must match embedding model |
+| `embedding_model` / `embedding_dims` | `str` / `int` | **Derived** from `embedding_profile` |
 | `agent` | `AgentConfig` | Identity, loop, autonomous mode, protocols |
 | `subagents` | `SubagentConfig` (dict) | planner / deep_research / academic_research / browser_use / veritas |
 | `skillify` | `SkillifyConfig` | Daemon-shared semantic skill warehouse indexing and retrieval |
@@ -74,9 +77,9 @@ See [Provider Setup](provider-setup.md) for selection criteria.
 
 ## Router
 
-Define routing in **`router_profiles`** and select with **`active_router_profile`**. At load, Soothe copies the active profile into derived fields `router` and `embedding_dims`.
+Define chat/image routing in **`router_profiles`** and select with **`active_router_profile`**. At load, Soothe copies the active profile into derived field `router`.
 
-`ModelRouter` maps six roles to `"provider_name:model_name"` strings: `default`, `think`, `fast`, `image`, `ocr`, `embedding`. Unset roles inherit `default`. Agent code never names a model directly — it requests a role and the router resolves it.
+`ModelRouter` maps five roles to `"provider_name:model_name"` strings: `default`, `think`, `fast`, `image`, `ocr`. Unset roles inherit `default`. Embeddings are configured separately under `embedding_profile`.
 
 ## Agent
 
@@ -165,7 +168,7 @@ Interactive CLI/TUI goals and autopilot dispatches share the thread-pool request
 
 ## Minimal Configs
 
-**Production** needs only a provider with an interpolated key, a `router.default`, and `embedding_dims` matching the embedding model.
+**Production** needs only a provider with an interpolated key, a `router.default`, and `embedding_profile` set to the embedding model + matching dimensions.
 
 **Dev with reasoning + tracing** adds a `think` role, enables autonomous with a low `max_iterations`, bumps `loop.max_iterations`, and turns on `langfuse` with interpolated keys. See [Common Patterns](common-patterns.md) for the full recipes.
 

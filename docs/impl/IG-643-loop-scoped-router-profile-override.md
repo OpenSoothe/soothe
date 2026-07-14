@@ -12,7 +12,7 @@
 
 ## Summary
 
-Implement TUI `/model-router` so the user can select a configured `router_profiles` entry for the **current loop**. Each following turn sends `input.router_profile`; the daemon attaches a **turn-scoped chat-role overlay**. Process `active_router_profile` embedding + `embedding_dims` stay unchanged. New loop / `/clear` clear the client override (same durability class as `/model`).
+Implement TUI `/model-router` so the user can select a configured `router_profiles` entry for the **current loop**. Each following turn sends `input.router_profile`; the daemon attaches a **turn-scoped chat-role overlay**. Process `embedding_profile` (embedding model + dims) stays unchanged. New loop / `/clear` clear the client override (same durability class as `/model`).
 
 ---
 

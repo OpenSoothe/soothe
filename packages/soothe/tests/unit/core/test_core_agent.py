@@ -138,7 +138,7 @@ class TestCoreAgentClass:
                 with patch("soothe.runner.resolver.resolve_memory", return_value=None):
                     with patch("soothe.runner.resolver.resolve_planner", return_value=None):
                         with patch("soothe.runner.resolver.resolve_policy", return_value=None):
-                            with patch("deepagents.create_deep_agent") as mock_create:
+                            with patch("soothe_deepagents.create_deep_agent") as mock_create:
                                 mock_graph = _mock_graph()
                                 mock_create.return_value = mock_graph
 

@@ -132,7 +132,7 @@ def example_secure_wrapper() -> None:
     print("\n=== Example 5: Secure Filesystem Wrapper ===")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        from deepagents.backends.filesystem import FilesystemBackend
+        from soothe_deepagents.backends.filesystem import FilesystemBackend
 
         # Create backend
         backend = FilesystemBackend(tmpdir)

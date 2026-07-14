@@ -23,7 +23,7 @@ def middleware(tmp_path):
 
     This is the reference pattern for testing file_ops tools.
     """
-    from deepagents.backends.filesystem import FilesystemBackend
+    from soothe_deepagents.backends.filesystem import FilesystemBackend
 
     from soothe.middleware.filesystem import SootheFilesystemMiddleware
 

@@ -17,10 +17,10 @@ from soothe.utils.text_preview import log_preview
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from deepagents.middleware.subagents import CompiledSubAgent, SubAgent
     from langchain_core.runnables import RunnableConfig
     from langgraph.graph.state import CompiledStateGraph
     from langgraph.pregel.base import BaseCheckpointSaver
+    from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
     from soothe.config import SootheConfig
     from soothe.protocols.memory import MemoryProtocol

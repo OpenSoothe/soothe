@@ -487,11 +487,16 @@ providers:
       - o3-mini
 
 # Model routing by purpose
-router:
-  default: "openai:gpt-4o-mini"  # General tasks
-  think: "openai:o3-mini"         # Complex reasoning
-  fast: "openai:gpt-4o-mini"       # Quick tasks
-  embedding: "openai:text-embedding-3-small"
+router_profiles:
+  - name: default
+    router:
+      default: "openai:gpt-4o-mini"  # General tasks
+      think: "openai:o3-mini"        # Complex reasoning
+      fast: "openai:gpt-4o-mini"     # Quick tasks
+active_router_profile: default
+embedding_profile:
+  - model_role: "openai:text-embedding-3-small"
+    embedding_dims: 1536
 
 # Workspace settings
 filesystem_middleware:
