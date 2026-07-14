@@ -174,6 +174,7 @@ class CognitionGoalTreeMessage(Vertical):
         self._footer_tone: str = "muted"  # success | error | muted (step/tool completion parity)
         self._execution_mode: str = ""
         self._spinner_position: int = 0
+        self._loop_started_at: float | None = None
         self._steps_static: Static | None = None
 
     @staticmethod
@@ -229,7 +230,7 @@ class CognitionGoalTreeMessage(Vertical):
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
             colors = theme.DARK_COLORS
-        gutter = f"{get_glyphs().output_prefix} "
+        gutter = self._indent_prefix()
         plain = self._footer_plain
         if self._footer_tone == "success":
             mark = get_glyphs().checkmark
@@ -238,6 +239,41 @@ class CognitionGoalTreeMessage(Vertical):
             mark = get_glyphs().error
             return Content.styled(f"{gutter}{mark} {plain}", colors.error)
         return Content.styled(f"{gutter}{plain}", "dim")
+
+    def _running_elapsed_start(self) -> float | None:
+        """Wall-clock anchor for the plan running status (loop start or earliest step)."""
+        if self._loop_started_at is not None:
+            return self._loop_started_at
+        starts = [
+            st.started_at
+            for st in self._steps.values()
+            if st.phase == "running" and st.started_at is not None
+        ]
+        return min(starts) if starts else None
+
+    def _running_status_content(self) -> Content:
+        """Thinking-row style live status: ``spinner Running... (12s)``."""
+        try:
+            colors = theme.get_theme_colors(self)
+        except Exception:  # noqa: BLE001
+            colors = theme.DARK_COLORS
+        gutter = self._indent_prefix()
+        frames = get_glyphs().spinner_frames
+        frame = frames[self._spinner_position % len(frames)]
+        start = self._running_elapsed_start()
+        hint = ""
+        if start is not None:
+            hint = f" ({format_running_elapsed(time() - start)})"
+        return Content.assemble(
+            Content.styled(f"{gutter}{frame}", colors.primary),
+            Content.styled(" Running... ", colors.primary),
+            Content.styled(hint, colors.muted) if hint else Content(""),
+        )
+
+    def mark_loop_started(self, started_at: float | None = None) -> None:
+        """Anchor plan-level elapsed time (matches thinking-row turn start)."""
+        if self._loop_started_at is None:
+            self._loop_started_at = started_at if started_at is not None else time()
 
     def _indent_prefix(self) -> str:
         g = get_glyphs()
@@ -257,7 +293,8 @@ class CognitionGoalTreeMessage(Vertical):
         if st.phase == "running":
             parts: list[str] = []
             if st.started_at is not None:
-                parts.append(format_running_elapsed(time() - st.started_at))
+                # Parentheses match thinking-row / step-card live timers: (45s).
+                parts.append(f"({format_running_elapsed(time() - st.started_at)})")
             if st.tool_call_count > 0:
                 parts.append(f"{st.tool_call_count} tools")
             if not parts:
@@ -394,6 +431,8 @@ class CognitionGoalTreeMessage(Vertical):
             parts.extend([Content("\n"), steps])
         if self._footer_visible and self._footer_plain:
             parts.extend([Content("\n"), self._goal_footer_styled_content()])
+        elif self._goal_tree_status() == "running":
+            parts.extend([Content("\n"), self._running_status_content()])
         return Content.assemble(*parts)
 
     def sync_running_live_stats(
@@ -410,12 +449,15 @@ class CognitionGoalTreeMessage(Vertical):
                 st.started_at = started_at
 
     def tick_running_spinner(self) -> None:
-        """Advance the running-row spinner when any step is in flight."""
+        """Advance the running spinner frame for the next plan-quick-view paint.
+
+        Live trees stay unmounted (Ctrl+T overlay snapshots ``plan_quick_view_content``);
+        only the spinner index is updated here.
+        """
         if not any(st.phase == "running" for st in self._steps.values()):
             return
         frames = get_glyphs().spinner_frames
         self._spinner_position = (self._spinner_position + 1) % len(frames)
-        self._refresh_steps_display()
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -444,6 +486,9 @@ class CognitionGoalTreeMessage(Vertical):
             ft = self.query_one("#cognition-goal-tree-footer", Static)
             if self._footer_visible and self._footer_plain:
                 ft.update(self._goal_footer_styled_content())
+                ft.display = True
+            elif self._goal_tree_status() == "running":
+                ft.update(self._running_status_content())
                 ft.display = True
             else:
                 ft.display = False
@@ -479,6 +524,7 @@ class CognitionGoalTreeMessage(Vertical):
             "footer_visible": self._footer_visible,
             "footer_text": self._footer_plain,
             "footer_tone": self._footer_tone,
+            "loop_started_at": self._loop_started_at,
         }
 
     def _apply_snapshot(self, snap: dict[str, Any]) -> None:
@@ -490,6 +536,8 @@ class CognitionGoalTreeMessage(Vertical):
         self._footer_visible = bool(snap.get("footer_visible", False))
         tone = str(snap.get("footer_tone", "muted") or "muted")
         self._footer_tone = tone if tone in ("success", "error", "muted") else "muted"
+        loop_started_raw = snap.get("loop_started_at")
+        self._loop_started_at = float(loop_started_raw) if loop_started_raw is not None else None
         self._step_order = []
         self._steps.clear()
         for row in snap.get("steps", []) or []:
@@ -581,6 +629,8 @@ class CognitionGoalTreeMessage(Vertical):
                 st.description = desc
         if phase == "running" and st.started_at is None:
             st.started_at = time()
+        if phase == "running":
+            self.mark_loop_started()
         self._refresh_steps_display()
 
     def complete_step(

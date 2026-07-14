@@ -223,7 +223,7 @@ class CognitionStepMessage(Vertical):
         self._input_tokens += input_tokens
         self._output_tokens += output_tokens
         if self._status in ("running", "pending"):
-            self._sync_running_status_line()
+            self._sync_step_card_surface()
 
     def _token_budget_suffix(self) -> str:
         """Token budget suffix for status lines, e.g. ``in:1.2K out:345``."""
@@ -1072,10 +1072,6 @@ class CognitionStepMessage(Vertical):
             self._rows.append(row)
             self._row_index[tcid] = row
         self._refresh_header_title()
-        self._sync_step_card_surface()
-
-    def _sync_running_status_line(self) -> None:
-        """Refresh status text when tool stats change without repainting tool rows."""
         self._sync_step_card_surface()
 
     def _sync_running_status_text(self, index: StepRowIndex | None = None) -> None:

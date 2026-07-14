@@ -70,9 +70,6 @@ def _should_refresh_now(last_refresh_time: float | None) -> bool:
 _RUNNING_SPINNER_INTERVAL_SECONDS = 0.2
 """Spinner/status animation cadence for running cards."""
 
-_RUNNING_ROWS_REFRESH_INTERVAL_SECONDS = 0.5
-"""Minimum interval between expensive running-row re-renders."""
-
 # Deferred tool-list refresh (turn-level coalescing + global repaint budget).
 _DEFERRED_TOOL_REFRESH_WIDGETS: weakref.WeakSet[Any] = weakref.WeakSet()
 _global_tools_list_refresh_at: float = 0.0

@@ -1499,12 +1499,14 @@ async def _ensure_goal_tree_message(
             tree._goal_text = goal.strip()
         if max_iterations > 0:
             tree._max_iterations = max_iterations
+        tree.mark_loop_started()
         return tree
     widget = CognitionGoalTreeMessage(
         goal=goal.strip() or "Goal",
         max_iterations=max_iterations,
         id=f"goal-tree-{uuid.uuid4().hex[:8]}",
     )
+    widget.mark_loop_started()
     adapter._goal_tree_message = widget
     return widget
 

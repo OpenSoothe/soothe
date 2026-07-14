@@ -80,6 +80,8 @@ Replace ad-hoc `RunningStepsOverlay` with a **plan aggregate** quick view.
 | Overlay chrome | Compact panel padding, tinted scrollbar, bold title + dim close/Enter hints |
 | Loop id header | Abbreviated `prefix...suffix` loop id (avoids full UUID clutter) |
 | Done footer duration | Total goal completion duration on the last status line (`Done · … · 2m 5s`) |
+| Running status | Thinking-row style live footer while steps run: `spinner Running... (12s)` |
+| Overlay-only paint | Spinner ticks update in-memory frame only; remount paths keep DOM sync no-ops |
 
 ---
 

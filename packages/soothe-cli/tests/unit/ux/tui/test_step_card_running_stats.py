@@ -335,7 +335,7 @@ def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
     """Tool count shows in status line immediately even when widget is not yet visible.
 
     This tests the fix for real-time tool count display: when tool calls arrive
-    during a running step, `_sync_running_status_line` should update the status
+    during a running step, `_sync_step_card_surface` should update the status
     line immediately (bypassing the visibility check) so users see the count
     in real-time, not only when the step finishes.
     """
@@ -355,7 +355,7 @@ def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
         ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
-        # Adding tool calls should trigger immediate status update via _sync_running_status_line
+        # Adding tool calls should trigger immediate status update via _sync_step_card_surface
         card.add_tool_call("INVIS_01:s:grep:0", "grep", {"pattern": "test"})
         card.add_tool_call("INVIS_01:s:glob:1", "glob", {"pattern": "*.py"})
 
