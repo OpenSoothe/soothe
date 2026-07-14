@@ -81,7 +81,7 @@ router_profiles:
 active_router_profile: production
 
 embedding_profile:
-  - model_role: openai:text-embedding-3-small
+  - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
 # ============================================================
