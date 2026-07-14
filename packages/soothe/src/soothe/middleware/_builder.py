@@ -105,14 +105,21 @@ def build_soothe_middleware_stack(
     Returns:
         Tuple of middleware instances in execution order.
     """
+    from soothe_deepagents.middleware.reliability import (
+        InvalidToolHintsMiddleware,
+        NetworkToolErrorsMiddleware,
+        ToolOutputCapMiddleware,
+    )
+    from soothe_deepagents.middleware.tool_timeout import (
+        ToolTimeoutMiddleware,
+    )
+
     from .edit_coalescing import EditCoalescingMiddleware
     from .llm_rate_limit import LLMRateLimitMiddleware
     from .model_call_profiler import is_profiler_enabled
     from .per_turn_model import PerTurnModelMiddleware
     from .policy import SoothePolicyMiddleware
     from .system_prompt import SystemPromptMiddleware
-    from .tool_network_errors import NetworkToolErrorsMiddleware
-    from .tool_timeout import ToolTimeoutMiddleware
     from .workspace_context import WorkspaceContextMiddleware
 
     stack: list[AgentMiddleware] = []
@@ -186,14 +193,16 @@ def build_soothe_middleware_stack(
     logger.debug("[Middleware] Network tool error recovery enabled")
 
     # 2b. Cap tool output before graph state / model context
-    from .tool_output_cap import ToolOutputCapMiddleware
-
-    stack.append(ToolOutputCapMiddleware(config=config))
+    tool_output = config.agent.loop.tool_output
+    stack.append(
+        ToolOutputCapMiddleware(
+            default_max_chars=int(tool_output.tool_output_max_chars),
+            code_exec_max_chars=int(tool_output.code_exec_max_output_chars),
+        )
+    )
     logger.debug("[Middleware] Tool output cap enabled")
 
     # 2c. Progressive builtin-tool loading (optional)
-    from .invalid_tool_hints import InvalidToolHintsMiddleware
-
     stack.append(InvalidToolHintsMiddleware())
     logger.debug("[Middleware] Invalid tool hints enabled")
 
@@ -304,11 +313,20 @@ def build_soothe_middleware_stack(
     # Positioned after other tool-related middleware, innermost around actual execution
     tool_timeout_config = config.agent.loop.tool_timeout
     if tool_timeout_config.enabled:
+        from soothe.config.constants import DEFAULT_TASK_TIMEOUT_SECONDS
+
+        skip_tools = (
+            frozenset({"glob"})
+            if tool_timeout_config.skip_tools_with_internal_timeout
+            else frozenset()
+        )
         stack.append(
             ToolTimeoutMiddleware(
                 default_timeout_seconds=tool_timeout_config.default_seconds,
-                per_tool_timeout=dict(tool_timeout_config.per_tool),
-                skip_tools_with_internal_timeout=tool_timeout_config.skip_tools_with_internal_timeout,
+                per_tool_timeout_seconds=dict(tool_timeout_config.per_tool),
+                skip_tools=skip_tools,
+                honor_timeout_arg_for=frozenset({"run_command"}),
+                max_timeout_seconds=float(DEFAULT_TASK_TIMEOUT_SECONDS),
             )
         )
         logger.info(

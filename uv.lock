@@ -8354,7 +8354,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-deepagents", specifier = ">=0.7.16,<1.0.0" },
+    { name = "soothe-deepagents", specifier = ">=0.7.17,<1.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", specifier = ">=0.5.0" },
@@ -8491,7 +8491,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
-version = "0.7.16"
+version = "0.7.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain" },
@@ -8501,9 +8501,9 @@ dependencies = [
     { name = "langsmith" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ca/ef/c170acb17b47b287ae59d4c1b826870676a00a1f2b0d656ee0200e48db38/soothe_deepagents-0.7.16.tar.gz", hash = "sha256:259cd4c9f39b69b1dd1d88e70beef41aa65f8d037f8a0a399285181881e776b2", size = 258263, upload-time = "2026-07-14T03:12:50.342Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4d/a4/2029345c8faa0e6ed6cc94f4045810b3e99e71b9c0dbee97f96265bed251/soothe_deepagents-0.7.17.tar.gz", hash = "sha256:8706d0fc76f440840c5028a320e28c17600681ae62fdc343d483015a34d3043f", size = 265186, upload-time = "2026-07-14T04:16:49.652Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/f2/a05ce7a951cae00150610f72533c88aa937451ac4640f9567536aa0ebbf2/soothe_deepagents-0.7.16-py3-none-any.whl", hash = "sha256:4fa25c55a0817c91493537c501150a5f5f46e7e9e793cef8fba2993b27efb798", size = 284113, upload-time = "2026-07-14T03:12:48.336Z" },
+    { url = "https://files.pythonhosted.org/packages/9a/9f/47fa183d31c7b6c0a7ab09c37e1f4fdc04e478be767d2f75553d2683d348/soothe_deepagents-0.7.17-py3-none-any.whl", hash = "sha256:f356bf3bc7172cf6fc773208b4d0902b3f509a063604178a3510b8edf2c2784c", size = 292789, upload-time = "2026-07-14T04:16:47.977Z" },
 ]
 
 [[package]]
