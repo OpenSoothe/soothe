@@ -11,7 +11,11 @@ from textual.containers import Vertical
 from textual.content import Content
 from textual.widgets import Static
 
-from soothe_cli.runtime.presentation.duration_format import format_duration, format_running_elapsed
+from soothe_cli.runtime.presentation.duration_format import (
+    format_duration,
+    format_duration_ms,
+    format_running_elapsed,
+)
 from soothe_cli.tui import theme
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
@@ -372,14 +376,15 @@ class CognitionGoalTreeMessage(Vertical):
         return Content.assemble(*parts)
 
     def _refresh_steps_display(self) -> None:
-        if self._steps_static is None:
+        """Repaint mounted step/header children; no-op for overlay-only (unmounted) trees."""
+        if not self.is_mounted or self._steps_static is None:
             return
         self._steps_static.update(self._assemble_steps_content())
         try:
             hdr = self.query_one("#cognition-goal-tree-header", Static)
             hdr.update(self._goal_header_content())
         except Exception:
-            pass
+            logger.debug("goal tree header refresh failed", exc_info=True)
 
     def plan_quick_view_content(self, *, max_line_width: int | None = None) -> Content:
         """Full goal tree snapshot for the sticky plan quick-view overlay."""
@@ -428,6 +433,8 @@ class CognitionGoalTreeMessage(Vertical):
 
     def _sync_goal_tree_widgets(self) -> None:
         """Push goal, steps, and footer state to child widgets (requires mount)."""
+        if not self.is_mounted:
+            return
         try:
             hdr = self.query_one("#cognition-goal-tree-header", Static)
             hdr.update(self._goal_header_content())
@@ -508,11 +515,7 @@ class CognitionGoalTreeMessage(Vertical):
     def set_execution_mode(self, mode: str) -> None:
         """Show dependency/parallel mode in the goal header."""
         self._execution_mode = (mode or "").strip()
-        try:
-            hdr = self.query_one("#cognition-goal-tree-header", Static)
-            hdr.update(self._goal_header_content())
-        except Exception:  # noqa: BLE001
-            logger.debug("goal tree execution mode sync failed", exc_info=True)
+        self._sync_goal_tree_widgets()
 
     def sync_plan_steps(self, steps: list[dict[str, Any]]) -> None:
         """Populate or refresh planned step rows from a plan_decision event."""
@@ -605,6 +608,14 @@ class CognitionGoalTreeMessage(Vertical):
         st.started_at = None
         self._refresh_steps_display()
 
+    def _total_step_duration_ms(self) -> int:
+        """Sum completed/errored step durations for footer fallback timing."""
+        return sum(
+            max(0, int(st.duration_ms))
+            for st in self._steps.values()
+            if st.phase in ("done", "error")
+        )
+
     def set_loop_finished(
         self,
         *,
@@ -612,8 +623,18 @@ class CognitionGoalTreeMessage(Vertical):
         goal_progress: str,  # IG-399: descriptive level instead of float
         completion_summary: str,
         total_steps: int,
+        duration_ms: int | None = None,
     ) -> None:
-        """Show a compact footer when the agentic loop completes."""
+        """Show a compact footer when the agentic loop completes.
+
+        Args:
+            status: Terminal status label (``done``, ``failed``, …).
+            goal_progress: Descriptive progress level mapped to a percent badge.
+            completion_summary: Short free-text summary clipped for the footer.
+            total_steps: Completed step count shown when greater than zero.
+            duration_ms: Optional wall-clock goal duration. When omitted, falls
+                back to the sum of completed step durations.
+        """
         # IG-399: Map descriptive levels to percentage display
         progress_map = {
             "none": "0%",
@@ -629,6 +650,11 @@ class CognitionGoalTreeMessage(Vertical):
         parts: list[str] = [status_str, pct_display]
         if total_steps:
             parts.append(f"{total_steps} step(s)")
+        resolved_ms = (
+            int(duration_ms) if duration_ms is not None else self._total_step_duration_ms()
+        )
+        if resolved_ms > 0:
+            parts.append(format_duration_ms(resolved_ms))
         cs = (completion_summary or "").strip()
         if cs:
             parts.append(self._clip(cs, 100))
@@ -641,12 +667,7 @@ class CognitionGoalTreeMessage(Vertical):
             self._footer_tone = "error"
         else:
             self._footer_tone = "muted"
-        try:
-            footer = self.query_one("#cognition-goal-tree-footer", Static)
-            footer.update(self._goal_footer_styled_content())
-            footer.display = True
-        except Exception:
-            pass
+        self._sync_goal_tree_widgets()
 
     def set_interrupted(self, message: str) -> None:
         """Mark running steps as failed and show a footer (stream cancel/error)."""
@@ -659,13 +680,7 @@ class CognitionGoalTreeMessage(Vertical):
                 st.duration_ms = 0
                 st.summary = msg
                 st.started_at = None
-        self._refresh_steps_display()
         self._footer_plain = self._clip(msg, 120)
         self._footer_visible = True
         self._footer_tone = "error"
-        try:
-            footer = self.query_one("#cognition-goal-tree-footer", Static)
-            footer.update(self._goal_footer_styled_content())
-            footer.display = True
-        except Exception:
-            pass
+        self._sync_goal_tree_widgets()

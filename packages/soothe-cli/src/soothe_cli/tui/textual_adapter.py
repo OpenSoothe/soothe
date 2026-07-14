@@ -3818,6 +3818,18 @@ async def execute_task_textual(
                             if event_type == STRANGE_LOOP_COMPLETED:
                                 if not ns_key:
                                     if adapter._goal_tree_message is not None:
+                                        goal_elapsed_start = _goal_loop_elapsed_start(
+                                            goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                            turn_start_monotonic=start_time,
+                                        )
+                                        goal_duration_ms = (
+                                            max(
+                                                0,
+                                                int((time.monotonic() - goal_elapsed_start) * 1000),
+                                            )
+                                            if goal_elapsed_start is not None
+                                            else None
+                                        )
                                         adapter._goal_tree_message.set_loop_finished(
                                             status=str(data.get("status", "done")),
                                             goal_progress=str(data.get("goal_progress", "")),
@@ -3827,6 +3839,7 @@ async def execute_task_textual(
                                                 or ""
                                             ),
                                             total_steps=int(data.get("total_steps", 0) or 0),
+                                            duration_ms=goal_duration_ms,
                                         )
                                     if not goal_completed_logged:
                                         _log_goal_completed_event_stats(

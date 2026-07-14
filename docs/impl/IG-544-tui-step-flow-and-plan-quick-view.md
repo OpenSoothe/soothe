@@ -77,6 +77,9 @@ Replace ad-hoc `RunningStepsOverlay` with a **plan aggregate** quick view.
 | Running live stats | Elapsed duration + current tool count (synced from step cards) |
 | Completed dedup | Hide `Done [N tools]` summary tail when structured `· N tools` suffix is shown |
 | Single-line width | Clip step description so full row fits terminal width (`PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS`) |
+| Overlay chrome | Compact panel padding, tinted scrollbar, bold title + dim close/Enter hints |
+| Loop id header | Abbreviated `prefix...suffix` loop id (avoids full UUID clutter) |
+| Done footer duration | Total goal completion duration on the last status line (`Done · … · 2m 5s`) |
 
 ---
 

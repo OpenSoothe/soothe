@@ -25,11 +25,18 @@ def test_get_live_goal_tree_reads_adapter() -> None:
 
 
 def test_plan_quick_view_header_includes_loop_id_when_available() -> None:
-    assert _plan_quick_view_header(None) == "Plan  ·  Ctrl+t to close"
-    assert _plan_quick_view_header("loop-123") == "Plan (loop-123)  ·  Ctrl+t to close"
+    bare = _plan_quick_view_header(None)
+    assert bare.plain == "Plan  ·  Ctrl+t to close"
+
+    with_loop = _plan_quick_view_header("019f17e6-1234-5678-9abc-def012346543")
+    assert with_loop.plain == "Plan (019f17e6...6543)  ·  Ctrl+t to close"
+
+    with_hint = _plan_quick_view_header(
+        "019f17e6-1234-5678-9abc-def012346543",
+        show_enter_hint=True,
+    )
     assert (
-        _plan_quick_view_header("loop-123", show_enter_hint=True)
-        == "Plan (loop-123)  ·  Enter runs queued goal  ·  Ctrl+t to close"
+        with_hint.plain == "Plan (019f17e6...6543)  ·  Enter runs queued goal  ·  Ctrl+t to close"
     )
 
 
@@ -138,6 +145,33 @@ def test_plan_quick_view_clips_long_description_to_line_width() -> None:
 
     assert len(body) <= max_width
     assert "…" in body
+
+
+def test_goal_tree_done_footer_includes_total_duration() -> None:
+    """Done status line shows wall-clock or summed step duration."""
+    tree = CognitionGoalTreeMessage(goal="Ship", id="gt-dur")
+    tree.complete_step("STEP-1", True, 1_200, 2, "ok")
+    tree.complete_step("STEP-2", True, 3_400, 1, "ok")
+
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=2,
+    )
+    assert "Done · 100% · 2 step(s) · 4.6s · All good" in tree._footer_plain
+
+    tree.set_loop_finished(
+        status="done",
+        goal_progress="complete",
+        completion_summary="All good",
+        total_steps=2,
+        duration_ms=125_000,
+    )
+    assert "Done · 100% · 2 step(s) · 2m 5s · All good" in tree._footer_plain
+
+    content = tree.plan_quick_view_content()
+    assert "2m 5s" in content.plain
 
 
 def test_overlay_toggle_expands_and_collapses() -> None:

@@ -10,6 +10,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.content import Content
 from textual.widgets import Static
 
+from soothe_cli.runtime.presentation.id_format import abbreviate_compact_id
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS
 from soothe_cli.tui.widgets.messages._helpers import _RUNNING_SPINNER_INTERVAL_SECONDS
@@ -23,14 +24,20 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = False) -> str:
-    """Build the quick-view header text, including active loop id when known."""
-    base = "Plan"
-    if loop_id:
-        base = f"{base} ({loop_id})"
+def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = False) -> Content:
+    """Build the quick-view header: bold title, abbreviated loop id, dim hints."""
+    title = "Plan"
+    abbreviated = abbreviate_compact_id(loop_id or "")
+    if abbreviated:
+        title = f"Plan ({abbreviated})"
+    hints: list[str] = []
     if show_enter_hint:
-        return f"{base}  ·  Enter runs queued goal  ·  Ctrl+t to close"
-    return f"{base}  ·  Ctrl+t to close"
+        hints.append("Enter runs queued goal")
+    hints.append("Ctrl+t to close")
+    return Content.assemble(
+        Content.styled(title, "bold"),
+        Content.styled(f"  ·  {'  ·  '.join(hints)}", "dim"),
+    )
 
 
 def get_live_goal_tree(app: Any) -> CognitionGoalTreeMessage | None:
@@ -74,9 +81,9 @@ class PlanQuickViewOverlay(Vertical):
 
     PlanQuickViewOverlay.-expanded {
         layer: plan-quick-view;
-        max-height: 18;
+        max-height: 20;
         opacity: 1;
-        padding: 0 1;
+        padding: 1 1 0 1;
         margin: 0 0 1 0;
         background: $surface;
         border: solid $cognition;
@@ -84,22 +91,26 @@ class PlanQuickViewOverlay(Vertical):
 
     PlanQuickViewOverlay .plan-quick-view-header {
         height: 1;
+        width: 1fr;
         color: $cognition;
-        text-style: bold;
         margin: 0 0 1 0;
+        padding: 0;
     }
 
     PlanQuickViewOverlay .plan-quick-view-body {
         height: auto;
-        max-height: 14;
+        max-height: 15;
         width: 1fr;
+        scrollbar-size-vertical: 1;
+        scrollbar-color: $cognition 40%;
+        scrollbar-background: $surface;
     }
 
     PlanQuickViewOverlay .plan-quick-view-content {
         height: auto;
         width: 1fr;
         margin: 0;
-        padding: 0;
+        padding: 0 0 1 0;
     }
     """
 

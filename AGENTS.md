@@ -26,12 +26,12 @@ Tests go in package directories: `packages/<pkg>/tests/unit/` or `tests/integrat
 ### 5. Verification Required
 Run `./scripts/verify_finally.sh` before ANY commit. Zero lint errors, all tests pass.
 
-### 6. Finish Work: Clean Up, Verify, Fix
-Before marking work done (commit, PR, or handoff), you MUST:
+### 6. After Code Impl: Cleanse → Verify → Fix (MUST)
+After implementing (or changing) code—and before marking work done (commit, PR, or handoff)—you MUST apply this sequence every time:
 
-1. **Remove related legacy and dead code** — delete superseded helpers, unused exports, stale tests/docs tied to the change; do not leave parallel old paths.
+1. **Cleanse related legacy and dead code** — remove superseded helpers, unused exports, duplicate parallel paths, and stale tests/docs tied to the change. Do **not** change existing functionality while cleansing; cleanup is deletion/consolidation only, not behavior rewrites.
 2. **Run verification** — `./scripts/verify_finally.sh`
-3. **Fix all errors** — lint, format, tests, vulture; do not stop with a failing verify
+3. **Fix all errors** — lint, format, tests, vulture; do not stop with a failing verify. Re-cleanse if fixes leave new dead code, then re-run verify until green.
 
 ### 7. Terminology
 - NEVER use "layer N" — use concrete names (CoreAgent, StrangeLoop, GoalEngine)
@@ -126,9 +126,8 @@ langchain provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, G
 
 1. **Plan**: Explore codebase → ask when alternatives exist → ExitPlanMode for approval
 2. **Implement**: Read existing → check ecosystem → follow patterns → run `make lint`
-3. **Clean up**: Remove related legacy/dead code from the change (see Critical Rule 6)
-4. **Verify**: `./scripts/verify_finally.sh` — must pass; fix all errors before commit
-5. **GitHub Actions**: Use `GITHUB_PAT` env var; `export GH_TOKEN="$GITHUB_PAT"` for `gh` CLI
+3. **Cleanse → Verify → Fix** (Critical Rule 6 — MUST after every code impl): remove related legacy/dead code **without changing existing functionality**, then `./scripts/verify_finally.sh`, then fix until green
+4. **GitHub Actions**: Use `GITHUB_PAT` env var; `export GH_TOKEN="$GITHUB_PAT"` for `gh` CLI
 
 ---
 

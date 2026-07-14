@@ -18,6 +18,7 @@ from textual.widgets import Static
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
+from soothe_cli.runtime.presentation.id_format import abbreviate_compact_id
 from soothe_cli.tui.config import get_glyphs, is_ascii_mode
 from soothe_cli.tui.widgets.context_data import (
     LoadTokenSnapshotFn,
@@ -60,15 +61,7 @@ STATUS_ICONS: dict[str, str] = {
 
 def _abbreviate_loop_id(loop_id: str) -> str:
     """Render loop id in ``prefix...suffix`` form for compact status lines."""
-    raw = str(loop_id or "").strip().strip("[]")
-    if not raw:
-        return "unknown"
-    compact = raw.replace("-", "")
-    if "..." in compact:
-        return compact
-    if len(compact) <= 14:
-        return compact
-    return f"{compact[:8]}...{compact[-4:]}"
+    return abbreviate_compact_id(loop_id, empty="unknown")
 
 
 def _truncate_text(value: str, *, max_len: int) -> str:
