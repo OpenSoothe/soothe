@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 __all__ = [
+    "CodingCoreAgent",
     "CoreAgent",
     "create_soothe_agent",
     "AgentBuilder",
@@ -25,6 +26,10 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Lazy import core modules."""
+    if name == "CodingCoreAgent":
+        from soothe.foundation.core.agent._core import CodingCoreAgent
+
+        return CodingCoreAgent
     if name == "CoreAgent":
         from soothe.foundation.core.agent._core import CoreAgent
 

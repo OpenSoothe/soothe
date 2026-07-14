@@ -38,8 +38,8 @@ if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
 
     from soothe.config import SootheConfig
-    from soothe.foundation.core.agent import CoreAgent
     from soothe.foundation.sloop.state.schemas import PlanResult
+    from soothe.protocols.core_agent import CoreAgentProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class SynthesisGenerator:
     def __init__(
         self,
         llm_client: BaseChatModel,
-        core_agent: CoreAgent,
+        core_agent: CoreAgentProtocol,
         soothe_config: SootheConfig | None = None,
         *,
         loop_id: str | None = None,

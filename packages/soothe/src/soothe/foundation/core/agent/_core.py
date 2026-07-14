@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
     from soothe.config import SootheConfig
+    from soothe.protocols.core_agent import CoreAgentCapabilities
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
@@ -73,7 +74,7 @@ def _normalize_layer1_input(input_arg: str | dict) -> dict:
     return input_arg
 
 
-class CoreAgent:
+class CodingCoreAgent:
     """Layer 1 CoreAgent runtime interface (RFC-0023).
 
     Self-contained module wrapping CompiledStateGraph with explicit typed
@@ -144,6 +145,7 @@ class CoreAgent:
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
         subagents: list[SubAgent | CompiledSubAgent] | None = None,
+        capabilities: CoreAgentCapabilities | None = None,
         execute_graph: CompiledStateGraph | None = None,
         execute_graph_compiler: Callable[[], CompiledStateGraph] | None = None,
     ) -> None:
@@ -156,6 +158,7 @@ class CoreAgent:
             planner: PlannerProtocol instance (or None if disabled).
             policy: PolicyProtocol instance (or None if disabled).
             subagents: List of configured subagents.
+            capabilities: Capability inventory exposed to orchestration/planner.
             execute_graph: Optional twin graph without checkpointer for execute
                 streaming (IG-477). When set and ephemeral execute is enabled,
                 ACT-phase streaming uses this graph instead of ``graph``.
@@ -171,6 +174,14 @@ class CoreAgent:
         self._planner = planner
         self._policy = policy
         self._subagents = list(subagents) if subagents else []
+        if capabilities is None:
+            from soothe.protocols.core_agent import CoreAgentCapabilities
+
+            capabilities = CoreAgentCapabilities(
+                subagents=tuple(str(getattr(subagent, "name", "")) for subagent in self._subagents),
+                features=("langgraph", "checkpointer", "execution_graph"),
+            )
+        self._capabilities = capabilities
 
     # --- Explicit typed properties ---
     @property
@@ -236,6 +247,10 @@ class CoreAgent:
     def subagents(self) -> list[SubAgent | CompiledSubAgent]:
         """List of configured subagents available for delegation."""
         return self._subagents
+
+    def list_capabilities(self) -> CoreAgentCapabilities:
+        """Return tooling/subagent/feature inventory for orchestration."""
+        return self._capabilities
 
     # --- Execution interface ---
     def astream(
@@ -387,6 +402,23 @@ class CoreAgent:
             durability=durability,
         )
 
+    def execute_stream(
+        self,
+        input_arg: str | dict,
+        config: RunnableConfig | None = None,
+        *,
+        stream_mode: list[str] | None = None,
+        subgraphs: bool = False,
+    ) -> AsyncIterator[Any]:
+        """Canonical execute stream abstraction for Layer 2."""
+        return self.execution_astream(
+            input_arg,
+            config=config,
+            stream_mode=stream_mode,
+            subgraphs=subgraphs,
+            durability="exit",
+        )
+
     async def execution_aget_state(
         self,
         config: RunnableConfig | None = None,
@@ -411,6 +443,17 @@ class CoreAgent:
                 return None
             raise
 
+    async def read_runtime_state(
+        self,
+        config: RunnableConfig | None = None,
+        *,
+        execution_scope: bool = False,
+    ) -> Any:
+        """Normalized state-read adapter for orchestration runtime surfaces."""
+        if execution_scope:
+            return await self.execution_aget_state(config=config)
+        return await self.aget_state(config=config)
+
     async def execution_ainvoke(
         self,
         input_arg: str | dict,
@@ -426,7 +469,7 @@ class CoreAgent:
         return await self.execution_graph.ainvoke(graph_input, config or {}, **invoke_kwargs)
 
     @classmethod
-    def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CoreAgent:
+    def create(cls, config: SootheConfig | None = None, **kwargs: Any) -> CodingCoreAgent:
         """Factory method - delegates to create_soothe_agent().
 
         Args:
@@ -439,3 +482,7 @@ class CoreAgent:
         from soothe.foundation.core.agent._builder import create_soothe_agent
 
         return create_soothe_agent(config, **kwargs)
+
+
+# Backward-compatible name while call sites migrate to CodingCoreAgent.
+CoreAgent = CodingCoreAgent

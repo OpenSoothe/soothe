@@ -14,7 +14,7 @@ from soothe_sdk.protocols.identity import (
 )
 
 from soothe.protocols.concurrency import ConcurrencyPolicy
-from soothe.protocols.core_agent import CoreAgentProtocol
+from soothe.protocols.core_agent import CoreAgentCapabilities, CoreAgentProtocol
 from soothe.protocols.durability import (
     DurabilityProtocol,
     ThreadFilter,
@@ -58,6 +58,7 @@ __all__ = [
     "ActionRequest",
     "AsyncPersistStore",
     "ConcurrencyPolicy",
+    "CoreAgentCapabilities",
     "CoreAgentProtocol",
     "DurabilityProtocol",
     "GoalReport",

@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from soothe.config import SootheConfig
     from soothe.foundation.autopilot.engine.proposal_queue import ProposalQueue
-    from soothe.foundation.core.agent import CoreAgent
+    from soothe.protocols.core_agent import CoreAgentProtocol
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class StrangeLoop:
 
     def __init__(
         self,
-        core_agent: CoreAgent,
+        core_agent: CoreAgentProtocol,
         loop_planner: LoopPlannerProtocol,
         config: SootheConfig,
     ) -> None:
@@ -944,11 +944,34 @@ class StrangeLoop:
         Returns:
             PlanContext with tools, subagents, and completed steps for the reasoner
         """
-        available_tools = []
-        if hasattr(self.core_agent, "tools") and isinstance(self.core_agent.tools, dict):
-            available_tools = list(self.core_agent.tools.keys())
+        capabilities = None
+        capability_reader = getattr(self.core_agent, "list_capabilities", None)
+        if callable(capability_reader):
+            capabilities = capability_reader()
+
+        raw_tools = getattr(capabilities, "tools", ())
+        if (
+            not raw_tools
+            and hasattr(self.core_agent, "tools")
+            and isinstance(self.core_agent.tools, dict)
+        ):
+            raw_tools = tuple(str(name) for name in self.core_agent.tools.keys())
+        available_tools = (
+            [str(name) for name in raw_tools if isinstance(name, str)]
+            if isinstance(raw_tools, (list, tuple, set))
+            else []
+        )
 
         available_subagents = [name for name, cfg in self.config.subagents.items() if cfg.enabled]
+        raw_subagents = getattr(capabilities, "subagents", ())
+        capability_subagents = (
+            [str(name) for name in raw_subagents if isinstance(name, str)]
+            if isinstance(raw_subagents, (list, tuple, set))
+            else []
+        )
+        for capability_subagent in capability_subagents:
+            if capability_subagent not in available_subagents:
+                available_subagents.append(capability_subagent)
 
         completed_steps = [
             StepResult(

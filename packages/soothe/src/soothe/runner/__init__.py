@@ -48,9 +48,9 @@ __all__ = [
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe.foundation.core.agent import CoreAgent
     from soothe.foundation.core.agent._lazy import LazyCoreAgent
     from soothe.middleware.identity import IdentityRuntime
+    from soothe.protocols.core_agent import CoreAgentProtocol
     from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,7 @@ class SootheRunner(
 
         lazy_core_agent = self._config.agent.runtime.lazy_core_agent
 
-        def _build_core_agent() -> CoreAgent:
+        def _build_core_agent() -> CoreAgentProtocol:
             agent_start = time.perf_counter()
             agent = create_soothe_agent(
                 self._config,
@@ -178,7 +178,7 @@ class SootheRunner(
             return agent
 
         if lazy_core_agent:
-            self._core_agent: CoreAgent | LazyCoreAgent = LazyCoreAgent(
+            self._core_agent: CoreAgentProtocol | LazyCoreAgent = LazyCoreAgent(
                 _build_core_agent,
                 planner=self._planner,
                 policy=self._policy,
@@ -218,11 +218,11 @@ class SootheRunner(
         logger.info("SootheRunner initialized in %.1fms", total_ms)
 
     @property
-    def _agent(self) -> CoreAgent | LazyCoreAgent:
+    def _agent(self) -> CoreAgentProtocol | LazyCoreAgent:
         """Layer-1 agent handle (lazy or materialized)."""
         return self._core_agent
 
-    async def _materialize_core_agent(self) -> CoreAgent:
+    async def _materialize_core_agent(self) -> CoreAgentProtocol:
         """Ensure CoreAgent graph is compiled and checkpointer is attached."""
         from soothe.foundation.core.agent._lazy import LazyCoreAgent
 
@@ -231,7 +231,7 @@ class SootheRunner(
         await self._ensure_checkpointer_initialized()
         return self._core_agent
 
-    def _materialized_core_agent(self) -> CoreAgent:
+    def _materialized_core_agent(self) -> CoreAgentProtocol:
         """Return a compiled CoreAgent, materializing lazily when needed."""
         from soothe.foundation.core.agent._lazy import LazyCoreAgent
 

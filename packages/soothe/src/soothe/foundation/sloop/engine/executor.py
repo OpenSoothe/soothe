@@ -148,7 +148,7 @@ from soothe.utils.text_preview import create_output_summary, log_preview, previe
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.foundation.core.agent import CoreAgent
+    from soothe.protocols.core_agent import CoreAgentProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ class Executor:
 
     def __init__(
         self,
-        core_agent: CoreAgent,
+        core_agent: CoreAgentProtocol,
         *,
         checkpointer: Any | None = None,
         max_parallel_steps: int = 16,
@@ -342,12 +342,13 @@ class Executor:
             collect_core_agent_message_ids,
         )
 
-        graph_state = await self.core_agent.aget_state(
-            config={"configurable": {"thread_id": fork_thread_id}},
+        graph_state = await self._read_runtime_state(
+            graph_config={"configurable": {"thread_id": fork_thread_id}},
         )
-        if not graph_state or not graph_state.values:
+        values = getattr(graph_state, "values", None)
+        if not graph_state or not isinstance(values, dict):
             return frozenset()
-        return collect_core_agent_message_ids(list(graph_state.values.get("messages") or []))
+        return collect_core_agent_message_ids(list(values.get("messages") or []))
 
     def _max_subagent_tasks_per_wave(self) -> int:
         """Configured cap on root-level ``task`` tool completions (0 = unlimited)."""
@@ -370,6 +371,45 @@ class Executor:
         if self._config is None:
             return 1
         return max(0, int(self._config.agent.loop.execute_action_retry_max))
+
+    async def _read_runtime_state(
+        self,
+        *,
+        graph_config: dict[str, Any],
+        execution_scope: bool = False,
+    ) -> Any:
+        reader = getattr(self.core_agent, "read_runtime_state", None)
+        # Guard against loose mocks where any attribute appears callable.
+        if callable(reader) and hasattr(type(self.core_agent), "read_runtime_state"):
+            return await reader(config=graph_config, execution_scope=execution_scope)
+        if execution_scope:
+            execution_reader = getattr(self.core_agent, "execution_aget_state", None)
+            if callable(execution_reader):
+                return await execution_reader(config=graph_config)
+        return await self.core_agent.aget_state(config=graph_config)
+
+    def _execute_stream(
+        self,
+        stream_input: dict[str, Any] | Command,
+        *,
+        graph_config: dict[str, Any],
+    ) -> Any:
+        stream_method = getattr(self.core_agent, "execute_stream", None)
+        # Guard against loose mocks where any attribute appears callable.
+        if callable(stream_method) and hasattr(type(self.core_agent), "execute_stream"):
+            return stream_method(
+                stream_input,
+                config=graph_config,
+                stream_mode=["messages", "custom"],
+                subgraphs=True,
+            )
+        return self.core_agent.execution_astream(
+            stream_input,
+            config=graph_config,
+            stream_mode=["messages", "custom"],
+            subgraphs=True,
+            durability="exit",
+        )
 
     @staticmethod
     async def _maybe_aclose_act_stream(stream: Any, *, reason: str) -> None:
@@ -565,21 +605,28 @@ class Executor:
         if getattr(self.core_agent, "can_read_graph_state", True) is False:
             return _PendingInterruptFetch()
 
-        graph_state = await self.core_agent.execution_aget_state(config=graph_config)
+        graph_state = await self._read_runtime_state(
+            graph_config=graph_config,
+            execution_scope=True,
+        )
         if graph_state is None:
             return _PendingInterruptFetch()
 
         interrupts: tuple[Interrupt, ...] = ()
         if graph_state is not None:
             raw = getattr(graph_state, "interrupts", None)
-            if raw:
+            if isinstance(raw, (list, tuple)):
                 interrupts = tuple(raw)
             else:
-                tasks = getattr(graph_state, "tasks", None) or ()
+                tasks = getattr(graph_state, "tasks", None)
                 collected: list[Interrupt] = []
-                for task in tasks:
-                    for interrupt_obj in getattr(task, "interrupts", None) or ():
-                        collected.append(interrupt_obj)
+                if isinstance(tasks, (list, tuple)):
+                    for task in tasks:
+                        task_interrupts = getattr(task, "interrupts", None)
+                        if not isinstance(task_interrupts, (list, tuple)):
+                            continue
+                        for interrupt_obj in task_interrupts:
+                            collected.append(interrupt_obj)
                 interrupts = tuple(collected)
 
         for interrupt_obj in interrupts:
@@ -636,12 +683,9 @@ class Executor:
             else stream_input
         )
         while True:
-            chunk_iter = self.core_agent.execution_astream(
+            chunk_iter = self._execute_stream(
                 current_input,
-                config=graph_config,
-                stream_mode=["messages", "custom"],
-                subgraphs=True,
-                durability="exit",
+                graph_config=graph_config,
             )
             # LLM timeout: LLMRateLimitMiddleware. Dispatch watchdog: opt-in via
             # agent.loop.dispatch_timeout_seconds (0 = disabled by default).
@@ -2046,16 +2090,17 @@ class Executor:
                 loop_state is not None
                 and getattr(self.core_agent, "can_read_graph_state", None) is True
             ):
-                graph_state = await self.core_agent.aget_state(
-                    config={"configurable": {"thread_id": fork_thread_id}},
+                graph_state = await self._read_runtime_state(
+                    graph_config={"configurable": {"thread_id": fork_thread_id}},
                 )
-                if graph_state and graph_state.values:
-                    self._snapshot_skill_activation(graph_state.values, loop_state)
-                    self._snapshot_mcp_state(graph_state.values, loop_state)
-                    self._snapshot_tool_activation(graph_state.values, loop_state)
+                values = getattr(graph_state, "values", None)
+                if graph_state and isinstance(values, dict):
+                    self._snapshot_skill_activation(values, loop_state)
+                    self._snapshot_mcp_state(values, loop_state)
+                    self._snapshot_tool_activation(values, loop_state)
                     human_core_agent_message_id, ai_core_agent_message_id = (
                         extract_execute_turn_core_agent_message_ids(
-                            graph_messages=list(graph_state.values.get("messages") or []),
+                            graph_messages=list(values.get("messages") or []),
                             stream_ai_messages=messages,
                             envelope_human_id=envelope_human_id,
                         )

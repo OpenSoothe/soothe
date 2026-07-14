@@ -51,7 +51,8 @@ if TYPE_CHECKING:
 # (CoreAgent pulls in the loop engine + protocols chain).
 from langchain_core.language_models import BaseChatModel  # noqa: E402
 
-from soothe.foundation.core.agent._core import CoreAgent  # noqa: E402
+from soothe.foundation.core.agent._core import CodingCoreAgent  # noqa: E402
+from soothe.protocols.core_agent import CoreAgentCapabilities  # noqa: E402
 
 # Apply all patches at module import time (after all imports complete)
 apply_summarization_patches()
@@ -111,7 +112,8 @@ class AgentBuilder:
         policy: PolicyProtocol | None = None,
         mcp_registry: Any | None = None,
         identity_runtime: IdentityRuntime | None = None,
-    ) -> CoreAgent:
+        core_agent_kind: str | None = None,
+    ) -> CodingCoreAgent:
         """Build CoreAgent with all components.
 
         Layer 1 Responsibilities:
@@ -141,13 +143,21 @@ class AgentBuilder:
             mcp_registry: Override MCPRegistry. None uses builder's instance (RFC-412).
             identity_runtime: Optional identity bundle (RFC-307). When enabled,
                 IdentityMiddleware is prepended to the stack.
+            core_agent_kind: Runtime implementation kind (default: ``coding``).
 
         Returns:
-            CoreAgent instance wrapping CompiledStateGraph with typed properties.
+            CodingCoreAgent instance wrapping CompiledStateGraph.
         """
         from soothe_deepagents import create_deep_agent
 
         create_start = time.perf_counter()
+        selected_kind = (core_agent_kind or self._resolve_core_agent_kind()).strip().lower()
+        if selected_kind != "coding":
+            msg = (
+                f"Unsupported core agent kind: {selected_kind!r}. "
+                "Only 'coding' is currently implemented."
+            )
+            raise ValueError(msg)
 
         # Resolve model
         resolved_model: str | BaseChatModel
@@ -315,14 +325,32 @@ class AgentBuilder:
             def execute_graph_compiler() -> Any:
                 return _compile_deep_agent(None)
 
-        # Wrap graph in CoreAgent with typed protocol properties
-        agent = CoreAgent(
+        capabilities = CoreAgentCapabilities(
+            tools=tuple(self._collect_tool_names(all_tools)),
+            subagents=tuple(self._collect_subagent_names(all_subagents)),
+            features=(
+                "langgraph",
+                "checkpointer",
+                "execution_graph",
+                "interrupt_resume",
+                "streaming",
+            ),
+            metadata={
+                "runtime_kind": "coding",
+                "tool_count": len(all_tools),
+                "subagent_count": len(all_subagents),
+            },
+        )
+
+        # Wrap graph in coding runtime with typed protocol properties
+        agent = CodingCoreAgent(
             graph=graph,
             config=self._config,
             memory=resolved_memory,
             planner=resolved_planner,
             policy=resolved_policy,
             subagents=all_subagents,
+            capabilities=capabilities,
             execute_graph=execute_graph,
             execute_graph_compiler=execute_graph_compiler,
         )
@@ -331,6 +359,39 @@ class AgentBuilder:
         logger.info("[Init] CoreAgent ready (%.1fms total)", total_ms)
 
         return agent
+
+    def _resolve_core_agent_kind(self) -> str:
+        runtime_cfg = getattr(getattr(self._config, "agent", None), "runtime", None)
+        raw = getattr(runtime_cfg, "core_agent_kind", None) if runtime_cfg else None
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+        return "coding"
+
+    @staticmethod
+    def _collect_tool_names(tools: Sequence[BaseTool | Callable | dict[str, Any]]) -> list[str]:
+        names: list[str] = []
+        for tool in tools:
+            if isinstance(tool, dict):
+                candidate = tool.get("name")
+                if isinstance(candidate, str) and candidate:
+                    names.append(candidate)
+                continue
+            name = getattr(tool, "name", None)
+            if isinstance(name, str) and name:
+                names.append(name)
+                continue
+            if callable(tool):
+                names.append(getattr(tool, "__name__", "callable_tool"))
+        return sorted(set(names))
+
+    @staticmethod
+    def _collect_subagent_names(subagents: Sequence[SubAgent | CompiledSubAgent]) -> list[str]:
+        names: list[str] = []
+        for subagent in subagents:
+            name = getattr(subagent, "name", None)
+            if isinstance(name, str) and name:
+                names.append(name)
+        return sorted(set(names))
 
     def _resolve_memory(self) -> MemoryProtocol | None:
         """Resolve MemoryProtocol with parallel resolution support (always enabled)."""
@@ -438,7 +499,8 @@ def create_soothe_agent(
     planner: PlannerProtocol | None = None,
     policy: PolicyProtocol | None = None,
     identity_runtime: IdentityRuntime | None = None,
-) -> CoreAgent:
+    core_agent_kind: str | None = None,
+) -> CodingCoreAgent:
     """Factory that creates Soothe's Layer 1 CoreAgent runtime.
 
     This is a thin wrapper delegating to AgentBuilder.
@@ -461,9 +523,10 @@ def create_soothe_agent(
         planner: Override PlannerProtocol implementation.
         policy: Override PolicyProtocol implementation.
         identity_runtime: Optional identity bundle (RFC-307).
+        core_agent_kind: Runtime implementation kind (default: ``coding``).
 
     Returns:
-        CoreAgent instance wrapping CompiledStateGraph with typed properties.
+        CodingCoreAgent instance wrapping CompiledStateGraph.
     """
     return AgentBuilder(config).build(
         model=model,
@@ -478,4 +541,5 @@ def create_soothe_agent(
         planner=planner,
         policy=policy,
         identity_runtime=identity_runtime,
+        core_agent_kind=core_agent_kind,
     )

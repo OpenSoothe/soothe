@@ -20,9 +20,9 @@ from .phase_scratch import LoopPhaseScratch
 
 if TYPE_CHECKING:
     from soothe.foundation.autopilot.engine.proposal_queue import ProposalQueue
-    from soothe.foundation.core.agent import CoreAgent
     from soothe.foundation.sloop.clarification.protocol import ClarificationPolicy
     from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+    from soothe.protocols.core_agent import CoreAgentProtocol
     from soothe.utils.observability.langfuse import GoalLoopTrace
 
 EmitFn = Callable[[str, Any], Awaitable[None]]
@@ -71,7 +71,7 @@ class LoopRuntimeContext:
     tail_persistence_task: asyncio.Task[None] | None = None
 
     @property
-    def core_agent(self) -> CoreAgent:
+    def core_agent(self) -> CoreAgentProtocol:
         """Layer 1 graph (checkpoint key = ``thread_id``, not loop_id)."""
         return self.strange_loop.core_agent
 

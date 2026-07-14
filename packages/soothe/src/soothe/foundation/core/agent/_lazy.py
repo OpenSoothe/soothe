@@ -10,7 +10,7 @@ import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.core.agent._core import CoreAgent
+from soothe.foundation.core.agent._core import CodingCoreAgent
 
 if TYPE_CHECKING:
     from langchain_core.runnables import RunnableConfig
@@ -19,13 +19,14 @@ if TYPE_CHECKING:
     from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
     from soothe.config import SootheConfig
+    from soothe.protocols.core_agent import CoreAgentCapabilities
     from soothe.protocols.memory import MemoryProtocol
     from soothe.protocols.planner import PlannerProtocol
     from soothe.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
 
-MaterializeHook = Callable[[CoreAgent], Awaitable[None] | None]
+MaterializeHook = Callable[[CodingCoreAgent], Awaitable[None] | None]
 
 
 class LazyCoreAgent:
@@ -37,7 +38,7 @@ class LazyCoreAgent:
 
     def __init__(
         self,
-        factory: Callable[[], CoreAgent],
+        factory: Callable[[], CodingCoreAgent],
         *,
         memory: MemoryProtocol | None = None,
         planner: PlannerProtocol | None = None,
@@ -46,7 +47,7 @@ class LazyCoreAgent:
         materialize_hook: MaterializeHook | None = None,
     ) -> None:
         self._factory = factory
-        self._delegate: CoreAgent | None = None
+        self._delegate: CodingCoreAgent | None = None
         self._memory = memory
         self._planner = planner
         self._policy = policy
@@ -58,14 +59,14 @@ class LazyCoreAgent:
         """Return True once the underlying CoreAgent has been compiled."""
         return self._delegate is not None
 
-    def materialize(self) -> CoreAgent:
+    def materialize(self) -> CodingCoreAgent:
         """Compile and cache the underlying CoreAgent."""
         if self._delegate is None:
             self._delegate = self._factory()
             logger.info("[Init] LazyCoreAgent materialized")
         return self._delegate
 
-    async def amaterialize(self) -> CoreAgent:
+    async def amaterialize(self) -> CodingCoreAgent:
         """Materialize and run optional async hook (e.g. checkpointer attach)."""
         agent = self.materialize()
         if self._materialize_hook is not None:
@@ -118,6 +119,9 @@ class LazyCoreAgent:
     def subagents(self) -> list[SubAgent | CompiledSubAgent]:
         return self.materialize().subagents
 
+    def list_capabilities(self) -> CoreAgentCapabilities:
+        return self.materialize().list_capabilities()
+
     def astream(
         self,
         input_arg: str | dict,
@@ -164,9 +168,33 @@ class LazyCoreAgent:
             durability=durability,
         )
 
+    def execute_stream(
+        self,
+        input_arg: str | dict,
+        config: RunnableConfig | None = None,
+        *,
+        stream_mode: list[str] | None = None,
+        subgraphs: bool = False,
+    ) -> AsyncIterator[Any]:
+        return self.materialize().execute_stream(
+            input_arg,
+            config,
+            stream_mode=stream_mode,
+            subgraphs=subgraphs,
+        )
+
     async def execution_aget_state(self, config: RunnableConfig | None = None) -> Any:
         agent = await self.amaterialize()
         return await agent.execution_aget_state(config=config)
+
+    async def read_runtime_state(
+        self,
+        config: RunnableConfig | None = None,
+        *,
+        execution_scope: bool = False,
+    ) -> Any:
+        agent = await self.amaterialize()
+        return await agent.read_runtime_state(config=config, execution_scope=execution_scope)
 
     async def execution_ainvoke(
         self,
