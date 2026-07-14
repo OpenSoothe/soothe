@@ -19,6 +19,9 @@ from typing import Any, TypeVar
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
+from soothe_deepagents.middleware.llm_call_policy import (
+    LLMCallPolicyConfig as DeepagentsLLMCallPolicyConfig,
+)
 
 from soothe.utils.token_counting import estimate_content_chars
 
@@ -185,7 +188,7 @@ def _extract_retry_after_seconds(exc: Exception) -> float | None:
 
         try:
             return float(retry_after)
-        except ValueError:
+        except (TypeError, ValueError):
             continue
 
     return None
@@ -427,6 +430,31 @@ def resolve_llm_budget_key(thread_id: str | None) -> str:
     return "direct"
 
 
+def _to_deepagents_llm_call_policy(config: Any) -> DeepagentsLLMCallPolicyConfig:
+    """Map Soothe `LLMRateLimitConfig` into deepagents call-policy config.
+
+    This keeps timeout/retry math aligned with the upstream utility while
+    Soothe continues to own thread-budget allocation and retry observability.
+    """
+    from soothe.config.models import LLMRateLimitConfig
+
+    if not isinstance(config, LLMRateLimitConfig):
+        timeout_seconds = float(getattr(config, "call_timeout_seconds", 600))
+        return DeepagentsLLMCallPolicyConfig(timeout_seconds=timeout_seconds)
+    return DeepagentsLLMCallPolicyConfig(
+        timeout_seconds=float(config.call_timeout_seconds),
+        retry_on_timeout=bool(config.retry_on_timeout),
+        max_timeout_retries=int(config.max_timeout_retries),
+        timeout_retry_multiplier=float(config.timeout_retry_multiplier),
+        retry_on_rate_limit=bool(config.retry_on_rate_limit),
+        max_rate_limit_retries=int(config.max_rate_limit_retries),
+        rate_limit_backoff_base=float(config.rate_limit_backoff_base),
+        rate_limit_backoff_max=float(config.rate_limit_backoff_max),
+        respect_retry_after_header=bool(config.respect_retry_after_header),
+        rate_limit_retry_timeout_seconds=float(config.rate_limit_retry_timeout_seconds),
+    )
+
+
 def effective_llm_call_timeout(
     config: Any,
     *,
@@ -436,14 +464,16 @@ def effective_llm_call_timeout(
     """Compute per-attempt timeout; 429 retries use a shorter cap."""
     from soothe.config.models import LLMRateLimitConfig
 
-    if not isinstance(config, LLMRateLimitConfig):
-        return int(getattr(config, "call_timeout_seconds", 600))
-    if rate_limit_attempts > 0:
-        return config.rate_limit_retry_timeout_seconds
-    escalated = int(
-        config.call_timeout_seconds * (config.timeout_retry_multiplier**timeout_attempts)
+    policy = _to_deepagents_llm_call_policy(config)
+    timeout = int(
+        policy.timeout_for_attempt(
+            timeout_attempt=timeout_attempts,
+            rate_limit_attempt=rate_limit_attempts,
+        )
     )
-    return min(escalated, config.call_timeout_max_seconds)
+    if isinstance(config, LLMRateLimitConfig):
+        return min(timeout, config.call_timeout_max_seconds)
+    return timeout
 
 
 def calc_rate_limit_backoff(
@@ -454,12 +484,18 @@ def calc_rate_limit_backoff(
     backoff_max: float,
     respect_retry_after: bool,
 ) -> float:
-    """Exponential backoff for 429 retries, honoring retry-after when configured."""
-    if respect_retry_after and exc is not None:
+    """Exponential backoff for 429 retries, aligned with deepagents policy utility."""
+    policy = DeepagentsLLMCallPolicyConfig(
+        timeout_seconds=60.0,
+        rate_limit_backoff_base=float(base),
+        rate_limit_backoff_max=float(backoff_max),
+        respect_retry_after_header=bool(respect_retry_after),
+    )
+    if policy.respect_retry_after_header and exc is not None:
         retry_after = _extract_retry_after_seconds(exc)
         if retry_after is not None:
-            return min(retry_after, backoff_max)
-    return min(base * (2**attempt), backoff_max)
+            return min(retry_after, policy.rate_limit_backoff_max)
+    return min(policy.rate_limit_backoff_base * (2**attempt), policy.rate_limit_backoff_max)
 
 
 def _emit_llm_retry_event(
