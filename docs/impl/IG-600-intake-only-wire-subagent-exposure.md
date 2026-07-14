@@ -46,7 +46,7 @@ IG-601 completes true invisibility: intake-only specs are not passed to `create_
 
 1. ~~Keep registering all four in CoreAgent~~ → IG-601: partition; intake-only on parallel registry only.
 2. Catalog advertisement omits intake-only names.
-3. ~~Allow `task` when wired directive matches~~ → IG-601: always reject intake-only `task` (belt-and-suspenders); wired path uses direct `ainvoke`.
+3. ~~Allow `task` when wired directive matches~~ → IG-601: always reject intake-only `task` (belt-and-suspenders); wired path uses streamed direct invoke (IG-602).
 4. Planner prompts / PlanContext never advertise the three intake-only names.
 
 ---

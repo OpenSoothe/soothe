@@ -156,6 +156,7 @@ async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
     assert step.wire_subagent == "planner"
     assert ctx.scratch.plan_result.terminal_after_execute is True
     assert any(e[0] == "plan_phase_status" for e in emitted)
+    assert not any(e[0].startswith("wired_subagent_") for e in emitted)
 
 
 @pytest.mark.asyncio
@@ -180,11 +181,16 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
         iteration=0,
         _loop_messages_cache=[],
     )
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, payload: object) -> None:
+        emitted.append((event_type, payload))
+
     ctx = SimpleNamespace(
         loop_state=loop_state,
         preferred_subagent=None,
         scratch=SimpleNamespace(plan_result=None),
-        emit=_noop_emit,
+        emit=_emit,
         ce=None,
         core_agent=SimpleNamespace(
             lookup_intake_only_subagent=lambda name: (
@@ -202,6 +208,71 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
         getattr(m, "content", None) == "research report body"
         for m in loop_state._loop_messages_cache
     )
+    types = [e[0] for e in emitted]
+    assert "plan_phase_status" in types
+    assert "wired_subagent_started" in types
+    assert "wired_subagent_completed" in types
+    started = next(p for t, p in emitted if t == "wired_subagent_started")
+    assert isinstance(started, dict)
+    assert started["subagent"] == "deep_research"
+    assert started["invocation_id"]
+
+
+@pytest.mark.asyncio
+async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="deep_research",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+
+    async def _astream(_input, stream_mode=None):  # type: ignore[no-untyped-def]
+        yield (
+            "custom",
+            {"type": "soothe.subagent.deep_research.progress", "phase": "plan", "message": "go"},
+        )
+        yield ("values", {"messages": [AIMessage(content="streamed report")]})
+
+    runnable = SimpleNamespace(astream=_astream, ainvoke=AsyncMock())
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, payload: object) -> None:
+        emitted.append((event_type, payload))
+
+    loop_state = SimpleNamespace(
+        intent=intent,
+        routing_classification=build_loop_routing_classification(intent, None),
+        goal="research",
+        goal_user_submission="research",
+        total_tokens_used=0,
+        thread_id="t1",
+        workspace=None,
+        iteration=0,
+        _loop_messages_cache=[],
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        preferred_subagent=None,
+        scratch=SimpleNamespace(plan_result=None),
+        emit=_emit,
+        ce=None,
+        core_agent=SimpleNamespace(
+            lookup_intake_only_subagent=lambda name: (
+                {"name": "deep_research", "runnable": runnable} if name == "deep_research" else None
+            )
+        ),
+    )
+    out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
+    assert out == {"wired_route_next": "goal_completion"}
+    runnable.ainvoke.assert_not_called()
+    stream_customs = [p for t, p in emitted if t == "stream_event"]
+    assert stream_customs
+    ns, mode, data = stream_customs[0]  # type: ignore[misc]
+    assert mode == "custom"
+    assert data["type"] == "soothe.subagent.deep_research.progress"
+    assert data["invocation_id"]
+    assert any(t == "wired_subagent_completed" for t, _ in emitted)
 
 
 def test_route_after_wired_subagent_fatal() -> None:

@@ -6,12 +6,13 @@
 **Kind**: Architecture Design
 **Authors**: Xiaming Chen
 **Created**: 2026-06-30
-**Last Updated**: 2026-07-14
+**Last Updated**: 2026-07-15
 **Depends on**: RFC-220, RFC-225, RFC-226, RFC-503
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
-**Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine)
-**Amended by**: IG-599 (wired-subagent direct route after Pass 2), IG-600 (intake-only exposure), IG-601 (intake-only dual registry / direct invoke)
+**Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine), RFC-628 (SubAgent / orphan wired card display)
+**Amended by**: IG-599 (wired-subagent direct route after Pass 2), IG-600 (intake-only exposure), IG-601 (intake-only dual registry / direct invoke), IG-602 (orphan wired-subagent card / stream bridge)
+**Design draft (orphan card UX)**: `docs/drafts/2026-07-15-orphan-wired-subagent-card-design.md`
 
 ---
 
@@ -235,9 +236,9 @@ When Pass 2 `wire_subagent` or slash/daemon `preferred_subagent` resolves to an 
 
 1. `init_or_resume` sets `intent_route=wired_subagent` when a specialist resolves (no plan inject here).
 2. `route_by_intent` returns `invoke_wired_subagent` (after chitchat, before continuation).
-3. `invoke_wired_subagent` emits delegation status, then:
-   - **Intake-only** (`browser_use`, `deep_research`, `academic_research`): looks up the specialist on the intake-only registry (not on CoreAgent `task`), `ainvoke`s the CompiledSubAgent runnable, records execute-step Human(goal)+AI(report) on the CE ledger, then routes to `goal_completion`.
-   - **Catalog / dual-exposed** (`planner`): builds the terminal 1-step plan (`build_trivial_plan` with `wire_subagent` + `terminal_after_execute`) and edges to `resolve_decision` → validate → execute (CoreAgent `task`) → `goal_completion`.
+3. `invoke_wired_subagent` emits delegation status (`plan_phase_status`), then:
+   - **Intake-only** (`browser_use`, `deep_research`, `academic_research`): looks up the specialist on the intake-only registry (not on CoreAgent `task`), runs the CompiledSubAgent runnable **without** resolve → execute, records execute-step Human(goal)+AI(report) on the CE ledger, then routes to `goal_completion`. See §6.3.3 for stream / TUI contract.
+   - **Catalog / dual-exposed** (`planner`): builds the terminal 1-step plan (`build_trivial_plan` with `wire_subagent` + `terminal_after_execute`) and edges to `resolve_decision` → validate → execute (CoreAgent `task`) → `goal_completion`. Progress uses the normal parented SubAgent card path (RFC-628 Part II).
 4. Final user-visible text uses the existing goal-completion path (`ledger_direct` / synthesize).
 
 Content judgment for *which* specialist stays on the Pass 2 structured field (or explicit slash). Validation/coerce of names is deterministic allowlist filtering.
@@ -249,14 +250,33 @@ Built-in wire specialists have two exposure modes:
 | Subagent | Intake / wired route | On CoreAgent graph / `task` | Plan-generate `delegate` |
 |----------|----------------------|-----------------------------|---------------------------|
 | `planner` | Yes (resolve→execute) | Yes | Yes |
-| `browser_use` | Yes (direct `ainvoke`) | No | No |
-| `deep_research` | Yes (direct `ainvoke`) | No | No |
-| `academic_research` | Yes (direct `ainvoke`) | No | No |
+| `browser_use` | Yes (streamed direct invoke) | No | No |
+| `deep_research` | Yes (streamed direct invoke) | No | No |
+| `academic_research` | Yes (streamed direct invoke) | No | No |
 
-- Intake-only specialists live on a **parallel registry** (`CodingCoreAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake invokes their runnable directly.
+- Intake-only specialists live on a **parallel registry** (`CodingCoreAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake streams their runnable (custom events forwarded) then completes.
 - `planner` remains on the open CoreAgent `task` catalog and may still use resolve → execute.
 - Open-hop `task` to intake-only names fails naturally (not registered); ToolEnforcement still rejects them as belt-and-suspenders.
 - Plan-wave `delegate` / `resolve_step_wire_subagent` never wires intake-only names; those are intake/slash only.
+
+### 6.3.3 Intake-only wire: stream bridge and orphan SubAgent card
+
+Intake-only specialists do **not** enter CoreAgent execute, so they never emit a main-graph `task` tool call and never parent a step card. Direct invoke must still provide TUI progress.
+
+**Normative stream contract** (StrangeLoop → query stream → TUI):
+
+| Phase | Emit | Required fields |
+|-------|------|-----------------|
+| Before / as invoke begins | `plan_phase_status` («Delegating to {subagent}») | `label`, tokens as today |
+| Start | `wired_subagent_started` | `subagent`, `invocation_id`, `step_id` (trivial-plan step id), `description` |
+| Progress | Forward allowlisted `soothe.subagent.*` customs as `stream_event` (or equivalent) | Specialist payload + `invocation_id` (+ `step_id` when known) |
+| End | `wired_subagent_completed` \| `failed` \| `cancelled` | `invocation_id`, `duration_ms`, `summary` / error |
+
+**Streaming requirement**: bare `ainvoke` alone is insufficient for client progress. The intake-only path MUST run the specialist under a path where LangGraph custom/`get_stream_writer()` events are captured and re-emitted onto the StrangeLoop query stream (e.g. `astream` with `custom` mode, or an equivalent emit bridge). Worker log lines for wire events are audit-only and do not satisfy this contract.
+
+**TUI**: The client mounts an **orphan SubAgent card** (no parent step widget, empty `parent_step_id` / `parent_task_key`) per RFC-628 Part III. After the card mounts, the thinking / plan-phase row MUST NOT remain the primary long-running progress surface.
+
+**Non-goals for this section**: re-registering intake-only names on CoreAgent `task`; synthesizing a fake StrangeLoop step card solely to parent the SubAgent card.
 
 ### 6.4 `node_init_or_resume` (extended)
 
@@ -497,6 +517,7 @@ Budget: relaxed (<300ms acceptable). Pass 1 ultra-lean (~50-80 tokens input, ~12
 | False social-path rate | Near-zero |
 | Added latency on task | <200ms median |
 | Routing guard activation | <1% (structural contradiction rare) |
+| Intake-only wire UX | Client receives `wired_subagent_started` + progress or terminal lifecycle; orphan SubAgent card mounted (not plan-phase-only) |
 
 ---
 
@@ -514,5 +535,17 @@ Budget: relaxed (<300ms acceptable). Pass 1 ultra-lean (~50-80 tokens input, ~12
 - [RFC-225](./RFC-225-loop-continuity-and-goal-record-enrichment.md) — Loop Continuity (continuation overlay)
 - [RFC-226](./RFC-226-continuation-aware-plan-assess.md) — Continuation-Aware plan_assess
 - [RFC-503](./RFC-503-loop-first-user-experience.md) — First-message latency
-- Design draft: `docs/archive/drafts/2026-07-06-two-pass-intake-classification.md`
+- [RFC-628](./RFC-628-step-card-display-refactor.md) — Step / SubAgent / orphan wired card display
+- Design draft (intake): `docs/archive/drafts/2026-07-06-two-pass-intake-classification.md`
+- Design draft (orphan wired card): `docs/drafts/2026-07-15-orphan-wired-subagent-card-design.md`
 - Rejected one-pass draft: `docs/archive/drafts/2026-07-06-one-pass-intent-classify-optimization.md`
+
+---
+
+## 18. Change History
+
+| Date | Change |
+|------|--------|
+| 2026-06-30 | Initial Draft |
+| 2026-07-14 | Wired-subagent direct route + intake-only dual registry (IG-599/651/652) |
+| 2026-07-15 | §6.3.3 intake-only stream bridge + orphan SubAgent card contract; IG-602 implemented |

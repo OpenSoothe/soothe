@@ -76,6 +76,10 @@ from .catalog import (
     StrangeLoopStepStartedEvent,
     # Type alias
     StreamChunk,
+    WiredSubagentCancelledEvent,
+    WiredSubagentCompletedEvent,
+    WiredSubagentFailedEvent,
+    WiredSubagentStartedEvent,
     # Helper functions
     custom_event,
     register_event,
@@ -143,6 +147,10 @@ from .constants import (
     STRANGE_LOOP_STARTED,
     STRANGE_LOOP_STEP_COMPLETED,
     STRANGE_LOOP_STEP_STARTED,
+    WIRED_SUBAGENT_CANCELLED,
+    WIRED_SUBAGENT_COMPLETED,
+    WIRED_SUBAGENT_FAILED,
+    WIRED_SUBAGENT_STARTED,
 )
 
 # Import all event classes, registry, and helpers
@@ -188,6 +196,10 @@ __all__ = [
     "STRANGE_LOOP_STEP_STARTED",
     "STRANGE_LOOP_STEP_QUEUED",
     "STRANGE_LOOP_STEP_COMPLETED",
+    "WIRED_SUBAGENT_STARTED",
+    "WIRED_SUBAGENT_COMPLETED",
+    "WIRED_SUBAGENT_FAILED",
+    "WIRED_SUBAGENT_CANCELLED",
     "BRANCH_CREATED",
     "BRANCH_ANALYZED",
     "BRANCH_RETRY_STARTED",
@@ -249,6 +261,10 @@ __all__ = [
     "StrangeLoopStepQueuedEvent",
     "StrangeLoopStepCompletedEvent",
     "StrangeLoopContextCompactionEvent",
+    "WiredSubagentStartedEvent",
+    "WiredSubagentCompletedEvent",
+    "WiredSubagentFailedEvent",
+    "WiredSubagentCancelledEvent",
     # Intent events (IG-518)
     "IntentClassifiedEvent",
     # Other events

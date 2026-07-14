@@ -1,18 +1,21 @@
-"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601).
+"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602).
 
 Catalog wires (``planner``): build the 1-step terminal plan and continue to
 ``resolve_decision`` → execute → ``goal_completion``.
 
 Intake-only wires (``browser_use``, ``deep_research``, ``academic_research``):
-invoke the specialist runnable from the intake-only registry (not on CoreAgent
-``task``), record Human/AI execute-step ledger rows, then route to
-``goal_completion``.
+stream the specialist runnable from the intake-only registry (not on CoreAgent
+``task``), forward curated wire customs for the orphan SubAgent card, record
+Human/AI execute-step ledger rows, then route to ``goal_completion``.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
+import uuid
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -29,6 +32,7 @@ from ..runtime_context import LoopRuntimeContext
 logger = logging.getLogger(__name__)
 
 WIRED_SUBAGENT_STATUS_LABEL = "Delegating to {subagent}"
+_DESC_DISPLAY_MAX = 200
 
 
 def _extract_subagent_report(result: Any) -> str:
@@ -102,13 +106,76 @@ def _record_wired_execute_ledger(
         )
 
 
+def _unpack_astream_item(item: Any) -> tuple[str | None, Any]:
+    """Normalize LangGraph astream items to ``(mode, data)``."""
+    if isinstance(item, tuple):
+        if len(item) == 3:
+            _ns, mode, data = item
+            return (str(mode) if mode is not None else None), data
+        if len(item) == 2 and isinstance(item[0], str):
+            return item[0], item[1]
+    return None, item
+
+
+async def _forward_wire_custom(
+    ctx: LoopRuntimeContext,
+    data: dict[str, Any],
+    *,
+    invocation_id: str,
+    step_id: str,
+) -> None:
+    """Stamp and forward curated ``soothe.subagent.*`` customs to the query stream."""
+    et = data.get("type")
+    if not isinstance(et, str) or not et.startswith("soothe.subagent."):
+        return
+    stamped = {**data, "invocation_id": invocation_id, "step_id": step_id}
+    await ctx.emit("stream_event", ((), "custom", stamped))
+
+
+async def _run_intake_only_runnable(
+    ctx: LoopRuntimeContext,
+    runnable: Any,
+    *,
+    goal_text: str,
+    invocation_id: str,
+    step_id: str,
+) -> Any:
+    """Stream specialist with custom forward; fall back to ``ainvoke`` if needed."""
+    input_state = {"messages": [HumanMessage(content=goal_text)]}
+    astream = getattr(runnable, "astream", None)
+    if callable(astream):
+        last_values: Any = None
+        try:
+            stream = astream(input_state, stream_mode=["custom", "values"])
+            async for item in stream:
+                mode, data = _unpack_astream_item(item)
+                if mode == "custom" and isinstance(data, dict):
+                    await _forward_wire_custom(
+                        ctx, data, invocation_id=invocation_id, step_id=step_id
+                    )
+                elif mode == "values":
+                    last_values = data
+                elif mode is None and isinstance(data, dict) and "type" in data:
+                    await _forward_wire_custom(
+                        ctx, data, invocation_id=invocation_id, step_id=step_id
+                    )
+            if last_values is not None:
+                return last_values
+        except TypeError:
+            logger.debug(
+                "[WiredSubagent] astream(stream_mode=...) unsupported; falling back to ainvoke",
+                exc_info=True,
+            )
+    return await runnable.ainvoke(input_state)
+
+
 async def _invoke_intake_only_direct(
     ctx: LoopRuntimeContext,
     *,
     wire: str,
     goal_text: str,
 ) -> dict[str, Any]:
-    """Run intake-only CompiledSubAgent and hand off to goal_completion (IG-601)."""
+    """Run intake-only CompiledSubAgent with orphan-card stream bridge (IG-602)."""
     lookup = getattr(ctx.core_agent, "lookup_intake_only_subagent", None)
     spec = lookup(wire) if callable(lookup) else None
     if spec is None:
@@ -137,23 +204,80 @@ async def _invoke_intake_only_direct(
     ctx.scratch.plan_result = plan
     step = plan.decision.steps[0]
     step_id = step.id
+    invocation_id = uuid.uuid4().hex[:12]
+    description = (goal_text or "").strip()
+    if len(description) > _DESC_DISPLAY_MAX:
+        description = description[: _DESC_DISPLAY_MAX - 1] + "…"
 
+    await ctx.emit(
+        "wired_subagent_started",
+        {
+            "subagent": wire,
+            "invocation_id": invocation_id,
+            "step_id": step_id,
+            "description": description,
+        },
+    )
+
+    started_at = time.monotonic()
     try:
-        result = await runnable.ainvoke({"messages": [HumanMessage(content=goal_text)]})
+        result = await _run_intake_only_runnable(
+            ctx,
+            runnable,
+            goal_text=goal_text,
+            invocation_id=invocation_id,
+            step_id=step_id,
+        )
+    except asyncio.CancelledError:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        await ctx.emit(
+            "wired_subagent_cancelled",
+            {
+                "subagent": wire,
+                "invocation_id": invocation_id,
+                "step_id": step_id,
+                "duration_ms": duration_ms,
+                "summary": "Cancelled",
+            },
+        )
+        raise
     except Exception as exc:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
         logger.exception("[WiredSubagent] Direct invoke failed (subagent=%s)", wire)
+        await ctx.emit(
+            "wired_subagent_failed",
+            {
+                "subagent": wire,
+                "invocation_id": invocation_id,
+                "step_id": step_id,
+                "duration_ms": duration_ms,
+                "summary": f"{type(exc).__name__}: {exc}",
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
         await ctx.emit(
             "fatal_error",
             {"error": f"Wired subagent failed: {type(exc).__name__}: {exc}", "step_id": step_id},
         )
         return {"last_outcome": "fatal"}
 
+    duration_ms = int((time.monotonic() - started_at) * 1000)
     report = _extract_subagent_report(result)
     if not report.strip():
         report = f"({wire} completed with no text output)"
 
     _record_wired_execute_ledger(
         ctx, goal_text=goal_text, report=report, wire=wire, step_id=step_id
+    )
+    await ctx.emit(
+        "wired_subagent_completed",
+        {
+            "subagent": wire,
+            "invocation_id": invocation_id,
+            "step_id": step_id,
+            "duration_ms": duration_ms,
+            "summary": "Done",
+        },
     )
     logger.info(
         "[WiredSubagent] Intake-only direct invoke done (subagent=%s chars=%d)",

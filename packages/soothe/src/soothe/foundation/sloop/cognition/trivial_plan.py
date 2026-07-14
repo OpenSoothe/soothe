@@ -3,7 +3,7 @@
 Used by:
 - ``trivial`` intake branch (``init_or_resume``) — direct execute, no planning
 - catalog wired ``planner`` (``invoke_wired_subagent`` → resolve → ``task``)
-- intake-only wired path (plan bookkeeping only; specialist runs via direct ``ainvoke``)
+- intake-only wired path (plan bookkeeping only; specialist runs via streamed direct invoke)
 
 Execute (or post-direct-invoke) routes to ``goal_completion`` via
 ``terminal_after_execute`` / ``wired_route_next`` without a second assess wave.

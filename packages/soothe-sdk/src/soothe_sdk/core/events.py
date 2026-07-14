@@ -83,6 +83,11 @@ STRANGE_LOOP_STEP_QUEUED = "soothe.cognition.strange_loop.step.queued"
 STRANGE_LOOP_STEP_COMPLETED = "soothe.cognition.strange_loop.step.completed"
 STRANGE_LOOP_PLAN_DECISION = "soothe.cognition.strange_loop.plan.decision"
 STRANGE_LOOP_PLAN_PHASE = "soothe.cognition.strange_loop.plan.phase"
+# Intake-only wired specialist lifecycle (orphan SubAgent card; RFC-630 §6.3.3)
+WIRED_SUBAGENT_STARTED = "soothe.cognition.wired_subagent.started"
+WIRED_SUBAGENT_COMPLETED = "soothe.cognition.wired_subagent.completed"
+WIRED_SUBAGENT_FAILED = "soothe.cognition.wired_subagent.failed"
+WIRED_SUBAGENT_CANCELLED = "soothe.cognition.wired_subagent.cancelled"
 INTENT_CLASSIFIED = "soothe.cognition.intent.classified"
 
 # Clarification relay events (RFC-622 / RFC-623)
@@ -123,6 +128,10 @@ __all__ = [
     "STRANGE_LOOP_STEP_COMPLETED",
     "STRANGE_LOOP_PLAN_DECISION",
     "STRANGE_LOOP_PLAN_PHASE",
+    "WIRED_SUBAGENT_STARTED",
+    "WIRED_SUBAGENT_COMPLETED",
+    "WIRED_SUBAGENT_FAILED",
+    "WIRED_SUBAGENT_CANCELLED",
     "INTENT_CLASSIFIED",
     # Clarification relay (RFC-622 / RFC-623)
     "LOOP_CLARIFICATION_REQUESTED",

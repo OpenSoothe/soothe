@@ -107,6 +107,10 @@ from .constants import (
     STRANGE_LOOP_STEP_QUEUED,
     STRANGE_LOOP_STEP_STARTED,
     STREAM_END,
+    WIRED_SUBAGENT_CANCELLED,
+    WIRED_SUBAGENT_COMPLETED,
+    WIRED_SUBAGENT_FAILED,
+    WIRED_SUBAGENT_STARTED,
 )
 
 # IG-504: LLM retry event constant (used by middleware and TUI)
@@ -301,6 +305,58 @@ class StrangeLoopPlanPhaseStatusEvent(LifecycleEvent):
     )
     label: str
     total_tokens_used: int = 0
+
+
+class WiredSubagentStartedEvent(LifecycleEvent):
+    """Intake-only wired specialist began (orphan SubAgent card mount)."""
+
+    type: Literal["soothe.cognition.wired_subagent.started"] = (
+        "soothe.cognition.wired_subagent.started"
+    )
+    subagent: str
+    invocation_id: str
+    step_id: str
+    description: str = ""
+
+
+class WiredSubagentCompletedEvent(LifecycleEvent):
+    """Intake-only wired specialist finished successfully."""
+
+    type: Literal["soothe.cognition.wired_subagent.completed"] = (
+        "soothe.cognition.wired_subagent.completed"
+    )
+    subagent: str
+    invocation_id: str
+    step_id: str = ""
+    duration_ms: int = 0
+    summary: str = ""
+
+
+class WiredSubagentFailedEvent(LifecycleEvent):
+    """Intake-only wired specialist failed."""
+
+    type: Literal["soothe.cognition.wired_subagent.failed"] = (
+        "soothe.cognition.wired_subagent.failed"
+    )
+    subagent: str
+    invocation_id: str
+    step_id: str = ""
+    duration_ms: int = 0
+    summary: str = ""
+    error: str = ""
+
+
+class WiredSubagentCancelledEvent(LifecycleEvent):
+    """Intake-only wired specialist cancelled (disconnect / interrupt)."""
+
+    type: Literal["soothe.cognition.wired_subagent.cancelled"] = (
+        "soothe.cognition.wired_subagent.cancelled"
+    )
+    subagent: str
+    invocation_id: str
+    step_id: str = ""
+    duration_ms: int = 0
+    summary: str = ""
 
 
 class StrangeLoopStepStartedEvent(LifecycleEvent):
@@ -826,6 +882,34 @@ _reg(
     StrangeLoopPlanPhaseStatusEvent,
     verbosity=VerbosityTier.NORMAL,
     summary_template="{label}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    WIRED_SUBAGENT_STARTED,
+    WiredSubagentStartedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Delegating to {subagent}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    WIRED_SUBAGENT_COMPLETED,
+    WiredSubagentCompletedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{summary}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    WIRED_SUBAGENT_FAILED,
+    WiredSubagentFailedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{summary}",
+    priority=EventPriority.HIGH,
+)
+_reg(
+    WIRED_SUBAGENT_CANCELLED,
+    WiredSubagentCancelledEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="{summary}",
     priority=EventPriority.HIGH,
 )
 _reg(

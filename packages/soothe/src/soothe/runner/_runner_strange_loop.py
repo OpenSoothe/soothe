@@ -23,6 +23,10 @@ from soothe.foundation.events import (
     StrangeLoopStepCompletedEvent,
     StrangeLoopStepQueuedEvent,
     StrangeLoopStepStartedEvent,
+    WiredSubagentCancelledEvent,
+    WiredSubagentCompletedEvent,
+    WiredSubagentFailedEvent,
+    WiredSubagentStartedEvent,
 )
 from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
 from soothe.foundation.sloop.clarification.events import (
@@ -732,6 +736,54 @@ class StrangeLoopMixin:
                                 total_tokens_used=total_tokens_used,
                             ).to_dict()
                         )
+
+                elif event_type == "wired_subagent_started":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    yield _custom(
+                        WiredSubagentStartedEvent(
+                            subagent=str(payload.get("subagent") or ""),
+                            invocation_id=str(payload.get("invocation_id") or ""),
+                            step_id=str(payload.get("step_id") or ""),
+                            description=str(payload.get("description") or ""),
+                        ).to_dict()
+                    )
+
+                elif event_type == "wired_subagent_completed":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    yield _custom(
+                        WiredSubagentCompletedEvent(
+                            subagent=str(payload.get("subagent") or ""),
+                            invocation_id=str(payload.get("invocation_id") or ""),
+                            step_id=str(payload.get("step_id") or ""),
+                            duration_ms=int(payload.get("duration_ms") or 0),
+                            summary=str(payload.get("summary") or "Done"),
+                        ).to_dict()
+                    )
+
+                elif event_type == "wired_subagent_failed":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    yield _custom(
+                        WiredSubagentFailedEvent(
+                            subagent=str(payload.get("subagent") or ""),
+                            invocation_id=str(payload.get("invocation_id") or ""),
+                            step_id=str(payload.get("step_id") or ""),
+                            duration_ms=int(payload.get("duration_ms") or 0),
+                            summary=str(payload.get("summary") or "Failed"),
+                            error=str(payload.get("error") or ""),
+                        ).to_dict()
+                    )
+
+                elif event_type == "wired_subagent_cancelled":
+                    payload = event_data if isinstance(event_data, dict) else {}
+                    yield _custom(
+                        WiredSubagentCancelledEvent(
+                            subagent=str(payload.get("subagent") or ""),
+                            invocation_id=str(payload.get("invocation_id") or ""),
+                            step_id=str(payload.get("step_id") or ""),
+                            duration_ms=int(payload.get("duration_ms") or 0),
+                            summary=str(payload.get("summary") or "Cancelled"),
+                        ).to_dict()
+                    )
 
                 elif event_type == "assess":
                     reasoning = str(event_data.get("assessment_reasoning", "")).strip()

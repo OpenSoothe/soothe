@@ -278,7 +278,7 @@ When Pass 2 ``wire_subagent`` or slash ``preferred_subagent`` resolves to
 ``planner`` / ``browser_use`` / ``deep_research`` / ``academic_research``:
 
 - ``init_or_resume`` sets ``intent_route = wired_subagent``
-- Intake-only specialists: direct ``ainvoke`` from intake-only registry → ``goal_completion``
+- Intake-only specialists: streamed direct invoke from intake-only registry → ``goal_completion``
 - ``planner``: terminal 1-step plan → ``resolve_decision`` → execute → ``goal_completion``
 - Skips evidence gather / plan assess / plan generate; ledger via existing goal completion
 

@@ -58,6 +58,10 @@ from soothe_sdk.core.events import (
     STRANGE_LOOP_STEP_QUEUED,
     STRANGE_LOOP_STEP_STARTED,
     STREAM_END,
+    WIRED_SUBAGENT_CANCELLED,
+    WIRED_SUBAGENT_COMPLETED,
+    WIRED_SUBAGENT_FAILED,
+    WIRED_SUBAGENT_STARTED,
 )
 from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
 from soothe_sdk.langchain_wire import (
@@ -289,7 +293,11 @@ class TextualUIAdapter:
 
         # IG-513: SubAgent card registry for routing inner subgraph tools
         self._subagent_cards_by_key: dict[str, Any] = {}
-        """SubAgent cards keyed by "{step}:t{n}" for direct tool routing."""
+        """SubAgent cards keyed by ``{step}:t{n}`` or ``wire:{name}:{invocation}``."""
+
+        # IG-602: intake-only orphan SubAgent cards by invocation_id
+        self._orphan_cards_by_invocation: dict[str, Any] = {}
+        """``invocation_id`` → orphan SubAgent card (no parent step)."""
 
         # Token display callbacks (set by the app after construction)
         self._seed_loop_token_from_checkpoint: _SeedLoopTokenFromCheckpointCallback | None = None
@@ -384,7 +392,9 @@ class TextualUIAdapter:
         self._tool_to_step.clear()
         self._step_by_namespace.clear()
         self._step_router.reset_turn()
+        _finalize_orphan_subagent_cards(self, success=False, summary=error)
         self._subagent_cards_by_key.clear()
+        self._orphan_cards_by_invocation.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
         self._file_change_previews_shown.clear()
@@ -406,6 +416,7 @@ class TextualUIAdapter:
                 success=False,
                 summary=message,
             )
+        _finalize_orphan_subagent_cards(self, success=False, summary=message)
         for step_msg in list(self._current_step_messages.values()):
             step_msg.set_interrupted(message)
         self._current_step_messages.clear()
@@ -414,6 +425,7 @@ class TextualUIAdapter:
         self._tool_display_by_call_id.clear()
         self._step_router.reset_turn()
         self._subagent_cards_by_key.clear()
+        self._orphan_cards_by_invocation.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
         if self._goal_tree_message is not None:
@@ -679,8 +691,134 @@ def _log_step_completion_stats(
 
 
 def _subagent_registry_key(step_id: str, task_idx: int) -> str:
-    """Registry key for a SubAgent card (``{step}:t{n}``)."""
-    return f"{step_id.strip()}:t{int(task_idx)}"
+    return f"{step_id}:t{task_idx}"
+
+
+def _orphan_registry_key(subagent: str, invocation_id: str) -> str:
+    return f"wire:{subagent}:{invocation_id}"
+
+
+def _finalize_orphan_subagent_cards(
+    adapter: TextualUIAdapter,
+    *,
+    success: bool,
+    summary: str,
+) -> None:
+    """Complete and unregister all orphan (``wire:``) SubAgent cards."""
+    for key, card in list(adapter._subagent_cards_by_key.items()):
+        if not str(key).startswith("wire:"):
+            continue
+        _complete_subagent_card(
+            adapter,
+            card,
+            success=success,
+            duration_ms=0,
+            summary=summary,
+        )
+        adapter._subagent_cards_by_key.pop(key, None)
+        inv = str(getattr(card, "_invocation_id", "") or "").strip()
+        if inv:
+            adapter._orphan_cards_by_invocation.pop(inv, None)
+
+
+async def _mount_orphan_subagent_card(
+    adapter: TextualUIAdapter,
+    *,
+    subagent: str,
+    invocation_id: str,
+    step_id: str,
+    description: str,
+) -> Any | None:
+    """Create and mount an orphan SubAgent card for intake-only wired invoke."""
+    inv = str(invocation_id or "").strip()
+    name = str(subagent or "").strip() or "subagent"
+    if not inv:
+        return None
+    existing = adapter._orphan_cards_by_invocation.get(inv)
+    if existing is not None:
+        return existing
+    sid = str(step_id or "").strip() or f"WIRE-{inv[:6]}"
+    desc = str(description or "").strip() or f"{name} task"
+    card = create_subagent_card(
+        step_id=sid,
+        description=desc,
+        subagent_type=name,
+        parent_step_id="",
+        parent_task_key="",
+        task_idx=0,
+        id=f"orphan-{uuid.uuid4().hex[:8]}",
+    )
+    card._invocation_id = inv  # type: ignore[attr-defined]
+    key = _orphan_registry_key(name, inv)
+    adapter._subagent_cards_by_key[key] = card
+    adapter._orphan_cards_by_invocation[inv] = card
+    await _mount_subagent_card_if_needed(adapter, card)
+    return card
+
+
+def _complete_orphan_subagent_card(
+    adapter: TextualUIAdapter,
+    *,
+    invocation_id: str,
+    success: bool,
+    duration_ms: int,
+    summary: str,
+) -> None:
+    inv = str(invocation_id or "").strip()
+    if not inv:
+        return
+    card = adapter._orphan_cards_by_invocation.get(inv)
+    if card is None:
+        return
+    _complete_subagent_card(
+        adapter,
+        card,
+        success=success,
+        duration_ms=duration_ms,
+        summary=summary,
+    )
+    name = str(getattr(card, "_subagent_type", "") or "").strip()
+    adapter._subagent_cards_by_key.pop(_orphan_registry_key(name, inv), None)
+    adapter._orphan_cards_by_invocation.pop(inv, None)
+
+
+def _route_orphan_wire_event(
+    adapter: TextualUIAdapter,
+    *,
+    event_type: str,
+    data: dict[str, Any],
+) -> bool:
+    """Route ``soothe.subagent.*`` events onto an orphan card via ``invocation_id``."""
+    inv = str(data.get("invocation_id") or "").strip()
+    if not inv:
+        return False
+    card = adapter._orphan_cards_by_invocation.get(inv)
+    if card is None:
+        return False
+    step_id = str(getattr(card, "_step_id", "") or data.get("step_id") or "").strip()
+    subagent = str(getattr(card, "_subagent_type", "") or "").strip()
+    task_tcid = f"{step_id}:s:task:0" if step_id else f"wire:{inv}:task:0"
+    task_scope: TaskScope = (task_tcid, subagent, step_id)
+    return _route_subagent_wire_event(
+        adapter,
+        event_type=event_type,
+        data=data,
+        task_scope=task_scope,
+    )
+
+
+def _lookup_orphan_card_by_step_id(
+    adapter: TextualUIAdapter,
+    step_id: str,
+) -> Any | None:
+    """Return an orphan wired card that shares the trivial-plan display step_id."""
+    sid = str(step_id or "").strip()
+    if not sid:
+        return None
+    for orphan in adapter._orphan_cards_by_invocation.values():
+        if str(getattr(orphan, "_step_id", "") or "").strip() == sid:
+            return orphan
+    return None
 
 
 def _lookup_subagent_card(adapter: TextualUIAdapter, display_key: str) -> Any | None:
@@ -963,6 +1101,9 @@ def _ensure_subagent_card_for_task_scope(
     if card is not None:
         return card
     step_id = task_scope_step_id(task_scope)
+    orphan = _lookup_orphan_card_by_step_id(adapter, step_id)
+    if orphan is not None:
+        return orphan
     step_w = adapter._current_step_messages.get(step_id)
     if step_w is None:
         return None
@@ -4189,6 +4330,43 @@ async def execute_task_textual(
                                     adapter._update_status(label)
                                 continue
 
+                            if event_type == WIRED_SUBAGENT_STARTED:
+                                await _mount_orphan_subagent_card(
+                                    adapter,
+                                    subagent=str(data.get("subagent") or ""),
+                                    invocation_id=str(data.get("invocation_id") or ""),
+                                    step_id=str(data.get("step_id") or ""),
+                                    description=str(data.get("description") or ""),
+                                )
+                                continue
+
+                            if event_type in (
+                                WIRED_SUBAGENT_COMPLETED,
+                                WIRED_SUBAGENT_FAILED,
+                                WIRED_SUBAGENT_CANCELLED,
+                            ):
+                                success = event_type == WIRED_SUBAGENT_COMPLETED
+                                summary = str(
+                                    data.get("summary")
+                                    or (
+                                        "Done"
+                                        if success
+                                        else (
+                                            "Cancelled"
+                                            if event_type == WIRED_SUBAGENT_CANCELLED
+                                            else "Failed"
+                                        )
+                                    )
+                                ).strip()
+                                _complete_orphan_subagent_card(
+                                    adapter,
+                                    invocation_id=str(data.get("invocation_id") or ""),
+                                    success=success,
+                                    duration_ms=int(data.get("duration_ms") or 0),
+                                    summary=summary or ("Done" if success else "Failed"),
+                                )
+                                continue
+
                             if event_type == INTENT_CLASSIFIED_EVENT_TYPE:
                                 reasoning = str(data.get("reasoning", "")).strip()
                                 if not reasoning:
@@ -4246,6 +4424,18 @@ async def execute_task_textual(
 
                             if ns_key and not is_step_card_tool_scope(ns_key=ns_key):
                                 router.on_subgraph_namespace(ns_key)
+                            # IG-602: orphan intake-only wire events carry invocation_id
+                            # without a task-namespace binding.
+                            if (
+                                event_type.startswith("soothe.subagent.")
+                                and is_allowlisted_subagent_event_type(event_type)
+                                and _route_orphan_wire_event(
+                                    adapter,
+                                    event_type=event_type,
+                                    data=data,
+                                )
+                            ):
+                                continue
                             task_scope = router.resolve_task_scope(ns_key)
                             if (
                                 task_scope

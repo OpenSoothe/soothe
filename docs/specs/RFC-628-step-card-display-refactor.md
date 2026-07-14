@@ -2,21 +2,22 @@
 
 **RFC**: 628
 **Title**: Cognition Step Card & SubAgent Card Display
-**Status**: Implemented
+**Status**: Implemented (Parts I–III)
 **Kind**: Implementation Interface Design
 **Created**: 2026-06-26
-**Updated**: 2026-06-26
+**Updated**: 2026-07-15
 **Authors**: Xiaming Chen
-**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements)
+**Depends on**: RFC-500 (CLI/TUI Architecture), RFC-501 (Display Verbosity), RFC-607 (Progressive Display Refinements), RFC-630 (intake-only wire stream contract for Part III)
 **Extends**: RFC-500 § Event Rendering (step card), RFC-501 § 7.3 (TUI step card body)
-**Implemented by**: IG-512-step-card-display-refactor.md, IG-513-subagent-card.md, IG-514-execute-namespace-tool-stamping-fix.md, IG-515-step-subagent-card-footer-and-lifecycle-fixes.md
+**Implemented by**: IG-512-step-card-display-refactor.md, IG-513-subagent-card.md, IG-514-execute-namespace-tool-stamping-fix.md, IG-515-step-subagent-card-footer-and-lifecycle-fixes.md, IG-602-orphan-wired-subagent-card.md (Part III)
 **Design draft**: `docs/archive/drafts/2026-06-26-subagent-card-flattened-display.md`
+**Design draft (orphan wired)**: `docs/drafts/2026-07-15-orphan-wired-subagent-card-design.md`
 
 ---
 
 ## Abstract
 
-This RFC is the **canonical specification** for the Textual TUI **step card** (`CognitionStepMessage`): layout, activity tree, running status lines, tool-count semantics, refresh orchestration, and module boundaries. It consolidates and supersedes scattered step-card guidance previously referenced only via IG-402/IG-421/IG-428 in RFC-500 and RFC-501.
+This RFC is the **canonical specification** for the Textual TUI **step card** (`CognitionStepMessage`): layout, activity tree, running status lines, tool-count semantics, refresh orchestration, and module boundaries. It consolidates and supersedes scattered step-card guidance previously referenced only via IG-402/IG-421/IG-428 in RFC-500 and RFC-501. **Part II** defines parented SubAgent cards (CoreAgent `task`). **Part III** defines orphan SubAgent cards for intake-only wired invoke (RFC-630 §6.3.3).
 
 Implementation lives in `packages/soothe-cli/src/soothe_cli/tui/widgets/messages/cognition_step.py` (widget lifecycle) and `cognition_step_activity.py` (pure classification and rendering).
 
@@ -441,3 +442,95 @@ SubAgent has no pending/queued states — created when task call arrives (alread
 | `test_flat_step_activity.py` | Step shows flat rows |
 
 Run `./scripts/verify_finally.sh` before merge.
+
+---
+
+# Part III: Orphan Wired-Subagent Card
+
+Covers SubAgent cards mounted for **intake-only** StrangeLoop wired invoke (RFC-630 §6.3.3). These specialists never emit a main-graph `task` tool and have **no parent Cognition step card**.
+
+**Status of this part**: Implemented by [IG-602](../impl/IG-602-orphan-wired-subagent-card.md).
+
+---
+
+## Motivation
+
+Parented SubAgent cards (Part II) require:
+
+1. A step widget in `_current_step_messages`
+2. A main-graph `task` row / `TaskScope`
+
+Intake-only `invoke_wired_subagent` skips resolve → execute. Without an orphan path, the TUI shows only plan-phase «Delegating to …» while the specialist runs (incident loop `779b`).
+
+---
+
+## Orphan card model
+
+Reuse `create_subagent_card` / SubAgent chrome:
+
+| Field | Value |
+|-------|--------|
+| `parent_step_id` | `""` |
+| `parent_task_key` | `""` |
+| Registry key | `wire:{subagent}:{invocation_id}` (must not collide with `{step}:t{n}`) |
+| Display `step_id` | Trivial-plan step id from wired node (fallback synthetic `WIRE-…` only if plan build fails) |
+| `sync_status_to_step` | No-op (no parent task row) |
+
+### Display
+
+```
+[plan-phase: Delegating to deep_research]   ← brief; not primary progress
+
+⎿ ◆ deep_research(近期足球世界杯消息)       ← orphan SubAgent card
+  ○ PlanResearch(...)
+  ○ WebSearch(...)
+  ✓ Completed (Xs) · N tools
+```
+
+Footer: tool / wire-row counts only — **no** «N task» parent branch suffix.
+
+Mount location: conversation turn surface where a step card would appear (after intake / thinking), not nested under a fake step.
+
+---
+
+## Routing model (orphan)
+
+| Event | Adapter action |
+|-------|----------------|
+| `wired_subagent_started` | Create orphan card; register `wire:…`; mount; demote thinking-row primacy |
+| `soothe.subagent.*` + matching `invocation_id` | Route via existing wire step/note/lifecycle helpers; **bypass** `step_w is None` early-return |
+| `wired_subagent_completed` / `failed` / `cancelled` | `_complete_subagent_card`; unregister |
+| Turn teardown / disconnect | Complete any still-running orphan cards |
+
+Synthetic `TaskScope` for row ID helpers only: `(synthetic_task_tcid, subagent_type, step_id)` — never rendered as a parent task branch.
+
+Part II parented routing (`{step}:s:task:{n}` → step + card) is unchanged.
+
+---
+
+## Lifecycle
+
+| Card | Phases |
+|------|--------|
+| Orphan SubAgent | `running → success/error/cancelled` (created on `wired_subagent_started`) |
+
+---
+
+## Testing (Part III)
+
+| Suite | Coverage |
+|-------|----------|
+| TUI unit | `wired_subagent_started` mounts with empty parent; wire rows attach without `_current_step_messages` |
+| TUI unit | completed / cancelled clears registry; no stuck Running after turn end |
+| TUI regression | Part II parented `task` SubAgent path unchanged |
+
+Normative emit/stream rules live in RFC-630 §6.3.3 (orchestrator responsibility).
+
+---
+
+## Change History
+
+| Date | Change |
+|------|--------|
+| 2026-06-26 | Initial: step card + flattened SubAgent (Parts I–II) |
+| 2026-07-15 | Part III: orphan wired-subagent card (design draft 2026-07-15) |

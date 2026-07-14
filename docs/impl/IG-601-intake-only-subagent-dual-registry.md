@@ -18,7 +18,7 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
    - **catalog** → `create_deep_agent(subagents=catalog)` / `CodingCoreAgent.subagents`
    - **intake-only** → `CodingCoreAgent.intake_only_subagents` (lookup only; never on `task`)
 2. `invoke_wired_subagent`:
-   - **intake-only wire**: `runnable.ainvoke` → ledger Human/AI execute-step → route `goal_completion`
+   - **intake-only wire**: stream specialist (prefer `astream` custom+values; `ainvoke` fallback) → ledger Human/AI execute-step → route `goal_completion` (progress via IG-602 orphan card)
    - **catalog wire (`planner`)**: inject trivial plan → route `resolve_decision` (unchanged)
 3. StrangeLoop `PlanContext` remains catalog-filtered (IG-600).
 4. Open-hop `task` for those names fails naturally (not registered); keep middleware guard as belt-and-suspenders.
