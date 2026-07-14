@@ -1,4 +1,4 @@
-# IG-644 Stable Embedding Profile Decoupling
+# IG-657: Stable Embedding Profile Decoupling
 
 ## Goal
 

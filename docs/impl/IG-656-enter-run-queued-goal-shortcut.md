@@ -1,4 +1,4 @@
-# IG-640: Enter Shortcut to Run Queued Goal Head
+# IG-656: Enter Shortcut to Run Queued Goal Head
 
 **Created**: 2026-07-13  
 **Status**: Implemented  
