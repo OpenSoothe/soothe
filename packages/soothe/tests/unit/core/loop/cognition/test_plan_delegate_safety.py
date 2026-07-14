@@ -34,6 +34,20 @@ def test_strip_unrequested_step_delegates_keeps_when_user_requested() -> None:
     steps = [
         StepAction(
             id="01",
+            description="Draft plan",
+            execution_hint="subagent",
+            subagent="planner",
+            wire_subagent="planner",
+        ),
+    ]
+    out = strip_unrequested_step_delegates(steps, user_wire_subagent="planner")
+    assert out[0].wire_subagent == "planner"
+
+
+def test_strip_unrequested_treats_intake_only_user_wire_as_absent() -> None:
+    steps = [
+        StepAction(
+            id="01",
             description="Web research",
             execution_hint="subagent",
             subagent="deep_research",
@@ -41,7 +55,8 @@ def test_strip_unrequested_step_delegates_keeps_when_user_requested() -> None:
         ),
     ]
     out = strip_unrequested_step_delegates(steps, user_wire_subagent="deep_research")
-    assert out[0].wire_subagent == "deep_research"
+    assert out[0].wire_subagent is None
+    assert out[0].execution_hint == "auto"
 
 
 def test_resolve_user_requested_wire_subagent_from_intent() -> None:
@@ -73,7 +88,16 @@ def test_build_plan_generate_message_includes_subagent_routing_block() -> None:
     assert "Leave delegate null" in msg
 
     msg_explicit = UserMessageBuilder().build_plan_generate_message(
+        "use planner for migration plan",
+        user_wire_subagent="planner",
+    )
+    assert "User requested wired subagent: planner" in msg_explicit
+
+    # Intake-only hints never reach plan-generate in production; message falls
+    # back to the default catalog guidance.
+    msg_intake_only = UserMessageBuilder().build_plan_generate_message(
         "use deep_research for docs",
         user_wire_subagent="deep_research",
     )
-    assert "User requested wired subagent: deep_research" in msg_explicit
+    assert "intake-only" in msg_intake_only
+    assert "Leave delegate null" in msg_intake_only

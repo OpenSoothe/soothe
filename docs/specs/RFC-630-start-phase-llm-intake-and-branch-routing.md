@@ -6,11 +6,12 @@
 **Kind**: Architecture Design
 **Authors**: Xiaming Chen
 **Created**: 2026-06-30
-**Last Updated**: 2026-07-13
+**Last Updated**: 2026-07-14
 **Depends on**: RFC-220, RFC-225, RFC-226, RFC-503
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
 **Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine)
+**Amended by**: IG-650 (wired-subagent direct route after Pass 2), IG-651 (intake-only exposure), IG-652 (intake-only dual registry / direct invoke)
 
 ---
 
@@ -18,7 +19,7 @@
 
 The start-phase pipeline — from user goal arrival to the first task submitted to CoreAgent — uses a **two-pass intake architecture** that cleanly separates social/task classification from scope classification. Pass 1 decides whether the user goal is a social interaction (greeting, thanks, small talk) or a work request; Pass 2 (if work) classifies scope as trivial, simple, or complex. This separation resolves the semantic blind spot where acknowledgment+pivot phrasing ("Ok, now apply the fix") misroutes to social fast-path.
 
-Both passes run structured LLM calls on the fast model. Pass 1 runs `asyncio.gather`-ed with checkpoint load and git status in stage 1; Pass 2 runs after stage 1 completes (only if Pass 1 returns `is_task=true`). A `route_by_intent` conditional edge after `init_or_resume` dispatches to four branches. A P0 hard routing guard blocks social-path when daemon has created a new goal record. The legacy binary intent classifier, its heuristic bypass (`_is_likely_agentic`), and the `simple_bypass` string-prefix detector are removed outright.
+Both passes run structured LLM calls on the fast model. Pass 1 runs `asyncio.gather`-ed with checkpoint load and git status in stage 1; Pass 2 runs after stage 1 completes (only if Pass 1 returns `is_task=true`). A `route_by_intent` conditional edge after `init_or_resume` dispatches to chitchat, wired-subagent, trivial, simple, complex, and continuation overlays. A P0 hard routing guard blocks social-path when daemon has created a new goal record. The legacy binary intent classifier, its heuristic bypass (`_is_likely_agentic`), and the `simple_bypass` string-prefix detector are removed outright.
 
 ---
 
@@ -31,7 +32,7 @@ This RFC defines:
 - A **two-pass intake architecture**: Pass 1 (social vs task) → Pass 2 (scope: trivial|simple|complex).
 - Pass 1 prompt, schema, and context exclusion (no prior projection).
 - Pass 2 prompt, schema, and context inclusion (prior projection for reference resolution).
-- A `route_by_intent` conditional edge after `init_or_resume` driving four branches.
+- A `route_by_intent` conditional edge after `init_or_resume` driving intake branches (including wired-subagent, IG-650).
 - A P0 hard routing guard: block social-path when `loop_state.new_goal_created`.
 - Complexity-tiered planning: fresh-loop `trivial` skips `plan_generate`; fresh-loop `simple` runs lightweight; `complex` runs full spine. On continuation turns, `simple` routes through `plan_assess` discriminator first.
 - The trivial-branch plan shape: goal-as-step-action, no synthetic reasoning message.
@@ -103,6 +104,7 @@ graph TB
     G2 --> Graph["graph: init_or_resume"]
     Graph --> Route["route_by_intent"]
     Route -->|"chitchat"| END["END (blocked if new_goal_created)"]
+    Route -->|"wired_subagent"| Wired["invoke_wired_subagent → (intake-only direct | planner resolve→execute) → goal_completion"]
     Route -->|"trivial"| Trivial["resolve_decision → validate → execute"]
     Route -->|"simple (fresh)"| Simple["plan_generate(lightweight) → resolve → validate → execute"]
     Route -->|"complex"| Complex["bounded_evidence_gather → plan_assess? → plan_generate → resolve → validate → execute"]
@@ -211,9 +213,9 @@ Examples:
 **Purpose**: Branch dispatch after `init_or_resume`, with routing guard.
 
 **Capabilities**:
-- Pure function over `(state, ctx)` — testable without LLM.
+- Pure function over graph state — testable without LLM.
 - Checks routing guard first: `new_goal_created` blocks social-path.
-- Matches intake_label derived from Pass 1 + Pass 2.
+- Priority: chitchat `fast_path` → **wired_subagent** → continuation overlays → fresh trivial/simple/complex.
 
 **Routing guard (P0 hard constraint)**:
 
@@ -225,16 +227,46 @@ if loop_state.new_goal_created and intake_label == "chitchat":
 
 **Interfaces**:
 - Provides: conditional-edge target string for `init_or_resume`.
-- Requires: `LoopGraphState.intake_label`, `ctx.loop_state.new_goal_created`.
+- Requires: `LoopGraphState.intake_label`, `intent_route`, `ctx.loop_state.new_goal_created`.
+
+### 6.3.1 Wired-subagent direct route (IG-650 / IG-652)
+
+When Pass 2 `wire_subagent` or slash/daemon `preferred_subagent` resolves to an allowlisted specialist (`planner`, `browser_use`, `deep_research`, `academic_research`):
+
+1. `init_or_resume` sets `intent_route=wired_subagent` when a specialist resolves (no plan inject here).
+2. `route_by_intent` returns `invoke_wired_subagent` (after chitchat, before continuation).
+3. `invoke_wired_subagent` emits delegation status, then:
+   - **Intake-only** (`browser_use`, `deep_research`, `academic_research`): looks up the specialist on the intake-only registry (not on CoreAgent `task`), `ainvoke`s the CompiledSubAgent runnable, records execute-step Human(goal)+AI(report) on the CE ledger, then routes to `goal_completion`.
+   - **Catalog / dual-exposed** (`planner`): builds the terminal 1-step plan (`build_trivial_plan` with `wire_subagent` + `terminal_after_execute`) and edges to `resolve_decision` → validate → execute (CoreAgent `task`) → `goal_completion`.
+4. Final user-visible text uses the existing goal-completion path (`ledger_direct` / synthesize).
+
+Content judgment for *which* specialist stays on the Pass 2 structured field (or explicit slash). Validation/coerce of names is deterministic allowlist filtering.
+
+### 6.3.2 Intake-only vs task-catalog exposure (IG-651 / IG-652)
+
+Built-in wire specialists have two exposure modes:
+
+| Subagent | Intake / wired route | On CoreAgent graph / `task` | Plan-generate `delegate` |
+|----------|----------------------|-----------------------------|---------------------------|
+| `planner` | Yes (resolve→execute) | Yes | Yes |
+| `browser_use` | Yes (direct `ainvoke`) | No | No |
+| `deep_research` | Yes (direct `ainvoke`) | No | No |
+| `academic_research` | Yes (direct `ainvoke`) | No | No |
+
+- Intake-only specialists live on a **parallel registry** (`CodingCoreAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-652). Wired intake invokes their runnable directly.
+- `planner` remains on the open CoreAgent `task` catalog and may still use resolve → execute.
+- Open-hop `task` to intake-only names fails naturally (not registered); ToolEnforcement still rejects them as belt-and-suspenders.
+- Plan-wave `delegate` / `resolve_step_wire_subagent` never wires intake-only names; those are intake/slash only.
 
 ### 6.4 `node_init_or_resume` (extended)
 
-**Purpose**: Surface intake results onto graph state; inject minimal plan for trivial.
+**Purpose**: Surface intake results onto graph state; inject minimal plan for trivial and wired-subagent branches.
 
 **Capabilities**:
 - Derives `intake_label` from Pass 1 + Pass 2 results.
 - Derives `has_deliverable` at routing.
-- For `trivial`: builds minimal 1-step plan into `ctx.scratch`.
+- For wired specialist: sets `intent_route=wired_subagent` (plan built in `invoke_wired_subagent`).
+- For `trivial`: builds minimal 1-step plan into `ctx.scratch` (no allowlisted `wire_subagent`).
 
 ### 6.5 `plan_phase.generate_lightweight`
 
@@ -291,6 +323,7 @@ asyncio.gather(
 2. Routing guard checks `new_goal_created`.
 3. `route_by_intent` dispatches:
    - `chitchat` → END (social fast-path)
+   - `wired_subagent` → `invoke_wired_subagent` → (intake-only → `goal_completion` | `planner` → `resolve` → `validate` → `execute` → `goal_completion`)
    - `trivial` → `resolve_decision` → `validate` → `execute`
    - `simple` (fresh) → `plan_generate(lightweight)` → `resolve` → `validate` → `execute`
    - `complex` → `bounded_evidence_gather` → `plan_assess?` → `plan_generate` → `resolve` → `validate` → `execute`
@@ -321,7 +354,8 @@ IntakePass2Result {
   goal_description: string         // imperative summary
   reasoning: string                // ≤15 words
   multi_phase: bool
-  wire_subagent: string | null
+  wire_subagent: "planner" | "browser_use" | "deep_research"
+                 | "academic_research" | null
   requires_tool_use: bool          // IG-569: external/live data needs tools
 }
 ```
@@ -330,6 +364,12 @@ IntakePass2Result {
 external/live data (weather, web lookup, file contents). Pure reasoning/math
 sets `false`. The field propagates to trivial `StepAction.requires_tool_use`
 for the execute deliverable gate.
+
+`wire_subagent` is set when the GOAL's **primary intent** is to run one wired
+specialist end-to-end (explicit name, slash such as `/plan` → `planner`, or a
+clear single-purpose specialist ask). Unknown names coerce to `null`. When
+resolved (Pass 2 or slash `preferred_subagent`), IG-650 routes through
+`invoke_wired_subagent` instead of the plan spine.
 
 ### 8.3 Derived fields at routing
 
@@ -397,6 +437,7 @@ completion remains free-form via `ledger_direct` / synthesis.
 ```
 init_or_resume --(route_by_intent)--> {
   END                      // chitchat (blocked if new_goal_created)
+  invoke_wired_subagent    // IG-650/652 specialist (intake-only → goal_completion; planner → resolve)
   resolve_decision         // trivial (synth plan in scratch)
   plan_generate            // simple (fresh only)
   bounded_evidence_gather  // complex

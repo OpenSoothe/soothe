@@ -39,7 +39,8 @@ def test_execution_policies_subagent_delegation_guidance() -> None:
     from soothe.foundation.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "Subagent delegation" in EXECUTION_POLICIES_FRAGMENT
-    assert "never wire ``deep_research`` for repo or file reads" in EXECUTION_POLICIES_FRAGMENT
+    assert "``planner`` only" in EXECUTION_POLICIES_FRAGMENT
+    assert "intake/slash routed specialists" in EXECUTION_POLICIES_FRAGMENT
 
 
 def test_execution_policies_forbids_sequential_mode() -> None:
@@ -52,7 +53,8 @@ def test_execution_policies_forbids_sequential_mode() -> None:
 def test_plan_generate_delegate_rules_default_null() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
     assert "Default: omit / null" in text
-    assert "deep_research``: public web investigation only" in text
+    assert "``planner`` only among built-ins" in text
+    assert "never plan-wave delegates" in text
     assert "Never set ``delegate`` on every step" in text
 
 

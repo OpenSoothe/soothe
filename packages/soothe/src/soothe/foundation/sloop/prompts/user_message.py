@@ -700,7 +700,11 @@ class UserMessageBuilder:
             if open_gaps.strip():
                 sections.append(("OPEN GAPS", open_gaps))
 
-        if user_wire_subagent:
+        from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent
+
+        # Intake-only specialists never reach plan-generate (wired route). Prefer
+        # catalog names (e.g. planner) when a non-intake wire hint is present.
+        if user_wire_subagent and not is_intake_only_wire_subagent(user_wire_subagent):
             sections.append(
                 (
                     "SUBAGENT ROUTING",
@@ -713,8 +717,9 @@ class UserMessageBuilder:
             sections.append(
                 (
                     "SUBAGENT ROUTING",
-                    "Leave delegate null on all steps unless GOAL explicitly names a wired "
-                    "subagent. Execute CoreAgent has task and local tools.",
+                    "Leave delegate null on all steps unless GOAL explicitly names a "
+                    "task-catalog subagent such as planner. browser_use / deep_research / "
+                    "academic_research are intake-only (not plan delegates).",
                 )
             )
 

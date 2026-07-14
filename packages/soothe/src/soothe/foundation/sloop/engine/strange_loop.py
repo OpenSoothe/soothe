@@ -962,14 +962,18 @@ class StrangeLoop:
             else []
         )
 
-        available_subagents = [name for name, cfg in self.config.subagents.items() if cfg.enabled]
+        from soothe.foundation.sloop.state.schemas import filter_task_catalog_subagent_names
+
+        available_subagents = filter_task_catalog_subagent_names(
+            [name for name, cfg in self.config.subagents.items() if cfg.enabled]
+        )
         raw_subagents = getattr(capabilities, "subagents", ())
         capability_subagents = (
             [str(name) for name in raw_subagents if isinstance(name, str)]
             if isinstance(raw_subagents, (list, tuple, set))
             else []
         )
-        for capability_subagent in capability_subagents:
+        for capability_subagent in filter_task_catalog_subagent_names(capability_subagents):
             if capability_subagent not in available_subagents:
                 available_subagents.append(capability_subagent)
 

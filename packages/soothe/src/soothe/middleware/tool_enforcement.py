@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
-from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
+from langchain.agents.middleware.types import (
+    AgentMiddleware,
+    ContextT,
+    ModelRequest,
+    ModelResponse,
+    ToolCallRequest,
+)
+from langchain_core.messages import ToolMessage
+
+from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +39,7 @@ def _configurable_goal_synthesis() -> bool:
 
 
 def _configurable_step_subagent() -> str | None:
-    """Return per-step subagent hint from LangGraph RunnableConfig when set."""
+    """Return per-step catalog subagent hint from LangGraph RunnableConfig when set."""
     try:
         from langgraph.config import get_config
 
@@ -45,7 +55,9 @@ def _configurable_step_subagent() -> str | None:
     if not isinstance(raw, str):
         return None
     stripped = raw.strip()
-    return stripped or None
+    if not stripped or is_intake_only_wire_subagent(stripped):
+        return None
+    return stripped
 
 
 def _last_message_is_human(messages: list[Any] | None) -> bool:
@@ -73,13 +85,29 @@ def _filter_tools_to_task_only(
     return kept
 
 
+def _task_subagent_type(request: ToolCallRequest) -> str | None:
+    """Extract ``subagent_type`` from a ``task`` tool call."""
+    tool_call = getattr(request, "tool_call", None)
+    if not isinstance(tool_call, dict):
+        return None
+    args = tool_call.get("args")
+    if not isinstance(args, dict):
+        return None
+    raw = args.get("subagent_type")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
 class ToolEnforcementMiddleware(AgentMiddleware):
     """Apply request-time tool availability policies.
 
     Policies:
     - Goal synthesis: disable all tools.
-    - Explicit wire subagent routing on first hop: task-only tools.
+    - Explicit wire subagent routing on first hop: task-only tools (catalog only).
     - Per-step configured subagent routing: task-only tools for full step.
+    - Intake-only specialists (IG-652): always reject ``task`` invokes — they are
+      not on the CoreAgent graph and run only via wired direct invoke.
     """
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
@@ -97,6 +125,10 @@ class ToolEnforcementMiddleware(AgentMiddleware):
             else:
                 routing_hint = getattr(classification, "routing_hint", None)
                 preferred_subagent = getattr(classification, "preferred_subagent", None)
+
+        if isinstance(preferred_subagent, str) and is_intake_only_wire_subagent(preferred_subagent):
+            # IG-652: intake-only never rides CoreAgent task enforcement.
+            preferred_subagent = None
 
         msgs_for_hop = getattr(request, "messages", None) or []
         first_after_user = _last_message_is_human(msgs_for_hop)
@@ -175,3 +207,37 @@ class ToolEnforcementMiddleware(AgentMiddleware):
     ) -> ModelResponse[Any]:
         """Async wrapper that applies enforcement before model invocation."""
         return await handler(self.modify_request(request))
+
+    async def awrap_tool_call(
+        self,
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], Awaitable[Any]],
+    ) -> Any:
+        """Reject ``task`` calls to intake-only specialists (IG-652 belt-and-suspenders)."""
+        tool_call = getattr(request, "tool_call", None)
+        tool_name = tool_call.get("name") if isinstance(tool_call, dict) else None
+        if tool_name != _TASK_TOOL_NAME:
+            return await handler(request)
+
+        subagent_type = _task_subagent_type(request)
+        if subagent_type is None or not is_intake_only_wire_subagent(subagent_type):
+            return await handler(request)
+
+        tool_call_id = ""
+        if isinstance(tool_call, dict):
+            raw_id = tool_call.get("id")
+            if isinstance(raw_id, str):
+                tool_call_id = raw_id
+        logger.info(
+            "Blocked task invoke for intake-only subagent=%s (not on CoreAgent graph)",
+            subagent_type,
+        )
+        return ToolMessage(
+            content=(
+                f"Subagent '{subagent_type}' is intake-only and is not available via "
+                f"`{_TASK_TOOL_NAME}`. It runs only through intake / slash wired routing."
+            ),
+            tool_call_id=tool_call_id,
+            name=_TASK_TOOL_NAME,
+            status="error",
+        )

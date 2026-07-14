@@ -1,9 +1,12 @@
-"""Trivial-branch plan builder (RFC-630 §11).
+"""Terminal 1-step plan builder (RFC-630 §11, IG-650).
 
-For the ``trivial`` intake label, ``init_or_resume`` injects a minimal
-1-step plan so the loop skips ``plan_assess`` and ``plan_generate``. Execute
-runs on a step thread branch; ``terminal_after_execute`` routes to
-``goal_completion`` without a second assess wave (``auto`` strategy applies).
+Used by:
+- ``trivial`` intake branch (``init_or_resume``) — direct execute, no planning
+- catalog wired ``planner`` (``invoke_wired_subagent`` → resolve → ``task``)
+- intake-only wired path (plan bookkeeping only; specialist runs via direct ``ainvoke``)
+
+Execute (or post-direct-invoke) routes to ``goal_completion`` via
+``terminal_after_execute`` / ``wired_route_next`` without a second assess wave.
 """
 
 from __future__ import annotations
@@ -23,11 +26,11 @@ def build_trivial_plan(
     wire_subagent: str | None = None,
     requires_tool_use: bool = False,
 ) -> PlanResult:
-    """Build a minimal 1-step plan for the ``trivial`` intake label (RFC-630).
+    """Build a minimal 1-step terminal plan.
 
     Args:
         goal: The user's goal text (verbatim submission).
-        wire_subagent: Pass 2 wired subagent hint when user named one explicitly.
+        wire_subagent: Allowlisted specialist for the wired-subagent route.
         requires_tool_use: Pass 2 signal for the execute deliverable gate.
 
     Returns:

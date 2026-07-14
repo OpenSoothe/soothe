@@ -16,6 +16,7 @@ graph TD;
 	__start__([<p>__start__</p>]):::first
 	intent_classify(intent_classify)
 	init_or_resume(init_or_resume)
+	invoke_wired_subagent(invoke_wired_subagent)
 	iteration_gate(iteration_gate)
 	iteration_start(iteration_start)
 	bounded_evidence_gather(bounded_evidence_gather)
@@ -44,11 +45,13 @@ graph TD;
 	execute -.-> record_iteration;
 	init_or_resume -.-> __end__;
 	init_or_resume -.-> bounded_evidence_gather;
+	init_or_resume -.-> invoke_wired_subagent;
 	init_or_resume -.-> iteration_gate;
 	init_or_resume -.-> plan_assess;
 	init_or_resume -.-> plan_generate;
 	init_or_resume -.-> resolve_decision;
 	intent_classify --> init_or_resume;
+	invoke_wired_subagent --> resolve_decision;
 	iteration_gate -.-> __end__;
 	iteration_gate -.-> iteration_start;
 	iteration_start --> bounded_evidence_gather;

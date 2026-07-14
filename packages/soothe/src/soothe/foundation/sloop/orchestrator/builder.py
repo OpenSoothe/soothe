@@ -17,6 +17,7 @@ from .nodes.execute_steps import node_execute
 from .nodes.goal_completion import node_goal_completion
 from .nodes.init_or_resume import node_init_or_resume
 from .nodes.intent_classify import node_intent_classify
+from .nodes.invoke_wired_subagent import node_invoke_wired_subagent
 from .nodes.iteration_gate import node_iteration_gate
 from .nodes.iteration_start import node_iteration_start
 from .nodes.plan_assess import node_plan_assess
@@ -36,6 +37,7 @@ from .routing import (
     route_after_record_iteration,
     route_after_resolve_decision,
     route_after_validate_evidence,
+    route_after_wired_subagent,
     route_by_intent,
 )
 from .runtime_context import LoopRuntimeContext
@@ -72,6 +74,9 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
 
     async def init_or_resume(state: dict[str, Any]) -> dict[str, Any]:
         return await node_init_or_resume(ctx, state)
+
+    async def invoke_wired_subagent(state: dict[str, Any]) -> dict[str, Any]:
+        return await node_invoke_wired_subagent(ctx, state)
 
     async def iteration_gate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_iteration_gate(ctx, state)
@@ -112,6 +117,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
     graph = StateGraph(LoopGraphState)
     graph.add_node("intent_classify", intent_classify)
     graph.add_node("init_or_resume", init_or_resume)
+    graph.add_node("invoke_wired_subagent", invoke_wired_subagent)
     graph.add_node("iteration_gate", iteration_gate)
     graph.add_node("iteration_start", iteration_start)
     graph.add_node("bounded_evidence_gather", bounded_evidence_gather)
@@ -136,6 +142,16 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             "plan_generate": "plan_generate",
             "plan_assess": "plan_assess",
             "resolve_decision": "resolve_decision",
+            "invoke_wired_subagent": "invoke_wired_subagent",
+            END: END,
+        },
+    )
+    graph.add_conditional_edges(
+        "invoke_wired_subagent",
+        route_after_wired_subagent,
+        {
+            "resolve_decision": "resolve_decision",
+            "goal_completion": "goal_completion",
             END: END,
         },
     )

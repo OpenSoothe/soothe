@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SootheConfig
 from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
+from soothe.foundation.sloop.state.schemas import partition_subagent_specs
 from soothe.middleware import build_soothe_middleware_stack
 from soothe.protocols.core_agent import CoreAgentCapabilities
 from soothe.runner.resolver import (
@@ -192,6 +193,10 @@ class AgentBuilder:
 
         install_model_call_profiler(enabled=is_profiler_enabled(self._config))
 
+        # IG-652: intake-only specialists stay off the main CoreAgent graph.
+        catalog_subagents, intake_only_subagents = partition_subagent_specs(all_subagents)
+        catalog_names = self._collect_subagent_names(catalog_subagents)
+
         def _compile_deep_agent(cp: Checkpointer | None) -> Any:
             gp_enabled = self._config.agent.runtime.general_purpose_subagent
             return create_deep_agent(
@@ -199,7 +204,7 @@ class AgentBuilder:
                 tools=all_tools or None,
                 system_prompt=self._config.resolve_system_prompt(),
                 middleware=all_middleware,
-                subagents=all_subagents or None,
+                subagents=catalog_subagents or None,
                 skills=None,
                 memory=self._config.memory or None,
                 checkpointer=cp,
@@ -229,7 +234,8 @@ class AgentBuilder:
 
         capabilities = CoreAgentCapabilities(
             tools=tuple(self._collect_tool_names(all_tools)),
-            subagents=tuple(self._collect_subagent_names(all_subagents)),
+            # Open catalog only — intake-only names never appear (IG-652).
+            subagents=tuple(catalog_names),
             features=(
                 "langgraph",
                 "checkpointer",
@@ -240,7 +246,8 @@ class AgentBuilder:
             metadata={
                 "runtime_kind": "coding",
                 "tool_count": len(all_tools),
-                "subagent_count": len(all_subagents),
+                "subagent_count": len(catalog_subagents),
+                "intake_only_subagent_count": len(intake_only_subagents),
             },
         )
 
@@ -250,7 +257,8 @@ class AgentBuilder:
             memory=resolved_memory,
             planner=resolved_planner,
             policy=resolved_policy,
-            subagents=all_subagents,
+            subagents=catalog_subagents,
+            intake_only_subagents=intake_only_subagents,
             capabilities=capabilities,
             execute_graph=execute_graph,
             execute_graph_compiler=execute_graph_compiler,
@@ -288,9 +296,15 @@ class AgentBuilder:
     def _collect_subagent_names(subagents: Sequence[SubAgent | CompiledSubAgent]) -> list[str]:
         names: list[str] = []
         for subagent in subagents:
-            name = getattr(subagent, "name", None)
-            if isinstance(name, str) and name:
-                names.append(name)
+            name: str | None = None
+            if isinstance(subagent, dict):
+                raw = subagent.get("name")
+                name = raw if isinstance(raw, str) else None
+            else:
+                raw_name = getattr(subagent, "name", None)
+                name = raw_name if isinstance(raw_name, str) else None
+            if name and name.strip():
+                names.append(name.strip())
         return sorted(set(names))
 
     def _resolve_memory(self) -> MemoryProtocol | None:

@@ -9,7 +9,7 @@ from soothe.foundation.sloop.intention.models import IntakeLabel
 IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "deferred"]
 
 PlanRoute = Literal["goal_done", "execute"]
-IntentRoute = Literal["continue_loop", "fast_path"]
+IntentRoute = Literal["continue_loop", "fast_path", "wired_subagent"]
 AssessRoute = Literal[
     "continue_generate", "skip_generate", "continue_assess", "fresh_loop_skip_assess"
 ]
@@ -53,3 +53,7 @@ class LoopGraphState(TypedDict, total=False):
     # decision" fatal — the synthesized step has already emitted
     # step_completed and the next iteration will replan from the answer.
     resume_synth: bool | None
+    # RFC-226 / terminal bootstrap: record_iteration → goal_completion.
+    after_record_route: Literal["goal_completion", ""] | None
+    # IG-652: invoke_wired_subagent → goal_completion (intake-only) or resolve.
+    wired_route_next: Literal["goal_completion", "resolve_decision"] | None

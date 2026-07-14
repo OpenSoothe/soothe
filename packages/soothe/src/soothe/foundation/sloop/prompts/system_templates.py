@@ -81,8 +81,8 @@ _RESEARCH_GUIDE = """\
 Research tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
 - search_web: Quick web search for factual lookups, news, current events (single call).
 - crawl_web: Extract clean content from a web page URL.
-- deep_research: Iterative public web research with URL crawling and adaptive reports.
-  Set domain='web' for internet, 'code' for codebase, 'deep' for all, 'auto' to decide.\
+Thorough multi-source public-web or academic research is intake/slash routed
+(deep_research / academic_research) — those specialists are not available via `task`.\
 """
 
 _DATA_GUIDE = """\
@@ -99,7 +99,8 @@ _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
 - planner: Agentic plan design — iterative markdown execution plan; one report.
-- deep_research: Public web investigation—not local codebase or file exploration.
+browser_use, deep_research, and academic_research are not available via `task`; \
+they run only through intake/slash wired routing.
 Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
 """
 
@@ -131,7 +132,7 @@ Progressive tool binding:
 Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_lines) instead of full-file rewrites.
-- Use websearch for quick lookups; use deep_research for thorough public web research reports.
+- Use websearch/crawl_web for lookups; thorough public-web or academic research is intake-routed (not open `task`).
 - Use run_command for sync shell (pass timeout when the job may exceed 60s); use run_background for servers/daemons and jobs you poll via tail_background_log; kill_process stops background PIDs; run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """

@@ -26,6 +26,17 @@ _BUILTIN_WIRE_SUBAGENTS = frozenset(
         "planner",
         "browser_use",
         "deep_research",
+        "academic_research",
+    }
+)
+
+# IG-651: specialists reachable only via Pass 2 / slash → invoke_wired_subagent.
+# ``planner`` is intentionally excluded — it stays in the open task catalog.
+INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
+    {
+        "browser_use",
+        "deep_research",
+        "academic_research",
     }
 )
 
@@ -39,6 +50,41 @@ def resolve_wire_subagent(
     if name and name in _BUILTIN_WIRE_SUBAGENTS:
         return name
     return None
+
+
+def is_intake_only_wire_subagent(name: str | None) -> bool:
+    """True when ``name`` is an intake-only specialist (not open task catalog)."""
+    token = (name or "").strip()
+    return bool(token) and token in INTAKE_ONLY_WIRE_SUBAGENTS
+
+
+def filter_task_catalog_subagent_names(names: list[str] | tuple[str, ...] | set[str]) -> list[str]:
+    """Drop intake-only specialists from open CoreAgent / planner capability lists."""
+    return [n for n in names if n and not is_intake_only_wire_subagent(n)]
+
+
+def spec_subagent_name(spec: Any) -> str | None:
+    """Best-effort name from a SubAgent / CompiledSubAgent dict or object."""
+    if isinstance(spec, dict):
+        raw = spec.get("name")
+        return raw.strip() if isinstance(raw, str) and raw.strip() else None
+    raw_name = getattr(spec, "name", None)
+    if isinstance(raw_name, str) and raw_name.strip():
+        return raw_name.strip()
+    return None
+
+
+def partition_subagent_specs(specs: list[Any]) -> tuple[list[Any], list[Any]]:
+    """Split specs into (task-catalog, intake-only) lists (IG-652)."""
+    catalog: list[Any] = []
+    intake_only: list[Any] = []
+    for spec in specs:
+        name = spec_subagent_name(spec)
+        if is_intake_only_wire_subagent(name):
+            intake_only.append(spec)
+        else:
+            catalog.append(spec)
+    return catalog, intake_only
 
 
 class EvidenceEntry(BaseModel):
@@ -119,12 +165,22 @@ def resolve_step_wire_subagent(
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto",
     subagent: str | None = None,
 ) -> str | None:
-    """Map planner execution hints to executor subagent wiring."""
+    """Map planner execution hints to executor subagent wiring.
+
+    Intake-only specialists cannot be plan-wave delegates (IG-651); they are
+    reached only via intake / slash → ``invoke_wired_subagent``.
+    """
     if execution_hint != "subagent":
         return None
     name = (subagent or "").strip()
     if not name:
         logger.debug("subagent execution_hint without subagent name; using direct tools")
+        return None
+    if is_intake_only_wire_subagent(name):
+        logger.debug(
+            "Ignoring intake-only planner subagent %r; use intake/slash routing",
+            name,
+        )
         return None
     if name not in _BUILTIN_WIRE_SUBAGENTS:
         logger.debug(
@@ -155,8 +211,15 @@ def strip_unrequested_step_delegates(
     *,
     user_wire_subagent: str | None,
 ) -> list[StepAction]:
-    """Clear planner-chosen subagent wiring unless the user explicitly requested a subagent."""
-    if user_wire_subagent:
+    """Clear planner-chosen subagent wiring unless the user requested a catalog subagent.
+
+    Intake-only specialists (IG-651) never count as a plan-wave user request —
+    those goals take the wired-subagent route instead.
+    """
+    catalog_user_wire = (
+        None if is_intake_only_wire_subagent(user_wire_subagent) else (user_wire_subagent or None)
+    )
+    if catalog_user_wire:
         return steps
 
     out: list[StepAction] = []

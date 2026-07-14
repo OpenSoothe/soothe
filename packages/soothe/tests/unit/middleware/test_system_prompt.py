@@ -299,14 +299,14 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="deep_research",
+        preferred_subagent="planner",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="search_web"), SimpleNamespace(name="task")]
     request = ModelRequest(
         model=model,
-        messages=[HumanMessage(content="latest news")],
+        messages=[HumanMessage(content="draft a plan")],
         system_message=SystemMessage(content="orig"),
         tools=tools,
         state={"routing_classification": classification},
@@ -362,18 +362,18 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "deep_research"}}
+    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "planner"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         enforced = enforcement.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
-    assert "deep_research" in modified.system_message.content
+    assert "planner" in modified.system_message.content
 
 
 def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
-    """Wired step subagents stay task-only after the first model hop."""
+    """Wired catalog step subagents stay task-only after the first model hop."""
     config = SootheConfig()
     enforcement = ToolEnforcementMiddleware()
     middleware = SystemPromptMiddleware(config=config)
@@ -386,21 +386,21 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
     request = ModelRequest(
         model=model,
         messages=[
-            HumanMessage(content="Execute: use browser_use"),
+            HumanMessage(content="Execute: use planner"),
             AIMessage(content="delegating"),
-            ToolMessage(content="BrowserUse failed", tool_call_id="t1"),
+            ToolMessage(content="plan draft", tool_call_id="t1"),
         ],
         system_message=SystemMessage(content="orig"),
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "browser_use"}}
+    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "planner"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         enforced = enforcement.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
-    assert "browser_use" in modified.system_message.content
+    assert "planner" in modified.system_message.content
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
@@ -410,7 +410,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="deep_research",
+        preferred_subagent="planner",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -422,12 +422,30 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"soothe_step_subagent": "deep_research"}}
+    lg_config = {"configurable": {"soothe_step_subagent": "planner"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         enforced = enforcement.modify_request(request)
         modified = middleware.modify_request(enforced)
     content = modified.system_message.content
-    assert "subagent_type='deep_research'" in content
+    assert "subagent_type='planner'" in content
+
+
+def test_intake_only_step_subagent_hint_does_not_narrow_tools() -> None:
+    """IG-652: intake-only names never force CoreAgent task-only enforcement."""
+    enforcement = ToolEnforcementMiddleware()
+    model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
+    tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
+    request = ModelRequest(
+        model=model,
+        messages=[HumanMessage(content="Execute: research")],
+        system_message=SystemMessage(content="orig"),
+        tools=tools,
+        state={},
+    )
+    lg_config = {"configurable": {"soothe_step_subagent": "deep_research"}}
+    with patch("langgraph.config.get_config", return_value=lg_config):
+        enforced = enforcement.modify_request(request)
+    assert len(enforced.tools) == 2
 
 
 def test_goal_synthesis_disables_all_tools() -> None:

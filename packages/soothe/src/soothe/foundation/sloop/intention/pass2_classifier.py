@@ -184,8 +184,11 @@ class IntakePass2Classifier:
             result_dict["requires_tool_use"] = False
 
         wire = result_dict.get("wire_subagent")
-        if wire is not None and not str(wire).strip():
-            result_dict["wire_subagent"] = None
+        if wire is not None:
+            from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
+
+            resolved = resolve_wire_subagent(wire_subagent=str(wire).strip() or None)
+            result_dict["wire_subagent"] = resolved
 
         return IntakePass2LLMResult(**result_dict)
 

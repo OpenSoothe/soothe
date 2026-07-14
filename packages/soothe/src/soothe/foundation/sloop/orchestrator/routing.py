@@ -61,27 +61,25 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
 
 
 def route_by_intent(state: dict[str, Any]) -> str:
-    """RFC-630 IG-554: branch dispatch after init_or_resume by intake label.
+    """RFC-630 IG-554/IG-650: branch dispatch after init_or_resume by intake.
 
     Routing guard (P0): block chitchat fast-path when new_goal_created. If daemon
     has committed to starting agentic work, chitchat is structurally invalid.
 
-    Continuation is checked first from the structural ``is_continuation`` flag
-    set by ``init_or_resume``. Continuation turns follow intake-aware routing:
+    Priority (first match wins):
 
-    - ``trivial`` → ``plan_assess`` (continuation discriminator)
-    - ``simple``  → ``plan_assess`` (continuation discriminator; may bootstrap)
-    - ``complex`` / missing label → ``bounded_evidence_gather`` (full spine)
+    1. ``intent_route == fast_path`` → END (chitchat)
+    2. ``intent_route == wired_subagent`` → ``invoke_wired_subagent`` (IG-650)
+    3. Continuation overlay from structural ``is_continuation``:
 
-    Fresh-loop (non-continuation) routing is unchanged:
+       - ``trivial`` / ``simple`` → ``plan_assess``
+       - ``complex`` / missing → ``bounded_evidence_gather``
 
-    - ``trivial`` → ``resolve_decision`` (pseudo 1-step plan from init_or_resume;
-                    skips plan_assess/plan_generate; terminal_after_execute → goal_completion)
-    - ``simple``  → ``plan_generate`` (skip bounded_evidence_gather + plan_assess)
-    - ``complex`` → ``bounded_evidence_gather`` (full existing spine, IG-476 intact)
+    4. Fresh-loop labels:
 
-    Falls back to ``bounded_evidence_gather`` (complex) when the label is
-    missing — the fail-safe path runs the full pipeline.
+       - ``trivial`` → ``resolve_decision``
+       - ``simple`` → ``plan_generate``
+       - ``complex`` / missing → ``bounded_evidence_gather``
     """
     # P0 routing guard: block chitchat when new_goal_created (IG-554)
     # If daemon created a new goal record, chitchat is structurally invalid.
@@ -106,6 +104,11 @@ def route_by_intent(state: dict[str, Any]) -> str:
             return "bounded_evidence_gather"
         logger.info("[routing] route_by_intent → END (chitchat fast-path)")
         return END
+
+    # IG-650: dedicated specialist — after chitchat, before continuation overlays.
+    if state.get("intent_route") == "wired_subagent":
+        logger.info("[routing] route_by_intent → invoke_wired_subagent")
+        return "invoke_wired_subagent"
 
     if state.get("is_continuation"):
         if label == IntakeLabel.SIMPLE:
@@ -173,6 +176,18 @@ def route_after_resolve_decision(state: dict[str, Any]) -> str:
     if state.get("last_outcome") == "fatal":
         return END
     return "validate_evidence_bindings"
+
+
+def route_after_wired_subagent(state: dict[str, Any]) -> str:
+    """IG-652: intake-only direct invoke → goal_completion; catalog wire → resolve."""
+    if state.get("last_outcome") == "fatal":
+        logger.debug("[routing] route_after_wired_subagent → END (fatal)")
+        return END
+    if state.get("wired_route_next") == "goal_completion":
+        logger.info("[routing] route_after_wired_subagent → goal_completion")
+        return "goal_completion"
+    logger.info("[routing] route_after_wired_subagent → resolve_decision")
+    return "resolve_decision"
 
 
 def route_after_validate_evidence(state: dict[str, Any]) -> str:

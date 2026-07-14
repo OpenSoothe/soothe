@@ -133,7 +133,10 @@ class IntentClassification(BaseModel):
     )
     wire_subagent: str | None = Field(
         default=None,
-        description="Pass 2: explicit wired subagent when user names one",
+        description=(
+            "Pass 2: wired specialist when primary intent is to call one "
+            "(planner, browser_use, deep_research, academic_research)"
+        ),
     )
     requires_tool_use: bool = Field(
         default=False,
@@ -162,12 +165,23 @@ def build_loop_routing_classification(
     intent: IntentClassification | None,
     preferred_subagent: str | None,
 ) -> RoutingClassification | None:
-    """Build routing classification consumed by StrangeLoop Plan/Execute."""
+    """Build routing classification consumed by StrangeLoop Plan/Execute.
+
+    Prefers slash/daemon ``preferred_subagent``, then Pass 2 ``wire_subagent``.
+    """
+    from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
+
+    slash_wire = resolve_wire_subagent(wire_subagent=preferred_subagent)
+    pass2_wire = None
+    if intent is not None:
+        pass2_wire = resolve_wire_subagent(wire_subagent=getattr(intent, "wire_subagent", None))
+    resolved_wire = slash_wire or pass2_wire
+
     if intent is None:
-        if preferred_subagent:
+        if resolved_wire:
             return RoutingClassification(
                 task_complexity=TaskComplexity.MEDIUM,
-                preferred_subagent=preferred_subagent,
+                preferred_subagent=resolved_wire,
                 routing_hint="subagent",
             )
         return None
@@ -177,9 +191,9 @@ def build_loop_routing_classification(
         preferred_subagent=None,
         routing_hint="intent_based",
     )
-    if preferred_subagent:
+    if resolved_wire:
         return base.model_copy(
-            update={"preferred_subagent": preferred_subagent, "routing_hint": "subagent"}
+            update={"preferred_subagent": resolved_wire, "routing_hint": "subagent"}
         )
     return base
 
@@ -320,8 +334,8 @@ class IntakePass2LLMResult(BaseModel):
     wire_subagent: str | None = Field(
         default=None,
         description=(
-            "Explicit wired subagent when user names one: planner, browser_use, "
-            "deep_research, or null"
+            "Wired specialist when primary intent is to call one: planner, "
+            "browser_use, deep_research, academic_research, or null"
         ),
     )
     requires_tool_use: bool = Field(

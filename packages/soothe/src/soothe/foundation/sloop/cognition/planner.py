@@ -369,8 +369,14 @@ class LLMPlanner:
         decision: AgentDecision,
         subagent_name: str,
     ) -> AgentDecision:
-        """Apply wire ``preferred_subagent`` to ``AgentDecision`` step descriptions (IG-349)."""
-        if not decision.steps:
+        """Apply wire ``preferred_subagent`` to ``AgentDecision`` step descriptions (IG-349).
+
+        Intake-only specialists are skipped here (IG-651); they never reach plan-generate
+        under the wired-subagent route (IG-650).
+        """
+        from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent
+
+        if not decision.steps or is_intake_only_wire_subagent(subagent_name):
             return decision
         n = len(decision.steps)
         start = 1 if n > 1 else 0

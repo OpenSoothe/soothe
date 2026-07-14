@@ -21,8 +21,8 @@ After glob timeout or empty results, switch to ``grep`` (with path/glob filter) 
 **On failure**: Different approach; do not repeat same step text.
 
 **Subagent delegation** (``steps[].delegate``):
-- Default null — execute CoreAgent delegates via ``task`` when needed; planner wiring locks
-  the step to ``task``-only and blocks local tools.
-- Wire ``delegate`` only for exclusive public-web / browser / plan-design steps (see
-  PLAN_GENERATE ``delegate`` rules); never wire ``deep_research`` for repo or file reads.
+- Default null — execute CoreAgent chooses via ``task`` when needed.
+- Open catalog built-in ``delegate`` is ``planner`` only (plan-design deliverable).
+- Never plan-wave ``delegate`` to ``browser_use``, ``deep_research``, or
+  ``academic_research`` (intake/slash routed specialists).
 </EXECUTION_POLICIES>

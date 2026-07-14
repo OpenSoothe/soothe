@@ -1,4 +1,4 @@
-"""Tests for explicit subagent wiring in trivial-branch plans."""
+"""Tests for terminal 1-step plans used by trivial and wired-subagent routes."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
 
 def test_resolve_wire_subagent_accepts_pass2_hint() -> None:
     assert resolve_wire_subagent(wire_subagent="browser_use") == "browser_use"
+    assert resolve_wire_subagent(wire_subagent="academic_research") == "academic_research"
     assert resolve_wire_subagent(wire_subagent="unknown") is None
 
 
-def test_build_trivial_plan_wires_browser_use_from_pass2() -> None:
+def test_build_trivial_plan_wires_browser_use() -> None:
     plan = build_trivial_plan(
         "get weather at beijing",
         wire_subagent="browser_use",

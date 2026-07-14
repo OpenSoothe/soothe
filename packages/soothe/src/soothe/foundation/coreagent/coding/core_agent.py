@@ -131,6 +131,7 @@ class CodingCoreAgent:
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
         subagents: list[SubAgent | CompiledSubAgent] | None = None,
+        intake_only_subagents: list[SubAgent | CompiledSubAgent] | None = None,
         capabilities: CoreAgentCapabilities | None = None,
         execute_graph: CompiledStateGraph | None = None,
         execute_graph_compiler: Callable[[], CompiledStateGraph] | None = None,
@@ -143,6 +144,8 @@ class CodingCoreAgent:
         self._planner = planner
         self._policy = policy
         self._subagents = list(subagents) if subagents else []
+        # IG-652: never bound to the open task tool; wired intake invokes these.
+        self._intake_only_subagents = list(intake_only_subagents) if intake_only_subagents else []
         if capabilities is None:
             from soothe.protocols.core_agent import CoreAgentCapabilities
 
@@ -197,7 +200,25 @@ class CodingCoreAgent:
 
     @property
     def subagents(self) -> list[SubAgent | CompiledSubAgent]:
+        """Open task-catalog subagents bound on the CoreAgent graph."""
         return self._subagents
+
+    @property
+    def intake_only_subagents(self) -> list[SubAgent | CompiledSubAgent]:
+        """Intake-only specialists (not on the open ``task`` catalog; IG-652)."""
+        return self._intake_only_subagents
+
+    def lookup_intake_only_subagent(self, name: str) -> SubAgent | CompiledSubAgent | None:
+        """Return an intake-only CompiledSubAgent/SubAgent spec by name."""
+        from soothe.foundation.sloop.state.schemas import spec_subagent_name
+
+        target = (name or "").strip()
+        if not target:
+            return None
+        for spec in self._intake_only_subagents:
+            if spec_subagent_name(spec) == target:
+                return spec
+        return None
 
     def list_capabilities(self) -> CoreAgentCapabilities:
         return self._capabilities

@@ -245,23 +245,24 @@ Regenerate: ``python scripts/visualize_strange_loop_graph.py``
 
 Every goal turn runs:
 
-1. ``intent_classify`` — intake LLM (or heuristic) → ``IntakeLabel`` + optional ``chitchat_response``
-2. ``init_or_resume`` — surface label on graph state; inject trivial pseudo-plan; emit chitchat fast-path event
+1. ``intent_classify`` — intake LLM (or heuristic) → ``IntakeLabel`` + optional ``chitchat_response`` / ``wire_subagent``
+2. ``init_or_resume`` — surface label on graph state; inject trivial pseudo-plan or select wired-subagent route; emit chitchat fast-path event
 3. ``route_by_intent`` — branch dispatch (conditional edge from ``init_or_resume``)
 
-## ``route_by_intent`` priority (RFC-630)
+## ``route_by_intent`` priority (RFC-630 / IG-650)
 
 Evaluated in order; first match wins:
 
 | Priority | Condition | Target | Notes |
 |----------|-----------|--------|-------|
 | 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
-| 2 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
-| 2b | ``is_continuation`` + ``simple`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
-| 2c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
-| 3 | ``intake_label == trivial`` (fresh) | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
-| 4 | ``intake_label == simple`` (fresh) | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
-| 5 | default / ``complex`` (fresh) | ``bounded_evidence_gather`` | Full spine; fresh-loop skip (IG-476) intact |
+| 2 | ``intent_route == wired_subagent`` | ``invoke_wired_subagent`` | Intake-only → goal_completion; planner → resolve → execute → goal_completion |
+| 3 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
+| 3b | ``is_continuation`` + ``simple`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
+| 3c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
+| 4 | ``intake_label == trivial`` (fresh) | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
+| 5 | ``intake_label == simple`` (fresh) | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
+| 6 | default / ``complex`` (fresh) | ``bounded_evidence_gather`` | Full spine; fresh-loop skip (IG-476) intact |
 
 ### Chitchat fast-path (``init_or_resume``)
 
@@ -271,11 +272,22 @@ When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is 
 - Runner streams the piggybacked reply directly — **no** ``plan_assess``, ``plan_generate``, or ``execute``
 - Applies on **first and subsequent goals** in the same loop (continuation does not override chitchat)
 
+### Wired-subagent route (``invoke_wired_subagent``)
+
+When Pass 2 ``wire_subagent`` or slash ``preferred_subagent`` resolves to
+``planner`` / ``browser_use`` / ``deep_research`` / ``academic_research``:
+
+- ``init_or_resume`` sets ``intent_route = wired_subagent``
+- Intake-only specialists: direct ``ainvoke`` from intake-only registry → ``goal_completion``
+- ``planner``: terminal 1-step plan → ``resolve_decision`` → execute → ``goal_completion``
+- Skips evidence gather / plan assess / plan generate; ledger via existing goal completion
+
 ```mermaid
 flowchart TD
     IC[intent_classify] --> IOR[init_or_resume]
     IOR --> R{{route_by_intent}}
     R -->|fast_path| END1[__end__ / chitchat response]
+    R -->|wired_subagent| IWS[invoke_wired_subagent → intake-only GC or planner resolve→execute→GC]
     R -->|continuation+trivial| PA[plan_assess]
     R -->|continuation+simple| PA2[plan_assess]
     R -->|continuation+complex| BEG[bounded_evidence_gather]
@@ -288,7 +300,6 @@ flowchart TD
     PGA -->|plan_gap_analysis| PGA2[plan_gap_analysis → plan_assess]
     PGA -->|plan_generate| PG3[plan_generate → execute]
 ```
-
 ## Nodes
 
 """
@@ -301,6 +312,7 @@ flowchart TD
     summary += "Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are conditional.\n\n"
     summary += "### From ``init_or_resume`` (`route_by_intent`)\n\n"
     summary += "- → ``__end__`` — chitchat fast-path\n"
+    summary += "- → ``invoke_wired_subagent`` — Pass 2 / slash specialist direct route\n"
     summary += "- → ``plan_assess`` — continuation + trivial, or continuation + simple\n"
     summary += "- → ``plan_generate`` — fresh simple\n"
     summary += "- → ``bounded_evidence_gather`` — continuation + complex, or fresh complex\n"

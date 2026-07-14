@@ -475,25 +475,28 @@ class TestPlanGeneration:
         steps = [
             PlanGenerateStep(
                 id="01",
-                description="Search papers",
+                description="Draft migration plan",
                 expected_output="List",
                 dependencies=None,
                 execution_hint="subagent",
-                subagent="deep_research",
+                subagent="planner",
             )
         ]
         out = plan_generate_steps_to_step_actions(steps)
         assert len(out) == 1
-        assert out[0].description == "Search papers"
-        assert out[0].wire_subagent == "deep_research"
+        assert out[0].description == "Draft migration plan"
+        assert out[0].wire_subagent == "planner"
         assert "evidence_refs" not in StepAction.model_fields
 
     def test_resolve_step_wire_subagent(self) -> None:
         assert resolve_step_wire_subagent(execution_hint="auto") is None
         assert resolve_step_wire_subagent(execution_hint="subagent") is None
         assert (
-            resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research")
-            == "deep_research"
+            resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") == "planner"
+        )
+        # IG-651: intake-only specialists are not plan-wave delegates
+        assert (
+            resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
         )
         assert (
             resolve_step_wire_subagent(
@@ -508,34 +511,51 @@ class TestPlanGeneration:
         steps = [
             StepAction(
                 id="s1",
-                description="Recon",
-                expected_output="map",
+                description="Draft plan",
+                expected_output="markdown plan",
                 execution_hint="subagent",
-                subagent="deep_research",
+                subagent="planner",
             )
         ]
         wired = apply_step_wire_subagents(steps)
-        assert wired[0].wire_subagent == "deep_research"
+        assert wired[0].wire_subagent == "planner"
 
     def test_resolve_wire_subagent_from_pass2(self) -> None:
         assert resolve_wire_subagent(wire_subagent="browser_use") == "browser_use"
         assert resolve_wire_subagent(wire_subagent="list files") is None
 
-    def test_resolve_wire_subagent_for_step_prefers_planner_hint(self) -> None:
+    def test_resolve_wire_subagent_for_step_prefers_step_wire(self) -> None:
         step = StepAction(
             id="s1",
-            description="Recon",
-            expected_output="map",
-            wire_subagent="deep_research",
+            description="Draft plan",
+            expected_output="plan",
+            wire_subagent="planner",
         )
-        routing = {"routing_hint": "subagent", "preferred_subagent": "planner"}
-        assert resolve_wire_subagent_for_step(step, routing) == "deep_research"
-        assert resolve_wire_subagent_for_step(step, None) == "deep_research"
+        routing = {"routing_hint": "subagent", "preferred_subagent": "general_purpose"}
+        assert resolve_wire_subagent_for_step(step, routing) == "planner"
+        assert resolve_wire_subagent_for_step(step, None) == "planner"
 
     def test_resolve_wire_subagent_falls_back_to_routing(self) -> None:
-        step = StepAction(id="s1", description="Recon", expected_output="map")
+        step = StepAction(id="s1", description="Draft plan", expected_output="plan")
+        routing = {"routing_hint": "subagent", "preferred_subagent": "planner"}
+        assert resolve_wire_subagent_for_step(step, routing) == "planner"
+
+    def test_resolve_wire_subagent_ignores_intake_only(self) -> None:
+        step = StepAction(
+            id="s1",
+            description="Research",
+            expected_output="report",
+            wire_subagent="deep_research",
+        )
         routing = {"routing_hint": "subagent", "preferred_subagent": "deep_research"}
-        assert resolve_wire_subagent_for_step(step, routing) == "deep_research"
+        assert resolve_wire_subagent_for_step(step, routing) is None
+        assert (
+            resolve_wire_subagent_for_step(
+                StepAction(id="s2", description="x", expected_output="y"),
+                routing,
+            )
+            is None
+        )
 
     def test_new_requires_type(self) -> None:
         """Plan generation requires top-level type."""

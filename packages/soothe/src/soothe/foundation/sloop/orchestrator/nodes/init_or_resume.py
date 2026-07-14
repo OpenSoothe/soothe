@@ -1,11 +1,13 @@
-"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554).
+"""Loop Graph ``init_or_resume`` node (RFC-220, RFC-630, IG-554, IG-650).
 
 Hydrates intent/routing from intake classified in the graph entry node.
 Loop continuation is derived in ``StrangeLoop`` from the checkpoint. This
 node emits the classified intake for event streaming, surfaces the 3-class
 ``intake_label`` and a structural ``is_continuation`` flag onto the graph
 state for ``route_by_intent``. Trivial labels inject a pseudo single-step plan
-and route through resolve_decision → execute → goal_completion.
+and route through resolve_decision → execute → goal_completion. Wired
+specialist requests set ``intent_route=wired_subagent``; the plan is built in
+``invoke_wired_subagent``.
 
 IG-554: Derives ``new_goal_created`` from ``recovery_valid_resume`` for the
 routing guard that blocks chitchat fast-path when daemon has committed to
@@ -17,6 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.foundation.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 
@@ -121,9 +124,35 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             **graph_intake_fields,
         }
 
+    # IG-650: wired specialist — route only; plan is built in invoke_wired_subagent.
+    # Wins over continuation / trivial / simple / complex once chitchat is out.
+    if intake_label != IntakeLabel.CHITCHAT and not is_continue_keyword(ctx.loop_state.goal):
+        wire = resolve_user_requested_wire_subagent(
+            routing_classification=getattr(ctx.loop_state, "routing_classification", None),
+            intent=intent,
+            preferred_subagent=getattr(ctx, "preferred_subagent", None),
+        )
+        if wire:
+            logger.info(
+                "[Intent] Wired subagent branch selected (subagent=%s)",
+                wire,
+            )
+            return {
+                "intent_route": "wired_subagent",
+                "intake_label": intake_label,
+                "is_continuation": is_continuation,
+                "new_goal_created": new_goal_created,
+                "plan_route": None,
+                "assess_route": None,
+                "last_outcome": None,
+                "resume_synth": None,
+                **graph_intake_fields,
+            }
+
     # RFC-630 trivial branch: pseudo 1-step plan (user goal), skip
     # plan_assess/plan_generate, execute on a step thread branch, then
     # goal_completion via terminal_after_execute (auto strategy selects ledger vs synthesize).
+    # Allowlisted wire_subagent never reaches here (wired branch above owns that path).
     if (
         intake_label == IntakeLabel.TRIVIAL
         and not is_continuation
@@ -138,7 +167,6 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
             goal_text = ctx.loop_state.goal
         ctx.scratch.plan_result = build_trivial_plan(
             goal_text,
-            wire_subagent=getattr(intent, "wire_subagent", None),
             requires_tool_use=bool(getattr(intent, "requires_tool_use", False)),
         )
         logger.info("[Intent] Trivial branch: pseudo plan injected (goal=%s)", goal_text[:50])

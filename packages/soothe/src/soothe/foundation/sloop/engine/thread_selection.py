@@ -38,34 +38,46 @@ def resolve_wire_subagent_for_step(
     step: Any,
     routing_classification: Any | None,
 ) -> str | None:
-    """Resolve subagent wiring for execute: planner step hint wins over wire routing."""
+    """Resolve catalog subagent wiring for execute: step hint wins over wire routing.
+
+    Intake-only specialists never become ``soothe_step_subagent`` (IG-652): they
+    run via ``invoke_wired_subagent`` direct ``ainvoke``, not CoreAgent ``task``.
+    """
+    from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent
+
     wire = getattr(step, "wire_subagent", None)
     if isinstance(wire, str) and wire.strip():
-        return wire.strip()
-    return _wire_subagent_from_routing(routing_classification)
+        name = wire.strip()
+        if is_intake_only_wire_subagent(name):
+            return None
+        return name
+    from_routing = _wire_subagent_from_routing(routing_classification)
+    if is_intake_only_wire_subagent(from_routing):
+        return None
+    return from_routing
 
 
 def resolve_user_requested_wire_subagent(
     *,
     routing_classification: Any | None = None,
     intent: Any | None = None,
+    preferred_subagent: str | None = None,
 ) -> str | None:
-    """Return a wired subagent the user explicitly requested (Pass 2 or slash routing)."""
-    from soothe.foundation.sloop.state.schemas import (
-        resolve_step_wire_subagent,
-        resolve_wire_subagent,
-    )
+    """Return a wired subagent requested via slash, routing, or Pass 2.
 
-    if intent is not None:
-        raw = getattr(intent, "wire_subagent", None)
-        if isinstance(raw, str) and raw.strip():
-            resolved = resolve_wire_subagent(wire_subagent=raw.strip())
-            if resolved:
-                return resolved
+    Precedence: ``preferred_subagent`` (slash/daemon) → routing classification →
+    Pass 2 ``intent.wire_subagent``. All names are allowlist-filtered.
+    """
+    from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
 
-    raw = _wire_subagent_from_routing(routing_classification)
-    if raw:
-        return resolve_step_wire_subagent(execution_hint="subagent", subagent=raw)
+    for candidate in (
+        preferred_subagent,
+        _wire_subagent_from_routing(routing_classification),
+        getattr(intent, "wire_subagent", None) if intent is not None else None,
+    ):
+        resolved = resolve_wire_subagent(wire_subagent=candidate)
+        if resolved:
+            return resolved
     return None
 
 
