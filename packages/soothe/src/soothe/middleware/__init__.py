@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from soothe_deepagents.middleware.llm_rate_limit import LLMRateLimitMiddleware
+    from soothe_deepagents.middleware.tool_timeout import ToolTimeoutMiddleware
 
     from soothe.middleware._builder import (
         build_soothe_middleware_stack as build_soothe_middleware_stack,
@@ -48,7 +49,6 @@ if TYPE_CHECKING:
     from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
     from soothe.middleware.system_prompt import SystemPromptMiddleware
     from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
-    from soothe.middleware.tool_timeout import ToolTimeoutMiddleware
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
@@ -110,7 +110,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     ),
     "TokenConfig": ("soothe.middleware.identity", "TokenConfig"),
     "ThreadContextProvider": ("soothe.middleware.identity", "ThreadContextProvider"),
-    "ToolTimeoutMiddleware": ("soothe.middleware.tool_timeout", "ToolTimeoutMiddleware"),
+    "ToolTimeoutMiddleware": (
+        "soothe_deepagents.middleware.tool_timeout",
+        "ToolTimeoutMiddleware",
+    ),
     "ToolEnforcementMiddleware": (
         "soothe.middleware.tool_enforcement",
         "ToolEnforcementMiddleware",
