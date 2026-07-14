@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -23,6 +25,7 @@ from soothe_cli.runtime.state.file_tracker import (
 from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.file_change_notify import (
     finalize_file_change_preview,
+    handle_file_change_result_without_active_track,
     mount_file_change_preview,
     textual_widget_id,
 )
@@ -608,3 +611,60 @@ async def test_mount_file_change_preview_skips_alias_duplicate() -> None:
 
     assert adapter._mount_message.await_count == 1
     assert len(adapter._file_change_widgets) == 1
+
+
+@pytest.mark.asyncio
+async def test_mount_late_after_early_result_shows_edited(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Result-before-preview race mounts as Edited, not a stuck Editing card."""
+    from soothe_cli.runtime.state.file_tracker import FileOpTracker
+
+    target = tmp_path / "e2e.py"
+    target.write_text("after\n", encoding="utf-8")
+    tracker = FileOpTracker(assistant_id=None)
+    tcid = "JPI_02:s:call_8ee18d9179724fc19a79dd63"
+
+    msg = SimpleNamespace(
+        tool_call_id=tcid,
+        name="edit_file",
+        content=f"Successfully replaced 1 instance(s) of the string in '{target}'",
+        status="success",
+    )
+    assert tracker.complete_with_message(msg) is None
+    with caplog.at_level(logging.DEBUG, logger="soothe_cli.tui.file_change_notify"):
+        stashed = handle_file_change_result_without_active_track(
+            tracker,
+            msg,
+            tool_name="edit_file",
+            tool_call_id=tcid,
+        )
+    assert stashed is not None
+    assert stashed.status == "success"
+    assert "result-before-preview race" in caplog.text
+    assert tcid in caplog.text
+
+    adapter = MagicMock()
+    adapter._file_change_previews_shown = set()
+    adapter._file_change_widgets = {}
+    adapter._mount_message = AsyncMock()
+
+    await mount_file_change_preview(
+        adapter,
+        tool_name="edit_file",
+        args={
+            "file_path": str(target),
+            "old_string": "before",
+            "new_string": "after",
+        },
+        tool_call_id=tcid,
+        assistant_id=None,
+        file_op_tracker=tracker,
+    )
+
+    assert adapter._mount_message.await_count == 1
+    widget = adapter._file_change_widgets[tcid]
+    assert widget._action_label == "Edited"
+    assert widget._finalized is True
+    assert tracker.peek_recently_completed(tcid, tool_name="edit_file") is None

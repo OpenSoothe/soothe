@@ -247,3 +247,63 @@ def test_edit_file_alias_requires_unique_match_when_multiple_pending(tmp_path: P
 
     assert record is None
     assert len(tracker.active) == 2
+
+
+def test_stash_untracked_edit_result_and_skip_late_track(tmp_path: Path) -> None:
+    """Early ToolMessage is stashed; late track must not capture post-edit before."""
+    target = tmp_path / "e2e.py"
+    target.write_text("after\n", encoding="utf-8")
+    tracker = FileOpTracker(assistant_id=None)
+    tcid = "JPI_02:s:call_aabbcc"
+
+    msg = SimpleNamespace(
+        tool_call_id=tcid,
+        name="edit_file",
+        content=f"Successfully replaced 1 instance(s) of the string in '{target}'",
+        status="success",
+    )
+    assert tracker.complete_with_message(msg) is None
+    record = tracker.stash_untracked_file_change_result(msg)
+    assert record is not None
+    assert record.after_content == "after\n"
+    assert tracker.recently_completed[tcid] is record
+
+    track_file_operation(
+        tracker,
+        "edit_file",
+        {
+            "file_path": str(target),
+            "old_string": "before",
+            "new_string": "after",
+        },
+        tcid,
+    )
+    assert tcid not in tracker.active
+    assert tracker.peek_recently_completed(tcid, tool_name="edit_file") is record
+
+
+def test_complete_with_message_populates_recently_completed(tmp_path: Path) -> None:
+    """Normal completions are available for late-mount lookups."""
+    target = tmp_path / "x.txt"
+    target.write_text("old\n", encoding="utf-8")
+    tracker = FileOpTracker(assistant_id=None)
+    track_file_operation(
+        tracker,
+        "edit_file",
+        {"file_path": str(target), "old_string": "old", "new_string": "new"},
+        "tc-1",
+    )
+    target.write_text("new\n", encoding="utf-8")
+    record = tracker.complete_with_message(
+        SimpleNamespace(
+            tool_call_id="tc-1",
+            name="edit_file",
+            content=f"Successfully replaced 1 instance(s) in '{target}'",
+            status="success",
+        )
+    )
+    assert record is not None
+    assert tracker.peek_recently_completed("tc-1", tool_name="edit_file") is record
+    taken = tracker.take_recently_completed("tc-1", tool_name="edit_file")
+    assert taken is record
+    assert tracker.peek_recently_completed("tc-1", tool_name="edit_file") is None

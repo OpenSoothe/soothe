@@ -446,6 +446,27 @@ def file_change_operation_already_tracked(
     )
 
 
+def _tool_message_content_text(tool_message: Any) -> str:  # noqa: ANN401
+    """Flatten a LangChain tool message content payload to plain text."""
+    content = getattr(tool_message, "content", None)
+    if isinstance(content, list):
+        joined: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                joined.append(item)
+            else:
+                joined.append(str(item))
+        return "\n".join(joined)
+    return str(content) if content is not None else ""
+
+
+def _tool_message_indicates_error(tool_message: Any, content_text: str) -> bool:  # noqa: ANN401
+    """Match :meth:`FileOpTracker.complete_with_message` error detection."""
+    return getattr(
+        tool_message, "status", "success"
+    ) != "success" or content_text.lower().startswith("error")
+
+
 class FileOpTracker:
     """Collect file operation metrics during a CLI interaction."""
 
@@ -453,7 +474,8 @@ class FileOpTracker:
         """Initialize the tracker."""
         self.assistant_id = assistant_id
         self.active: dict[str | None, FileOperationRecord] = {}
-        self.completed: list[FileOperationRecord] = []
+        self.recently_completed: dict[str, FileOperationRecord] = {}
+        """Completed records keyed by tool_call_id for late preview mounts."""
 
     def start_operation(
         self, tool_name: str, args: dict[str, Any], tool_call_id: str | None
@@ -486,19 +508,7 @@ class FileOpTracker:
         """
         tool_call_id = getattr(tool_message, "tool_call_id", None)
         tool_name = str(getattr(tool_message, "name", "") or "").strip()
-
-        content = tool_message.content
-        if isinstance(content, list):
-            # Some tool messages may return list segments; join them for analysis.
-            joined = []
-            for item in content:
-                if isinstance(item, str):
-                    joined.append(item)
-                else:
-                    joined.append(str(item))
-            content_text = "\n".join(joined)
-        else:
-            content_text = str(content) if content is not None else ""
+        content_text = _tool_message_content_text(tool_message)
 
         active_key, record = resolve_active_file_operation(
             self,
@@ -509,9 +519,7 @@ class FileOpTracker:
         if record is None:
             return None
 
-        if getattr(
-            tool_message, "status", "success"
-        ) != "success" or content_text.lower().startswith("error"):
+        if _tool_message_indicates_error(tool_message, content_text):
             record.status = "error"
             record.error = content_text
             self._finalize(record, active_key=active_key)
@@ -597,12 +605,105 @@ class FileOpTracker:
         record.after_content = _safe_read(record.physical_path)
 
     def _finalize(self, record: FileOperationRecord, *, active_key: str | None = None) -> None:
-        self.completed.append(record)
         key = str(active_key or record.tool_call_id or "").strip()
         if key:
             self.active.pop(key, None)
+            self.recently_completed[key] = record
         else:
             self.active.pop(record.tool_call_id, None)
+            completed_id = str(record.tool_call_id or "").strip()
+            if completed_id:
+                self.recently_completed[completed_id] = record
+
+    def stash_untracked_file_change_result(
+        self,
+        tool_message: Any,  # noqa: ANN401
+    ) -> FileOperationRecord | None:
+        """Remember a filesystem tool result that arrived before tracking started.
+
+        Used when the CLI receives ``ToolMessage`` before streamed args mount a
+        preview card. Late mounts consult :attr:`recently_completed`.
+
+        Returns:
+            The stashed record, or None when the message is not a file-change tool.
+        """
+        tool_name = str(getattr(tool_message, "name", "") or "").strip()
+        if tool_name not in FILE_CHANGE_TOOLS:
+            return None
+        tcid = str(getattr(tool_message, "tool_call_id", None) or "").strip()
+        if not tcid:
+            return None
+        existing = self.peek_recently_completed(tcid, tool_name=tool_name)
+        if existing is not None:
+            return existing
+
+        content_text = _tool_message_content_text(tool_message)
+        path_str = file_path_from_tool_message_content(content_text) or ""
+        record = FileOperationRecord(
+            tool_name=tool_name,
+            display_path=format_display_path(path_str),
+            physical_path=resolve_physical_path(path_str, self.assistant_id),
+            tool_call_id=tcid,
+            args={"file_path": path_str} if path_str else {},
+        )
+        if _tool_message_indicates_error(tool_message, content_text):
+            record.status = "error"
+            record.error = content_text
+        else:
+            record.status = "success"
+            if record.physical_path is not None:
+                after = _safe_read(record.physical_path)
+                if after is not None:
+                    record.after_content = after
+                    record.metrics.lines_written = _count_lines(after)
+                    record.metrics.bytes_written = len(after.encode("utf-8"))
+        self.recently_completed[tcid] = record
+        return record
+
+    def _recently_completed_key(
+        self,
+        tool_call_id: str,
+        *,
+        tool_name: str,
+    ) -> str | None:
+        """Resolve the map key for a recently completed file-change id/alias."""
+        tcid = str(tool_call_id or "").strip()
+        if not tcid:
+            return None
+        if tcid in self.recently_completed:
+            return tcid
+        for key, record in self.recently_completed.items():
+            rname = str(record.tool_name or "").strip()
+            alias_name = str(tool_name or rname).strip()
+            if tool_name and rname and tool_name != rname:
+                continue
+            if file_change_tool_call_ids_match(str(key), tcid, tool_name=alias_name):
+                return str(key)
+        return None
+
+    def peek_recently_completed(
+        self,
+        tool_call_id: str,
+        *,
+        tool_name: str,
+    ) -> FileOperationRecord | None:
+        """Return a recently completed record without removing it."""
+        key = self._recently_completed_key(tool_call_id, tool_name=tool_name)
+        if key is None:
+            return None
+        return self.recently_completed.get(key)
+
+    def take_recently_completed(
+        self,
+        tool_call_id: str,
+        *,
+        tool_name: str,
+    ) -> FileOperationRecord | None:
+        """Pop a recently completed record for late preview finalization."""
+        key = self._recently_completed_key(tool_call_id, tool_name=tool_name)
+        if key is None:
+            return None
+        return self.recently_completed.pop(key, None)
 
 
 def track_file_operation(
@@ -615,7 +716,13 @@ def track_file_operation(
     if tool_name not in FILE_CHANGE_TOOLS:
         return
     tcid = str(tool_call_id).strip() if tool_call_id else ""
-    if not tcid or file_change_operation_already_tracked(
+    if not tcid:
+        return
+    # Result already landed (result-before-preview race): do not capture
+    # post-edit on-disk bytes as before_content.
+    if tracker.peek_recently_completed(tcid, tool_name=tool_name) is not None:
+        return
+    if file_change_operation_already_tracked(
         tracker.active,
         tcid,
         tool_name=tool_name,

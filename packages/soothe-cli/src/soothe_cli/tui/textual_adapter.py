@@ -146,6 +146,7 @@ from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 from soothe_cli.tui.config import build_stream_config
 from soothe_cli.tui.file_change_notify import (
     complete_file_change_preview,
+    handle_file_change_result_without_active_track,
     mount_file_change_preview,
 )
 from soothe_cli.tui.hooks import dispatch_hook
@@ -1921,6 +1922,7 @@ async def apply_tool_call_wire_update(
             args=display_args,
             tool_call_id=file_tcid,
             assistant_id=adapter._file_preview_assistant_id,
+            file_op_tracker=file_op_tracker,
         )
 
     if is_step_scope and name == "task":
@@ -3066,6 +3068,19 @@ async def execute_task_textual(
                                 pending_tool_calls_lc.pop(str(tool_id), None)
 
                             record = file_op_tracker.complete_with_message(message)
+                            early_untracked = False
+                            if record is None:
+                                result_name = str(
+                                    tool_result.tool_name or getattr(message, "name", "") or ""
+                                ).strip()
+                                if result_name in FILE_CHANGE_TOOLS:
+                                    record = handle_file_change_result_without_active_track(
+                                        file_op_tracker,
+                                        message,
+                                        tool_name=result_name,
+                                        tool_call_id=tool_id,
+                                    )
+                                    early_untracked = record is not None
 
                             sid = str(tool_id) if tool_id else ""
                             row_key = resolve_tool_result_row_key(
@@ -3099,8 +3114,14 @@ async def execute_task_textual(
                                     adapter, clarification_pending=clarification_pending
                                 )
 
-                            # Finalize mounted file previews in place; mount completed card if needed
-                            if record and record.tool_name in FILE_CHANGE_TOOLS:
+                            # Finalize mounted file previews in place; mount completed
+                            # card if needed. Early-untracked results have no widget yet
+                            # and usually no diff — late arg mount finalizes instead.
+                            if (
+                                record
+                                and record.tool_name in FILE_CHANGE_TOOLS
+                                and not early_untracked
+                            ):
                                 pending_text = pending_text_by_namespace.get(ns_key, "")
                                 if pending_text:
                                     await _flush_assistant_text_ns(
@@ -3569,6 +3590,7 @@ async def execute_task_textual(
                                             args=parsed_args,
                                             tool_call_id=file_tcid,
                                             assistant_id=assistant_id,
+                                            file_op_tracker=file_op_tracker,
                                         )
 
                                     if is_step_scope and buffer_name == "task":

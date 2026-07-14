@@ -21,7 +21,7 @@ from soothe_cli.tui.file_change_renderers import (
 )
 
 if TYPE_CHECKING:
-    from soothe_cli.runtime.state.file_tracker import FileOperationRecord
+    from soothe_cli.runtime.state.file_tracker import FileOperationRecord, FileOpTracker
     from soothe_cli.tui.textual_adapter import TextualUIAdapter
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,29 @@ def textual_widget_id(prefix: str, tool_call_id: str) -> str:
     return safe
 
 
+async def _register_file_change_widget(
+    adapter: TextualUIAdapter,
+    widget: Any,
+    *,
+    tcid: str,
+    log_message: str,
+    log_args: tuple[Any, ...],
+) -> bool:
+    """Mount a file-change widget and register it on the adapter."""
+    try:
+        await adapter._mount_message(widget)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        adapter._file_change_previews_shown.add(tcid)
+        logger.warning("Failed to mount file change preview", exc_info=True)
+        return False
+    adapter._file_change_previews_shown.add(tcid)
+    adapter._file_change_widgets[tcid] = widget
+    logger.debug(log_message, *log_args)
+    return True
+
+
 async def mount_file_change_preview(
     adapter: TextualUIAdapter,
     *,
@@ -55,11 +78,16 @@ async def mount_file_change_preview(
     args: dict[str, Any],
     tool_call_id: str | None,
     assistant_id: str | None,
+    file_op_tracker: FileOpTracker | None = None,
 ) -> None:
     """Mount a preview card once per tool call when args are known.
 
     Does not block tool execution; duplicates are suppressed via
     ``adapter._file_change_previews_shown``.
+
+    When ``file_op_tracker`` already holds a completed record for this call
+    (result-before-preview race), the card is mounted as finalized past tense
+    (e.g. ``Edited``) instead of an in-flight ``Editing`` preview.
 
     Args:
         adapter: Active textual UI adapter for the turn.
@@ -67,6 +95,7 @@ async def mount_file_change_preview(
         args: Parsed tool arguments.
         tool_call_id: LangChain tool call id.
         assistant_id: Agent id for path resolution.
+        file_op_tracker: Optional tracker with ``recently_completed`` lookups.
     """
     if tool_name not in FILE_CHANGE_TOOLS:
         return
@@ -99,25 +128,37 @@ async def mount_file_change_preview(
     if built is None:
         return
     widget_cls, data = built
-    label = file_change_label_from_preview_data(tool_name, data)
-    try:
-        widget = widget_cls(data, action_label=label)
-        widget.id = textual_widget_id("file-preview", tcid)
-        await adapter._mount_message(widget)
-        adapter._file_change_previews_shown.add(tcid)
-        adapter._file_change_widgets[tcid] = widget
-        logger.debug(
-            "Mounted file change preview tool=%s tool_call_id=%s path=%s",
-            tool_name,
-            tcid,
-            path_str,
+    completed = None
+    if file_op_tracker is not None:
+        completed = file_op_tracker.take_recently_completed(tcid, tool_name=tool_name)
+    if completed is not None:
+        # Prefer streamed args for edit diffs when the early result has no
+        # before/after snapshot; still apply on-disk data when present.
+        if completed.diff or (
+            completed.tool_name == "write_file" and completed.after_content is not None
+        ):
+            update_preview_data_from_record(data, completed)
+        label = file_change_action_label(completed)
+    else:
+        label = file_change_label_from_preview_data(tool_name, data)
+    widget = widget_cls(data, action_label=label)
+    if completed is not None:
+        widget._finalized = True
+        widget._expanded = False
+    widget.id = textual_widget_id("file-preview", tcid)
+    if completed is not None:
+        log_message = (
+            "Mounted completed file change preview (late args) tool=%s tool_call_id=%s path=%s"
         )
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        # Mark shown so streaming arg updates do not retry-mount and flood logs.
-        adapter._file_change_previews_shown.add(tcid)
-        logger.warning("Failed to mount file change preview", exc_info=True)
+    else:
+        log_message = "Mounted file change preview tool=%s tool_call_id=%s path=%s"
+    await _register_file_change_widget(
+        adapter,
+        widget,
+        tcid=tcid,
+        log_message=log_message,
+        log_args=(tool_name, tcid, path_str),
+    )
 
 
 async def finalize_file_change_preview(
@@ -190,21 +231,13 @@ async def mount_completed_file_change_preview(
     widget._finalized = True
     widget._expanded = False
     widget.id = textual_widget_id("file-preview", tcid)
-    try:
-        await adapter._mount_message(widget)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        logger.warning("Failed to mount completed file change preview", exc_info=True)
-        return False
-    adapter._file_change_previews_shown.add(tcid)
-    adapter._file_change_widgets[tcid] = widget
-    logger.debug(
-        "Mounted completed file change preview tool=%s tool_call_id=%s",
-        tool_name,
-        tcid,
+    return await _register_file_change_widget(
+        adapter,
+        widget,
+        tcid=tcid,
+        log_message="Mounted completed file change preview tool=%s tool_call_id=%s",
+        log_args=(tool_name, tcid),
     )
-    return True
 
 
 async def complete_file_change_preview(
@@ -221,3 +254,24 @@ async def complete_file_change_preview(
         record=record,
         assistant_id=assistant_id,
     )
+
+
+def handle_file_change_result_without_active_track(
+    tracker: FileOpTracker,
+    tool_message: Any,
+    *,
+    tool_name: str,
+    tool_call_id: str | None,
+) -> FileOperationRecord | None:
+    """DEBUG-log and stash a filesystem tool result that beat the preview mount.
+
+    Returns:
+        Stashed :class:`FileOperationRecord` for late mount finalization, or None.
+    """
+    logger.debug(
+        "File-change tool result with no active track tool=%s tool_call_id=%s "
+        "(result-before-preview race)",
+        tool_name,
+        tool_call_id,
+    )
+    return tracker.stash_untracked_file_change_result(tool_message)
