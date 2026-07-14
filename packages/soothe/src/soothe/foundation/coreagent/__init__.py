@@ -7,7 +7,6 @@ Runtime implementations live under ``coreagent``. The default implementation is
 from soothe.foundation.coreagent.coding import (
     AgentBuilder,
     CodingCoreAgent,
-    CoreAgent,
     LazyCoreAgent,
     create_soothe_agent,
 )
@@ -15,7 +14,6 @@ from soothe.foundation.coreagent.coding import (
 __all__ = [
     "AgentBuilder",
     "CodingCoreAgent",
-    "CoreAgent",
     "LazyCoreAgent",
     "create_soothe_agent",
 ]

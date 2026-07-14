@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.coreagent import CoreAgent
+from soothe.foundation.coreagent import CodingCoreAgent as CoreAgent
 from soothe.foundation.sloop.engine.executor import ephemeral_execute_stream_enabled
 
 

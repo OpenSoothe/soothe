@@ -11,7 +11,7 @@ This package contains:
 
 RFC-625: GoalEngine deleted. ContextEngine is the sole source of truth.
 Import paths:
-    from soothe.foundation.coreagent import CoreAgent, create_soothe_agent
+    from soothe.foundation.coreagent import CodingCoreAgent, create_soothe_agent
     from soothe.foundation.sloop import StrangeLoop, LoopState
     from soothe.foundation.autopilot import AutopilotService, AutopilotMonitor
     from soothe.foundation.context import ContextEngine, GoalNode
@@ -36,7 +36,7 @@ from soothe.foundation.workspace import (
 
 __all__ = [
     # Layer 1: Core
-    "CoreAgent",
+    "CodingCoreAgent",
     "create_soothe_agent",
     # Layer 2: Loop
     "StrangeLoop",
@@ -63,10 +63,10 @@ __all__ = [
 
 def __getattr__(name: str) -> Any:
     """Lazy import for modules with potential circular deps."""
-    if name == "CoreAgent":
-        from soothe.foundation.coreagent.coding.core_agent import CoreAgent
+    if name == "CodingCoreAgent":
+        from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
 
-        return CoreAgent
+        return CodingCoreAgent
     if name == "create_soothe_agent":
         from soothe.foundation.coreagent.coding.builder import create_soothe_agent
 

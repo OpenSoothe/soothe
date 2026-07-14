@@ -355,5 +355,3 @@ class CodingCoreAgent:
 
         return create_soothe_agent(config, **kwargs)
 
-
-CoreAgent = CodingCoreAgent
