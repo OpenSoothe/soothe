@@ -3,22 +3,78 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any
+from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, Any
 
 from langchain.tools import ToolRuntime
 from langchain.tools.tool_node import ToolCallRequest
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 from soothe_deepagents.backends.protocol import BackendProtocol
-from soothe_deepagents.middleware.filesystem import ApplyDiffSchema, FilesystemMiddleware
+from soothe_deepagents.middleware.filesystem import FilesystemMiddleware
 
 from soothe.foundation.filesystem.discovery_hints import GLOB_TOOL_DESCRIPTION
+
+if TYPE_CHECKING:
+    from soothe_deepagents.middleware.filesystem import ApplyDiffSchema as ApplyDiffSchema
 
 __all__ = [
     "ApplyDiffSchema",
     "SootheFilesystemMiddleware",
     "coerce_provider_safe_tool_message",
 ]
+
+_MIN_DEEPAGENTS_APPLY_DIFF = "0.7.20"
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy-export `ApplyDiffSchema` so module import does not hard-fail early.
+
+    Daemon startup imports `SootheFilesystemMiddleware` only. Requiring
+    `ApplyDiffSchema` at import time crashed environments that still had
+    `soothe-deepagents<0.7.20` installed even when the class was unused.
+    """
+    if name == "ApplyDiffSchema":
+        try:
+            from soothe_deepagents.middleware.filesystem import (
+                ApplyDiffSchema as apply_diff_schema,
+            )
+        except ImportError as exc:
+            raise ImportError(_apply_diff_requirement_message()) from exc
+        return apply_diff_schema
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def _installed_deepagents_version() -> str:
+    try:
+        return version("soothe-deepagents")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _apply_diff_requirement_message() -> str:
+    return (
+        "Soothe filesystem tools require soothe-deepagents>="
+        f"{_MIN_DEEPAGENTS_APPLY_DIFF} (ApplyDiffSchema / apply_diff). "
+        f"Installed soothe-deepagents version: {_installed_deepagents_version()}. "
+        f"Upgrade with: pip install -U 'soothe-deepagents>={_MIN_DEEPAGENTS_APPLY_DIFF}'"
+    )
+
+
+def _ensure_upstream_apply_diff_support() -> None:
+    """Fail fast with a clear upgrade hint when apply_diff is unavailable."""
+    filesystem_mod = getattr(FilesystemMiddleware, "__module__", "")
+    try:
+        from soothe_deepagents.middleware import filesystem as da_filesystem
+    except ImportError as exc:
+        raise ImportError(_apply_diff_requirement_message()) from exc
+
+    if not hasattr(da_filesystem, "ApplyDiffSchema") or not hasattr(
+        FilesystemMiddleware, "_create_apply_diff_tool"
+    ):
+        raise ImportError(
+            f"{_apply_diff_requirement_message()} (module={filesystem_mod!r})"
+        )
 
 # OpenAI-compatible chat APIs used by many Soothe providers (e.g. coding-plan) reject
 # LangChain ``file`` / ``audio`` tool-result blocks. ``read_file`` on PDFs returns those.
@@ -125,6 +181,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
                 resolution without callable backend deprecation.
             **kwargs: Passed to FilesystemMiddleware (backend, system_prompt, etc.)
         """
+        _ensure_upstream_apply_diff_support()
         custom_descriptions = dict(kwargs.pop("custom_tool_descriptions", None) or {})
         custom_descriptions.setdefault("glob", GLOB_TOOL_DESCRIPTION)
         kwargs["custom_tool_descriptions"] = custom_descriptions
@@ -148,6 +205,8 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         kwargs.setdefault("large_tool_results_prefix", ".soothe/large_tool_results")
         kwargs.setdefault("conversation_history_prefix", ".soothe/conversation_history")
         super().__init__(**kwargs)
+        if not any(getattr(tool, "name", None) == "apply_diff" for tool in self.tools):
+            raise ImportError(_apply_diff_requirement_message())
 
         # Retain constructor compatibility while delegating delete behavior upstream.
         _ = backup_enabled, backup_dir

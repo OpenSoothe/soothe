@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -62,6 +64,53 @@ class TestCoerceProviderSafeToolMessage:
         assert coerce_provider_safe_tool_message(msg) is msg
 
 
+class TestApplyDiffUpstreamContract:
+    """Regression: ApplyDiffSchema must exist on soothe-deepagents>=0.7.20."""
+
+    def test_apply_diff_schema_importable_from_soothe_deepagents(self) -> None:
+        from soothe_deepagents.middleware import ApplyDiffSchema as PackageApplyDiffSchema
+        from soothe_deepagents.middleware.filesystem import (
+            ApplyDiffSchema as UpstreamApplyDiffSchema,
+        )
+
+        assert UpstreamApplyDiffSchema is PackageApplyDiffSchema
+        assert issubclass(UpstreamApplyDiffSchema, BaseModel)
+        assert {"file_path", "diff"} <= set(UpstreamApplyDiffSchema.model_fields)
+
+    def test_soothe_reexports_same_apply_diff_schema(self) -> None:
+        from soothe_deepagents.middleware.filesystem import (
+            ApplyDiffSchema as UpstreamApplyDiffSchema,
+        )
+
+        assert ApplyDiffSchema is UpstreamApplyDiffSchema
+
+    def test_filesystem_module_imports_without_eager_apply_diff_schema(self) -> None:
+        """Daemon path imports SootheFilesystemMiddleware; schema is lazy."""
+        module = importlib.import_module("soothe.middleware.filesystem")
+        assert hasattr(module, "SootheFilesystemMiddleware")
+        assert "ApplyDiffSchema" not in module.__dict__
+        assert module.ApplyDiffSchema is ApplyDiffSchema
+
+    def test_daemon_startup_import_chain_resolves(self) -> None:
+        """Mirror the runner -> resolver -> file_ops_catalog import chain."""
+        catalog = importlib.import_module("soothe.toolkits.file_ops_catalog")
+        assert catalog.SootheFilesystemMiddleware is SootheFilesystemMiddleware
+        assert "apply_diff" in catalog.SURGICAL_FILE_OP_TOOL_NAMES
+
+    def test_pyproject_requires_deepagents_with_apply_diff(self) -> None:
+        """Keep soothe-deepagents floor at the ApplyDiffSchema release."""
+        pyproject = (
+            Path(__file__).resolve().parents[3] / "pyproject.toml"
+        ).read_text(encoding="utf-8")
+        match = re.search(
+            r'"soothe-deepagents(?P<spec>[^"]+)"',
+            pyproject,
+        )
+        assert match is not None, "soothe-deepagents dependency missing from pyproject.toml"
+        spec = match.group("spec")
+        assert ">=0.7.20" in spec, f"expected >=0.7.20 floor for apply_diff, got {spec!r}"
+
+
 class TestSootheFilesystemMiddlewareSchemas:
     """Test soothe-specific tool schemas."""
 
@@ -77,6 +126,17 @@ class TestSootheFilesystemMiddlewareSchemas:
                 assert field_info.description, (
                     f"{schema_cls.__name__}.{field_name} missing description"
                 )
+
+    def test_ensure_upstream_apply_diff_support_fails_clearly(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import soothe_deepagents.middleware.filesystem as da_filesystem
+
+        from soothe.middleware import filesystem as fs_mod
+
+        monkeypatch.delattr(da_filesystem, "ApplyDiffSchema")
+        with pytest.raises(ImportError, match="soothe-deepagents>=0.7.20"):
+            fs_mod._ensure_upstream_apply_diff_support()
 
 
 def _tool_output_text(result: object) -> str:
