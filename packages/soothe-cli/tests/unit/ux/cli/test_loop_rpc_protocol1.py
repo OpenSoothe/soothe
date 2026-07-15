@@ -33,12 +33,28 @@ class _FakeClient:
         self.request_calls: list[tuple[str, dict[str, Any]]] = []
         self.notify_calls: list[tuple[str, dict[str, Any]]] = []
         self.subscribe_calls: list[tuple[str, dict[str, Any]]] = []
+        self.connection_init_calls = 0
+        self.connection_ack_calls: list[float] = []
 
     async def connect(self) -> None:
         return None
 
     async def close(self) -> None:
         return None
+
+    async def request_connection_init(self) -> None:
+        self.connection_init_calls += 1
+
+    async def wait_for_connection_ack(self, ack_timeout_s: float = 10.0) -> dict[str, Any]:
+        self.connection_ack_calls.append(ack_timeout_s)
+        return {
+            "type": "connection_ack",
+            "result": {
+                "readiness_state": "ready",
+                "protocol_version": "1",
+                "capabilities": ["streaming", "batch", "heartbeat"],
+            },
+        }
 
     async def request(
         self, method: str, params: dict[str, Any] | None = None, *, timeout: float = 5.0
@@ -80,6 +96,8 @@ async def test_rpc_request_returns_result_dict_directly() -> None:
     assert response == {"loops": [{"loop_id": "abc", "status": "running"}]}
     assert fake.request_calls[0] == ("loop_list", {"limit": 20})
     assert not fake.notify_calls
+    assert fake.connection_init_calls == 1
+    assert fake.connection_ack_calls == [30.0]
 
 
 @pytest.mark.asyncio
@@ -94,6 +112,7 @@ async def test_rpc_notify_returns_empty_dict() -> None:
     assert "error" not in response
     assert fake.notify_calls[0] == ("loop_input", {"loop_id": "loop_1", "content": "hi"})
     assert not fake.request_calls
+    assert fake.connection_init_calls == 1
 
 
 @pytest.mark.asyncio

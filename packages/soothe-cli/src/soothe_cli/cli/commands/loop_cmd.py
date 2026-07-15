@@ -79,13 +79,23 @@ async def _rpc(
     client = WebSocketClient(url=ws_url)
     try:
         await client.connect()
+        await asyncio.wait_for(client.request_connection_init(), timeout=timeout)
+        await asyncio.wait_for(
+            client.wait_for_connection_ack(ack_timeout_s=timeout), timeout=timeout
+        )
         if mode == "notify":
             await asyncio.wait_for(client.notify(method, params or {}), timeout=timeout)
             return {}
         if mode == "subscribe":
-            sub_id = await asyncio.wait_for(client.subscribe(method, params or {}), timeout=timeout)
+            sub_id = await asyncio.wait_for(
+                client.subscribe(method, params or {}, timeout=timeout),
+                timeout=timeout,
+            )
             return {"subscription_id": sub_id}
-        result = await asyncio.wait_for(client.request(method, params or {}), timeout=timeout)
+        result = await asyncio.wait_for(
+            client.request(method, params or {}, timeout=timeout),
+            timeout=timeout,
+        )
         return result if isinstance(result, dict) else {"result": result}
     except TimeoutError:
         return {"error": "Timed out waiting for daemon response"}
