@@ -76,7 +76,8 @@ def subagent_wire_row_params(
         if rc or st:
             tail = f"{rc} hits, {st} sources"
             preview = f"{query} → {tail}" if query else tail
-        return "WebSearch", {"query": preview or query}, "success", 0
+        tool_name = "AcademicSearch" if ".academic_research." in et else "WebSearch"
+        return tool_name, {"query": preview or query}, "success", 0
     if et.endswith(".crawl.summary"):
         urls = int(data.get("urls_crawled", 0) or 0)
         success = int(data.get("success_count", 0) or 0)
@@ -85,21 +86,30 @@ def subagent_wire_row_params(
     if et.endswith(".step.completed"):
         tool_name = str(data.get("tool_name", "") or "").strip()
         args_preview = str(data.get("args_preview", "") or "").strip()
-        if not tool_name and data.get("step_index") is not None:
-            tool_name = "BrowserStep"
+        step_index = data.get("step_index")
+        if not tool_name and step_index is not None:
+            try:
+                idx = int(step_index)
+            except (TypeError, ValueError):
+                idx = 0
+            tool_name = f"BrowserStep#{idx}" if idx > 0 else "BrowserStep"
         if not tool_name:
             tool_name = "Step"
         if not args_preview:
             action = preview_first(str(data.get("action_preview", "")), 60)
             url = preview_first(str(data.get("url", "")), 60)
+            title = preview_first(str(data.get("title", "")), 40)
             if action and url:
                 args_preview = f"{action} @ {url}"
             else:
                 args_preview = action or url
+            if title and args_preview:
+                args_preview = f"{title}: {args_preview}"
+            elif title:
+                args_preview = title
         status = str(data.get("status", "done") or "done").strip().lower()
-        phase = "success" if status in ("done", "success", "complete") else "running"
-        if status in ("error", "failed"):
-            phase = "error"
+        # ``.step.completed`` always settles the row (error vs success).
+        phase = "error" if status in ("error", "failed") else "success"
         duration_ms = int(data.get("duration_ms", 0) or 0)
         args = {"preview": args_preview} if args_preview else {}
         return tool_name, args, phase, duration_ms

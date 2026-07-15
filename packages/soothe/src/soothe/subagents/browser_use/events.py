@@ -46,7 +46,8 @@ class BrowserUseStepCompletedEvent(SubagentEvent):
     url: str = ""
     title: str = ""
     action_preview: str = ""
-    status: str = ""  # e.g. running / done
+    status: str = "done"
+    duration_ms: int = 0
 
     model_config = ConfigDict(extra="allow")
 
@@ -60,7 +61,7 @@ register_event(
 register_event(
     BrowserUseCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="BrowserUse done ({duration_ms}ms)",
+    summary_template="BrowserUse: {summary}",
 )
 register_event(
     BrowserUseStepCompletedEvent,

@@ -412,7 +412,8 @@ def _build_browser_use_graph(
                             url=str(url or ""),
                             title=str(page_title),
                             action_preview=str(action_desc or "")[:120],
-                            status="done" if agent.history.is_done() else "running",
+                            status="done",
+                            duration_ms=int(wall_since_prev * 1000),
                         ).to_dict(),
                         logger,
                     )
@@ -526,7 +527,10 @@ def _build_browser_use_graph(
                 shutil.rmtree(ephemeral_profile_dir, ignore_errors=True)
                 logger.info("Cleaned up ephemeral profile: %s", ephemeral_profile_dir)
 
-        return {"messages": [AIMessage(content=result)]}
+        return {
+            "messages": [AIMessage(content=result)],
+            "answer": result,
+        }
 
     async def run_browser_use(state: _BrowserUseState) -> dict[str, Any]:
         """Async browser_use function for LangGraph."""

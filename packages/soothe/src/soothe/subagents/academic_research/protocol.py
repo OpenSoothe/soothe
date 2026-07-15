@@ -69,6 +69,7 @@ class AcademicResearchConfig(BaseModel):
     polite_circuit_breaker_threshold: int = Field(default=5, ge=1, le=20)
     polite_circuit_breaker_reset_sec: float = Field(default=60.0, ge=5.0, le=300.0)
     polite_domain_overrides: dict[str, dict[str, float | int]] = Field(default_factory=dict)
+    save_reports: bool = Field(default=True)
 
 
 @runtime_checkable

@@ -532,7 +532,7 @@ async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> No
     handled = _apply_subagent_wire_lifecycle_event(
         adapter,
         event_type="soothe.subagent.deep_research.completed",
-        data={"duration_ms": 1200, "completion_status": "complete"},
+        data={"duration_ms": 1200, "summary": "Survey complete"},
         task_scope=scope,
     )
     assert handled is True

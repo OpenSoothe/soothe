@@ -93,3 +93,94 @@ async def test_complete_orphan_clears_registry() -> None:
     assert "inv2" not in adapter._orphan_cards_by_invocation
     assert _orphan_registry_key("deep_research", "inv2") not in adapter._subagent_cards_by_key
     assert "WRE-02:t0" not in adapter._subagent_cards_by_key
+
+
+@pytest.mark.asyncio
+async def test_orphan_browser_use_step_and_lifecycle() -> None:
+    """browser_use wire steps settle on orphan cards; *.completed finds orphan registry."""
+    from soothe_cli.tui.textual_adapter import _apply_subagent_wire_lifecycle_event
+
+    adapter = _make_adapter()
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="browser_use",
+        invocation_id="bu-inv",
+        step_id="BRW-01",
+        description="open example.com",
+    )
+    assert card is not None
+
+    handled = _route_orphan_wire_event(
+        adapter,
+        event_type="soothe.subagent.browser_use.started",
+        data={
+            "type": "soothe.subagent.browser_use.started",
+            "invocation_id": "bu-inv",
+            "task_preview": "open example.com",
+        },
+    )
+    assert handled is True
+
+    handled = _route_orphan_wire_event(
+        adapter,
+        event_type="soothe.subagent.browser_use.step.completed",
+        data={
+            "type": "soothe.subagent.browser_use.step.completed",
+            "invocation_id": "bu-inv",
+            "step_index": 1,
+            "action_preview": "navigate",
+            "url": "https://example.com",
+            "status": "done",  # step finished
+            "duration_ms": 400,
+        },
+    )
+    assert handled is True
+    rows = list(getattr(card, "_rows", []) or [])
+    assert rows
+    assert getattr(rows[-1], "phase", "") == "success"
+
+    # Wire lifecycle must resolve orphan (not only {step}:t0).
+    scope: tuple[str, str, str] = ("BRW-01:s:task:0", "browser_use", "BRW-01")
+    handled = _apply_subagent_wire_lifecycle_event(
+        adapter,
+        event_type="soothe.subagent.browser_use.completed",
+        data={
+            "invocation_id": "bu-inv",
+            "duration_ms": 1200,
+            "success": True,
+            "summary": "Opened example.com",
+        },
+        task_scope=scope,
+    )
+    assert handled is True
+    assert getattr(card, "_status", "") == "success"
+    assert "bu-inv" not in adapter._orphan_cards_by_invocation
+    assert _orphan_registry_key("browser_use", "bu-inv") not in adapter._subagent_cards_by_key
+
+
+@pytest.mark.asyncio
+async def test_orphan_browser_use_lifecycle_honors_success_false() -> None:
+    adapter = _make_adapter()
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="browser_use",
+        invocation_id="bu-fail",
+        step_id="BRW-02",
+        description="task",
+    )
+    from soothe_cli.tui.textual_adapter import _apply_subagent_wire_lifecycle_event
+
+    scope: tuple[str, str, str] = ("BRW-02:s:task:0", "browser_use", "BRW-02")
+    handled = _apply_subagent_wire_lifecycle_event(
+        adapter,
+        event_type="soothe.subagent.browser_use.completed",
+        data={
+            "invocation_id": "bu-fail",
+            "success": False,
+            "summary": "Browser start failed",
+            "duration_ms": 50,
+        },
+        task_scope=scope,
+    )
+    assert handled is True
+    assert getattr(card, "_status", "") == "error"

@@ -38,8 +38,8 @@ _DESC_DISPLAY_MAX = 200
 def _extract_subagent_report(result: Any) -> str:
     """Mirror SubAgentMiddleware return text, plus CompiledSubAgent ``answer``.
 
-    Intake-only specialists (deep_research / academic_research) write the user-facing
-    report to state ``answer`` rather than only an ``AIMessage`` in ``messages``.
+    Intake-only specialists write the user-facing report to state ``answer``
+    (and usually mirror it on an ``AIMessage`` in ``messages``).
     """
     if not isinstance(result, dict):
         return (str(result) if result is not None else "").strip()

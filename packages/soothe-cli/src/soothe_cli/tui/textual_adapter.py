@@ -1227,15 +1227,31 @@ def _apply_subagent_wire_lifecycle_event(
         return False
     step_id = task_scope_step_id(task_scope)
     task_idx = task_scope_task_idx(task_scope, step_id)
-    card = adapter._subagent_cards_by_key.get(_subagent_registry_key(step_id, task_idx))
+    registry_key = _subagent_registry_key(step_id, task_idx)
+    card = adapter._subagent_cards_by_key.get(registry_key)
+    orphan_inv = ""
+    if card is None:
+        # Intake-only orphans register as ``wire:{name}:{inv}``, not ``{step}:t0``.
+        card = _lookup_orphan_card_by_step_id(adapter, step_id)
+        if card is None:
+            inv = str(data.get("invocation_id") or "").strip()
+            if inv:
+                card = adapter._orphan_cards_by_invocation.get(inv)
+        if card is not None:
+            orphan_inv = str(getattr(card, "_invocation_id", "") or "").strip()
+            if not orphan_inv:
+                orphan_inv = str(data.get("invocation_id") or "").strip()
     if card is None:
         return True
     if et.endswith(".failed"):
         success = False
         summary = str(data.get("failure_reason") or data.get("error") or "Failed").strip()
     else:
-        status = str(data.get("completion_status") or "complete").strip().lower()
-        success = status not in ("failed", "error", "cancelled")
+        # Prefer explicit ``success`` (browser_use); ``*.completed`` defaults to success.
+        if "success" in data and data.get("success") is not None:
+            success = bool(data.get("success"))
+        else:
+            success = True
         summary = str(data.get("summary") or data.get("failure_reason") or "Done").strip()
     if not summary:
         summary = "Done" if success else "Failed"
@@ -1247,7 +1263,12 @@ def _apply_subagent_wire_lifecycle_event(
         duration_ms=duration_ms,
         summary=summary,
     )
-    adapter._subagent_cards_by_key.pop(_subagent_registry_key(step_id, task_idx), None)
+    if orphan_inv:
+        name = str(getattr(card, "_subagent_type", "") or "").strip()
+        adapter._subagent_cards_by_key.pop(_orphan_registry_key(name, orphan_inv), None)
+        adapter._orphan_cards_by_invocation.pop(orphan_inv, None)
+    else:
+        adapter._subagent_cards_by_key.pop(registry_key, None)
     return True
 
 
