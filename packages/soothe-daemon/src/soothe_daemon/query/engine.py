@@ -19,12 +19,12 @@ from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events import ERROR
 from soothe.logging import ThreadLogger, set_thread_id
 from soothe.utils.error_format import emit_error_event
-from soothe_sdk.client.protocol import _serialize_for_json
-from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
     extract_tool_call_updates_from_wire_message,
 )
+from soothe_sdk.wire.codec import prepare_stream_data_for_wire
+from soothe_sdk.wire.protocol import _serialize_for_json
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.protocol.intent_hints import is_daemon_direct_hint
@@ -581,7 +581,7 @@ class QueryEngine:
         if stripped_tool_metadata:
             body = wire_data[0] if wire_data else None
             if isinstance(body, dict):
-                from soothe_sdk.client.wire import flatten_enveloped_message_dict
+                from soothe_sdk.wire.codec import flatten_enveloped_message_dict
 
                 flat = flatten_enveloped_message_dict(body)
                 text = "".join(extract_text_from_ai_message(flat)).strip()

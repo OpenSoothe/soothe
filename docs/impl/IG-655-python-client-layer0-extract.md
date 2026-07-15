@@ -37,18 +37,35 @@ soothe-cli → soothe-client-python → [WS] → daemon → soothe (core)
 | `schemas.py` | |
 | `intent_hints.py` | |
 
-## Later phases (not A)
+## Later phases
 
-- **B**: Slim SDK further (plugins + contracts only; relocate wire if needed).
+- **B**: Slim SDK further — relocate wire/paths out of `soothe_sdk.client` ✓
 - **C**: Thin CLI onto client; remove `soothe.*` leaks.
 - **D**: Python `appkit` (promote CLI session/turn generics).
 
+## Phase B (slim SDK layout)
+
+| Old path | Canonical path |
+|----------|----------------|
+| `soothe_sdk.client.wire` | `soothe_sdk.wire.codec` (`soothe_sdk.wire`) |
+| `soothe_sdk.client.protocol` | `soothe_sdk.wire.protocol` |
+| `soothe_sdk.client.config` | `soothe_sdk.paths` |
+
+Compat shims under `soothe_sdk.client.*` remain for one migration window.
+
 ## Exit criteria
 
+### Phase A
 - [x] `client/python` is a uv workspace member
 - [x] Unit tests for Layer 0 live under `client/python/tests`
 - [x] CLI + daemon transport imports use `soothe_client`
 - [x] SDK no longer depends on `websockets` for runtime
 - [x] `./scripts/verify_finally.sh` green
 
-**Status**: Phase A complete (2026-07-15)
+### Phase B
+- [x] Wire/paths live under `soothe_sdk.wire` / `soothe_sdk.paths`
+- [x] Compat shims keep old `soothe_sdk.client.*` imports working
+- [x] SDK package description reflects slim contracts (no transport client)
+- [x] `./scripts/verify_finally.sh` green
+
+**Status**: Phase B complete (2026-07-15)

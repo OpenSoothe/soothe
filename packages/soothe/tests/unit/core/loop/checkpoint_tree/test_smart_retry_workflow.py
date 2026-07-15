@@ -41,7 +41,7 @@ def mock_soothe_home(tmp_path):
 
     Ensures tests use isolated database in tmp_path instead of ~/.soothe/.
     """
-    import soothe_sdk.client.config as sdk_config
+    import soothe_sdk.paths as sdk_config
 
     import soothe.config.env as env_config
 

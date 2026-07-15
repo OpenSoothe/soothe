@@ -419,7 +419,7 @@ class LoopCardManager:
 
     @staticmethod
     def _ingest_message_wire(state: _BindingBuffers, msg_wire: dict[str, Any]) -> bool:
-        from soothe_sdk.client.wire import (
+        from soothe_sdk.wire.codec import (
             flatten_enveloped_message_dict,
             messages_from_wire_dicts,
         )

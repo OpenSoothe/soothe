@@ -5,10 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from soothe_sdk.client.protocol import preview_first
 from soothe_sdk.tools.metadata import get_tool_meta
 from soothe_sdk.utils import get_tool_display_name
 from soothe_sdk.utils.formatting import convert_and_abbreviate_path
+from soothe_sdk.wire.protocol import preview_first
 
 from soothe_cli.runtime.parse.message_processing import (
     _normalize_tool_name_for_arg_map,

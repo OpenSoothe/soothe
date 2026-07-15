@@ -75,7 +75,7 @@ def _load_soothe_config_for_context() -> Any:
     from pathlib import Path
 
     from soothe.config.settings import SootheConfig
-    from soothe_sdk.client.config import SOOTHE_HOME
+    from soothe_sdk.paths import SOOTHE_HOME
 
     path = Path(SOOTHE_HOME) / "config" / "config.yml"
     if path.exists():

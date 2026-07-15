@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from soothe_sdk.client.wire import prepare_stream_message_for_wire
 from soothe_sdk.ux.stream_tool_wire import (
     STREAM_TOOL_CALL_UPDATE,
     extract_tool_call_updates_from_wire_message,
     tool_call_update_event,
 )
+from soothe_sdk.wire.codec import prepare_stream_message_for_wire
 
 
 def test_tool_call_update_event_shape() -> None:

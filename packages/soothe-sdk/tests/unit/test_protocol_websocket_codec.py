@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_sdk.client.protocol import decode_websocket_text, encode_websocket_text
+from soothe_sdk.wire.protocol import decode_websocket_text, encode_websocket_text
 
 
 def test_encode_websocket_text_compact_and_roundtrip() -> None:

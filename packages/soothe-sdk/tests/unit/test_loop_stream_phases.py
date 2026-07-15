@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from langchain_core.messages import messages_from_dict
 
-from soothe_sdk.client.wire import envelope_langchain_message_dict
 from soothe_sdk.ux.loop_stream import (
     GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
     LOOP_ASSISTANT_OUTPUT_PHASES,
@@ -13,6 +12,7 @@ from soothe_sdk.ux.loop_stream import (
     is_stream_terminal,
     is_stream_terminal_wire_dict,
 )
+from soothe_sdk.wire.codec import envelope_langchain_message_dict
 
 
 def test_chitchat_phase_in_allowlist() -> None:

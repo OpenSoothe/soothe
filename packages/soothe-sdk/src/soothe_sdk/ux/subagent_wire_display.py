@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
 
-from soothe_sdk.client.protocol import preview_first
+from soothe_sdk.wire.protocol import preview_first
 
 
 class SubagentWireRenderKind(StrEnum):

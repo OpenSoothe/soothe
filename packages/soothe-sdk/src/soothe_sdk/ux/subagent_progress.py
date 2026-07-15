@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from soothe_sdk.client.protocol import preview_first
+from soothe_sdk.wire.protocol import preview_first
 
 
 def get_subagent_name_from_event(event_type: str) -> str | None:

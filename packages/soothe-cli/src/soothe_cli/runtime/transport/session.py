@@ -14,7 +14,7 @@ from soothe_client import (
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
-from soothe_sdk.client.protocol import _serialize_for_json
+from soothe_sdk.wire.protocol import _serialize_for_json
 
 from soothe_cli.runtime.state.session_stats import TurnEventStats
 from soothe_cli.runtime.wire.chunk_filter import should_drop_stream_chunk_early

@@ -7,28 +7,28 @@ from pathlib import Path
 
 def resolve_metadata_db_path() -> Path:
     """Return the ThreadInfo metadata database path."""
-    from soothe_sdk.client.config import SOOTHE_DATA_DIR
+    from soothe_sdk.paths import SOOTHE_DATA_DIR
 
     return Path(SOOTHE_DATA_DIR) / "metadata.db"
 
 
 def resolve_checkpoint_db_path() -> Path:
     """Return the shared LangGraph + StrangeLoop checkpoints database path."""
-    from soothe_sdk.client.config import SOOTHE_DATA_DIR
+    from soothe_sdk.paths import SOOTHE_DATA_DIR
 
     return Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
 
 
 def resolve_context_engine_db_path() -> Path:
     """Return the shared ContextEngine SQLite database path."""
-    from soothe_sdk.client.config import SOOTHE_DATA_DIR
+    from soothe_sdk.paths import SOOTHE_DATA_DIR
 
     return Path(SOOTHE_DATA_DIR) / "context_engine.db"
 
 
 def resolve_display_db_path() -> Path:
     """Return the shared display card ledger SQLite database path."""
-    from soothe_sdk.client.config import SOOTHE_DATA_DIR
+    from soothe_sdk.paths import SOOTHE_DATA_DIR
 
     return Path(SOOTHE_DATA_DIR) / "display.db"
 

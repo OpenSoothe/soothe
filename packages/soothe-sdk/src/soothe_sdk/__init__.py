@@ -12,7 +12,7 @@ Canonical import paths (IG-259 refactoring):
     from soothe_sdk.core.types import VerbosityLevel
     from soothe_sdk.core.verbosity import VerbosityTier
     from soothe_sdk.core.exceptions import PluginError
-    from soothe_sdk.client.wire import messages_from_wire_dicts
+    from soothe_sdk.wire.codec import messages_from_wire_dicts
     from soothe_sdk.ux.loop_stream import assistant_output_phase
     from soothe_sdk.tools.metadata import get_tool_meta
     from soothe_sdk.utils.formatting import format_cli_error
@@ -26,10 +26,10 @@ import importlib.metadata
 # Load before plugin stack so LangGraph serde import-time Reviver() warning is filtered.
 importlib.import_module("soothe_sdk._upstream_warnings")
 
-from soothe_sdk.client.config import SOOTHE_HOME  # noqa: E402, F401
 from soothe_sdk.core.events import SubagentEvent  # noqa: E402, F401
 from soothe_sdk.core.exceptions import PluginError  # noqa: E402, F401
 from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402, F401
+from soothe_sdk.paths import SOOTHE_HOME  # noqa: E402, F401
 from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: E402, F401
 from soothe_sdk.plugin.emit import emit_progress  # noqa: E402, F401
 from soothe_sdk.plugin.registry import register_event  # noqa: E402, F401

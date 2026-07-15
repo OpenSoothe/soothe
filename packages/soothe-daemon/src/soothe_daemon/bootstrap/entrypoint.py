@@ -117,7 +117,7 @@ def main() -> None:
     )
 
     # Migrate runtime data files from root to data/ subdirectory
-    from soothe_sdk.client.config import migrate_data_to_subdir
+    from soothe_sdk.paths import migrate_data_to_subdir
 
     migrate_data_to_subdir()
 

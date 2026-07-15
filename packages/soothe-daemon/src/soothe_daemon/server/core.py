@@ -226,7 +226,7 @@ class SootheDaemon(DaemonHandlersMixin):
         from pathlib import Path
 
         from soothe.foundation.identity.identity_service import IdentityService
-        from soothe_sdk.client.config import SOOTHE_DATA_DIR
+        from soothe_sdk.paths import SOOTHE_DATA_DIR
 
         identity_cfg = self._daemon_config.identity
 
@@ -554,7 +554,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 )
                 from soothe.foundation.context import ContextEngine
                 from soothe.foundation.events.internal_bus import InternalEventBus
-                from soothe_sdk.client.config import SOOTHE_DATA_DIR
+                from soothe_sdk.paths import SOOTHE_DATA_DIR
 
                 # Isolated bus for the daemon's autopilot domain.
                 daemon_autopilot_bus = InternalEventBus()

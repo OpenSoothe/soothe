@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from soothe_sdk.client.protocol import encode
+from soothe_sdk.wire.protocol import encode
 
 logger = logging.getLogger(__name__)
 

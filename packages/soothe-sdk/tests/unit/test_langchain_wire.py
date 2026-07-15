@@ -8,7 +8,6 @@ from langchain_core.messages import (
     messages_from_dict,
 )
 
-from soothe_sdk.client.protocol import _serialize_for_json
 from soothe_sdk.langchain_wire import (
     deserialize_langchain_message_from_wire,
     envelope_langchain_message_dict,
@@ -16,6 +15,7 @@ from soothe_sdk.langchain_wire import (
     prepare_stream_data_for_wire,
     prepare_stream_message_for_wire,
 )
+from soothe_sdk.wire.protocol import _serialize_for_json
 
 
 def test_messages_from_wire_dicts_flat_human() -> None:

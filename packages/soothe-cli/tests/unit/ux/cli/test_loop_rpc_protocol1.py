@@ -131,7 +131,7 @@ async def test_rpc_subscribe_returns_subscription_id() -> None:
 @pytest.mark.asyncio
 async def test_rpc_translates_protocol_error_to_error_dict() -> None:
     """_rpc catches ProtocolError and returns {"error": ...}."""
-    from soothe_sdk.client.wire import ProtocolError
+    from soothe_sdk.wire.codec import ProtocolError
 
     fake = _FakeClient(exc=ProtocolError(code=-32200, message="Loop not found"))
     with _make_patch(fake):

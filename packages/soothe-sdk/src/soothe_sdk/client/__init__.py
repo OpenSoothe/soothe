@@ -1,12 +1,15 @@
-"""Shared client-facing contracts: wire codec, config paths, and protocol helpers.
+"""Compatibility package for relocated wire/paths modules.
 
-Transport WebSocket client APIs live in ``soothe_client`` (package
-``soothe-client-python``). This package keeps the encode/decode surface and
-path constants so daemon and core can depend on soothe-sdk without depending
-on the client library.
+Prefer canonical imports:
+
+- ``soothe_sdk.wire`` / ``soothe_sdk.wire.codec`` / ``soothe_sdk.wire.protocol``
+- ``soothe_sdk.paths``
+
+Submodules ``soothe_sdk.client.config``, ``.wire``, and ``.protocol`` remain as
+thin re-export shims during the slim-SDK migration.
 """
 
-from soothe_sdk.client.config import (
+from soothe_sdk.paths import (
     DEFAULT_EXECUTE_TIMEOUT,
     SOOTHE_DATA_DIR,
     SOOTHE_HOME,
@@ -16,11 +19,7 @@ from soothe_sdk.client.config import (
     WebSocketConfigProtocol,
     migrate_data_to_subdir,
 )
-from soothe_sdk.client.protocol import (
-    decode_websocket_text,
-    encode_websocket_text,
-)
-from soothe_sdk.client.wire import (
+from soothe_sdk.wire.codec import (
     DEFAULT_PROTO,
     BatchRequest,
     BatchRequestEnvelope,
@@ -41,9 +40,12 @@ from soothe_sdk.client.wire import (
     envelope_langchain_message_dict,
     messages_from_wire_dicts,
 )
+from soothe_sdk.wire.protocol import (
+    decode_websocket_text,
+    encode_websocket_text,
+)
 
 __all__ = [
-    # Config / paths
     "SOOTHE_HOME",
     "SOOTHE_DATA_DIR",
     "DEFAULT_EXECUTE_TIMEOUT",
@@ -52,10 +54,8 @@ __all__ = [
     "DaemonConfigProtocol",
     "DaemonTransportConfigProtocol",
     "WebSocketConfigProtocol",
-    # Protocol codec helpers
     "encode_websocket_text",
     "decode_websocket_text",
-    # Wire envelopes
     "DEFAULT_PROTO",
     "MessageType",
     "WireEnvelope",

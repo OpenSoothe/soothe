@@ -383,7 +383,7 @@ class TestLoopAIMessageChunkWireRoundtrip:
 
     def test_chunk_roundtrip_preserves_class_and_phase(self) -> None:
         from langchain_core.messages import AIMessageChunk
-        from soothe_sdk.client.wire import (
+        from soothe_sdk.wire.codec import (
             deserialize_langchain_message_from_wire,
             prepare_stream_message_for_wire,
         )
@@ -416,7 +416,7 @@ class TestLoopAIMessageChunkWireRoundtrip:
         ``soothe_daemon.query.engine``: pair (msg, meta) → flat dicts.
         """
         from langchain_core.messages import AIMessageChunk
-        from soothe_sdk.client.wire import (
+        from soothe_sdk.wire.codec import (
             deserialize_langchain_message_from_wire,
             prepare_stream_data_for_wire,
         )

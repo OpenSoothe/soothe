@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.client.wire import flatten_enveloped_message_dict
+from soothe_sdk.wire.codec import flatten_enveloped_message_dict
 
 
 def wire_message_body(msg: Any) -> Any:

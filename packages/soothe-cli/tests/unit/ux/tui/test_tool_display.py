@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_sdk.client.protocol import preview_first
+from soothe_sdk.wire.protocol import preview_first
 
 from soothe_cli.tui.tool_display import (
     abbreviate_tool_error_message,

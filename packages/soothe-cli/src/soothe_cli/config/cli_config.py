@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from soothe_sdk.client.config import SOOTHE_HOME
+from soothe_sdk.paths import SOOTHE_HOME
 
 
 @dataclass

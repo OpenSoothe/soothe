@@ -22,7 +22,7 @@ def _reset_shared_sqlite_backend() -> None:
 
 @pytest.mark.asyncio
 async def test_shared_sqlite_backend_reused_across_managers(tmp_path, monkeypatch) -> None:
-    import soothe_sdk.client.config as sdk_config
+    import soothe_sdk.paths as sdk_config
 
     import soothe.config as config
 
@@ -47,7 +47,7 @@ async def test_shared_sqlite_backend_reused_across_managers(tmp_path, monkeypatc
 
 @pytest.mark.asyncio
 async def test_acquire_sync_creates_data_directory(tmp_path, monkeypatch) -> None:
-    import soothe_sdk.client.config as sdk_config
+    import soothe_sdk.paths as sdk_config
 
     import soothe.config as config
 

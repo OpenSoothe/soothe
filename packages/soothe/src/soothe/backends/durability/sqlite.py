@@ -33,7 +33,7 @@ class SQLiteDurability(BasePersistStoreDurability):
             # Default to data/metadata.db for clear separation from data/langgraph_checkpoints.db
             from pathlib import Path
 
-            from soothe_sdk.client.config import SOOTHE_DATA_DIR
+            from soothe_sdk.paths import SOOTHE_DATA_DIR
 
             actual_path = db_path or str(Path(SOOTHE_DATA_DIR) / "metadata.db")
             persist_store = SQLitePersistStore(actual_path, namespace="durability")

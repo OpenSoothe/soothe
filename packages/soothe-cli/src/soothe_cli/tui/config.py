@@ -13,7 +13,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.client.config import SOOTHE_HOME
+from soothe_sdk.paths import SOOTHE_HOME
 
 from soothe_cli.tui._version import (
     __version__,

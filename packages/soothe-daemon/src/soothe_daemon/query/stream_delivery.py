@@ -39,7 +39,6 @@ from typing import Any, Literal
 
 from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
-from soothe_sdk.client.wire import prepare_stream_data_for_wire
 from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED, STREAM_END
 from soothe_sdk.ux.loop_stream import (
     GOAL_COMPLETION_STREAM_TERMINAL_FIELD,
@@ -50,6 +49,7 @@ from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
     extract_tool_call_updates_from_wire_message,
 )
+from soothe_sdk.wire.codec import prepare_stream_data_for_wire
 
 StreamDeliveryMode = Literal["batch", "adaptive", "streaming"]
 
@@ -467,7 +467,7 @@ class StreamDeliveryCoalescer:
                     out.extend(self._maybe_flush_tool_batch(ns, now, force=added_new))
                     body = wire_data[0] if wire_data else None
                     if isinstance(body, dict):
-                        from soothe_sdk.client.wire import flatten_enveloped_message_dict
+                        from soothe_sdk.wire.codec import flatten_enveloped_message_dict
 
                         flat = flatten_enveloped_message_dict(body)
                         text = "".join(extract_text_from_ai_message(flat)).strip()

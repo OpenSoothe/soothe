@@ -261,7 +261,8 @@ from soothe_sdk.core.verbosity import VerbosityTier, should_show
 # Purpose packages - import from subpackage
 from soothe_sdk.plugin import plugin, tool, subagent, register_event
 from soothe_client import WebSocketClient  # soothe-client-python
-from soothe_sdk.client.wire import messages_from_wire_dicts
+from soothe_sdk.wire import messages_from_wire_dicts, ProtocolError
+from soothe_sdk.paths import SOOTHE_HOME
 from soothe_sdk.core.types import VerbosityLevel
 from soothe_sdk.ux.loop_stream import assistant_output_phase, LOOP_ASSISTANT_OUTPUT_PHASES
 from soothe_sdk.tools.metadata import get_tool_meta, get_tool_display_name
@@ -278,6 +279,7 @@ from soothe_sdk.protocols import PersistStore, PolicyProtocol
 4. **Runtime-agnostic**: No dependency on Soothe runtime
 5. **Extensible**: Support for tools, subagents, and custom events
 6. **Client separate**: WebSocket transport lives in `soothe-client-python`
+7. **Contracts, not transport**: Wire codec under `soothe_sdk.wire`; paths under `soothe_sdk.paths`
 
 ## License
 

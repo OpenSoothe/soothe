@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from soothe_sdk.client.config import SOOTHE_DATA_DIR
+from soothe_sdk.paths import SOOTHE_DATA_DIR
 
 logger = logging.getLogger(__name__)
 

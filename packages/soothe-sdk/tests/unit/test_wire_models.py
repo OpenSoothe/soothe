@@ -12,7 +12,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from soothe_sdk.client.wire import (
+from soothe_sdk.wire.codec import (
     DEFAULT_PROTO,
     BatchRequest,
     BatchRequestEnvelope,

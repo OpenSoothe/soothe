@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe_sdk.client.protocol import WorkspaceMapping
+from soothe_sdk.wire.protocol import WorkspaceMapping
 
 
 class TestWorkspaceMapping:

@@ -19,7 +19,7 @@ from soothe_client import (
     websocket_url_from_config,
     ws_command_client_from_config,
 )
-from soothe_sdk.client.protocol import preview_first
+from soothe_sdk.wire.protocol import preview_first
 
 app = typer.Typer(help="Autopilot mode — long-running autonomous agent control.")
 

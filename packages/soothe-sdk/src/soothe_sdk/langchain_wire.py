@@ -1,9 +1,9 @@
 """Legacy import shim for LangChain wire helpers.
 
-Canonical location: ``soothe_sdk.client.wire``.
+Canonical location: ``soothe_sdk.wire.codec``.
 """
 
-from soothe_sdk.client.wire import (
+from soothe_sdk.wire.codec import (
     coerce_tool_call_chunk_args_for_wire,
     deserialize_langchain_message_from_wire,
     envelope_langchain_message_dict,
