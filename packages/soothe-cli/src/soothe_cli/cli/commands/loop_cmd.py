@@ -17,11 +17,13 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
-from soothe_sdk.client import (
-    ProtocolError,
+from soothe_client import (
     WebSocketClient,
     is_daemon_live,
     websocket_url_from_config,
+)
+from soothe_sdk.client import (
+    ProtocolError,
 )
 
 from soothe_cli.runtime import load_config

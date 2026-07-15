@@ -10,7 +10,7 @@ from typing import Annotated, Any
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from soothe_sdk.client import (
+from soothe_client import (
     WebSocketClient,
     request_daemon_config_reload,
     websocket_url_from_config,

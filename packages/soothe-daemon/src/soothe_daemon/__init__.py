@@ -19,7 +19,7 @@ def __getattr__(name: str):
 
         return SootheDaemon
     if name == "WebSocketClient":
-        from soothe_sdk.client import WebSocketClient
+        from soothe_client import WebSocketClient
 
         return WebSocketClient
     if name == "run_daemon":

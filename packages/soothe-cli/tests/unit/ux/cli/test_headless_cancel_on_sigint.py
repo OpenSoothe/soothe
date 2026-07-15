@@ -68,7 +68,7 @@ def _patch_daemon_deps(
     monkeypatch.setattr(daemon_exec, "connect_websocket_with_retries", _noop_async)
     monkeypatch.setattr(daemon_exec, "bootstrap_loop_session", _bootstrap)
     monkeypatch.setattr(daemon_exec, "websocket_url_from_config", lambda _cfg: "ws://unit.test")
-    monkeypatch.setattr("soothe_sdk.client.WebSocketClient", lambda url: stub_client)
+    monkeypatch.setattr(daemon_exec, "WebSocketClient", lambda url: stub_client)
 
 
 @pytest.mark.asyncio

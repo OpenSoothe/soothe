@@ -4,7 +4,7 @@ import asyncio
 import sys
 
 import typer
-from soothe_sdk.client import (
+from soothe_client import (
     WebSocketClient,
     is_daemon_live,
     request_daemon_shutdown,

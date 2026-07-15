@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 
 from tests.integration.test_timeouts import (
     timeout_default,

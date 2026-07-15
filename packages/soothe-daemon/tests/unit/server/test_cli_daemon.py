@@ -13,7 +13,7 @@ import typer
 from soothe.config import SootheConfig
 from soothe_cli.cli.execution import daemon as daemon_exec
 from soothe_cli.cli.execution import headless as headless_exec
-from soothe_sdk.client import session as sdk_session  # For retry logic (moved from CLI)
+from soothe_client import session as sdk_session  # For retry logic (moved from CLI)
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.protocol import MessageRouter
@@ -767,10 +767,11 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
     stderr: list[str] = []
 
-    # Patch WebSocketClient where it's imported by daemon.py
-    # daemon.py imports: from soothe_sdk.client import WebSocketClient
-    # So we patch soothe_sdk.client.WebSocketClient (not websocket.WebSocketClient)
-    monkeypatch.setattr("soothe_sdk.client.WebSocketClient", lambda url=None: _BusyClient())
+    # Patch WebSocketClient where daemon.py binds the name.
+    monkeypatch.setattr(
+        "soothe_cli.cli.execution.daemon.WebSocketClient",
+        lambda url=None: _BusyClient(),
+    )
     monkeypatch.setattr(
         typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None
     )

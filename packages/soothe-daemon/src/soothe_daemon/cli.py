@@ -454,7 +454,7 @@ def memory_trace(
     ws_url = f"ws://{host}:{port}"
 
     try:
-        from soothe_sdk.client.ws_command_client import SyncWsCommandClient
+        from soothe_client.ws_command_client import SyncWsCommandClient
 
         timeout = 30 if mode == "objects" else 10
         client = SyncWsCommandClient(ws_url, timeout=timeout)

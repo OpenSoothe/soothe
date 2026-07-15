@@ -8,7 +8,7 @@ import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.client import (
+from soothe_client import (
     WebSocketClient,
     bootstrap_loop_session,
     connect_websocket_with_retries,

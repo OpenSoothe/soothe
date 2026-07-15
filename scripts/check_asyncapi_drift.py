@@ -45,6 +45,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 for _src in (
     _REPO_ROOT / "packages" / "soothe-daemon" / "src",
     _REPO_ROOT / "packages" / "soothe-sdk" / "src",
+    _REPO_ROOT / "client" / "python" / "src",
 ):
     _src_str = str(_src)
     if _src.exists() and _src_str not in sys.path:
@@ -295,7 +296,7 @@ def load_sdk_params_module() -> tuple[Any, bool]:
         or ``None`` when unavailable.
     """
     try:
-        return importlib.import_module("soothe_sdk.client.protocol_params"), True
+        return importlib.import_module("soothe_client.protocol_params"), True
     except ImportError as exc:
         print(f"WARNING: Cannot import SDK params module: {exc}", file=sys.stderr)
         return None, False
@@ -390,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         has_errors = True
     if args.strict and not sdk_import_ok:
         print(
-            "\nFAIL: --strict requires soothe_sdk.client.protocol_params to be importable.",
+            "\nFAIL: --strict requires soothe_client.protocol_params to be importable.",
             file=sys.stderr,
         )
         has_errors = True

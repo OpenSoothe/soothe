@@ -126,7 +126,7 @@ async def test_connect_daemon_once_uses_extended_ready_timeout(monkeypatch) -> N
             return {"loop_id": "loop-abc", "type": "session_ready"}
 
     monkeypatch.setattr(
-        "soothe_sdk.client.is_daemon_live",
+        "soothe_client.is_daemon_live",
         fake_is_daemon_live,
     )
     monkeypatch.setattr(

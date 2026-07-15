@@ -16,7 +16,7 @@ from soothe_cli.tui.commands.subagent_routing import parse_subagent_from_input
 
 if TYPE_CHECKING:
     from rich.console import Console
-    from soothe_sdk.client import WebSocketClient
+    from soothe_client import WebSocketClient
 
 logger = logging.getLogger(__name__)
 

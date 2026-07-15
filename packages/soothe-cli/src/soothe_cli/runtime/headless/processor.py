@@ -35,7 +35,7 @@ from soothe_cli.runtime.policy.tui_trace_log import log_tui_trace
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 
 if TYPE_CHECKING:
-    from soothe_sdk.client.schemas import Plan
+    from soothe_client.schemas import Plan
 
     from soothe_cli.runtime.presentation.renderer_protocol import RendererProtocol
 
@@ -962,7 +962,7 @@ class EventProcessor:
 
     def _handle_plan_created(self, data: dict[str, Any]) -> None:
         """Handle plan creation event."""
-        from soothe_sdk.client.schemas import Plan, PlanStep
+        from soothe_client.schemas import Plan, PlanStep
 
         steps = [
             PlanStep(

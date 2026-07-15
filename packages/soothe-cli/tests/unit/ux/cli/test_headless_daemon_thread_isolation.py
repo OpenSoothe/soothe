@@ -81,7 +81,7 @@ async def test_run_headless_filters_non_active_loop_frames(monkeypatch: pytest.M
         _bootstrap,
     )
     monkeypatch.setattr(daemon_exec, "websocket_url_from_config", lambda _cfg: "ws://unit.test")
-    monkeypatch.setattr("soothe_sdk.client.WebSocketClient", lambda url: stub_client)
+    monkeypatch.setattr("soothe_cli.cli.execution.daemon.WebSocketClient", lambda url: stub_client)
 
     cfg = SimpleNamespace()
     exit_code = await daemon_exec.run_headless_via_daemon(cfg, prompt="hi")

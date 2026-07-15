@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from soothe.config import SootheConfig
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.services.direct_llm_turn import run_text_completion_turn

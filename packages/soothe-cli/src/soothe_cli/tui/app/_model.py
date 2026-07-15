@@ -308,7 +308,7 @@ class _ModelMixin:
         Args:
             task: Task description for autonomous execution.
         """
-        from soothe_sdk.client import (
+        from soothe_client import (
             async_ws_command_client_from_config,
             is_daemon_live,
             websocket_url_from_config,
@@ -356,7 +356,7 @@ class _ModelMixin:
             text: Natural language schedule and task description.
             slash_input: Original slash command for chat display.
         """
-        from soothe_sdk.client import (
+        from soothe_client import (
             async_ws_command_client_from_config,
             is_daemon_live,
             websocket_url_from_config,

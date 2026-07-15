@@ -34,7 +34,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 from soothe_sdk.client.wire import (
     BatchRequest,
     BatchRequestEnvelope,

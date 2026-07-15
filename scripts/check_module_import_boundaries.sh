@@ -5,9 +5,10 @@
 #
 # Rules:
 #   1. soothe (in-proc agent core) must NOT import soothe_daemon or soothe_cli
-#      (one-way dep: soothe-daemon -> soothe; soothe-cli -> soothe-sdk -> soothe).
+#      (one-way dep: soothe-daemon -> soothe; soothe-cli -> soothe-client-python -> soothe-sdk).
 #   2. soothe_daemon must NOT import soothe_cli (CLI sits above the daemon).
 #   3. soothe_sdk must NOT import any other workspace package.
+#   4. soothe_client must NOT import soothe / soothe_cli / soothe_daemon.
 #
 # Usage:
 #   ./scripts/check_module_import_boundaries.sh
@@ -28,6 +29,7 @@ Rules:
   1. soothe must not import soothe_daemon or soothe_cli.
   2. soothe-daemon must not import soothe_cli.
   3. soothe-sdk must not import other workspace packages.
+  4. soothe-client-python must not import soothe/cli/daemon.
 
 Usage: ./scripts/check_module_import_boundaries.sh [--help]
 Requires: ripgrep (rg)
@@ -86,8 +88,13 @@ run_check "${PKG_DIR}/soothe-daemon/src" \
 
 # Rule 3: soothe-sdk must be standalone.
 run_check "${PKG_DIR}/soothe-sdk/src" \
-  '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' \
+  '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli|soothe_client)(\.|\s|$)' \
   "soothe-sdk must not import other workspace packages"
+
+# Rule 4: soothe-client-python depends only on soothe-sdk (among workspace pkgs).
+run_check "${ROOT}/client/python/src" \
+  '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' \
+  "soothe-client-python must not import soothe/cli/daemon"
 
 echo ""
 

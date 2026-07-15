@@ -150,7 +150,7 @@ class ConcurrentQueryBenchmark:
         Returns:
             True if daemon is available, False otherwise
         """
-        from soothe_sdk.client.websocket import WebSocketClient
+        from soothe_client.websocket import WebSocketClient
 
         logger.info("Checking if daemon is running on ws://127.0.0.1:8765...")
 
@@ -172,7 +172,7 @@ class ConcurrentQueryBenchmark:
         Returns:
             List of WebSocket client instances
         """
-        from soothe_sdk.client.websocket import WebSocketClient
+        from soothe_client.websocket import WebSocketClient
 
         logger.info(f"Creating {self.num_clients} WebSocket clients...")
 
@@ -378,7 +378,7 @@ class ConcurrentQueryBenchmark:
         Returns:
             Query latency in milliseconds (from send to completion)
         """
-        from soothe_sdk.client.websocket import WebSocketClient
+        from soothe_client.websocket import WebSocketClient
 
         client = None
         try:

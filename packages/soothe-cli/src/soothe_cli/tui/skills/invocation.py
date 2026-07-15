@@ -6,7 +6,10 @@ import logging
 from collections import OrderedDict
 from typing import TYPE_CHECKING
 
-from soothe_sdk.client import fetch_skills_catalog, websocket_url_from_config
+from soothe_client import (
+    fetch_skills_catalog,
+    websocket_url_from_config,
+)
 
 from soothe_cli.tui.skills.load import ExtendedSkillMetadata
 
@@ -33,7 +36,7 @@ async def discover_skills_async(
         (built-in first, winning entry last). Empty list if daemon
         unavailable.
     """
-    from soothe_sdk.client import WebSocketClient
+    from soothe_client import WebSocketClient
 
     if daemon_config is None:
         logger.warning("No daemon_config provided for skills discovery; returning empty catalog")

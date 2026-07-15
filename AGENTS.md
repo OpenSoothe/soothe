@@ -63,8 +63,13 @@ packages/
 ├── soothe/          # Core framework: GoalEngine/StrangeLoop/CoreAgent, protocols, backends, middleware
 ├── soothe-daemon/   # Daemon server (soothed): WebSocket/HTTP transports, event bus, client sessions
 ├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)
-├── soothe-sdk/      # WebSocket client, protocol params, plugin decorators (@plugin/@tool/@subagent)
+├── soothe-sdk/      # Plugin decorators, shared events/display/wire contracts
 └── soothe-plugins/  # Community plugins (delegated subagents)
+
+client/
+├── go/              # soothe-client-go
+├── typescript/      # @mirasoth/soothe-client
+└── python/          # soothe-client-python (WebSocket transport client)
 ```
 
 **Key docs**: [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) for architecture, [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) for plugins.

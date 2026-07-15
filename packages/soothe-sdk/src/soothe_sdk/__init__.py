@@ -1,7 +1,8 @@
 """Soothe SDK - Minimal __init__.py matching langchain-core pattern.
 
-This SDK provides decorator-based API for building Soothe plugins
-and client utilities for WebSocket communication with the daemon.
+This SDK provides decorator-based API for building Soothe plugins and shared
+contracts (events, wire codec, display/UX helpers). The WebSocket transport
+client lives in ``soothe-client-python`` (`soothe_client`).
 
 Following langchain-core pattern: minimal __init__.py (version only).
 Use package-level imports instead of root-level re-exports.
@@ -16,6 +17,7 @@ Canonical import paths (IG-259 refactoring):
     from soothe_sdk.tools.metadata import get_tool_meta
     from soothe_sdk.utils.formatting import format_cli_error
     from soothe_sdk.plugin import plugin, tool
+    # Transport client: soothe-client-python (module soothe_client)
 """
 
 import importlib

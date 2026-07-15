@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from soothe_sdk.client.schemas import Plan
+    from soothe_client.schemas import Plan
 
 TaskScope = tuple[str, str]
 

@@ -92,7 +92,7 @@ async def websocket_bootstrap_loop_session(
     resume_loop_id: str | None = None,
 ) -> str:
     """Create or attach to a loop and subscribe for streaming; returns ``loop_id``."""
-    from soothe_sdk.client.session import bootstrap_loop_session
+    from soothe_client.session import bootstrap_loop_session
 
     ev = await bootstrap_loop_session(
         client,

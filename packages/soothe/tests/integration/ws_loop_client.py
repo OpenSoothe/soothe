@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 
 
 async def loop_new(

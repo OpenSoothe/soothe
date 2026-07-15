@@ -72,7 +72,10 @@ async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
         Provider config dict or None if not found.
     """
     try:
-        from soothe_sdk.client import WebSocketClient, fetch_config_section
+        from soothe_client import (
+            WebSocketClient,
+            fetch_config_section,
+        )
 
         from soothe_cli.config.loader import load_config
 
@@ -480,7 +483,10 @@ def get_available_models() -> list[ModelProfileEntry]:
     try:
         import asyncio
 
-        from soothe_sdk.client import WebSocketClient, fetch_config_section
+        from soothe_client import (
+            WebSocketClient,
+            fetch_config_section,
+        )
 
         # Use CLIConfig to get WebSocket URL
         from soothe_cli.config.loader import load_config

@@ -10,3 +10,6 @@
 [submodule "packages/soothe-deepagents"]
 	path = packages/soothe-deepagents
 	url = git@github.com:mirasoth/soothe-deepagents.git
+[submodule "client/python"]
+	path = client/python
+	url = git@github.com:mirasoth/soothe-client-python.git

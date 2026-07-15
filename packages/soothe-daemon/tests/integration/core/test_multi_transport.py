@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 
 from soothe_daemon.channels.websocket import WebSocketChannel
 from soothe_daemon.config.models import WebSocketConfig

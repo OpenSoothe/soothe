@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe_sdk.client.schemas import Plan
+    from soothe_client.schemas import Plan
 
 from soothe_cli.runtime.state.stream_accumulator import StreamingTextAccumulator
 

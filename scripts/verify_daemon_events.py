@@ -32,8 +32,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from soothe_client.websocket import WebSocketClient
 from soothe_daemon.query.stream_delivery import StreamDeliveryMode
-from soothe_sdk.client.websocket import WebSocketClient
 from soothe_sdk.core.subagent_wire import (
     is_allowlisted_subagent_event_type,
     parse_subagent_wire_agent,

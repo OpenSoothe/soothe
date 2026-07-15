@@ -15,7 +15,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from soothe_sdk.client import (
+from soothe_client import (
     WebSocketClient,
     check_daemon_status,
     is_daemon_live,

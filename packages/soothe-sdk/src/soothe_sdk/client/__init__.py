@@ -1,73 +1,25 @@
-"""WebSocket client utilities for connecting to Soothe daemon.
+"""Shared client-facing contracts: wire codec, config paths, and protocol helpers.
 
-This package provides the client-side WebSocket connection,
-session management, and daemon communication helpers.
+Transport WebSocket client APIs live in ``soothe_client`` (package
+``soothe-client-python``). This package keeps the encode/decode surface and
+path constants so daemon and core can depend on soothe-sdk without depending
+on the client library.
 """
 
-from soothe_sdk.client.helpers import (
-    check_daemon_status,
-    fetch_config_section,
-    fetch_skills_catalog,
-    is_daemon_live,
-    request_daemon_config_reload,
-    request_daemon_shutdown,
-    websocket_url_from_config,
+from soothe_sdk.client.config import (
+    DEFAULT_EXECUTE_TIMEOUT,
+    SOOTHE_DATA_DIR,
+    SOOTHE_HOME,
+    CliConfigProtocol,
+    DaemonConfigProtocol,
+    DaemonTransportConfigProtocol,
+    WebSocketConfigProtocol,
+    migrate_data_to_subdir,
 )
-from soothe_sdk.client.intent_hints import (
-    EMBED,
-    IMAGE_TO_TEXT,
-    OCR,
-    TEXT_COMPLETION,
-    validate_loop_input_intent_hint,
+from soothe_sdk.client.protocol import (
+    decode_websocket_text,
+    encode_websocket_text,
 )
-
-# Client-side params validation models (RFC-450 §6.5)
-from soothe_sdk.client.protocol_params import (
-    AuthParams,
-    AuthRefreshParams,
-    AutopilotSubscribeParams,
-    ConfigGetParams,
-    ConfigReloadParams,
-    CronAddParams,
-    CronCancelParams,
-    CronListParams,
-    CronShowParams,
-    DaemonShutdownParams,
-    DaemonStatusParams,
-    DisconnectParams,
-    InvokeSkillParams,
-    JobCancelParams,
-    JobCreateParams,
-    JobDagParams,
-    JobGuidanceParams,
-    JobPauseParams,
-    JobResumeParams,
-    JobStatusParams,
-    LoopCardsFetchParams,
-    LoopDeleteParams,
-    LoopDetachParams,
-    LoopGetParams,
-    LoopInputParams,
-    LoopListParams,
-    LoopMessagesParams,
-    LoopNewParams,
-    LoopPruneParams,
-    LoopReattachParams,
-    LoopStateGetParams,
-    LoopStateUpdateParams,
-    LoopTreeParams,
-    McpStatusParams,
-    ModelsListParams,
-    RpcCommandParams,
-    SkillsListParams,
-    SlashCommandParams,
-    SubscribeParams,
-)
-from soothe_sdk.client.session import (
-    bootstrap_loop_session,
-    connect_websocket_with_retries,
-)
-from soothe_sdk.client.websocket import WebSocketClient
 from soothe_sdk.client.wire import (
     DEFAULT_PROTO,
     BatchRequest,
@@ -89,38 +41,21 @@ from soothe_sdk.client.wire import (
     envelope_langchain_message_dict,
     messages_from_wire_dicts,
 )
-from soothe_sdk.client.ws_command_client import (
-    SyncWsCommandClient,
-    WsCommandClient,
-    async_ws_command_client_from_config,
-    ws_command_client_from_config,
-)
-from soothe_sdk.core.types import VerbosityLevel
 
 __all__ = [
-    "WebSocketClient",
-    "VerbosityLevel",
-    "WsCommandClient",
-    "SyncWsCommandClient",
-    "ws_command_client_from_config",
-    "async_ws_command_client_from_config",
-    "bootstrap_loop_session",
-    "connect_websocket_with_retries",
-    "websocket_url_from_config",
-    "check_daemon_status",
-    "is_daemon_live",
-    "request_daemon_config_reload",
-    "request_daemon_shutdown",
-    "fetch_skills_catalog",
-    "fetch_config_section",
-    "TEXT_COMPLETION",
-    "IMAGE_TO_TEXT",
-    "OCR",
-    "EMBED",
-    "validate_loop_input_intent_hint",
-    "envelope_langchain_message_dict",
-    "messages_from_wire_dicts",
-    # Protocol-1 wire envelope models (RFC-450 §5, IG-522 Phase 1)
+    # Config / paths
+    "SOOTHE_HOME",
+    "SOOTHE_DATA_DIR",
+    "DEFAULT_EXECUTE_TIMEOUT",
+    "migrate_data_to_subdir",
+    "CliConfigProtocol",
+    "DaemonConfigProtocol",
+    "DaemonTransportConfigProtocol",
+    "WebSocketConfigProtocol",
+    # Protocol codec helpers
+    "encode_websocket_text",
+    "decode_websocket_text",
+    # Wire envelopes
     "DEFAULT_PROTO",
     "MessageType",
     "WireEnvelope",
@@ -138,44 +73,6 @@ __all__ = [
     "BatchResponseEnvelope",
     "encode_envelope",
     "decode_envelope",
-    # Client-side params validation models (RFC-450 §6.5)
-    "LoopGetParams",
-    "LoopListParams",
-    "LoopTreeParams",
-    "LoopPruneParams",
-    "LoopDeleteParams",
-    "LoopNewParams",
-    "LoopReattachParams",
-    "LoopInputParams",
-    "LoopMessagesParams",
-    "LoopStateGetParams",
-    "LoopStateUpdateParams",
-    "LoopCardsFetchParams",
-    "LoopDetachParams",
-    "SubscribeParams",
-    "AutopilotSubscribeParams",
-    "JobCreateParams",
-    "JobStatusParams",
-    "JobPauseParams",
-    "JobResumeParams",
-    "JobCancelParams",
-    "JobDagParams",
-    "JobGuidanceParams",
-    "CronAddParams",
-    "CronListParams",
-    "CronShowParams",
-    "CronCancelParams",
-    "DaemonStatusParams",
-    "DaemonShutdownParams",
-    "ConfigGetParams",
-    "ConfigReloadParams",
-    "SkillsListParams",
-    "ModelsListParams",
-    "InvokeSkillParams",
-    "McpStatusParams",
-    "AuthParams",
-    "AuthRefreshParams",
-    "SlashCommandParams",
-    "RpcCommandParams",
-    "DisconnectParams",
+    "envelope_langchain_message_dict",
+    "messages_from_wire_dicts",
 ]

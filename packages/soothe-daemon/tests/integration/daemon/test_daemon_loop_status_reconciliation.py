@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from tests.integration.daemon_fixtures import (

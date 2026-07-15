@@ -14,7 +14,7 @@ from collections import Counter
 from pathlib import Path
 
 import typer
-from soothe_sdk.client import (
+from soothe_client import (
     is_daemon_live,
     websocket_url_from_config,
     ws_command_client_from_config,

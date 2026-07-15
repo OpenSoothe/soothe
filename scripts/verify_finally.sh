@@ -113,8 +113,16 @@ for arg in "$@"; do
   esac
 done
 
-# All packages in dependency order
-ALL_PACKAGES=(soothe-sdk soothe-cli soothe soothe-daemon)
+# All packages in dependency order (soothe-client-python lives under client/python)
+ALL_PACKAGES=(soothe-sdk soothe-client-python soothe-cli soothe soothe-daemon)
+
+# Resolve package root directory (most packages live under packages/; Python client is under client/).
+package_dir() {
+  case "$1" in
+  soothe-client-python) echo "$WORKSPACE_ROOT/client/python" ;;
+  *) echo "$WORKSPACE_ROOT/packages/$1" ;;
+  esac
+}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # HELPER FUNCTIONS
@@ -419,7 +427,7 @@ validate_package_dependencies() {
 
   # Rule 2: soothe-sdk MUST NOT import any other package
   # Optimized: single grep pass instead of two
-  violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
+  violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe_client|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe_client|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
   if [ -n "$violations" ]; then
     print_fail "sdk must be independent"
     record_check_outcome "dependencies" "sdk independence" "fail"
@@ -428,6 +436,19 @@ validate_package_dependencies() {
   else
     print_ok "sdk independence"
     record_check_outcome "dependencies" "sdk independence" "pass"
+  fi
+
+  # Rule 2b: soothe-client-python must not import cli/daemon/core
+  # Use word-boundary-style alternation so soothe_client / soothe_sdk self-imports are allowed.
+  violations=$(grep -rE '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' client/python/src --include='*.py' 2>/dev/null | head -10 || true)
+  if [ -n "$violations" ]; then
+    print_fail "soothe-client-python must not import soothe/cli/daemon"
+    record_check_outcome "dependencies" "client → core/cli/daemon boundary" "fail"
+    record_failure_log "Dependency: client independence" "$violations"
+    return 1
+  else
+    print_ok "client → sdk only (no core/cli/daemon)"
+    record_check_outcome "dependencies" "client → core/cli/daemon boundary" "pass"
   fi
 
   # Rule 3: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
@@ -456,10 +477,10 @@ validate_package_dependencies() {
   # Rule 4: soothe-daemon MUST NOT depend on soothe-cli in core dependencies
   # Optimized: read file once, grep from variable
   daemon_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe-daemon/pyproject.toml 2>/dev/null || true)
-  if echo "$daemon_deps" | grep -qE '"soothe-cli'; then
+  if echo "$daemon_deps" | grep -qE '"soothe-cli("|>=)'; then
     print_fail "soothe-daemon pyproject.toml lists soothe-cli in core deps"
     record_check_outcome "dependencies" "daemon ↛ soothe-cli (pyproject)" "fail"
-    record_failure_log "Dependency: daemon pyproject.toml" "$(echo "$daemon_deps" | grep -nE '"soothe-cli')"
+    record_failure_log "Dependency: daemon pyproject.toml" "$(echo "$daemon_deps" | grep -nE '"soothe-cli("|>=)')"
     return 1
   fi
   print_ok "daemon ↛ soothe-cli (runtime)"
@@ -557,13 +578,15 @@ _format_check_pkg() {
   local pkg="$1"
   local exit_file="$2"
   local details_file="$3"
+  local pkg_root
+  pkg_root="$(package_dir "$pkg")"
   local paths="src/"
-  if [ -d "$WORKSPACE_ROOT/packages/$pkg/tests/" ]; then
+  if [ -d "$pkg_root/tests/" ]; then
     paths="src/ tests/"
   fi
   local output
   local exit_code=0
-  output=$(cd "$WORKSPACE_ROOT/packages/$pkg" && "$VENV_RUFF" format --check $paths 2>&1) || exit_code=$?
+  output=$(cd "$pkg_root" && "$VENV_RUFF" format --check $paths 2>&1) || exit_code=$?
   echo "$exit_code" >"$exit_file"
   if [ "$exit_code" -ne 0 ]; then
     printf '\n[%s]\n%s\n' "$pkg" "$output" >"${details_file}.${pkg}"
@@ -575,18 +598,20 @@ _lint_check_pkg() {
   local pkg="$1"
   local exit_file="$2"
   local details_file="$3"
+  local pkg_root
+  pkg_root="$(package_dir "$pkg")"
   local paths="src/"
-  if [ -d "$WORKSPACE_ROOT/packages/$pkg/tests/" ]; then
+  if [ -d "$pkg_root/tests/" ]; then
     paths="src/ tests/"
   fi
   local output
   local exit_code=0
-  output=$(cd "$WORKSPACE_ROOT/packages/$pkg" && "$VENV_RUFF" check $paths 2>&1) || exit_code=$?
+  output=$(cd "$pkg_root" && "$VENV_RUFF" check $paths 2>&1) || exit_code=$?
   echo "$exit_code" >"$exit_file"
   if [ "$exit_code" -ne 0 ]; then
     printf '\n[%s]\n%s\n' "$pkg" "$output" >"${details_file}.${pkg}"
     local concise_output
-    concise_output=$(cd "$WORKSPACE_ROOT/packages/$pkg" && "$VENV_RUFF" check --output-format concise $paths 2>&1) || true
+    concise_output=$(cd "$pkg_root" && "$VENV_RUFF" check --output-format concise $paths 2>&1) || true
     printf '%s\n' "$concise_output" >"${details_file}.${pkg}.concise"
   fi
 }
@@ -597,14 +622,16 @@ _run_pkg_tests_streaming() {
   local pkg="$1"
   local failures_file="$2"
   local slow_file="$3"
-  cd "$WORKSPACE_ROOT/packages/$pkg"
+  local pkg_root
+  pkg_root="$(package_dir "$pkg")"
+  cd "$pkg_root"
 
-  # Use pytest-xdist for packages with mostly sync tests (sdk, cli).
+  # Use pytest-xdist for packages with mostly sync tests (sdk, cli, client).
   # soothe and soothe-daemon have many async fixtures that don't work well with xdist.
   local xdist_opts=""
   if "$VENV_PYTHON" -c "import xdist" 2>/dev/null; then
     case "$pkg" in
-    soothe-sdk | soothe-cli)
+    soothe-sdk | soothe-client-python | soothe-cli)
       xdist_opts="-n4 --dist=loadgroup"
       ;;
     *)
@@ -957,7 +984,7 @@ run_tests() {
 
   # Run tests sequentially package-by-package with real-time output
   for pkg in "${ALL_PACKAGES[@]}"; do
-    if [ ! -d "$WORKSPACE_ROOT/packages/$pkg/tests/unit" ]; then
+    if [ ! -d "$(package_dir "$pkg")/tests/unit" ]; then
       continue
     fi
 

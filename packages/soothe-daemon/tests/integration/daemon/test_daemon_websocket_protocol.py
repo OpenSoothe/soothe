@@ -11,7 +11,7 @@ import pytest_asyncio
 import websockets.asyncio.client
 import websockets.exceptions
 from soothe.config import SootheConfig
-from soothe_sdk.client import WebSocketClient
+from soothe_client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.channels.websocket import WebSocketChannel

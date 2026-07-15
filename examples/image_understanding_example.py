@@ -1,7 +1,7 @@
 """Image understanding example -- demonstrates vision processing via daemon API.
 
 This example shows how to send an image to the Soothe daemon for analysis
-using the WebSocket client from soothe-sdk. The daemon performs vision
+using the WebSocket client from soothe-client-python. The daemon performs vision
 preflight (IG-327) to extract visual information before main processing.
 
 Usage:
@@ -15,7 +15,7 @@ Usage:
 
 The example:
 1. Loads an image file and converts to base64 attachment format
-2. Connects to the daemon via WebSocket (soothe-sdk client)
+2. Connects to the daemon via WebSocket (soothe_client)
 3. Sends input message with text + image attachment
 4. Streams response events and displays vision preflight results
 """
@@ -28,9 +28,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from _config_helper import load_example_config
-from soothe_sdk.client import (
+from soothe_client import (
     WebSocketClient,
-    bootstrap_thread_session,
+    bootstrap_loop_session,
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
@@ -284,15 +284,14 @@ async def main() -> None:
         sys.exit(1)
 
     try:
-        # Bootstrap thread session (handshake + new thread)
-        print("\n[Session] Bootstrapping thread...")
-        status_event = await bootstrap_thread_session(
+        # Bootstrap loop session (handshake + new loop)
+        print("\n[Session] Bootstrapping loop...")
+        status_event = await bootstrap_loop_session(
             client,
-            resume_thread_id=None,  # Create new thread
-            verbosity="detailed",  # High verbosity for detailed output
+            resume_loop_id=None,  # Create new loop
         )
-        thread_id = status_event.get("thread_id")
-        print(f"[Session] Thread created: {thread_id}")
+        thread_id = status_event.get("loop_id") or status_event.get("thread_id")
+        print(f"[Session] Loop created: {thread_id}")
 
         # Send input with image attachment
         print("\n[Input] Sending query with image attachment...")

@@ -473,7 +473,7 @@ class _StartupMixin:
             ConnectionError: If the daemon is not reachable or ready in time.
             Exception: If loop bootstrap fails.
         """
-        from soothe_sdk.client import (
+        from soothe_client import (
             is_daemon_live,
             websocket_url_from_config,
         )

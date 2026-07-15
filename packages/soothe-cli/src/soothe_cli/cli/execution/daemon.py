@@ -12,7 +12,7 @@ import signal
 from typing import Any
 
 import typer
-from soothe_sdk.client import (
+from soothe_client import (
     WebSocketClient,
     async_ws_command_client_from_config,
     bootstrap_loop_session,
@@ -120,8 +120,6 @@ async def _run_headless_session_once(
     max_iterations: int | None = None,
 ) -> tuple[int, bool]:
     """Run one headless daemon session; return ``(exit_code, retry_on_worker_loss)``."""
-    from soothe_sdk.client import WebSocketClient
-
     ws_url = websocket_url_from_config(cfg)
     client = WebSocketClient(url=ws_url)
 
