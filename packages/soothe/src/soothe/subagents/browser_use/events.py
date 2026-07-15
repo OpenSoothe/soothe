@@ -6,21 +6,14 @@ from typing import Literal
 
 from pydantic import ConfigDict
 from soothe_sdk.core.events import SubagentEvent
-from soothe_sdk.core.subagent_wire import register_subagent_wire_event_types
 from soothe_sdk.core.verbosity import VerbosityTier
-from soothe_sdk.plugin.registry import register_event
+
+from soothe.foundation.events import register_event
 
 # Event type constants defined locally (self-contained pattern, RFC-0018)
 SUBAGENT_BROWSER_USE_STARTED = "soothe.subagent.browser_use.started"
 SUBAGENT_BROWSER_USE_COMPLETED = "soothe.subagent.browser_use.completed"
 SUBAGENT_BROWSER_USE_STEP_COMPLETED = "soothe.subagent.browser_use.step.completed"
-
-# Register wire types for emission allowlisting
-register_subagent_wire_event_types(
-    SUBAGENT_BROWSER_USE_STARTED,
-    SUBAGENT_BROWSER_USE_COMPLETED,
-    SUBAGENT_BROWSER_USE_STEP_COMPLETED,
-)
 
 
 class BrowserUseStartedEvent(SubagentEvent):
@@ -58,6 +51,7 @@ class BrowserUseStepCompletedEvent(SubagentEvent):
     model_config = ConfigDict(extra="allow")
 
 
+# Foundation register_event → NORMAL client-wire visibility for stream forwards.
 register_event(
     BrowserUseStartedEvent,
     verbosity=VerbosityTier.NORMAL,

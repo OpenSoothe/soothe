@@ -36,7 +36,11 @@ _DESC_DISPLAY_MAX = 200
 
 
 def _extract_subagent_report(result: Any) -> str:
-    """Mirror SubAgentMiddleware return text (structured_response or last AI)."""
+    """Mirror SubAgentMiddleware return text, plus CompiledSubAgent ``answer``.
+
+    Intake-only specialists (deep_research / academic_research) write the user-facing
+    report to state ``answer`` rather than only an ``AIMessage`` in ``messages``.
+    """
     if not isinstance(result, dict):
         return (str(result) if result is not None else "").strip()
 
@@ -49,6 +53,12 @@ def _extract_subagent_report(result: Any) -> str:
         if isinstance(structured, (dict, list)):
             return json.dumps(structured).strip()
         return str(structured).strip()
+
+    answer = result.get("answer")
+    if answer is not None:
+        text = answer.strip() if isinstance(answer, str) else str(answer).strip()
+        if text:
+            return text
 
     messages = result.get("messages")
     if isinstance(messages, list):
@@ -269,6 +279,7 @@ async def _invoke_intake_only_direct(
     _record_wired_execute_ledger(
         ctx, goal_text=goal_text, report=report, wire=wire, step_id=step_id
     )
+    card_summary = report.strip().splitlines()[0][:160] if report.strip() else "Done"
     await ctx.emit(
         "wired_subagent_completed",
         {
@@ -276,7 +287,7 @@ async def _invoke_intake_only_direct(
             "invocation_id": invocation_id,
             "step_id": step_id,
             "duration_ms": duration_ms,
-            "summary": "Done",
+            "summary": card_summary,
         },
     )
     logger.info(

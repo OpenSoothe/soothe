@@ -131,6 +131,12 @@ COMMANDS: tuple[SlashCommand, ...] = (
         bypass_tier=BypassTier.QUEUED,
     ),
     SlashCommand(
+        name="/browser_use",
+        description="Route prompt to browser_use subagent (usage: /browser_use <task>)",
+        bypass_tier=BypassTier.QUEUED,
+        hidden_keywords="browser automation web",
+    ),
+    SlashCommand(
         name="/plan",
         description="Send input in plan mode (usage: /plan or /plan <prompt>)",
         bypass_tier=BypassTier.QUEUED,

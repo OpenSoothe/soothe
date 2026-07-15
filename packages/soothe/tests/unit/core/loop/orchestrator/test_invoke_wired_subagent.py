@@ -159,6 +159,17 @@ async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
     assert not any(e[0].startswith("wired_subagent_") for e in emitted)
 
 
+def test_extract_subagent_report_prefers_answer_field() -> None:
+    """deep_research / academic_research put the report in state ``answer``."""
+    from soothe.foundation.sloop.orchestrator.nodes.invoke_wired_subagent import (
+        _extract_subagent_report,
+    )
+
+    body = "## Summary\n\nBrief.\n\nFull report saved to: `/tmp/r.md`"
+    assert _extract_subagent_report({"answer": body, "messages": []}) == body
+    assert _extract_subagent_report({"messages": [AIMessage(content="from msg")]}) == "from msg"
+
+
 @pytest.mark.asyncio
 async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
     intent = IntentClassification(
@@ -216,6 +227,52 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
     assert isinstance(started, dict)
     assert started["subagent"] == "deep_research"
     assert started["invocation_id"]
+
+
+@pytest.mark.asyncio
+async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="deep_research",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    body = "## Summary\n\nUS macro brief.\n\nFull report saved to: `/tmp/us.md`"
+    runnable = SimpleNamespace(ainvoke=AsyncMock(return_value={"answer": body, "messages": []}))
+    loop_state = SimpleNamespace(
+        intent=intent,
+        routing_classification=build_loop_routing_classification(intent, None),
+        goal="research US economy",
+        goal_user_submission="research US economy",
+        total_tokens_used=0,
+        thread_id="t1",
+        workspace=None,
+        iteration=0,
+        _loop_messages_cache=[],
+    )
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, payload: object) -> None:
+        emitted.append((event_type, payload))
+
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        preferred_subagent=None,
+        scratch=SimpleNamespace(plan_result=None),
+        emit=_emit,
+        ce=None,
+        core_agent=SimpleNamespace(
+            lookup_intake_only_subagent=lambda name: (
+                {"name": "deep_research", "runnable": runnable} if name == "deep_research" else None
+            )
+        ),
+    )
+    out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
+    assert out == {"wired_route_next": "goal_completion"}
+    assert any(getattr(m, "content", None) == body for m in loop_state._loop_messages_cache)
+    completed = next(p for t, p in emitted if t == "wired_subagent_completed")
+    assert isinstance(completed, dict)
+    assert completed["summary"].startswith("## Summary")
 
 
 @pytest.mark.asyncio

@@ -229,13 +229,23 @@ progressive_skills:
   intent_prefetch_min_query_chars: 4
 
 # ============================================================
-# TOOLS (execution background logs)
+# TOOLS (execution background logs + web search)
 # ============================================================
 tools:
   execution:
     enabled: true
     background_log_dir: null
     background_log_retention_days: 7
+  wizsearch:
+    enabled: true
+    # Prefer free/local engines; omit tavily (needs TAVILY_API_KEY).
+    default_engines:
+      - duckduckgo
+      - bing
+    max_results_per_engine: 10
+    timeout: 30
+    # Local Clash/V2Ray HTTP proxy for duckduckgo/bing.
+    proxy: http://127.0.0.1:7890
 
 # ============================================================
 # SKILLIFY (daemon-shared semantic skill search)

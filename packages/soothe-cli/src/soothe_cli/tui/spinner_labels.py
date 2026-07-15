@@ -17,6 +17,7 @@ SPINNER_LABEL_RETRYING = "Retrying"
 SPINNER_LABEL_INPUT = "Input"
 SPINNER_LABEL_WAITING = "Waiting"
 SPINNER_LABEL_CONNECTING = "Connecting"
+SPINNER_LABEL_DELEGATING = "Delegating"
 
 # Backend plan_phase_status labels (orchestrator nodes) → display word.
 _PLAN_PHASE_TO_SPINNER: dict[str, str] = {
@@ -38,7 +39,13 @@ def map_plan_phase_spinner_label(label: str) -> str:
     key = label.strip()
     if not key:
         return SPINNER_LABEL_THINKING
-    return _PLAN_PHASE_TO_SPINNER.get(key, SPINNER_LABEL_THINKING)
+    mapped = _PLAN_PHASE_TO_SPINNER.get(key)
+    if mapped:
+        return mapped
+    # Intake-only wire: «Delegating to {subagent}» (RFC-630 / IG-602).
+    if key.lower().startswith("delegating"):
+        return SPINNER_LABEL_DELEGATING
+    return SPINNER_LABEL_THINKING
 
 
 def retry_spinner_hint(*, attempt: int, max_attempts: int) -> str | None:

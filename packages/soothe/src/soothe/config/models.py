@@ -374,6 +374,9 @@ class WebSearchConfig(ToolConfig):
         default_engines: List of default search engines to use.
         max_results_per_engine: Maximum results per search engine.
         timeout: Request timeout in seconds.
+        proxy: Optional HTTP(S) proxy URL for wizsearch engines/crawl
+            (e.g. ``http://127.0.0.1:7890``). Applied for the duration of each
+            search/crawl call; process-wide ``HTTP(S)_PROXY`` still wins if set.
 
     Note: The crawler runs in headless mode by default (BrowserConfig default in wizsearch backend).
     """
@@ -381,6 +384,7 @@ class WebSearchConfig(ToolConfig):
     default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
     max_results_per_engine: int = 10
     timeout: int = 30
+    proxy: str | None = None
 
 
 class DeepxivToolsConfig(ToolConfig):

@@ -191,6 +191,25 @@ def test_curated_subagent_wire_custom_forwarded() -> None:
     assert _forward_messages_chunk(chunk) is True
 
 
+def test_browser_use_step_wire_custom_forwarded() -> None:
+    """browser_use steps must be foundation-registered or orphan cards stay empty."""
+    import soothe.subagents.browser_use.events  # noqa: F401
+
+    chunk = (
+        (),
+        "custom",
+        {
+            "type": "soothe.subagent.browser_use.step.completed",
+            "step_index": 2,
+            "url": "https://example.com",
+            "action_preview": "navigate",
+            "status": "running",
+            "invocation_id": "abc",
+        },
+    )
+    assert _forward_messages_chunk(chunk) is True
+
+
 def test_subagent_progress_wire_custom_forwarded() -> None:
     chunk = (
         ("tools:abc123",),

@@ -9,6 +9,7 @@ from typing import Any
 
 from soothe_sdk.plugin import plugin, subagent
 
+from . import events as _events  # noqa: F401 — register soothe.subagent.browser_use.* wire types
 from .implementation import (
     _build_browser_use_graph,  # noqa: F401 - needed for tests
     create_browser_use_subagent,
@@ -30,9 +31,7 @@ class BrowserUsePlugin:
     """
 
     async def on_load(self, context: Any) -> None:
-        """Verify browser-use is available and register wire events."""
-        import soothe.subagents.browser_use.events  # noqa: F401
-
+        """Verify browser-use is available."""
         try:
             import browser_use  # noqa: F401
         except ImportError as e:

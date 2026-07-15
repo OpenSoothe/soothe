@@ -30,6 +30,16 @@ _LOG_QUERY_CHARS = 120
 _LOG_URL_CHARS = 160
 
 
+def _apply_shared_wizsearch_config(tool: Any, config: dict[str, Any]) -> None:
+    """Apply shared toolkit config keys onto a search/crawl tool instance."""
+    if not config:
+        return
+    if "proxy" in config:
+        tool.proxy = config["proxy"]
+    if "debug" in config and hasattr(tool, "debug_mode"):
+        tool.debug_mode = bool(config["debug"])
+
+
 class WizsearchSearchTool(BaseTool):
     """Multi-engine web search powered by wizsearch.
 
@@ -55,6 +65,7 @@ class WizsearchSearchTool(BaseTool):
     default_max_results_per_engine: int = Field(default=10)
     default_timeout: int = Field(default=30)
     default_engines: list[str] = Field(default_factory=lambda: ["tavily"])
+    proxy: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     debug_mode: bool = False
 
@@ -63,7 +74,7 @@ class WizsearchSearchTool(BaseTool):
 
         Args:
             **data: Tool configuration, including 'config' dict with
-                'default_engines', 'max_results_per_engine', 'timeout', 'debug'.
+                'default_engines', 'max_results_per_engine', 'timeout', 'proxy', 'debug'.
         """
         super().__init__(**data)
         if self.config:
@@ -73,13 +84,12 @@ class WizsearchSearchTool(BaseTool):
                 self.default_max_results_per_engine = self.config["max_results_per_engine"]
             if "timeout" in self.config:
                 self.default_timeout = self.config["timeout"]
-            self.debug_mode = self.config.get("debug", False)
+            _apply_shared_wizsearch_config(self, self.config)
 
     @tool_error_handler("wizsearch_search", return_type="str")
     def _run(
         self,
         query: str,
-        limit: int | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -87,15 +97,13 @@ class WizsearchSearchTool(BaseTool):
 
         Args:
             query: Search query.
-            limit: Alias for max_results_per_engine (for backward compatibility).
             max_results_per_engine: Max results per engine.
             timeout_seconds: Request timeout.
 
         Returns:
             Formatted search results.
         """
-        # Use limit if provided, otherwise fall back to max_results_per_engine or default
-        effective_max = limit or max_results_per_engine or self.default_max_results_per_engine
+        effective_max = max_results_per_engine or self.default_max_results_per_engine
         logger.info(
             "[Wizsearch] wizsearch_search invoke sync query=%r engines=%s max_results=%d timeout=%ds",
             log_preview(query, chars=_LOG_QUERY_CHARS),
@@ -110,6 +118,7 @@ class WizsearchSearchTool(BaseTool):
                 timeout_seconds=timeout_seconds or self.default_timeout,
                 engines=self.default_engines,
                 debug_mode=self.debug_mode,
+                proxy=self.proxy,
             )
         )
 
@@ -117,7 +126,6 @@ class WizsearchSearchTool(BaseTool):
     async def _arun(
         self,
         query: str,
-        limit: int | None = None,
         max_results_per_engine: int | None = None,
         timeout_seconds: int | None = None,
     ) -> str:
@@ -125,15 +133,13 @@ class WizsearchSearchTool(BaseTool):
 
         Args:
             query: Search query.
-            limit: Alias for max_results_per_engine (for backward compatibility).
             max_results_per_engine: Max results per engine.
             timeout_seconds: Request timeout.
 
         Returns:
             Formatted search results.
         """
-        # Use limit if provided, otherwise fall back to max_results_per_engine or default
-        effective_max = limit or max_results_per_engine or self.default_max_results_per_engine
+        effective_max = max_results_per_engine or self.default_max_results_per_engine
         logger.info(
             "[Wizsearch] wizsearch_search invoke async query=%r engines=%s max_results=%d timeout=%ds",
             log_preview(query, chars=_LOG_QUERY_CHARS),
@@ -147,6 +153,7 @@ class WizsearchSearchTool(BaseTool):
             timeout_seconds=timeout_seconds or self.default_timeout,
             engines=self.default_engines,
             debug_mode=self.debug_mode,
+            proxy=self.proxy,
         )
 
 
@@ -169,15 +176,17 @@ class WizsearchCrawlTool(BaseTool):
     )
 
     default_content_format: str = Field(default="markdown")
+    proxy: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
 
     def __init__(self, **data: Any) -> None:
         """Initialize wizsearch crawl tool.
 
         Args:
-            **data: Tool configuration.
+            **data: Tool configuration, including 'config' with optional ``proxy``.
         """
         super().__init__(**data)
+        _apply_shared_wizsearch_config(self, self.config)
 
     @tool_error_handler("wizsearch_crawl", return_type="str")
     def _run(
@@ -209,6 +218,7 @@ class WizsearchCrawlTool(BaseTool):
                 url=url,
                 content_format=content_format or self.default_content_format,
                 only_text=only_text,
+                proxy=self.proxy,
             )
         )
 
@@ -251,6 +261,7 @@ class WizsearchCrawlTool(BaseTool):
             url=url,
             content_format=content_format or self.default_content_format,
             only_text=only_text,
+            proxy=self.proxy,
         )
 
         # Return content or error message

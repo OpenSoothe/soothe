@@ -3980,6 +3980,10 @@ async def execute_task_textual(
                                             elapsed_seconds=time.monotonic() - start_time,
                                         )
                                         goal_completed_logged = True
+                                    # Loop is done even if the WS turn stream is slow to
+                                    # close — do not leave the thinking row spinning.
+                                    if adapter._set_spinner and not clarification_pending:
+                                        await adapter._set_spinner(None)
                                 continue
 
                             if event_type in (
@@ -4338,6 +4342,9 @@ async def execute_task_textual(
                                     step_id=str(data.get("step_id") or ""),
                                     description=str(data.get("description") or ""),
                                 )
+                                # Orphan card owns progress; demote thinking row (RFC-628 III).
+                                if adapter._set_spinner and not clarification_pending:
+                                    await adapter._set_spinner(None)
                                 continue
 
                             if event_type in (
@@ -4365,6 +4372,8 @@ async def execute_task_textual(
                                     duration_ms=int(data.get("duration_ms") or 0),
                                     summary=summary or ("Done" if success else "Failed"),
                                 )
+                                if adapter._set_spinner and not clarification_pending:
+                                    await adapter._set_spinner(None)
                                 continue
 
                             if event_type == INTENT_CLASSIFIED_EVENT_TYPE:
@@ -4542,7 +4551,7 @@ async def execute_task_textual(
                 and adapter._goal_tree_message._loop_executing()
             ):
                 adapter._goal_tree_message.set_interrupted(stream_end_error)
-            if stream_end_error == "Stream cancelled" and adapter._set_spinner:
+            if adapter._set_spinner and not clarification_pending:
                 await adapter._set_spinner(None)
 
         await dispatch_hook("task.complete", {"loop_id": loop_id})

@@ -465,10 +465,10 @@ class _ExecutionMixin:
         )
         from soothe_cli.tui.commands.slash_commands import COMMANDS as _RFC404_COMMANDS
 
-        # RFC-454 daemon *routing* commands (/research, /plan, optional /«id»):
+        # RFC-454 daemon *routing* commands (/deep_research, /plan, /browser_use, …):
         # send the full line as a normal user turn so ``parse_subagent_from_input``
         # runs in the daemon adapter (same as headless CLI). Without this branch,
-        # ``cmd == "/research …"`` never matches the bare single-token handlers below.
+        # ``cmd == "/deep_research …"`` never matches the bare single-token handlers below.
         full_stripped = command.strip()
         first_word, query = parse_slash_command(full_stripped)
         if first_word:

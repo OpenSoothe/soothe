@@ -12,7 +12,8 @@ import logging
 import os
 import re
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 from urllib.parse import urlparse
@@ -253,6 +254,51 @@ def _maybe_apply_tavily_key() -> None:
         os.environ["TAVILY_API_KEY"] = alt
 
 
+_PROXY_ENV_KEYS = ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
+
+
+def normalize_proxy_url(proxy: str | None) -> str | None:
+    """Normalize a host:port or URL into an ``http://`` proxy URL."""
+    if proxy is None:
+        return None
+    text = str(proxy).strip()
+    if not text:
+        return None
+    if "://" not in text:
+        text = f"http://{text}"
+    return text
+
+
+@contextmanager
+def wizsearch_proxy_env(proxy: str | None) -> Iterator[str | None]:
+    """Temporarily set HTTP(S)_PROXY for wizsearch when config proxy is set.
+
+    Existing process proxy env vars take precedence (left unchanged). Yields the
+    effective proxy URL actually used (env or config), or ``None``.
+    """
+    normalized = normalize_proxy_url(proxy)
+    for env_key in _PROXY_ENV_KEYS:
+        existing = os.environ.get(env_key, "").strip()
+        if existing:
+            yield existing
+            return
+    if not normalized:
+        yield None
+        return
+    saved = {key: os.environ.get(key) for key in _PROXY_ENV_KEYS}
+    try:
+        for key in _PROXY_ENV_KEYS:
+            os.environ[key] = normalized
+        logger.debug("[Wizsearch] using config proxy %s", normalized)
+        yield normalized
+    finally:
+        for key, prior in saved.items():
+            if prior is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = prior
+
+
 # ---------------------------------------------------------------------------
 # Search implementation
 # ---------------------------------------------------------------------------
@@ -355,6 +401,7 @@ async def perform_wizsearch_search(
     timeout_seconds: int = 30,
     engines: list[str] | None = None,
     debug_mode: bool = False,
+    proxy: str | None = None,
 ) -> str:
     """Perform web search using wizsearch.
 
@@ -364,6 +411,7 @@ async def perform_wizsearch_search(
         timeout_seconds: Timeout in seconds (default: 30).
         engines: List of engines (default: ["tavily", "duckduckgo"]).
         debug_mode: Enable debug output (default: False).
+        proxy: Optional HTTP(S) proxy URL (e.g. ``http://127.0.0.1:7890``).
 
     Returns:
         Formatted search result string.
@@ -417,7 +465,10 @@ async def perform_wizsearch_search(
     )
     started = time.perf_counter()
     try:
-        with capture_subagent_output("wizsearch", suppress=not debug_mode):
+        with (
+            wizsearch_proxy_env(proxy),
+            capture_subagent_output("wizsearch", suppress=not debug_mode),
+        ):
             searcher = WizSearch(config=WizSearchConfig(**config_kwargs))
             result = await searcher.search(query=query)
 
@@ -464,6 +515,7 @@ async def perform_wizsearch_crawl(
     content_format: str = "markdown",
     *,
     only_text: bool = False,
+    proxy: str | None = None,
 ) -> dict[str, object]:
     """Crawl a web page using wizsearch PageCrawler.
 
@@ -471,6 +523,7 @@ async def perform_wizsearch_crawl(
         url: URL to crawl.
         content_format: Output format ('markdown', 'html', 'text').
         only_text: Extract only text content (default: False).
+        proxy: Optional HTTP(S) proxy URL (e.g. ``http://127.0.0.1:7890``).
 
     Returns:
         Dict with url, content_format, only_text, headless, content, content_length, error.
@@ -507,11 +560,15 @@ async def perform_wizsearch_crawl(
         }
 
     try:
-        with capture_subagent_output("wizsearch", suppress=True):
+        with (
+            wizsearch_proxy_env(proxy) as effective_proxy,
+            capture_subagent_output("wizsearch", suppress=True),
+        ):
             crawler = PageCrawler(
                 url=validated_url,
                 content_format=selected_format,
                 only_text=only_text,
+                proxy=effective_proxy,
             )
             content = await crawler.crawl()
 

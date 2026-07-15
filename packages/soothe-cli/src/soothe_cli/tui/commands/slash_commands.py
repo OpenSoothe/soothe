@@ -272,7 +272,7 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "requires_query": True,
         "handler": show_cron_add,
     },
-    # Daemon routing commands (3)
+    # Daemon routing commands
     "/plan": {"location": "daemon", "type": "routing", "description": "Trigger plan mode"},
     "/deep_research": {
         "location": "daemon",
@@ -284,6 +284,12 @@ COMMANDS: dict[str, dict[str, Any]] = {
         "location": "daemon",
         "type": "routing",
         "description": "Route query to Academic Research subagent",
+        "requires_query": True,
+    },
+    "/browser_use": {
+        "location": "daemon",
+        "type": "routing",
+        "description": "Route query to Browser Use subagent",
         "requires_query": True,
     },
 }

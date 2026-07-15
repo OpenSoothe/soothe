@@ -373,6 +373,7 @@ def _resolve_single_tool_group_uncached(
                 "default_engines": ws.default_engines,
                 "max_results_per_engine": ws.max_results_per_engine,
                 "timeout": ws.timeout,
+                "proxy": ws.proxy,
             }
         if config and hasattr(config, "debug"):
             web_search_config["debug"] = config.debug

@@ -128,10 +128,12 @@ Gate: `./scripts/verify_finally.sh` before commit.
 
 ## Cleanse
 
-- Docs/comments that describe intake-only as «ainvoke only» without streaming
-- Dual `{step}:t0` SubAgent registry alias for orphans (use `wire:{name}:{invocation}` + `_orphan_cards_by_invocation` / step_id lookup only)
-- Any dead dual path that synthesizes fake step/`task` for this UX (must not ship)
-- Temporary debug hacks for plan-phase-only progress once card path ships
+- [x] Docs/comments that describe intake-only as «ainvoke only» without streaming
+- [x] Dual `{step}:t0` SubAgent registry alias for orphans (use `wire:{name}:{invocation}` + `_orphan_cards_by_invocation` / step_id lookup only)
+- [x] Any dead dual path that synthesizes fake step/`task` for this UX (must not ship)
+- [x] Temporary debug hacks for plan-phase-only progress once card path ships
+- [x] `browser_use` events: foundation `register_event` only (no SDK registry / duplicate wire allowlist)
+- [x] Stale `/research` slash examples in CLI/TUI comments; `/«subagent»` help points at plugins
 
 ---
 

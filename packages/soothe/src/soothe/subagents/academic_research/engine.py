@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from operator import add
 from typing import TYPE_CHECKING, Annotated, Any
 
+from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
@@ -579,7 +580,7 @@ def build_academic_research_engine(
             ).to_dict(),
             logger,
         )
-        return {"answer": report}
+        return {"answer": report, "messages": [AIMessage(content=report)]}
 
     graph = StateGraph(AcademicResearchEngineState)
     graph.add_node("plan_research", plan_research_node)

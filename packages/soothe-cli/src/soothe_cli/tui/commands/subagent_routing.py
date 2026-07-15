@@ -11,9 +11,13 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
 }
 
 # Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
-SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = ("deep_research", "academic_research")
-
-BUILTIN_SUBAGENT_NAMES: list[str] = list(SUBAGENT_SLASH_ROUTE_IDS)
+# Longest-first so a shorter id never shadows a longer prefix match.
+# Intake-only specialists (IG-600/601) must stay here so slash sets preferred_subagent.
+SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = (
+    "academic_research",
+    "deep_research",
+    "browser_use",
+)
 
 
 def get_subagent_display_name(technical_name: str) -> str:
@@ -34,7 +38,7 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/deep_research``)
+    Detects subagent routing commands (e.g. ``/deep_research``, ``/browser_use``)
     and extracts the subagent name along with the cleaned input text.
 
     Args:
@@ -47,14 +51,22 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
 
     Examples:
         ``"/deep_research check this"`` -> ``("deep_research", "check this")``
+        ``"/browser_use open example.com"`` -> ``("browser_use", "open example.com")``
         ``"hello world"`` -> ``(None, "hello world")``
     """
     first_match: tuple[int, str] | None = None
+    lowered = user_input.lower()
 
     for subagent_name in SUBAGENT_SLASH_ROUTE_IDS:
         subcommand = f"/{subagent_name}"
-        idx = user_input.lower().find(subcommand)
-        if idx != -1 and (first_match is None or idx < first_match[0]):
+        idx = lowered.find(subcommand)
+        if idx == -1:
+            continue
+        end = idx + len(subcommand)
+        # Require end-of-string or whitespace so ``/browser`` does not match ``/browser_use``.
+        if end < len(lowered) and not lowered[end].isspace():
+            continue
+        if first_match is None or idx < first_match[0]:
             first_match = (idx, subagent_name)
 
     if first_match:

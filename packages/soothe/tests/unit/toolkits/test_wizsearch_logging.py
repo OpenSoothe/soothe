@@ -12,6 +12,35 @@ from soothe.toolkits._internal import wizsearch as wiz_internal
 _TAVILY_ENV = patch.dict(os.environ, {"TAVILY_API_KEY": "test-key"}, clear=False)
 
 
+def test_normalize_proxy_url_adds_scheme() -> None:
+    assert wiz_internal.normalize_proxy_url("127.0.0.1:7890") == "http://127.0.0.1:7890"
+    assert wiz_internal.normalize_proxy_url("http://127.0.0.1:7890") == "http://127.0.0.1:7890"
+    assert wiz_internal.normalize_proxy_url(None) is None
+    assert wiz_internal.normalize_proxy_url("  ") is None
+
+
+def test_wizsearch_proxy_env_sets_and_restores() -> None:
+    for key in wiz_internal._PROXY_ENV_KEYS:
+        os.environ.pop(key, None)
+    try:
+        with wiz_internal.wizsearch_proxy_env("127.0.0.1:7890") as effective:
+            assert effective == "http://127.0.0.1:7890"
+            assert os.environ["HTTPS_PROXY"] == "http://127.0.0.1:7890"
+            assert os.environ["HTTP_PROXY"] == "http://127.0.0.1:7890"
+        assert "HTTPS_PROXY" not in os.environ
+        assert "HTTP_PROXY" not in os.environ
+    finally:
+        for key in wiz_internal._PROXY_ENV_KEYS:
+            os.environ.pop(key, None)
+
+
+def test_wizsearch_proxy_env_preserves_existing() -> None:
+    with patch.dict(os.environ, {"HTTPS_PROXY": "http://existing:1"}, clear=False):
+        with wiz_internal.wizsearch_proxy_env("http://127.0.0.1:7890") as effective:
+            assert effective == "http://existing:1"
+            assert os.environ["HTTPS_PROXY"] == "http://existing:1"
+
+
 @pytest.mark.asyncio
 async def test_perform_wizsearch_search_logs_start_and_done(
     caplog: pytest.LogCaptureFixture,

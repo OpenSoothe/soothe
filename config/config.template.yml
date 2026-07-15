@@ -371,6 +371,9 @@ tools:
     - tavily
     max_results_per_engine: 10
     timeout: 30
+    # Optional HTTP(S) proxy for search/crawl (e.g. http://127.0.0.1:7890).
+    # Process-wide HTTP_PROXY / HTTPS_PROXY still take precedence when set.
+    proxy: null
   http_requests:
     enabled: true
     allow_dangerous_requests: true

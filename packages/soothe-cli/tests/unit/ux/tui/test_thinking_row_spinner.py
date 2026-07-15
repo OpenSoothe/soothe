@@ -28,6 +28,11 @@ def test_map_plan_phase_spinner_label_known() -> None:
     assert map_plan_phase_spinner_label("Assessing continuation context") == "Assessing"
 
 
+def test_map_plan_phase_spinner_label_delegating() -> None:
+    assert map_plan_phase_spinner_label("Delegating to browser_use") == "Delegating"
+    assert map_plan_phase_spinner_label("Delegating to deep_research") == "Delegating"
+
+
 def test_map_plan_phase_spinner_label_unknown_falls_back_to_thinking() -> None:
     assert map_plan_phase_spinner_label("Unknown phase") == SPINNER_LABEL_THINKING
 

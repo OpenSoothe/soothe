@@ -20,7 +20,7 @@ from soothe_cli.tui.config import get_glyphs, is_ascii_mode, newline_shortcut
 
 _EXTRA_COMMANDS: tuple[tuple[str, str], ...] = (
     ("/skill:<name>", "Run a discovered skill by name"),
-    ("/«subagent»", "Route to a configured subagent when available"),
+    ("/«subagent»", "Route to a plugin subagent by id (built-ins listed above)"),
 )
 
 

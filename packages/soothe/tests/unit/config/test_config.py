@@ -1161,6 +1161,7 @@ class TestToolsSettings:
         assert cfg.tools.wizsearch.max_results_per_engine == 10
         assert cfg.tools.wizsearch.timeout == 30
         assert cfg.tools.wizsearch.enabled is True
+        assert cfg.tools.wizsearch.proxy is None
 
     def test_web_search_custom_config(self) -> None:
         """Test wizsearch with custom configuration."""
@@ -1171,6 +1172,7 @@ class TestToolsSettings:
                     default_engines=["tavily"],
                     max_results_per_engine=15,
                     timeout=45,
+                    proxy="http://127.0.0.1:7890",
                 )
             )
         )
@@ -1178,6 +1180,7 @@ class TestToolsSettings:
         assert cfg.tools.wizsearch.default_engines == ["tavily"]
         assert cfg.tools.wizsearch.max_results_per_engine == 15
         assert cfg.tools.wizsearch.timeout == 45
+        assert cfg.tools.wizsearch.proxy == "http://127.0.0.1:7890"
 
     def test_web_search_config_from_dict(self) -> None:
         """Test wizsearch config from dict."""
@@ -1188,6 +1191,7 @@ class TestToolsSettings:
                     "default_engines": ["brave", "tavily"],
                     "max_results_per_engine": 20,
                     "timeout": 60,
+                    "proxy": "http://127.0.0.1:7890",
                 }
             }
         )
@@ -1195,6 +1199,7 @@ class TestToolsSettings:
         assert cfg.tools.wizsearch.default_engines == ["brave", "tavily"]
         assert cfg.tools.wizsearch.max_results_per_engine == 20
         assert cfg.tools.wizsearch.timeout == 60
+        assert cfg.tools.wizsearch.proxy == "http://127.0.0.1:7890"
 
     def test_web_search_partial_config(self) -> None:
         """Test wizsearch with partial configuration."""

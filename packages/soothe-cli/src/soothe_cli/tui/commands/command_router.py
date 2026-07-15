@@ -25,7 +25,7 @@ def parse_slash_command(input_text: str) -> tuple[str, str | None]:
     """Parse slash command and extract command + query.
 
     Args:
-        input_text: Full user input (e.g., "/research topic summary")
+        input_text: Full user input (e.g., "/deep_research topic summary")
 
     Returns:
         Tuple of (command, query) where query may be None
@@ -119,7 +119,7 @@ async def route_slash_command(
     """Route slash command based on registry metadata (RFC-454).
 
     Args:
-        cmd_input: Full command input (e.g., "/memory", "/research topic")
+        cmd_input: Full command input (e.g., "/memory", "/deep_research topic")
         console: Rich console for rendering
         client: WebSocket client for daemon communication
 
@@ -237,12 +237,13 @@ async def handle_routing_command(
 ) -> None:
     """Handle daemon routing command by sending input with optional subagent (RFC-454).
 
-    For routing commands that map to a configured subagent id (e.g. ``/research``, ``/plan``),
-    sets the WebSocket ``preferred_subagent`` field so the daemon merges a subagent hint into
-    StrangeLoop (IG-349). Other routing commands (e.g. ``/plan``) are sent as plain text unchanged.
+    For routing commands that map to a configured subagent id (e.g. ``/deep_research``,
+    ``/browser_use``), sets the WebSocket ``preferred_subagent`` field so the daemon merges a
+    subagent hint into StrangeLoop (IG-349). Other routing commands (e.g. ``/plan``) are sent
+    as plain text unchanged.
 
     Args:
-        cmd_input: Full command input (e.g., "/research topic summary")
+        cmd_input: Full command input (e.g., "/deep_research topic summary")
         console: Rich console
         client: WebSocket client
         loop_id: Subscribed loop to target (required for ``loop_input``)
