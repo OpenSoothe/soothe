@@ -24,6 +24,7 @@ ExecutionMode = Literal["parallel", "dependency"]
 _BUILTIN_WIRE_SUBAGENTS = frozenset(
     {
         "planner",
+        "explorer",
         "browser_use",
         "deep_research",
         "academic_research",

@@ -228,6 +228,42 @@ progressive_skills:
   intent_prefetch_top_k: 2
   intent_prefetch_min_query_chars: 4
 
+# Keep explicit defaults for built-in subagent routing behavior.
+subagents:
+  planner:
+    enabled: true
+    model_role: think
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  explorer:
+    enabled: true
+    model_role: fast
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  deep_research:
+    enabled: true
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  academic_research:
+    enabled: true
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  browser_use:
+    enabled: true
+    model_role: default
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+
 # ============================================================
 # TOOLS (execution background logs + web search)
 # ============================================================

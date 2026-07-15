@@ -31,7 +31,8 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
     return None
 
 
-def test_allowlist_includes_academic_research_and_planner() -> None:
+def test_allowlist_includes_explorer_academic_research_and_planner() -> None:
+    assert resolve_wire_subagent(wire_subagent="explorer") == "explorer"
     assert resolve_wire_subagent(wire_subagent="academic_research") == "academic_research"
     assert resolve_wire_subagent(wire_subagent="planner") == "planner"
     assert resolve_wire_subagent(wire_subagent="plan") is None

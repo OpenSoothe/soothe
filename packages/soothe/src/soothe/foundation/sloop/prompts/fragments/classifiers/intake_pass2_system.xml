@@ -14,12 +14,13 @@ Rules:
 - wire_subagent: set when the GOAL's primary intent is to run one wired specialist end-to-end
   (explicit name, slash like /plan or /deep_research, or clear single-purpose specialist ask).
   Use null when the goal is general work that might merely use a subagent later.
-  Allowed: planner | browser_use | deep_research | academic_research.
-  Map /plan or "use the plan agent" → planner; literature/paper search → academic_research;
-  public web investigation reports → deep_research; browse/click/web UI automation → browser_use.
+  Allowed: planner | explorer | browser_use | deep_research | academic_research.
+  Map /plan or "use the plan agent" → planner; /explorer or deep codebase/file hunting → explorer;
+  literature/paper search → academic_research; public web investigation reports → deep_research;
+  browse/click/web UI automation → browser_use.
 
 JSON only:
-{"scope":"trivial"|"simple"|"complex","reasoning":"≤15 words, first person","multi_phase":bool,"wire_subagent":"planner"|"browser_use"|"deep_research"|"academic_research"|null,"requires_tool_use":bool}
+{"scope":"trivial"|"simple"|"complex","reasoning":"≤15 words, first person","multi_phase":bool,"wire_subagent":"planner"|"explorer"|"browser_use"|"deep_research"|"academic_research"|null,"requires_tool_use":bool}
 
 multi_phase: true when the goal text implies multiple ordered phases (e.g. "first X then Y", numbered steps, "and then run tests").
 requires_tool_use: true when answering needs tools or external data; false for greetings, math, or static knowledge.
@@ -35,6 +36,7 @@ Examples:
 "/deep_research latest LLM agent evals" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:deep_research
 "run academic_research on transformer attention papers" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:academic_research
 "/plan a migration from SQLite to Postgres" → scope:simple, requires_tool_use:false, multi_phase:false, wire_subagent:planner
+"/explorer where retry middleware is implemented" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:explorer
 "add tests for the new API endpoint" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
 "migrate the auth system to OAuth2" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null
 "fix this failed CI run: https://github.com/org/repo/actions/runs/123456" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null

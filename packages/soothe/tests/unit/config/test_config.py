@@ -95,16 +95,17 @@ class TestSootheConfig:
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
         assert "planner" in cfg.subagents
+        assert "explorer" in cfg.subagents
         assert "deep_research" in cfg.subagents
         assert "academic_research" in cfg.subagents
         assert "browser_use" in cfg.subagents
         assert "skillify" not in cfg.subagents
         assert "claude" not in cfg.subagents
-        assert "explore" not in cfg.subagents
         assert "scout" not in cfg.subagents
-        for name in ("planner", "deep_research", "academic_research"):
+        for name in ("planner", "explorer", "deep_research", "academic_research"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
         assert cfg.subagents["planner"].model_role == "think"
+        assert cfg.subagents["explorer"].model_role == "fast"
         assert cfg.subagents["browser_use"].enabled is True
         assert cfg.subagents["browser_use"].model_role == "default"
 

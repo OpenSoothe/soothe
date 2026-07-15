@@ -16,7 +16,7 @@ Use cases:
 - Current events and news analysis
 
 NOT for:
-- Local codebase or repository files (use explore/planner instead)
+- Local codebase or repository files (use explorer/planner instead)
 - Academic literature (use academic_research instead)
 
 Prerequisites:
@@ -164,7 +164,7 @@ async def main() -> None:
         "2. Use 'thorough' keyword for more comprehensive reports\n"
         "3. Reports include source references and citations\n"
         "4. For academic papers, consider using academic_research instead\n"
-        "5. For local codebase exploration, use the explore subagent"
+        "5. For local codebase exploration, use the explorer subagent"
     )
 
 

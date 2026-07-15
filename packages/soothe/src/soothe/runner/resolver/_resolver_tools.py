@@ -95,10 +95,12 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
     from soothe.subagents.academic_research import create_academic_research_subagent
     from soothe.subagents.browser_use import create_browser_use_subagent
     from soothe.subagents.deep_research import create_deep_research_subagent
+    from soothe.subagents.explore import create_explorer_subagent
     from soothe.subagents.plan import create_plan_subagent
 
     return {
         "planner": create_plan_subagent,
+        "explorer": create_explorer_subagent,
         "deep_research": create_deep_research_subagent,
         "academic_research": create_academic_research_subagent,
         "browser_use": create_browser_use_subagent,
@@ -553,6 +555,8 @@ def resolve_subagents(
 
         if name in ("deep_research", "academic_research"):
             model_override = _resolve_subagent_chat_model(config, sub_cfg, default_role="fast")
+        elif name == "explorer":
+            model_override = _resolve_subagent_chat_model(config, sub_cfg, default_role="fast")
         elif name == "planner":
             model_override = _resolve_subagent_chat_model(config, sub_cfg, default_role="think")
         elif name == "browser_use":
@@ -581,6 +585,12 @@ def resolve_subagents(
         if name in ("deep_research", "academic_research"):
             # Research YAML options live in ``config.subagents[name].config`` only.
             # Factories accept ``model``, ``SootheConfig``, and ``context``.
+            extra_kwargs.clear()
+            extra_kwargs["config"] = config
+            extra_kwargs["context"] = {"work_dir": resolved_cwd}
+        elif name == "explorer":
+            # Explorer YAML options live in ``config.subagents[name].config`` only.
+            # Factory accepts ``model``, ``SootheConfig``, and ``context``.
             extra_kwargs.clear()
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}

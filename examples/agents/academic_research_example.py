@@ -16,7 +16,7 @@ Use cases:
 - State-of-the-art surveys in specific domains
 
 NOT for:
-- Local codebase or repository files (use explore/planner instead)
+- Local codebase or repository files (use explorer/planner instead)
 - General web research or news (use deep_research instead)
 
 Prerequisites:
@@ -177,7 +177,7 @@ async def main() -> None:
         "2. Use 'thorough' keyword for more comprehensive research\n"
         "3. Reports include citations and source references\n"
         "4. For general web research, use deep_research instead\n"
-        "5. For local codebase exploration, use the explore subagent"
+        "5. For local codebase exploration, use the explorer subagent"
     )
 
 

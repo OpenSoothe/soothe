@@ -386,11 +386,18 @@ tools:
     timeout: 60
     max_retries: 3
 
-# SubagentConfig — overrides merge with builtin planner/deep_research/academic_research/browser_use
+# SubagentConfig — overrides merge with builtin planner/explorer/deep_research/academic_research/browser_use
 subagents:
   planner:
     enabled: true
     model_role: think
+    transport: local
+    url: null
+    config: {}
+    runtime_dir: ''
+  explorer:
+    enabled: true
+    model_role: fast
     transport: local
     url: null
     config: {}

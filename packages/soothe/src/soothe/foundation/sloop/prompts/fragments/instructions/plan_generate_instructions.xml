@@ -21,7 +21,7 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
 - ``expected_output``: Checkable completion signal.
 - ``id``: Optional short token (``01``, ``02``) or per STEP ID HINT.
 - ``delegate``: Optional open-catalog subagent when this step must **exclusively** delegate
-  via ``task`` (``planner`` only among built-ins). **Default: omit / null** on every step —
+  via ``task`` (``planner``/``explorer`` among built-ins). **Default: omit / null** on every step —
   execute CoreAgent already has ``task`` and local tools and chooses per hop.
   Do **not** set ``delegate`` to ``browser_use``, ``deep_research``, or ``academic_research``
   (intake/slash routed; never plan-wave delegates).
@@ -31,6 +31,8 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
   gap analysis from local docs, synthesis from prior step outputs, adb/shell on workspace.
 - Set ``delegate`` to ``planner`` only when the step deliverable is an agentic markdown
   execution-plan design that cannot be done with local tools alone.
+- Set ``delegate`` to ``explorer`` only when the step is pure deep readonly reconnaissance
+  (map modules, locate implementations, trace symbols) better served by iterative search.
 - Never set ``delegate`` on every step in a wave; mixed local + delegated steps are normal
   (``delegate`` null on local steps, set only where required).
 

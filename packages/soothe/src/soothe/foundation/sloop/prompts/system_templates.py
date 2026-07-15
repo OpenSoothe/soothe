@@ -99,6 +99,7 @@ _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
 - planner: Agentic plan design — iterative markdown execution plan; one report.
+- explorer: Deep codebase reconnaissance using readonly filesystem tooling.
 browser_use, deep_research, and academic_research are not available via `task`; \
 they run only through intake/slash wired routing.
 Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
