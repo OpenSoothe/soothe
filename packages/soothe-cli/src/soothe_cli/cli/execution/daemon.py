@@ -19,6 +19,7 @@ from soothe_client import (
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
+from soothe_client.appkit import is_loop_scoped_event, unwrap_next
 
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error,
@@ -37,46 +38,6 @@ _SESSION_BOOTSTRAP_TIMEOUT_S = 30.0
 _QUERY_START_TIMEOUT_S = 20.0
 _HEADLESS_WORKER_LOST_RETRIES = 1
 _CANCEL_SEND_TIMEOUT_S = 3.0
-
-
-def _unwrap_next(event: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Unwrap a protocol-1 ``next`` envelope to its inner streaming frame.
-
-    Under protocol-1 (RFC-450 §9.3) the daemon wraps free-form streaming
-    frames (``event``/``command_response``/card replay) in a
-    ``{proto, type:"next", payload:{namespace, mode, data}}`` envelope. This
-    helper returns the inner ``data`` dict (the legacy frame) so the headless
-    loop and EventProcessor can branch on the same fields as before.
-    ``status``/``error``/``response``/``complete`` are sent raw and pass
-    through unchanged.
-    """
-    if not isinstance(event, dict):
-        return event
-    if event.get("type") != "next":
-        return event
-    payload = event.get("payload")
-    if not isinstance(payload, dict):
-        return event
-    data = payload.get("data")
-    return data if isinstance(data, dict) else event
-
-
-def _is_loop_scoped_event(event: dict[str, Any], *, active_loop_id: str) -> bool:
-    """Return whether a daemon frame belongs to the active StrangeLoop session.
-
-    Unwraps protocol-1 ``next`` envelopes first, then checks ``loop_id`` on the
-    inner streaming frame. Non-scoped types (``response``, ``error``,
-    ``complete``, etc.) are always considered in-scope.
-    """
-    event_type = event.get("type", "")
-    if event_type == "next":
-        inner = _unwrap_next(event)
-        if isinstance(inner, dict):
-            event_type = inner.get("type", "")
-            return event_type not in {"status", "event"} or (inner.get("loop_id") == active_loop_id)
-    if event_type not in {"status", "event"}:
-        return True
-    return event.get("loop_id") == active_loop_id
 
 
 def _emit_headless_error(message: str) -> None:
@@ -246,13 +207,13 @@ async def _run_headless_session_once(
                 break
 
             event_type = event.get("type", "")
-            if not _is_loop_scoped_event(event, active_loop_id=active_loop_id):
+            if not is_loop_scoped_event(event, active_loop_id=active_loop_id):
                 continue
 
             # Unwrap protocol-1 ``next`` envelopes to the inner streaming frame
             # (RFC-450 §9.3). ``status``/``error`` arrive raw and pass through.
             if event_type == "next":
-                inner = _unwrap_next(event)
+                inner = unwrap_next(event)
                 if isinstance(inner, dict):
                     event = inner
                     event_type = event.get("type", "")
@@ -286,12 +247,12 @@ async def _run_headless_session_once(
                             break
                         if not nxt:
                             break
-                        if not _is_loop_scoped_event(nxt, active_loop_id=active_loop_id):
+                        if not is_loop_scoped_event(nxt, active_loop_id=active_loop_id):
                             continue
                         # Unwrap ``next`` envelopes before handing to the
                         # processor so it sees the legacy frame shape.
                         if nxt.get("type") == "next":
-                            inner = _unwrap_next(nxt)
+                            inner = unwrap_next(nxt)
                             if isinstance(inner, dict):
                                 nxt = inner
                         processor.process_event(nxt)

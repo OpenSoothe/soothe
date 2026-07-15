@@ -14,6 +14,7 @@ from soothe_client import (
     connect_websocket_with_retries,
     websocket_url_from_config,
 )
+from soothe_client.appkit import unwrap_next
 from soothe_sdk.wire.protocol import _serialize_for_json
 
 from soothe_cli.runtime.state.session_stats import TurnEventStats
@@ -36,36 +37,6 @@ _TURN_END_CUSTOM_TYPES = {
 
 # Brief close handshake on TUI exit — the daemon cleans up on disconnect anyway.
 TUI_EXIT_HANDSHAKE_TIMEOUT_S = 0.3
-
-
-def _unwrap_next(event: dict[str, Any] | None) -> dict[str, Any] | None:
-    """Unwrap a protocol-1 ``next`` envelope to its inner streaming frame.
-
-    Under protocol-1 (RFC-450 §9.3) the daemon wraps free-form streaming
-    frames (``event``/``command_response``/card replay) in a
-    ``{proto, type:"next", payload:{namespace, mode, data}}`` envelope. This
-    helper returns the inner ``data`` dict (the legacy frame carrying
-    ``type``/``mode``/``namespace``/``data``/``loop_id``) so the turn loop can
-    branch on the same fields it consumed before the migration. ``status``
-    frames and other protocol-1 messages (``response``/``error``/``complete``)
-    are sent raw and pass through unchanged.
-
-    Args:
-        event: A raw wire frame as returned by ``client.read_event()``.
-
-    Returns:
-        The inner ``payload.data`` dict for ``next`` envelopes, the original
-        frame otherwise, or ``None`` if ``event`` is ``None``.
-    """
-    if not isinstance(event, dict):
-        return event
-    if event.get("type") != "next":
-        return event
-    payload = event.get("payload")
-    if not isinstance(payload, dict):
-        return event
-    data = payload.get("data")
-    return data if isinstance(data, dict) else event
 
 
 class TuiDaemonSession:
@@ -276,7 +247,7 @@ class TuiDaemonSession:
             # Unwrap protocol-1 ``next`` envelopes to the inner streaming frame
             # (RFC-450 §9.3); ``status``/``error`` arrive raw and pass through.
             if event_type == "next":
-                event = _unwrap_next(event) or event
+                event = unwrap_next(event) or event
                 event_type = event.get("type", "")
             event_loop_id = event.get("loop_id")
             if exp and isinstance(event_loop_id, str) and event_loop_id and event_loop_id != exp:
@@ -373,7 +344,7 @@ class TuiDaemonSession:
                     # branches below keep working. ``status``/``error`` are sent
                     # raw and pass through unchanged.
                     if event_type == "next":
-                        event = _unwrap_next(event) or event
+                        event = unwrap_next(event) or event
                         event_type = event.get("type", "")
 
                     event_loop_id = event.get("loop_id")

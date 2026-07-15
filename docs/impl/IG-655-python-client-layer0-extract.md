@@ -4,7 +4,7 @@
 **Title**: Extract WebSocket client from soothe-sdk into `client/python`  
 **Created**: 2026-07-15  
 **Related**: RFC-629 (Client Appkit), RFC-450 (Protocol-1), RFC-610 (SDK structure)  
-**Status**: Phase C complete (2026-07-15)
+**Status**: Phase D first slice complete (2026-07-16)
 
 ---
 
@@ -41,7 +41,8 @@ soothe-cli → soothe-client-python → [WS] → daemon → soothe (core)
 
 - **B**: Slim SDK further — relocate wire/paths out of `soothe_sdk.client` ✓
 - **C**: Thin CLI onto client; remove `soothe.*` leaks ✓
-- **D**: Python `appkit` (promote CLI session/turn generics).
+- **D**: Python `appkit` (promote CLI session/turn generics) — first slice ✓
+  (Pool / TurnRunner / EventClassifier deferred).
 
 ## Phase B (slim SDK layout)
 
@@ -83,4 +84,20 @@ Compat shims under `soothe_sdk.client.*` remain for one migration window.
 - [x] Shared tool-error text helper lives in slim SDK
 - [x] `./scripts/verify_finally.sh` green
 
-**Status**: Phase C complete (2026-07-15)
+### Phase D (Python appkit — first slice)
+Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
+(parity vocabulary with Go/TS; not full RFC-629 surface yet).
+
+| Component | Status |
+|-----------|--------|
+| `unwrap_next` / `is_loop_scoped_event` | ✓ (CLI session + headless use appkit) |
+| `QueryGate` | ✓ |
+| `TurnEventPipeline` / `run_turn_pipeline` | ✓ (CLI re-exports) |
+| `SessionStore` Protocol | ✓ |
+| `ConnectionPool` / `TurnRunner` / `EventClassifier` / SSE | deferred |
+
+- [x] `soothe_client.appkit` package exists with unit tests
+- [x] CLI turn pipeline + `_unwrap_next` duplicates removed (shims / imports)
+- [x] `./scripts/verify_finally.sh` green
+
+**Status**: Phase D first slice complete (2026-07-16)
