@@ -294,7 +294,7 @@ async def test_ensure_rpc_connected_completes_protocol_handshake() -> None:
     session._rpc_client = AsyncMock()
 
     with patch(
-        "soothe_cli.runtime.transport.session.connect_websocket_with_retries",
+        "soothe_client.appkit.daemon_session.connect_websocket_with_retries",
         new_callable=AsyncMock,
     ) as connect_mock:
         await session._ensure_rpc_connected()
@@ -331,7 +331,7 @@ async def test_ensure_rpc_connected_skips_when_already_connected() -> None:
     session._rpc_client = AsyncMock()
 
     with patch(
-        "soothe_cli.runtime.transport.session.connect_websocket_with_retries",
+        "soothe_client.appkit.daemon_session.connect_websocket_with_retries",
         new_callable=AsyncMock,
     ) as connect_mock:
         await session._ensure_rpc_connected()

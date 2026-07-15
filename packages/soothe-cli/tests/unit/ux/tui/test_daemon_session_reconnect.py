@@ -57,7 +57,7 @@ async def test_ensure_connected_reconnects_and_resumes_loop() -> None:
     )
 
     with patch(
-        "soothe_cli.runtime.transport.session.connect_websocket_with_retries",
+        "soothe_client.appkit.daemon_session.connect_websocket_with_retries",
         new_callable=AsyncMock,
     ) as connect_mock:
         await session.ensure_connected()

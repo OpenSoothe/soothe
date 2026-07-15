@@ -4,7 +4,7 @@
 **Title**: Extract WebSocket client from soothe-sdk into `client/python`  
 **Created**: 2026-07-15  
 **Related**: RFC-629 (Client Appkit), RFC-450 (Protocol-1), RFC-610 (SDK structure)  
-**Status**: Phase D first slice complete (2026-07-16)
+**Status**: Phase D production slice complete (2026-07-16)
 
 ---
 
@@ -84,20 +84,25 @@ Compat shims under `soothe_sdk.client.*` remain for one migration window.
 - [x] Shared tool-error text helper lives in slim SDK
 - [x] `./scripts/verify_finally.sh` green
 
-### Phase D (Python appkit — first slice)
+### Phase D (Python appkit)
+
 Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
-(parity vocabulary with Go/TS; not full RFC-629 surface yet).
+(parity vocabulary with Go/TS **plus** CLI-grade daemon interaction Go/TS lack).
 
 | Component | Status |
 |-----------|--------|
-| `unwrap_next` / `is_loop_scoped_event` | ✓ (CLI session + headless use appkit) |
+| `unwrap_next` / `is_loop_scoped_event` | ✓ |
 | `QueryGate` | ✓ |
 | `TurnEventPipeline` / `run_turn_pipeline` | ✓ (CLI re-exports) |
 | `SessionStore` Protocol | ✓ |
+| Layer 0 `loop_*` RPCs + helpers | ✓ |
+| `DaemonSession` + `iter_turn_chunks` (dual-socket, post-idle drain) | ✓ |
 | `ConnectionPool` / `TurnRunner` / `EventClassifier` / SSE | deferred |
+| `ReattachAndProbe` / `Disconnected` | deferred |
 
 - [x] `soothe_client.appkit` package exists with unit tests
 - [x] CLI turn pipeline + `_unwrap_next` duplicates removed (shims / imports)
+- [x] CLI `TuiDaemonSession` wraps `DaemonSession`
 - [x] `./scripts/verify_finally.sh` green
 
-**Status**: Phase D first slice complete (2026-07-16)
+**Status**: Phase D production slice complete (2026-07-16) — DaemonSession + loop RPCs; Pool/Classifier/TurnRunner deferred
