@@ -159,6 +159,38 @@ async def test_orphan_browser_use_step_and_lifecycle() -> None:
 
 
 @pytest.mark.asyncio
+async def test_orphan_wire_step_routes_without_invocation_id() -> None:
+    """Fallback routing should still show step rows when invocation_id is missing."""
+    adapter = _make_adapter()
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="browser_use",
+        invocation_id="bu-no-inv",
+        step_id="BRW-03",
+        description="task",
+    )
+    assert card is not None
+
+    handled = _route_orphan_wire_event(
+        adapter,
+        event_type="soothe.subagent.browser_use.step.completed",
+        data={
+            "type": "soothe.subagent.browser_use.step.completed",
+            # Simulate legacy/malformed forwarding where invocation_id is absent.
+            "step_id": "BRW-03",
+            "tool_name": "Navigate",
+            "action_preview": "https://example.com",
+            "duration_ms": 123,
+        },
+    )
+    assert handled is True
+    rows = list(getattr(card, "_rows", []) or [])
+    assert rows
+    assert getattr(rows[-1], "tool_name", "") == "Navigate"
+    assert getattr(rows[-1], "phase", "") == "success"
+
+
+@pytest.mark.asyncio
 async def test_orphan_browser_use_lifecycle_honors_success_false() -> None:
     adapter = _make_adapter()
     card = await _mount_orphan_subagent_card(

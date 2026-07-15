@@ -1,4 +1,4 @@
-"""Tests for Ctrl+C behavior: clear input → interrupt → quit."""
+"""Tests for Ctrl+C and Ctrl+D interrupt/exit hints."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from soothe_cli.tui.app._messages_mixin import _MessagesMixin
 from soothe_cli.tui.app._module_init import QueuedMessage
 
 
-def test_arm_quit_pending_clears_chat_input_when_idle() -> None:
-    """First Ctrl+C when idle should clear pending text and arm quit hint."""
+def test_ctrl_c_idle_clears_input_and_shows_quit_command_hint() -> None:
+    """Ctrl+C when idle should not arm quit; it hints `/quit` instead."""
 
     class _AppStub(_MessagesMixin):
         def __init__(self) -> None:
@@ -20,7 +20,6 @@ def test_arm_quit_pending_clears_chat_input_when_idle() -> None:
             self._chat_input.value = "some draft text"
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = False
             self._agent_worker = None
             self._shell_running = False
@@ -32,8 +31,8 @@ def test_arm_quit_pending_clears_chat_input_when_idle() -> None:
     app.action_quit_or_interrupt()
 
     app._chat_input.clear_input.assert_called_once()
-    assert app._quit_pending is True
     app.notify.assert_called_once()
+    assert "Use /quit" in app.notify.call_args.args[0]
 
 
 def test_ctrl_c_clears_input_first_when_agent_running() -> None:
@@ -45,7 +44,6 @@ def test_ctrl_c_clears_input_first_when_agent_running() -> None:
             self._chat_input.value = "draft text"
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = True
             self._agent_worker = MagicMock()
             self._shell_running = False
@@ -61,7 +59,6 @@ def test_ctrl_c_clears_input_first_when_agent_running() -> None:
     # Should clear input, NOT cancel worker
     app._chat_input.clear_input.assert_called_once()
     app._agent_worker.cancel.assert_not_called()
-    assert app._quit_pending is False
 
 
 def test_ctrl_c_interrupts_agent_when_input_empty() -> None:
@@ -73,7 +70,6 @@ def test_ctrl_c_interrupts_agent_when_input_empty() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = True
             self._agent_worker = MagicMock()
             self._shell_running = False
@@ -94,7 +90,6 @@ def test_ctrl_c_interrupts_agent_when_input_empty() -> None:
     # Should cancel worker, NOT clear input (already empty)
     app._chat_input.clear_input.assert_not_called()
     app._agent_worker.cancel.assert_called_once()
-    assert app._quit_pending is False
 
 
 def test_ctrl_c_clears_input_first_when_shell_running() -> None:
@@ -106,7 +101,6 @@ def test_ctrl_c_clears_input_first_when_shell_running() -> None:
             self._chat_input.value = "draft"
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = False
             self._agent_worker = None
             self._shell_running = True
@@ -121,7 +115,6 @@ def test_ctrl_c_clears_input_first_when_shell_running() -> None:
     # Should clear input, NOT cancel worker
     app._chat_input.clear_input.assert_called_once()
     app._shell_worker.cancel.assert_not_called()
-    assert app._quit_pending is False
 
 
 def test_ctrl_c_interrupts_shell_when_input_empty() -> None:
@@ -133,7 +126,6 @@ def test_ctrl_c_interrupts_shell_when_input_empty() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = False
             self._agent_worker = None
             self._shell_running = True
@@ -151,7 +143,6 @@ def test_ctrl_c_interrupts_shell_when_input_empty() -> None:
     # Should cancel worker
     app._chat_input.clear_input.assert_not_called()
     app._shell_worker.cancel.assert_called_once()
-    assert app._quit_pending is False
 
 
 def test_ctrl_c_clears_input_when_in_command_mode() -> None:
@@ -164,7 +155,6 @@ def test_ctrl_c_clears_input_when_in_command_mode() -> None:
             # Use PropertyMock for mode since it's checked via != "normal"
             type(self._chat_input).mode = PropertyMock(return_value="command")
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = True
             self._agent_worker = MagicMock()
             self._shell_running = False
@@ -191,7 +181,6 @@ def test_ctrl_c_clears_input_when_completion_active() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = [("/help", "Show help")]
-            self._quit_pending = False
             self._agent_running = True
             self._agent_worker = MagicMock()
             self._shell_running = False
@@ -209,8 +198,8 @@ def test_ctrl_c_clears_input_when_completion_active() -> None:
     app._agent_worker.cancel.assert_not_called()
 
 
-def test_double_ctrl_c_quits_when_idle() -> None:
-    """Double Ctrl+C when idle should quit via the unified detach path."""
+def test_double_ctrl_c_no_longer_quits_when_idle() -> None:
+    """Ctrl+C never exits; it should keep hinting `/quit`."""
 
     class _AppStub(_MessagesMixin):
         def __init__(self) -> None:
@@ -218,7 +207,6 @@ def test_double_ctrl_c_quits_when_idle() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = True  # Already armed from first Ctrl+C
             self._agent_running = False
             self._agent_worker = None
             self._shell_running = False
@@ -230,9 +218,26 @@ def test_double_ctrl_c_quits_when_idle() -> None:
     app = _AppStub()
     app.action_quit_or_interrupt()
 
-    # Should use unified quit path, not clear input again
-    app._detach_or_exit.assert_called_once()
-    app._chat_input.clear_input.assert_not_called()
+    app._detach_or_exit.assert_not_called()
+    app._chat_input.clear_input.assert_called_once()
+    app.notify.assert_called_once()
+    assert "Use /quit" in app.notify.call_args.args[0]
+
+
+def test_ctrl_d_hints_use_quit_command() -> None:
+    """Ctrl+D should not exit directly; it should hint explicit slash exit."""
+
+    class _AppStub(_MessagesMixin):
+        def __init__(self) -> None:
+            self.notify = MagicMock()
+            self._detach_or_exit = MagicMock()
+
+    app = _AppStub()
+    app.action_quit_app()
+
+    app._detach_or_exit.assert_not_called()
+    app.notify.assert_called_once()
+    assert "Use /quit" in app.notify.call_args.args[0]
 
 
 def test_ctrl_c_preserves_queued_goal_when_interrupting_agent() -> None:
@@ -244,7 +249,6 @@ def test_ctrl_c_preserves_queued_goal_when_interrupting_agent() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = True
             self._agent_worker = MagicMock()
             self._shell_running = False
@@ -276,7 +280,6 @@ def test_ctrl_c_preserves_queue_when_interrupting_via_daemon() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = False
             self._agent_running = True
             self._agent_worker = MagicMock()
             self._shell_running = False
@@ -365,7 +368,6 @@ def test_enter_shortcut_interrupts_running_goal_via_daemon_path() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = True
             self._agent_running = True
             self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
             self._agent_worker = MagicMock()
@@ -380,7 +382,6 @@ def test_enter_shortcut_interrupts_running_goal_via_daemon_path() -> None:
     assert coro.cr_code.co_name == "_interrupt_daemon_agent_turn"
     coro.close()
     assert len(app._pending_messages) == 1
-    assert app._quit_pending is False
 
 
 def test_enter_shortcut_interrupts_running_goal_without_daemon() -> None:
@@ -390,7 +391,6 @@ def test_enter_shortcut_interrupts_running_goal_without_daemon() -> None:
             self._chat_input.value = ""
             self._chat_input.mode = "normal"
             self._chat_input._current_suggestions = []
-            self._quit_pending = True
             self._agent_running = True
             self._pending_messages = deque([QueuedMessage(text="queued", mode="normal")])
             self._agent_worker = MagicMock()
@@ -406,4 +406,3 @@ def test_enter_shortcut_interrupts_running_goal_without_daemon() -> None:
     coro.close()
     app._agent_worker.cancel.assert_called_once()
     assert len(app._pending_messages) == 1
-    assert app._quit_pending is False

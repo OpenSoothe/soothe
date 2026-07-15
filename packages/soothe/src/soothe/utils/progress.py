@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,11 @@ _current_step_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 _wire_bridge: contextvars.ContextVar[Callable[[dict[str, Any]], None] | None] = (
     contextvars.ContextVar("subagent_wire_bridge", default=None)
 )
+
+# Per-event-loop fallback for cases where ContextVar propagation is lost across
+# tasks/callback boundaries while still running on the same loop.
+_loop_wire_bridge: dict[int, Callable[[dict[str, Any]], None]] = {}
+_loop_wire_bridge_lock = threading.Lock()
 
 # Constants for formatting
 _MAX_FIELD_LEN = 50
@@ -56,17 +62,63 @@ def get_step_id() -> str | None:
 
 def set_wire_bridge(callback: Callable[[dict[str, Any]], None] | None) -> contextvars.Token:
     """Install a sync sink for wire/progress events (intake-only stream bridge)."""
-    return _wire_bridge.set(callback)
+    token = _wire_bridge.set(callback)
+    if callback is not None:
+        try:
+            import asyncio
+
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            with _loop_wire_bridge_lock:
+                _loop_wire_bridge[id(loop)] = callback
+    return token
 
 
 def reset_wire_bridge(token: contextvars.Token) -> None:
     """Restore the previous wire bridge callback."""
+    try:
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    previous_callback = _wire_bridge.get()
+    loop_id = id(loop) if loop is not None else None
+    if loop_id is not None and previous_callback is not None:
+        with _loop_wire_bridge_lock:
+            if _loop_wire_bridge.get(loop_id) is previous_callback:
+                _loop_wire_bridge.pop(loop_id, None)
+
     _wire_bridge.reset(token)
+
+    # Nested set/reset support: re-install the now-current callback if present.
+    if loop_id is not None:
+        current_callback = _wire_bridge.get()
+        with _loop_wire_bridge_lock:
+            if current_callback is None:
+                _loop_wire_bridge.pop(loop_id, None)
+            else:
+                _loop_wire_bridge[loop_id] = current_callback
 
 
 def get_wire_bridge() -> Callable[[dict[str, Any]], None] | None:
     """Return the active wire bridge sink, if any."""
-    return _wire_bridge.get()
+    callback = _wire_bridge.get()
+    if callback is not None:
+        return callback
+
+    try:
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+
+    with _loop_wire_bridge_lock:
+        return _loop_wire_bridge.get(id(loop))
 
 
 def _format_event_compact(event: dict[str, Any]) -> str:

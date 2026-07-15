@@ -30,6 +30,9 @@ _POST_IDLE_DRAIN_DEADLINE_S = 0.5
 
 # Align with ``bootstrap_loop_session`` daemon-ready wait (RFC-450 §8.2).
 _RPC_HANDSHAKE_TIMEOUT_S = 20.0
+_TURN_END_CUSTOM_TYPES = {
+    "soothe.cognition.strange_loop.completed",
+}
 
 # Brief close handshake on TUI exit — the daemon cleans up on disconnect anyway.
 TUI_EXIT_HANDSHAKE_TIMEOUT_S = 0.3
@@ -448,6 +451,19 @@ class TuiDaemonSession:
                     progress_seen = True
                     stream_payload_seen = True
                     yield (namespace, mode, data)
+                    if mode == "custom" and isinstance(data, dict):
+                        custom_type = str(data.get("type", "")).strip()
+                        if custom_type in _TURN_END_CUSTOM_TYPES:
+                            # Some turns can miss the trailing status=idle/stopped
+                            # despite emitting terminal custom events. Treat these
+                            # as explicit turn completion and briefly drain late
+                            # frames to preserve post-terminal payloads.
+                            self.last_turn_end_state = "completed"
+                            async for chunk in self._drain_stream_events_after_idle(
+                                expected_loop_id=expected_loop_id,
+                            ):
+                                yield chunk
+                            break
                     # Graph auto-resumes LangGraph interrupts server-side; keep consuming events.
                     if mode == "updates" and isinstance(data, dict) and "__interrupt__" in data:
                         continue

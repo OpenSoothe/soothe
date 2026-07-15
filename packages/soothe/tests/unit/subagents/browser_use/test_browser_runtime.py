@@ -97,6 +97,8 @@ def test_browser_use_subagent_config_defaults() -> None:
     assert config.disable_extensions is True
     assert config.disable_cloud is True
     assert config.disable_telemetry is True
+    assert config.synthesis_role == "default"
+    assert config.synthesis_timeout_sec == 30.0
 
 
 def test_browser_use_config_from_dict() -> None:

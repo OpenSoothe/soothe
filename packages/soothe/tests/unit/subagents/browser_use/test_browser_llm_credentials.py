@@ -5,7 +5,9 @@ from __future__ import annotations
 from soothe.config.models import ModelProviderConfig, SubagentConfig
 from soothe.config.settings import SootheConfig
 from soothe.subagents.browser_use.implementation import (
+    _apply_browser_use_synthesis_decision,
     _browser_history_had_no_progress,
+    _BrowserUseSynthesisDecision,
     _format_browser_no_progress_error,
     _resolve_browser_llm_credentials,
     browser_use_model_role,
@@ -99,3 +101,43 @@ def test_format_browser_no_progress_error_includes_model_and_steps() -> None:
     assert "BrowserUse failed" in message
     assert "kimi-k2.5" in message
     assert "10 step(s)" in message
+
+
+def test_apply_browser_use_synthesis_decision_prefers_synthesized_answer() -> None:
+    decision = _BrowserUseSynthesisDecision(
+        use_raw_result=False,
+        answer_quality="sufficient",
+        final_answer="Los Angeles weather: clear, 26C.",
+        summary="Los Angeles weather summary",
+        rationale="Raw output only described scrolling.",
+    )
+    final_answer, summary, used_synthesized, quality_sufficient = (
+        _apply_browser_use_synthesis_decision(
+            raw_result="Scrolled down 3 pages",
+            decision=decision,
+        )
+    )
+    assert final_answer == "Los Angeles weather: clear, 26C."
+    assert summary == "Los Angeles weather summary"
+    assert used_synthesized is True
+    assert quality_sufficient is True
+
+
+def test_apply_browser_use_synthesis_decision_falls_back_to_raw_result() -> None:
+    decision = _BrowserUseSynthesisDecision(
+        use_raw_result=True,
+        answer_quality="insufficient",
+        final_answer="",
+        summary="",
+        rationale="Raw output is partial.",
+    )
+    final_answer, summary, used_synthesized, quality_sufficient = (
+        _apply_browser_use_synthesis_decision(
+            raw_result="Weather page opened but no forecast extracted.",
+            decision=decision,
+        )
+    )
+    assert final_answer == "Weather page opened but no forecast extracted."
+    assert "Weather page opened" in summary
+    assert used_synthesized is False
+    assert quality_sufficient is False

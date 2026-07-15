@@ -154,8 +154,8 @@ def show_cron_add(console: Console, data: dict[str, Any]) -> None:
 
 KEYBOARD_SHORTCUTS: dict[str, str] = {
     "Esc": "Dismiss modal, plan overlay, or autocomplete",
-    "Ctrl+D": "Quit and detach from the daemon",
-    "Ctrl+C": "Clear input, interrupt agent/shell, or quit when pressed twice while idle",
+    "Ctrl+D": "Use /quit (or /q) to exit the TUI",
+    "Ctrl+C": "Clear input or interrupt running agent/shell",
     "Ctrl+X": "Open prompt in external editor ($VISUAL/$EDITOR)",
     "Ctrl+Y": "Copy selected text to clipboard (or show hint if none)",
     "Ctrl+T": "Toggle plan quick-view overlay",

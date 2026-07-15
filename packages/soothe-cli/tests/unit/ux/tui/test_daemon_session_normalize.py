@@ -391,3 +391,40 @@ async def test_iter_turn_chunks_records_stopped_end_state() -> None:
 
     assert session.last_turn_end_state == "stopped"
     assert session.last_turn_cancellation_seen is False
+
+
+@pytest.mark.asyncio
+async def test_iter_turn_chunks_ends_on_terminal_custom_without_idle_status() -> None:
+    """Terminal custom events should end the turn even without trailing idle/stopped."""
+    session = object.__new__(TuiDaemonSession)
+    session._loop_id = "loop-main"
+    session._read_lock = asyncio.Lock()
+    session._streaming = False
+    session._client = _StubEventClient(
+        [
+            {"type": "status", "state": "running", "loop_id": "loop-main"},
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "custom",
+                "data": {"type": "soothe.cognition.strange_loop.completed"},
+            },
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
+                "mode": "messages",
+                "data": ("late", {}),
+            },
+            # Simulate missing terminal status event from daemon.
+        ]
+    )
+
+    chunks = [chunk async for chunk in session.iter_turn_chunks()]
+
+    assert chunks == [
+        ((), "custom", {"type": "soothe.cognition.strange_loop.completed"}),
+        ((), "messages", ("late", {})),
+    ]
+    assert session.last_turn_end_state == "completed"

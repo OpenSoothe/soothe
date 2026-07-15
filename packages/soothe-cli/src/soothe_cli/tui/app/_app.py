@@ -226,8 +226,6 @@ class SootheApp(
         self._chat_input: ChatInput | None = None
         self._plan_quick_view_overlay: PlanQuickViewOverlay | None = None
 
-        self._quit_pending = False
-
         self._session_state: TextualSessionState | None = None
 
         self._ui_adapter: TextualUIAdapter | None = None

@@ -345,6 +345,16 @@ class QueryEngine:
         if pool is not None and hasattr(pool, "await_loop_dispatchable"):
             await pool.await_loop_dispatchable(lid)
 
+        # Direct intent-hint turns do not occupy execution pool workers, but they
+        # still hold per-loop query admission until stream-finally completes.
+        # Queue workers can invoke run_query again before that finally runs; wait
+        # here so the follow-up turn is deferred instead of being rejected LOOP_BUSY.
+        while True:
+            async with self._daemon._query_state_lock:
+                if lid not in self._daemon._loops_with_active_query:
+                    break
+            await asyncio.sleep(0.01)
+
     def _should_arm_pending_cancel(self, loop_id: str) -> bool:
         """Return True only for the genuine pre-registration cancel race window."""
         if self.collect_active_tasks_for_loop(loop_id):

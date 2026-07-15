@@ -117,13 +117,11 @@ def _record_wired_execute_ledger(
 
 
 def _unpack_astream_item(item: Any) -> tuple[str | None, Any]:
-    """Normalize LangGraph astream items to ``(mode, data)``."""
+    """Normalize LangGraph ``astream`` items to ``(mode, data)``."""
     if isinstance(item, tuple):
         if len(item) == 3:
             _ns, mode, data = item
             return (str(mode) if mode is not None else None), data
-        if len(item) == 2 and isinstance(item[0], str):
-            return item[0], item[1]
     return None, item
 
 
@@ -175,14 +173,17 @@ async def _run_intake_only_runnable(
         try:
             loop.call_soon_threadsafe(queue.put_nowait, payload)
         except RuntimeError:
-            queue.put_nowait(payload)
+            logger.debug("[WiredSubagent] bridge sink dropped event: loop closed")
 
     async def _drain_bridge() -> None:
         while True:
             item = await queue.get()
             if item is None:
                 return
-            await _forward_wire_custom(ctx, item, invocation_id=invocation_id, step_id=step_id)
+            try:
+                await _forward_wire_custom(ctx, item, invocation_id=invocation_id, step_id=step_id)
+            except Exception:
+                logger.debug("[WiredSubagent] bridge forward failed", exc_info=True)
 
     bridge_token = set_wire_bridge(_bridge_sink)
     drain_task = asyncio.create_task(_drain_bridge())
@@ -209,7 +210,8 @@ async def _run_intake_only_runnable(
     finally:
         await queue.put(None)
         try:
-            await drain_task
+            # Keep draining queued wire events even if the caller is cancelled.
+            await asyncio.shield(drain_task)
         finally:
             reset_wire_bridge(bridge_token)
 

@@ -63,7 +63,10 @@ from soothe_sdk.core.events import (
     WIRED_SUBAGENT_FAILED,
     WIRED_SUBAGENT_STARTED,
 )
-from soothe_sdk.core.subagent_wire import is_allowlisted_subagent_event_type
+from soothe_sdk.core.subagent_wire import (
+    is_allowlisted_subagent_event_type,
+    parse_subagent_wire_agent,
+)
 from soothe_sdk.langchain_wire import (
     messages_from_wire_dicts,
 )
@@ -790,9 +793,18 @@ def _route_orphan_wire_event(
 ) -> bool:
     """Route ``soothe.subagent.*`` events onto an orphan card via ``invocation_id``."""
     inv = str(data.get("invocation_id") or "").strip()
-    if not inv:
-        return False
-    card = adapter._orphan_cards_by_invocation.get(inv)
+    card = adapter._orphan_cards_by_invocation.get(inv) if inv else None
+    if card is None:
+        # Fallback: some forwarded custom events may miss invocation_id.
+        # Recover by matching step_id + subagent against active orphan cards.
+        sid = str(data.get("step_id") or "").strip()
+        event_subagent = str(parse_subagent_wire_agent(str(event_type or "")) or "").strip()
+        if sid:
+            candidate = _lookup_orphan_card_by_step_id(adapter, sid)
+            if candidate is not None:
+                card_subagent = str(getattr(candidate, "_subagent_type", "") or "").strip()
+                if not event_subagent or not card_subagent or card_subagent == event_subagent:
+                    card = candidate
     if card is None:
         return False
     step_id = str(getattr(card, "_step_id", "") or data.get("step_id") or "").strip()

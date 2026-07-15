@@ -104,7 +104,6 @@ class _MessagesMixin:
                 group="interrupt-ui",
             )
             self._cancel_worker(self._agent_worker, discard_queue=False)
-        self._quit_pending = False
         return True
 
     async def _load_loop_history(
@@ -554,18 +553,16 @@ class _MessagesMixin:
         copy_selection_to_clipboard(self, notify_if_empty=True)
 
     def action_quit_or_interrupt(self) -> None:
-        """Handle Ctrl+C - clear input, interrupt agent, or quit on double press.
+        """Handle Ctrl+C - clear input or interrupt running work.
 
         Priority order when task is running (agent/shell):
         1. If input has pending text, clear it (first Ctrl+C)
-        2. If input is empty, interrupt the running task (second Ctrl+C)
+        2. If input is empty, interrupt the running task
 
-        Priority order when idle:
-        1. If double press (quit_pending), quit
-        2. Otherwise clear pending input and show quit hint
+        When idle, Ctrl+C never exits the TUI. Use `/quit` (or `/q`) to exit.
 
         Note: Copying selected text is bound to Ctrl+Y (`action_copy_selection`)
-        so Ctrl+C is reserved for interrupt/quit only.
+        so Ctrl+C is reserved for interrupt behavior.
         """
         # Check if input has pending content (text, mode, or completion)
         has_pending_input = self._has_pending_chat_input()
@@ -574,39 +571,22 @@ class _MessagesMixin:
         if self._shell_running and self._shell_worker:
             if has_pending_input:
                 self._chat_input.clear_input()
-                self._quit_pending = False
                 return
             self._cancel_worker(self._shell_worker, discard_queue=False)
-            self._quit_pending = False
             return
 
         # If agent is running: clear input first, then interrupt
         if self._agent_running and self._agent_worker:
             if has_pending_input:
                 self._chat_input.clear_input()
-                self._quit_pending = False
                 return
             self._interrupt_running_goal_preserving_queue()
             return
 
-        # Double Ctrl+C to quit (same detach path as Ctrl+D and /quit)
-        if self._quit_pending:
-            self._detach_or_exit()
-        else:
-            self._arm_quit_pending("Ctrl+C")
-
-    def _arm_quit_pending(self, shortcut: str) -> None:
-        """Set the pending-quit flag, clear pending input, and show a matching hint.
-
-        Args:
-            shortcut: The key chord to show in the quit hint.
-        """
+        # Idle path: clear any pending draft, but never quit via keyboard shortcut.
         if self._chat_input:
             self._chat_input.clear_input()
-        self._quit_pending = True
-        quit_timeout = 3
-        self.notify(f"Press {shortcut} again to quit", timeout=quit_timeout, markup=False)
-        self.set_timer(quit_timeout, lambda: setattr(self, "_quit_pending", False))
+        self.notify("Use /quit (or /q) to exit the TUI", timeout=2, markup=False)
 
     def action_dismiss_ui(self) -> None:
         """Handle Escape — dismiss overlays and optionally cancel queued goals.
@@ -661,14 +641,8 @@ class _MessagesMixin:
         self.action_dismiss_ui()
 
     def action_quit_app(self) -> None:
-        """Handle quit action (Ctrl+D)."""
-        from soothe_cli.tui.widgets.loop_selector import LoopSelectorScreen
-
-        if isinstance(self.screen, LoopSelectorScreen):
-            # Loop selector doesn't have delete confirmation - just detach
-            self._detach_or_exit()
-            return
-        self._detach_or_exit()
+        """Handle Ctrl+D by hinting explicit slash-command exit."""
+        self.notify("Use /quit (or /q) to exit the TUI", timeout=2, markup=False)
 
     async def _detach_then_exit(self) -> None:
         """Detach from daemon, then exit the app."""

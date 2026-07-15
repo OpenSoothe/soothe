@@ -10,6 +10,7 @@ import multiprocessing
 import queue
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -651,6 +652,45 @@ class TestWorkerPool:
         assert metrics.dispatch_waiters_waiting == 0
 
         await WorkerPool.close_shared_instance()
+
+    @pytest.mark.asyncio
+    async def test_finish_request_skips_wait_when_ready_seen_early(self) -> None:
+        """Cleanup should not block when ``ready`` arrived before terminal."""
+        worker = WorkerProcess(
+            process=MagicMock(is_alive=MagicMock(return_value=True)),
+            request_queue=MagicMock(),
+            response_queue=MagicMock(),
+            cancel_event=_make_cancel_event(),
+            worker_id="worker-0",
+            status=WorkerStatus.BUSY,
+            current_loop_id="loop-1",
+            current_request_id="req-1",
+        )
+        pool = WorkerPool.__new__(WorkerPool)
+        pool._workers_by_loop_id = {"loop-1": worker.worker_id}
+        pool._pending_responses = {"req-1": asyncio.Queue()}
+        pool._metrics_requests_total = 0
+        pool._metrics_latencies = []
+
+        async def _mark_idle(w: WorkerProcess) -> None:
+            w.mark_idle()
+
+        pool._mark_worker_idle_and_notify = AsyncMock(side_effect=_mark_idle)
+
+        response_queue: asyncio.Queue = asyncio.Queue()
+        await pool._finish_request_after_terminal(
+            worker,
+            "loop-1",
+            "req-1",
+            response_queue,
+            start_time=datetime.now(),
+            ready_already_received=True,
+        )
+
+        pool._mark_worker_idle_and_notify.assert_awaited_once_with(worker)
+        assert worker.status == WorkerStatus.IDLE
+        assert "loop-1" not in pool._workers_by_loop_id
+        assert "req-1" not in pool._pending_responses
 
 
 class TestPoolLoopRunner:

@@ -27,7 +27,8 @@ def test_build_keyboard_shortcut_rows_cover_core_bindings() -> None:
     """Help documents the primary chat and app shortcuts."""
     rows = dict(build_keyboard_shortcut_rows())
     assert rows["Enter"] == "Submit message"
-    assert rows["Ctrl+D"] == "Quit and detach from the daemon"
+    assert rows["Ctrl+D"] == "Use /quit (or /q) to exit the TUI"
+    assert rows["Ctrl+C"] == "Clear input or interrupt running agent/shell"
     assert rows["Ctrl+T"] == "Toggle plan quick-view overlay"
     assert rows["Shift+Tab"] == "Toggle clarification relay mode (Auto/Manual)"
 

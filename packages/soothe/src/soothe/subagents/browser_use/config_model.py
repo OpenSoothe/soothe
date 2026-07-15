@@ -27,6 +27,8 @@ class BrowserUseSubagentConfig(BaseModel):
             exit -- safe for concurrent browser tasks.
         max_steps: Maximum browser automation steps per delegated task (browser-use
             loop). Override via YAML ``subagents.browser_use.config.max_steps``.
+        synthesis_role: Router role used for post-run result synthesis/quality gate.
+        synthesis_timeout_sec: Timeout budget for synthesis LLM call.
     """
 
     max_steps: int = Field(
@@ -43,6 +45,16 @@ class BrowserUseSubagentConfig(BaseModel):
     enable_existing_browser: bool = True
     browser_start_timeout: int = 90
     profile_mode: Literal["persistent", "ephemeral"] = "ephemeral"
+    synthesis_role: str = Field(
+        default="default",
+        description="Router role for browser_use result synthesis/quality gate.",
+    )
+    synthesis_timeout_sec: float = Field(
+        default=30.0,
+        ge=5.0,
+        le=120.0,
+        description="Timeout in seconds for browser_use synthesis call.",
+    )
 
 
 __all__ = ["BrowserUseSubagentConfig"]

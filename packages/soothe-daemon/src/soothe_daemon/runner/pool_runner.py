@@ -1416,10 +1416,12 @@ class WorkerPool:
         response_queue: asyncio.Queue[Any],
         *,
         start_time: datetime,
+        ready_already_received: bool = False,
     ) -> None:
         """Release worker only after cleanup completes (``ready`` signal)."""
         worker.status = WorkerStatus.CLEANING_UP
-        await self._await_worker_ready(response_queue)
+        if not ready_already_received:
+            await self._await_worker_ready(response_queue)
         await self._mark_worker_idle_and_notify(worker)
         self._workers_by_loop_id.pop(loop_id, None)
         self._pending_responses.pop(request_id, None)
@@ -1539,10 +1541,18 @@ class WorkerPool:
         start_time = datetime.now()
         stream_complete = False
         error_payload: BaseException | None = None
+        ready_already_received = False
 
         try:
             while True:
                 msg_type, payload = await response_queue.get()
+
+                if msg_type == "ready":
+                    # ``ready`` can be observed before terminal frames under callback
+                    # scheduling races; mark and continue so terminal cleanup remains
+                    # idempotent and non-blocking.
+                    ready_already_received = True
+                    continue
 
                 if msg_type in _TERMINAL_RESPONSE_TYPES:
                     stream_complete = True
@@ -1572,6 +1582,7 @@ class WorkerPool:
                     request_id,
                     response_queue,
                     start_time=start_time,
+                    ready_already_received=ready_already_received,
                 )
             else:
                 self._schedule_abandon_drain(worker, request.loop_id, request_id, response_queue)

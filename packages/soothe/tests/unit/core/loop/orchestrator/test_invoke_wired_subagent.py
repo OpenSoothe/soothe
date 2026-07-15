@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -404,6 +405,74 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     assert data["type"] == "soothe.subagent.deep_research.progress"
     assert data["invocation_id"]
     assert any(t == "wired_subagent_completed" for t, _ in emitted)
+
+
+@pytest.mark.asyncio
+async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> None:
+    """Loop-level bridge fallback still forwards events without ContextVar propagation."""
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="deep_research",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+
+    async def _ainvoke(_input):  # type: ignore[no-untyped-def]
+        from soothe.utils.progress import emit_progress
+
+        fresh_context = contextvars.Context()
+
+        async def _emit_inside_fresh_context() -> None:
+            emit_progress(
+                {
+                    "type": "soothe.subagent.deep_research.progress",
+                    "phase": "gather",
+                    "message": "context lost",
+                },
+                logging.getLogger("test.wired_bridge.context-loss"),
+            )
+
+        await asyncio.create_task(_emit_inside_fresh_context(), context=fresh_context)
+        return {"messages": [AIMessage(content="streamed report")]}
+
+    runnable = SimpleNamespace(ainvoke=_ainvoke)
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, payload: object) -> None:
+        emitted.append((event_type, payload))
+        await asyncio.sleep(0)
+
+    loop_state = SimpleNamespace(
+        intent=intent,
+        routing_classification=build_loop_routing_classification(intent, None),
+        goal="research",
+        goal_user_submission="research",
+        total_tokens_used=0,
+        thread_id="t1",
+        workspace=None,
+        iteration=0,
+        _loop_messages_cache=[],
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        preferred_subagent=None,
+        scratch=SimpleNamespace(plan_result=None),
+        emit=_emit,
+        ce=None,
+        core_agent=SimpleNamespace(
+            lookup_intake_only_subagent=lambda name: (
+                {"name": "deep_research", "runnable": runnable} if name == "deep_research" else None
+            )
+        ),
+    )
+    out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
+    assert out == {"wired_route_next": "goal_completion"}
+    stream_customs = [p for t, p in emitted if t == "stream_event"]
+    assert stream_customs
+    _ns, mode, data = stream_customs[0]  # type: ignore[misc]
+    assert mode == "custom"
+    assert data["type"] == "soothe.subagent.deep_research.progress"
+    assert data["invocation_id"]
 
 
 def test_route_after_wired_subagent_fatal() -> None:

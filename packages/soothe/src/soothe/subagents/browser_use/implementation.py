@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import TYPE_CHECKING, Annotated, Any, TypedDict
+from typing import TYPE_CHECKING, Annotated, Any, Literal, TypedDict
 
 if TYPE_CHECKING:
     from soothe_deepagents.middleware.subagents import CompiledSubAgent
@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from pydantic import BaseModel, Field
 from soothe_sdk.utils.formatting import format_cli_error
 
 from soothe.subagents.browser_use._preview import preview_first
@@ -42,6 +43,44 @@ from soothe.utils.subagent_emit import emit_subagent_wire_event
 logger = logging.getLogger(__name__)
 
 _NO_EXTRACTED_CONTENT = "BrowserUse task completed (no extracted content.)"
+_MAX_HISTORY_DIGEST_STEPS = 12
+
+
+class _BrowserUseSynthesisDecision(BaseModel):
+    """Structured result-quality judgement and fallback answer synthesis."""
+
+    use_raw_result: bool = Field(
+        default=True,
+        description="Whether raw browser_use result is already sufficient for end-user answer.",
+    )
+    answer_quality: Literal["sufficient", "insufficient"] = Field(
+        default="insufficient",
+        description="Whether the selected answer is sufficient to complete the task.",
+    )
+    final_answer: str = Field(
+        default="",
+        description="User-facing final answer text (raw or synthesized).",
+    )
+    summary: str = Field(
+        default="",
+        description="Short completion summary for subagent completion card.",
+    )
+    rationale: str = Field(
+        default="",
+        description="Brief explanation for the quality judgement and answer choice.",
+    )
+
+
+def _log_browser_event(event: str, **fields: Any) -> None:
+    """Emit a compact structured browser-use log line.
+
+    Example:
+        browser_use event=run_start run_id=abc123 model=gpt-4.1 headless=True
+    """
+    parts = [f"browser_use event={event}"]
+    for key, value in fields.items():
+        parts.append(f"{key}={value!r}")
+    logger.info(" ".join(parts))
 
 
 def _parse_model_spec(spec: str) -> tuple[str, str]:
@@ -110,6 +149,129 @@ def _format_browser_no_progress_error(*, model_name: str, steps: int) -> str:
         f"Model: {model_name}. "
         "Check subagents.browser_use.model_role and provider API credentials."
     )
+
+
+def _history_digest_for_synthesis(history: Any) -> str:
+    """Return a concise, structured browser trajectory summary for synthesis prompts."""
+    entries = list(getattr(history, "history", None) or [])
+    if not entries:
+        return "(no browser step history)"
+    lines: list[str] = []
+    for idx, entry in enumerate(entries[:_MAX_HISTORY_DIGEST_STEPS], start=1):
+        state = getattr(entry, "state", None)
+        url = preview_first(str(getattr(state, "url", "") or ""), 140)
+        title = preview_first(str(getattr(state, "title", "") or ""), 60)
+        tool_name = "Step"
+        action_preview = ""
+        model_output = getattr(entry, "model_output", None)
+        if model_output is not None:
+            action = getattr(model_output, "action", None)
+            if action is not None:
+                tool_name, action_preview = summarize_browser_step_action(action)
+        if not action_preview and url:
+            action_preview = url
+        line = (
+            f"{idx}. tool={tool_name}; action={action_preview or '(none)'}; "
+            f"url={url or '(none)'}; title={title or '(none)'}"
+        )
+        lines.append(line)
+    if len(entries) > _MAX_HISTORY_DIGEST_STEPS:
+        lines.append(f"... ({len(entries) - _MAX_HISTORY_DIGEST_STEPS} more steps)")
+    return "\n".join(lines)
+
+
+def _apply_browser_use_synthesis_decision(
+    *,
+    raw_result: str,
+    decision: _BrowserUseSynthesisDecision | None,
+) -> tuple[str, str, bool, bool]:
+    """Resolve final answer/summary from structured synthesis decision.
+
+    Returns:
+        Tuple of ``(final_answer, summary, used_synthesized_answer, quality_sufficient)``.
+    """
+    raw = (raw_result or "").strip()
+    if decision is None:
+        summary = browser_use_result_summary_for_display(raw)
+        return raw, summary, False, False
+
+    preferred = raw if decision.use_raw_result else decision.final_answer.strip()
+    if not preferred:
+        preferred = raw
+    if not preferred:
+        preferred = _NO_EXTRACTED_CONTENT
+    summary = (decision.summary or "").strip() or browser_use_result_summary_for_display(preferred)
+    used_synthesized = preferred != raw and bool(preferred.strip())
+    quality_sufficient = decision.answer_quality == "sufficient"
+    return preferred, summary, used_synthesized, quality_sufficient
+
+
+async def _synthesize_browser_use_result(
+    *,
+    task: str,
+    raw_result: str,
+    history_digest: str,
+    soothe_config: Any,
+    browser_config: BrowserUseSubagentConfig,
+    run_id: str,
+) -> _BrowserUseSynthesisDecision | None:
+    """Run deep-research-style structured synthesis over browser run output."""
+    from soothe.utils.llm.invoke_policy import (
+        await_with_llm_call_policy,
+        llm_rate_limit_config_from,
+    )
+    from soothe.utils.llm.structured import invoke_structured_chat_typed
+
+    role = (browser_config.synthesis_role or "").strip() or browser_use_model_role(soothe_config)
+    try:
+        synthesis_model = soothe_config.create_chat_model(role)
+    except Exception:
+        logger.warning(
+            "browser_use synthesis role %r unavailable, skipping synthesis",
+            role,
+            exc_info=True,
+        )
+        return None
+
+    prompt = (
+        "You are a result-quality judge and report synthesizer for browser automation.\n"
+        "Given task, raw browser result, and step trajectory, decide whether raw result is"
+        " sufficient.\n"
+        "If raw result is low-information, synthesize a better final answer strictly from the"
+        " provided evidence.\n"
+        "Never invent facts not present in the evidence.\n"
+        "Respond in the same language as the task.\n\n"
+        f"Task:\n{task or '(empty task)'}\n\n"
+        f"Raw result:\n{raw_result or '(empty)'}\n\n"
+        f"Browser trajectory:\n{history_digest}\n"
+    )
+    llm_config = llm_rate_limit_config_from(soothe_config).model_copy(
+        update={
+            "call_timeout_seconds": int(browser_config.synthesis_timeout_sec),
+            "call_timeout_max_seconds": int(browser_config.synthesis_timeout_sec),
+        }
+    )
+
+    async def _invoke() -> _BrowserUseSynthesisDecision:
+        return await invoke_structured_chat_typed(
+            synthesis_model,
+            [{"role": "user", "content": prompt}],
+            _BrowserUseSynthesisDecision,
+        )
+
+    _log_browser_event("synthesis_begin", run_id=run_id, role=role)
+    try:
+        decision = await await_with_llm_call_policy(_invoke, config=llm_config)
+    except Exception:
+        logger.warning("browser_use synthesis failed (run_id=%s)", run_id, exc_info=True)
+        return None
+    _log_browser_event(
+        "synthesis_end",
+        run_id=run_id,
+        use_raw=decision.use_raw_result,
+        quality=decision.answer_quality,
+    )
+    return decision
 
 
 async def detect_existing_browser_intent(prompt: str, *, soothe_config: Any) -> bool:
@@ -276,6 +438,7 @@ def _build_browser_use_graph(
 
         browser_runtime_dir = browser_config.runtime_dir or str(get_browser_runtime_dir())
         browser_extensions_dir = browser_config.extensions_dir or str(get_browser_extensions_dir())
+        run_id = uuid.uuid4().hex[:8]
 
         ephemeral_profile_dir: str | None = None
         if browser_config.user_data_dir:
@@ -284,7 +447,11 @@ def _build_browser_use_graph(
             profile_name = f"session-{uuid.uuid4().hex[:12]}"
             browser_user_data_dir = str(get_browser_user_data_dir(profile_name))
             ephemeral_profile_dir = browser_user_data_dir
-            logger.info("Using ephemeral browser profile: %s", profile_name)
+            _log_browser_event(
+                "profile_ephemeral",
+                run_id=run_id,
+                profile=profile_name,
+            )
         else:
             browser_user_data_dir = str(get_browser_user_data_dir())
 
@@ -316,18 +483,22 @@ def _build_browser_use_graph(
                     soothe_config=soothe_config,
                 )
 
-                logger.info(
-                    "BrowserUse subagent: starting run task_len=%d chars headless=%s max_steps=%d "
-                    "use_vision=%s browser_use_model=%s model_role=%s base_url=%s",
-                    len(task) if isinstance(task, str) else 0,
-                    headless,
-                    resolved_max_steps,
-                    use_vision,
-                    model_name,
-                    browser_use_model_role(soothe_config),
-                    preview_first(str(llm_base_url or ""), 80) or "(default)",
+                _log_browser_event(
+                    "run_start",
+                    run_id=run_id,
+                    task_len=len(task) if isinstance(task, str) else 0,
+                    headless=headless,
+                    max_steps=resolved_max_steps,
+                    use_vision=use_vision,
+                    model=model_name,
+                    model_role=browser_use_model_role(soothe_config),
+                    base_url=preview_first(str(llm_base_url or ""), 80) or "(default)",
                 )
-                logger.info("BrowserUse subagent: task preview: %s", preview_first(str(task), 400))
+                _log_browser_event(
+                    "task_preview",
+                    run_id=run_id,
+                    preview=preview_first(str(task), 400),
+                )
 
                 llm_kwargs: dict[str, Any] = {"model": model_name}
                 if llm_base_url:
@@ -348,16 +519,28 @@ def _build_browser_use_graph(
                     if use_existing:
                         cdp_url = os.environ.get("CHROME_CDP_URL")
                         if cdp_url:
-                            logger.info("Using existing browser at %s", cdp_url)
+                            _log_browser_event(
+                                "existing_browser_connect",
+                                run_id=run_id,
+                                cdp_url=cdp_url,
+                            )
                         else:
-                            logger.info("No existing browser CDP URL found, launching new instance")
+                            _log_browser_event(
+                                "existing_browser_unavailable",
+                                run_id=run_id,
+                                reason="CHROME_CDP_URL missing",
+                            )
 
                 if not cdp_url:
                     killed = cleanup_stale_chrome(browser_user_data_dir)
                     if killed:
                         import asyncio
 
-                        logger.info("Cleaned up %d stale Chrome process(es)", killed)
+                        _log_browser_event(
+                            "stale_chrome_cleanup",
+                            run_id=run_id,
+                            killed=killed,
+                        )
                         await asyncio.sleep(1)
 
                 extra_args = [f"--user-data-dir={browser_user_data_dir}"]
@@ -367,11 +550,12 @@ def _build_browser_use_graph(
                     args=extra_args,
                     user_data_dir=browser_user_data_dir,
                 )
-                logger.info(
-                    "BrowserUse subagent: Browser() ready cdp_url=%r headless_effective=%s user_data_dir=%s",
-                    cdp_url,
-                    headless if not cdp_url else False,
-                    preview_first(str(browser_user_data_dir), 120),
+                _log_browser_event(
+                    "browser_ready",
+                    run_id=run_id,
+                    cdp_url=cdp_url or "",
+                    headless_effective=headless if not cdp_url else False,
+                    user_data_dir=preview_first(str(browser_user_data_dir), 120),
                 )
 
                 last_step_wall = time.perf_counter()
@@ -399,19 +583,18 @@ def _build_browser_use_graph(
                     now = time.perf_counter()
                     wall_since_prev = now - last_step_wall
                     last_step_wall = now
-                    logger.info(
-                        "BrowserUse subagent step: n_steps=%s wall_since_prev=%.2fs "
-                        "since_run_start=%.1fs url=%r title=%r action=%r tool=%s is_done=%s "
-                        "history_len=%d",
-                        step_num,
-                        wall_since_prev,
-                        now - run_t0,
-                        url or "",
-                        page_title,
-                        action_desc or "(none)",
-                        tool_name,
-                        agent.history.is_done(),
-                        len(agent.history.history) if agent.history.history else 0,
+                    _log_browser_event(
+                        "step",
+                        run_id=run_id,
+                        step=step_num,
+                        dt_s=round(wall_since_prev, 2),
+                        elapsed_s=round(now - run_t0, 1),
+                        url=url or "",
+                        title=page_title,
+                        action=action_desc or "(none)",
+                        tool=tool_name,
+                        done=agent.history.is_done(),
+                        history_len=len(agent.history.history) if agent.history.history else 0,
                     )
                     emit_subagent_wire_event(
                         BrowserUseStepCompletedEvent(
@@ -433,37 +616,42 @@ def _build_browser_use_graph(
                     use_vision=use_vision,
                 )
 
-                logger.info("BrowserUse subagent: calling browser_session.start()")
+                _log_browser_event("session_start_begin", run_id=run_id)
                 sess_t0 = time.perf_counter()
                 await agent.browser_session.start()
-                logger.info(
-                    "BrowserUse subagent: browser_session.start() finished in %.2fs",
-                    time.perf_counter() - sess_t0,
+                _log_browser_event(
+                    "session_start_end",
+                    run_id=run_id,
+                    dt_s=round(time.perf_counter() - sess_t0, 2),
                 )
 
                 for step_idx in range(resolved_max_steps):
                     try:
                         iter_t0 = time.perf_counter()
-                        logger.info(
-                            "BrowserUse subagent: invoking agent.step() (%d/%d, elapsed=%.1fs)",
-                            step_idx + 1,
-                            resolved_max_steps,
-                            iter_t0 - run_t0,
+                        _log_browser_event(
+                            "step_begin",
+                            run_id=run_id,
+                            step=step_idx + 1,
+                            max_steps=resolved_max_steps,
+                            elapsed_s=round(iter_t0 - run_t0, 1),
                         )
                         await agent.step()
-                        logger.info(
-                            "BrowserUse subagent: agent.step() returned in %.2fs",
-                            time.perf_counter() - iter_t0,
+                        _log_browser_event(
+                            "step_end",
+                            run_id=run_id,
+                            step=step_idx + 1,
+                            dt_s=round(time.perf_counter() - iter_t0, 2),
                         )
                         await on_step_end(agent)
                         if agent.history.is_done():
-                            logger.info(
-                                "BrowserUse subagent: agent reports is_done=True after %d step(s)",
-                                step_idx + 1,
+                            _log_browser_event(
+                                "run_done",
+                                run_id=run_id,
+                                step=step_idx + 1,
                             )
                             break
                     except Exception:
-                        logger.exception("BrowserUse step failed")
+                        logger.exception("browser_use event=step_failed run_id=%s", run_id)
                         raise
 
                 history = agent.history
@@ -477,23 +665,49 @@ def _build_browser_use_graph(
                         steps=steps_executed,
                     )
                     run_success = False
-                    logger.error(result)
+                    logger.error(
+                        "browser_use event=no_progress run_id=%s model=%s steps=%d",
+                        run_id,
+                        model_name,
+                        steps_executed,
+                    )
                 else:
                     result = _NO_EXTRACTED_CONTENT
                     run_success = False
                     logger.error(
-                        "BrowserUse finished without extracted content after %d step(s) (model=%s)",
+                        "browser_use event=no_content run_id=%s steps=%d model=%s",
+                        run_id,
                         steps_executed,
                         model_name,
                     )
-                result_str = str(result)
-                completion_summary = browser_use_result_summary_for_display(result_str)
-                logger.info(
-                    "BrowserUse subagent: loop finished total_wall=%.1fs steps_executed=%d success=%s result_preview=%s",
-                    time.perf_counter() - run_t0,
-                    steps_executed,
-                    run_success,
-                    preview_first(result_str, 300),
+                raw_result = str(result)
+                history_digest = _history_digest_for_synthesis(history)
+                synthesis_decision = await _synthesize_browser_use_result(
+                    task=str(task or ""),
+                    raw_result=raw_result,
+                    history_digest=history_digest,
+                    soothe_config=soothe_config,
+                    browser_config=browser_config,
+                    run_id=run_id,
+                )
+                result_str, completion_summary, used_synthesized, quality_sufficient = (
+                    _apply_browser_use_synthesis_decision(
+                        raw_result=raw_result,
+                        decision=synthesis_decision,
+                    )
+                )
+                if used_synthesized:
+                    _log_browser_event("synthesis_applied", run_id=run_id)
+                if not run_success and quality_sufficient:
+                    run_success = True
+                result = result_str
+                _log_browser_event(
+                    "run_end",
+                    run_id=run_id,
+                    total_s=round(time.perf_counter() - run_t0, 1),
+                    steps=steps_executed,
+                    success=run_success,
+                    result_preview=preview_first(result_str, 300),
                 )
 
                 emit_subagent_wire_event(
@@ -506,16 +720,17 @@ def _build_browser_use_graph(
                 )
 
                 try:
-                    logger.info("BrowserUse subagent: stopping browser_session")
+                    _log_browser_event("session_stop_begin", run_id=run_id)
                     await agent.browser_session.stop()
                 except Exception:
-                    logger.info("Failed to stop browser session (already stopped?)")
+                    _log_browser_event("session_stop_skip", run_id=run_id, reason="already stopped")
 
                 if browser_config.cleanup_on_exit:
                     cleanup_browser_temp_files()
+                    _log_browser_event("temp_cleanup", run_id=run_id)
 
         except Exception as e:
-            logger.exception("BrowserUse agent failed")
+            logger.exception("browser_use event=run_failed run_id=%s", run_id)
             error_msg = format_cli_error(e)
             result = error_msg
             run_success = False
@@ -533,7 +748,11 @@ def _build_browser_use_graph(
                 import shutil
 
                 shutil.rmtree(ephemeral_profile_dir, ignore_errors=True)
-                logger.info("Cleaned up ephemeral profile: %s", ephemeral_profile_dir)
+                _log_browser_event(
+                    "profile_cleanup",
+                    run_id=run_id,
+                    dir=ephemeral_profile_dir,
+                )
 
         return {
             "messages": [AIMessage(content=result)],

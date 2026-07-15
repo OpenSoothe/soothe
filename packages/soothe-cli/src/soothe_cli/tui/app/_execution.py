@@ -148,9 +148,6 @@ class _ExecutionMixin:
         value = event.value
         mode: InputMode = event.mode  # type: ignore[assignment]  # Textual event mode is str at type level but InputMode at runtime
 
-        # Reset quit pending state on any input
-        self._quit_pending = False
-
         await dispatch_hook("user.prompt", {})
 
         # /quit and /q always execute immediately, even mid-loop-switch.

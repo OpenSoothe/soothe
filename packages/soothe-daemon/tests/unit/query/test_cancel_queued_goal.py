@@ -171,6 +171,22 @@ async def test_await_loop_ready_waits_for_pool_dispatchable() -> None:
     await asyncio.wait_for(ready, timeout=1.0)
 
 
+@pytest.mark.asyncio
+async def test_await_loop_ready_waits_for_active_query_admission() -> None:
+    """Queued turns must wait until loop admission is released."""
+    daemon = _daemon_factory()
+    engine = QueryEngine(daemon)
+    daemon._loops_with_active_query.add("loop-a")
+
+    ready = asyncio.create_task(engine.await_loop_ready_for_turn("loop-a"))
+    await asyncio.sleep(0.05)
+    assert not ready.done()
+
+    async with daemon._query_state_lock:
+        daemon._loops_with_active_query.discard("loop-a")
+    await asyncio.wait_for(ready, timeout=1.0)
+
+
 def test_thread_pool_is_loop_busy_and_dispatchable_gate() -> None:
     """Same-loop dispatch must wait until the mapped worker returns idle."""
     pool = ThreadPool.__new__(ThreadPool)

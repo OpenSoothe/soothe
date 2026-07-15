@@ -70,6 +70,37 @@ async def test_finish_request_waits_for_ready_before_marking_idle() -> None:
     assert "req-123" not in pool._pending_responses
 
 
+@pytest.mark.asyncio
+async def test_finish_request_skips_wait_when_ready_seen_early() -> None:
+    """Cleanup should not block if ``ready`` was consumed before terminal frame."""
+    worker = _busy_worker()
+    pool = ThreadPool.__new__(ThreadPool)
+    pool._workers_by_loop_id = {"loop-abc": worker.worker_id}
+    pool._pending_responses = {"req-123": asyncio.Queue()}
+    pool._metrics_requests_total = 0
+    pool._metrics_latencies = []
+
+    async def _mark_idle(w: WorkerThreadState) -> None:
+        w.mark_idle()
+
+    pool._mark_worker_idle_and_notify = AsyncMock(side_effect=_mark_idle)
+
+    response_queue: asyncio.Queue = asyncio.Queue()
+    await pool._finish_request_after_terminal(
+        worker,
+        "loop-abc",
+        "req-123",
+        response_queue,
+        start_time=datetime.now(),
+        ready_already_received=True,
+    )
+
+    pool._mark_worker_idle_and_notify.assert_awaited_once_with(worker)
+    assert worker.status == WorkerThreadStatus.IDLE
+    assert "loop-abc" not in pool._workers_by_loop_id
+    assert "req-123" not in pool._pending_responses
+
+
 def test_terminal_response_types_include_done_and_error() -> None:
     assert "done" in _TERMINAL_RESPONSE_TYPES
     assert "error" in _TERMINAL_RESPONSE_TYPES

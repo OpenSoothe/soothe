@@ -55,10 +55,10 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
             "Insert newline in the chat input",
         ),
         ("Esc", "Dismiss modal, plan overlay, or autocomplete"),
-        ("Ctrl+D", "Quit and detach from the daemon"),
+        ("Ctrl+D", "Use /quit (or /q) to exit the TUI"),
         (
             "Ctrl+C",
-            "Clear input, interrupt agent/shell, or quit when pressed twice while idle",
+            "Clear input or interrupt running agent/shell",
         ),
         ("Ctrl+X", "Open prompt in external editor ($VISUAL/$EDITOR)"),
         ("Ctrl+Y", "Copy selected text to clipboard"),
