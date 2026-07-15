@@ -119,6 +119,9 @@ def _record_wired_execute_ledger(
 def _unpack_astream_item(item: Any) -> tuple[str | None, Any]:
     """Normalize LangGraph ``astream`` items to ``(mode, data)``."""
     if isinstance(item, tuple):
+        if len(item) == 2:
+            mode, data = item
+            return (str(mode) if mode is not None else None), data
         if len(item) == 3:
             _ns, mode, data = item
             return (str(mode) if mode is not None else None), data

@@ -343,6 +343,68 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
 
 
 @pytest.mark.asyncio
+async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field() -> None:
+    """Two-item ``(mode, data)`` astream chunks should unwrap to dict state."""
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="browser_use",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    synthesized = "Weather summary: clear sky, 26C."
+
+    async def _astream(_input, stream_mode=None):  # type: ignore[no-untyped-def]
+        yield (
+            "values",
+            {
+                "answer": synthesized,
+                "messages": [AIMessage(content=synthesized)],
+            },
+        )
+
+    runnable = SimpleNamespace(astream=_astream, ainvoke=AsyncMock())
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, payload: object) -> None:
+        emitted.append((event_type, payload))
+        await asyncio.sleep(0)
+
+    loop_state = SimpleNamespace(
+        intent=intent,
+        routing_classification=build_loop_routing_classification(intent, None),
+        goal="west coast weather",
+        goal_user_submission="west coast weather",
+        total_tokens_used=0,
+        thread_id="t1",
+        workspace=None,
+        iteration=0,
+        _loop_messages_cache=[],
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        preferred_subagent=None,
+        scratch=SimpleNamespace(plan_result=None),
+        emit=_emit,
+        ce=None,
+        core_agent=SimpleNamespace(
+            lookup_intake_only_subagent=lambda name: (
+                {"name": "browser_use", "runnable": runnable} if name == "browser_use" else None
+            )
+        ),
+    )
+
+    out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
+    assert out == {"wired_route_next": "goal_completion"}
+    runnable.ainvoke.assert_not_called()
+    assert any(getattr(m, "content", None) == synthesized for m in loop_state._loop_messages_cache)
+
+    completed = next(p for t, p in emitted if t == "wired_subagent_completed")
+    assert isinstance(completed, dict)
+    assert completed["summary"].startswith("Weather summary")
+    assert "values" not in completed["summary"]
+
+
+@pytest.mark.asyncio
 async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     """Bridge captures emit_progress during ainvoke when stream writer is absent."""
     intent = IntentClassification(
