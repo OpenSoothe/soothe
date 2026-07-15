@@ -42,7 +42,7 @@ if TYPE_CHECKING:
         def __call__(self) -> tuple[int, int, int]: ...
 
     class _AuthoritativeLoopTokensCallback(Protocol):
-        def __call__(self, goal_run_tokens: int, *, source: str = "backend") -> None: ...
+        def __call__(self, _goal_run_tokens: int, *, source: str = "backend") -> None: ...
 
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -2918,7 +2918,6 @@ async def execute_task_textual(
     daemon_session: Any,  # noqa: ANN401  # TuiDaemonSession
     sandbox_type: str | None = None,
     workspace: str | None = None,
-    message_kwargs: dict[str, Any] | None = None,
     turn_stats: SessionStats | None = None,
     skip_daemon_send_turn: bool = False,
     clarification_mode: str | None = None,
@@ -2945,9 +2944,6 @@ async def execute_task_textual(
         workspace: Resolved project directory (status-bar cwd / daemon bootstrap)
             mirrored into stream ``configurable.workspace``; when omitted,
             ``build_stream_config`` uses ``Path.cwd()`` (IG-341).
-        message_kwargs: Extra fields merged into the stream input message
-            dict (e.g., `additional_kwargs` for persisting skill metadata
-            in the checkpoint).
         turn_stats: Pre-created `SessionStats` to accumulate into.
 
             When the caller holds a reference to the same object, stats are

@@ -744,7 +744,6 @@ class _ExecutionMixin:
         self,
         message: str,
         *,
-        message_kwargs: dict[str, Any] | None = None,
         skip_daemon_send_turn: bool = False,
     ) -> None:
         """Send a message to the agent and start execution.
@@ -755,8 +754,6 @@ class _ExecutionMixin:
 
         Args:
             message: The prompt to send to the agent.
-            message_kwargs: Extra fields merged into the stream input message
-                dict (e.g., `additional_kwargs` for skill metadata).
             skip_daemon_send_turn: When using a daemon session, only attach to
                 the in-flight stream (prompt already queued on the daemon).
         """
@@ -789,7 +786,6 @@ class _ExecutionMixin:
             self._agent_worker = self.run_worker(
                 self._run_agent_task(
                     message,
-                    message_kwargs=message_kwargs,
                     skip_daemon_send_turn=skip_daemon_send_turn,
                 ),
                 exclusive=False,
@@ -805,7 +801,6 @@ class _ExecutionMixin:
         self,
         message: str,
         *,
-        message_kwargs: dict[str, Any] | None = None,
         skip_daemon_send_turn: bool = False,
     ) -> None:
         """Run the agent task in a background worker.
@@ -814,8 +809,6 @@ class _ExecutionMixin:
 
         Args:
             message: The prompt to send to the agent.
-            message_kwargs: Extra fields merged into the stream input message
-                dict (e.g., `additional_kwargs` for skill metadata).
             skip_daemon_send_turn: When ``True`` with a daemon session, only
                 consume the daemon stream (prompt already queued server-side).
         """
@@ -844,7 +837,6 @@ class _ExecutionMixin:
                         image_tracker=self._image_tracker,
                         sandbox_type=self._sandbox_type,
                         workspace=self._cwd,
-                        message_kwargs=message_kwargs,
                         context=CLIContext(
                             model=self._model_override,
                             model_params=self._model_params_override or {},
