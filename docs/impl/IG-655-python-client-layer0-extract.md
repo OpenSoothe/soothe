@@ -4,7 +4,7 @@
 **Title**: Extract WebSocket client from soothe-sdk into `client/python`  
 **Created**: 2026-07-15  
 **Related**: RFC-629 (Client Appkit), RFC-450 (Protocol-1), RFC-610 (SDK structure)  
-**Status**: Phase D + IG-651 lifecycle parity (2026-07-16)
+**Status**: Phase D + IG-651 lifecycle + packaging (Makefile/CI/examples) (2026-07-16)
 
 ---
 
@@ -107,4 +107,4 @@ Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
 - [x] CLI `TuiDaemonSession` wraps `DaemonSession`
 - [x] Python client unit tests green (`client/python`)
 
-**Status**: Phase D + IG-651 lifecycle parity for Python (2026-07-16)
+**Status**: Phase D + IG-651 lifecycle + packaging (2026-07-16)
