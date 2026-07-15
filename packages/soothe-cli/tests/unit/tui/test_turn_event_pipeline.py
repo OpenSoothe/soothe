@@ -128,7 +128,7 @@ def test_loop_assistant_output_message_gets_high_priority() -> None:
     text card lands behind the step card even though the daemon emitted it first.
     Regression for: 'I will complete this...' appearing after the step card.
     """
-    from soothe.foundation.sloop.utils.messages import LoopAIMessage
+    from types import SimpleNamespace
 
     from soothe_cli.runtime.presentation.engine import PresentationEngine
 
@@ -137,10 +137,8 @@ def test_loop_assistant_output_message_gets_high_priority() -> None:
         presentation=PresentationEngine(),
     )
 
-    plan_direct_msg = LoopAIMessage(
+    plan_direct_msg = SimpleNamespace(
         content="I will complete this goal directly: read file",
-        thread_id="t",
-        iteration=0,
         phase="plan_direct",
     )
     prepared = prepare_turn_chunk(state, ((), "messages", (plan_direct_msg, {})))
@@ -216,7 +214,7 @@ def test_turn_apply_batcher_flushes_on_high_priority() -> None:
 @pytest.mark.asyncio
 async def test_run_turn_pipeline_records_latency_stats() -> None:
     """IG-534 Phase 3: pipeline records time-to-first-chunk latency."""
-    from soothe.foundation.sloop.utils.messages import LoopAIMessage
+    from types import SimpleNamespace
 
     latency = TurnLatencyStats(turn_start_monotonic=time.monotonic())
     applied: list[str] = []
@@ -232,10 +230,8 @@ async def test_run_turn_pipeline_records_latency_stats() -> None:
             (),
             "messages",
             (
-                LoopAIMessage(
+                SimpleNamespace(
                     content="hi",
-                    thread_id="t",
-                    iteration=0,
                     phase="goal_completion",
                 ),
                 {},

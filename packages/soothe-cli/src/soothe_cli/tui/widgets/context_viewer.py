@@ -1,7 +1,7 @@
 """Context Engine viewer screen for /context command.
 
-Displays token usage, goal DAG, and status from the Context Engine using the
-configured persistence backend (SQLite or PostgreSQL).
+Displays token usage, goal DAG, and status for the current loop via the
+daemon session (loop history RPC), plus token usage callbacks from the TUI.
 """
 
 from __future__ import annotations
@@ -349,6 +349,7 @@ class ContextViewerScreen(ModalScreen[None]):
         self,
         loop_id: str | None,
         *,
+        daemon_session: Any = None,
         load_token_snapshot: LoadTokenSnapshotFn | None = None,
         initial_token_snapshot: TokenUsageSnapshot | None = None,
         **kwargs: Any,
@@ -356,13 +357,15 @@ class ContextViewerScreen(ModalScreen[None]):
         """Initialize the ContextViewerScreen.
 
         Args:
-            loop_id: Current loop ID to read context engine data.
+            loop_id: Current loop ID to read goal / token context for.
+            daemon_session: Active TUI daemon session used to fetch goal history.
             load_token_snapshot: Optional async callback to refresh token usage.
             initial_token_snapshot: Seed token snapshot before the first refresh.
             **kwargs: Passed to parent.
         """
         super().__init__()
         self._loop_id = loop_id or "unknown"
+        self._daemon_session = daemon_session
         self._goals: list[dict[str, Any]] = []
         self._load_token_snapshot = load_token_snapshot
         self._token_snapshot = initial_token_snapshot
@@ -442,7 +445,7 @@ class ContextViewerScreen(ModalScreen[None]):
 
     async def _async_refresh(self) -> None:
         """Reload context data and refresh all panels."""
-        goals = await load_ce_goals(self._loop_id)
+        goals = await load_ce_goals(self._loop_id, self._daemon_session)
         token_snapshot = self._token_snapshot
         if self._load_token_snapshot is not None:
             try:

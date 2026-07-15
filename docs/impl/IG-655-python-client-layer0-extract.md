@@ -4,7 +4,7 @@
 **Title**: Extract WebSocket client from soothe-sdk into `client/python`  
 **Created**: 2026-07-15  
 **Related**: RFC-629 (Client Appkit), RFC-450 (Protocol-1), RFC-610 (SDK structure)  
-**Status**: In progress (Phase A)
+**Status**: Phase C complete (2026-07-15)
 
 ---
 
@@ -40,7 +40,7 @@ soothe-cli → soothe-client-python → [WS] → daemon → soothe (core)
 ## Later phases
 
 - **B**: Slim SDK further — relocate wire/paths out of `soothe_sdk.client` ✓
-- **C**: Thin CLI onto client; remove `soothe.*` leaks.
+- **C**: Thin CLI onto client; remove `soothe.*` leaks ✓
 - **D**: Python `appkit` (promote CLI session/turn generics).
 
 ## Phase B (slim SDK layout)
@@ -52,6 +52,15 @@ soothe-cli → soothe-client-python → [WS] → daemon → soothe (core)
 | `soothe_sdk.client.config` | `soothe_sdk.paths` |
 
 Compat shims under `soothe_sdk.client.*` remain for one migration window.
+
+## Phase C (thin CLI; no core imports)
+
+| Leak | Remediation |
+|------|-------------|
+| `/context` CE persistence via `soothe.config` + `resolve_context_engine_persistence` | Load goals via daemon `fetch_loop_history` (RFC-631 snapshots); wire `daemon_session` into `ContextViewerScreen` |
+| `run_cmd` `--mcp-config` via `MCPServerConfig` | Flag is daemon-owned post-split; CLI warns and ignores |
+| `cognition_goal_tree` `is_error_tool_result_text` | Canonical helper in `soothe_sdk.display.tool_result`; core re-exports |
+| CLI tests importing `LoopAIMessage` | Use `SimpleNamespace` / getattr phase only |
 
 ## Exit criteria
 
@@ -68,4 +77,10 @@ Compat shims under `soothe_sdk.client.*` remain for one migration window.
 - [x] SDK package description reflects slim contracts (no transport client)
 - [x] `./scripts/verify_finally.sh` green
 
-**Status**: Phase B complete (2026-07-15)
+### Phase C
+- [x] `packages/soothe-cli` has no `soothe.*` (core) imports
+- [x] `/context` goals load via daemon session RPC (not core persistence)
+- [x] Shared tool-error text helper lives in slim SDK
+- [x] `./scripts/verify_finally.sh` green
+
+**Status**: Phase C complete (2026-07-15)

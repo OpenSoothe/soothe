@@ -70,46 +70,53 @@ async def load_token_usage_snapshot(
     )
 
 
-def _load_soothe_config_for_context() -> Any:
-    """Load full daemon ``SootheConfig`` for context-engine persistence."""
-    from pathlib import Path
+def _goal_viewer_dict(raw: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a daemon goal snapshot (or CE-shaped dict) for the DAG panel."""
+    goal_id = str(raw.get("id") or raw.get("goal_id") or "").strip()
+    description = str(raw.get("description") or raw.get("goal_text") or "").strip()
+    status = str(raw.get("status") or "unknown").strip() or "unknown"
+    depends_raw = raw.get("depends_on")
+    depends_on: list[str] = []
+    if isinstance(depends_raw, list):
+        depends_on = [str(dep) for dep in depends_raw if str(dep).strip()]
+    return {
+        "id": goal_id or "?",
+        "description": description,
+        "status": status,
+        "depends_on": depends_on,
+    }
 
-    from soothe.config.settings import SootheConfig
-    from soothe_sdk.paths import SOOTHE_HOME
 
-    path = Path(SOOTHE_HOME) / "config" / "config.yml"
-    if path.exists():
-        return SootheConfig.from_yaml_file(str(path))
-    return SootheConfig()
+async def load_ce_goals(loop_id: str, daemon_session: Any = None) -> list[dict[str, Any]]:
+    """Load goals for ``loop_id`` via the daemon session (loop history RPC).
 
-
-async def load_ce_goals(loop_id: str) -> list[dict[str, Any]]:
-    """Load Context Engine goals for ``loop_id`` via the configured persistence backend."""
+    Prefers Context Engine-shaped fields when present; otherwise maps RFC-631
+    display snapshots (``goal_id`` / ``goal_text``). Dependency edges are only
+    shown when the daemon includes ``depends_on``.
+    """
     raw_loop_id = str(loop_id or "").strip()
-    if not raw_loop_id or raw_loop_id == "unknown":
+    if not raw_loop_id or raw_loop_id == "unknown" or daemon_session is None:
+        return []
+
+    fetch = getattr(daemon_session, "fetch_loop_history", None)
+    if not callable(fetch):
         return []
 
     try:
-        from soothe.foundation.context.persistence.factory import (
-            resolve_context_engine_persistence,
-        )
-
-        config = _load_soothe_config_for_context()
-        persistence = resolve_context_engine_persistence(config, raw_loop_id)
-        dag = await persistence.load_dag()
-        close = getattr(persistence, "close", None)
-        if callable(close):
-            await close()
+        history = await fetch(raw_loop_id)
     except Exception:
-        logger.debug("Failed to load CE goals for loop %s", raw_loop_id, exc_info=True)
+        logger.debug("Failed to load goals for loop %s", raw_loop_id, exc_info=True)
         return []
 
-    if dag is None:
+    goals_raw = getattr(history, "goals", None)
+    if not isinstance(goals_raw, list):
         return []
 
-    return [
-        goal.model_dump(mode="json") for goal in dag.goals.values() if hasattr(goal, "model_dump")
-    ]
+    goals: list[dict[str, Any]] = []
+    for item in goals_raw:
+        if isinstance(item, dict):
+            goals.append(_goal_viewer_dict(item))
+    return goals
 
 
 def format_token_usage(snapshot: TokenUsageSnapshot) -> str:

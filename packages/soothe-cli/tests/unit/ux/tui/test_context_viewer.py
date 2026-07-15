@@ -20,39 +20,40 @@ def test_abbreviate_loop_id_keeps_short_ids() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_ce_goals_reads_persistence_dag(monkeypatch) -> None:
-    goal = SimpleNamespace(
-        model_dump=lambda *, mode: {  # noqa: ARG005
+async def test_load_ce_goals_maps_daemon_history_snapshots() -> None:
+    history = SimpleNamespace(
+        goals=[
+            {
+                "goal_id": "g1",
+                "goal_text": "First",
+                "status": "active",
+            }
+        ]
+    )
+    session = SimpleNamespace(fetch_loop_history=AsyncMock(return_value=history))
+
+    goals = await context_data.load_ce_goals("loop-123", session)
+    assert goals == [
+        {
             "id": "g1",
             "description": "First",
             "status": "active",
             "depends_on": [],
         }
-    )
-    dag = SimpleNamespace(goals={"g1": goal})
-    persistence = SimpleNamespace(load_dag=AsyncMock(return_value=dag), close=AsyncMock())
-
-    monkeypatch.setattr(
-        "soothe.foundation.context.persistence.factory.resolve_context_engine_persistence",
-        lambda _config, _loop_id: persistence,
-    )
-    monkeypatch.setattr(context_data, "_load_soothe_config_for_context", lambda: object())
-
-    goals = await context_data.load_ce_goals("loop-123")
-    assert [g["id"] for g in goals] == ["g1"]
-    persistence.close.assert_awaited_once()
+    ]
+    session.fetch_loop_history.assert_awaited_once_with("loop-123")
 
 
 @pytest.mark.asyncio
-async def test_load_ce_goals_returns_empty_when_dag_missing(monkeypatch) -> None:
-    persistence = SimpleNamespace(load_dag=AsyncMock(return_value=None), close=AsyncMock())
-    monkeypatch.setattr(
-        "soothe.foundation.context.persistence.factory.resolve_context_engine_persistence",
-        lambda _config, _loop_id: persistence,
-    )
-    monkeypatch.setattr(context_data, "_load_soothe_config_for_context", lambda: object())
+async def test_load_ce_goals_returns_empty_when_history_missing() -> None:
+    session = SimpleNamespace(fetch_loop_history=AsyncMock(return_value=SimpleNamespace(goals=[])))
+    assert await context_data.load_ce_goals("missing-loop", session) == []
 
-    assert await context_data.load_ce_goals("missing-loop") == []
+
+@pytest.mark.asyncio
+async def test_load_ce_goals_returns_empty_without_daemon_session() -> None:
+    assert await context_data.load_ce_goals("loop-123") == []
+    assert await context_data.load_ce_goals("loop-123", None) == []
 
 
 def test_format_token_usage_includes_breakdown() -> None:

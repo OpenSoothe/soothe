@@ -59,7 +59,7 @@ def _plan_quick_view_step_summary(
         return ""
     if success:
         try:
-            from soothe.foundation.sloop.engine.act_wave_finalize import is_error_tool_result_text
+            from soothe_sdk.display.tool_result import is_error_tool_result_text
 
             if is_error_tool_result_text(tail):
                 return ""

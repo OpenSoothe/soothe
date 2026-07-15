@@ -287,6 +287,7 @@ class _ModelMixin:
         initial_snapshot = await self._load_token_usage_snapshot()
         screen = ContextViewerScreen(
             loop_id=loop_id,
+            daemon_session=self._daemon_session,
             load_token_snapshot=self._load_token_usage_snapshot,
             initial_token_snapshot=initial_snapshot,
         )

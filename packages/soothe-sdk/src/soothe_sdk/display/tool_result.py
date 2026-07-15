@@ -20,6 +20,23 @@ from soothe_sdk.display.tool_message_format import (
 )
 from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
+# Markers shared with act-wave finalize (canonical home for client + core reuse).
+_ERROR_TOOL_RESULT_MARKERS = (
+    "timed out",
+    "timeout after",
+    "command timed out",
+    "error:",
+    "tool error",
+)
+
+
+def is_error_tool_result_text(text: str) -> bool:
+    """Return True when tool output text is dominated by a failure message."""
+    low = (text or "").strip().lower()
+    if not low:
+        return False
+    return any(marker in low for marker in _ERROR_TOOL_RESULT_MARKERS)
+
 
 def infer_tool_output_suggests_error(output_display: str, _tool_name: str = "") -> bool:
     """Return True if formatted tool output text looks like a failure (CLI parity).
@@ -137,4 +154,5 @@ __all__ = [
     "ToolResultPayload",
     "extract_tool_result_payload",
     "infer_tool_output_suggests_error",
+    "is_error_tool_result_text",
 ]

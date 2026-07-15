@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
+from soothe_sdk.display.tool_result import is_error_tool_result_text
 
 from soothe.utils.text_preview import preview_first
 
@@ -34,22 +35,6 @@ DELEGATE_FINAL_WAVE_CAP = 120_000
 # prose text. Plan-assess reads this to grade goal progress on concrete
 # tool output rather than only the AI's prose summary.
 LAST_TOOL_RESULT_HEAD_CHARS = 500
-
-_ERROR_TOOL_RESULT_MARKERS = (
-    "timed out",
-    "timeout after",
-    "command timed out",
-    "error:",
-    "tool error",
-)
-
-
-def is_error_tool_result_text(text: str) -> bool:
-    """Return True when tool output text is dominated by a failure message."""
-    low = (text or "").strip().lower()
-    if not low:
-        return False
-    return any(marker in low for marker in _ERROR_TOOL_RESULT_MARKERS)
 
 
 def _first_arg_head_for_tool_call(call: dict[str, Any]) -> str:
