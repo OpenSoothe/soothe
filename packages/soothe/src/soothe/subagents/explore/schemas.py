@@ -170,6 +170,8 @@ class ExploreSubagentConfig(BaseModel):
         enable_semantic_similarity: Use semantic similarity for relevance scoring (requires fastembed).
         semantic_similarity_timeout_seconds: Wall-clock cap for async synthesis relevance scoring (embedding + rank).
         synthesis_timeout_seconds: Wall-clock cap for LLM structured synthesis before partial fallback.
+        synthesis_validation_retries: Additional retries after structured validation failure.
+        synthesis_fallback_to_primary_model: Retry synthesis on primary model when fast model fails.
     """
 
     thoroughness: str = "medium"
@@ -217,6 +219,18 @@ class ExploreSubagentConfig(BaseModel):
         ge=5.0,
         le=600.0,
         description="Max seconds for LLM structured synthesis; partial fallback uses findings on timeout/error.",
+    )
+
+    synthesis_validation_retries: int = Field(
+        default=1,
+        ge=0,
+        le=3,
+        description="Additional retries for synthesis when structured schema validation fails.",
+    )
+
+    synthesis_fallback_to_primary_model: bool = Field(
+        default=True,
+        description="Retry synthesis on primary explorer model when fast synthesis model fails.",
     )
 
     # Tool call limit overrides for explore subagent

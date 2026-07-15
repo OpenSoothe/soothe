@@ -19,12 +19,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.types import Command, Overwrite
 
 from soothe.utils.llm.structured import (
+    StructuredOutputError,
     invoke_structured_chat_typed,
 )
 from soothe.utils.subagent_emit import emit_subagent_wire_event
 
 from .events import ExploreCompletedEvent, ExploreStartedEvent, ExploreStepCompletedEvent
 from .findings import extract_findings_from_tool_result, should_record_findings
+from .normalize import coerce_explore_result_dict
 from .partial import build_explore_result_from_findings
 from .prompts import SYNTHESIZE, format_explore_agent_system
 from .schemas import (
@@ -472,7 +474,40 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         )
         return prompt, len(detail_lines)
 
-    def _invoke_synthesis_llm_sync(self, prompt: str) -> ExploreResult:
+    @staticmethod
+    def _same_model_instance(left: Any, right: Any) -> bool:
+        """Best-effort check for model identity without requiring hashability."""
+        if left is right:
+            return True
+        if left is None or right is None:
+            return False
+        return repr(left) == repr(right)
+
+    @staticmethod
+    def _synthesis_repair_message() -> HumanMessage:
+        """Compact repair hint appended on structured-output retry attempts."""
+        return HumanMessage(
+            content=(
+                "Structured output repair: return valid ExploreResult JSON with required keys "
+                "target, matches, summary. If no matches exist, return matches: []."
+            )
+        )
+
+    def _normalize_synthesis_payload(
+        self,
+        data: dict[str, Any],
+        *,
+        search_target: str,
+    ) -> dict[str, Any]:
+        """Coerce provider payload into a strict ExploreResult-compatible dict."""
+        return coerce_explore_result_dict(
+            data,
+            search_target=search_target,
+            thoroughness=self._explore_config.thoroughness,
+            max_matches=self._max_matches,
+        )
+
+    def _invoke_synthesis_llm_sync(self, prompt: str, *, search_target: str) -> ExploreResult:
         from soothe.utils.llm.invoke_policy import (
             llm_rate_limit_config_from,
             run_with_llm_call_policy_sync,
@@ -486,17 +521,60 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             }
         )
 
-        async def _invoke() -> ExploreResult:
-            async with asyncio.timeout(timeout):
-                return await invoke_structured_chat_typed(
-                    self._synthesis_model,
-                    [HumanMessage(content=prompt)],
-                    ExploreResult,
-                )
+        retries = max(0, int(self._explore_config.synthesis_validation_retries))
+        models: list[tuple[str, BaseChatModel]] = [("synthesis", self._synthesis_model)]
+        if (
+            self._explore_config.synthesis_fallback_to_primary_model
+            and not self._same_model_instance(self._synthesis_model, self._model)
+        ):
+            models.append(("primary", self._model))
 
-        return run_with_llm_call_policy_sync(_invoke, config=llm_config)
+        last_exc: Exception | None = None
+        for model_name, model in models:
+            for attempt in range(retries + 1):
 
-    async def _invoke_synthesis_llm_async(self, prompt: str) -> ExploreResult:
+                async def _invoke() -> ExploreResult:
+                    msgs: list[HumanMessage] = [HumanMessage(content=prompt)]
+                    if attempt > 0:
+                        msgs.append(self._synthesis_repair_message())
+                    async with asyncio.timeout(timeout):
+                        return await invoke_structured_chat_typed(
+                            model,
+                            msgs,
+                            ExploreResult,
+                            normalize=lambda data: self._normalize_synthesis_payload(
+                                data,
+                                search_target=search_target,
+                            ),
+                        )
+
+                try:
+                    return run_with_llm_call_policy_sync(_invoke, config=llm_config)
+                except StructuredOutputError as exc:
+                    last_exc = exc
+                    if attempt < retries:
+                        logger.warning(
+                            "Explore: synthesis structured output invalid on %s model "
+                            "(attempt %d/%d): %s",
+                            model_name,
+                            attempt + 1,
+                            retries + 1,
+                            exc,
+                        )
+                        continue
+                    logger.warning(
+                        "Explore: synthesis structured retries exhausted on %s model: %s",
+                        model_name,
+                        exc,
+                    )
+                    break
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Explore synthesis failed without a captured exception")
+
+    async def _invoke_synthesis_llm_async(
+        self, prompt: str, *, search_target: str
+    ) -> ExploreResult:
         from soothe.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
@@ -510,15 +588,56 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             }
         )
 
-        async def _invoke() -> ExploreResult:
-            async with asyncio.timeout(timeout):
-                return await invoke_structured_chat_typed(
-                    self._synthesis_model,
-                    [HumanMessage(content=prompt)],
-                    ExploreResult,
-                )
+        retries = max(0, int(self._explore_config.synthesis_validation_retries))
+        models: list[tuple[str, BaseChatModel]] = [("synthesis", self._synthesis_model)]
+        if (
+            self._explore_config.synthesis_fallback_to_primary_model
+            and not self._same_model_instance(self._synthesis_model, self._model)
+        ):
+            models.append(("primary", self._model))
 
-        return await await_with_llm_call_policy(_invoke, config=llm_config)
+        last_exc: Exception | None = None
+        for model_name, model in models:
+            for attempt in range(retries + 1):
+
+                async def _invoke() -> ExploreResult:
+                    msgs: list[HumanMessage] = [HumanMessage(content=prompt)]
+                    if attempt > 0:
+                        msgs.append(self._synthesis_repair_message())
+                    async with asyncio.timeout(timeout):
+                        return await invoke_structured_chat_typed(
+                            model,
+                            msgs,
+                            ExploreResult,
+                            normalize=lambda data: self._normalize_synthesis_payload(
+                                data,
+                                search_target=search_target,
+                            ),
+                        )
+
+                try:
+                    return await await_with_llm_call_policy(_invoke, config=llm_config)
+                except StructuredOutputError as exc:
+                    last_exc = exc
+                    if attempt < retries:
+                        logger.warning(
+                            "Explore: synthesis structured output invalid on %s model "
+                            "(attempt %d/%d): %s",
+                            model_name,
+                            attempt + 1,
+                            retries + 1,
+                            exc,
+                        )
+                        continue
+                    logger.warning(
+                        "Explore: synthesis structured retries exhausted on %s model: %s",
+                        model_name,
+                        exc,
+                    )
+                    break
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Explore synthesis failed without a captured exception")
 
     def _partial_synthesis_response(
         self,
@@ -584,7 +703,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         completion_status = "complete"
         explore_failure = failure_reason
         try:
-            structured = self._invoke_synthesis_llm_sync(prompt)
+            structured = self._invoke_synthesis_llm_sync(prompt, search_target=search_target)
         except Exception as exc:
             reason = failure_reason or str(exc)
             logger.warning(
@@ -708,7 +827,10 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         ranked = await self._arank_findings_for_synthesis(findings, search_target)
         prompt, _detail_count = self._build_synthesis_prompt(ranked, search_target)
         try:
-            structured = await self._invoke_synthesis_llm_async(prompt)
+            structured = await self._invoke_synthesis_llm_async(
+                prompt,
+                search_target=search_target,
+            )
         except Exception as exc:
             reason = failure_reason or str(exc)
             logger.warning(

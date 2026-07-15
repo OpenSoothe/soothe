@@ -100,7 +100,7 @@ agent:
       max_parallel_goals: 8
       max_parallel_steps: 8
       max_parallel_subagents: 6
-      max_parallel_tools: 64
+      max_parallel_tools: 99
       global_max_llm_calls: 16
       step_parallelism: max
     max_subagent_tasks_per_wave: 8

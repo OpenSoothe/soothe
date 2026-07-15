@@ -1281,7 +1281,7 @@ class LoopConcurrencyConfig(BaseModel):
         default="dependency", description="Step scheduling strategy"
     )
     max_parallel_tools: int = Field(
-        default=50, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
+        default=99, ge=0, description="Maximum concurrent tool calls per thread (0=unlimited)"
     )
     checkpoint: LoopCheckpointAsyncConfig = Field(
         default_factory=LoopCheckpointAsyncConfig,

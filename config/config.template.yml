@@ -225,7 +225,7 @@ agent:
       max_parallel_subagents: 4
       global_max_llm_calls: 10
       step_parallelism: dependency
-      max_parallel_tools: 50
+      max_parallel_tools: 99
       checkpoint:
         flush_interval: 5.0
         close_timeout_seconds: 30
