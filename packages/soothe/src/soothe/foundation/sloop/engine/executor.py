@@ -26,6 +26,7 @@ from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
+from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, Interrupt
 from soothe_sdk.utils import get_outcome_type
 from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
@@ -199,6 +200,15 @@ def _log_dependency_execution_residual(
         len(never_started),
         len(decision.steps),
         "; ".join(details),
+    )
+
+
+def _graph_recursion_warning_text(error: Exception) -> str:
+    """Return user-facing warning text for recoverable graph recursion stops."""
+    detail = str(error).strip() or "Graph recursion limit reached"
+    return (
+        "Step reached the execution recursion limit and was treated as recoverable. "
+        f"Details: {detail}"
     )
 
 
@@ -2205,6 +2215,37 @@ class Executor:
             raise
         except Exception as e:
             duration_ms = int((time.perf_counter() - start) * 1000)
+            if isinstance(e, GraphRecursionError):
+                warning_text = _graph_recursion_warning_text(e)
+                logger.warning(
+                    "Step %s hit recursion limit after %dms [wire_subagent=%s]; "
+                    "recording warning and continuing execution: %s",
+                    step.id,
+                    duration_ms,
+                    wire_subagent,
+                    warning_text,
+                )
+                return _ExecuteStepResult(
+                    events=events,
+                    step_result=StepResult(
+                        step_id=step.id,
+                        success=True,
+                        outcome={
+                            "type": "graph_recursion_limit",
+                            "warning": warning_text,
+                        },
+                        error=None,
+                        error_type=None,
+                        duration_ms=duration_ms,
+                        thread_id=thread_id,
+                        subagent_task_completions=0,
+                        hit_subagent_cap=False,
+                        hit_tool_budget=False,
+                    ),
+                    messages=[],
+                    delegate_final="",
+                    output=warning_text,
+                )
             if _is_recoverable_tool_network_error(e):
                 logger.warning(
                     "Step %s failed after %dms [wire_subagent=%s]: %s",

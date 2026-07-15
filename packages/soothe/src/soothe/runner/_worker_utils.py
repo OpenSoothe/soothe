@@ -85,6 +85,11 @@ def cancel_orphan_loop_tasks(
                 timeout_seconds,
                 ", ".join(task_names),
             )
+    except Exception:
+        logger.warning(
+            "cancel_orphan_loop_tasks: cleanup crashed; proceeding without blocking worker",
+            exc_info=True,
+        )
 
 
 __all__ = ["cancel_orphan_loop_tasks", "spawn_safe_config", "spawn_safe_request"]

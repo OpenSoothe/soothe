@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from langgraph.errors import GraphRecursionError
 
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
@@ -256,3 +257,31 @@ class TestExecutorHints:
 
         with pytest.raises(asyncio.CancelledError):
             await executor._execute_step_collecting_events(step, "thread-cancel")
+
+    @pytest.mark.asyncio
+    async def test_executor_graph_recursion_error_is_recoverable(self, caplog) -> None:
+        """Graph recursion limit should not fail the step."""
+
+        async def _recursion_error_stream():
+            raise GraphRecursionError("Recursion limit of 99 reached without stop condition.")
+            if False:
+                yield None  # pragma: no cover
+
+        mock_agent = MagicMock()
+        mock_agent.execution_astream = MagicMock(return_value=_recursion_error_stream())
+        executor = Executor(mock_agent)
+        step = StepAction(
+            id="step-recursion",
+            description="Run recursive workflow",
+            expected_output="n/a",
+        )
+
+        result = await executor._execute_step_collecting_events(step, "thread-recursion")
+
+        assert result.step_result is not None
+        assert result.step_result.success is True
+        assert result.step_result.error is None
+        assert result.step_result.error_type is None
+        assert result.step_result.outcome.get("type") == "graph_recursion_limit"
+        assert "recursion limit" in (result.output or "").lower()
+        assert "recording warning and continuing execution" in caplog.text

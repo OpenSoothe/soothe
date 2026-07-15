@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _RESPONSE_QUEUE_MAXSIZE = 200  # IG-535: dense streaming under many concurrent loops
+_WORKER_READY_TIMEOUT_SECONDS = 45.0
 
 # Last error per worker thread (survives unexpected thread exit for watchdog logs).
 _worker_last_errors: dict[str, str] = {}
@@ -118,6 +119,7 @@ class ThreadPoolMetrics:
     avg_request_latency_ms: float = 0.0
     thread_uptimes: dict[str, float] = field(default_factory=dict)
     dispatch_waiters_waiting: int = 0
+    ready_timeout_recoveries: int = 0
 
 
 def _thread_worker_body(
@@ -484,8 +486,10 @@ class ThreadPool:
         self._waiting_for_worker_slot: int = 0
         self._running = False
         self._metrics_requests_total = 0
+        self._metrics_ready_timeout_recoveries = 0
         # Bounded to prevent memory leak - only need last 100 for avg calculation
         self._metrics_latencies: list[float] = []
+        self._worker_ready_timeout_seconds = _WORKER_READY_TIMEOUT_SECONDS
         self._pending_responses: dict[str, asyncio.Queue] = {}
         self._main_loop: asyncio.AbstractEventLoop | None = None
         self._health_task: asyncio.Task | None = None
@@ -970,8 +974,40 @@ class ThreadPool:
         """Release worker only after cleanup completes (``ready`` signal)."""
         worker.status = WorkerThreadStatus.CLEANING_UP
         if not ready_already_received:
-            await self._await_worker_ready(response_queue)
+            try:
+                await asyncio.wait_for(
+                    self._await_worker_ready(response_queue),
+                    timeout=self._worker_ready_timeout_seconds,
+                )
+            except TimeoutError:
+                self._metrics_ready_timeout_recoveries += 1
+                logger.error(
+                    "ThreadPool: timed out waiting for worker ready; recycling worker "
+                    "(loop_id=%s request_id=%s worker=%s timeout=%.1fs)",
+                    loop_id,
+                    request_id,
+                    worker.worker_id,
+                    self._worker_ready_timeout_seconds,
+                )
+                self._record_request_completion(
+                    start_time=start_time, loop_id=loop_id, request_id=request_id
+                )
+                await self.force_cancel_worker(worker.worker_id, timeout=1.0)
+                return
         await self._mark_worker_idle_and_notify(worker)
+        self._record_request_completion(
+            start_time=start_time, loop_id=loop_id, request_id=request_id
+        )
+        worker.requests_completed += 1
+
+    def _record_request_completion(
+        self,
+        *,
+        start_time: datetime,
+        loop_id: str,
+        request_id: str,
+    ) -> None:
+        """Clear request bookkeeping and append request latency metrics."""
         self._workers_by_loop_id.pop(loop_id, None)
         self._pending_responses.pop(request_id, None)
         self._metrics_requests_total += 1
@@ -979,7 +1015,6 @@ class ThreadPool:
         self._metrics_latencies.append(latency_ms)
         if len(self._metrics_latencies) > 100:
             self._metrics_latencies = self._metrics_latencies[-100:]
-        worker.requests_completed += 1
 
     def _worker_pool_counts(self) -> tuple[int, int]:
         """Return (idle, busy) live worker counts for dispatch diagnostics."""
@@ -1210,6 +1245,7 @@ class ThreadPool:
             loop_id = worker.current_loop_id or ""
             self._workers_by_loop_id.pop(loop_id, None)
             self._pending_responses.pop(worker.current_request_id or "", None)
+            await self._notify_worker_slot_available()
             return
 
         logger.warning(
@@ -1239,6 +1275,7 @@ class ThreadPool:
         loop_id = worker.current_loop_id or ""
         self._workers_by_loop_id.pop(loop_id, None)
         self._pending_responses.pop(worker.current_request_id or "", None)
+        await self._notify_worker_slot_available()
 
         logger.info("Thread worker %s force cancelled", worker_id)
 
@@ -1337,6 +1374,7 @@ class ThreadPool:
             avg_request_latency_ms=avg_latency,
             thread_uptimes=uptimes,
             dispatch_waiters_waiting=self._waiting_for_worker_slot,
+            ready_timeout_recoveries=self._metrics_ready_timeout_recoveries,
         )
 
 

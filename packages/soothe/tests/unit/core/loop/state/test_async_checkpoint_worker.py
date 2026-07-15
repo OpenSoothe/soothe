@@ -86,13 +86,45 @@ def test_cancel_orphan_loop_tasks_logs_task_names_on_timeout(caplog) -> None:
         loop.create_task(stubborn_after_cancel(), name="stuck-increment")
         loop.run_until_complete(asyncio.sleep(0))
 
+        async def _raise_timeout(coro, *args, **kwargs):
+            coro.close()
+            raise TimeoutError
+
         with patch(
             "soothe.runner._worker_utils.asyncio.wait_for",
-            side_effect=TimeoutError,
+            new=_raise_timeout,
         ):
             with caplog.at_level("WARNING", logger="soothe.runner._worker_utils"):
                 cancel_orphan_loop_tasks(loop, timeout_seconds=0.01)
 
         assert "stuck-increment" in caplog.text
+    finally:
+        loop.close()
+
+
+def test_cancel_orphan_loop_tasks_swallows_unexpected_cleanup_error(caplog) -> None:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    async def leaked_worker() -> None:
+        await asyncio.sleep(3600.0)
+
+    try:
+        loop.run_until_complete(asyncio.sleep(0))
+        loop.create_task(leaked_worker(), name="cleanup-crash-task")
+        loop.run_until_complete(asyncio.sleep(0))
+
+        async def _raise_runtime_error(coro, *args, **kwargs):
+            coro.close()
+            raise RuntimeError("cleanup boom")
+
+        with patch(
+            "soothe.runner._worker_utils.asyncio.wait_for",
+            new=_raise_runtime_error,
+        ):
+            with caplog.at_level("WARNING", logger="soothe.runner._worker_utils"):
+                cancel_orphan_loop_tasks(loop, timeout_seconds=0.01)
+
+        assert "cleanup crashed" in caplog.text
     finally:
         loop.close()
