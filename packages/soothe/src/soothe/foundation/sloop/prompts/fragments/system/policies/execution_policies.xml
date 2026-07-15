@@ -22,7 +22,7 @@ After glob timeout or empty results, switch to ``grep`` (with path/glob filter) 
 
 **Subagent delegation** (``steps[].delegate``):
 - Default null — execute CoreAgent chooses via ``task`` when needed.
-- Open catalog built-in ``delegate`` are ``planner`` and ``explorer`` only.
-- Never plan-wave ``delegate`` to ``browser_use``, ``deep_research``, or
+- Open catalog built-in ``delegate`` is ``planner`` only.
+- Never plan-wave ``delegate`` to ``explorer``, ``browser_use``, ``deep_research``, or
   ``academic_research`` (intake/slash routed specialists).
 </EXECUTION_POLICIES>

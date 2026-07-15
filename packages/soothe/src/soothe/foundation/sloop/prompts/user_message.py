@@ -718,8 +718,8 @@ class UserMessageBuilder:
                 (
                     "SUBAGENT ROUTING",
                     "Leave delegate null on all steps unless GOAL explicitly names a "
-                    "task-catalog subagent such as planner or explorer. browser_use / deep_research / "
-                    "academic_research are intake-only (not plan delegates).",
+                    "task-catalog subagent such as planner. explorer / browser_use / "
+                    "deep_research / academic_research are intake-only (not plan delegates).",
                 )
             )
 

@@ -3,7 +3,7 @@
 Catalog wires (``planner``): build the 1-step terminal plan and continue to
 ``resolve_decision`` → execute → ``goal_completion``.
 
-Intake-only wires (``browser_use``, ``deep_research``, ``academic_research``):
+Intake-only wires (``explorer``, ``browser_use``, ``deep_research``, ``academic_research``):
 stream the specialist runnable from the intake-only registry (not on CoreAgent
 ``task``), forward curated wire customs for the orphan SubAgent card, record
 Human/AI execute-step ledger rows, then route to ``goal_completion``.
@@ -12,7 +12,6 @@ Human/AI execute-step ledger rows, then route to ``goal_completion``.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -44,16 +43,6 @@ def _extract_subagent_report(result: Any) -> str:
     if not isinstance(result, dict):
         return (str(result) if result is not None else "").strip()
 
-    structured = result.get("structured_response")
-    if structured is not None:
-        if hasattr(structured, "model_dump_json"):
-            return str(structured.model_dump_json()).strip()
-        if hasattr(structured, "model_dump"):
-            return json.dumps(structured.model_dump()).strip()
-        if isinstance(structured, (dict, list)):
-            return json.dumps(structured).strip()
-        return str(structured).strip()
-
     answer = result.get("answer")
     if answer is not None:
         text = answer.strip() if isinstance(answer, str) else str(answer).strip()
@@ -69,6 +58,15 @@ def _extract_subagent_report(result: Any) -> str:
                     text = extract_text_from_message_content(getattr(msg, "content", None)).strip()
                 if text:
                     return text
+
+    # Last resort: stringify structured payload only when no textual report exists.
+    structured = result.get("structured_response")
+    if structured is not None:
+        if hasattr(structured, "model_dump_json"):
+            return str(structured.model_dump_json()).strip()
+        if hasattr(structured, "model_dump"):
+            return str(structured.model_dump()).strip()
+        return str(structured).strip()
     return ""
 
 

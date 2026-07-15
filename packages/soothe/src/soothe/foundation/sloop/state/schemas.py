@@ -35,6 +35,7 @@ _BUILTIN_WIRE_SUBAGENTS = frozenset(
 # ``planner`` is intentionally excluded — it stays in the open task catalog.
 INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
     {
+        "explorer",
         "browser_use",
         "deep_research",
         "academic_research",

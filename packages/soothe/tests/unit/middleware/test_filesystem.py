@@ -108,7 +108,7 @@ class TestApplyDiffUpstreamContract:
         )
         assert match is not None, "soothe-deepagents dependency missing from pyproject.toml"
         spec = match.group("spec")
-        assert ">=0.7.21" in spec, f"expected >=0.7.21 floor for apply_diff, got {spec!r}"
+        assert ">=0.7.22" in spec, f"expected >=0.7.22 floor for apply_diff, got {spec!r}"
 
 
 class TestSootheFilesystemMiddlewareSchemas:

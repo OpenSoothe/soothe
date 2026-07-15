@@ -44,6 +44,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_SYNTHESIS_FINDING_SNIPPET_CHARS = 160
+
 
 def _keyword_overlap_score(finding: dict[str, Any], query: str) -> float:
     """Simple lexical relevance fallback for ranking findings.
@@ -158,6 +160,7 @@ class ExploreWireMiddleware(AgentMiddleware[ExploreAgentState, None]):
             logger,
         )
         updates["explore_wire_started"] = True
+        updates["explore_started_at_monotonic"] = time.perf_counter()
         return updates
 
     async def abefore_agent(
@@ -176,6 +179,12 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
     """
 
     state_schema = ExploreAgentState
+
+    @staticmethod
+    def _finding_fingerprint(row: dict[str, Any]) -> tuple[str, str]:
+        path = str(row.get("path", "") or "").strip()
+        snippet = str(row.get("snippet", "") or "").strip()
+        return path, snippet
 
     def _emit_step_event(
         self,
@@ -234,7 +243,23 @@ class ExploreFindingsMiddleware(AgentMiddleware[ExploreAgentState, None]):
         rows = extract_findings_from_tool_result(request, tm)
         if not rows:
             return tm
-        return Command(update={"messages": [tm], "findings": rows})
+        state_findings = request.state.get("findings") if isinstance(request.state, dict) else None
+        existing = state_findings if isinstance(state_findings, list) else []
+        existing_keys = {
+            self._finding_fingerprint(row) for row in existing if isinstance(row, dict)
+        }
+        novel_rows = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            key = self._finding_fingerprint(row)
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
+            novel_rows.append(row)
+        if not novel_rows:
+            return tm
+        return Command(update={"messages": [tm], "findings": novel_rows})
 
     def wrap_tool_call(
         self,
@@ -311,24 +336,19 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         """Delegate to sync hook (no milestone events)."""
         return self.after_model(state, runtime)
 
-    def wrap_model_call(
+    def _prepare_model_turn_state(
         self,
-        request: ModelRequest[None],
-        handler: Callable[[ModelRequest[None]], ModelResponse],
-    ) -> ModelResponse | ExtendedModelResponse[ExploreResult]:
-        state = request.state
+        state: ExploreAgentState,
+        messages: list[Any],
+    ) -> tuple[list[Any], int, list[dict[str, Any]], int, int]:
+        """Apply history/tool-output truncation and compute finding-stall counters."""
         current = state.get("explore_model_invocations", 0)
-        messages = request.messages
-        thread_ws = state.get("workspace") or self._resolver_workspace
-        search_target = resolve_explore_search_target(messages, state.get("search_target"))
         findings = state.get("findings") or []
 
-        # IG-399: Truncate message history to keep only recent turns
         max_history = self._explore_config.max_history_messages_for_model
         if len(messages) > max_history:
             messages = messages[-max_history:]
 
-        # IG-399: Truncate tool outputs in each message
         max_tool_chars = self._explore_config.max_tool_output_chars_per_turn
         truncated_messages = []
         for msg in messages:
@@ -343,15 +363,27 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 truncated_messages.append(msg)
         messages = truncated_messages
 
-        # IG-399: Early-stop detection when findings stall
         prev_findings_count = state.get("prev_findings_count", 0)
         new_findings_count = len(findings)
         stall_counter = state.get("findings_stall_counter", 0)
-
         if new_findings_count == prev_findings_count:
             stall_counter += 1
         else:
             stall_counter = 0
+        return messages, current, findings, new_findings_count, stall_counter
+
+    def wrap_model_call(
+        self,
+        request: ModelRequest[None],
+        handler: Callable[[ModelRequest[None]], ModelResponse],
+    ) -> ModelResponse | ExtendedModelResponse[ExploreResult]:
+        state = request.state
+        messages = request.messages
+        thread_ws = state.get("workspace") or self._resolver_workspace
+        search_target = resolve_explore_search_target(messages, state.get("search_target"))
+        messages, current, findings, new_findings_count, stall_counter = (
+            self._prepare_model_turn_state(state, messages)
+        )
 
         # Force synthesis if findings have stalled for N consecutive turns
         early_stop_threshold = self._explore_config.early_stop_no_new_findings_turns
@@ -457,7 +489,8 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
     ) -> tuple[str, int]:
         max_findings = self._explore_config.max_findings_for_synthesis
         detail_lines = [
-            f"- {f.get('path', 'unknown')}: {(f.get('snippet') or '')[:100] or '(no snippet)'}"
+            f"- {f.get('path', 'unknown')}: "
+            f"{(f.get('snippet') or '')[:_SYNTHESIS_FINDING_SNIPPET_CHARS] or '(no snippet)'}"
             for f in findings[:max_findings]
         ]
         findings_detail = "\n".join(detail_lines) if detail_lines else "No findings"
@@ -721,6 +754,22 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 failure_reason=reason,
                 ai_message="Returning partial explore results (synthesis failed).",
             )
+        if ranked and not structured.matches:
+            reason = "synthesis returned zero matches despite collected findings"
+            logger.warning(
+                "Explore: synthesis quality gate triggered (%s); returning deterministic complete result",
+                reason,
+            )
+            completion_status = "complete"
+            explore_failure = ""
+            structured = build_explore_result_from_findings(
+                ranked,
+                search_target=search_target,
+                thoroughness=self._explore_config.thoroughness,
+                max_matches=self._max_matches,
+                status="complete",
+                failure_reason="",
+            )
 
         elapsed = time.perf_counter() - start_time
         logger.info(
@@ -756,16 +805,25 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
         ],
     ) -> ModelResponse | ExtendedModelResponse[ExploreResult]:
         state = request.state
-        current = state.get("explore_model_invocations", 0)
         messages = request.messages
         thread_ws = state.get("workspace") or self._resolver_workspace
         search_target = resolve_explore_search_target(messages, state.get("search_target"))
-        findings = state.get("findings") or []
+        messages, current, findings, new_findings_count, stall_counter = (
+            self._prepare_model_turn_state(state, messages)
+        )
         findings_so_far = ""
         if findings:
             findings_so_far = "\nFindings so far:\n" + "\n".join(
                 f"- {f.get('path', 'unknown')}" for f in findings[:10]
             )
+
+        early_stop_threshold = self._explore_config.early_stop_no_new_findings_turns
+        if stall_counter >= early_stop_threshold and current > 0:
+            logger.info(
+                "Explore: early stop after %d turns with no new findings — synthesizing",
+                stall_counter,
+            )
+            return await self._asynthesize_findings(findings, search_target, current)
 
         if current >= self._max_iterations:
             logger.info(
@@ -782,7 +840,7 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             max_read_lines=self._explore_config.max_read_lines,
             findings_so_far=findings_so_far,
         )
-        req = request.override(system_message=SystemMessage(content=body))
+        req = request.override(messages=messages, system_message=SystemMessage(content=body))
         try:
             response = await handler(req)
         except Exception as exc:
@@ -806,7 +864,13 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
             )
         return ExtendedModelResponse(
             model_response=response,
-            command=Command(update={"explore_model_invocations": current + 1}),
+            command=Command(
+                update={
+                    "explore_model_invocations": current + 1,
+                    "prev_findings_count": new_findings_count,
+                    "findings_stall_counter": stall_counter,
+                }
+            ),
         )
 
     async def _asynthesize_findings(
@@ -848,13 +912,32 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 failure_reason=reason,
                 ai_message="Returning partial explore results (synthesis failed).",
             )
+        completion_status = "complete"
+        explore_failure = failure_reason
+        if ranked and not structured.matches:
+            reason = "synthesis returned zero matches despite collected findings"
+            logger.warning(
+                "Explore: synthesis quality gate triggered (%s); returning deterministic complete result",
+                reason,
+            )
+            completion_status = "complete"
+            explore_failure = ""
+            structured = build_explore_result_from_findings(
+                ranked,
+                search_target=search_target,
+                thoroughness=self._explore_config.thoroughness,
+                max_matches=self._max_matches,
+                status="complete",
+                failure_reason="",
+            )
 
         elapsed = time.perf_counter() - start_time
         logger.info(
-            "Explore: synthesis completed in %.1fs (%d findings → %d matches, status=complete)",
+            "Explore: synthesis completed in %.1fs (%d findings → %d matches, status=%s)",
             elapsed,
             len(findings),
             len(structured.matches),
+            completion_status,
         )
         return ExtendedModelResponse(
             model_response=ModelResponse(
@@ -867,8 +950,9 @@ class ExplorePromptBudgetMiddleware(AgentMiddleware[ExploreAgentState, None]):
                 update={
                     "explore_model_invocations": current_iter + 1,
                     "prev_findings_count": len(findings),
-                    "explore_completion_status": "complete",
-                    "explore_failure_reason": failure_reason[:500],
+                    "findings_stall_counter": 0,
+                    "explore_completion_status": completion_status,
+                    "explore_failure_reason": explore_failure[:500],
                 }
             ),
         )
@@ -954,9 +1038,12 @@ class ExploreFinalizeMiddleware(AgentMiddleware[ExploreAgentState, None]):
             if isinstance(structured, ExploreResult)
             else ExploreResult.model_validate(structured)
         )
-        start_time = time.perf_counter()
         md = format_explore_result_markdown(result)
-        elapsed_ms = int((time.perf_counter() - start_time) * 1000)
+        started_at = state.get("explore_started_at_monotonic")
+        if isinstance(started_at, (int, float)) and started_at > 0:
+            elapsed_ms = max(0, int((time.perf_counter() - float(started_at)) * 1000))
+        else:
+            elapsed_ms = 0
         emit_subagent_wire_event(
             ExploreCompletedEvent(
                 total_findings=len(findings),

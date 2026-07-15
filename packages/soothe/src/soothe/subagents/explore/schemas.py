@@ -62,6 +62,9 @@ class ExploreResult(BaseModel):
     )
 
 
+_MAX_MARKDOWN_SNIPPET_CHARS = 2500
+
+
 class ExploreAgentState(AgentState[ExploreResult]):
     """State for LangChain ``create_agent`` explore subgraph."""
 
@@ -70,7 +73,10 @@ class ExploreAgentState(AgentState[ExploreResult]):
     thoroughness: NotRequired[str]  # Optional; defaults to "medium" in ExploreResult
     findings: NotRequired[Annotated[list[dict[str, Any]], operator.add]]
     explore_wire_started: NotRequired[bool]
+    explore_started_at_monotonic: NotRequired[float]
     explore_model_invocations: NotRequired[int]
+    prev_findings_count: NotRequired[int]
+    findings_stall_counter: NotRequired[int]
     explore_completion_status: NotRequired[str]
     explore_failure_reason: NotRequired[str]
 
@@ -119,8 +125,8 @@ def format_explore_result_markdown(result: ExploreResult) -> str:
                 lines.append("")
                 lines.append("```text")
                 snippet = m.snippet.strip()
-                if len(snippet) > 4000:
-                    snippet = snippet[:3999] + "…"
+                if len(snippet) > _MAX_MARKDOWN_SNIPPET_CHARS:
+                    snippet = snippet[: _MAX_MARKDOWN_SNIPPET_CHARS - 1] + "…"
                 lines.append(snippet)
                 lines.append("```")
             lines.append("")
@@ -182,26 +188,26 @@ class ExploreSubagentConfig(BaseModel):
     )
     max_iterations: dict[str, int] = Field(
         default_factory=lambda: {
-            "quick": 6,
-            "medium": 10,
-            "thorough": 16,
+            "quick": 8,
+            "medium": 14,
+            "thorough": 24,
         },
     )
-    max_read_lines: int = 50
-    max_matches_returned: int = 5
+    max_read_lines: int = 80
+    max_matches_returned: int = 8
 
     # IG-399: context growth capping
-    max_history_messages_for_model: int = 8
+    max_history_messages_for_model: int = 12
     """Keep only recent N message turns in model request."""
 
-    max_tool_output_chars_per_turn: int = 2000
+    max_tool_output_chars_per_turn: int = 4000
     """Truncate oversized tool outputs before sending back to model."""
 
-    early_stop_no_new_findings_turns: int = 2
+    early_stop_no_new_findings_turns: int = 3
     """Force synthesis if N consecutive turns produce zero net-new findings."""
 
     # Performance optimization: configurable findings limit for synthesis
-    max_findings_for_synthesis: int = 20
+    max_findings_for_synthesis: int = 30
     """Max findings sent to synthesis (reduced payload for faster model processing)."""
 
     enable_semantic_similarity: bool = True

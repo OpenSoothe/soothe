@@ -21,15 +21,15 @@ from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 def test_intake_only_set_excludes_planner() -> None:
     assert "planner" not in INTAKE_ONLY_WIRE_SUBAGENTS
-    assert "explorer" not in INTAKE_ONLY_WIRE_SUBAGENTS
+    assert "explorer" in INTAKE_ONLY_WIRE_SUBAGENTS
     assert is_intake_only_wire_subagent("deep_research")
     assert is_intake_only_wire_subagent("browser_use")
     assert is_intake_only_wire_subagent("academic_research")
+    assert is_intake_only_wire_subagent("explorer")
     assert not is_intake_only_wire_subagent("planner")
-    assert not is_intake_only_wire_subagent("explorer")
 
 
-def test_filter_task_catalog_keeps_planner_and_explorer() -> None:
+def test_filter_task_catalog_excludes_intake_only_subagents() -> None:
     names = [
         "planner",
         "explorer",
@@ -38,7 +38,7 @@ def test_filter_task_catalog_keeps_planner_and_explorer() -> None:
         "academic_research",
         "plugin_agent",
     ]
-    assert filter_task_catalog_subagent_names(names) == ["planner", "explorer", "plugin_agent"]
+    assert filter_task_catalog_subagent_names(names) == ["planner", "plugin_agent"]
 
 
 def test_partition_subagent_specs_splits_intake_only() -> None:
@@ -50,8 +50,8 @@ def test_partition_subagent_specs_splits_intake_only() -> None:
         {"name": "browser_use", "description": "b"},
     ]
     catalog, intake = partition_subagent_specs(specs)
-    assert [s["name"] for s in catalog] == ["planner", "explorer", "plugin_agent"]
-    assert [s["name"] for s in intake] == ["deep_research", "browser_use"]
+    assert [s["name"] for s in catalog] == ["planner", "plugin_agent"]
+    assert [s["name"] for s in intake] == ["explorer", "deep_research", "browser_use"]
 
 
 def test_wired_intake_still_resolves_all_supported_specialists() -> None:

@@ -74,7 +74,8 @@ def coerce_explore_result_dict(
         else:
             summary = f"No ranked matches were returned for '{search_target}'."
 
-    normalized["target"] = str(normalized.get("target") or search_target or "unknown")
+    # Keep target stable: synthesized payloads may paraphrase or over-expand it.
+    normalized["target"] = str(search_target or "unknown")
     normalized["thoroughness"] = str(normalized.get("thoroughness") or thoroughness or "medium")
     normalized["matches"] = normalized_matches
     normalized["summary"] = summary

@@ -8,6 +8,8 @@ from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
 _EXPLORE_TOOL_NAMES = frozenset({"glob", "grep", "ls", "read_file", "file_info"})
+_MAX_DISCOVERED_PATHS_PER_TOOL = 20
+_MAX_FINDING_SNIPPET_CHARS = 800
 
 
 def should_record_findings(tool_name: str) -> bool:
@@ -44,18 +46,22 @@ def extract_findings_from_tool_result(
     if tool_name == "glob":
         paths: list[str] = []
         if isinstance(result_data, list):
-            paths = [str(p) for p in result_data[:20]]
+            paths = [str(p) for p in result_data[:_MAX_DISCOVERED_PATHS_PER_TOOL]]
         elif isinstance(result_data, str) and result_data.strip():
-            paths = [p.strip() for p in result_data.strip().split("\n")[:20] if p.strip()]
+            paths = [
+                p.strip()
+                for p in result_data.strip().split("\n")[:_MAX_DISCOVERED_PATHS_PER_TOOL]
+                if p.strip()
+            ]
         for path in paths:
             findings.append({"path": path, "snippet": None, "relevance": "unknown"})
 
     elif tool_name == "grep":
         matches: list[Any] = []
         if isinstance(result_data, list):
-            matches = result_data[:20]
+            matches = result_data[:_MAX_DISCOVERED_PATHS_PER_TOOL]
         elif isinstance(result_data, str) and result_data.strip():
-            lines = result_data.strip().split("\n")[:20]
+            lines = result_data.strip().split("\n")[:_MAX_DISCOVERED_PATHS_PER_TOOL]
             for line in lines:
                 if ":" in line:
                     path_part = line.split(":")[0].strip()
@@ -68,9 +74,13 @@ def extract_findings_from_tool_result(
     elif tool_name == "ls":
         entries: list[str] = []
         if isinstance(result_data, list):
-            entries = [str(e) for e in result_data[:20]]
+            entries = [str(e) for e in result_data[:_MAX_DISCOVERED_PATHS_PER_TOOL]]
         elif isinstance(result_data, str) and result_data.strip():
-            entries = [e.strip() for e in result_data.strip().split("\n")[:20] if e.strip()]
+            entries = [
+                e.strip()
+                for e in result_data.strip().split("\n")[:_MAX_DISCOVERED_PATHS_PER_TOOL]
+                if e.strip()
+            ]
         for path in entries:
             findings.append({"path": path, "snippet": None, "relevance": "unknown"})
 
@@ -85,7 +95,7 @@ def extract_findings_from_tool_result(
             findings.append(
                 {
                     "path": last_path,
-                    "snippet": content_str[:500],
+                    "snippet": content_str[:_MAX_FINDING_SNIPPET_CHARS],
                     "relevance": "unknown",
                 }
             )
@@ -94,7 +104,7 @@ def extract_findings_from_tool_result(
         path = str(args.get("path", "") or "unknown")
         snippet: str | None = None
         if isinstance(result_data, str) and result_data.strip():
-            snippet = result_data.strip()[:500]
+            snippet = result_data.strip()[:_MAX_FINDING_SNIPPET_CHARS]
         if path != "unknown" or snippet:
             findings.append({"path": path, "snippet": snippet, "relevance": "unknown"})
 

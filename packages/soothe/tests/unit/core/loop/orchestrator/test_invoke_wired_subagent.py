@@ -202,6 +202,15 @@ def test_extract_subagent_report_prefers_answer_field() -> None:
     body = "## Summary\n\nBrief.\n\nFull report saved to: `/tmp/r.md`"
     assert _extract_subagent_report({"answer": body, "messages": []}) == body
     assert _extract_subagent_report({"messages": [AIMessage(content="from msg")]}) == "from msg"
+    assert (
+        _extract_subagent_report(
+            {
+                "messages": [AIMessage(content="## Explore results\n\n- item")],
+                "structured_response": {"target": "x", "matches": [], "summary": "raw json"},
+            }
+        )
+        == "## Explore results\n\n- item"
+    )
 
 
 @pytest.mark.asyncio
