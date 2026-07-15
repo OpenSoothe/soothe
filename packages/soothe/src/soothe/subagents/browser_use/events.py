@@ -43,6 +43,7 @@ class BrowserUseStepCompletedEvent(SubagentEvent):
         SUBAGENT_BROWSER_USE_STEP_COMPLETED
     )
     step_index: int = 0
+    tool_name: str = ""
     url: str = ""
     title: str = ""
     action_preview: str = ""
@@ -66,7 +67,7 @@ register_event(
 register_event(
     BrowserUseStepCompletedEvent,
     verbosity=VerbosityTier.NORMAL,
-    summary_template="Step {step_index}: {action_preview}",
+    summary_template="{tool_name}: {action_preview}",
 )
 
 __all__ = [

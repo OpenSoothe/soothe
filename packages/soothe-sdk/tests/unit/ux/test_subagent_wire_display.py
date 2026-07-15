@@ -73,9 +73,29 @@ def test_browser_step_row_params_without_tool_name() -> None:
     assert tool_name == "BrowserStep#2"
     preview = str(args.get("preview", ""))
     assert "click submit" in preview
-    assert "Login" in preview
     assert phase == "success"
     assert duration_ms == 350
+
+
+def test_browser_step_row_params_with_humanized_tool_name() -> None:
+    params = subagent_wire_row_params(
+        "soothe.subagent.browser_use.step.completed",
+        {
+            "step_index": 3,
+            "tool_name": "Navigate",
+            "action_preview": "https://www.moji.com/Weather",
+            "url": "https://www.moji.com/Weather?city=Zhoushan",
+            "title": "moji.com/Weather",
+            "status": "done",
+            "duration_ms": 13209,
+        },
+    )
+    assert params is not None
+    tool_name, args, phase, duration_ms = params
+    assert tool_name == "Navigate"
+    assert "moji.com" in str(args.get("preview", ""))
+    assert phase == "success"
+    assert duration_ms == 13209
 
 
 def test_browser_step_error_status_maps_to_error_phase() -> None:

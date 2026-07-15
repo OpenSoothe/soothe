@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -276,7 +278,8 @@ async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
+async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> None:
+    """astream values + bridge: wire customs come from emit_progress, not custom mode."""
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         wire_subagent="deep_research",
@@ -285,9 +288,15 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     )
 
     async def _astream(_input, stream_mode=None):  # type: ignore[no-untyped-def]
-        yield (
-            "custom",
-            {"type": "soothe.subagent.deep_research.progress", "phase": "plan", "message": "go"},
+        from soothe.utils.progress import emit_progress
+
+        emit_progress(
+            {
+                "type": "soothe.subagent.deep_research.progress",
+                "phase": "plan",
+                "message": "go",
+            },
+            logging.getLogger("test.wired_bridge_astream"),
         )
         yield ("values", {"messages": [AIMessage(content="streamed report")]})
 
@@ -296,6 +305,7 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
 
     async def _emit(event_type: str, payload: object) -> None:
         emitted.append((event_type, payload))
+        await asyncio.sleep(0)
 
     loop_state = SimpleNamespace(
         intent=intent,
@@ -323,6 +333,70 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {"wired_route_next": "goal_completion"}
     runnable.ainvoke.assert_not_called()
+    stream_customs = [p for t, p in emitted if t == "stream_event"]
+    assert stream_customs
+    _ns, mode, data = stream_customs[0]  # type: ignore[misc]
+    assert mode == "custom"
+    assert data["type"] == "soothe.subagent.deep_research.progress"
+    assert data["invocation_id"]
+
+
+@pytest.mark.asyncio
+async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
+    """Bridge captures emit_progress during ainvoke when stream writer is absent."""
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="deep_research",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+
+    async def _ainvoke(_input):  # type: ignore[no-untyped-def]
+        from soothe.utils.progress import emit_progress
+
+        emit_progress(
+            {
+                "type": "soothe.subagent.deep_research.progress",
+                "phase": "plan",
+                "message": "go",
+            },
+            logging.getLogger("test.wired_bridge"),
+        )
+        return {"messages": [AIMessage(content="streamed report")]}
+
+    runnable = SimpleNamespace(ainvoke=_ainvoke)
+    emitted: list[tuple[str, object]] = []
+
+    async def _emit(event_type: str, payload: object) -> None:
+        emitted.append((event_type, payload))
+        # Let the bridge drain task run.
+        await asyncio.sleep(0)
+
+    loop_state = SimpleNamespace(
+        intent=intent,
+        routing_classification=build_loop_routing_classification(intent, None),
+        goal="research",
+        goal_user_submission="research",
+        total_tokens_used=0,
+        thread_id="t1",
+        workspace=None,
+        iteration=0,
+        _loop_messages_cache=[],
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        preferred_subagent=None,
+        scratch=SimpleNamespace(plan_result=None),
+        emit=_emit,
+        ce=None,
+        core_agent=SimpleNamespace(
+            lookup_intake_only_subagent=lambda name: (
+                {"name": "deep_research", "runnable": runnable} if name == "deep_research" else None
+            )
+        ),
+    )
+    out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
+    assert out == {"wired_route_next": "goal_completion"}
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
     ns, mode, data = stream_customs[0]  # type: ignore[misc]

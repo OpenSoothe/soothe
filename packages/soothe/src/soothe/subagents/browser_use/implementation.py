@@ -29,6 +29,7 @@ from soothe.subagents.browser_use._runtime import (
     get_browser_runtime_dir,
     get_browser_user_data_dir,
 )
+from soothe.subagents.browser_use.action_format import summarize_browser_step_action
 from soothe.subagents.browser_use.config_model import BrowserUseSubagentConfig
 from soothe.subagents.browser_use.display_summary import browser_use_result_summary_for_display
 from soothe.subagents.browser_use.events import (
@@ -379,23 +380,28 @@ def _build_browser_use_graph(
                     nonlocal last_step_wall
                     step_num = agent.state.n_steps
                     last = agent.history.history[-1] if agent.history.history else None
+                    tool_name = "Step"
                     action_desc = ""
                     page_title = ""
                     url = None
                     if last:
                         if hasattr(last, "model_output") and last.model_output:
                             action = getattr(last.model_output, "action", None)
-                            if action:
-                                action_desc = preview_first(str(action), 80)
+                            if action is not None:
+                                tool_name, action_desc = summarize_browser_step_action(action)
                         if hasattr(last, "state"):
                             url = getattr(last.state, "url", None)
                             page_title = preview_first(getattr(last.state, "title", ""), 60)
+                    if not action_desc and url:
+                        action_desc = preview_first(str(url), 100)
+                        if tool_name == "Step":
+                            tool_name = "Navigate"
                     now = time.perf_counter()
                     wall_since_prev = now - last_step_wall
                     last_step_wall = now
                     logger.info(
                         "BrowserUse subagent step: n_steps=%s wall_since_prev=%.2fs "
-                        "since_run_start=%.1fs url=%r title=%r action=%r is_done=%s "
+                        "since_run_start=%.1fs url=%r title=%r action=%r tool=%s is_done=%s "
                         "history_len=%d",
                         step_num,
                         wall_since_prev,
@@ -403,12 +409,14 @@ def _build_browser_use_graph(
                         url or "",
                         page_title,
                         action_desc or "(none)",
+                        tool_name,
                         agent.history.is_done(),
                         len(agent.history.history) if agent.history.history else 0,
                     )
                     emit_subagent_wire_event(
                         BrowserUseStepCompletedEvent(
                             step_index=int(step_num),
+                            tool_name=tool_name,
                             url=str(url or ""),
                             title=str(page_title),
                             action_preview=str(action_desc or "")[:120],

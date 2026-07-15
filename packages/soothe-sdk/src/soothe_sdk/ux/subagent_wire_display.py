@@ -86,29 +86,27 @@ def subagent_wire_row_params(
     if et.endswith(".step.completed"):
         tool_name = str(data.get("tool_name", "") or "").strip()
         args_preview = str(data.get("args_preview", "") or "").strip()
-        step_index = data.get("step_index")
-        if not tool_name and step_index is not None:
+        if not tool_name and data.get("step_index") is not None:
             try:
-                idx = int(step_index)
+                idx = int(data.get("step_index"))
             except (TypeError, ValueError):
                 idx = 0
             tool_name = f"BrowserStep#{idx}" if idx > 0 else "BrowserStep"
         if not tool_name:
             tool_name = "Step"
         if not args_preview:
-            action = preview_first(str(data.get("action_preview", "")), 60)
-            url = preview_first(str(data.get("url", "")), 60)
+            action = preview_first(str(data.get("action_preview", "")), 80)
+            url = preview_first(str(data.get("url", "")), 80)
             title = preview_first(str(data.get("title", "")), 40)
-            if action and url:
-                args_preview = f"{action} @ {url}"
-            else:
-                args_preview = action or url
-            if title and args_preview:
-                args_preview = f"{title}: {args_preview}"
-            elif title:
+            if action:
+                args_preview = action
+            elif url:
+                args_preview = url
+            if title and args_preview and title not in args_preview:
+                args_preview = f"{args_preview} ({title})"
+            elif title and not args_preview:
                 args_preview = title
         status = str(data.get("status", "done") or "done").strip().lower()
-        # ``.step.completed`` always settles the row (error vs success).
         phase = "error" if status in ("error", "failed") else "success"
         duration_ms = int(data.get("duration_ms", 0) or 0)
         args = {"preview": args_preview} if args_preview else {}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextvars
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -11,6 +12,12 @@ if TYPE_CHECKING:
 # Context variable for current step ID
 _current_step_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_step_id", default=None
+)
+
+# Intake-only / outer bridges when LangGraph ``get_stream_writer`` is unavailable
+# (e.g. long single-node browser_use runs). Sync callback; may schedule onto a loop.
+_wire_bridge: contextvars.ContextVar[Callable[[dict[str, Any]], None] | None] = (
+    contextvars.ContextVar("subagent_wire_bridge", default=None)
 )
 
 # Constants for formatting
@@ -47,6 +54,21 @@ def get_step_id() -> str | None:
     return _current_step_id.get()
 
 
+def set_wire_bridge(callback: Callable[[dict[str, Any]], None] | None) -> contextvars.Token:
+    """Install a sync sink for wire/progress events (intake-only stream bridge)."""
+    return _wire_bridge.set(callback)
+
+
+def reset_wire_bridge(token: contextvars.Token) -> None:
+    """Restore the previous wire bridge callback."""
+    _wire_bridge.reset(token)
+
+
+def get_wire_bridge() -> Callable[[dict[str, Any]], None] | None:
+    """Return the active wire bridge sink, if any."""
+    return _wire_bridge.get()
+
+
 def _format_event_compact(event: dict[str, Any]) -> str:
     """Format event dict into a compact, readable string.
 
@@ -70,7 +92,10 @@ def _format_event_compact(event: dict[str, Any]) -> str:
     # Key fields to extract (in priority order)
     key_fields = [
         "tool",
+        "tool_name",
         "command",
+        "url",
+        "action_preview",
         "exit_code",
         "duration_ms",
         "error",
@@ -85,7 +110,7 @@ def _format_event_compact(event: dict[str, Any]) -> str:
     for field in key_fields:
         if field in event:
             val = event[field]
-            if val is None:
+            if val is None or val == "":
                 continue
             # Format duration nicely
             if field == "duration_ms":
@@ -100,13 +125,16 @@ def _format_event_compact(event: dict[str, Any]) -> str:
 
 
 def emit_progress(event: dict[str, Any], logger: logging.Logger) -> None:
-    """Emit a progress event via the LangGraph stream writer with logging fallback.
+    """Emit a progress event via wire bridge or LangGraph stream writer.
 
     Always logs to file first for backend audit trail, then attempts stream emission.
     This is the canonical way for Soothe subagent graph nodes to surface
     ``soothe.*`` custom events to the TUI / headless renderer.
 
     Automatically injects step_id from context if available and not already present.
+
+    When an intake-only wire bridge is installed, events go only through that sink
+    (avoiding duplicate astream ``custom`` delivery).
 
     Args:
         event: Event dict with at minimum a ``type`` key.
@@ -120,7 +148,15 @@ def emit_progress(event: dict[str, Any], logger: logging.Logger) -> None:
     if step_id and "step_id" not in event:
         event = {**event, "step_id": step_id}
 
-    # Also emit to stream if available (for TUI/headless rendering)
+    bridge = get_wire_bridge()
+    if bridge is not None:
+        try:
+            bridge(event)
+        except Exception:
+            logger.debug("Wire bridge sink failed", exc_info=True)
+        return
+
+    # LangGraph custom stream (parented task / when no outer bridge).
     try:
         from langgraph.config import get_stream_writer
 

@@ -150,33 +150,68 @@ async def _run_intake_only_runnable(
     invocation_id: str,
     step_id: str,
 ) -> Any:
-    """Stream specialist with custom forward; fall back to ``ainvoke`` if needed."""
+    """Run specialist while bridging wire customs live onto the query stream.
+
+    LangGraph ``get_stream_writer`` is often unavailable inside long single-node
+    specialists (notably browser_use): emits land in the runner log only. Install a
+    wire bridge so ``emit_progress`` posts to a queue drained concurrently for live
+    orphan-card activity. Stream ``values`` (or ``ainvoke``) for the final state.
+    """
+    from soothe.utils.progress import reset_wire_bridge, set_wire_bridge
+
     input_state = {"messages": [HumanMessage(content=goal_text)]}
-    astream = getattr(runnable, "astream", None)
-    if callable(astream):
-        last_values: Any = None
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+
+    def _bridge_sink(event: dict[str, Any]) -> None:
+        payload = dict(event)
         try:
-            stream = astream(input_state, stream_mode=["custom", "values"])
-            async for item in stream:
-                mode, data = _unpack_astream_item(item)
-                if mode == "custom" and isinstance(data, dict):
-                    await _forward_wire_custom(
-                        ctx, data, invocation_id=invocation_id, step_id=step_id
-                    )
-                elif mode == "values":
-                    last_values = data
-                elif mode is None and isinstance(data, dict) and "type" in data:
-                    await _forward_wire_custom(
-                        ctx, data, invocation_id=invocation_id, step_id=step_id
-                    )
-            if last_values is not None:
-                return last_values
-        except TypeError:
-            logger.debug(
-                "[WiredSubagent] astream(stream_mode=...) unsupported; falling back to ainvoke",
-                exc_info=True,
-            )
-    return await runnable.ainvoke(input_state)
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if running is loop:
+            queue.put_nowait(payload)
+            return
+        try:
+            loop.call_soon_threadsafe(queue.put_nowait, payload)
+        except RuntimeError:
+            queue.put_nowait(payload)
+
+    async def _drain_bridge() -> None:
+        while True:
+            item = await queue.get()
+            if item is None:
+                return
+            await _forward_wire_custom(ctx, item, invocation_id=invocation_id, step_id=step_id)
+
+    bridge_token = set_wire_bridge(_bridge_sink)
+    drain_task = asyncio.create_task(_drain_bridge())
+    try:
+        astream = getattr(runnable, "astream", None)
+        if callable(astream):
+            last_values: Any = None
+            try:
+                # Customs arrive via the wire bridge; only consume final state here.
+                stream = astream(input_state, stream_mode=["values"])
+                async for item in stream:
+                    mode, data = _unpack_astream_item(item)
+                    if mode == "values" or mode is None:
+                        last_values = data
+                if last_values is not None:
+                    return last_values
+            except TypeError:
+                logger.debug(
+                    "[WiredSubagent] astream(stream_mode=values) unsupported; "
+                    "falling back to ainvoke",
+                    exc_info=True,
+                )
+        return await runnable.ainvoke(input_state)
+    finally:
+        await queue.put(None)
+        try:
+            await drain_task
+        finally:
+            reset_wire_bridge(bridge_token)
 
 
 async def _invoke_intake_only_direct(
