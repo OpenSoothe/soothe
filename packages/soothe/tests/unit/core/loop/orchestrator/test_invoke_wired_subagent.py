@@ -127,6 +127,36 @@ async def test_init_or_resume_sets_wired_subagent_route() -> None:
 
 
 @pytest.mark.asyncio
+async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="explorer",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    loop_state = SimpleNamespace(
+        intent=intent,
+        routing_classification=build_loop_routing_classification(intent, None),
+        goal="continue",
+        goal_user_submission="continue",
+    )
+    ctx = SimpleNamespace(
+        loop_state=loop_state,
+        preferred_subagent=None,
+        continue_loop_mode=True,
+        recovery_valid_resume=False,
+        checkpoint=None,
+        ce=None,
+        ce_goal_id=None,
+        scratch=SimpleNamespace(plan_result=None),
+        emit=_noop_emit,
+    )
+    result = await node_init_or_resume(ctx, {})  # type: ignore[arg-type]
+    assert result["intent_route"] == "wired_subagent"
+    assert route_by_intent(result) == "invoke_wired_subagent"
+
+
+@pytest.mark.asyncio
 async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,

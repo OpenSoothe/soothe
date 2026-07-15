@@ -139,7 +139,7 @@ class _StartupMixin:
 
         with suppress(NoMatches):
             banner = self.query_one("#welcome-banner", WelcomeBanner)
-            self._status_bar.set_session_tip(banner.session_tip)
+            self.set_default_session_tip(banner.session_tip)
 
         # Focus the input immediately so the cursor is visible on first paint
         self._chat_input.focus_input()
@@ -535,7 +535,7 @@ class _StartupMixin:
             if self._lc_loop_id:
                 banner.update_loop_id(self._lc_loop_id)
             if self._status_bar is not None:
-                self._status_bar.set_session_tip(banner.session_tip)
+                self.set_default_session_tip(banner.session_tip)
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 

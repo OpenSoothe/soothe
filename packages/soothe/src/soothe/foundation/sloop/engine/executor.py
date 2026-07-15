@@ -139,6 +139,7 @@ from soothe.foundation.sloop.utils.messages import (
 
 # IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
 from soothe.middleware.tool_call_args_registry import init_tool_call_args_registry
+from soothe.middleware.tool_optimization_middleware import get_tool_reuse_metrics_snapshot
 from soothe.utils.network_errors import (
     format_tool_network_error as _format_tool_network_error,
 )
@@ -210,6 +211,19 @@ def _graph_recursion_warning_text(error: Exception) -> str:
         "Step reached the execution recursion limit and was treated as recoverable. "
         f"Details: {detail}"
     )
+
+
+def _merge_int_metrics(
+    base: dict[str, int],
+    incoming: dict[str, int],
+) -> dict[str, int]:
+    """Merge integer metric counters by summation."""
+    if not incoming:
+        return dict(base)
+    merged = dict(base)
+    for key, value in incoming.items():
+        merged[key] = int(merged.get(key, 0)) + int(value)
+    return merged
 
 
 class Executor:
@@ -1970,6 +1984,7 @@ class Executor:
             delegate_final = ""
             stream_outcomes: list[dict[str, Any]] = []
             has_tool_error = False
+            execution_metrics: dict[str, int] = {}
 
             while True:
                 stream = self._core_agent_astream_with_interrupt_resume(
@@ -1999,6 +2014,7 @@ class Executor:
                 pass_delegate_final = ""
                 pass_stream_outcomes: list[dict[str, Any]] = []
                 pass_has_tool_error = False
+                pass_execution_metrics: dict[str, int] = {}
 
                 async for chunk in self._stream_and_collect(
                     stream,
@@ -2017,25 +2033,28 @@ class Executor:
                         pass_delegate_final = chunk.delegate_final
                         pass_stream_outcomes = list(chunk.outcomes)
                         pass_has_tool_error = chunk.has_error
+                        pass_execution_metrics = dict(chunk.execution_metrics)
+
+                output = pass_output
+                main_tool_call_count = pass_main_tool_call_count
+                subgraph_tool_call_count = pass_subgraph_tool_call_count
+                if pass_delegate_final:
+                    delegate_final = pass_delegate_final
 
                 if action_retries_done > 0:
-                    output = pass_output
-                    main_tool_call_count = pass_main_tool_call_count
-                    subgraph_tool_call_count = pass_subgraph_tool_call_count
+                    # Retry pass replaces prior evidence with the latest attempt.
                     messages = list(pass_messages)
-                    if pass_delegate_final:
-                        delegate_final = pass_delegate_final
                     stream_outcomes = list(pass_stream_outcomes)
                     has_tool_error = pass_has_tool_error
+                    execution_metrics = dict(pass_execution_metrics)
                 else:
-                    output = pass_output
-                    main_tool_call_count = pass_main_tool_call_count
-                    subgraph_tool_call_count = pass_subgraph_tool_call_count
                     messages.extend(pass_messages)
-                    if pass_delegate_final:
-                        delegate_final = pass_delegate_final
                     stream_outcomes.extend(pass_stream_outcomes)
                     has_tool_error = has_tool_error or pass_has_tool_error
+                    execution_metrics = _merge_int_metrics(
+                        execution_metrics,
+                        pass_execution_metrics,
+                    )
 
                 pass_final_ai = self._extract_final_assistant_text_from_step_messages(pass_messages)
                 if step_has_deliverable_gate(step):
@@ -2137,6 +2156,10 @@ class Executor:
                 hit_tool_budget=budget.hit_tool_budget,
                 step_id=step.id,
             )
+            if execution_metrics:
+                primary_outcome["execution_metrics"] = {
+                    k: int(v) for k, v in execution_metrics.items()
+                }
 
             # IG-148: Add CoreAgent input/output evidence
             primary_outcome["step_input"] = envelope  # HumanMessage content sent to Layer 1
@@ -2178,6 +2201,12 @@ class Executor:
                     subgraph_tool_call_count,
                     budget.hit_subagent_cap,
                     budget.hit_tool_budget,
+                )
+            if execution_metrics:
+                logger.debug(
+                    "[ExecuteMetrics] step=%s metrics=%s",
+                    step.id,
+                    execution_metrics,
                 )
 
             return _ExecuteStepResult(
@@ -2335,6 +2364,9 @@ class Executor:
         chunks: list[str] = []
         tool_call_count = 0
         subgraph_tool_call_count = 0
+        search_calls_total = 0
+        search_calls_shell_fallback = 0
+        evidence_reads_total = 0
         messages: list[BaseMessage] = []  # IG-151: Collect messages for token extraction
         delegate_task_final_parts: list[str] = []
         delegate_task_ids_seen: set[str] = set()
@@ -2344,7 +2376,9 @@ class Executor:
         # RFC-211: Collect per-tool outcome metadata (structured, no filesystem cache; IG-387)
         outcomes: list[dict] = []
 
-        stream_chunk_count = 0  # Debug counter
+        no_progress_watchdog_triggered = 0
+        watchdog_seconds = self._dispatch_timeout_seconds()
+        last_progress_at = time.perf_counter()
 
         def _maybe_cap_subagent_tasks(msg: ToolMessage) -> bool:
             """Return True if the stream must stop (cap exceeded)."""
@@ -2371,6 +2405,10 @@ class Executor:
                 True when the Act stream must stop (budget/cap).
             """
             nonlocal tool_call_count
+            nonlocal search_calls_total
+            nonlocal search_calls_shell_fallback
+            nonlocal evidence_reads_total
+            nonlocal last_progress_at
 
             messages.append(msg)
             tool_call_count += 1
@@ -2440,6 +2478,17 @@ class Executor:
                     delegate_task_final_parts.append(clipped)
 
             logged_args = tool_args.lookup(tool_call_id or "")
+            if tool_name in {"grep", "glob"}:
+                search_calls_total += 1
+            elif tool_name == "read_file":
+                evidence_reads_total += 1
+            elif tool_name == "run_command":
+                command = str(logged_args.get("command") or "").lower()
+                if "grep" in command or "rg " in command or command.startswith("rg"):
+                    search_calls_total += 1
+                    search_calls_shell_fallback += 1
+
+            last_progress_at = time.perf_counter()
             logger.debug(
                 "[Tool#%d] %s(%s) args=%s → %s, %dB",
                 tool_call_count,
@@ -2473,7 +2522,14 @@ class Executor:
             return False
 
         async for chunk in stream:
-            stream_chunk_count += 1
+            now = time.perf_counter()
+            if watchdog_seconds > 0 and (now - last_progress_at) >= watchdog_seconds:
+                no_progress_watchdog_triggered += 1
+                await self._maybe_aclose_act_stream(stream, reason="no_progress_watchdog")
+                raise DispatchTimeoutError(
+                    timeout_seconds=watchdog_seconds,
+                    step_id=step_id,
+                )
             stream_ns: tuple[str, ...] = ()
             execute_ns_tool_stop = False
 
@@ -2534,6 +2590,7 @@ class Executor:
                             t = extract_text_from_message_content(rewritten_msg.content)
                             if t:
                                 chunks.append(t)
+                                last_progress_at = time.perf_counter()
                     elif isinstance(msg0, ToolMessage):
                         modified_msg, tool_update_events = tool_args.promote_tool_message(
                             msg0,
@@ -2576,6 +2633,7 @@ class Executor:
                         t = extract_text_from_message_content(msg.content)
                         if t:
                             chunks.append(t)
+                            last_progress_at = time.perf_counter()
                     elif isinstance(msg, AIMessage):
                         if not step_id:
                             task_idx = (
@@ -2593,6 +2651,7 @@ class Executor:
                         t = extract_text_from_message_content(msg.content)
                         if t:
                             chunks.append(t)
+                            last_progress_at = time.perf_counter()
                             logger.debug("[AI Message] %s", log_preview(t, chars=150))
 
             subgraph_tool_updates: list[tuple[tuple[str, ...], dict[str, Any]]] = []
@@ -2629,6 +2688,7 @@ class Executor:
                         )
                     else:
                         chunks.append(text_out)
+                    last_progress_at = time.perf_counter()
                 body_preview = log_preview(
                     extract_text_from_message_content(getattr(tm, "content", "")),
                     chars=160,
@@ -2703,12 +2763,16 @@ class Executor:
             if isinstance(chunk, dict) and "model" not in chunk:
                 if "content" in chunk:
                     chunks.append(str(chunk["content"]))
+                    last_progress_at = time.perf_counter()
                 elif "output" in chunk:
                     chunks.append(str(chunk["output"]))
+                    last_progress_at = time.perf_counter()
                 elif "text" in chunk:
                     chunks.append(str(chunk["text"]))
+                    last_progress_at = time.perf_counter()
             elif hasattr(chunk, "content") and not isinstance(chunk, (tuple, dict)):
                 chunks.append(str(chunk.content))
+                last_progress_at = time.perf_counter()
 
         delegate_final_text = ""
         if delegate_task_final_parts:
@@ -2717,6 +2781,14 @@ class Executor:
                 delegate_final_text = delegate_final_text[:DELEGATE_FINAL_WAVE_CAP]
 
         has_tool_error = any(o.get("has_error") for o in outcomes)
+        reuse_metrics = get_tool_reuse_metrics_snapshot()
+        execution_metrics = {
+            "search_calls_total": int(search_calls_total),
+            "search_calls_shell_fallback": int(search_calls_shell_fallback),
+            "evidence_reads_total": int(evidence_reads_total),
+            "no_progress_watchdog_triggered": int(no_progress_watchdog_triggered),
+            **{k: int(v) for k, v in reuse_metrics.items()},
+        }
         yield _StreamCollectChunk.finalized(
             output=join_text_fragments(chunks),
             main_tool_count=tool_call_count,
@@ -2725,6 +2797,7 @@ class Executor:
             outcomes=outcomes,
             has_error=has_tool_error,
             subgraph_tool_count=subgraph_tool_call_count,
+            execution_metrics=execution_metrics,
         )
 
     def _extract_error_message(self, exc: Exception, fallback: str) -> str:

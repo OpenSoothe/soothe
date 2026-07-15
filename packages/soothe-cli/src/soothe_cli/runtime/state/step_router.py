@@ -24,6 +24,7 @@ from soothe_sdk.ux.task_namespace import (
     resolve_task_parent_lookup,
     resolve_task_scope_for_namespace,
     row_key_for_subgraph_tool,
+    step_level_parent_task_call_id,
     task_scope_step_id,
     try_bind_namespace_from_tool_call_id,
 )
@@ -93,6 +94,10 @@ class StepTaskRouter:
     _spawns_by_task_id: dict[str, TaskScope] = field(default_factory=dict, repr=False)
     _pending_unscoped_namespaces: deque[tuple[str, ...]] = field(default_factory=deque, repr=False)
     _spawn_recorded: set[tuple[str, str]] = field(default_factory=set, repr=False)
+    _task_index_by_step_and_call: dict[tuple[str, str], int] = field(
+        default_factory=dict, repr=False
+    )
+    _next_task_index_by_step: dict[str, int] = field(default_factory=dict, repr=False)
     _pending_main_tools: dict[str, PendingMainTool] = field(default_factory=dict, repr=False)
     _pending_subgraph_tools: dict[tuple[tuple[str, ...], str], PendingSubgraphTool] = field(
         default_factory=dict,
@@ -108,6 +113,8 @@ class StepTaskRouter:
         self._spawns_by_task_id.clear()
         self._pending_unscoped_namespaces.clear()
         self._spawn_recorded.clear()
+        self._task_index_by_step_and_call.clear()
+        self._next_task_index_by_step.clear()
         self._pending_main_tools.clear()
         self._pending_subgraph_tools.clear()
 
@@ -220,6 +227,11 @@ class StepTaskRouter:
             ]
             for tcid in drop_tcid:
                 self._spawns_by_task_id.pop(tcid, None)
+            # Cleanse per-step synthetic task-index state once the step is done.
+            self._next_task_index_by_step.pop(sid, None)
+            stale_index_keys = [key for key in self._task_index_by_step_and_call if key[0] == sid]
+            for key in stale_index_keys:
+                self._task_index_by_step_and_call.pop(key, None)
 
     def step_id_for_tool(self, tool_call_id: str) -> str:
         """Return execute step id encoded in a unified root tool_call_id."""
@@ -287,7 +299,10 @@ class StepTaskRouter:
             sid = str(step_id).strip()
         if not sid:
             return False
-        normalized_tcid = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
+        normalized_tcid = self.normalize_task_delegation_id(
+            step_id=sid,
+            tool_call_id=tcid,
+        )
         spawn_key = (sid, normalized_tcid)
         if spawn_key in self._spawn_recorded:
             return False
@@ -310,6 +325,42 @@ class StepTaskRouter:
             self._pending_unscoped_namespaces,
         )
         return True
+
+    def normalize_task_delegation_id(self, *, step_id: str, tool_call_id: str) -> str:
+        """Return canonical ``{step}:s:task:{idx}`` for main ``task`` delegations.
+
+        Some providers emit unified ids like ``{step}:s:call_<uuid>`` that do not
+        encode a task index. In that case allocate a stable per-step synthetic
+        index so task activity rows and standalone SubAgent cards stay 1:1.
+        """
+        sid = str(step_id).strip()
+        tcid = str(tool_call_id).strip()
+        if not sid or not tcid:
+            return tcid
+
+        normalized = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
+        _, type_code, _, tool_info = parse_unified_tool_call_id(normalized)
+        if type_code == "s" and isinstance(tool_info, str):
+            parts = tool_info.split(":")
+            if parts and parts[0] == "task":
+                tail = parts[-1] if parts else ""
+                if tail.isdigit():
+                    idx = int(tail)
+                    key = (sid, tcid)
+                    self._task_index_by_step_and_call[key] = idx
+                    next_idx = self._next_task_index_by_step.get(sid, 0)
+                    if idx >= next_idx:
+                        self._next_task_index_by_step[sid] = idx + 1
+                    return normalized
+
+        key = (sid, tcid)
+        if key in self._task_index_by_step_and_call:
+            idx = self._task_index_by_step_and_call[key]
+        else:
+            idx = self._next_task_index_by_step.get(sid, 0)
+            self._task_index_by_step_and_call[key] = idx
+            self._next_task_index_by_step[sid] = idx + 1
+        return step_level_parent_task_call_id(sid, idx)
 
     def resolve_task_scope(self, namespace: tuple[str, ...]) -> TaskScope | None:
         """Task scope for a stream namespace, if bound."""

@@ -6,11 +6,13 @@ import asyncio
 import logging
 import time
 from collections import deque
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
+    from textual.timer import Timer
     from textual.worker import Worker
 
     from soothe_cli.tui.skills.load import ExtendedSkillMetadata
@@ -222,6 +224,9 @@ class SootheApp(
         self._mcp_tool_count = sum(len(s.tools) for s in (mcp_server_info or []))
 
         self._status_bar: StatusBar | None = None
+        self._default_session_tip: str = ""
+        self._status_notification_timer: Timer | None = None
+        self._status_notification_active = False
 
         self._chat_input: ChatInput | None = None
         self._plan_quick_view_overlay: PlanQuickViewOverlay | None = None
@@ -358,6 +363,55 @@ class SootheApp(
     def _runtime_backend_ready(self) -> bool:
         """Return whether the app has a connected daemon session."""
         return self._daemon_session is not None
+
+    def set_default_session_tip(self, tip: str) -> None:
+        """Persist and render the fallback tip shown when no notification is active."""
+        cleaned = (tip or "").strip()
+        self._default_session_tip = cleaned
+        if self._status_bar is not None and not self._status_notification_active:
+            self._status_bar.set_session_tip(cleaned)
+
+    def _set_status_notification(self, message: str, *, timeout: float | None = None) -> None:
+        """Render a transient notification in the status-tip area."""
+        text = (message or "").strip()
+        if not text:
+            return
+        if self._status_notification_timer is not None:
+            with suppress(Exception):
+                self._status_notification_timer.stop()
+            self._status_notification_timer = None
+        self._status_notification_active = True
+        if self._status_bar is not None:
+            self._status_bar.set_notification_message(text)
+
+        duration = timeout if timeout and timeout > 0 else 3.0
+        self._status_notification_timer = self.set_timer(duration, self._clear_status_notification)
+
+    def _clear_status_notification(self) -> None:
+        """Restore the default tip after transient notification timeout."""
+        self._status_notification_timer = None
+        self._status_notification_active = False
+        if self._status_bar is not None:
+            self._status_bar.set_session_tip(self._default_session_tip)
+
+    def notify(  # type: ignore[override]
+        self,
+        message: Any,
+        *,
+        title: str = "",
+        severity: str = "information",
+        timeout: float | None = None,
+        markup: bool = True,  # noqa: ARG002
+    ) -> None:
+        """Display notifications in the status-tip area instead of toast bubbles."""
+        text = str(message or "").strip()
+        if not text:
+            return
+        if title:
+            text = f"{title}: {text}"
+        if severity and severity.lower() in {"warning", "error"}:
+            text = f"{severity.title()}: {text}"
+        self._set_status_notification(text, timeout=timeout)
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         """Return custom CSS variable defaults for the current theme.

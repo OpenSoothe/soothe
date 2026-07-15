@@ -10,6 +10,7 @@ from soothe_cli.tui.widgets.status import (
     CLARIFICATION_MODE_MANUAL,
     ClarificationModeBadge,
     ModelLabel,
+    StatusBar,
 )
 
 
@@ -83,3 +84,19 @@ def test_model_label_truncates_from_the_right_when_too_narrow() -> None:
     width = 6
     expected = full_model[: width - 1] + "…"
     assert expected == "gpt-4…"
+
+
+def test_status_tip_prefixes_default_tip_text() -> None:
+    """Default session tips keep the `Tip:` prefix in the status area."""
+    bar = StatusBar()
+    bar.set_session_tip("Use /help")
+    assert bar.session_tip == "Tip: Use /help"
+    assert bar.tip_is_notification is False
+
+
+def test_status_tip_can_show_transient_notification_message() -> None:
+    """Notification mode renders a message in the same status-tip slot."""
+    bar = StatusBar()
+    bar.set_notification_message("Saved draft")
+    assert bar.session_tip == "Notice: Saved draft"
+    assert bar.tip_is_notification is True

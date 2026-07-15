@@ -170,6 +170,10 @@ class StatusBar(Horizontal):
         overflow: hidden;
     }
 
+    StatusBar .status-tip.notification {
+        color: $warning;
+    }
+
     StatusBar .status-message {
         width: auto;
         padding: 0 1;
@@ -210,6 +214,7 @@ class StatusBar(Horizontal):
     clarification_mode: reactive[str] = reactive(CLARIFICATION_MODE_AUTO, init=False)
     status_message: reactive[str] = reactive("", init=False)
     session_tip: reactive[str] = reactive("", init=False)
+    tip_is_notification: reactive[bool] = reactive(False, init=False)
     cwd: reactive[str] = reactive("", init=False)
     branch: reactive[str] = reactive("", init=False)
     tokens: reactive[int] = reactive(0, init=False)
@@ -292,13 +297,21 @@ class StatusBar(Horizontal):
             indicator.add_class("normal")
 
     def watch_session_tip(self, new_value: str) -> None:
-        """Update the rotating session tip below the input."""
+        """Update the status-tip text below the input."""
         try:
             tip_widget = self.query_one("#session-tip", Static)
         except NoMatches:
             return
         text = (new_value or "").strip()
-        tip_widget.update(f"Tip: {text}" if text else "")
+        tip_widget.update(text)
+
+    def watch_tip_is_notification(self, is_notification: bool) -> None:
+        """Toggle visual style for transient notifications in the tip slot."""
+        try:
+            tip_widget = self.query_one("#session-tip", Static)
+        except NoMatches:
+            return
+        tip_widget.set_class(is_notification, "notification")
 
     def watch_cwd(self, new_value: str) -> None:
         """Update cwd display when it changes."""
@@ -357,8 +370,16 @@ class StatusBar(Horizontal):
         self.mode = mode
 
     def set_session_tip(self, tip: str) -> None:
-        """Set the session tip shown next to the input (migrated from welcome banner)."""
-        self.session_tip = (tip or "").strip()
+        """Set the default rotating tip shown in the status-tip area."""
+        self.tip_is_notification = False
+        text = (tip or "").strip()
+        self.session_tip = f"Tip: {text}" if text else ""
+
+    def set_notification_message(self, message: str) -> None:
+        """Set a transient notification message in the status-tip area."""
+        self.tip_is_notification = True
+        text = (message or "").strip()
+        self.session_tip = f"Notice: {text}" if text else ""
 
     def set_status_message(self, message: str) -> None:
         """Set the status message.

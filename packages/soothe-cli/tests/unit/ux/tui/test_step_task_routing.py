@@ -31,6 +31,53 @@ def test_register_task_spawn_normalizes_unified_task_id() -> None:
     assert router._spawns_by_step_id["YKF-02"][0] == "YKF_02:s:task:0"
 
 
+def test_register_task_spawn_assigns_stable_indices_for_step_level_call_ids() -> None:
+    router = StepTaskRouter()
+    assert router.register_task_spawn("XQZ_01:s:call_aaa111", "explorer", step_id="XQZ-01") is True
+    assert router.register_task_spawn("XQZ_01:s:call_bbb222", "explorer", step_id="XQZ-01") is True
+    assert router.register_task_spawn("XQZ_01:s:call_aaa111", "explorer", step_id="XQZ-01") is False
+    assert "XQZ_01:s:task:0" in router._spawns_by_task_id
+    assert "XQZ_01:s:task:1" in router._spawns_by_task_id
+
+
+def test_normalize_task_delegation_id_reuses_assigned_index_for_same_call_id() -> None:
+    router = StepTaskRouter()
+    first = router.normalize_task_delegation_id(
+        step_id="XQZ-01",
+        tool_call_id="XQZ_01:s:call_aaa111",
+    )
+    second = router.normalize_task_delegation_id(
+        step_id="XQZ-01",
+        tool_call_id="XQZ_01:s:call_aaa111",
+    )
+    third = router.normalize_task_delegation_id(
+        step_id="XQZ-01",
+        tool_call_id="XQZ_01:s:call_bbb222",
+    )
+    assert first == "XQZ_01:s:task:0"
+    assert second == "XQZ_01:s:task:0"
+    assert third == "XQZ_01:s:task:1"
+
+
+def test_step_completed_cleans_synthetic_task_index_state() -> None:
+    router = StepTaskRouter()
+    router.normalize_task_delegation_id(
+        step_id="XQZ-01",
+        tool_call_id="XQZ_01:s:call_aaa111",
+    )
+    router.normalize_task_delegation_id(
+        step_id="XQZ-01",
+        tool_call_id="XQZ_01:s:call_bbb222",
+    )
+    assert router._next_task_index_by_step.get("XQZ-01") == 2
+    assert any(k[0] == "XQZ-01" for k in router._task_index_by_step_and_call)
+
+    router.on_step_completed("XQZ-01")
+
+    assert "XQZ-01" not in router._next_task_index_by_step
+    assert not any(k[0] == "XQZ-01" for k in router._task_index_by_step_and_call)
+
+
 def test_parallel_namespace_bind_via_unified_tool_ids() -> None:
     """Namespace binding requires unified tool call IDs, not FIFO order."""
     router = StepTaskRouter()

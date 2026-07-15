@@ -85,7 +85,6 @@ from soothe_sdk.ux.subagent_wire_display import (
 from soothe_sdk.ux.task_namespace import (
     TaskScope,
     is_inner_subgraph_task_tool_id,
-    normalize_main_task_delegation_id,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
     task_scope_step_id,
@@ -1414,7 +1413,10 @@ def _ingest_main_task_tool_on_step_card(
     if not sid:
         _route_pending_subgraph_tools(adapter, router)
         return None
-    norm_tcid = normalize_main_task_delegation_id(sid, tcid, tool_name="task")
+    norm_tcid = router.normalize_task_delegation_id(
+        step_id=sid,
+        tool_call_id=tcid,
+    )
     step_w = _resolve_step_widget_for_tool(
         adapter,
         router,

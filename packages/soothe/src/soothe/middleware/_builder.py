@@ -65,41 +65,15 @@ def build_soothe_middleware_stack(
 
     The middleware order is intentional and follows dependency requirements:
 
-    0. **IdentityMiddleware** (optional, RFC-307) - Validates JWT auth_token or
-       resolves external channel identity BEFORE any other middleware. Must run
-       before PolicyMiddleware to establish user context for permission checks.
-       Only installed when ``identity_runtime.enabled`` is True.
-
-    1. **SoothePolicyMiddleware** - Blocks unsafe actions FIRST before any
-       other middleware processes them. Uses PolicyProtocol.check() on every
-       tool/subagent call.
-
-    2. **ToolEnforcementMiddleware** - Applies request-time tool narrowing
-       policies (goal synthesis read-only mode, explicit subagent delegation).
-
-    3. **ProgressiveListingMiddleware** - Prepares deferred tools/skills/MCP
-       listing blocks before prompt assembly.
-
-    4. **SystemPromptMiddleware** - Modifies prompts BEFORE the
-       LLM call. Requires ``routing_classification`` state injected by StrangeLoop / runner
-       runner during pre-stream phase. Only enabled when performance features
-       are fully configured.
-
-    5. **LLMRateLimitMiddleware** - Rate limits LLM API calls at model level,
-       not thread level. Uses sliding window for RPM and semaphore for concurrent
-       requests. Solves thread hanging issues from thread-level blocking.
-
-    6. **CodeInterpreterMiddleware** (optional) - Embedded QuickJS interpreter
-       for programmatic tool calling. Enabled when ``code_interpreter.enabled``
-       is True. Exposes allowlisted tools via ``tools.*`` namespace.
-
-    7. **WorkspaceContextMiddleware** - Sets workspace ContextVar via
-       abefore_agent/aafter_agent hooks. Must be set before tools run to
-       enable thread-aware filesystem operations.
-
-    8. **PerTurnModelMiddleware** - When ``attach_stream_model_override`` is set
-       for the current asyncio Task (daemon per-turn ``input``), replaces the
-       chat model for that stream via ``ModelRequest.override``.
+    1. Identity and optional outer profiling wrappers.
+    2. Safety and activation chain (policy, skill, MCP).
+    3. Tool-call arg capture, optimization policy, and edit coalescing.
+    4. Tool reliability guards and output controls.
+    5. Prompt/tool preparation (enforcement, progressive listing, system prompt).
+    6. LLM call wrappers (rate-limit, optional code interpreter, workspace context).
+    7. Optional inner profiling wrappers.
+    8. Tool timeout wrapper.
+    9. Role routing and per-turn model override.
 
     Args:
         config: SootheConfig with performance settings.
@@ -131,14 +105,14 @@ def build_soothe_middleware_stack(
     stack: list[AgentMiddleware] = []
     profile_model_calls = is_profiler_enabled(config)
 
-    # 0. Identity validation (RFC-307: must run before PolicyMiddleware)
+    # 1. Identity validation (RFC-307: must run before PolicyMiddleware)
     if identity_runtime is not None and identity_runtime.enabled:
         from .identity import IdentityMiddleware
 
         stack.append(IdentityMiddleware(identity_runtime))
         logger.info("[Middleware] Identity validation enabled")
 
-    # 0b. Model call profiler (optional, for latency debugging)
+    # 2. Model call profiler (optional, for latency debugging)
     # Insert at the very start to capture full middleware chain timing
     if profile_model_calls:
         from .model_call_profiler import ModelCallProfilerMiddleware
@@ -146,7 +120,7 @@ def build_soothe_middleware_stack(
         stack.append(ModelCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] Model call profiler enabled (outer wrapper)")
 
-    # 1. Policy enforcement (must be first to block unsafe actions)
+    # 3. Policy enforcement (must be first policy gate)
     if policy:
         stack.append(
             SoothePolicyMiddleware(
@@ -156,7 +130,7 @@ def build_soothe_middleware_stack(
         )
         logger.debug("[Middleware] Policy enforcement enabled")
 
-    # 1b. Skill activation (RFC-105: activates conditional skills on file-op path match)
+    # 4. Skill activation (RFC-105: activates conditional skills on file-op path match)
     from soothe.skills.index import SkillIndex
     from soothe.skills.registry import ProgressiveSkillRegistry
 
@@ -172,33 +146,38 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] Skill activation enabled")
 
-    # 1c. MCP activation (RFC-412: search, promote, bind deferred MCP tools)
+    # 5. MCP activation (RFC-412: search, promote, bind deferred MCP tools)
     if mcp_registry is not None:
         from .mcp_activation import MCPActivationMiddleware
 
         stack.append(MCPActivationMiddleware(mcp_registry=mcp_registry))
         logger.info("[Middleware] MCP activation enabled")
 
-    # 1d. Record tool-call kwargs for TUI display (IG-519).
+    # 6. Record tool-call kwargs for TUI display (IG-519).
     # The executor's stream path reads these via get_recorded_tool_call_args() to
     # attach args to wire events for step + subagent activities. Without
     # this middleware the registry stays empty and the TUI shows no tool args.
     # Must wrap EditCoalescingMiddleware (outer): coalescing intercepts edit tools
     # without calling inner handlers, so kwargs must be captured before that path.
     from .tool_call_args_middleware import ToolCallArgsMiddleware
+    from .tool_optimization_middleware import ToolOptimizationMiddleware
 
     stack.append(ToolCallArgsMiddleware())
     logger.debug("[Middleware] Tool call args recording enabled")
 
-    # 1e. Edit coalescing for parallel file edits (IG-517)
+    # 7. Deterministic tool optimization (reuse/dedup/search consolidation)
+    stack.append(ToolOptimizationMiddleware())
+    logger.debug("[Middleware] Tool optimization middleware enabled")
+
+    # 8. Edit coalescing for parallel file edits (IG-517)
     stack.append(EditCoalescingMiddleware())
     logger.info("[Middleware] Edit coalescing enabled")
 
-    # 2. Recoverable outbound network errors → tool messages (TLS verify, connection refused)
+    # 9. Recoverable outbound network errors → tool messages
     stack.append(NetworkToolErrorsMiddleware())
     logger.debug("[Middleware] Network tool error recovery enabled")
 
-    # 2b. Cap tool output before graph state / model context
+    # 10. Cap tool output before graph state / model context
     tool_output = config.agent.loop.tool_output
     stack.append(
         ToolOutputCapMiddleware(
@@ -208,7 +187,7 @@ def build_soothe_middleware_stack(
     )
     logger.debug("[Middleware] Tool output cap enabled")
 
-    # 2c. Progressive builtin-tool loading (optional)
+    # 11. Progressive builtin-tool loading (optional)
     stack.append(InvalidToolHintsMiddleware())
     logger.debug("[Middleware] Invalid tool hints enabled")
 
@@ -220,13 +199,13 @@ def build_soothe_middleware_stack(
         stack.append(progressive_tool_middleware)
         logger.info("[Middleware] Progressive tool loading enabled")
 
-    # 3. Request-time tool enforcement (goal synthesis + delegated subagent routing)
+    # 12. Request-time tool enforcement (goal synthesis + delegated subagent routing)
     from .tool_enforcement import ToolEnforcementMiddleware
 
     stack.append(ToolEnforcementMiddleware())
     logger.info("[Middleware] Tool enforcement middleware enabled")
 
-    # 4. Progressive listing prep (deferred tools/skills/MCP listing state)
+    # 13. Progressive listing prep (deferred tools/skills/MCP listing state)
     from .progressive_listing import ProgressiveListingMiddleware
 
     stack.append(
@@ -238,7 +217,7 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] Progressive listing middleware enabled")
 
-    # 5. System prompt assembly (requires routing_classification from StrangeLoop / runner)
+    # 14. System prompt assembly (requires routing_classification from StrangeLoop / runner)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(
@@ -250,7 +229,7 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] System prompt middleware enabled")
 
-    # 3b. Inner profiler (optional, after SystemPrompt, before RateLimiter)
+    # 15. Inner profiler (optional, after SystemPrompt, before rate limiter)
     # Captures timing between prompt modification and rate limiting
     if profile_model_calls:
         from .model_call_profiler import InnerModelCallProfilerMiddleware
@@ -258,7 +237,7 @@ def build_soothe_middleware_stack(
         stack.append(InnerModelCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] Inner model call profiler enabled")
 
-    # 4. LLM rate limiting (throttles API calls, not threads)
+    # 16. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
     llm_rl = config.agent.loop.llm_rate_limit
     if llm_rl.enabled:
@@ -302,7 +281,7 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] LLM rate limiting disabled")
 
-    # 5. Code interpreter (embedded QuickJS for programmatic tool calling)
+    # 17. Code interpreter (embedded QuickJS for programmatic tool calling)
     ci_config = config.agent.code_interpreter
     if ci_config.enabled and ci_config.ptc_allowlist:
         from .code_interpreter import CodeInterpreterMiddleware
@@ -319,11 +298,11 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Code interpreter disabled (opt-in)")
 
-    # 6. Workspace context (thread-aware filesystem)
+    # 18. Workspace context (thread-aware filesystem)
     stack.append(WorkspaceContextMiddleware())
     logger.debug("[Middleware] Workspace context enabled")
 
-    # 6b. LLM profiler (optional, innermost before PerTurnModelMiddleware)
+    # 19. LLM profiler (optional, innermost before PerTurnModelMiddleware)
     # Captures timing just before the actual model.ainvoke call
     if profile_model_calls:
         from .model_call_profiler import LLMCallProfilerMiddleware
@@ -331,7 +310,7 @@ def build_soothe_middleware_stack(
         stack.append(LLMCallProfilerMiddleware(enabled=True))
         logger.info("[Middleware] LLM call profiler enabled (innermost wrapper)")
 
-    # 7. Tool timeout wrapper (IG-511: prevent indefinite hangs from slow tools)
+    # 20. Tool timeout wrapper (IG-511: prevent indefinite hangs from slow tools)
     # Positioned after other tool-related middleware, innermost around actual execution
     tool_timeout_config = config.agent.loop.tool_timeout
     if tool_timeout_config.enabled:
@@ -359,7 +338,7 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Tool timeout disabled")
 
-    # 8. Per-hop role routing (IG-545) — before per-turn override
+    # 21. Per-hop role routing (IG-545) — before per-turn override
     role_routing = config.agent.runtime.role_routing
     if role_routing.enabled:
         from .role_routing import RoleRoutingMiddleware
@@ -374,7 +353,7 @@ def build_soothe_middleware_stack(
     else:
         logger.debug("[Middleware] Role routing disabled")
 
-    # 9. Per-turn model override (daemon / stream context) — innermost around the LLM
+    # 22. Per-turn model override (daemon / stream context) — innermost around the LLM
     stack.append(PerTurnModelMiddleware(config))
     logger.debug("[Middleware] Per-turn model override enabled")
 

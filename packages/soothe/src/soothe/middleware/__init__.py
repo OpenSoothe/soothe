@@ -12,6 +12,7 @@ This package provides middleware implementations:
 - MCPActivationMiddleware: MCP progressive disclosure search, promote, bind (RFC-412)
 - ToolTimeoutMiddleware: Wrap tool calls with configurable timeout (IG-511)
 - ToolEnforcementMiddleware: Request-time tool narrowing policies
+- ToolOptimizationMiddleware: Deterministic lookup reuse/dedup/search-consolidation policy
 - ProgressiveListingMiddleware: Prepare deferred listing blocks for system prompt
 
 Utility functions:
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
     from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
     from soothe.middleware.system_prompt import SystemPromptMiddleware
     from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
+    from soothe.middleware.tool_optimization_middleware import ToolOptimizationMiddleware
     from soothe.middleware.workspace_context import WorkspaceContextMiddleware
 
 __all__ = [
@@ -70,6 +72,7 @@ __all__ = [
     "ThreadContextProvider",
     "ToolTimeoutMiddleware",
     "ToolEnforcementMiddleware",
+    "ToolOptimizationMiddleware",
     "ProgressiveListingMiddleware",
     "WorkspaceContextMiddleware",
     "build_soothe_middleware_stack",
@@ -117,6 +120,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ToolEnforcementMiddleware": (
         "soothe.middleware.tool_enforcement",
         "ToolEnforcementMiddleware",
+    ),
+    "ToolOptimizationMiddleware": (
+        "soothe.middleware.tool_optimization_middleware",
+        "ToolOptimizationMiddleware",
     ),
     "WorkspaceContextMiddleware": (
         "soothe.middleware.workspace_context",

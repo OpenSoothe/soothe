@@ -126,7 +126,7 @@ async def node_init_or_resume(ctx: LoopRuntimeContext, _state: dict[str, Any]) -
 
     # IG-599: wired specialist — route only; plan is built in invoke_wired_subagent.
     # Wins over continuation / trivial / simple / complex once chitchat is out.
-    if intake_label != IntakeLabel.CHITCHAT and not is_continue_keyword(ctx.loop_state.goal):
+    if intake_label != IntakeLabel.CHITCHAT:
         wire = resolve_user_requested_wire_subagent(
             routing_classification=getattr(ctx.loop_state, "routing_classification", None),
             intent=intent,

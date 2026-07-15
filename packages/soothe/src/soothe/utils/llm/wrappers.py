@@ -29,6 +29,22 @@ logger = logging.getLogger(__name__)
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL | re.IGNORECASE)
 
 
+def _sanitize_tool_choice_for_compat(tool_choice: Any) -> Any:
+    """Normalize tool_choice for limited OpenAI-compatible providers.
+
+    Some "thinking mode" providers reject both object-form and ``"required"``
+    tool choice. For compatibility, coerce those variants to ``"auto"``.
+    """
+    if isinstance(tool_choice, dict):
+        return "auto"
+    if isinstance(tool_choice, str) and tool_choice in {"required", "any"}:
+        return "auto"
+    # LangChain may pass bool and later coerce True -> "required".
+    if tool_choice is True:
+        return "auto"
+    return tool_choice
+
+
 def _strip_json_text(raw: str) -> str:
     """Normalize model output to a JSON-parseable string.
 
@@ -333,12 +349,14 @@ class OpenAICompatModelWrapper(BaseChatModel):
                 delegate_kwargs["schema_name"] = schema_name
             if method == "function_calling":
                 delegate_kwargs["strict"] = strict
-                if isinstance(kwargs.get("tool_choice"), dict):
+                sanitized_tool_choice = _sanitize_tool_choice_for_compat(kwargs.get("tool_choice"))
+                if sanitized_tool_choice != kwargs.get("tool_choice"):
                     logger.debug(
-                        "OpenAICompatModelWrapper sanitizing object-form tool_choice for structured output (provider=%s)",
+                        "OpenAICompatModelWrapper sanitizing incompatible tool_choice=%r for structured output (provider=%s)",
+                        kwargs.get("tool_choice"),
                         self._provider_name,
                     )
-                    delegate_kwargs["tool_choice"] = "auto"
+                    delegate_kwargs["tool_choice"] = sanitized_tool_choice
             # json_mode: omit strict — LangChain rejects it; invoke_structured_chat post-validates.
             return self._model.with_structured_output(schema, **delegate_kwargs)
 
@@ -366,8 +384,8 @@ class OpenAICompatModelWrapper(BaseChatModel):
     def bind_tools(self, tools: list[Any], **kwargs: Any) -> Any:
         """Intercept tool_choice parameter for limited providers.
 
-        Removes object-form tool_choice and converts to string if needed.
-        Limited providers only accept string values: "none", "auto", "required".
+        Coerces incompatible values (object-form and ``"required"``) to
+        ``"auto"`` for provider compatibility.
 
         Args:
             tools: List of tool definitions.
@@ -378,17 +396,14 @@ class OpenAICompatModelWrapper(BaseChatModel):
         """
         # Intercept tool_choice parameter
         if "tool_choice" in kwargs:
-            tool_choice = kwargs["tool_choice"]
-
-            # If tool_choice is a dict/object, sanitize it for limited providers
-            if isinstance(tool_choice, dict):
+            sanitized_tool_choice = _sanitize_tool_choice_for_compat(kwargs["tool_choice"])
+            if sanitized_tool_choice != kwargs["tool_choice"]:
                 logger.debug(
-                    "OpenAICompatModelWrapper sanitizing object-form tool_choice for %s (provider=%s)",
-                    tool_choice,
+                    "OpenAICompatModelWrapper sanitizing incompatible tool_choice=%r (provider=%s)",
+                    kwargs["tool_choice"],
                     self._provider_name,
                 )
-                # Convert to "auto" for best compatibility
-                kwargs["tool_choice"] = "auto"
+                kwargs["tool_choice"] = sanitized_tool_choice
 
         return self._model.bind_tools(tools, **kwargs)
 

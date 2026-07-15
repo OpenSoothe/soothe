@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from soothe.foundation.sloop.engine.executor import (
     Executor,
     _ActStreamBudget,
 )
+from soothe.foundation.sloop.engine.graph_interrupt import DispatchTimeoutError
 from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
@@ -141,3 +143,63 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
     assert "out-0" in str(preview)
     ledger_ai = [m for m in ce.ledger.get_messages() if getattr(m, "step_id", None) == "s0"][-1]
     assert "Step execution failed" not in ledger_ai.content
+
+
+@pytest.mark.asyncio
+async def test_stream_collect_exposes_execution_metrics() -> None:
+    budget = _ActStreamBudget(max_tool_calls_per_step=8)
+    chunks = [
+        (
+            (),
+            "messages",
+            (ToolMessage(content="x.py:12:needle", tool_call_id="1", name="grep"), {}),
+        ),
+        (
+            (),
+            "messages",
+            (
+                ToolMessage(
+                    content="1|line one\n2|line two",
+                    tool_call_id="2",
+                    name="read_file",
+                ),
+                {},
+            ),
+        ),
+    ]
+
+    async def fake_stream():
+        for c in chunks:
+            yield c
+
+    ex = Executor(MagicMock(), max_parallel_steps=1, context_engine=_make_ce())
+    rows = [
+        r
+        async for r in ex._stream_and_collect(fake_stream(), budget=budget, step_id="s0")
+        if r.output is not None
+    ]
+    assert len(rows) == 1
+    final = rows[0]
+    assert final.execution_metrics.get("search_calls_total") == 1
+    assert final.execution_metrics.get("evidence_reads_total") == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_collect_no_progress_watchdog_raises_timeout() -> None:
+    config = MagicMock()
+    config.agent.loop.dispatch_timeout_seconds = 0.01
+    config.agent.loop.max_tool_calls_per_step = 999
+
+    async def fake_stream():
+        yield ((), "custom", {"kind": "heartbeat"})
+        await asyncio.sleep(0.03)
+        yield ((), "custom", {"kind": "heartbeat"})
+
+    ex = Executor(MagicMock(), max_parallel_steps=1, context_engine=_make_ce(), config=config)
+    with pytest.raises(DispatchTimeoutError):
+        async for _ in ex._stream_and_collect(
+            fake_stream(),
+            budget=_ActStreamBudget(max_tool_calls_per_step=10),
+            step_id="s_watchdog",
+        ):
+            pass

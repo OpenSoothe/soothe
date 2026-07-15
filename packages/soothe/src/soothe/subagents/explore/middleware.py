@@ -910,10 +910,7 @@ def build_explore_middleware_stack(
     Returns:
         Middleware stack with tool limits, retries, budget, findings, wire, and finalize.
     """
-    from soothe.middleware.tool_limits import (
-        build_tool_limit_middleware,
-        build_tool_retry_middleware,
-    )
+    from langchain.agents.middleware import ToolCallLimitMiddleware, ToolRetryMiddleware
 
     # Build tool limit and retry middleware from config
     tool_middlewares: list[AgentMiddleware[Any, None]] = []
@@ -924,14 +921,27 @@ def build_explore_middleware_stack(
         )
         run_limit = explore_config.tool_call_limit_run or loop.tool_call_limit.global_run_limit
 
-        tool_call_limit = loop.tool_call_limit.model_copy(
-            update={"global_thread_limit": thread_limit, "global_run_limit": run_limit}
+        tool_middlewares.append(
+            ToolCallLimitMiddleware(
+                thread_limit=thread_limit,
+                run_limit=run_limit,
+                exit_behavior="continue",
+            )
         )
-        tool_middlewares.extend(build_tool_limit_middleware(tool_call_limit))
-        tool_middlewares.extend(build_tool_retry_middleware(loop.tool_retry))
+        tool_middlewares.append(
+            ToolRetryMiddleware(
+                max_retries=loop.tool_retry.max_retries,
+                backoff_factor=loop.tool_retry.backoff_factor,
+                initial_delay=loop.tool_retry.initial_delay,
+                on_failure="continue",
+            )
+        )
 
     from soothe.middleware.tool_call_args_middleware import (
         ToolCallArgsMiddleware,
+    )
+    from soothe.middleware.tool_optimization_middleware import (
+        ToolOptimizationMiddleware,
     )
 
     return [
@@ -939,6 +949,8 @@ def build_explore_middleware_stack(
         *tool_middlewares,
         # IG-519: ToolCallArgsMiddleware records invocation args for subgraph tool display
         ToolCallArgsMiddleware(),
+        # IG-653: deterministic lookup reuse/dedup/search consolidation in middleware layer
+        ToolOptimizationMiddleware(),
         # Explore-specific middlewares
         ExploreWireMiddleware(
             thoroughness=explore_config.thoroughness,

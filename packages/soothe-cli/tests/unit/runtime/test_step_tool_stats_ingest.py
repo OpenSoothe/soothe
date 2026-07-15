@@ -272,6 +272,55 @@ async def test_wire_update_registers_task_on_execute_namespace() -> None:
 
 
 @pytest.mark.asyncio
+async def test_wire_update_task_call_ids_keep_step_rows_and_subagent_cards_in_sync() -> None:
+    adapter = TextualUIAdapter(
+        mount_message=lambda _w: None,
+        update_status=lambda _s: None,
+    )
+    card = CognitionStepMessage("XQZ-01", "Analyze architecture", id="stp-wire-task-sync")
+    adapter._current_step_messages["XQZ-01"] = card
+    router = StepTaskRouter()
+    router.on_step_started("XQZ-01")
+
+    first = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "XQZ_01:s:call_aaa111",
+            "name": "task",
+            "args": {
+                "subagent_type": "explorer",
+                "description": "Analyze repo structure",
+            },
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+    second = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "XQZ_01:s:call_bbb222",
+            "name": "task",
+            "args": {
+                "subagent_type": "explorer",
+                "description": "Analyze package boundaries",
+            },
+        },
+        ns_key=("execute:abc",),
+        pending_tool_calls_lc={},
+    )
+
+    assert first is True
+    assert second is True
+    assert len(card._iter_task_delegation_rows()) == 2
+    assert "XQZ-01:t0" in adapter._subagent_cards_by_key
+    assert "XQZ-01:t1" in adapter._subagent_cards_by_key
+
+
+@pytest.mark.asyncio
 async def test_wire_update_registers_subgraph_tool_with_placeholder_args() -> None:
     """Subgraph placeholder args must still create a step-card row (tool name only)."""
     from soothe_cli.tui.tool_display import format_step_tool_activity_command

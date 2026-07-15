@@ -290,6 +290,8 @@ def build_dependent_execution_hints(
         "- Execute the step described in EXECUTION TASK above",
         "- Use the suggested approach when provided",
         "- Produce output matching the expected output specification",
+        "- Prefer one broad native search (grep/glob) then targeted reads; avoid repeated equivalent scans",
+        "- Reuse prior search results in this step; switch to edit/apply once evidence is sufficient",
     ]
     if has_predecessor_evidence:
         instruction_lines.insert(

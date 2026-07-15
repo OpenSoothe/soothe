@@ -79,6 +79,7 @@ class _StreamCollectChunk:
     outcomes: tuple[dict[str, Any], ...] = ()
     has_error: bool = False
     subgraph_tool_count: int = 0
+    execution_metrics: dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def wire_event(cls, event: StreamEvent) -> _StreamCollectChunk:
@@ -96,6 +97,7 @@ class _StreamCollectChunk:
         outcomes: list[dict[str, Any]],
         has_error: bool,
         subgraph_tool_count: int,
+        execution_metrics: dict[str, int] | None = None,
     ) -> _StreamCollectChunk:
         """Terminal aggregate after the act stream completes."""
         return cls(
@@ -106,6 +108,7 @@ class _StreamCollectChunk:
             outcomes=tuple(outcomes),
             has_error=has_error,
             subgraph_tool_count=subgraph_tool_count,
+            execution_metrics=dict(execution_metrics or {}),
         )
 
 
