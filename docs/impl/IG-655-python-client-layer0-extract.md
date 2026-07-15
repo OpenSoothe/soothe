@@ -97,12 +97,13 @@ Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
 | `SessionStore` Protocol | ✓ |
 | Layer 0 `loop_*` RPCs + helpers | ✓ |
 | `DaemonSession` + `iter_turn_chunks` (dual-socket, post-idle drain) | ✓ |
-| `ConnectionPool` / `TurnRunner` / `EventClassifier` / SSE | deferred |
-| `ReattachAndProbe` / `Disconnected` | deferred |
+| `EventClassifier` / `extract_thinking_step` / `SSEBroadcaster` | ✓ |
+| `ReattachAndProbe` / `Disconnected` | ✓ |
+| `ConnectionPool` / `TurnRunner` product wiring | deferred |
 
 - [x] `soothe_client.appkit` package exists with unit tests
 - [x] CLI turn pipeline + `_unwrap_next` duplicates removed (shims / imports)
 - [x] CLI `TuiDaemonSession` wraps `DaemonSession`
 - [x] `./scripts/verify_finally.sh` green
 
-**Status**: Phase D production slice complete (2026-07-16) — DaemonSession + loop RPCs; Pool/Classifier/TurnRunner deferred
+**Status**: Phase D production slice + reconnect/classifier/SSE (2026-07-16) — Pool/TurnRunner deferred
