@@ -85,28 +85,17 @@ embedding_profile:
     embedding_dims: 1536
 
 # ============================================================
-# AGENT (team concurrency overrides only)
+# AGENT (develop-specific overrides)
 # ============================================================
 agent:
-  agent_instructions_max_chars: 8000
   runtime:
-    lazy_core_agent: true  # pair with daemon thread_pool.warmup_core_agent for fast TUI
-    general_purpose_subagent: false
-    recursion_limit: 99
     role_routing:
       enabled: true
-      orchestration_model_role: fast
-      generation_model_role: default
-      max_orchestration_hops: 1
   autopilot:
     enabled: true
     max_parallel_goals: 6
     max_loops: 8
-    goal_deadline_seconds: 1209600  # 14d wall-clock budget per dispatched goal
-    monitor_model_role: think
-    consensus_model_role: think
   loop:
-    max_plan_steps_per_wave: 10
     concurrency:
       max_parallel_goals: 8
       max_parallel_steps: 8
@@ -114,51 +103,8 @@ agent:
       max_parallel_tools: 64
       global_max_llm_calls: 16
       step_parallelism: max
-      checkpoint:
-        flush_interval: 5.0
-        close_timeout_seconds: 30
-        durable_flush_timeout: 10
-    max_tool_calls_per_step: 999
-    dispatch_timeout_seconds: 0
-    execute_action_retry_max: 1
-    execute_min_answer_chars: 20
-    execute_deliverable_assess: auto
-    step_completion_report_max_words: 50
     max_subagent_tasks_per_wave: 8
     plan_assess_model_role: fast
-    plan_generate_model_role: think
-    plan_gap_analysis_enabled: true
-    rules:
-      completion:
-        dag_dependency_threshold: 3
-        low_success_rate_threshold: 0.6
-        simple_ledger_direct_max_steps: 1
-        ledger_direct_max_tool_calls: 50
-      scenario:
-        skip_llm_when_single_step: true
-        skip_llm_when_all_failed: true
-        high_step_count_threshold: 4
-        low_evidence_volume_threshold: 2000
-      plan_safety:
-        banned_step_patterns:
-          - "^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|finish up|complete process|final step|last step|the end)$"
-        simple_evidence_min_chars: 200
-    plan_prompt_ledger:
-      plan_ledger_max_messages: 40
-      plan_ledger_max_total_chars: 0
-      plan_ledger_max_message_chars: 0
-    plan_assess_prompt:
-      ledger_max_messages: 24
-      execute_ai_max_chars: 400
-      keep_head_tail_execute_ai: true
-      omit_prior_progress_hint: true
-      include_plan_coverage: true
-    execute_prompt_ledger:
-      cross_goal_completion_tail: 3
-      predecessor_max_messages: 96
-      execute_ai_ledger_max_tokens: 65536
-    llm_rate_limit:
-      rate_limit_retry_timeout_seconds: 120
 
 # ============================================================
 # PERSISTENCE
@@ -166,13 +112,8 @@ agent:
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
-  postgres_pool_min_size: 4
-  checkpoints_pool_size: 32
-  metadata_pool_size: 16
-  vectors_pool_size: 16
   postgres_pool_max_idle_seconds: 90
   postgres_pool_max_lifetime_seconds: 900
-  postgres_pool_acquire_timeout_seconds: 45
 
 security:
   allow_paths_outside_workspace: true
@@ -192,17 +133,6 @@ observability:
       - soothe
 
 # ============================================================
-# CRON (RFC-229 — natural language scheduled jobs)
-# ============================================================
-cron:
-  max_jobs: 100
-  poll_interval: 60
-  extraction_model: fast
-  extraction_timeout: 30
-  default_priority: 50
-  timezone: local
-
-# ============================================================
 # VECTOR STORES (pgvector; DSN auto-resolved from postgres_base_dsn)
 # ============================================================
 vector_stores:
@@ -213,93 +143,13 @@ vector_store_router:
   default: pgvector_dev:soothe_default
 
 # ============================================================
-# PROGRESSIVE SKILLS (RFC-105 / IG-543)
-# ============================================================
-progressive_skills:
-  budget_pct: 0.01
-  max_listing_chars_per_entry: 250
-  min_listing_chars_per_entry: 20
-  core_skills: null
-  search_skills_enabled: true
-  semantic_search_enabled: true
-  semantic_search_min_score: 0.0
-  intent_prefetch_enabled: true
-  core_intent_auto_invoke_enabled: true
-  intent_prefetch_top_k: 2
-  intent_prefetch_min_query_chars: 4
-
-# Keep explicit defaults for built-in subagent routing behavior.
-subagents:
-  planner:
-    enabled: true
-    model_role: think
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
-  explorer:
-    enabled: true
-    model_role: fast
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
-  deep_research:
-    enabled: true
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
-  academic_research:
-    enabled: true
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
-  browser_use:
-    enabled: true
-    model_role: default
-    transport: local
-    url: null
-    config: {}
-    runtime_dir: ''
-
-# ============================================================
 # TOOLS (execution background logs + web search)
 # ============================================================
 tools:
-  execution:
-    enabled: true
-    background_log_dir: null
-    background_log_retention_days: 7
   wizsearch:
-    enabled: true
     # Prefer free/local engines; omit tavily (needs TAVILY_API_KEY).
     default_engines:
       - duckduckgo
       - bing
-    max_results_per_engine: 10
-    timeout: 30
     # Local Clash/V2Ray HTTP proxy for duckduckgo/bing.
     proxy: http://127.0.0.1:7890
-
-# ============================================================
-# SKILLIFY (daemon-shared semantic skill search)
-# ============================================================
-skillify:
-  enabled: false
-  model_role: embedding
-  warehouse_paths: []
-  index_collection: soothe_skillify
-  index_interval_seconds: 300
-  retrieval_top_k: 10
-
-# ============================================================
-# MCP (RFC-412 — progressive disclosure; opt-in builtins)
-# ============================================================
-mcp_servers: []
-mcp_builtins: []
-progressive_mcp:
-  budget_pct: 0.01
-  max_listing_chars_per_entry: 250
-  min_listing_chars_per_entry: 20

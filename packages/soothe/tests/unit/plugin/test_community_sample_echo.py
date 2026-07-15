@@ -56,7 +56,7 @@ def _minimal_config_sample_echo_only() -> SootheConfig:
             enabled=False,
             model=entry.model,
             transport=entry.transport,
-            url=entry.url,
+            endpoint=entry.endpoint,
             config=dict(entry.config),
             runtime_dir=entry.runtime_dir,
         )

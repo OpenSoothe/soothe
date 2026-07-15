@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from importlib.metadata import PackageNotFoundError, version
 from typing import TYPE_CHECKING, Any
@@ -23,8 +24,7 @@ __all__ = [
     "SootheFilesystemMiddleware",
     "coerce_provider_safe_tool_message",
 ]
-
-_MIN_DEEPAGENTS_APPLY_DIFF = "0.7.20"
+logger = logging.getLogger(__name__)
 
 
 def __getattr__(name: str) -> Any:
@@ -32,7 +32,7 @@ def __getattr__(name: str) -> Any:
 
     Daemon startup imports `SootheFilesystemMiddleware` only. Requiring
     `ApplyDiffSchema` at import time crashed environments that still had
-    `soothe-deepagents<0.7.20` installed even when the class was unused.
+    older soothe-deepagents installed even when the class was unused.
     """
     if name == "ApplyDiffSchema":
         try:
@@ -54,10 +54,10 @@ def _installed_deepagents_version() -> str:
 
 def _apply_diff_requirement_message() -> str:
     return (
-        "Soothe filesystem tools require soothe-deepagents>="
-        f"{_MIN_DEEPAGENTS_APPLY_DIFF} (ApplyDiffSchema / apply_diff). "
+        "Soothe filesystem tools require soothe-deepagents with "
+        "ApplyDiffSchema / apply_diff support. "
         f"Installed soothe-deepagents version: {_installed_deepagents_version()}. "
-        f"Upgrade with: pip install -U 'soothe-deepagents>={_MIN_DEEPAGENTS_APPLY_DIFF}'"
+        "Upgrade with: pip install -U soothe-deepagents"
     )
 
 
@@ -72,6 +72,9 @@ def _ensure_upstream_apply_diff_support() -> None:
     if not hasattr(da_filesystem, "ApplyDiffSchema") or not hasattr(
         FilesystemMiddleware, "_create_apply_diff_tool"
     ):
+        logger.warning(
+            "Missing deepagents apply_diff support. %s", _apply_diff_requirement_message()
+        )
         raise ImportError(f"{_apply_diff_requirement_message()} (module={filesystem_mod!r})")
 
 

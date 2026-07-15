@@ -199,7 +199,17 @@ class VectorStoreRouter(BaseModel):
 
 
 class SubagentConfig(BaseModel):
-    """Configuration for a single subagent."""
+    """Configuration for a single subagent.
+
+    Args:
+        enabled: Whether this subagent is enabled.
+        model: Optional explicit ``provider:model`` override.
+        model_role: Optional router role for model selection.
+        transport: Subagent transport mode.
+        endpoint: Remote endpoint URL when using remote transports.
+        config: Subagent-specific nested configuration.
+        runtime_dir: Runtime directory for subagent artifacts.
+    """
 
     enabled: bool = True
     model: str | None = Field(
@@ -218,10 +228,28 @@ class SubagentConfig(BaseModel):
         ),
     )
     transport: Literal["local", "acp", "a2a", "langgraph"] = "local"
-    url: str | None = None
+    endpoint: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
     runtime_dir: str = ""
     """Runtime directory for subagent. Defaults to SOOTHE_HOME/agents/<name>/."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_legacy_url_field(cls, data: Any) -> Any:
+        """Accept legacy ``url`` input and map it to ``endpoint``."""
+        if isinstance(data, dict) and "endpoint" not in data and "url" in data:
+            data = dict(data)
+            data["endpoint"] = data.get("url")
+        return data
+
+    @property
+    def url(self) -> str | None:
+        """Backward-compatible alias for ``endpoint``."""
+        return self.endpoint
+
+    @url.setter
+    def url(self, value: str | None) -> None:
+        self.endpoint = value
 
 
 class PluginConfig(BaseModel):

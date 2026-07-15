@@ -78,4 +78,3 @@ class ExplorerPlugin:
             "thoroughness": getattr(context, "thoroughness", "medium"),
         }
         return create_explorer_subagent(model, config, context_dict)
-

@@ -65,7 +65,7 @@ class TestCoerceProviderSafeToolMessage:
 
 
 class TestApplyDiffUpstreamContract:
-    """Regression: ApplyDiffSchema must exist on soothe-deepagents>=0.7.20."""
+    """Regression: ApplyDiffSchema must exist on soothe-deepagents."""
 
     def test_apply_diff_schema_importable_from_soothe_deepagents(self) -> None:
         from soothe_deepagents.middleware import ApplyDiffSchema as PackageApplyDiffSchema
@@ -108,7 +108,7 @@ class TestApplyDiffUpstreamContract:
         )
         assert match is not None, "soothe-deepagents dependency missing from pyproject.toml"
         spec = match.group("spec")
-        assert ">=0.7.20" in spec, f"expected >=0.7.20 floor for apply_diff, got {spec!r}"
+        assert ">=0.7.21" in spec, f"expected >=0.7.21 floor for apply_diff, got {spec!r}"
 
 
 class TestSootheFilesystemMiddlewareSchemas:
@@ -135,7 +135,7 @@ class TestSootheFilesystemMiddlewareSchemas:
         from soothe.middleware import filesystem as fs_mod
 
         monkeypatch.delattr(da_filesystem, "ApplyDiffSchema")
-        with pytest.raises(ImportError, match="soothe-deepagents>=0.7.20"):
+        with pytest.raises(ImportError, match="Upgrade with: pip install -U soothe-deepagents"):
             fs_mod._ensure_upstream_apply_diff_support()
 
 

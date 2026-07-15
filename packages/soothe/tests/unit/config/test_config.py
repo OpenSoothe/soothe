@@ -106,8 +106,23 @@ class TestSootheConfig:
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
         assert cfg.subagents["planner"].model_role == "think"
         assert cfg.subagents["explorer"].model_role == "fast"
+        assert cfg.subagents["planner"].endpoint is None
+        assert cfg.subagents["explorer"].config.get("recursion_limit") == 999
         assert cfg.subagents["browser_use"].enabled is True
         assert cfg.subagents["browser_use"].model_role == "default"
+
+    def test_subagent_endpoint_accepts_legacy_url_key(self) -> None:
+        cfg = SootheConfig(
+            subagents={
+                "custom_remote": {
+                    "enabled": True,
+                    "transport": "acp",
+                    "url": "https://example.invalid/subagent",
+                }
+            }
+        )
+        assert cfg.subagents["custom_remote"].endpoint == "https://example.invalid/subagent"
+        assert cfg.subagents["custom_remote"].url == "https://example.invalid/subagent"
 
     def test_default_skillify_config(self) -> None:
         cfg = SootheConfig()

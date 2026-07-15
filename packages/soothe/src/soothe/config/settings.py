@@ -490,7 +490,10 @@ class SootheConfig(BaseSettings):
         # browser_use ships in core dependencies.
         builtin_subagents = {
             "planner": SubagentConfig(model_role="think"),
-            "explorer": SubagentConfig(model_role="fast"),
+            "explorer": SubagentConfig(
+                model_role="fast",
+                config={"recursion_limit": 999},
+            ),
             "deep_research": SubagentConfig(),
             "academic_research": SubagentConfig(),
             "browser_use": SubagentConfig(enabled=True, model_role="default"),

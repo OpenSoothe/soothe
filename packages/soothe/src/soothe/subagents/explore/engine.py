@@ -73,4 +73,4 @@ def build_explore_engine(
         state_schema=ExploreAgentState,
         name="explorer",
     )
-    return graph
+    return graph.with_config(recursion_limit=int(config.recursion_limit))

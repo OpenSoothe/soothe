@@ -392,33 +392,34 @@ subagents:
     enabled: true
     model_role: think
     transport: local
-    url: null
+    endpoint: null
     config: {}
     runtime_dir: ''
   explorer:
     enabled: true
     model_role: fast
     transport: local
-    url: null
-    config: {}
+    endpoint: null
+    config:
+      recursion_limit: 999
     runtime_dir: ''
   deep_research:
     enabled: true
     transport: local
-    url: null
+    endpoint: null
     config: {}
     runtime_dir: ''
   academic_research:
     enabled: true
     transport: local
-    url: null
+    endpoint: null
     config: {}
     runtime_dir: ''
   browser_use:
     enabled: true
     model_role: default
     transport: local
-    url: null
+    endpoint: null
     config: {}
     runtime_dir: ''
 

@@ -159,6 +159,7 @@ class ExploreSubagentConfig(BaseModel):
 
     Args:
         thoroughness: Default thoroughness level.
+        recursion_limit: LangGraph recursion limit for explorer graph execution.
         max_iterations: Per-level iteration caps.
         max_read_lines: Max lines per read_file call.
         max_matches_returned: Max matches in final result.
@@ -172,6 +173,11 @@ class ExploreSubagentConfig(BaseModel):
     """
 
     thoroughness: str = "medium"
+    recursion_limit: int = Field(
+        default=999,
+        ge=1,
+        description="LangGraph recursion limit for explorer subagent graph execution.",
+    )
     max_iterations: dict[str, int] = Field(
         default_factory=lambda: {
             "quick": 6,

@@ -11,12 +11,13 @@ Run:
 
 from __future__ import annotations
 
-from examples._config_helper import load_example_config
 from soothe.foundation.sloop.state.schemas import (
     filter_task_catalog_subagent_names,
     is_intake_only_wire_subagent,
     resolve_wire_subagent,
 )
+
+from examples._config_helper import load_example_config
 
 
 def main() -> None:
