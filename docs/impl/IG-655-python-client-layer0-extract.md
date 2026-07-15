@@ -4,7 +4,7 @@
 **Title**: Extract WebSocket client from soothe-sdk into `client/python`  
 **Created**: 2026-07-15  
 **Related**: RFC-629 (Client Appkit), RFC-450 (Protocol-1), RFC-610 (SDK structure)  
-**Status**: Phase D complete (2026-07-16)
+**Status**: Phase D + IG-651 lifecycle parity (2026-07-16)
 
 ---
 
@@ -100,10 +100,11 @@ Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
 | `EventClassifier` / `extract_thinking_step` / `SSEBroadcaster` | ✓ |
 | `ReattachAndProbe` / `Disconnected` | ✓ |
 | `ConnectionPool` / `TurnRunner` | ✓ |
+| Idle / soft-complete / attachments (IG-651 parity) | ✓ |
 
 - [x] `soothe_client.appkit` package exists with unit tests
 - [x] CLI turn pipeline + `_unwrap_next` duplicates removed (shims / imports)
 - [x] CLI `TuiDaemonSession` wraps `DaemonSession`
 - [x] Python client unit tests green (`client/python`)
 
-**Status**: Phase D complete (2026-07-16) — full Layer 1 appkit vocabulary with Go/TS parity plus CLI-grade `DaemonSession`
+**Status**: Phase D + IG-651 lifecycle parity for Python (2026-07-16)
