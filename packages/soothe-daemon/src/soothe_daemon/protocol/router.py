@@ -326,46 +326,6 @@ class MessageRouter:
             envelope["id"] = subscription_id
         await d._send_client_message(client_id, envelope)
 
-    async def _send_complete(
-        self,
-        client_id: Any,
-        subscription_id: str | None,
-        *,
-        proto: str = "1",
-        reason: str | None = None,
-    ) -> None:
-        """Send a protocol-1 ``complete`` message to terminate a subscription (RFC-450 §9.4).
-
-        Subscriptions MUST end with an explicit ``complete`` message so clients
-        can distinguish "stream paused" from "stream ended". Call this when:
-        - A goal completes (normal termination)
-        - A goal is cancelled (user cancellation)
-        - Reattachment history replay finishes
-        - An error terminates the stream (sent after error message)
-
-        Args:
-            client_id: Client connection identifier.
-            subscription_id: The subscription correlation id from the original
-                ``subscribe`` request.
-            proto: Protocol version string (default ``"1"``).
-            reason: Optional reason string for logging (not sent on wire).
-        """
-        d = self._daemon
-        envelope: dict[str, Any] = {
-            "proto": proto,
-            "type": "complete",
-        }
-        if subscription_id is not None:
-            envelope["id"] = subscription_id
-        await d._send_client_message(client_id, envelope)
-        log_reason = reason or "stream_complete"
-        logger.debug(
-            "[MsgRouter] Sent complete to client %s (subscription=%s, reason=%s)",
-            client_id,
-            subscription_id,
-            log_reason,
-        )
-
     async def _client_subscribed_loop_id(self, client_id: Any) -> str | None:
         """Return the ``loop_id`` this client receives loop-scoped events for (IG-408).
 
@@ -1850,7 +1810,7 @@ class MessageRouter:
             loop_id,
             stream_delivery=stream_delivery,
             wire_tier=wire_tier,
-            subscription_id=request_id,  # RFC-450 §9.4: track for complete messages
+            subscription_id=request_id,  # correlate protocol-1 ``next`` envelopes
         )
 
         # Per RFC-450 §9.4, subscription confirmation is a ``next`` event

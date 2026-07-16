@@ -71,7 +71,6 @@ def _normalize_client_trace(
     *,
     loop_id: str,
     drained: bool,
-    complete_reason: str | None,
 ) -> list[dict[str, Any]]:
     """Reduce loop-scoped client frames to kind/type/scope for golden comparison."""
 
@@ -114,8 +113,6 @@ def _normalize_client_trace(
         _append_event(trace, msg)
     if drained:
         trace.append({"kind": "lifecycle", "type": "delivery_drained"})
-    if complete_reason is not None:
-        trace.append({"kind": "lifecycle", "type": "complete", "reason": complete_reason})
     trace.extend(idle_entries)
     return trace
 
@@ -124,32 +121,25 @@ def _daemon_with_lifecycle_tracking(
     *,
     runner: Any,
     broadcasts: list[dict[str, Any]],
-) -> tuple[SimpleNamespace, AsyncMock, AsyncMock, list[str]]:
+) -> tuple[SimpleNamespace, AsyncMock, list[str]]:
     lifecycle_order: list[str] = []
 
     async def _drain(*_args: Any, **_kwargs: Any) -> bool:
         lifecycle_order.append("drain")
         return True
 
-    async def _complete(*_args: Any, **_kwargs: Any) -> None:
-        lifecycle_order.append("complete")
-
     drain_mock = AsyncMock(side_effect=_drain)
-    complete_mock = AsyncMock(side_effect=_complete)
     daemon = _daemon_factory(runner=runner, broadcasts=broadcasts)
     daemon._session_manager.await_loop_delivery_drained = drain_mock
-    daemon._session_manager.get_clients_for_loop = AsyncMock(return_value=["client-1"])
-    daemon._session_manager.get_loop_subscription_id = AsyncMock(return_value="sub-1")
-    daemon._message_router._send_complete = complete_mock
-    return daemon, drain_mock, complete_mock, lifecycle_order
+    return daemon, drain_mock, lifecycle_order
 
 
 @pytest.mark.asyncio
 async def test_completed_turn_wire_trace_matches_golden() -> None:
-    """Terminal → stream.end scopes → turn stream.end → drain → complete → idle."""
+    """Terminal → stream.end scopes → turn stream.end → drain → idle."""
     broadcasts: list[dict[str, Any]] = []
     runner = _CompletedTurnRunner()
-    daemon, drain_mock, complete_mock, _lifecycle_order = _daemon_with_lifecycle_tracking(
+    daemon, drain_mock, _lifecycle_order = _daemon_with_lifecycle_tracking(
         runner=runner,
         broadcasts=broadcasts,
     )
@@ -160,25 +150,21 @@ async def test_completed_turn_wire_trace_matches_golden() -> None:
     assert task is not None
     await task
 
-    complete_reason = None
-    if complete_mock.call_count:
-        complete_reason = complete_mock.call_args.kwargs.get("reason")
     trace = _normalize_client_trace(
         broadcasts,
         loop_id="loop-turn",
         drained=drain_mock.await_count == 1,
-        complete_reason=complete_reason,
     )
     expected = json.loads(_GOLDEN_ENGINE.read_text(encoding="utf-8"))
     assert trace == expected
 
 
 @pytest.mark.asyncio
-async def test_turn_stream_end_precedes_drain_complete_and_idle() -> None:
-    """IG-556: turn-scoped stream.end must be broadcast before subscription teardown."""
+async def test_turn_stream_end_precedes_drain_and_idle() -> None:
+    """Turn-scoped stream.end must be broadcast before idle."""
     broadcasts: list[dict[str, Any]] = []
     runner = _CompletedTurnRunner()
-    daemon, _drain_mock, _complete_mock, lifecycle_order = _daemon_with_lifecycle_tracking(
+    daemon, _drain_mock, lifecycle_order = _daemon_with_lifecycle_tracking(
         runner=runner,
         broadcasts=broadcasts,
     )
@@ -204,7 +190,7 @@ async def test_turn_stream_end_precedes_drain_complete_and_idle() -> None:
         if msg.get("type") == "status" and msg.get("state") == "idle"
     )
     assert turn_end_ix < idle_ix
-    assert lifecycle_order == ["drain", "complete"]
+    assert lifecycle_order == ["drain"]
 
 
 @pytest.mark.asyncio
@@ -214,7 +200,7 @@ async def test_cancel_emits_turn_stream_end_with_reason_before_idle() -> None:
 
     broadcasts: list[dict[str, Any]] = []
     runner = slow_cancel_runner(unwind_delay=0.04)
-    daemon, _drain_mock, complete_mock, _lifecycle_order = _daemon_with_lifecycle_tracking(
+    daemon, _drain_mock, _lifecycle_order = _daemon_with_lifecycle_tracking(
         runner=runner,
         broadcasts=broadcasts,
     )
@@ -249,5 +235,62 @@ async def test_cancel_emits_turn_stream_end_with_reason_before_idle() -> None:
         if msg.get("type") == "status" and msg.get("state") == "idle"
     )
     assert turn_ix < idle_ix
-    assert complete_mock.call_count == 1
-    assert complete_mock.call_args.kwargs.get("reason") == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_turn_frames_include_turn_id_and_seq() -> None:
+    """Running / stream.end / idle carry turn_id and monotonic seq."""
+    broadcasts: list[dict[str, Any]] = []
+    runner = _CompletedTurnRunner()
+    daemon, _drain_mock, _lifecycle_order = _daemon_with_lifecycle_tracking(
+        runner=runner,
+        broadcasts=broadcasts,
+    )
+    engine = QueryEngine(daemon)
+
+    await engine.run_query("stamp turn", loop_id="loop-stamp")
+    task = daemon._current_query_task
+    assert task is not None
+    await task
+
+    loop_msgs = _loop_broadcasts(broadcasts, "loop-stamp")
+    running = next(
+        m for m in loop_msgs if m.get("type") == "status" and m.get("state") == "running"
+    )
+    idle = next(m for m in loop_msgs if m.get("type") == "status" and m.get("state") == "idle")
+    turn_end = next(
+        m
+        for m in loop_msgs
+        if m.get("type") == "event"
+        and m.get("mode") == "custom"
+        and (m.get("data") or {}).get("type") == STREAM_END
+        and (m.get("data") or {}).get("scope") == "turn"
+    )
+    expected_tid = "loop-stamp:1"
+    assert running.get("turn_id") == expected_tid
+    assert idle.get("turn_id") == expected_tid
+    assert turn_end.get("turn_id") == expected_tid
+    assert (turn_end.get("data") or {}).get("turn_id") == expected_tid
+    assert isinstance(running.get("seq"), int) and running["seq"] >= 1
+    assert isinstance(idle.get("seq"), int) and idle["seq"] > running["seq"]
+    assert isinstance(turn_end.get("seq"), int)
+    assert running["seq"] < turn_end["seq"] < idle["seq"]
+
+
+@pytest.mark.asyncio
+async def test_await_loop_ready_waits_while_finalizing() -> None:
+    """Next admit waits until prior finalize clears."""
+    daemon = _daemon_factory(runner=_CompletedTurnRunner(), broadcasts=[])
+    engine = QueryEngine(daemon)
+    engine._loops_finalizing.add("loop-fin")
+
+    async def _clear() -> None:
+        await asyncio.sleep(0.05)
+        engine._loops_finalizing.discard("loop-fin")
+
+    clearer = asyncio.create_task(_clear())
+    started = asyncio.get_running_loop().time()
+    await engine.await_loop_ready_for_turn("loop-fin")
+    elapsed = asyncio.get_running_loop().time() - started
+    await clearer
+    assert elapsed >= 0.04

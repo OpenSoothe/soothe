@@ -200,11 +200,8 @@ async def test_daemon_run_query_passes_autonomous_kwargs() -> None:
         subscribe_loop=lambda *_args, **_kwargs: True,
         get_stream_delivery=lambda *_args, **_kwargs: "batch",
         await_loop_delivery_drained=AsyncMock(return_value=True),
-        get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
-        get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
     )
     daemon._message_router = SimpleNamespace(  # type: ignore[attr-defined]
-        _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
     )
     daemon._query_state_lock = asyncio.Lock()  # type: ignore[attr-defined]
     daemon._persistence_manager = SimpleNamespace(get_loop_metadata=AsyncMock(return_value=None))  # type: ignore[attr-defined]
@@ -441,11 +438,8 @@ async def test_daemon_logs_thread_to_file(tmp_path: Any) -> None:
         subscribe_loop=lambda *_args, **_kwargs: True,
         get_stream_delivery=lambda *_args, **_kwargs: "batch",
         await_loop_delivery_drained=AsyncMock(return_value=True),
-        get_clients_for_loop=AsyncMock(return_value=[]),  # RFC-450 §9.4
-        get_loop_subscription_id=AsyncMock(return_value=None),  # RFC-450 §9.4
     )
     daemon._message_router = SimpleNamespace(  # type: ignore[attr-defined]
-        _send_complete=lambda *_args, **_kwargs: None,  # RFC-450 §9.4
     )
     daemon._thread_registry = _FakeThreadRegistry()  # type: ignore[attr-defined]
 

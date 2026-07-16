@@ -215,7 +215,7 @@ class ClientSession:
         wire_tier: Client wire filter tier (``full`` or ``progress``, IG-435)
         detach_requested: Whether client explicitly requested detach (RFC-0013)
         config: Optional SootheConfig for effective streaming config (RFC-614)
-        loop_subscription_ids: Maps loop_id → subscription correlation id (RFC-450 §9.4)
+        loop_subscription_ids: Maps loop_id → subscription correlation id for ``next`` envelopes
     """
 
     client_id: str
@@ -233,7 +233,7 @@ class ClientSession:
     autopilot_subscribed: bool = False  # RFC-228: receives autopilot__* worker events
     config: SootheConfig | None = None  # RFC-614: daemon config reference
     stream_delivery: StreamDeliveryMode = "adaptive"  # IG-534 §3.2: per-client preference
-    # RFC-450 §9.4: subscription_id tracking for complete messages
+    # Subscription correlation ids for protocol-1 ``next`` envelopes (RFC-450).
     loop_subscription_ids: dict[str, str] = field(default_factory=dict)  # loop_id → subscription_id
 
     def get_effective_streaming_config(
@@ -359,7 +359,7 @@ class ClientSessionManager:
         *,
         stream_delivery: StreamDeliveryMode | None = None,
         wire_tier: str = "full",
-        subscription_id: str | None = None,  # RFC-450 §9.4: correlation id for complete
+        subscription_id: str | None = None,  # correlation id for protocol-1 ``next`` envelopes
     ) -> bool:
         """Subscribe client to loop event topic; replaces prior loop subscriptions.
 
@@ -432,7 +432,7 @@ class ClientSessionManager:
         topic = loop_event_topic(loop_id)
         await self._event_bus.subscribe(topic, session.event_queue)
         session.subscriptions.add(loop_id)
-        # RFC-450 §9.4: store subscription_id for sending complete messages
+        # Store subscription_id for correlating ``next`` envelopes.
         if subscription_id is not None:
             session.loop_subscription_ids[loop_id] = subscription_id
 
@@ -466,7 +466,7 @@ class ClientSessionManager:
         topic = loop_event_topic(loop_id)
         await self._event_bus.unsubscribe(topic, session.event_queue)
         session.subscriptions.discard(loop_id)
-        # RFC-450 §9.4: remove subscription_id tracking
+        # Drop subscription_id tracking for this loop.
         session.loop_subscription_ids.pop(loop_id, None)
 
         # Set logging context for full IDs
@@ -474,41 +474,6 @@ class ClientSessionManager:
         set_loop_id(loop_id)
         logger.info("[Session] Client %s ← loop %s", client_id, loop_id)
         return True
-
-    async def get_loop_subscription_id(self, client_id: str, loop_id: str) -> str | None:
-        """Get the subscription correlation id for a loop (RFC-450 §9.4).
-
-        Args:
-            client_id: Client identifier.
-            loop_id: Loop identifier.
-
-        Returns:
-            The subscription_id if the client has an active subscription,
-            None otherwise.
-        """
-        async with self._lock:
-            session = self._sessions.get(client_id)
-        if session is None:
-            return None
-        return session.loop_subscription_ids.get(loop_id)
-
-    async def get_clients_for_loop(self, loop_id: str) -> list[str]:
-        """Get all client_ids subscribed to a specific loop (RFC-450 §9.4).
-
-        Used to send complete messages to all subscribers when a stream ends.
-
-        Args:
-            loop_id: Loop identifier.
-
-        Returns:
-            List of client_ids that have an active subscription to this loop.
-        """
-        async with self._lock:
-            clients: list[str] = []
-            for client_id, session in self._sessions.items():
-                if loop_id in session.subscriptions:
-                    clients.append(client_id)
-            return clients
 
     async def remove_session(self, client_id: str) -> None:
         """Remove client session and cleanup."""

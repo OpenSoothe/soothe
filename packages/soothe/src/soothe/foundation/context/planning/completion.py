@@ -93,7 +93,9 @@ def _ledger_direct_eligible(
     ):
         return False
 
-    if last_wave_tool_call_count > rules.ledger_direct_max_tool_calls:
+    if rules.ledger_direct_max_tool_calls > 0 and (
+        last_wave_tool_call_count > rules.ledger_direct_max_tool_calls
+    ):
         logger.info(
             "LedgerDirect: tool_calls=%d > max=%d → synthesize",
             last_wave_tool_call_count,

@@ -274,6 +274,13 @@ class QueryEngine:
         # Monotonic turn counter per loop; stale finally blocks must not emit
         # terminal frames or cancel a successor runner.
         self._loop_turn_generation: dict[str, int] = {}
+        # IG-659: monotonic outbound seq per loop for client stale-drop.
+        self._loop_event_seq: dict[str, int] = {}
+        # IG-659 phase 4: loops still emitting prior-turn terminals after
+        # admission release — next admit must wait.
+        self._loops_finalizing: set[str] = set()
+        # Optional override while a turn broadcasts (emitting generation).
+        self._broadcast_turn_generation: dict[str, int] = {}
         # Async cancel orchestrator for guaranteed cancellation
         self._cancel_orchestrator: AsyncCancelOrchestrator | None = None
         # Loop ids cancelled before their query task was registered. The early
@@ -349,9 +356,13 @@ class QueryEngine:
         # still hold per-loop query admission until stream-finally completes.
         # Queue workers can invoke run_query again before that finally runs; wait
         # here so the follow-up turn is deferred instead of being rejected LOOP_BUSY.
+        # IG-659 phase 4: also wait while prior turn is still emitting terminals.
         while True:
             async with self._daemon._query_state_lock:
-                if lid not in self._daemon._loops_with_active_query:
+                if (
+                    lid not in self._daemon._loops_with_active_query
+                    and lid not in self._loops_finalizing
+                ):
                     break
             await asyncio.sleep(0.01)
 
@@ -403,36 +414,88 @@ class QueryEngine:
 
         return tasks
 
-    @staticmethod
-    def _loop_scoped_client_message(loop_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        """Build a client-visible frame: always ``loop_id``, never CoreAgent ``thread_id``."""
+    def _next_loop_seq(self, loop_id: str) -> int:
+        """Allocate the next monotonic outbound seq for ``loop_id``."""
+        lid = str(loop_id or "").strip()
+        nxt = self._loop_event_seq.get(lid, 0) + 1
+        self._loop_event_seq[lid] = nxt
+        return nxt
+
+    def _resolve_broadcast_generation(
+        self, loop_id: str, turn_generation: int | None = None
+    ) -> int:
+        """Return generation to stamp on outbound frames for ``loop_id``."""
+        if turn_generation is not None and turn_generation > 0:
+            return turn_generation
+        ctx = self._broadcast_turn_generation.get(loop_id)
+        if ctx is not None and ctx > 0:
+            return ctx
+        return int(self._loop_turn_generation.get(loop_id, 0) or 0)
+
+    def _loop_scoped_client_message(
+        self,
+        loop_id: str,
+        payload: dict[str, Any],
+        *,
+        turn_generation: int | None = None,
+    ) -> dict[str, Any]:
+        """Build a client-visible frame: ``loop_id``, ``turn_id``, ``seq`` (IG-659)."""
+        from soothe_daemon.query.turn_boundary import format_turn_id
+
         out = dict(payload)
         out["loop_id"] = str(loop_id).strip()
         out.pop("thread_id", None)
+        gen = self._resolve_broadcast_generation(loop_id, turn_generation)
+        turn_id = format_turn_id(loop_id, gen) if gen > 0 else ""
+        if turn_id and "turn_id" not in out:
+            out["turn_id"] = turn_id
+        if "seq" not in out:
+            out["seq"] = self._next_loop_seq(loop_id)
+        # Mirror turn_id into custom terminal payloads for nested readers.
+        if turn_id and out.get("type") == "event" and out.get("mode") == "custom":
+            data = out.get("data")
+            if isinstance(data, dict) and "turn_id" not in data:
+                data = dict(data)
+                data["turn_id"] = turn_id
+                out["data"] = data
         return out
 
-    async def _broadcast_loop_message(self, loop_id: str, payload: dict[str, Any]) -> None:
+    async def _broadcast_loop_message(
+        self,
+        loop_id: str,
+        payload: dict[str, Any],
+        *,
+        turn_generation: int | None = None,
+    ) -> None:
         """Broadcast one loop-scoped frame with per-loop in-flight budget (IG-534 2.2)."""
         d = self._daemon
+        scoped = self._loop_scoped_client_message(loop_id, payload, turn_generation=turn_generation)
         budget = getattr(d, "_loop_broadcast_budget", None)
         if budget is not None:
             async with budget.slot(loop_id):
-                await d._broadcast(self._loop_scoped_client_message(loop_id, payload))
+                await d._broadcast(scoped)
             return
-        await d._broadcast(self._loop_scoped_client_message(loop_id, payload))
+        await d._broadcast(scoped)
 
     async def _emit_turn_stream_end(
         self,
         loop_id: str,
         *,
         reason: str | None = None,
+        turn_generation: int | None = None,
     ) -> None:
-        """Broadcast ``soothe.stream.end`` with ``scope=turn`` (IG-556)."""
+        """Broadcast ``soothe.stream.end`` with ``scope=turn`` (IG-556 / IG-659)."""
         from soothe_sdk.core.events import STREAM_END
+
+        from soothe_daemon.query.turn_boundary import format_turn_id
 
         data: dict[str, Any] = {"type": STREAM_END, "scope": "turn"}
         if reason:
             data["reason"] = reason
+        gen = self._resolve_broadcast_generation(loop_id, turn_generation)
+        turn_id = format_turn_id(loop_id, gen) if gen > 0 else ""
+        if turn_id:
+            data["turn_id"] = turn_id
         await self._broadcast_loop_message(
             loop_id,
             {
@@ -441,6 +504,7 @@ class QueryEngine:
                 "mode": "custom",
                 "data": data,
             },
+            turn_generation=turn_generation,
         )
 
     async def _admit_query(
@@ -460,6 +524,8 @@ class QueryEngine:
             if max_concurrent > 0 and len(d._active_threads) >= max_concurrent:
                 return QueryAdmission.DAEMON_BUSY, 0
             if effective_loop_id and effective_loop_id in d._loops_with_active_query:
+                return QueryAdmission.LOOP_BUSY, 0
+            if effective_loop_id and effective_loop_id in self._loops_finalizing:
                 return QueryAdmission.LOOP_BUSY, 0
             turn_generation = 0
             if effective_loop_id:
@@ -642,16 +708,13 @@ class QueryEngine:
             return
 
         if len(batch_events) == 1:
-            await self._broadcast_loop_message(
-                loop_id,
-                self._loop_scoped_client_message(loop_id, batch_events[0]),
-            )
+            await self._broadcast_loop_message(loop_id, batch_events[0])
             return
 
         scoped = [self._loop_scoped_client_message(loop_id, event) for event in batch_events]
         await self._broadcast_loop_message(
             loop_id,
-            {"type": "event_batch", "loop_id": loop_id, "events": scoped},
+            {"type": "event_batch", "events": scoped},
         )
 
     async def _broadcast_stream_tuple(
@@ -937,6 +1000,7 @@ class QueryEngine:
                 response_schema=response_schema,
                 response_schema_name=response_schema_name,
                 response_schema_strict=response_schema_strict,
+                turn_generation=turn_generation,
             )
             return
 
@@ -1026,6 +1090,7 @@ class QueryEngine:
 
             if effective_loop_id:
                 d._active_stream_loop_ids.add(effective_loop_id)  # Bug 4.3: set-based tracking
+                self._broadcast_turn_generation[effective_loop_id] = turn_generation
             # Stream model / router-profile overlays are attached inside the loop
             # worker from ``LoopRunRequest`` (``stream_turn_overrides``). Parent
             # process ContextVars do not cross pool/thread/ray workers.
@@ -1037,6 +1102,7 @@ class QueryEngine:
                 await self._emit_turn_stream_end(
                     effective_loop_id,
                     reason="cancelled" if turn_cancelled else None,
+                    turn_generation=turn_generation,
                 )
                 turn_stream_end_emitted = True
 
@@ -1050,22 +1116,22 @@ class QueryEngine:
                 )
                 if effective_loop_id:
                     d._active_stream_loop_ids.discard(effective_loop_id)
-                    subscribed_clients = await d._session_manager.get_clients_for_loop(
-                        effective_loop_id
-                    )
-                    router = d._message_router
-                    await self._emit_turn_stream_end(effective_loop_id, reason="cancelled")
-                    for cid in subscribed_clients:
-                        subscription_id = await d._session_manager.get_loop_subscription_id(
-                            cid, effective_loop_id
+                    self._loops_finalizing.add(effective_loop_id)
+                    try:
+                        await self._emit_turn_stream_end(
+                            effective_loop_id,
+                            reason="cancelled",
+                            turn_generation=turn_generation,
                         )
-                        await router._send_complete(
-                            cid, subscription_id, reason="cancelled_before_start"
+                        # Long-lived loop_events stays open; turn end is stream.end + idle.
+                        await self._broadcast_loop_message(
+                            effective_loop_id,
+                            {"type": "status", "state": "idle"},
+                            turn_generation=turn_generation,
                         )
-                    await self._broadcast_loop_message(
-                        effective_loop_id,
-                        {"type": "status", "state": "idle"},
-                    )
+                    finally:
+                        self._loops_finalizing.discard(effective_loop_id)
+                        self._broadcast_turn_generation.pop(effective_loop_id, None)
                 if client_id:
                     await d._session_manager.release_loop_ownership(client_id)
                 await self._release_query_admission(effective_loop_id)
@@ -1343,144 +1409,176 @@ class QueryEngine:
                 # identity-scoped since successors reuse the checkpoint thread_id.
                 stream_task = asyncio.current_task()
                 owns_turn = self._owns_turn(effective_loop_id, turn_generation)
-                await self._unregister_query_task(thread_id, stream_task)
-                if owns_turn:
-                    await self._release_query_admission(effective_loop_id)
-                    active = self._active_runners.pop(effective_loop_id or thread_id, None)
-                    if active is not None and active.turn_generation == turn_generation:
-                        loop_runner_cleanup = active.runner
+                # Mark finalizing before releasing admission so the next admit
+                # cannot slip in during drain/stream.end/idle (phase 4).
+                if owns_turn and effective_loop_id:
+                    self._loops_finalizing.add(effective_loop_id)
+                try:
+                    await self._unregister_query_task(thread_id, stream_task)
+                    if owns_turn:
+                        await self._release_query_admission(effective_loop_id)
+                        active = self._active_runners.pop(effective_loop_id or thread_id, None)
+                        if active is not None and active.turn_generation == turn_generation:
+                            loop_runner_cleanup = active.runner
+                        else:
+                            loop_runner_cleanup = None
+                            if active is not None and effective_loop_id:
+                                self._active_runners[effective_loop_id] = active
                     else:
                         loop_runner_cleanup = None
-                        if active is not None and effective_loop_id:
-                            self._active_runners[effective_loop_id] = active
-                else:
-                    loop_runner_cleanup = None
-                if loop_runner_cleanup is not None:
-                    try:
-                        await loop_runner_cleanup.cancel()
-                    except Exception:
-                        logger.debug(
-                            "QueryEngine: loop_runner.cancel during stream finally failed",
-                            exc_info=True,
-                        )
-                if owns_turn and effective_loop_id:
-                    d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
-
-                # IG-054: Moved post-query logic here since we don't await task
-                final_thread_id = d._runner.current_thread_id or ""
-                final_logger_handle: ThreadLogger | None = None
-                # Phase-tagged conversation rows (plan_direct, goal_completion,
-                # etc.) written by ``_log_message_event`` are the canonical
-                # record of the assistant's user-visible output. The legacy
-                # ``log_assistant_response("".join(full_response))`` concatenates
-                # plan_direct text + ToolMessage outputs + goal_completion
-                # fragments into a single malformed assistant card — surface it
-                # only when nothing phase-tagged was written (autopilot bundles,
-                # non-loop turns, etc. that bypass the per-phase emit paths).
-                write_legacy_assistant_row = (
-                    bool(full_response) and not phase_tagged_assistant_written[0]
-                )
-                if final_thread_id and final_thread_id != thread_id:
-                    final_logger = ThreadLogger(
-                        thread_id=final_thread_id,
-                        retention_days=d._config.observability.thread_logging_retention_days,
-                        max_size_mb=d._config.observability.thread_logging_max_size_mb,
-                    )
-                    final_logger.log_user_input(effective_text)
-                    if write_legacy_assistant_row:
-                        final_logger.log_assistant_response("".join(full_response))
-                    final_logger_handle = final_logger
-                elif write_legacy_assistant_row:
-                    thread_logger.log_assistant_response("".join(full_response))
-
-                # Flush ThreadLogger's write buffer. Records (especially the
-                # ``phase=goal_completion`` conversation row written by
-                # ``_log_message_event`` for the final assistant chunk, and
-                # the ``log_assistant_response`` write above) only flush on
-                # the NEXT write or after the 1-second interval elapses;
-                # once the loop ends no further writes arrive on this thread,
-                # so without an explicit flush the tail records stay stuck in
-                # memory and resume rendering loses the final answer.
-                try:
-                    thread_logger.flush()
-                except Exception:
-                    logger.debug("ThreadLogger flush failed for primary log", exc_info=True)
-                if final_logger_handle is not None:
-                    try:
-                        final_logger_handle.flush()
-                    except Exception:
-                        logger.debug("ThreadLogger flush failed for final_logger", exc_info=True)
-
-                if final_thread_id:
-                    await d._runner.touch_thread_activity_timestamp(final_thread_id)
-
-                if effective_loop_id and self._owns_turn(effective_loop_id, turn_generation):
-                    await _ensure_turn_stream_end()
-                    drain_cfg = self._get_output_streaming_config(d)
-                    await d._session_manager.await_loop_delivery_drained(
-                        effective_loop_id,
-                        batch_timeout_s=drain_cfg.get("streaming_interval_ms", 100) / 1000.0,
-                    )
-                    if turn_cancelled:
-                        await self._mark_active_context_goals_cancelled(
-                            effective_loop_id,
-                            reason="user_cancelled",
-                        )
-                    # RFC-631: freeze live card tail into a goal snapshot before idle.
-                    card_manager = getattr(d, "_card_manager", None)
-                    if card_manager is not None:
+                    if loop_runner_cleanup is not None:
                         try:
-                            # Cancelled turns should not infer a synthetic "completion"
-                            # summary from the live ledger.
-                            goal_completion_text = ""
-                            if not turn_cancelled:
-                                goal_completion_text = "".join(goal_completion_response).strip()
-                                if not goal_completion_text:
-                                    goal_completion_text = await _peek_goal_completion_from_ledger(
-                                        card_manager,
-                                        effective_loop_id,
-                                    )
-                            await card_manager.freeze_goal_display(
-                                effective_loop_id,
-                                goal_text=effective_text,
-                                goal_completion=goal_completion_text,
-                                status="cancelled" if turn_cancelled else "completed",
-                            )
+                            await loop_runner_cleanup.cancel()
                         except Exception:
-                            logger.warning(
-                                "Goal display snapshot freeze failed for loop %s",
-                                effective_loop_id[:16],
+                            logger.debug(
+                                "QueryEngine: loop_runner.cancel during stream finally failed",
                                 exc_info=True,
                             )
-                    # RFC-450 §9.4: Send complete message to terminate the subscription
-                    # stream. Clients subscribed via loop_subscribe expect an explicit
-                    # complete when the stream ends (goal finished, cancelled, etc.).
-                    # Get all clients subscribed to this loop and send complete to each.
-                    subscribed_clients = await d._session_manager.get_clients_for_loop(
-                        effective_loop_id
-                    )
-                    router = d._message_router
-                    for cid in subscribed_clients:
-                        subscription_id = await d._session_manager.get_loop_subscription_id(
-                            cid, effective_loop_id
-                        )
-                        await router._send_complete(
-                            cid,
-                            subscription_id,
-                            reason="cancelled" if turn_cancelled else "stream_end",
-                        )
-                    await self._broadcast_loop_message(
-                        effective_loop_id,
-                        {"type": "status", "state": "idle"},
-                    )
+                    if owns_turn and effective_loop_id:
+                        d._active_stream_loop_ids.discard(effective_loop_id)  # Bug 4.3
 
-                if client_id and self._owns_turn(effective_loop_id, turn_generation):
-                    await d._session_manager.release_loop_ownership(client_id)
-                # Only clear the shared pointer if a successor turn has not
-                # already claimed it (superseded turns must not null it out).
-                async with d._query_state_lock:
-                    if d._current_query_task is stream_task:
-                        d._current_query_task = None
+                    # IG-054: Moved post-query logic here since we don't await task
+                    final_thread_id = d._runner.current_thread_id or ""
+                    final_logger_handle: ThreadLogger | None = None
+                    # Phase-tagged conversation rows (plan_direct, goal_completion,
+                    # etc.) written by ``_log_message_event`` are the canonical
+                    # record of the assistant's user-visible output. The legacy
+                    # ``log_assistant_response("".join(full_response))`` concatenates
+                    # plan_direct text + ToolMessage outputs + goal_completion
+                    # fragments into a single malformed assistant card — surface it
+                    # only when nothing phase-tagged was written (autopilot bundles,
+                    # non-loop turns, etc. that bypass the per-phase emit paths).
+                    write_legacy_assistant_row = (
+                        bool(full_response) and not phase_tagged_assistant_written[0]
+                    )
+                    if final_thread_id and final_thread_id != thread_id:
+                        final_logger = ThreadLogger(
+                            thread_id=final_thread_id,
+                            retention_days=d._config.observability.thread_logging_retention_days,
+                            max_size_mb=d._config.observability.thread_logging_max_size_mb,
+                        )
+                        final_logger.log_user_input(effective_text)
+                        if write_legacy_assistant_row:
+                            final_logger.log_assistant_response("".join(full_response))
+                        final_logger_handle = final_logger
+                    elif write_legacy_assistant_row:
+                        thread_logger.log_assistant_response("".join(full_response))
+
+                    # Flush ThreadLogger's write buffer. Records (especially the
+                    # ``phase=goal_completion`` conversation row written by
+                    # ``_log_message_event`` for the final assistant chunk, and
+                    # the ``log_assistant_response`` write above) only flush on
+                    # the NEXT write or after the 1-second interval elapses;
+                    # once the loop ends no further writes arrive on this thread,
+                    # so without an explicit flush the tail records stay stuck in
+                    # memory and resume rendering loses the final answer.
+                    try:
+                        thread_logger.flush()
+                    except Exception:
+                        logger.debug("ThreadLogger flush failed for primary log", exc_info=True)
+                    if final_logger_handle is not None:
+                        try:
+                            final_logger_handle.flush()
+                        except Exception:
+                            logger.debug(
+                                "ThreadLogger flush failed for final_logger", exc_info=True
+                            )
+
+                    if final_thread_id:
+                        await d._runner.touch_thread_activity_timestamp(final_thread_id)
+
+                    # Wire terminals must re-check ownership after every await: a
+                    # successor can admit during delivery drain and must not
+                    # receive the prior turn's stream.end / idle.
+                    # Drain first, then emit stream.end only if still owning.
+                    # Goal display freeze remains safe for superseded turns.
+                    if effective_loop_id and owns_turn:
+                        if self._owns_turn(effective_loop_id, turn_generation):
+                            drain_cfg = self._get_output_streaming_config(d)
+                            await d._session_manager.await_loop_delivery_drained(
+                                effective_loop_id,
+                                batch_timeout_s=drain_cfg.get("streaming_interval_ms", 100)
+                                / 1000.0,
+                            )
+
+                        still_owns = self._owns_turn(effective_loop_id, turn_generation)
+                        if turn_cancelled and still_owns:
+                            await self._mark_active_context_goals_cancelled(
+                                effective_loop_id,
+                                reason="user_cancelled",
+                            )
+                        # RFC-631: freeze live card tail into a goal snapshot before idle.
+                        card_manager = getattr(d, "_card_manager", None)
+                        if card_manager is not None:
+                            try:
+                                # Cancelled turns should not infer a synthetic "completion"
+                                # summary from the live ledger.
+                                goal_completion_text = ""
+                                if not turn_cancelled:
+                                    goal_completion_text = "".join(goal_completion_response).strip()
+                                    if not goal_completion_text:
+                                        goal_completion_text = (
+                                            await _peek_goal_completion_from_ledger(
+                                                card_manager,
+                                                effective_loop_id,
+                                            )
+                                        )
+                                await card_manager.freeze_goal_display(
+                                    effective_loop_id,
+                                    goal_text=effective_text,
+                                    goal_completion=goal_completion_text,
+                                    status="cancelled" if turn_cancelled else "completed",
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Goal display snapshot freeze failed for loop %s",
+                                    effective_loop_id[:16],
+                                    exc_info=True,
+                                )
+
+                        if self._owns_turn(effective_loop_id, turn_generation):
+                            await _ensure_turn_stream_end()
+                            # Long-lived loop_events stays open across goals.
+                            # Turn boundary is stream.end + idle (not subscription complete).
+                            if self._owns_turn(effective_loop_id, turn_generation):
+                                await self._broadcast_loop_message(
+                                    effective_loop_id,
+                                    {"type": "status", "state": "idle"},
+                                    turn_generation=turn_generation,
+                                )
+                            else:
+                                logger.debug(
+                                    "Skipped stale turn idle "
+                                    "(loop=%s gen=%s superseded during finalize)",
+                                    effective_loop_id[:16],
+                                    turn_generation,
+                                )
+                        else:
+                            logger.debug(
+                                "Skipped stale turn stream.end/idle "
+                                "(loop=%s gen=%s superseded before/during finalize)",
+                                effective_loop_id[:16],
+                                turn_generation,
+                            )
+                    elif effective_loop_id and not owns_turn:
+                        logger.debug(
+                            "Skipped stale turn stream.end/idle "
+                            "(loop=%s gen=%s superseded before finalize)",
+                            effective_loop_id[:16],
+                            turn_generation,
+                        )
+
+                    if client_id and self._owns_turn(effective_loop_id, turn_generation):
+                        await d._session_manager.release_loop_ownership(client_id)
+                    # Only clear the shared pointer if a successor turn has not
+                    # already claimed it (superseded turns must not null it out).
+                    async with d._query_state_lock:
+                        if d._current_query_task is stream_task:
+                            d._current_query_task = None
+                finally:
+                    if effective_loop_id:
+                        self._loops_finalizing.discard(effective_loop_id)
+                        self._broadcast_turn_generation.pop(effective_loop_id, None)
 
         try:
             task = asyncio.create_task(_run_stream())
@@ -1491,6 +1589,7 @@ class QueryEngine:
                 await self._broadcast_loop_message(
                     effective_loop_id,
                     {"type": "status", "state": "running"},
+                    turn_generation=turn_generation,
                 )
             # Yield once so _run_stream begins before run_query returns; otherwise /cancel
             # can run before the coroutine starts and skip finally cleanup.
@@ -1525,6 +1624,7 @@ class QueryEngine:
         response_schema: dict[str, Any] | None = None,
         response_schema_name: str | None = None,
         response_schema_strict: bool | None = None,
+        turn_generation: int = 0,
     ) -> None:
         """Spawn background task for ``intent_hint`` direct LLM turns (no agent subprocess)."""
         d = self._daemon
@@ -1543,6 +1643,7 @@ class QueryEngine:
                 response_schema=response_schema,
                 response_schema_name=response_schema_name,
                 response_schema_strict=response_schema_strict,
+                turn_generation=turn_generation,
             )
 
         try:
@@ -1576,9 +1677,11 @@ class QueryEngine:
         response_schema: dict[str, Any] | None = None,
         response_schema_name: str | None = None,
         response_schema_strict: bool | None = None,
+        turn_generation: int = 0,
     ) -> None:
         """Execute one direct model call and broadcast a single assistant ``messages`` event."""
         d = self._daemon
+        self._broadcast_turn_generation[effective_loop_id] = turn_generation
 
         if client_id and effective_loop_id:
             await d._session_manager.claim_loop_ownership(client_id, effective_loop_id)
@@ -1593,6 +1696,7 @@ class QueryEngine:
         await self._broadcast_loop_message(
             effective_loop_id,
             {"type": "status", "state": "running"},
+            turn_generation=turn_generation,
         )
 
         user_log_line = text.strip() if text.strip() else f"[{direct_intent_hint}]"
@@ -1650,23 +1754,26 @@ class QueryEngine:
         finally:
             direct_task = asyncio.current_task()
             await self._unregister_query_task(thread_id, direct_task)
-            await self._release_query_admission(effective_loop_id)
+            self._loops_finalizing.add(effective_loop_id)
             try:
-                thread_logger.flush()
-            except Exception:
-                logger.debug("ThreadLogger flush failed in direct turn finally", exc_info=True)
-            # RFC-450 §9.4: Send complete message to terminate subscription stream
-            subscribed_clients = await d._session_manager.get_clients_for_loop(effective_loop_id)
-            router = d._message_router
-            for cid in subscribed_clients:
-                subscription_id = await d._session_manager.get_loop_subscription_id(
-                    cid, effective_loop_id
-                )
-                await router._send_complete(cid, subscription_id, reason="direct_turn_end")
-            await self._broadcast_loop_message(
-                effective_loop_id,
-                {"type": "status", "state": "idle"},
-            )
+                await self._release_query_admission(effective_loop_id)
+                try:
+                    thread_logger.flush()
+                except Exception:
+                    logger.debug("ThreadLogger flush failed in direct turn finally", exc_info=True)
+                if self._owns_turn(effective_loop_id, turn_generation):
+                    await self._emit_turn_stream_end(
+                        effective_loop_id,
+                        turn_generation=turn_generation,
+                    )
+                    await self._broadcast_loop_message(
+                        effective_loop_id,
+                        {"type": "status", "state": "idle"},
+                        turn_generation=turn_generation,
+                    )
+            finally:
+                self._loops_finalizing.discard(effective_loop_id)
+                self._broadcast_turn_generation.pop(effective_loop_id, None)
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
             async with d._query_state_lock:

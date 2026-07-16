@@ -146,13 +146,17 @@ terminal content (stream_terminal=true)
     → soothe.stream.end (scope=phase)   # per assistant phase
     → strange_loop.completed            # internal; not a client finalization signal
     → coalescer flush (final tuples + stream.end scopes)
-    → soothe.stream.end (scope=turn)
+    → soothe.stream.end (scope=turn)    # stamped with turn_id (IG-659)
     → await_loop_delivery_drained (ack-based)
-    → complete (subscription, reason=stream_end)
-    → status: idle
+    → status: idle                      # stamped with turn_id (IG-659)
 ```
 
-**Hard invariant**: `status: idle` MUST NOT precede `complete`, which MUST NOT precede `soothe.stream.end` (scope=turn), which MUST NOT precede terminal content.
+**Hard invariant**: `status: idle` MUST NOT precede `soothe.stream.end` (scope=turn),
+which MUST NOT precede terminal content.
+
+**IG-659**: Long-lived `loop_events` subscriptions do **not** receive per-goal
+subscription `complete`. Turn boundary is `stream.end` + `idle` with `turn_id` /
+`seq`. Clients drop mismatched `turn_id` and `seq <= last_turn_end_seq`.
 
 ---
 

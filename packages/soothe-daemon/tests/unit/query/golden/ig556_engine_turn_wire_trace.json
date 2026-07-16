@@ -29,11 +29,6 @@
   },
   {
     "kind": "lifecycle",
-    "type": "complete",
-    "reason": "stream_end"
-  },
-  {
-    "kind": "lifecycle",
     "type": "idle"
   }
 ]

@@ -70,6 +70,8 @@ The agent config can be shared across daemon and non-daemon (embedded) deploymen
 
 Loop subscribers must finalize UI on **`stream_terminal=true`** content frames and **`soothe.stream.end`** (`scope=turn`), not on `chunk_position=last` or `status: idle` alone. See [RFC-614 stream termination](../../specs/RFC-614-unified-streaming-messaging.md#stream-termination-ig-556) for the full wire contract. Clients send `notification` / `delivery_ack` after terminal frames are applied.
 
+Loop-scoped frames carry **`turn_id`** (`{loop_id}:{generation}`) and monotonic **`seq`**. Long-lived `loop_events` subscriptions stay open across goals; turn end is `stream.end` + `idle` (not per-goal subscription `complete`). Clients should ignore frames with a mismatched `turn_id` or `seq` at/below the prior turn's end seq.
+
 ---
 
 ## Channel Architecture
@@ -92,13 +94,15 @@ The manager supports `broadcast()` (all clients, with optional exclusion) and `s
 
 All channels extend `Channel` (ABC) with capability flags:
 
-| Flag | Meaning | WebSocket | Telegram | Slack | Email |
-|------|---------|:---------:|:-------:|:-----:|:-----:|
-| `supports_inbound` | Can receive messages | ✅ | ✅ | ✅ | ✅ |
-| `supports_outbound` | Can send messages | ✅ | ✅ | ✅ | ✅ |
-| `supports_streaming` | Incremental deltas | ✅ | ❌ | ❌ | ❌ |
+| Flag | Meaning | WebSocket | Telegram | Slack | Discord | Feishu | Matrix | Mochat | Email | DingTalk | Signal | WhatsApp | WeChat |
+|------|---------|:---------:|:-------:|:-----:|:------:|:------:|:------:|:------:|:-----:|:-------:|:------:|:--------:|:------:|
+| `supports_inbound` | Can receive messages | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `supports_outbound` | Can send messages | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `supports_streaming` | Incremental deltas | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 Streaming channels receive `send_delta()` and `send_reasoning_delta()` calls; non-streaming channels receive buffered complete messages. This is why a Telegram bot shows the full response at once while a WebSocket client sees token-by-token streaming.
+
+> **Mochat streaming**: The Mochat channel (Socket.IO + HTTP polling fallback) is a non-streaming channel (`supports_streaming` defaults to `False`). The ChannelManager buffers the complete response and delivers it via a single `send()` call. This is consistent with Mochat's REST-style message-send API (`/api/claw/sessions/send`, `/api/claw/groups/panels/send`), which does not support incremental patching. If a future Mochat API revision adds edit/patch semantics, the channel can flip `supports_streaming = True` and override `send_delta()`.
 
 ### WebSocket Channel
 

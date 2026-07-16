@@ -403,6 +403,13 @@ async def test_iter_turn_chunks_ends_on_terminal_custom_without_idle_status() ->
                 "type": "event",
                 "loop_id": "loop-main",
                 "namespace": [],
+                "mode": "messages",
+                "data": ("early", {}),
+            },
+            {
+                "type": "event",
+                "loop_id": "loop-main",
+                "namespace": [],
                 "mode": "custom",
                 "data": {"type": "soothe.cognition.strange_loop.completed"},
             },
@@ -420,6 +427,7 @@ async def test_iter_turn_chunks_ends_on_terminal_custom_without_idle_status() ->
     chunks = [chunk async for chunk in session.iter_turn_chunks()]
 
     assert chunks == [
+        ((), "messages", ("early", {})),
         ((), "custom", {"type": "soothe.cognition.strange_loop.completed"}),
         ((), "messages", ("late", {})),
     ]

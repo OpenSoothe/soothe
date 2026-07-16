@@ -85,10 +85,8 @@ def _daemon_factory(*, broadcasts: list[dict[str, Any]] | None = None) -> Simple
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
             await_loop_delivery_drained=AsyncMock(return_value=True),
-            get_clients_for_loop=AsyncMock(return_value=[]),
-            get_loop_subscription_id=AsyncMock(return_value=None),
         ),
-        _message_router=SimpleNamespace(_send_complete=lambda *_args, **_kwargs: None),
+        _message_router=SimpleNamespace(),
         _persistence_manager=SimpleNamespace(
             get_loop_metadata=AsyncMock(return_value=None),
         ),
@@ -107,6 +105,20 @@ async def test_turn_generation_supersedes_stale_finally_ownership() -> None:
     assert gen2 > gen1
     assert engine._owns_turn("loop-a", gen1) is False
     assert engine._owns_turn("loop-a", gen2) is True
+
+
+@pytest.mark.asyncio
+async def test_owns_turn_false_after_successor_admit_mid_drain() -> None:
+    """Simulates the 3e43 race: successor admits while prior turn finalizes."""
+    engine = QueryEngine(_daemon_factory())
+    _, gen1 = await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-1")
+    await engine._release_query_admission("loop-a")
+    # Prior turn still thinks it may finalize; successor claims generation.
+    _, gen2 = await engine._admit_query(effective_loop_id="loop-a", thread_id="thread-1")
+    assert engine._owns_turn("loop-a", gen1) is False
+    assert engine._owns_turn("loop-a", gen2) is True
+    # Finalize path must skip wire terminals when this returns False.
+    assert not engine._owns_turn("loop-a", gen1)
 
 
 @pytest.mark.asyncio

@@ -89,10 +89,8 @@ def _daemon_factory(*, broadcasts: list[dict[str, Any]]) -> SimpleNamespace:
             release_loop_ownership=lambda *_args, **_kwargs: None,
             subscribe_loop=lambda *_args, **_kwargs: True,
             get_stream_delivery=lambda *_args, **_kwargs: "batch",
-            get_clients_for_loop=AsyncMock(return_value=[]),
-            get_loop_subscription_id=AsyncMock(return_value=None),
         ),
-        _message_router=SimpleNamespace(_send_complete=lambda *_args, **_kwargs: None),
+        _message_router=SimpleNamespace(),
         _persistence_manager=SimpleNamespace(
             get_loop_metadata=AsyncMock(return_value={}),
         ),

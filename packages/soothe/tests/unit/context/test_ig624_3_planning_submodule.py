@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.config.models import normalize_agentic_final_response_mode
+from soothe.config.models import CompletionRulesConfig, normalize_agentic_final_response_mode
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode, StepNode
 from soothe.foundation.context.planning import (
@@ -439,6 +439,16 @@ class TestLedgerDirectEligibility:
             failed_steps=0,
             total_steps=1,
             last_wave_tool_call_count=51,
+        )
+
+    def test_tool_cap_zero_means_unlimited(self) -> None:
+        assert _ledger_direct_eligible(
+            plan_wave_count=1,
+            has_dag_dependencies=False,
+            failed_steps=0,
+            total_steps=1,
+            last_wave_tool_call_count=999,
+            completion_rules=CompletionRulesConfig(ledger_direct_max_tool_calls=0),
         )
 
     def test_normalize_final_response_mode_alias(self) -> None:
