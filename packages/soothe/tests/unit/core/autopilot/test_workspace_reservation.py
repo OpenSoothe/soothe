@@ -114,6 +114,27 @@ class TestPathNormalization:
         # Same expansion → conflict
         assert r.acquire("g2", str(tmp_path / "work")) is False
 
+    def test_absolute_path_ok_when_cwd_missing(self, monkeypatch) -> None:
+        """Scheduling must not crash if the process cwd was deleted."""
+        monkeypatch.setattr(
+            "soothe.foundation.autopilot.service.workspace_reservation.os.getcwd",
+            lambda: (_ for _ in ()).throw(FileNotFoundError(2, "No such file or directory")),
+        )
+        r = WorkspaceReservation()
+        assert r.acquire("g1", "/proj/a") is True
+        assert r.conflicts_with_active("/proj/a") == "g1"
+
+    def test_relative_sentinel_ok_when_cwd_missing(self, monkeypatch) -> None:
+        """Autopilot fallback workspaces are relative (``$autopilot/goal/...``)."""
+        monkeypatch.setattr(
+            "soothe.foundation.autopilot.service.workspace_reservation.os.getcwd",
+            lambda: (_ for _ in ()).throw(FileNotFoundError(2, "No such file or directory")),
+        )
+        r = WorkspaceReservation()
+        assert r.acquire("g1", "$autopilot/goal/abc") is True
+        assert r.conflicts_with_active("$autopilot/goal/abc") == "g1"
+        assert r.acquire("g2", "$autopilot/goal/def") is True
+
 
 class TestObservability:
     def test_active_reservations_snapshot_is_copy(self) -> None:

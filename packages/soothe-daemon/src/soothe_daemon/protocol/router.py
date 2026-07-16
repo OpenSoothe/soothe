@@ -3137,6 +3137,110 @@ class MessageRouter:
             },
         )
 
+    async def _require_autopilot_service(
+        self, client_id: Any, request_id: str | None
+    ) -> Any | None:
+        """Return the autopilot service or send a not-ready error and None."""
+        d = self._daemon
+        service = getattr(d, "_autopilot_service", None)
+        if service is None:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.AUTOPILOT_NOT_READY,
+                    "Autopilot service unavailable",
+                    request_id=request_id,
+                ),
+            )
+            return None
+        return service
+
+    async def _dispatch_autopilot_rpc(
+        self,
+        client_id: Any,
+        msg: dict[str, Any],
+        action: str,
+    ) -> None:
+        """Shared protocol-1 response path for ``autopilot_*`` request methods."""
+        from soothe_daemon.protocol.autopilot_commands import run_autopilot_action
+
+        d = self._daemon
+        request_id = msg.get("request_id")
+        service = await self._require_autopilot_service(client_id, request_id)
+        if service is None:
+            return
+
+        payload = {
+            key: value
+            for key, value in msg.items()
+            if key not in {"type", "proto", "method", "params", "id", "request_id"}
+        }
+        try:
+            result = await run_autopilot_action(service, action, payload)
+        except RuntimeError as exc:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    str(exc),
+                    request_id=request_id,
+                ),
+            )
+            return
+        except Exception as exc:
+            logger.error("[AutopilotRPC] %s failed: %s", action, exc, exc_info=True)
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INTERNAL_ERROR,
+                    str(exc),
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        await self._send_response(client_id, request_id, result)
+
+    async def _handle_autopilot_status(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_status request (CLI / WsCommandClient)."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "status")
+
+    async def _handle_autopilot_submit(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_submit request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "submit")
+
+    async def _handle_autopilot_list_goals(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_list_goals request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "list_goals")
+
+    async def _handle_autopilot_get_goal(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_get_goal request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "get_goal")
+
+    async def _handle_autopilot_cancel_goal(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_cancel_goal request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "cancel_goal")
+
+    async def _handle_autopilot_wake(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_wake request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "wake")
+
+    async def _handle_autopilot_dream(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_dream request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "dream")
+
+    async def _handle_autopilot_resume(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_resume request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "resume")
+
+    async def _handle_autopilot_list_jobs(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_list_jobs request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "list_jobs")
+
+    async def _handle_autopilot_get_job(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_get_job request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "get_job")
+
     async def _handle_autopilot_subscribe(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle autopilot_subscribe RPC request (RFC-228).
 

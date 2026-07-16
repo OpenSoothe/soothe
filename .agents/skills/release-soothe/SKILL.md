@@ -69,14 +69,15 @@ Always maintain this order:
 
 ### 1. Determine Version
 
-Check current version:
+Check current versions:
 
 ```bash
-# From VERSION file
+# Monorepo release version (soothe / soothe-cli / soothe-daemon)
 cat VERSION
 
-# Or from pyproject.toml
-rg '^version = ' packages/soothe/pyproject.toml
+# Standalone package versions (independent of root VERSION)
+rg '^version = ' packages/soothe-sdk/pyproject.toml
+rg '^version = ' packages/soothe-plugins/pyproject.toml
 ```
 
 ### 2. Update CHANGELOG.md
@@ -100,14 +101,17 @@ Insert new version block at top (below header, above existing entries):
 
 ### 3. Update Version Files
 
-Synchronize VERSION file and pyproject.toml:
+Synchronize the monorepo `VERSION` for core packages. **soothe-sdk** and **soothe-plugins** keep standalone `version = "..."` in their own `pyproject.toml` and are only bumped when those packages intentionally change:
 
 ```bash
-# Update VERSION
-echo "vX.Y.Z" > VERSION
+# Update monorepo VERSION (soothe / soothe-cli / soothe-daemon)
+echo "X.Y.Z" > VERSION
 
-# Update pyproject.toml version
-# Edit: version = "X.Y.Z" in each package
+# Bump soothe-sdk only when publishing a new SDK release:
+# Edit: version = "A.B.C" in packages/soothe-sdk/pyproject.toml
+
+# Bump soothe-plugins only when publishing a new plugins release:
+# Edit: version = "A.B.C" in packages/soothe-plugins/pyproject.toml
 ```
 
 ### 4. Commit Changes
@@ -138,17 +142,17 @@ Or use the release workflow in `.github/workflows/`.
 
 ## Package Inventory
 
-| Package | Directory | Publishes |
-|---------|-----------|-----------|
-| soothe-core | `packages/soothe/` | PyPI: `soothe` |
-| soothe-cli | `packages/soothe-cli/` | PyPI: `soothe-cli` |
-| soothe-daemon | `packages/soothe-daemon/` | PyPI: `soothe-daemon` |
-| soothe-sdk | `packages/soothe-sdk/` | PyPI: `soothe-sdk` |
-| soothe-plugins | `packages/soothe-plugins/` | PyPI: `soothe-plugins` |
+| Package | Directory | Version source | Publishes |
+|---------|-----------|----------------|-----------|
+| soothe-core | `packages/soothe/` | Root `VERSION` | PyPI: `soothe` |
+| soothe-cli | `packages/soothe-cli/` | Root `VERSION` | PyPI: `soothe-cli` |
+| soothe-daemon | `packages/soothe-daemon/` | Root `VERSION` | PyPI: `soothe-daemon` |
+| soothe-sdk | `packages/soothe-sdk/` | Own `pyproject.toml` | PyPI: `soothe-sdk` |
+| soothe-plugins | `packages/soothe-plugins/` | Own `pyproject.toml` | PyPI: `soothe-plugins` |
 
 ## Troubleshooting
 
-- **Version mismatch**: Ensure all `pyproject.toml` files and VERSION are in sync before tagging
+- **Version mismatch**: Root `VERSION` drives soothe/cli/daemon only; do not expect soothe-sdk or soothe-plugins to match unless you bump them
 - **Changelog merge conflicts**: Preserve existing entries; add new version at top
 - **PyPI upload fails**: Verify credentials and check package names match registered names
 - **Missing changes**: Search git log since last tag: `git log v0.7.15..HEAD --oneline`
@@ -157,7 +161,9 @@ Or use the release workflow in `.github/workflows/`.
 
 | Task | Command |
 |------|---------|
-| Check current version | `cat VERSION` |
+| Check monorepo version | `cat VERSION` |
+| Check soothe-sdk version | `rg '^version = ' packages/soothe-sdk/pyproject.toml` |
+| Check soothe-plugins version | `rg '^version = ' packages/soothe-plugins/pyproject.toml` |
 | List recent tags | `git tag -l 'v0.7.*' \| tail -5` |
 | View tag details | `git show v0.7.16` |
 | Compare versions | `git log v0.7.15..v0.7.16 --oneline` |

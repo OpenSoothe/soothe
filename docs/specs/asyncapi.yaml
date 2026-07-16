@@ -87,6 +87,17 @@ channels:
           - $ref: '#/components/messages/authRequest'
           - $ref: '#/components/messages/authRefreshRequest'
           - $ref: '#/components/messages/rpcCommandRequest'
+          # Autopilot RPC requests
+          - $ref: '#/components/messages/autopilotStatusRequest'
+          - $ref: '#/components/messages/autopilotSubmitRequest'
+          - $ref: '#/components/messages/autopilotListGoalsRequest'
+          - $ref: '#/components/messages/autopilotGetGoalRequest'
+          - $ref: '#/components/messages/autopilotCancelGoalRequest'
+          - $ref: '#/components/messages/autopilotWakeRequest'
+          - $ref: '#/components/messages/autopilotDreamRequest'
+          - $ref: '#/components/messages/autopilotResumeRequest'
+          - $ref: '#/components/messages/autopilotListJobsRequest'
+          - $ref: '#/components/messages/autopilotGetJobRequest'
           # Notifications
           - $ref: '#/components/messages/loopInputNotification'
           - $ref: '#/components/messages/slashCommandNotification'
@@ -623,6 +634,79 @@ components:
         filters:
           type: object
           description: Event filter criteria
+
+    # Autopilot RPC params (protocol-1 request methods)
+    autopilotStatusParams:
+      type: object
+      description: No required fields
+
+    autopilotSubmitParams:
+      type: object
+      required: [description]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          description: Autopilot task description
+        priority:
+          type: integer
+          default: 50
+          description: Task priority
+        workspace:
+          type: string
+          description: Optional workspace path
+
+    autopilotListGoalsParams:
+      type: object
+      description: No required fields
+
+    autopilotGetGoalParams:
+      type: object
+      required: [goal_id]
+      properties:
+        goal_id:
+          type: string
+          minLength: 1
+          description: Goal identifier
+
+    autopilotCancelGoalParams:
+      type: object
+      required: [goal_id]
+      properties:
+        goal_id:
+          type: string
+          minLength: 1
+          description: Goal to cancel
+
+    autopilotWakeParams:
+      type: object
+      description: No required fields
+
+    autopilotDreamParams:
+      type: object
+      description: No required fields
+
+    autopilotResumeParams:
+      type: object
+      required: [goal_id]
+      properties:
+        goal_id:
+          type: string
+          minLength: 1
+          description: Goal to resume
+
+    autopilotListJobsParams:
+      type: object
+      description: No required fields
+
+    autopilotGetJobParams:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+          minLength: 1
+          description: Root goal (job) identifier
 
     # Disconnect params
     disconnectParams:
@@ -1371,6 +1455,187 @@ components:
                 const: rpc_command
               params:
                 $ref: '#/components/schemas/rpcCommandParams'
+              id:
+                type: string
+
+    # Autopilot RPC request messages
+    autopilotStatusRequest:
+      title: Get autopilot status
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_status
+              params:
+                $ref: '#/components/schemas/autopilotStatusParams'
+              id:
+                type: string
+
+    autopilotSubmitRequest:
+      title: Submit an autopilot task
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_submit
+              params:
+                $ref: '#/components/schemas/autopilotSubmitParams'
+              id:
+                type: string
+
+    autopilotListGoalsRequest:
+      title: List autopilot goals
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_list_goals
+              params:
+                $ref: '#/components/schemas/autopilotListGoalsParams'
+              id:
+                type: string
+
+    autopilotGetGoalRequest:
+      title: Get autopilot goal details
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_get_goal
+              params:
+                $ref: '#/components/schemas/autopilotGetGoalParams'
+              id:
+                type: string
+
+    autopilotCancelGoalRequest:
+      title: Cancel an autopilot goal
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_cancel_goal
+              params:
+                $ref: '#/components/schemas/autopilotCancelGoalParams'
+              id:
+                type: string
+
+    autopilotWakeRequest:
+      title: Wake autopilot from dreaming
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_wake
+              params:
+                $ref: '#/components/schemas/autopilotWakeParams'
+              id:
+                type: string
+
+    autopilotDreamRequest:
+      title: Force autopilot dreaming mode
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_dream
+              params:
+                $ref: '#/components/schemas/autopilotDreamParams'
+              id:
+                type: string
+
+    autopilotResumeRequest:
+      title: Resume a suspended or blocked goal
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_resume
+              params:
+                $ref: '#/components/schemas/autopilotResumeParams'
+              id:
+                type: string
+
+    autopilotListJobsRequest:
+      title: List root autopilot jobs
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_list_jobs
+              params:
+                $ref: '#/components/schemas/autopilotListJobsParams'
+              id:
+                type: string
+
+    autopilotGetJobRequest:
+      title: Get autopilot job with DAG snapshot
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_get_job
+              params:
+                $ref: '#/components/schemas/autopilotGetJobParams'
               id:
                 type: string
 

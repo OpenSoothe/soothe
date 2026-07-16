@@ -36,12 +36,14 @@ jobs:
     - name: Get SDK version
       id: sdk-version
       run: |
-        VERSION=$(cat VERSION)
+        cd packages/soothe-sdk
+        VERSION=$(grep '^version = "' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Check if SDK version exists on PyPI
       id: sdk-check
       run: |
+        cd packages/soothe-sdk
         VERSION="${{ steps.sdk-version.outputs.version }}"
         echo "Checking if soothe-sdk $VERSION exists on PyPI..."
         if pip index versions soothe-sdk 2>/dev/null | grep -q "$VERSION"; then
@@ -55,6 +57,7 @@ jobs:
     - name: Build SDK package
       if: steps.sdk-check.outputs.exists == 'false'
       run: |
+        rm -rf dist/
         cd packages/soothe-sdk
         uv build --out-dir ../../dist
 
@@ -102,7 +105,7 @@ jobs:
 
     - name: Wait for soothe-sdk on PyPI
       run: |
-        VERSION=$(cat VERSION)
+        VERSION=$(grep '^version = "' packages/soothe-sdk/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
@@ -196,7 +199,7 @@ jobs:
 
     - name: Wait for soothe-sdk on PyPI
       run: |
-        VERSION=$(cat VERSION)
+        VERSION=$(grep '^version = "' packages/soothe-sdk/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")

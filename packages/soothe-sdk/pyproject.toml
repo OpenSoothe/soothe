@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-sdk"
-dynamic = ["version"]
+version = "0.8.1"
 description = "Slim SDK for Soothe plugins and shared contracts (events, wire, display, protocols)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -62,10 +62,6 @@ ignore = ["E501"]
 
 [tool.ruff.format]
 docstring-code-format = true
-
-[tool.hatch.version]
-path = "../../VERSION"
-pattern = "^(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+)$"
 
 [tool.mypy]
 python_version = "3.12"

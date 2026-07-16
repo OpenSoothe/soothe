@@ -101,10 +101,12 @@ Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
 | `ReattachAndProbe` / `Disconnected` | ✓ |
 | `ConnectionPool` / `TurnRunner` | ✓ |
 | Idle / soft-complete / attachments (IG-651 parity) | ✓ |
+| Live `tests/integration` (daemon assumed) | ✓ |
+| ManagedClient flat→protocol-1 send coercion | ✓ |
 
 - [x] `soothe_client.appkit` package exists with unit tests
 - [x] CLI turn pipeline + `_unwrap_next` duplicates removed (shims / imports)
 - [x] CLI `TuiDaemonSession` wraps `DaemonSession`
 - [x] Python client unit tests green (`client/python`)
 
-**Status**: Phase D + IG-651 lifecycle + packaging (2026-07-16)
+**Status**: Phase D + IG-651 lifecycle + packaging + live `tests/integration` (2026-07-16)

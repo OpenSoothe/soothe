@@ -23,6 +23,7 @@ shape.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path, PurePosixPath
 
 logger = logging.getLogger(__name__)
@@ -33,10 +34,23 @@ def _normalize(workspace: str | Path) -> str:
 
     We use PurePosixPath for the component comparison even on macOS/Linux —
     we only care about path-prefix semantics, not filesystem case-sensitivity.
+
+    Avoids ``Path.absolute()`` / ``os.getcwd()`` when the process cwd has been
+    deleted (common for long-running daemons) — that raises ``FileNotFoundError``
+    and would crash the scheduling loop.
     """
     p = Path(workspace).expanduser()
     # Don't resolve symlinks (workspaces may not exist yet); just normalize.
-    abs_str = str(p.absolute()).rstrip("/")
+    if p.is_absolute():
+        abs_str = os.path.normpath(str(p))
+    else:
+        try:
+            cwd = os.getcwd()
+        except OSError:
+            # CWD deleted — anchor relative keys at "/" so they stay comparable.
+            cwd = os.sep
+        abs_str = os.path.normpath(os.path.join(cwd, str(p)))
+    abs_str = abs_str.rstrip("/")
     if not abs_str:
         abs_str = "/"
     return abs_str

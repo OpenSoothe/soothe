@@ -68,6 +68,16 @@ __all__ = [
     "SubscribeParams",
     "AutopilotSubscribeParams",
     "AutopilotUnsubscribeParams",
+    "AutopilotStatusParams",
+    "AutopilotSubmitParams",
+    "AutopilotListGoalsParams",
+    "AutopilotGetGoalParams",
+    "AutopilotCancelGoalParams",
+    "AutopilotWakeParams",
+    "AutopilotDreamParams",
+    "AutopilotResumeParams",
+    "AutopilotListJobsParams",
+    "AutopilotGetJobParams",
     "ConnectionInitParams",
     "DisconnectParams",
     "PingParams",
@@ -399,6 +409,58 @@ class AutopilotUnsubscribeParams(ParamsBase):
     """Params for type=autopilot_unsubscribe (legacy flat)."""
 
 
+class AutopilotStatusParams(EmptyParams):
+    """Params for method=autopilot_status, type=request."""
+
+
+class AutopilotSubmitParams(ParamsBase):
+    """Params for method=autopilot_submit, type=request."""
+
+    description: str = Field(..., min_length=1)
+    priority: int = 50
+    workspace: str | None = None
+
+
+class AutopilotListGoalsParams(EmptyParams):
+    """Params for method=autopilot_list_goals, type=request."""
+
+
+class AutopilotGetGoalParams(ParamsBase):
+    """Params for method=autopilot_get_goal, type=request."""
+
+    goal_id: str = Field(..., min_length=1)
+
+
+class AutopilotCancelGoalParams(ParamsBase):
+    """Params for method=autopilot_cancel_goal, type=request."""
+
+    goal_id: str = Field(..., min_length=1)
+
+
+class AutopilotWakeParams(EmptyParams):
+    """Params for method=autopilot_wake, type=request."""
+
+
+class AutopilotDreamParams(EmptyParams):
+    """Params for method=autopilot_dream, type=request."""
+
+
+class AutopilotResumeParams(ParamsBase):
+    """Params for method=autopilot_resume, type=request."""
+
+    goal_id: str = Field(..., min_length=1)
+
+
+class AutopilotListJobsParams(EmptyParams):
+    """Params for method=autopilot_list_jobs, type=request."""
+
+
+class AutopilotGetJobParams(ParamsBase):
+    """Params for method=autopilot_get_job, type=request."""
+
+    job_id: str = Field(..., min_length=1)
+
+
 class ConnectionInitParams(ParamsBase):
     """Params for type=connection_init (protocol-1 handshake)."""
 
@@ -521,6 +583,17 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("subscribe", "loop_events"): SubscribeParams,
     ("subscribe", "autopilot_events"): AutopilotSubscribeParams,
     ("unsubscribe", None): AutopilotUnsubscribeParams,
+    # Autopilot RPC (protocol-1 request methods for WsCommandClient / CLI)
+    ("request", "autopilot_status"): AutopilotStatusParams,
+    ("request", "autopilot_submit"): AutopilotSubmitParams,
+    ("request", "autopilot_list_goals"): AutopilotListGoalsParams,
+    ("request", "autopilot_get_goal"): AutopilotGetGoalParams,
+    ("request", "autopilot_cancel_goal"): AutopilotCancelGoalParams,
+    ("request", "autopilot_wake"): AutopilotWakeParams,
+    ("request", "autopilot_dream"): AutopilotDreamParams,
+    ("request", "autopilot_resume"): AutopilotResumeParams,
+    ("request", "autopilot_list_jobs"): AutopilotListJobsParams,
+    ("request", "autopilot_get_job"): AutopilotGetJobParams,
     # Cron RPC (RFC-229)
     ("request", "cron_add"): CronAddParams,
     ("request", "cron_list"): CronListParams,
