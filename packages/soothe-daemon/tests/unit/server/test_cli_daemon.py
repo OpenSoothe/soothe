@@ -767,10 +767,36 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
     stderr: list[str] = []
 
-    # Patch WebSocketClient where daemon.py binds the name.
+    class _BusySession:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            self._client = _BusyClient()
+            self._loop_id = "loop-123"
+
+        @property
+        def client(self) -> _BusyClient:
+            return self._client
+
+        @property
+        def loop_id(self) -> str:
+            return self._loop_id
+
+        async def connect(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
+            del resume_loop_id
+            return {"type": "session_ready", "loop_id": self._loop_id, "success": True}
+
+        async def send_turn(self, *_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        async def cancel_remote_query(self) -> None:
+            return None
+
+        async def close(self, **_kwargs: Any) -> None:
+            await self._client.close()
+
+    # Patch DaemonSession where daemon.py binds the name.
     monkeypatch.setattr(
-        "soothe_cli.cli.execution.daemon.WebSocketClient",
-        lambda url=None: _BusyClient(),
+        "soothe_cli.cli.execution.daemon.DaemonSession",
+        _BusySession,
     )
     monkeypatch.setattr(
         typer, "echo", lambda msg, err=False: stderr.append(str(msg)) if err else None
@@ -787,14 +813,15 @@ async def test_run_headless_via_daemon_returns_direct_error_before_query_start(m
 
 
 def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
-    """Test that headless stops stale daemon before restart (RFC-0013 WebSocket lifecycle).
+    """Test that headless stops stale daemon before restart (WebSocket lifecycle).
 
-    After IG-174/IG-175 refactoring, headless.py uses WebSocket RPC checks instead
-    of SootheDaemon static methods. The flow is:
+    Headless uses WebSocket RPC checks instead of SootheDaemon static methods:
     1. is_daemon_live() returns False (daemon not responsive)
-    2. WebSocketClient is created and request_daemon_shutdown() is called
+    2. connected_websocket + request_daemon_shutdown() are used
     3. Daemon is started via subprocess
     """
+    from contextlib import asynccontextmanager
+
     from soothe_cli.config.cli_config import CLIConfig
 
     cfg = CLIConfig()
@@ -806,6 +833,11 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
     mock_client_instance = MagicMock()
     mock_client_instance.connect = AsyncMock()
     mock_client_instance.close = AsyncMock()
+
+    @asynccontextmanager
+    async def _fake_connected_websocket(ws_url: str, *, timeout: float = 30.0):
+        del ws_url, timeout
+        yield mock_client_instance
 
     # Patch SDK client helpers (WebSocket RPC checks).
     # First call: pipeline decides daemon is not live (stale path). Second call:
@@ -819,8 +851,8 @@ def test_run_headless_stops_stale_daemon_before_restart(monkeypatch) -> None:
         AsyncMock(side_effect=lambda client, timeout: shutdown_called()),
     )
     monkeypatch.setattr(
-        "soothe_cli.cli.execution.headless.WebSocketClient",
-        MagicMock(return_value=mock_client_instance),  # Return mock instance
+        "soothe_cli.cli.execution.headless.connected_websocket",
+        _fake_connected_websocket,
     )
     monkeypatch.setattr(
         "soothe_cli.cli.execution.daemon.run_headless_via_daemon",

@@ -12,12 +12,6 @@ from typing import Any
 from soothe_client.appkit import DaemonSession
 from soothe_client.helpers import websocket_url_from_config
 
-# Re-exported for test monkeypatches / historical import sites.
-from soothe_client.session import (  # noqa: F401
-    bootstrap_loop_session,
-    connect_websocket_with_retries,
-)
-
 from soothe_cli.runtime.state.session_stats import TurnEventStats
 from soothe_cli.runtime.wire.chunk_filter import should_drop_stream_chunk_early
 
@@ -49,7 +43,7 @@ class TuiDaemonSession(DaemonSession):
         )
 
     def _resolve_stream_delivery_mode(self) -> str:
-        """Determine stream delivery mode from config (RFC-614).
+        """Determine stream delivery mode from config.
 
         Returns one of ``batch`` | ``adaptive`` | ``streaming``. CLI override
         wins, then config; defaults to ``adaptive``.
@@ -68,13 +62,7 @@ class TuiDaemonSession(DaemonSession):
         return "adaptive"
 
 
-# Historical alias used by some call sites / docs.
-DaemonSession = TuiDaemonSession  # noqa: F811
-
 __all__ = [
-    "DaemonSession",
     "TUI_EXIT_HANDSHAKE_TIMEOUT_S",
     "TuiDaemonSession",
-    "bootstrap_loop_session",
-    "connect_websocket_with_retries",
 ]

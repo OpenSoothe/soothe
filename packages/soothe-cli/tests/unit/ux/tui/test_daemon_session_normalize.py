@@ -368,7 +368,7 @@ async def test_iter_turn_chunks_records_cancellation_command() -> None:
 
 @pytest.mark.asyncio
 async def test_iter_turn_chunks_records_stopped_end_state() -> None:
-    """Stopped status should be surfaced to the stream-end safety net."""
+    """Stopped status after payload should end the turn."""
     session = object.__new__(TuiDaemonSession)
     session._loop_id = "loop-main"
     session._read_lock = asyncio.Lock()
@@ -381,7 +381,7 @@ async def test_iter_turn_chunks_records_stopped_end_state() -> None:
                 "loop_id": "loop-main",
                 "namespace": [],
                 "mode": "custom",
-                "data": {"type": "soothe.stream.end"},
+                "data": {"type": "soothe.test.payload"},
             },
             {"type": "status", "state": "stopped", "loop_id": "loop-main"},
         ]

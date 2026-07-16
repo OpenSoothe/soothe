@@ -27,10 +27,10 @@ async def test_headless_cron_slash_uses_ws_command_client(monkeypatch) -> None:
         "soothe_cli.cli.execution.daemon.async_ws_command_client_from_config",
         lambda _cfg: mock_client,
     )
-    connect = MagicMock()
+    session_factory = MagicMock()
     monkeypatch.setattr(
-        "soothe_cli.cli.execution.daemon.connect_websocket_with_retries",
-        connect,
+        "soothe_cli.cli.execution.daemon.DaemonSession",
+        session_factory,
     )
 
     exit_code, retry = await _run_headless_session_once(
@@ -40,23 +40,23 @@ async def test_headless_cron_slash_uses_ws_command_client(monkeypatch) -> None:
 
     assert exit_code == 0
     assert retry is False
-    connect.assert_not_called()
+    session_factory.assert_not_called()
     mock_client.cron_add.assert_called_once_with("in 1 hour verify headless path")
 
 
 @pytest.mark.asyncio
 async def test_headless_cron_slash_requires_text(monkeypatch) -> None:
-    connect = MagicMock()
+    session_factory = MagicMock()
     monkeypatch.setattr(
-        "soothe_cli.cli.execution.daemon.connect_websocket_with_retries",
-        connect,
+        "soothe_cli.cli.execution.daemon.DaemonSession",
+        session_factory,
     )
 
     exit_code, retry = await _run_headless_session_once(MagicMock(), "/cron")
 
     assert exit_code == 1
     assert retry is False
-    connect.assert_not_called()
+    session_factory.assert_not_called()
 
 
 @pytest.mark.asyncio
