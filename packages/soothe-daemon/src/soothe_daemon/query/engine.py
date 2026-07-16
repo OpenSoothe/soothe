@@ -424,9 +424,13 @@ class QueryEngine:
     def _resolve_broadcast_generation(
         self, loop_id: str, turn_generation: int | None = None
     ) -> int:
-        """Return generation to stamp on outbound frames for ``loop_id``."""
-        if turn_generation is not None and turn_generation > 0:
-            return turn_generation
+        """Return generation to stamp on outbound frames for ``loop_id``.
+
+        Pass ``turn_generation=0`` to omit ``turn_id`` (pre-admit early
+        ``running`` must not reuse the prior turn's generation).
+        """
+        if turn_generation is not None:
+            return max(0, int(turn_generation))
         ctx = self._broadcast_turn_generation.get(loop_id)
         if ctx is not None and ctx > 0:
             return ctx

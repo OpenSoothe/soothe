@@ -294,3 +294,22 @@ async def test_await_loop_ready_waits_while_finalizing() -> None:
     elapsed = asyncio.get_running_loop().time() - started
     await clearer
     assert elapsed >= 0.04
+
+
+def test_pre_admit_running_omits_prior_turn_id() -> None:
+    """Early running before admit must not stamp the prior turn generation."""
+    daemon = _daemon_factory(runner=_CompletedTurnRunner(), broadcasts=[])
+    engine = QueryEngine(daemon)
+    engine._loop_turn_generation["loop-x"] = 1
+    frame = engine._loop_scoped_client_message(
+        "loop-x",
+        {"type": "status", "state": "running"},
+        turn_generation=0,
+    )
+    assert not frame.get("turn_id")
+    stamped = engine._loop_scoped_client_message(
+        "loop-x",
+        {"type": "status", "state": "running"},
+        turn_generation=2,
+    )
+    assert stamped["turn_id"] == "loop-x:2"

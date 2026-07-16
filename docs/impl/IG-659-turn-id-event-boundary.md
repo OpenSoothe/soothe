@@ -46,6 +46,8 @@ soothe.stream.end data { scope: turn, turn_id, ... }
   race mid-drain / stream.end / idle.
 - `_admit_query` also rejects while finalizing (`LOOP_BUSY`).
 - Long-lived `loop_events` stays open; turn end is `stream.end` + `idle` only.
+- Pre-admit early `status=running` omits `turn_id` (generation reserved only after
+  admit). Clients rebind when a newer `status=running` generation arrives.
 
 ## Non-goals
 

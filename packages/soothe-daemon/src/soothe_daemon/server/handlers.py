@@ -144,15 +144,20 @@ class DaemonHandlersMixin:
             return
 
         # Emit running status early so client doesn't timeout waiting for query start.
-        # run_query emits another status later but this unblocks headless CLI immediately.
+        # Omit turn_id here: admit has not reserved the next generation yet, so
+        # stamping the prior generation would poison the client's expected_turn_id.
+        # run_query emits the authoritative running frame after admit.
         if self._query_engine is not None:
             self._query_engine.mark_loop_turn_starting(loop_id)
-        await self._broadcast(
-            self._query_engine._loop_scoped_client_message(
-                loop_id,
-                {"type": "status", "state": "running"},
+            await self._broadcast(
+                self._query_engine._loop_scoped_client_message(
+                    loop_id,
+                    {"type": "status", "state": "running"},
+                    turn_generation=0,
+                )
             )
-        )
+        else:
+            await self._broadcast({"type": "status", "state": "running", "loop_id": loop_id})
 
         try:
             if msg_type == "command":
