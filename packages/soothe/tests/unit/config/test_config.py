@@ -102,8 +102,9 @@ class TestSootheConfig:
         assert "skillify" not in cfg.subagents
         assert "claude" not in cfg.subagents
         assert "scout" not in cfg.subagents
-        for name in ("planner", "explorer", "deep_research", "academic_research"):
+        for name in ("planner", "deep_research", "academic_research"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
+        assert cfg.subagents["explorer"].enabled is False
         assert cfg.subagents["planner"].model_role == "think"
         assert cfg.subagents["explorer"].model_role == "fast"
         assert cfg.subagents["planner"].endpoint is None

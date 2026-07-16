@@ -396,7 +396,7 @@ subagents:
     config: {}
     runtime_dir: ''
   explorer:
-    enabled: true
+    enabled: false
     model_role: fast
     transport: local
     endpoint: null
