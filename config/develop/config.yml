@@ -92,7 +92,7 @@ agent:
     role_routing:
       enabled: true
   autopilot:
-    enabled: true
+    enabled: false
     max_parallel_goals: 6
     max_loops: 8
   loop:
