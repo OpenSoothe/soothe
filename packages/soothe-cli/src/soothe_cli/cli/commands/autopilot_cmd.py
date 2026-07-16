@@ -325,10 +325,41 @@ def show_goal(
 
 @app.command("cancel")
 def cancel_goal(
-    goal_id: str = typer.Argument(..., help="Goal ID to cancel."),
+    goal_id: str | None = typer.Argument(
+        None,
+        help="Goal ID to cancel (omit when using --all or --job).",
+    ),
+    cancel_all: bool = typer.Option(
+        False,
+        "--all",
+        help="Cancel every open (non-terminal) autopilot goal.",
+    ),
+    job_id: str | None = typer.Option(
+        None,
+        "--job",
+        help="Cancel a job root and all descendant goals.",
+    ),
 ) -> None:
-    """Cancel a goal via the daemon."""
+    """Cancel a goal, a job subtree, or all open goals via the daemon."""
+    modes = sum(1 for flag in (bool(goal_id), cancel_all, bool(job_id)) if flag)
+    if modes != 1:
+        typer.echo(
+            "Specify exactly one of: GOAL_ID, --all, or --job <id>.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
     client = _require_daemon_ws()
+    if cancel_all:
+        result = client.autopilot_cancel_all()
+        count = result.get("cancelled_count", 0)
+        typer.echo(f"Cancelled {count} open goal(s).")
+        return
+    if job_id:
+        result = client.job_cancel(job_id)
+        typer.echo(f"Cancel job result: {result.get('status', result)}")
+        return
+    assert goal_id is not None
     result = client.autopilot_cancel_goal(goal_id)
     typer.echo(f"Cancel result: {result.get('status', result)}")
 

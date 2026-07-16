@@ -64,6 +64,14 @@ async def run_autopilot_action(
             raise RuntimeError("Goal not found")
         return {"status": "cancelled", "goal_id": cancelled.id, "new_status": cancelled.status}
 
+    if action == "cancel_all":
+        result = await service.cancel_all_open_goals(reason="ws_command")
+        return {
+            "status": "cancelled",
+            "cancelled_count": result.get("cancelled_count", 0),
+            "goal_ids": result.get("goal_ids", []),
+        }
+
     if action == "resume":
         goal_id = payload.get("goal_id")
         context_engine = service._ce

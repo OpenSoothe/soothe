@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
+from soothe.foundation.context.models import TERMINAL_STATES, GoalNode
 from soothe.foundation.events.internal_bus import InternalEventBus
 from soothe.foundation.events.internal_events import (
     INTERNAL_GOAL_STATE_CHANGED,
@@ -441,15 +441,47 @@ class AutopilotService:
         """Read-through to ContextEngine for HTTP/CLI surfaces."""
         return await self._ce.get_goal(goal_id)
 
-    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
-        """Cancel a goal: stop the worker (if any) and transition to ``cancelled``.
+    async def _cancel_goal_worker(self, goal: GoalNode) -> None:
+        """Stop the worker for an active goal if one is assigned (RFC-222 H8)."""
+        if self._worker_pool is None or not goal.assigned_loop_id:
+            return
+        worker = self._worker_pool.get_worker(goal.assigned_loop_id)
+        if worker is None or worker.current_goal_id != goal.id:
+            return
+        try:
+            await worker.runner.cancel()
+            logger.info(
+                "[Autopilot] cancel_goal: requested cancel of worker %s for goal %s",
+                worker.loop_id,
+                goal.id,
+            )
+        except Exception:
+            logger.warning(
+                "worker.runner.cancel() raised during cancel_goal(%s)",
+                goal.id,
+                exc_info=True,
+            )
 
-        RFC-222 H8: when the goal is currently dispatched, resolve the assigned
+    async def _cancel_open_goal_node(self, goal: GoalNode, *, reason: str) -> None:
+        """Cancel one non-terminal goal: stop worker, CE transition, release workspace."""
+        await self._cancel_goal_worker(goal)
+        await self._ce.cancel_goal(goal.id, reason=reason)
+        if self._workspace_reservation is not None:
+            self._workspace_reservation.release(goal.id)
+
+    async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> GoalNode | None:
+        """Cancel a goal and all non-terminal descendants.
+
+        RFC-222 H8: when a goal is currently dispatched, resolve the assigned
         worker via ``WorkerPool`` and call ``worker.runner.cancel()`` to abort
         the subprocess via RFC-221's cooperative cancellation.
 
+        RFC-626 / RFC-228: job cancel is root-goal cancel with descendant
+        cascade. Already-terminal goals in the subtree are skipped so canceling
+        a cancelled root still cleans pending children.
+
         Args:
-            goal_id: Goal to cancel.
+            goal_id: Goal (or job root) to cancel.
             reason: Logged with the cancellation for audit.
 
         Returns:
@@ -459,30 +491,33 @@ class AutopilotService:
         if goal is None:
             return None
 
-        # H8: resolve and cancel the worker if a real-dispatch pool is wired
-        # and the goal is currently active on a worker.
-        if self._worker_pool is not None and goal.assigned_loop_id:
-            worker = self._worker_pool.get_worker(goal.assigned_loop_id)
-            if worker is not None and worker.current_goal_id == goal_id:
-                try:
-                    await worker.runner.cancel()
-                    logger.info(
-                        "[Autopilot] cancel_goal: requested cancel of worker %s for goal %s",
-                        worker.loop_id,
-                        goal_id,
-                    )
-                except Exception:
-                    logger.warning(
-                        "worker.runner.cancel() raised during cancel_goal(%s)",
-                        goal_id,
-                        exc_info=True,
-                    )
+        for gid in self._ce.collect_subtree_ids(goal_id):
+            node = await self._ce.get_goal(gid)
+            if node is None or node.status in TERMINAL_STATES:
+                continue
+            await self._cancel_open_goal_node(node, reason=reason)
 
-        await self._ce.cancel_goal(goal_id, reason=reason)
-        if self._workspace_reservation is not None:
-            self._workspace_reservation.release(goal_id)
         await self._persist_goals()
         return await self._ce.get_goal(goal_id)
+
+    async def cancel_all_open_goals(self, *, reason: str = "user_cancelled") -> dict[str, Any]:
+        """Cancel every non-terminal goal with a single persist.
+
+        Args:
+            reason: Logged with each cancellation for audit.
+
+        Returns:
+            Dict with ``cancelled_count`` and ``goal_ids``.
+        """
+        cancelled_ids: list[str] = []
+        for goal in await self.list_goals():
+            if goal.status in TERMINAL_STATES:
+                continue
+            await self._cancel_open_goal_node(goal, reason=reason)
+            cancelled_ids.append(goal.id)
+
+        await self._persist_goals()
+        return {"cancelled_count": len(cancelled_ids), "goal_ids": cancelled_ids}
 
     # ---- Internals ----------------------------------------------------
 

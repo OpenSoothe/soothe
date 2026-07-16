@@ -437,6 +437,10 @@ class AutopilotCancelGoalParams(ParamsBase):
     goal_id: str = Field(..., min_length=1)
 
 
+class AutopilotCancelAllParams(EmptyParams):
+    """Params for method=autopilot_cancel_all, type=request."""
+
+
 class AutopilotWakeParams(EmptyParams):
     """Params for method=autopilot_wake, type=request."""
 
@@ -589,6 +593,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "autopilot_list_goals"): AutopilotListGoalsParams,
     ("request", "autopilot_get_goal"): AutopilotGetGoalParams,
     ("request", "autopilot_cancel_goal"): AutopilotCancelGoalParams,
+    ("request", "autopilot_cancel_all"): AutopilotCancelAllParams,
     ("request", "autopilot_wake"): AutopilotWakeParams,
     ("request", "autopilot_dream"): AutopilotDreamParams,
     ("request", "autopilot_resume"): AutopilotResumeParams,

@@ -83,3 +83,48 @@ class TestCancelGoal:
 
         assert result is not None
         assert result.status == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_cancel_cascades_to_descendants(self) -> None:
+        """Cancelling a root cancels pending/active children (job cancel)."""
+        svc = _service()
+        root = await svc.submit_task("root", max_retries=0)
+        child = await svc._ce.create_goal("child", parent_id=root.id, source="decomposition")
+        grandchild = await svc._ce.create_goal("gc", parent_id=child.id, source="decomposition")
+
+        result = await svc.cancel_goal(root.id)
+
+        assert result is not None
+        assert result.status == "cancelled"
+        assert (await svc.get_goal(child.id)).status == "cancelled"
+        assert (await svc.get_goal(grandchild.id)).status == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_cancel_already_cancelled_root_cleans_pending_children(self) -> None:
+        """Re-cancelling a cancelled root still cancels pending descendants."""
+        svc = _service()
+        root = await svc.submit_task("root", max_retries=0)
+        child = await svc._ce.create_goal("child", parent_id=root.id, source="decomposition")
+        await svc._ce.cancel_goal(root.id, reason="prior")
+
+        result = await svc.cancel_goal(root.id)
+
+        assert result is not None
+        assert result.status == "cancelled"
+        assert (await svc.get_goal(child.id)).status == "cancelled"
+
+    @pytest.mark.asyncio
+    async def test_cancel_all_open_goals(self) -> None:
+        svc = _service()
+        a = await svc.submit_task("a", max_retries=0)
+        b = await svc.submit_task("b", max_retries=0)
+        child = await svc._ce.create_goal("c", parent_id=a.id, source="decomposition")
+        await svc._ce.cancel_goal(b.id, reason="already")
+
+        result = await svc.cancel_all_open_goals(reason="bulk")
+
+        assert result["cancelled_count"] == 2
+        assert set(result["goal_ids"]) == {a.id, child.id}
+        assert (await svc.get_goal(a.id)).status == "cancelled"
+        assert (await svc.get_goal(child.id)).status == "cancelled"
+        assert (await svc.get_goal(b.id)).status == "cancelled"

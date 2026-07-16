@@ -359,6 +359,10 @@ class ContextEngine:
         logger.info("Cancelled goal %s: %s", goal_id, reason)
         self._fire("goal_cancelled", goal_id, reason)
 
+    def collect_subtree_ids(self, root_id: str) -> list[str]:
+        """Return ``root_id`` and descendants (deepest-first). See GoalStepDAG."""
+        return self._dag.collect_subtree_ids(root_id)
+
     async def block_goal(self, goal_id: str) -> None:
         """Transition goal to blocked."""
         self._dag.block_goal(goal_id)

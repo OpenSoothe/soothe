@@ -153,6 +153,7 @@ class TestParamsRegistryCompleteness:
         ("request", "autopilot_list_goals"),
         ("request", "autopilot_get_goal"),
         ("request", "autopilot_cancel_goal"),
+        ("request", "autopilot_cancel_all"),
         ("request", "autopilot_wake"),
         ("request", "autopilot_dream"),
         ("request", "autopilot_resume"),

@@ -3181,6 +3181,10 @@ class MessageRouter:
         """Handle autopilot_cancel_goal request."""
         await self._dispatch_autopilot_rpc(client_id, msg, "cancel_goal")
 
+    async def _handle_autopilot_cancel_all(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Handle autopilot_cancel_all request."""
+        await self._dispatch_autopilot_rpc(client_id, msg, "cancel_all")
+
     async def _handle_autopilot_wake(self, client_id: Any, msg: dict[str, Any]) -> None:
         """Handle autopilot_wake request."""
         await self._dispatch_autopilot_rpc(client_id, msg, "wake")

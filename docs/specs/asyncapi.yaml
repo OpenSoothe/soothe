@@ -93,6 +93,7 @@ channels:
           - $ref: '#/components/messages/autopilotListGoalsRequest'
           - $ref: '#/components/messages/autopilotGetGoalRequest'
           - $ref: '#/components/messages/autopilotCancelGoalRequest'
+          - $ref: '#/components/messages/autopilotCancelAllRequest'
           - $ref: '#/components/messages/autopilotWakeRequest'
           - $ref: '#/components/messages/autopilotDreamRequest'
           - $ref: '#/components/messages/autopilotResumeRequest'
@@ -677,6 +678,10 @@ components:
           type: string
           minLength: 1
           description: Goal to cancel
+
+    autopilotCancelAllParams:
+      type: object
+      description: No required fields
 
     autopilotWakeParams:
       type: object
@@ -1546,6 +1551,24 @@ components:
                 const: autopilot_cancel_goal
               params:
                 $ref: '#/components/schemas/autopilotCancelGoalParams'
+              id:
+                type: string
+
+    autopilotCancelAllRequest:
+      title: Cancel all open autopilot goals
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: autopilot_cancel_all
+              params:
+                $ref: '#/components/schemas/autopilotCancelAllParams'
               id:
                 type: string
 

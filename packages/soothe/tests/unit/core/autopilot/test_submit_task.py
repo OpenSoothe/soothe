@@ -1,4 +1,4 @@
-"""Tests for AutopilotService.submit_task / list_goals / get_goal / cancel_goal (RFC-222 revised, Phase C, RFC-625)."""
+"""Tests for AutopilotService.submit_task / list_goals / get_goal (RFC-222 revised, Phase C, RFC-625)."""
 
 from __future__ import annotations
 
@@ -104,18 +104,3 @@ class TestListAndGet:
         out = await svc.get_goal(created.id)
         assert out is not None
         assert out.id == created.id
-
-
-class TestCancelGoal:
-    @pytest.mark.asyncio
-    async def test_cancel_existing_goal_marks_cancelled(self) -> None:
-        svc = _service()
-        goal = await svc.submit_task("doomed", max_retries=0)
-        cancelled = await svc.cancel_goal(goal.id, reason="user said no")
-        assert cancelled is not None
-        assert cancelled.status == "cancelled"
-
-    @pytest.mark.asyncio
-    async def test_cancel_missing_goal_returns_none(self) -> None:
-        svc = _service()
-        assert await svc.cancel_goal("missing") is None

@@ -346,6 +346,35 @@ class GoalStepDAG(BaseModel):
             goal.status = "cancelled"
             goal.updated_at = datetime.now(UTC)
 
+    def collect_subtree_ids(self, root_id: str) -> list[str]:
+        """Return ``root_id`` and all descendants, deepest-first.
+
+        Used by cascading cancel so child workers are stopped before parents.
+        Missing ``root_id`` yields an empty list.
+
+        Args:
+            root_id: Subtree root goal id.
+
+        Returns:
+            Goal ids in post-order (leaves before ancestors); ``root_id`` last.
+        """
+        if root_id not in self.goals:
+            return []
+        children: dict[str, list[str]] = {}
+        for gid, goal in self.goals.items():
+            if goal.parent_id:
+                children.setdefault(goal.parent_id, []).append(gid)
+
+        ordered: list[str] = []
+
+        def _visit(gid: str) -> None:
+            for child_id in children.get(gid, []):
+                _visit(child_id)
+            ordered.append(gid)
+
+        _visit(root_id)
+        return ordered
+
     def block_goal(self, goal_id: str) -> None:
         """Transition goal to blocked."""
         goal = self.goals.get(goal_id)

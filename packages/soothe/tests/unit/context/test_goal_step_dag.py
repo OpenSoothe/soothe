@@ -96,6 +96,17 @@ class TestGoalStepDAGLifecycle:
         dag = GoalStepDAG()
         dag.cancel_goal("missing")
 
+    def test_collect_subtree_ids_deepest_first(self) -> None:
+        dag = GoalStepDAG()
+        root = GoalNode(description="root")
+        child = GoalNode(description="child", parent_id=root.id)
+        leaf = GoalNode(description="leaf", parent_id=child.id)
+        dag.add_goal(root)
+        dag.add_goal(child)
+        dag.add_goal(leaf)
+        assert dag.collect_subtree_ids(root.id) == [leaf.id, child.id, root.id]
+        assert dag.collect_subtree_ids("missing") == []
+
 
 class TestGoalStepDAGScheduling:
     def test_ready_goals_pending_only(self) -> None:
