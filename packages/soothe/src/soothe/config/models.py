@@ -1054,10 +1054,13 @@ class PlanAssessPromptConfig(BaseModel):
         description="Max execute AI ledger rows for assess projection (0 = unlimited)",
     )
     execute_ai_max_chars: int = Field(
-        default=400,
+        default=2048,
         ge=0,
         le=50_000,
-        description="Per execute AI row char cap in assess projection (0 = unlimited)",
+        description=(
+            "Per execute AI row char cap in assess/gap projection (0 = unlimited). "
+            "Oversized rows keep head+tail so deliverable tables and closing notes survive."
+        ),
     )
     keep_head_tail_execute_ai: bool = Field(
         default=True,

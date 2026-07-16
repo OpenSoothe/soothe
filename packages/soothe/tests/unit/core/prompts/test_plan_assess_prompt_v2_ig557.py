@@ -21,6 +21,51 @@ from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessa
 from soothe.protocols.planner import PlanContext
 
 
+def test_assess_execute_ai_compaction_keeps_head_and_tail() -> None:
+    """Oversized execute AI must keep deliverable head + closing tail (not tail-only)."""
+    from soothe.config.models import PlanAssessPromptConfig
+    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        _compact_execute_ai_for_assess,
+    )
+
+    head = (
+        "## Deliverable: File Counts by Extension\n"
+        "| Extension | Count |\n"
+        "| `.py` | 1786 |\n"
+        "| `.md` | 962 |\n"
+    )
+    middle = ("PADDING_ONLY " * 200) + "\n"
+    tail = "Client surface is polyglot: TypeScript + Go.\nStep IUM-02 complete.\n"
+    full = head + middle + tail
+    assert len(full) > 400
+
+    msg = LoopAIMessage(content=full, phase="execute_step", thread_id="t", step_id="IUM-02")
+    compacted = _compact_execute_ai_for_assess(msg, 400)
+    text = str(compacted.content)
+    assert "1786" in text
+    assert "TypeScript" in text or "IUM-02 complete" in text
+    assert "abbr" in text  # middle omitted via preview marker
+    # Tail-only compaction would drop the table; head+tail must retain both ends.
+    assert "`.py`" in text or "Extension" in text
+
+    cfg = SimpleNamespace(
+        agent=SimpleNamespace(
+            loop=SimpleNamespace(
+                plan_assess_prompt=PlanAssessPromptConfig(execute_ai_max_chars=400),
+            )
+        )
+    )
+    projected = project_planner_ledger_for_assess(
+        [msg],
+        "mid_goal",
+        None,
+        soothe_config=cfg,
+    )
+    joined = " ".join(str(getattr(m, "content", "")) for m in projected)
+    assert "1786" in joined
+    assert "TypeScript" in joined or "IUM-02 complete" in joined
+
+
 def test_assess_projection_excludes_plan_phases_and_slice_a() -> None:
     ledger = [
         LoopHumanMessage(content="gc h", phase="goal_completion", thread_id="t"),

@@ -399,7 +399,14 @@ def _is_execute_ai_message(msg: BaseMessage) -> bool:
 
 
 def _compact_execute_ai_for_assess(msg: BaseMessage, max_chars: int) -> BaseMessage:
-    """Keep outcome prose; strip planning boilerplate from execute AI rows."""
+    """Keep outcome prose; strip planning boilerplate from execute AI rows.
+
+    When ``max_chars`` truncates a row, keep head **and** tail (not tail-only)
+    so assess/gap still see deliverable tables near the start and closing
+    observations near the end.
+    """
+    from soothe.utils.text_preview import preview
+
     text = extract_text_from_message_content(getattr(msg, "content", ""))
     lines: list[str] = []
     skip_block = False
@@ -415,7 +422,13 @@ def _compact_execute_ai_for_assess(msg: BaseMessage, max_chars: int) -> BaseMess
         lines.append(line)
     compacted = "\n".join(lines).strip() or text.strip()
     if max_chars > 0 and len(compacted) > max_chars:
-        compacted = compacted[-max_chars:]
+        half = max(1, max_chars // 2)
+        compacted = preview(
+            compacted,
+            mode="chars",
+            first=half,
+            last=half,
+        )
     return _set_message_content(_deep_copy_message(msg), compacted)
 
 
@@ -494,7 +507,7 @@ def project_planner_ledger_for_assess(
     assess_cfg = _assess_prompt_ledger_config(soothe_config)
 
     execute_ai = _collect_assess_execute_ai(loop_messages, mode)
-    max_per = int(getattr(assess_cfg, "execute_ai_max_chars", 400))
+    max_per = int(getattr(assess_cfg, "execute_ai_max_chars", 2048))
     compacted = [_compact_execute_ai_for_assess(m, max_per) for m in execute_ai]
     max_msg = int(getattr(assess_cfg, "ledger_max_messages", 24))
     trimmed = _apply_head_tail_message_cap(
