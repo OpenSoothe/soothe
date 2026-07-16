@@ -11,7 +11,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 from soothe_client import (
-    WebSocketClient,
+    connected_websocket,
     request_daemon_config_reload,
     websocket_url_from_config,
 )
@@ -34,14 +34,11 @@ async def _trigger_config_reload(ws_url: str, timeout: float = 5.0) -> dict[str,
     Returns:
         Response dict from daemon, or error dict on failure.
     """
-    client = WebSocketClient(url=ws_url)
     try:
-        await client.connect()
-        return await request_daemon_config_reload(client, timeout=timeout)
+        async with connected_websocket(ws_url, timeout=timeout) as client:
+            return await request_daemon_config_reload(client, timeout=timeout)
     except Exception as e:
         return {"success": False, "error": str(e)}
-    finally:
-        await client.close()
 
 
 @config_app.command("reload")

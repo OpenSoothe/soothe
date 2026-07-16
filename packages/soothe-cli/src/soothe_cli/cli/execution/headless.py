@@ -5,7 +5,7 @@ import sys
 
 import typer
 from soothe_client import (
-    WebSocketClient,
+    connected_websocket,
     is_daemon_live,
     request_daemon_shutdown,
     websocket_url_from_config,
@@ -49,10 +49,8 @@ def run_headless(
         if not daemon_live:
             # Attempt cleanup if stale daemon (connection exists but daemon not responsive)
             try:
-                client = WebSocketClient(url=ws_url)
-                await client.connect()
-                await request_daemon_shutdown(client, timeout=10.0)
-                await client.close()
+                async with connected_websocket(ws_url, timeout=10.0) as client:
+                    await request_daemon_shutdown(client, timeout=10.0)
             except Exception:
                 pass  # No daemon running or already stopped
 

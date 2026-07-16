@@ -16,8 +16,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from soothe_client import (
-    WebSocketClient,
     check_daemon_status,
+    connected_websocket,
     is_daemon_live,
     websocket_url_from_config,
 )
@@ -40,14 +40,11 @@ async def _fetch_status(ws_url: str, timeout: float = 5.0) -> dict[str, Any]:
     Returns:
         Status dict from daemon, or error dict on failure.
     """
-    client = WebSocketClient(url=ws_url)
     try:
-        await client.connect()
-        return await check_daemon_status(client, timeout=timeout)
+        async with connected_websocket(ws_url, timeout=timeout) as client:
+            return await check_daemon_status(client, timeout=timeout)
     except Exception as e:
         return {"error": str(e)}
-    finally:
-        await client.close()
 
 
 def _render_unified_status_table(

@@ -112,21 +112,34 @@ def parse_command_params(entry: dict[str, Any], query: str) -> dict[str, Any]:
 async def route_slash_command(
     cmd_input: str,
     console: Console,
-    client: WebSocketClient,
+    client: WebSocketClient | None = None,
     *,
     loop_id: str | None = None,
+    session: Any | None = None,
 ) -> bool:
-    """Route slash command based on registry metadata (RFC-454).
+    """Route slash command based on registry metadata.
 
     Args:
         cmd_input: Full command input (e.g., "/memory", "/deep_research topic")
         console: Rich console for rendering
         client: WebSocket client for daemon communication
+        loop_id: Active StrangeLoop id
+        session: Optional ``DaemonSession``; when set, uses ``session.client`` and
+            ``session.loop_id`` unless overridden.
 
     Returns:
         True if command was handled, False if unknown command
     """
     from soothe_cli.tui.commands.slash_commands import COMMANDS
+
+    if session is not None:
+        client = client or getattr(session, "client", None)
+        if loop_id is None:
+            loop_id = getattr(session, "loop_id", None)
+
+    if client is None:
+        console.print("[red]Error: No daemon connection[/red]")
+        return True
 
     command, query = parse_slash_command(cmd_input)
 

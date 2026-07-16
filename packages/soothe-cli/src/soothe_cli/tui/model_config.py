@@ -73,7 +73,7 @@ async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
     """
     try:
         from soothe_client import (
-            WebSocketClient,
+            connected_websocket,
             fetch_config_section,
         )
 
@@ -82,13 +82,12 @@ async def _fetch_provider_config(provider_name: str) -> dict[str, Any] | None:
         cli_cfg = load_config()
         ws_url = cli_cfg.websocket_url()
 
-        client = WebSocketClient(url=ws_url)
-        await client.connect()
-        try:
-            providers_data = await fetch_config_section(client, "providers", timeout=5.0)
-            return providers_data.get(provider_name)
-        finally:
-            await client.close()
+        async def _fetch() -> dict | None:
+            async with connected_websocket(ws_url, timeout=5.0) as client:
+                providers_data = await fetch_config_section(client, "providers", timeout=5.0)
+                return providers_data.get(provider_name)
+
+        return await _fetch()
     except Exception:
         logger.debug("Could not fetch provider config from daemon", exc_info=True)
         return None
@@ -484,7 +483,7 @@ def get_available_models() -> list[ModelProfileEntry]:
         import asyncio
 
         from soothe_client import (
-            WebSocketClient,
+            connected_websocket,
             fetch_config_section,
         )
 
@@ -494,15 +493,9 @@ def get_available_models() -> list[ModelProfileEntry]:
         cli_cfg = load_config()
         ws_url = cli_cfg.websocket_url()
 
-        # Fetch providers section from daemon
-        client = WebSocketClient(url=ws_url)
-
         async def _fetch_providers() -> dict:
-            await client.connect()
-            try:
+            async with connected_websocket(ws_url, timeout=5.0) as client:
                 return await fetch_config_section(client, "providers", timeout=5.0)
-            finally:
-                await client.close()
 
         providers_data = asyncio.run(_fetch_providers())
 

@@ -28,6 +28,35 @@ class _StubClient:
         return None
 
 
+class _StubSession:
+    """DaemonSession stub wrapping an event-playing client."""
+
+    def __init__(self, client: _StubClient, loop_id: str) -> None:
+        self._client = client
+        self._loop_id = loop_id
+
+    @property
+    def client(self) -> _StubClient:
+        return self._client
+
+    @property
+    def loop_id(self) -> str:
+        return self._loop_id
+
+    async def connect(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
+        del resume_loop_id
+        return {"type": "session_ready", "loop_id": self._loop_id, "success": True}
+
+    async def send_turn(self, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def cancel_remote_query(self) -> None:
+        return None
+
+    async def close(self, **_kwargs: Any) -> None:
+        await self._client.close()
+
+
 class _RecorderProcessor:
     """EventProcessor stub that records processed frames."""
 
@@ -67,21 +96,12 @@ async def test_run_headless_filters_non_active_loop_frames(monkeypatch: pytest.M
         ]
     )
 
-    async def _noop_async(*_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    async def _bootstrap(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        return {"type": "session_ready", "loop_id": active_loop_id, "success": True}
+    def _session_factory(*_args: Any, **_kwargs: Any) -> _StubSession:
+        return _StubSession(stub_client, active_loop_id)
 
     monkeypatch.setattr(daemon_exec, "EventProcessor", _RecorderProcessor)
-    monkeypatch.setattr(daemon_exec, "connect_websocket_with_retries", _noop_async)
-    monkeypatch.setattr(
-        daemon_exec,
-        "bootstrap_loop_session",
-        _bootstrap,
-    )
     monkeypatch.setattr(daemon_exec, "websocket_url_from_config", lambda _cfg: "ws://unit.test")
-    monkeypatch.setattr("soothe_cli.cli.execution.daemon.WebSocketClient", lambda url: stub_client)
+    monkeypatch.setattr(daemon_exec, "DaemonSession", _session_factory)
 
     cfg = SimpleNamespace()
     exit_code = await daemon_exec.run_headless_via_daemon(cfg, prompt="hi")

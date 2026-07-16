@@ -35,6 +35,7 @@ class _FakeClient:
         self.subscribe_calls: list[tuple[str, dict[str, Any]]] = []
         self.connection_init_calls = 0
         self.connection_ack_calls: list[float] = []
+        self._handshake_complete = False
 
     async def connect(self) -> None:
         return None
@@ -84,7 +85,7 @@ class _FakeClient:
 
 def _make_patch(fake: _FakeClient) -> Any:
     """Return a patch context that replaces WebSocketClient with ``fake``."""
-    return patch("soothe_cli.cli.commands.loop_cmd.WebSocketClient", return_value=fake)
+    return patch("soothe_client.helpers.WebSocketClient", return_value=fake)
 
 
 @pytest.mark.asyncio

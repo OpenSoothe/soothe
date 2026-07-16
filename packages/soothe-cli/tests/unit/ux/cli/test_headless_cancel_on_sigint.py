@@ -41,6 +41,35 @@ class _CancelRecordingClient:
         return None
 
 
+class _StubSession:
+    """DaemonSession stub wrapping a recording client."""
+
+    def __init__(self, client: _CancelRecordingClient, loop_id: str) -> None:
+        self._client = client
+        self._loop_id = loop_id
+
+    @property
+    def client(self) -> _CancelRecordingClient:
+        return self._client
+
+    @property
+    def loop_id(self) -> str:
+        return self._loop_id
+
+    async def connect(self, *, resume_loop_id: str | None = None) -> dict[str, Any]:
+        del resume_loop_id
+        return {"type": "session_ready", "loop_id": self._loop_id, "success": True}
+
+    async def send_turn(self, *_args: Any, **_kwargs: Any) -> None:
+        return None
+
+    async def cancel_remote_query(self) -> None:
+        await self._client.notify("slash_command", {"cmd": "/cancel"})
+
+    async def close(self, **_kwargs: Any) -> None:
+        await self._client.close()
+
+
 class _RecorderProcessor:
     """EventProcessor stub that records processed frames."""
 
@@ -58,24 +87,20 @@ def _patch_daemon_deps(
 ) -> None:
     """Apply common monkeypatches for daemon test setup."""
 
-    async def _noop_async(*_args: Any, **_kwargs: Any) -> None:
-        return None
-
-    async def _bootstrap(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        return {"type": "session_ready", "loop_id": active_loop_id, "success": True}
+    def _session_factory(*_args: Any, **_kwargs: Any) -> _StubSession:
+        return _StubSession(stub_client, active_loop_id)
 
     monkeypatch.setattr(daemon_exec, "EventProcessor", _RecorderProcessor)
-    monkeypatch.setattr(daemon_exec, "connect_websocket_with_retries", _noop_async)
-    monkeypatch.setattr(daemon_exec, "bootstrap_loop_session", _bootstrap)
     monkeypatch.setattr(daemon_exec, "websocket_url_from_config", lambda _cfg: "ws://unit.test")
-    monkeypatch.setattr(daemon_exec, "WebSocketClient", lambda url: stub_client)
+    monkeypatch.setattr(daemon_exec, "DaemonSession", _session_factory)
 
 
 @pytest.mark.asyncio
 async def test_send_cancel_to_daemon_sends_command() -> None:
-    """_send_cancel_to_daemon should send /cancel via the client."""
+    """_send_cancel_to_daemon should send /cancel via the session."""
     stub_client = _CancelRecordingClient()
-    await daemon_exec._send_cancel_to_daemon(stub_client)
+    session = _StubSession(stub_client, "loop-1")
+    await daemon_exec._send_cancel_to_daemon(session)
     assert "/cancel" in stub_client.cancel_commands
 
 
@@ -83,13 +108,14 @@ async def test_send_cancel_to_daemon_sends_command() -> None:
 async def test_send_cancel_to_daemon_is_tolerant_of_errors() -> None:
     """_send_cancel_to_daemon should not raise even if notify fails."""
     stub_client = _CancelRecordingClient()
+    session = _StubSession(stub_client, "loop-1")
 
-    async def _failing_notify(method: str, params: dict[str, Any] | None = None) -> None:
+    async def _failing_cancel() -> None:
         raise ConnectionError("boom")
 
-    stub_client.notify = _failing_notify
+    session.cancel_remote_query = _failing_cancel  # type: ignore[method-assign]
     # Should not raise.
-    await daemon_exec._send_cancel_to_daemon(stub_client)
+    await daemon_exec._send_cancel_to_daemon(session)
     assert stub_client.cancel_commands == []
 
 
@@ -119,7 +145,6 @@ async def test_sigint_flag_triggers_cancel_then_task_cancel(
         if sig == signal.SIGINT:
             captured_handler = callback
         # Don't install on the real loop to avoid interfering with pytest.
-        # original_add_signal_handler(sig, callback, *args)
 
     loop = asyncio.get_running_loop()
     loop.add_signal_handler = _capturing_add_handler  # type: ignore[assignment]
@@ -138,9 +163,6 @@ async def test_sigint_flag_triggers_cancel_then_task_cancel(
     assert captured_handler is not None, "SIGINT handler should have been installed"
     captured_handler()
 
-    # The handler sets sigint_received=True. The next read_event() call
-    # is blocked on sleep(10). After it times out or gets cancelled, the
-    # loop will check sigint_received and send /cancel.
     # Wait briefly for the cancel to be sent.
     for _ in range(20):
         if stub_client.cancel_commands:
@@ -173,7 +195,7 @@ async def test_cancelled_error_sends_cancel(monkeypatch: pytest.MonkeyPatch) -> 
     async def _read_event_raises_cancelled() -> dict[str, Any] | None:
         raise asyncio.CancelledError
 
-    stub_client.read_event = _read_event_raises_cancelled
+    stub_client.read_event = _read_event_raises_cancelled  # type: ignore[method-assign]
 
     cfg = SimpleNamespace()
     with pytest.raises(asyncio.CancelledError):

@@ -416,7 +416,12 @@ class _StartupMixin:
         """
         from soothe_cli.tui.skills.invocation import discover_skills_async
 
-        return await discover_skills_async(daemon_config=self._daemon_config)
+        session = getattr(self, "_daemon_session", None)
+        client = getattr(session, "client", None) if session is not None else None
+        return await discover_skills_async(
+            daemon_config=self._daemon_config,
+            client=client,
+        )
 
     @staticmethod
     def _daemon_connect_hint_extra(*, attempt: int, max_attempts: int) -> str | None:

@@ -1,7 +1,7 @@
 """Daemon-based execution for headless mode.
 
-Uses RFC-0019 EventProcessor with HeadlessCliRenderer (stdout: loop-tagged answers only).
-Uses WebSocket transport (RFC-0013).
+Uses EventProcessor with HeadlessCliRenderer (stdout: loop-tagged answers only).
+Session lifecycle goes through ``soothe_client.appkit.DaemonSession``.
 """
 
 from __future__ import annotations
@@ -13,13 +13,10 @@ from typing import Any
 
 import typer
 from soothe_client import (
-    WebSocketClient,
     async_ws_command_client_from_config,
-    bootstrap_loop_session,
-    connect_websocket_with_retries,
     websocket_url_from_config,
 )
-from soothe_client.appkit import is_loop_scoped_event, unwrap_next
+from soothe_client.appkit import DaemonSession, is_loop_scoped_event, unwrap_next
 
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error,
@@ -45,11 +42,11 @@ def _emit_headless_error(message: str) -> None:
     typer.echo(f"ERROR: {message}", err=True)
 
 
-async def _send_cancel_to_daemon(client: WebSocketClient) -> None:
+async def _send_cancel_to_daemon(session: DaemonSession) -> None:
     """Send /cancel to the daemon with a short timeout."""
     try:
         await asyncio.wait_for(
-            client.notify("slash_command", {"cmd": "/cancel"}),
+            session.cancel_remote_query(),
             timeout=_CANCEL_SEND_TIMEOUT_S,
         )
     except Exception:
@@ -81,14 +78,12 @@ async def _run_headless_session_once(
     max_iterations: int | None = None,
 ) -> tuple[int, bool]:
     """Run one headless daemon session; return ``(exit_code, retry_on_worker_loss)``."""
-    ws_url = websocket_url_from_config(cfg)
-    client = WebSocketClient(url=ws_url)
-
     # Track whether the daemon was notified of cancellation.
     cancel_sent = False
     sigint_received = False
     sigint_count = 0
     original_sigint: Any = None
+    session: DaemonSession | None = None
 
     cron_text = _parse_cron_slash_prompt(prompt)
     if cron_text is not None:
@@ -109,27 +104,34 @@ async def _run_headless_session_once(
         return 0, False
 
     try:
-        await connect_websocket_with_retries(client)
         cli_ws = resolve_cli_loop_workspace()
-        # IG-441: three first-class modes (batch / adaptive / streaming).
+        # Three first-class modes (batch / adaptive / streaming).
         # Default is ``adaptive`` for headless runs as well — it gives smooth
         # progress on long synthesis while keeping wire traffic bounded.
         override = getattr(cfg, "output_streaming_mode", None)
         stream_delivery = override if override in ("batch", "adaptive", "streaming") else "adaptive"
 
-        status_event = await bootstrap_loop_session(
-            client,
-            resume_loop_id=resume_loop_id,
-            stream_delivery=stream_delivery,
+        session = DaemonSession(
+            websocket_url_from_config(cfg),
             workspace=cli_ws,
-            subscribe_timeout_s=_SESSION_BOOTSTRAP_TIMEOUT_S,
+            stream_delivery=stream_delivery,
         )
+        try:
+            status_event = await asyncio.wait_for(
+                session.connect(resume_loop_id=resume_loop_id),
+                timeout=_SESSION_BOOTSTRAP_TIMEOUT_S,
+            )
+        except RuntimeError as exc:
+            raw = str(exc)
+            _emit_headless_error(friendly_daemon_execution_error(raw))
+            return 1, is_daemon_worker_subprocess_lost(raw)
+
         if status_event.get("type") == "error":
             raw = str(status_event.get("message", "unknown"))
             _emit_headless_error(friendly_daemon_execution_error(raw))
             return 1, is_daemon_worker_subprocess_lost(raw)
 
-        active_loop_id = status_event.get("loop_id")
+        active_loop_id = session.loop_id or status_event.get("loop_id")
         if not active_loop_id:
             _emit_headless_error("No loop_id after session bootstrap")
             return 1, False
@@ -138,8 +140,7 @@ async def _run_headless_session_once(
         effective_prompt = cleaned_prompt if subagent_name else prompt
 
         await asyncio.wait_for(
-            client.send_input(
-                active_loop_id,
+            session.send_turn(
                 effective_prompt,
                 autonomous=autonomous,
                 max_iterations=max_iterations,
@@ -182,13 +183,14 @@ async def _run_headless_session_once(
         )
 
         query_started = False
+        client = session.client
 
         while True:
             # Check if SIGINT fired and send /cancel to the daemon.
             if sigint_received and not cancel_sent:
                 cancel_sent = True
                 logger.info("Headless query interrupted; sending /cancel to daemon")
-                await _send_cancel_to_daemon(client)
+                await _send_cancel_to_daemon(session)
                 # After notifying the daemon, cancel the main task so
                 # asyncio.run() can unwind cleanly.
                 if main_task is not None and not main_task.done():
@@ -210,8 +212,8 @@ async def _run_headless_session_once(
             if not is_loop_scoped_event(event, active_loop_id=active_loop_id):
                 continue
 
-            # Unwrap protocol-1 ``next`` envelopes to the inner streaming frame
-            # (RFC-450 §9.3). ``status``/``error`` arrive raw and pass through.
+            # Unwrap protocol-1 ``next`` envelopes to the inner streaming frame.
+            # ``status``/``error`` arrive raw and pass through.
             if event_type == "next":
                 inner = unwrap_next(event)
                 if isinstance(inner, dict):
@@ -263,18 +265,18 @@ async def _run_headless_session_once(
             processor.process_event(event)
 
     except KeyboardInterrupt:
-        if not cancel_sent:
+        if session is not None and not cancel_sent:
             cancel_sent = True
             logger.info("Headless query interrupted by user; sending /cancel to daemon")
-            await _send_cancel_to_daemon(client)
+            await _send_cancel_to_daemon(session)
         return 1, False
     except asyncio.CancelledError:
-        if not cancel_sent:
+        if session is not None and not cancel_sent:
             cancel_sent = True
             logger.info("Headless query cancelled; sending /cancel to daemon")
             # Best-effort: the task is being cancelled so awaiting may fail.
             try:
-                await asyncio.shield(_send_cancel_to_daemon(client))
+                await asyncio.shield(_send_cancel_to_daemon(session))
             except (asyncio.CancelledError, Exception):
                 pass
         raise
@@ -300,7 +302,8 @@ async def _run_headless_session_once(
                 signal.signal(signal.SIGINT, original_sigint)
         except (ValueError, OSError, RuntimeError):
             pass
-        await client.close()
+        if session is not None:
+            await session.close()
 
 
 async def run_headless_via_daemon(
@@ -313,8 +316,8 @@ async def run_headless_via_daemon(
 ) -> int:
     """Run a single prompt by connecting to a running daemon.
 
-    Uses WebSocket transport for all connections (RFC-0013).
-    Headless output is RFC-614 loop-tagged main-graph assistant text only (IG-343).
+    Uses WebSocket transport for all connections.
+    Headless output is loop-tagged main-graph assistant text only.
 
     Retries once when the worker pool loses a subprocess mid-query (common idle-timeout
     race or transient worker recycle).

@@ -18,9 +18,8 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 from soothe_client import (
-    ProtocolError,
-    WebSocketClient,
     is_daemon_live,
+    protocol1_rpc,
     websocket_url_from_config,
 )
 
@@ -47,64 +46,8 @@ async def _check_daemon(ws_url: str) -> bool:
     return await is_daemon_live(ws_url, timeout=5.0)
 
 
-async def _rpc(
-    ws_url: str,
-    method: str,
-    params: dict[str, Any] | None = None,
-    *,
-    mode: str = "request",
-    timeout: float = 30.0,
-) -> dict[str, Any]:
-    """Send a protocol-1 RPC to the daemon and return the response.
-
-    Uses the protocol-1 client API (RFC-450): ``request()`` for RPC,
-    ``notify()`` for fire-and-forget, ``subscribe()`` for event streams.
-    The wrapper preserves the dict-based error contract used by command
-    handlers — callers check ``if "error" in response``.
-
-    Args:
-        ws_url: WebSocket URL.
-        method: RPC method / notification target / subscription target
-            (e.g. ``"loop_get"``, ``"loop_input"``, ``"loop_events"``).
-        params: Structured parameters object.
-        mode: One of ``"request"`` (blocking RPC), ``"notify"``
-            (fire-and-forget), or ``"subscribe"`` (start a stream).
-        timeout: Maximum seconds to wait.
-
-    Returns:
-        Response dict from daemon, or ``{"error": ...}`` on failure. For
-        ``notify`` mode returns ``{}``; for ``subscribe`` mode returns
-        ``{"subscription_id": <id>}``.
-    """
-    client = WebSocketClient(url=ws_url)
-    try:
-        await client.connect()
-        await asyncio.wait_for(client.request_connection_init(), timeout=timeout)
-        await asyncio.wait_for(
-            client.wait_for_connection_ack(ack_timeout_s=timeout), timeout=timeout
-        )
-        if mode == "notify":
-            await asyncio.wait_for(client.notify(method, params or {}), timeout=timeout)
-            return {}
-        if mode == "subscribe":
-            sub_id = await asyncio.wait_for(
-                client.subscribe(method, params or {}, timeout=timeout),
-                timeout=timeout,
-            )
-            return {"subscription_id": sub_id}
-        result = await asyncio.wait_for(
-            client.request(method, params or {}, timeout=timeout),
-            timeout=timeout,
-        )
-        return result if isinstance(result, dict) else {"result": result}
-    except TimeoutError:
-        return {"error": "Timed out waiting for daemon response"}
-    except ProtocolError as exc:
-        return {"error": str(exc)}
-    except (ConnectionError, OSError) as exc:
-        return {"error": f"Connection error: {exc}"}
-    finally:
-        await client.close()
+# Back-compat alias for tests and internal callers.
+_rpc = protocol1_rpc
 
 
 def _resolve_continue_loop_id(ws_url: str, loop_id: str | None) -> str:
