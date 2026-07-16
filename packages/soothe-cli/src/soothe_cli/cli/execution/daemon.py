@@ -16,7 +16,8 @@ from soothe_client import (
     async_ws_command_client_from_config,
     websocket_url_from_config,
 )
-from soothe_client.appkit import DaemonSession, is_loop_scoped_event, unwrap_next
+from soothe_client.appkit import DaemonSession
+from soothe_client.appkit.events import is_loop_scoped_event, unwrap_next
 
 from soothe_cli.cli.execution.daemon_errors import (
     friendly_daemon_execution_error,
