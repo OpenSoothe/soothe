@@ -310,7 +310,7 @@ class _ModelMixin:
             task: Task description for autonomous execution.
         """
         from soothe_client import (
-            async_ws_command_client_from_config,
+            async_command_client_from_config,
             is_daemon_live,
             websocket_url_from_config,
         )
@@ -333,7 +333,7 @@ class _ModelMixin:
         workspace = self._cwd if hasattr(self, "_cwd") else os.getcwd()
 
         try:
-            client = async_ws_command_client_from_config(cfg)
+            client = async_command_client_from_config(cfg)
             result = await client.autopilot_submit(task, workspace=workspace)
         except RuntimeError as exc:
             await self._mount_message(ErrorMessage(str(exc)))
@@ -358,7 +358,7 @@ class _ModelMixin:
             slash_input: Original slash command for chat display.
         """
         from soothe_client import (
-            async_ws_command_client_from_config,
+            async_command_client_from_config,
             is_daemon_live,
             websocket_url_from_config,
         )
@@ -378,7 +378,7 @@ class _ModelMixin:
             return
 
         try:
-            client = async_ws_command_client_from_config(cfg)
+            client = async_command_client_from_config(cfg)
             result = await client.cron_add(text)
         except RuntimeError as exc:
             message = str(exc)

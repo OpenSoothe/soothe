@@ -13,7 +13,7 @@
 Finish CLI thinning after IG-655: stop hand-rolling `WebSocketClient` connect/handshake/read loops where `DaemonSession` or shared oneshot RPC helpers already exist.
 
 ```
-soothe-cli (UI) → soothe_client (DaemonSession / helpers / WsCommandClient) → daemon
+soothe-cli (UI) → soothe_client (DaemonSession / helpers / AsyncCommandClient) → daemon
 ```
 
 ## Scope

@@ -11,7 +11,7 @@ from soothe_cli.cli.execution.daemon import _run_headless_session_once
 
 
 @pytest.mark.asyncio
-async def test_headless_cron_slash_uses_ws_command_client(monkeypatch) -> None:
+async def test_headless_cron_slash_uses_command_client(monkeypatch) -> None:
     """Headless /cron submits via WebSocket command client and skips the agent loop."""
     cfg = MagicMock()
     mock_client = AsyncMock()
@@ -24,7 +24,7 @@ async def test_headless_cron_slash_uses_ws_command_client(monkeypatch) -> None:
     }
 
     monkeypatch.setattr(
-        "soothe_cli.cli.execution.daemon.async_ws_command_client_from_config",
+        "soothe_cli.cli.execution.daemon.async_command_client_from_config",
         lambda _cfg: mock_client,
     )
     session_factory = MagicMock()
@@ -64,7 +64,7 @@ async def test_headless_cron_ws_failure(monkeypatch) -> None:
     mock_client = AsyncMock()
     mock_client.cron_add.side_effect = RuntimeError("WebSocket command failed")
     monkeypatch.setattr(
-        "soothe_cli.cli.execution.daemon.async_ws_command_client_from_config",
+        "soothe_cli.cli.execution.daemon.async_command_client_from_config",
         lambda _cfg: mock_client,
     )
 

@@ -32,7 +32,7 @@ soothe-cli → soothe-client-python → [WS] → daemon → soothe (core)
 | `websocket.py` | `wire.py` |
 | `session.py` | `protocol.py` |
 | `helpers.py` | `config.py` |
-| `ws_command_client.py` | |
+| `command_client.py` | |
 | `protocol_params.py` | |
 | `schemas.py` | |
 | `intent_hints.py` | |

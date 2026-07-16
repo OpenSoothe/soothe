@@ -22,9 +22,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from soothe_client import (
+    command_client_from_config,
     is_daemon_live,
     websocket_url_from_config,
-    ws_command_client_from_config,
 )
 
 from soothe_cli.runtime import load_config
@@ -44,7 +44,7 @@ def _require_cron_client():
             err=True,
         )
         sys.exit(1)
-    return ws_command_client_from_config(cfg)
+    return command_client_from_config(cfg)
 
 
 def _format_next_run(next_run: str) -> str:

@@ -1,7 +1,7 @@
 # IG-656: Protocol-1 autopilot_* request RPCs
 
 **Guide**: IG-656  
-**Title**: Register `autopilot_*` as protocol-1 request methods for CLI / WsCommandClient  
+**Title**: Register `autopilot_*` as protocol-1 request methods for CLI / AsyncCommandClient  
 **Created**: 2026-07-16  
 **Related**: IG-655, RFC-450, RFC-228  
 **Status**: implemented (2026-07-16) — restart running `soothed` to activate handlers
@@ -10,7 +10,7 @@
 
 ## Goal
 
-`WsCommandClient` / `soothe autopilot` send protocol-1 `request` envelopes with
+`AsyncCommandClient` / `soothe autopilot` send protocol-1 `request` envelopes with
 methods like `autopilot_status`. Envelope-only daemons rejected these as unknown
 methods (legacy path was flat `type=command`, which validation also rejects).
 

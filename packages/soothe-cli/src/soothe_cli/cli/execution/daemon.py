@@ -13,7 +13,7 @@ from typing import Any
 
 import typer
 from soothe_client import (
-    async_ws_command_client_from_config,
+    async_command_client_from_config,
     websocket_url_from_config,
 )
 from soothe_client.appkit import DaemonSession
@@ -92,7 +92,7 @@ async def _run_headless_session_once(
             _emit_headless_error("Usage: /cron <natural language schedule>")
             return 1, False
         try:
-            ws_client = async_ws_command_client_from_config(cfg)
+            ws_client = async_command_client_from_config(cfg)
             result = await ws_client.cron_add(cron_text)
         except RuntimeError as exc:
             _emit_headless_error(str(exc))

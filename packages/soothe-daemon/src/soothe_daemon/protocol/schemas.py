@@ -587,7 +587,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("subscribe", "loop_events"): SubscribeParams,
     ("subscribe", "autopilot_events"): AutopilotSubscribeParams,
     ("unsubscribe", None): AutopilotUnsubscribeParams,
-    # Autopilot RPC (protocol-1 request methods for WsCommandClient / CLI)
+    # Autopilot RPC (protocol-1 request methods for AsyncCommandClient / CLI)
     ("request", "autopilot_status"): AutopilotStatusParams,
     ("request", "autopilot_submit"): AutopilotSubmitParams,
     ("request", "autopilot_list_goals"): AutopilotListGoalsParams,

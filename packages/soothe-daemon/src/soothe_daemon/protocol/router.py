@@ -3162,7 +3162,7 @@ class MessageRouter:
         await self._send_response(client_id, request_id, result)
 
     async def _handle_autopilot_status(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle autopilot_status request (CLI / WsCommandClient)."""
+        """Handle autopilot_status request (CLI / AsyncCommandClient)."""
         await self._dispatch_autopilot_rpc(client_id, msg, "status")
 
     async def _handle_autopilot_submit(self, client_id: Any, msg: dict[str, Any]) -> None:

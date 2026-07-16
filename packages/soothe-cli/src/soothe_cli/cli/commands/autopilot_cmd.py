@@ -15,9 +15,9 @@ from pathlib import Path
 
 import typer
 from soothe_client import (
+    command_client_from_config,
     is_daemon_live,
     websocket_url_from_config,
-    ws_command_client_from_config,
 )
 from soothe_sdk.wire.protocol import preview_first
 
@@ -46,7 +46,7 @@ def _require_daemon_ws():
             err=True,
         )
         sys.exit(1)
-    return ws_command_client_from_config(cfg)
+    return command_client_from_config(cfg)
 
 
 @app.command("run")
