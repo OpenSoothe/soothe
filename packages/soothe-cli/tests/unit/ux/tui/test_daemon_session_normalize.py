@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
-from soothe_client.websocket import WebSocketClient
 from soothe_sdk.langchain_wire import envelope_langchain_message_dict
 from soothe_sdk.wire.protocol import _serialize_for_json
 
@@ -13,21 +12,18 @@ from soothe_cli.runtime.transport.session import TuiDaemonSession
 
 
 class _StubEventClient:
+    """Event sequence stub for turn-chunk tests (peel covered on WebSocketClient)."""
+
     def __init__(self, events: list[dict]) -> None:
         self._events = list(events)
 
     def peel_stale_pending_control_events(self) -> list[str]:
-        removed: list[str] = []
-        kept: list[dict] = []
-        stale = WebSocketClient._STALE_TURN_PENDING_TYPES  # noqa: SLF001
-        for event in self._events:
-            event_type = str(event.get("type") or "")
-            if event_type in stale:
-                removed.append(event_type)
-            else:
-                kept.append(event)
-        self._events = kept
-        return removed
+        # Real client peels ``_pending_events`` only; this stub feeds the live
+        # turn sequence via ``read_event``, so peeling here would drop fixtures.
+        return []
+
+    def is_connection_alive(self) -> bool:
+        return True
 
     async def read_event(self) -> dict | None:
         if not self._events:
