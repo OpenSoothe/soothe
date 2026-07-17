@@ -34,6 +34,6 @@ Close the IG-655 Phase B migration window and ship **soothe-sdk 1.0.0** with a c
 - [x] All in-repo consumers migrated
 - [x] Pins raised to `soothe-sdk>=1.0.0,<2.0.0`
 - [x] `./scripts/verify_finally.sh` green
-- [ ] soothe-sdk `1.0.0` released
+- [x] soothe-sdk `1.0.0` released
 
-**Status**: Implementation complete (2026-07-17); awaiting publish
+**Status**: Complete (2026-07-17) — PyPI `soothe-sdk==1.0.0`, GitHub release `soothe-sdk-v1.0.0`
