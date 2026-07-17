@@ -1,22 +1,22 @@
 # RFC-629: Client Library — Core Upgrade and Appkit Architecture
 
 **RFC**: 629
-**Title**: Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript)
+**Title**: Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript + Rust)
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-30
 **Updated**: 2026-07-17
 **Authors**: Xiaming Chen
 **Dependencies**: RFC-450, RFC-614, RFC-403
-**Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450), IG-655 (Python client), IG-662 (cross-client API parity)
+**Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450), IG-655 (Python client), IG-662 (cross-client API parity), IG-663 (Rust client)
 
 ## Abstract
 
-Three language clients talk to soothe-daemon over protocol-1 (RFC-450): `client/python` (`soothe-client-python`), `client/go`, and `client/typescript`. Real applications need more than a thin WebSocket wrapper: panic-safe read loops, drop detection, reconnect + loop reattach + liveness probing, readiness retry, concurrent RPC/subscription multiplexing, per-session pooling, single-flight query gating, cancel-before-context ordering, event→deliverable classification, SSE fan-out, dual-socket turn streaming (`DaemonSession`), ephemeral one-shot RPCs (`CommandClient`), and stream `delivery_ack` for daemon drain gating.
+Four language clients talk to soothe-daemon over protocol-1 (RFC-450): `client/python` (`soothe-client-python`), `client/go`, `client/typescript`, and `client/rust` (`soothe-client`). Real applications need more than a thin WebSocket wrapper: panic-safe read loops, drop detection, reconnect + loop reattach + liveness probing, readiness retry, concurrent RPC/subscription multiplexing, per-session pooling, single-flight query gating, cancel-before-context ordering, event→deliverable classification, SSE fan-out, dual-socket turn streaming (`DaemonSession`), ephemeral one-shot RPCs (`CommandClient`), and stream `delivery_ack` for daemon drain gating.
 
-**Python 0.10.x is the reference implementation** for user-facing API tiers, constrained public export surface, turn-session semantics, and production transport behaviors (priority inbound backpressure, `delivery_ack`). Go and TypeScript must match that contract with language-idiomatic code (IG-662).
+**Python 0.10.x is the reference implementation** for user-facing API tiers, constrained public export surface, turn-session semantics, and production transport behaviors (priority inbound backpressure, `delivery_ack`). Go, TypeScript, and Rust must match that contract with language-idiomatic code (IG-662, IG-663).
 
-This RFC defines a three-layer architecture shared by all three clients:
+This RFC defines a three-layer architecture shared by all four clients:
 
 - **Layer 0 (core transport)**: WebSocket + protocol-1 lifecycle — `WebSocketClient` / `Client`, reconnect/reattach, multiplexing, heartbeat, `delivery_ack`.
 - **Layer 1 (`appkit`)**: reusable application mechanics — `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `SessionStore`.

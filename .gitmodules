@@ -13,3 +13,6 @@
 [submodule "client/python"]
 	path = client/python
 	url = git@github.com:mirasoth/soothe-client-python.git
+[submodule "client/rust"]
+	path = client/rust
+	url = git@github.com:mirasoth/soothe-client-rust.git
