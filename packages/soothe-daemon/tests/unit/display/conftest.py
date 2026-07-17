@@ -10,7 +10,7 @@ from soothe.backends.persistence.display_store import DisplayCardStore, get_disp
 def isolated_display_db(tmp_path, monkeypatch: pytest.MonkeyPatch) -> DisplayCardStore:
     """Use an isolated ``display.db`` for every display test."""
     import soothe.backends.persistence.display_store as display_store_mod
-    from soothe_sdk import paths as sdk_config
+    import soothe_sdk.paths as sdk_config
 
     data_dir = tmp_path / "soothe_data"
     data_dir.mkdir()

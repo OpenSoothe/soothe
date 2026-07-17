@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 import pytest
-from soothe_sdk.client import ProtocolError
+from soothe_sdk.wire import ProtocolError
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from tests.integration.daemon_fixtures import (

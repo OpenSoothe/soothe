@@ -6,7 +6,7 @@ a more structured way to declare dependencies.
 
 Example:
     ```python
-    from soothe_sdk import plugin, depends
+    from soothe_sdk.plugin import library, plugin
 
 
     @plugin(
@@ -14,8 +14,8 @@ Example:
         version="1.0.0",
         description="My plugin",
         dependencies=[
-            depends.library("langchain", ">=0.1.0"),
-            depends.library("arxiv", ">=2.0.0"),
+            library("langchain", ">=0.1.0"),
+            library("arxiv", ">=2.0.0"),
         ],
     )
     class MyPlugin:
@@ -39,8 +39,8 @@ def library(name: str, version_constraint: str = "*") -> str:
     Example:
         ```python
         dependencies = [
-            depends.library("langchain", ">=0.1.0"),
-            depends.library("arxiv", ">=2.0.0"),
+            library("langchain", ">=0.1.0"),
+            library("arxiv", ">=2.0.0"),
         ]
         ```
     """

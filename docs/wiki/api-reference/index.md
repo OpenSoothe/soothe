@@ -18,7 +18,7 @@ These articles explain the *why* and *how* of each Soothe package — architectu
 |---------|---------|------|-----------|
 | [Core API](core-api.md) | `soothe` | CoreAgent & SootheRunner: configuration, protocols, agent construction, runner | ⚠️ Beta |
 | [Daemon API](daemon-api.md) | `soothe_daemon` | SootheDaemon: background server, multi-transport, goal dispatch | ⚠️ Alpha |
-| [SDK API](sdk-api.md) | `soothe_sdk` | Client & plugin development: WebSocket client, decorators, events | ✅ Stable |
+| [SDK API](sdk-api.md) | `soothe_sdk` | Plugin & contracts: decorators, events, wire, paths | ✅ Stable |
 
 ### Core (`soothe`) — Framework Foundation
 
@@ -30,7 +30,7 @@ Long-running background server hosting `SootheRunner` instances. Manages WebSock
 
 ### SDK (`soothe_sdk`) — Client & Plugin API
 
-Public API for two audiences: client developers connecting to a daemon (WebSocket client, RPC helpers) and plugin authors extending the agent (decorators for tools, subagents, events). Re-exports core protocols so plugins have zero hard dependency on the daemon package.
+Public API for plugin authors (decorators for tools, subagents, events) and shared contracts (wire, paths, display). Transport clients live in `soothe-client-python`.
 
 ## Architectural Tiers
 
@@ -48,12 +48,12 @@ Each tier has a strict contract: CoreAgent knows nothing about goals; SootheRunn
 |---------|----------------|
 | `soothe` | `from soothe.config import SootheConfig` · `from soothe.foundation.core.agent import CoreAgent, create_soothe_agent` · `from soothe.runner import SootheRunner` · `from soothe.protocols import MemoryProtocol, DurabilityProtocol` |
 | `soothe_daemon` | `from soothe_daemon import SootheDaemon, run_daemon` · `from soothe_daemon.bootstrap import pid_path` |
-| `soothe_sdk` | `from soothe_sdk.client import WebSocketClient` · `from soothe_sdk import plugin, tool, subagent` · `from soothe_sdk.core.events import SootheEvent` · `from soothe_sdk.protocols import AsyncPersistStore, VectorStoreProtocol` |
+| `soothe_sdk` | `from soothe_sdk.plugin import plugin, tool, subagent` · `from soothe_sdk.core.events import SootheEvent` · `from soothe_sdk.wire import ProtocolError` · `from soothe_sdk.protocols import AsyncPersistStore, VectorStoreProtocol` · transport: `from soothe_client import WebSocketClient` |
 
 ## Version Compatibility
 
 - **Python**: `>=3.11`
-- **SDK version constraint**: `>=0.5.0,<1.0.0` (see `__soothe_required_version__`)
+- **SDK version constraint**: `soothe-sdk>=1.0.0,<2.0.0`
 - **LangChain**: Compatible with `langchain-core`, `langchain-community`
 
 ## Related Documentation

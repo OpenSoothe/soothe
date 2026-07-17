@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
-from soothe_sdk.client import ProtocolError
+from soothe_sdk.wire import ProtocolError
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.config import SootheDaemonConfig

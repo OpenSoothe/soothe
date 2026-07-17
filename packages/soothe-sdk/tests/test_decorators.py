@@ -2,7 +2,8 @@
 
 import pytest
 
-from soothe_sdk import PluginError, plugin, subagent, tool
+from soothe_sdk.core.exceptions import PluginError
+from soothe_sdk.plugin import plugin, subagent, tool
 
 
 def test_plugin_decorator():

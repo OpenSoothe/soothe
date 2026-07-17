@@ -2,8 +2,7 @@
 
 import pytest
 
-from soothe_sdk.plugin import Context as PluginContext
-from soothe_sdk.plugin import plugin, subagent, tool
+from soothe_sdk.plugin import PluginContext, plugin, subagent, tool
 
 
 @pytest.mark.asyncio
@@ -72,7 +71,7 @@ async def test_plugin_health_check():
     @plugin(name="test-plugin", version="1.0.0", description="Test plugin")
     class TestPlugin:
         async def health_check(self):
-            from soothe_sdk.plugin import Health as PluginHealth
+            from soothe_sdk.plugin import PluginHealth
 
             return PluginHealth(status="healthy")
 

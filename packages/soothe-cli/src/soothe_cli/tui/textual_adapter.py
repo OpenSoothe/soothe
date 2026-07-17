@@ -67,9 +67,6 @@ from soothe_sdk.core.subagent_wire import (
     is_allowlisted_subagent_event_type,
     parse_subagent_wire_agent,
 )
-from soothe_sdk.langchain_wire import (
-    messages_from_wire_dicts,
-)
 from soothe_sdk.ux.loop_stream import (
     LOOP_ASSISTANT_OUTPUT_PHASES,
     assistant_output_phase,
@@ -89,6 +86,9 @@ from soothe_sdk.ux.task_namespace import (
     row_key_for_subgraph_tool,
     task_scope_step_id,
     task_scope_task_idx,
+)
+from soothe_sdk.wire.codec import (
+    messages_from_wire_dicts,
 )
 
 from soothe_cli.runtime.parse.message_processing import (

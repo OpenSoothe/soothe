@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "soothe-sdk>=0.5.25,<1.0.0",    # events/display/wire contracts
+    "soothe-sdk>=1.0.0,<2.0.0",    # events/display/wire contracts
     "soothe-client-python>=0.10.0,<1.0.0",  # WebSocket transport client
     "typer>=0.9.0,<2.0.0",          # CLI framework
     "textual>=8.0.0,<10.0.0",       # TUI framework

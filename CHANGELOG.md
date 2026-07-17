@@ -5,6 +5,18 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [soothe-sdk 1.0.0] - 2026-07-17
+
+### Removed
+- `soothe_sdk.client.*` and `soothe_sdk.langchain_wire` compatibility shims
+- Root-package re-exports of plugin API, paths, protocols, and events
+- Short plugin type aliases (`Manifest`, `Context`, `Health`, `Depends`)
+
+### Changed
+- First stable major: import from subpackages only (`soothe_sdk.plugin`, `.wire`, `.paths`, `.core`, …)
+- Plugin package exports full type names (`PluginManifest`, `PluginContext`, `PluginHealth`, `library`)
+- Dependent packages require `soothe-sdk>=1.0.0,<2.0.0`
+
 ## [v0.8.2] - 2026-07-17
 
 ### Added

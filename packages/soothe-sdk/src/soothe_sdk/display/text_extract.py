@@ -14,7 +14,7 @@ def normalize_stream_message(message: Any) -> Any:
     if not isinstance(message, dict):
         return message
     try:
-        from soothe_sdk.langchain_wire import deserialize_langchain_message_from_wire
+        from soothe_sdk.wire.codec import deserialize_langchain_message_from_wire
 
         restored = deserialize_langchain_message_from_wire(message)
         if restored is not message:

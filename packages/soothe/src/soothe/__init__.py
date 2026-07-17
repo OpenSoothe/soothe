@@ -2,7 +2,7 @@
 
 import importlib.metadata
 
-from soothe_sdk import _upstream_warnings as _upstream_warnings  # noqa: F401
+import soothe_sdk._upstream_warnings as _upstream_warnings  # noqa: F401
 
 try:
     __version__ = importlib.metadata.version("soothe")

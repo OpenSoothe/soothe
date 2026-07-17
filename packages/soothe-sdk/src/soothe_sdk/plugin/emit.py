@@ -45,7 +45,7 @@ def emit_progress(event: dict[str, Any] | Any, logger: logging.Logger | None = N
     Plugin authors use this in their subagent graph nodes:
 
     ```python
-    from soothe_sdk import emit_progress
+    from soothe_sdk.plugin import emit_progress
     import logging
 
     logger = logging.getLogger(__name__)

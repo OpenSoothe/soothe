@@ -188,7 +188,7 @@ src/soothe_plugins/your_subagent/
 
 ```toml
 dependencies = [
-    "soothe-sdk>=0.5.10,<1.0.0",  # Plugin decorators, events, protocols
+    "soothe-sdk>=1.0.0,<2.0.0",  # Plugin decorators, events, protocols
     "langgraph>=0.2.0",           # LangGraph for subagent graphs
     # ... other package-specific deps
 ]

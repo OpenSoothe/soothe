@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from soothe_sdk.client import ProtocolError
+from soothe_sdk.wire import ProtocolError
 
 from soothe_daemon import SootheDaemon, WebSocketClient
 from soothe_daemon.event import EventBus

@@ -8,7 +8,7 @@ from langchain_core.messages import (
     messages_from_dict,
 )
 
-from soothe_sdk.langchain_wire import (
+from soothe_sdk.wire.codec import (
     deserialize_langchain_message_from_wire,
     envelope_langchain_message_dict,
     messages_from_wire_dicts,

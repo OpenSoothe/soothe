@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_sdk.plugin import Manifest
+from soothe_sdk.plugin import PluginManifest
 
 from soothe.plugin.registry import PluginRegistry
 
 
-def _minimal_manifest(name: str = "test-plugin") -> Manifest:
-    return Manifest(name=name, version="1.0.0", description="test")
+def _minimal_manifest(name: str = "test-plugin") -> PluginManifest:
+    return PluginManifest(name=name, version="1.0.0", description="test")
 
 
 def test_get_tool_metadata_matches_decorated_tool() -> None:

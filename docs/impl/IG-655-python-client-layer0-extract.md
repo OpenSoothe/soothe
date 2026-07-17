@@ -52,7 +52,7 @@ soothe-cli → soothe-client-python → [WS] → daemon → soothe (core)
 | `soothe_sdk.client.protocol` | `soothe_sdk.wire.protocol` |
 | `soothe_sdk.client.config` | `soothe_sdk.paths` |
 
-Compat shims under `soothe_sdk.client.*` remain for one migration window.
+Compat shims under `soothe_sdk.client.*` removed in IG-664 (soothe-sdk 1.0.0).
 
 ## Phase C (thin CLI; no core imports)
 
@@ -74,7 +74,7 @@ Compat shims under `soothe_sdk.client.*` remain for one migration window.
 
 ### Phase B
 - [x] Wire/paths live under `soothe_sdk.wire` / `soothe_sdk.paths`
-- [x] Compat shims keep old `soothe_sdk.client.*` imports working
+- [x] Compat shims removed (IG-664 / soothe-sdk 1.0.0)
 - [x] SDK package description reflects slim contracts (no transport client)
 - [x] `./scripts/verify_finally.sh` green
 

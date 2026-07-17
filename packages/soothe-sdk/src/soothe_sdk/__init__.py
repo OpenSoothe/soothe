@@ -1,23 +1,13 @@
-"""Soothe SDK - Minimal __init__.py matching langchain-core pattern.
+"""Soothe SDK — slim contracts for plugins, wire, display, and protocols.
 
-This SDK provides decorator-based API for building Soothe plugins and shared
-contracts (events, wire codec, display/UX helpers). The WebSocket transport
-client lives in ``soothe-client-python`` (`soothe_client`).
+Root package exports version metadata only (langchain-core style).
+Import from subpackages:
 
-Following langchain-core pattern: minimal __init__.py (version only).
-Use package-level imports instead of root-level re-exports.
-
-Canonical import paths (IG-259 refactoring):
+    from soothe_sdk.plugin import plugin, tool, subagent
     from soothe_sdk.core.events import SootheEvent
-    from soothe_sdk.core.types import VerbosityLevel
-    from soothe_sdk.core.verbosity import VerbosityTier
-    from soothe_sdk.core.exceptions import PluginError
     from soothe_sdk.wire.codec import messages_from_wire_dicts
-    from soothe_sdk.ux.loop_stream import assistant_output_phase
-    from soothe_sdk.tools.metadata import get_tool_meta
-    from soothe_sdk.utils.formatting import format_cli_error
-    from soothe_sdk.plugin import plugin, tool
-    # Transport client: soothe-client-python (module soothe_client)
+    from soothe_sdk.paths import SOOTHE_HOME
+    from soothe_sdk.protocols import AsyncPersistStore
 """
 
 import importlib
@@ -25,21 +15,6 @@ import importlib.metadata
 
 # Load before plugin stack so LangGraph serde import-time Reviver() warning is filtered.
 importlib.import_module("soothe_sdk._upstream_warnings")
-
-from soothe_sdk.core.events import SubagentEvent  # noqa: E402, F401
-from soothe_sdk.core.exceptions import PluginError  # noqa: E402, F401
-from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402, F401
-from soothe_sdk.paths import SOOTHE_HOME  # noqa: E402, F401
-from soothe_sdk.plugin import plugin, subagent, tool, tool_group  # noqa: E402, F401
-from soothe_sdk.plugin.emit import emit_progress  # noqa: E402, F401
-from soothe_sdk.plugin.registry import register_event  # noqa: E402, F401
-from soothe_sdk.protocols import (  # noqa: E402, F401
-    ActionRequest,
-    AsyncPersistStore,
-    PermissionSet,
-    PolicyContext,
-    VectorStoreProtocol,
-)
 
 try:
     __version__ = importlib.metadata.version("soothe-sdk")
@@ -51,23 +26,4 @@ __soothe_required_version__ = ">=0.5.0,<1.0.0"
 __all__ = [
     "__version__",
     "__soothe_required_version__",
-    # Core
-    "PluginError",
-    "SubagentEvent",
-    "VerbosityTier",
-    # Plugin API
-    "plugin",
-    "subagent",
-    "tool",
-    "tool_group",
-    "register_event",
-    "emit_progress",
-    # Protocols (legacy root imports)
-    "AsyncPersistStore",
-    "VectorStoreProtocol",
-    "ActionRequest",
-    "PermissionSet",
-    "PolicyContext",
-    # Client config
-    "SOOTHE_HOME",
 ]

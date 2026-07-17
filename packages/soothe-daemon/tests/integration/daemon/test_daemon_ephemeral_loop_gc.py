@@ -13,7 +13,7 @@ from soothe.foundation.sloop.state.persistence.directory_manager import (
     PersistenceDirectoryManager,
 )
 from soothe_client import WebSocketClient
-from soothe_sdk.client import ProtocolError
+from soothe_sdk.wire import ProtocolError
 
 from soothe_daemon import SootheDaemon
 from soothe_daemon.runtime.loop_gc import purge_loop_execution_data

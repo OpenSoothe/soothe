@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import soothe_sdk._upstream_warnings as _upstream_warnings  # noqa: F401
 from dotenv import load_dotenv
-from soothe_sdk import _upstream_warnings as _upstream_warnings  # noqa: F401
 
 _INVOCATION_DIR_ENV_VARS = ("SOOTHE_DAEMON_INVOCATION_DIR", "SOOTHE_CLI_WORKSPACE")
 

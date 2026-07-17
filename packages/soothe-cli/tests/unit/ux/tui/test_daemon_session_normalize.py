@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, messages_from_dict
-from soothe_sdk.langchain_wire import envelope_langchain_message_dict
+from soothe_sdk.wire.codec import envelope_langchain_message_dict
 from soothe_sdk.wire.protocol import _serialize_for_json
 
 from soothe_cli.runtime.transport.session import TuiDaemonSession

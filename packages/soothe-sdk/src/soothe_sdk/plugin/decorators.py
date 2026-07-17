@@ -15,7 +15,7 @@ from functools import wraps
 from typing import Any
 
 from soothe_sdk.core.exceptions import PluginError
-from soothe_sdk.plugin.manifest import PluginManifest as Manifest
+from soothe_sdk.plugin.manifest import PluginManifest
 
 
 def plugin(
@@ -77,7 +77,7 @@ def plugin(
             raise PluginError("Plugin description is required")
 
         # Create and attach manifest
-        cls._plugin_manifest = Manifest(
+        cls._plugin_manifest = PluginManifest(
             name=name,
             version=version,
             description=description,
@@ -94,7 +94,7 @@ def plugin(
 
         # Add manifest property
         @property
-        def manifest(self) -> Manifest:
+        def manifest(self) -> PluginManifest:
             """Return the plugin manifest."""
             return self._plugin_manifest
 

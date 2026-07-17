@@ -1,8 +1,7 @@
 """Shared filesystem path constants and light config protocols.
 
 Canonical home for ``SOOTHE_HOME`` / ``SOOTHE_DATA_DIR`` and duck-typed config
-protocols used by daemon, core, and clients. Replaces the old
-``soothe_sdk.client.config`` location (compat shim retained).
+protocols used by daemon, core, and clients.
 """
 
 import os

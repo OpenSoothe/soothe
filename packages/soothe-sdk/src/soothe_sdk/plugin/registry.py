@@ -54,7 +54,9 @@ def register_event(
     custom events:
 
     ```python
-    from soothe_sdk import register_event, SubagentEvent, VerbosityTier
+    from soothe_sdk.core.events import SubagentEvent
+    from soothe_sdk.core.verbosity import VerbosityTier
+    from soothe_sdk.plugin import register_event
 
 
     class MyCustomEvent(SubagentEvent):
