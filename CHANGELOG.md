@@ -5,6 +5,26 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.8.2] - 2026-07-17
+
+### Added
+- Protocol-1 `autopilot_*` request RPCs so CLI and clients work against envelope-only daemons
+- Autopilot cascade goal cancel and `cancel --all` to clear leftover pending children
+- Loop stream `turn_id` / monotonic `seq` boundaries; turns end with `stream.end` + idle
+
+### Changed
+- Thin CLI daemon I/O onto `soothe_client` (`DaemonSession`, shared protocol-1 helpers)
+- Require `soothe-client-python>=0.10.0` and adopt `AsyncCommandClient` / `CommandClient`
+- Disable explorer subagent by default (opt-in)
+- Raise assess execute-AI preview default to 2048 chars with head+tail compaction
+
+### Fixed
+- Omit `turn_id` on pre-admit `running` so TUI does not lock onto the prior turn
+- Keep deliverable openings when compacting oversized execute AI rows for assess
+- Workspace path normalize when the daemon cwd has been deleted
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.8.1...v0.8.2
+
 ## [v0.7.16] - 2026-07-13
 
 ### Added
