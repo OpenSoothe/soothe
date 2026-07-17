@@ -222,9 +222,12 @@ This document defines the terminology and naming conventions used in this projec
 
 | Term | Definition | Introduced In |
 |------|------------|---------------|
-| `Client` | The core WebSocket client (`client/go` in Go, `client/typescript` in TypeScript) for the protocol-1 daemon. Owns transport, handshake, envelope codec, RPC, streaming, control-frame handling, heartbeat, reconnect/reattach, and concurrent request/subscription multiplexing on a single connection. | RFC-629 |
-| `appkit` | The sibling package (`client/go/appkit` in Go, `client/typescript/src/appkit` in TypeScript) holding the reusable application-architecture layer over `Client`: connection pooling, single-flight query gating, turn execution, event classification, and SSE fan-out. Product decisions are supplied via configuration and interfaces. | RFC-629 |
-| `ConnectionPool` | `appkit` component that acquires/releases/health-checks/reuses a `Client` per logical session, delegating bootstrap (`loop_new` + `subscribe`) or reattach (`loop_reattach` + `ReattachAndProbe`) to the core `Client`. | RFC-629 |
+| `Client` / `WebSocketClient` | The core WebSocket transport for the protocol-1 daemon (Python: `WebSocketClient`; Go/TS: `Client`). Owns handshake, envelope codec, RPC, streaming, control frames, heartbeat, reconnect/reattach, multiplexing, and `delivery_ack`. | RFC-629 |
+| `appkit` | Sibling package over the core client: `DaemonSession`, connection pooling, single-flight query gating, turn execution, event classification, and SSE fan-out. Product decisions via configuration and interfaces. | RFC-629 |
+| `DaemonSession` | Dual-socket `appkit` session for one conversation: subscribed stream socket + RPC sidecar; `SendTurn` / `IterTurnChunks` / `EnsureConnected`. Primary happy-path entry for streamed turns. | RFC-629 |
+| `CommandClient` | Ephemeral one-shot RPC client for jobs/cron/autopilot: connect → handshake → single request → close. Distinct from the long-lived streaming client. | RFC-629 |
+| `delivery_ack` | Client notification carrying monotonic per-loop `seq` after terminal stream frames so the daemon can gate drain correctly under load. | RFC-629 |
+| `ConnectionPool` | `appkit` component that acquires/releases/health-checks/reuses a core client per logical session, delegating bootstrap (`loop_new` + `subscribe`) or reattach (`loop_reattach` + `ReattachAndProbe`). | RFC-629 |
 | `QueryGate` | `appkit` component enforcing single-flight query execution per session (`ErrQueryBusy`) and the cancel-before-context ordering (daemon `cancel` before local context cancel, on a detached timeout). | RFC-629 |
 | `TurnRunner` | `appkit` component executing a timeout-bounded turn: send `loop_input`, consume the multiplexed event stream, classify events, resolve the deliverable, then persist/broadcast. | RFC-629 |
 | `EventClassifier` | `appkit` component mapping streamed frames to deliverable/streaming/terminal outcomes, keyed on `(namespace, mode, phase)` with a configurable `DeliverablePhases` set. | RFC-629 |
@@ -233,7 +236,7 @@ This document defines the terminology and naming conventions used in this projec
 | `SessionStore` | `appkit` interface abstracting per-application persistence: session↔loop-id mapping, message append, last-used/reset tracking. Triarch's Postgres `ChatRegistryStore` is one implementation. | RFC-629 |
 | `StaleLoopError` | Typed error returned by `ReattachAndProbe` when a loop accepts the reattach handshake but fails the `loop_get` liveness probe; signals the caller to fall back to a fresh `loop_new` bootstrap. | RFC-629 |
 | `DisconnectCause` | Enum distinguishing clean vs unclean connection loss (Go: `DisconnectClean`/`DisconnectUnclean`; TypeScript: `DisconnectCause.Clean`/`DisconnectCause.Unclean`). Clean follows a `disconnect` notification; unclean is a read/write error or missed pong. | RFC-629 |
-| `Multiplexer` | Core `Client` component that routes inbound protocol-1 frames to the correct waiter by `(type, id)` instead of discarding non-matching events, enabling concurrent RPCs and subscription streams. | RFC-629 |
+| `Multiplexer` | Core client component that routes inbound protocol-1 frames to the correct waiter by `(type, id)` instead of discarding non-matching events, enabling concurrent RPCs and subscription streams. | RFC-629 |
 
 ### Code Naming
 

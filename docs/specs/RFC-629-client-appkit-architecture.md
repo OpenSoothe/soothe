@@ -1,25 +1,28 @@
 # RFC-629: Client Library — Core Upgrade and Appkit Architecture
 
 **RFC**: 629
-**Title**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript)
+**Title**: Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript)
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-30
+**Updated**: 2026-07-17
 **Authors**: Xiaming Chen
 **Dependencies**: RFC-450, RFC-614, RFC-403
-**Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450)
+**Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450), IG-655 (Python client), IG-662 (cross-client API parity)
 
 ## Abstract
 
-`client/go` and `client/typescript` are basic protocol-1 (RFC-450) WebSocket wrappers. Real applications that consume them — currently `triarch/backend/internal/agent/` (Go), with a second Go app and a TypeScript app now starting — need substantially more: a panic-safe read loop, mid-session drop detection, managed reconnect + loop reattach + liveness probing, readiness retry, concurrent-safe request/subscription multiplexing, a per-session connection pool, single-flight query gating, cancel-before-context ordering, event→deliverable classification, and SSE fan-out. Triarch hand-rolls all of this and, notably, does **not** use the library's `Client` at all — it reimplements a `TriarchClient` on raw `gorilla/websocket` and imports only the library's protocol/message types, because the library lacked the transport/lifecycle features the application required.
+Three language clients talk to soothe-daemon over protocol-1 (RFC-450): `client/python` (`soothe-client-python`), `client/go`, and `client/typescript`. Real applications need more than a thin WebSocket wrapper: panic-safe read loops, drop detection, reconnect + loop reattach + liveness probing, readiness retry, concurrent RPC/subscription multiplexing, per-session pooling, single-flight query gating, cancel-before-context ordering, event→deliverable classification, SSE fan-out, dual-socket turn streaming (`DaemonSession`), ephemeral one-shot RPCs (`CommandClient`), and stream `delivery_ack` for daemon drain gating.
 
-This RFC defines a three-layer architecture that absorbs the generic half of triarch's adaptation layer into both client libraries:
+**Python 0.10.x is the reference implementation** for user-facing API tiers, constrained public export surface, turn-session semantics, and production transport behaviors (priority inbound backpressure, `delivery_ack`). Go and TypeScript must match that contract with language-idiomatic code (IG-662).
 
-- **Layer 0 (core `Client` upgrades)**: fold the transport/lifecycle gaps (panic-safe read loop, drop detection, `Reconnect`/`ReattachAndProbe`, readiness retry, concurrent multiplexing) down into the existing `Client`, so every application gets a safe, concurrent, reconnect-aware client for free.
-- **Layer 1 (`appkit` package)**: a new sibling package in each client holding the reusable application-architecture layer — `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, and a `SessionStore` interface — with product-specific decisions (deliverable phase sets, persistence, chat modes, error copy) kept in each application via configuration and interfaces.
-- **Layer 2 (application)**: each application's own code — domain types, persistence implementation, product config, user-facing copy, legacy paths.
+This RFC defines a three-layer architecture shared by all three clients:
 
-The boundary is drawn so that transport/protocol concerns live in the library, reusable application mechanics live in `appkit`, and product decisions stay in applications. This eliminates the repeated adaptation boilerplate across daemon-consuming applications in both Go and TypeScript while keeping the thin protocol clients free of one application's product opinions.
+- **Layer 0 (core transport)**: WebSocket + protocol-1 lifecycle — `WebSocketClient` / `Client`, reconnect/reattach, multiplexing, heartbeat, `delivery_ack`.
+- **Layer 1 (`appkit`)**: reusable application mechanics — `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `SessionStore`.
+- **Layer 2 (application)**: product decisions — deliverable phases, persistence, chat modes, error copy.
+
+A fourth **ephemeral RPC** entry point (`CommandClient` / `AsyncCommandClient`) sits beside Layer 0 for jobs/cron/autopilot one-shots that must not share a streaming socket.
 
 ## Problem Statement
 
@@ -41,12 +44,26 @@ The TypeScript client (`client/typescript`) is at the same baseline the Go clien
 
 ### Design Goals
 
-1. **Eliminate transport boilerplate** — applications import a safe, concurrent, reconnect-aware `Client` instead of rebuilding one, in both languages.
-2. **Eliminate application boilerplate** — a reusable `appkit` package in each client covers pool/query/turn/classification/SSE.
+1. **Eliminate transport boilerplate** — applications import a safe, concurrent, reconnect-aware core client instead of rebuilding one, in all three languages.
+2. **Eliminate application boilerplate** — a reusable `appkit` package covers `DaemonSession`, pool/query/turn/classification/SSE.
 3. **Keep product decisions in applications** — deliverable phase sets, persistence, chat modes, and error copy are expressed via configuration and interfaces, not hardcoded in the library.
-4. **Preserve the existing core API** — `Client`/`Send*`/`Request*` signatures stay; upgrades are additive.
-5. **Conform to RFC-450** — the multiplexer routing rule, reconnect/reattach flow, and readiness retry must match the protocol's correlation, lifecycle, and heartbeat semantics.
-6. **Cross-language parity** — the Go and TypeScript `appkit` packages expose the same component vocabulary and the same classification/gating semantics, so an application porting between languages finds the same shape.
+4. **Preserve additive core APIs** — existing `Client`/`Send*`/`Request*` signatures stay where present; new entry points (`DaemonSession`, `CommandClient`) are additive.
+5. **Conform to RFC-450** — multiplexer routing, reconnect/reattach, readiness retry, and `delivery_ack` must match protocol correlation and stream-drain semantics.
+6. **Cross-language parity** — Python, Go, and TypeScript expose the same API tiers and the same classification/gating/turn semantics; Python is the reference for contract tests and docs.
+7. **Constrained public surface** — root exports favor the happy path; wire param models and demoted internals are submodule-only (Python `__all__` / TS export allowlist / Go documented tiers).
+
+## User-Facing API Tiers
+
+Every client documents and implements these four entry points with matching semantics:
+
+| Need | Entry point | Notes |
+|------|-------------|-------|
+| One conversation, stream turns | `appkit.DaemonSession` | Dual-socket: stream + RPC sidecar; `SendTurn` / `IterTurnChunks`; `EnsureConnected` |
+| Jobs / cron / autopilot one-shots | `CommandClient` (+ async variant in Python/TS) | Ephemeral connect → handshake → one RPC → close |
+| Raw protocol / custom RPCs | `WebSocketClient` (Python) / `Client` (Go, TS) | Long-lived transport; advanced |
+| Multi-user HTTP backend | `ConnectionPool` + `TurnRunner` | Session-scoped pool; product supplies `SessionStore` |
+
+Wire request param models (Python `protocol_params`) stay off the root export. Advanced stream helpers (`unwrap_next`, pipeline batchers, `ManagedClient`) are importable from submodules but demoted from the primary public list.
 
 ## Guiding Principles
 
@@ -114,17 +131,21 @@ graph TB
 - `ReattachAndProbe(loopID)` — post-reconnect `loop_reattach` + re-`subscribe` (`method:"loop_events"`) + optional `loop_get` probe; returns a `StaleLoopError` on stale loops.
 - Readiness retry folded into the handshake (transient `readiness_state` and Warn-severity error codes).
 - Concurrent-safe multiplexing: pending-request and pending-subscription tables; the reader routes inbound frames by `(type, id)`.
+- `delivery_ack` — on terminal stream frames, notify the daemon with monotonic per-loop `seq` so drain gating stays correct under load (Python reference behavior).
+- Production transport (Python reference; Go/TS converge via IG-662): bounded inbound queue with priority-aware drop, stream-degraded callback, negotiated heartbeat, max frame size aligned with daemon default (10 MiB).
 
 **Interfaces**:
-- Provides: the existing `Client` API (unchanged signatures) plus the drop signal, `Reconnect`, and `ReattachAndProbe`.
+- Provides: the existing core API plus drop signal, `Reconnect`, `ReattachAndProbe`, `delivery_ack`, peel-stale helpers used by `DaemonSession`.
 - Requires: RFC-450 protocol-1 daemon endpoint.
+- Naming: Python uses `WebSocketClient`; Go and TypeScript use `Client` for the same Layer 0 role.
 
-### `appkit` (Layer 1, new)
+### `appkit` (Layer 1)
 
 **Purpose**: Provide the reusable application-architecture layer that every daemon-consuming application needs, parameterized by application product decisions.
 
 **Capabilities**:
-- `ConnectionPool` — acquire/release/health-check/reuse per logical session, delegating bootstrap/reattach to the core `Client`.
+- `DaemonSession` — dual-socket loop session for CLI/TUI-style apps: subscribed stream socket + RPC sidecar; `Connect` / `SendTurn` / `IterTurnChunks` / `EnsureConnected` / history-cards helpers. Primary happy-path entry for one conversation.
+- `ConnectionPool` — acquire/release/health-check/reuse per logical session, delegating bootstrap/reattach to the core client.
 - `QueryGate` — single-flight per-session query gate (`ErrQueryBusy`) with cancel-before-context ordering.
 - `TurnRunner` — timeout-bounded turn loop: send `loop_input`, consume the multiplexed stream, classify events, resolve deliverable, persist/broadcast.
 - `EventClassifier` — map streamed frames to deliverable/streaming/terminal outcomes, keyed on `(namespace, mode, phase)` with a configurable `DeliverablePhases` set.
@@ -132,8 +153,16 @@ graph TB
 - `SessionStore` interface — the persistence seam (loop-id mapping, message append, last-used/reset tracking).
 
 **Interfaces**:
-- Provides: `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `SessionStore`.
-- Requires: a core `Client` (or factory), an application-supplied `SessionStore` implementation, and application product config (`DeliverablePhases`, SSE event vocabulary).
+- Provides: `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `SessionStore`.
+- Requires: a core client (or factory), an application-supplied `SessionStore` when using the pool, and application product config (`DeliverablePhases`, SSE event vocabulary).
+
+### `CommandClient` (ephemeral RPC)
+
+**Purpose**: One-shot jobs/cron/autopilot RPCs without holding a streaming subscription.
+
+**Capabilities**: Open WebSocket → `connection_init` handshake → single correlated `request`/`response` → close. Sync and async wrappers as language-appropriate.
+
+**Constraint**: Blocking job helpers on the long-lived `Client` MUST NOT double-send (fire-and-forget `Send*` then a second `RequestResponse`). Prefer `CommandClient`, or a single `RequestResponse`.
 
 ### Application layer (Layer 2, per app)
 
@@ -177,25 +206,30 @@ graph TB
 5. **Per-connection handshake.** Each pooled connection independently completes `connection_init`/`connection_ack` (RFC-450 §8.2 rule 1); the protocol has no notion of pooling — pooling is a client-side concern.
 6. **Additive core API.** Existing `Client`/`Send*`/`Request*` signatures are preserved; the existing test suite must remain green.
 7. **Product decisions stay pluggable.** `SessionStore` is an interface; `DeliverablePhases` is configuration; the SSE broadcaster is string-keyed. The library does not import any application's domain types.
-8. **Cross-language parity of appkit semantics.** The Go and TypeScript `appkit` packages must classify events, gate queries, and run turns with the same semantics so a ported application behaves identically against the same daemon. Language-idiomatic mechanics differ; the *contract* does not.
+8. **Cross-language parity of appkit semantics.** Python, Go, and TypeScript `appkit` packages must classify events, gate queries, stream turns (`DaemonSession`), and run pool turns with the same semantics. Language-idiomatic mechanics differ; the *contract* does not. Python is the reference for disputed behavior.
+9. **Constrained public exports.** Root / package entrypoints export the API tiers above; wire factories, demoted pipeline helpers, and legacy aliases are submodule-only or unexported. Each language locks the contract with a public-API test where the language supports it.
 
 ## Layer Architecture
 
-### Layer 0: Core `Client` (transport/lifecycle)
+### Layer 0: Core transport (lifecycle)
 
-**Responsibility**: WebSocket transport, protocol-1 handshake, envelope codec, RPC, streaming, control-frame handling, heartbeat, reconnect/reattach, concurrent multiplexing.
+**Responsibility**: WebSocket transport, protocol-1 handshake, envelope codec, RPC, streaming, control-frame handling, heartbeat, reconnect/reattach, concurrent multiplexing, `delivery_ack`.
 
-**Contains (Go)**: the existing `client/go` files (`client.go`, `protocol.go`, `request.go`, `send_methods.go`, `session.go`, `heartbeat.go`, `config.go`, `errors.go`, `events.go`, `verbosity.go`, `job.go`, `helpers.go`), upgraded in place, plus `multiplexer.go`.
+**Contains (Python)**: `client/python/src/soothe_client/` (`websocket.py`, `session.py`, `helpers.py`, `command_client.py`, `protocol_params.py`, `errors.py`, `stream_terminal.py`, `turn_boundary.py`, …).
 
-**Contains (TypeScript)**: the existing `client/typescript/src` files (`client.ts`, `protocol.ts`, `errors.ts`, `config.ts`, `events.ts`, `verbosity.ts`, `session.ts`, `helpers.ts`), upgraded in place, plus `multiplexer.ts`.
+**Contains (Go)**: `client/go/` (`client.go`, `protocol.go`, `request.go`, `send_methods.go`, `session.go`, `heartbeat.go`, `config.go`, `errors.go`, `events.go`, `verbosity.go`, `job.go`, `helpers.go`, `command_client.go`, `stream_terminal.go`, `multiplexer.go`).
+
+**Contains (TypeScript)**: `client/typescript/src/` (`client.ts`, `protocol.ts`, `errors.ts`, `config.ts`, `events.ts`, `verbosity.ts`, `session.ts`, `helpers.ts`, `command_client.ts`, `stream_terminal.ts`, `multiplexer.ts`).
 
 ### Layer 1: `appkit` (application mechanics)
 
-**Responsibility**: per-session connection pooling, single-flight query gating, turn execution, event classification, SSE fan-out, persistence seam.
+**Responsibility**: dual-socket turn sessions, per-session connection pooling, single-flight query gating, turn execution, event classification, SSE fan-out, persistence seam.
 
-**Contains (Go)**: `client/go/appkit/` (`pool.go`, `query_gate.go`, `turn_runner.go`, `classifier.go`, `thinking_step.go`, `broadcaster.go`, `session_store.go`, `client.go`, `doc.go`).
+**Contains (Python)**: `client/python/src/soothe_client/appkit/` (`daemon_session.py`, `pool.py`, `query_gate.py`, `turn_runner.py`, `classifier.py`, …).
 
-**Contains (TypeScript)**: `client/typescript/src/appkit/` (`pool.ts`, `query_gate.ts`, `turn_runner.ts`, `classifier.ts`, `thinking_step.ts`, `broadcaster.ts`, `session_store.ts`, `client.ts`, `index.ts`).
+**Contains (Go)**: `client/go/appkit/` (`daemon_session.go`, `pool.go`, `query_gate.go`, `turn_runner.go`, `classifier.go`, `thinking_step.go`, `broadcaster.go`, `session_store.go`, `client.go`, `doc.go`).
+
+**Contains (TypeScript)**: `client/typescript/src/appkit/` (`daemon_session.ts`, `pool.ts`, `query_gate.ts`, `turn_runner.ts`, `classifier.ts`, `thinking_step.ts`, `broadcaster.ts`, `session_store.ts`, `client.ts`, `index.ts`).
 
 ### Layer 2: Application (product)
 
@@ -205,21 +239,20 @@ graph TB
 
 ## Language-Specific Adaptations
 
-The Go and TypeScript clients implement the same Layer 0/Layer 1 contract with language-idiomatic mechanics:
+All three clients implement the same Layer 0/Layer 1 contract with language-idiomatic mechanics:
 
-| Concern | Go | TypeScript |
-|---|---|---|
-| Drop signal | `Disconnected() <-chan DisconnectCause` (buffered-1 channel closed once) | `EventEmitter` `'disconnected'` event emitted once with a `DisconnectCause` |
-| Cancellation | `context.Context` + `context.WithTimeout` | `AbortSignal` / `AbortController` + timeout param |
-| Mutual exclusion | `sync.Mutex` / `sync.RWMutex` | private fields + single-threaded event loop + `Promise` chaining |
-| Event stream | `ReceiveMessages(ctx) (<-chan interface{}, error)` | `receiveMessages(signal?): AsyncGenerator<DecodedMessage>` |
-| Concurrent reads | `gorilla/websocket` forbids concurrent readers → `readerActive` atomic gates `RequestResponse` onto the mux | `ws` single socket; the resolver queue + multiplexer cooperate so RPC waits and stream reads do not starve each other |
-| Time durations | `time.Duration` | `number` (milliseconds) |
-| Pending-call tables | `map[string]*pendingCall` + `sync.Once` unregister | `Map<string, PendingCall>` + explicit unregister closures |
-| Single-flight gate | `map[string]context.CancelFunc` | `Map<string, AbortController>` |
-| SSE subscriber channel | `chan SSEEvent` (buffered cap 100, drop-on-full via `select`/`default`) | callback list + per-subscriber bounded queue (drop-on-full) |
+| Concern | Python | Go | TypeScript |
+|---|---|---|---|
+| Core type | `WebSocketClient` | `Client` | `Client` |
+| Drop signal | `wait_disconnected` / cause callback | `Disconnected() <-chan DisconnectCause` | `EventEmitter` `'disconnected'` |
+| Cancellation | `asyncio` timeouts / cancel | `context.Context` | `AbortSignal` + timeout ms |
+| Event stream | `read_event` / async iterators | `ReceiveMessages` / `ReadEvent` | `receiveMessages` / `readEvent` |
+| Dual-socket turns | `DaemonSession` | `appkit.DaemonSession` | `appkit.DaemonSession` |
+| One-shot RPC | `AsyncCommandClient` / `CommandClient` | `CommandClient` | `CommandClient` |
+| Time units | seconds (`float`) | `time.Duration` | milliseconds (`number`) |
+| Public surface | `__all__` + `test_public_api` | documented tiers + unexported helpers | root export allowlist + contract test |
 
-The contract — "route by `(type, id)`," "response before next," "cancel daemon before local context," "classify by `(namespace, mode, phase)`," "persist + broadcast on deliverable" — is identical across both.
+The contract — "route by `(type, id)`," "response before next," "cancel daemon before local context," "classify by `(namespace, mode, phase)`," "`delivery_ack` on terminals," "persist + broadcast on deliverable" — is identical across all three.
 
 ## Abstract Schemas
 
@@ -295,23 +328,25 @@ SessionStore {
 
 ## Migration and Sequencing
 
-This is substantial work, sequenced to manage risk. The Go client is ahead; the TypeScript client follows the same order.
+### Completed baselines
 
-### Go client
+| Language | Layer 0 | Appkit (pool/turn/classifier) | `DaemonSession` | `CommandClient` | Reference status |
+|----------|---------|-------------------------------|-----------------|-----------------|------------------|
+| Python | Done (IG-655) | Done | Done | Done | **Reference (0.10.x)** |
+| Go | Done (2026-06-30) | Done | IG-662 | IG-662 | Converging |
+| TypeScript | Done (IG-531/660) | Done | Done (IG-660) | IG-662 | Converging |
 
-1. **Core `Client` upgrades** — panic-safe read loop, drop signal, `Reconnect`/`ReattachAndProbe`, readiness retry, multiplexer. Land additively; keep the existing test suite green. *(Done 2026-06-30.)*
-2. **`appkit` package** — extract `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`SessionStore` from triarch, de-domain-ify. *(Done 2026-06-30.)*
-3. **Triarch migration** — delete `TriarchClient`, `bootstrap*ThreadSession`, `wait*`; reimplement `pool_manager`/`event_processor` on `appkit`. *(Blocked on a client-library publish.)*
-4. **New Go application on `appkit` from day one** — the forcing function that proves the abstraction.
+### Active: cross-client API parity (IG-662)
 
-### TypeScript client
+1. Spec + vocabulary (this RFC update + namings).
+2. Go: `DaemonSession`, `delivery_ack`, job single-RPC fix, `CommandClient`.
+3. TypeScript: wire `delivery_ack`, `CommandClient`, slim root exports + public-API test, version sync.
+4. Follow-up: priority inbound backpressure + degraded hooks on Go/TS; shared example ladder.
 
-1. **Core `Client` upgrades** — drop signal (`'disconnected'` event), `Reconnect`/`ReattachAndProbe`, readiness retry, multiplexer. Land additively; keep the existing test suite green. *(In progress — IG-531.)*
-2. **`appkit` package** — port the Go `appkit` semantics to TypeScript idiomatically: `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`SessionStore`, de-domain-ified. *(In progress — IG-531.)*
-3. **TypeScript application migration** — when a TS app consuming the daemon exists, migrate its hand-rolled layer onto `appkit`, mirroring the triarch migration. *(Blocked on that app existing.)*
-4. **New TypeScript application on `appkit` from day one** — the forcing function.
+### Product migrations
 
-Sequencing is core-first in each language because `appkit` depends on a safe, concurrent, reconnect-aware `Client`.
+- Triarch / airway thin onto Go `appkit` (including `DaemonSession` where appropriate).
+- Desktop / TS apps onto slimmed `@mirasoth/soothe-client` exports.
 
 ## Open Questions
 
@@ -329,9 +364,12 @@ Sequencing is core-first in each language because `appkit` depends on a safe, co
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) - Daemon Communication Protocol (protocol-1)
 - [RFC-614](./RFC-614-unified-streaming-messaging.md) - Unified Daemon → Client Streaming Messaging
 - [RFC-610](./RFC-610-sdk-module-structure-refactoring.md) - SDK Module Structure Refactoring
-- [IG-527](../impl/IG-527-go-client-appkit.md) - Go Client Core Upgrade and Appkit Implementation
-- [IG-531](../impl/IG-531-typescript-client-appkit.md) - TypeScript Client Core Upgrade and Appkit Implementation
+- [IG-655](../impl/IG-655-python-client-layer0-extract.md) - Python client extract (reference)
+- [IG-660](../impl/IG-660-typescript-client-production-parity.md) - TypeScript production parity
+- [IG-662](../impl/IG-662-cross-client-api-parity.md) - Cross-client API parity (active)
+- [IG-527](../archive/impl/IG-527-go-client-appkit.md) - Go Client Core Upgrade and Appkit (archived)
+- [IG-531](../archive/impl/IG-531-typescript-client-appkit.md) - TypeScript Client Appkit (archived)
 
 ---
 
-*Generated by Platonic Coding (brainstorm → RFC formalization).*
+*Updated 2026-07-17 for Python reference + three-language API tiers (IG-662).*

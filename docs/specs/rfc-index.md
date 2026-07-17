@@ -547,7 +547,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Implemented by: IG-512, IG-513, IG-514, IG-515
   - Authors: Xiaming Chen
 
-- **RFC-629**: [Client Library — Core Upgrade and Appkit Architecture](RFC-629-client-appkit-architecture.md)
+- **RFC-629**: [Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript)](RFC-629-client-appkit-architecture.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-06-30
@@ -754,7 +754,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 - **RFC-632**: Loop-Scoped Router Profile Override (2026-07-14, Draft)
 - **RFC-631**: Goal-Bound Display Snapshots (2026-07-05, Draft)
 - **RFC-630**: Start-Phase LLM Intake and Branch Routing (2026-06-30, Draft)
-- **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) (2026-06-30, Draft)
+- **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Python + Go + TypeScript) (2026-06-30, Draft; updated 2026-07-17)
 - **RFC-450**: Unified Daemon Communication Protocol — rewritten with protocol-1 wire contract (2026-06-28, Draft)
 - **RFC-628**: Cognition Step Card Display (2026-06-26, Implemented)
 - **RFC-626**: Entity Model and State Management Consolidation — LoopState Elimination (2026-06-16)
