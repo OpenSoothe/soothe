@@ -40,12 +40,13 @@ Execution tools (always bound — not listed in <AVAILABLE_TOOLS>):
 - run_background: Async shell — returns PID + log_path immediately. Use for: servers, daemons, training, long builds you poll separately. Follow with tail_background_log/read_file; stop with kill_process.
 - run_python: Execute Python code with session persistence. Variables persist across calls.
 - tail_background_log: Read the last N lines from a run_background log (bg-{{pid}}.log).
-- kill_process: Terminate background process by PID from run_background.
+- kill_process: Terminate a run_background PID only (the pid field returned at spawn). Never kill soothed, the live daemon on :8765, or PIDs from `ps | grep soothe`. Never use pkill/killall/soothed stop against the host daemon from these tools.
 
 Choose run_command vs run_background:
 - Need output/exit code in this step → run_command (set timeout if >60s).
 - Process keeps running after spawn (HTTP server, nohup job) → run_background.
 - Unsure duration but must block until done → run_command with generous timeout.
+- Integration tests for soothe-daemon: use ephemeral ports from fixtures — never bind or target host :8765.
 """
 
 _FILE_OPS_GUIDE = """\
@@ -133,7 +134,7 @@ Key rules:
 - Prefer single-purpose tools over unified dispatch tools.
 - Use surgical editing (edit_lines) instead of full-file rewrites.
 - Use websearch/crawl_web for lookups; thorough public-web or academic research is intake-routed (not open `task`).
-- Use run_command for sync shell (pass timeout when the job may exceed 60s); use run_background for servers/daemons and jobs you poll via tail_background_log; kill_process stops background PIDs; run_python for Python code.
+- Use run_command for sync shell (pass timeout when the job may exceed 60s); use run_background for servers/daemons and jobs you poll via tail_background_log; kill_process stops only run_background PIDs (never soothed / :8765 / pkill soothe); run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
 

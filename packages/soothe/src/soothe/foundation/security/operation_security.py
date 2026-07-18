@@ -31,6 +31,11 @@ _BANNED_COMMAND_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"chmod\s+-R\s+777\s+/", "command.dangerous.chmod_root"),
     (r"chown\s+-R\s+.+\s+/", "command.dangerous.chown_root"),
     (r"\bgit\s+push(\s|$)", "command.git.remote_push"),
+    # Do not let in-daemon agents wipe the host soothed / soothe daemon process tree.
+    # Prefer kill_process on a run_background PID instead of broad pkill.
+    (r"\bpkill\b[^\n]*\bsoothe", "command.dangerous.pkill_soothe"),
+    (r"\bkillall\b[^\n]*\bsoothe", "command.dangerous.killall_soothe"),
+    (r"\bsoothed\s+(stop|restart)\b", "command.dangerous.soothed_lifecycle"),
 )
 
 _SENSITIVE_SYSTEM_PATH_PATTERNS: tuple[str, ...] = (

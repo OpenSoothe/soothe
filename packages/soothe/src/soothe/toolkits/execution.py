@@ -264,8 +264,85 @@ def _process_is_alive(pid: int) -> bool:
     return True
 
 
+_PRODUCTION_DAEMON_WS_PORT = 8765
+
+
+def _soothed_pid_from_pidfile() -> int | None:
+    """Return the host daemon PID from ``SOOTHE_HOME/soothed.pid`` when present."""
+    try:
+        from soothe.config import SOOTHE_HOME
+
+        pf = Path(SOOTHE_HOME).expanduser() / "soothed.pid"
+        if not pf.is_file():
+            return None
+        return int(pf.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError, TypeError, ImportError):
+        return None
+
+
+def _pid_listening_on_port(port: int) -> int | None:
+    """Best-effort PID of the process listening on ``port`` (macOS/Linux ``lsof``)."""
+    if port <= 0:
+        return None
+    try:
+        completed = subprocess.run(  # noqa: S603
+            ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+    for line in (completed.stdout or "").splitlines():
+        token = line.strip()
+        if token.isdigit():
+            return int(token)
+    return None
+
+
+def _protected_kill_refusal(pid: int) -> str | None:
+    """Return an error message when ``pid`` must not be killed by agent tools.
+
+    Protects the in-process daemon (thread-pool mode), the host ``soothed``
+    PID file target, and whoever is listening on the production WebSocket port.
+    """
+    if pid == os.getpid():
+        return (
+            f"Error: refusing to kill PID {pid} — that is the current agent/daemon process. "
+            "kill_process is only for PIDs returned by run_background."
+        )
+    with contextlib.suppress(OSError):
+        if pid == os.getppid():
+            return (
+                f"Error: refusing to kill parent PID {pid}. "
+                "kill_process is only for PIDs returned by run_background."
+            )
+
+    daemon_pid = _soothed_pid_from_pidfile()
+    if daemon_pid is not None and pid == daemon_pid:
+        return (
+            f"Error: refusing to kill Soothe daemon PID {pid} (soothed.pid). "
+            "Stop the host daemon from an outside shell with `soothed stop`, "
+            "not via agent tools."
+        )
+
+    listener = _pid_listening_on_port(_PRODUCTION_DAEMON_WS_PORT)
+    if listener is not None and pid == listener:
+        return (
+            f"Error: refusing to kill PID {pid} listening on "
+            f"ws://127.0.0.1:{_PRODUCTION_DAEMON_WS_PORT} (live Soothe daemon). "
+            "kill_process is only for PIDs returned by run_background."
+        )
+    return None
+
+
 def _kill_process_tree(pid: int, *, sig: int = signal.SIGKILL) -> None:
-    """Terminate ``pid`` and its descendants (process group on Unix)."""
+    """Terminate ``pid`` and its descendants (process group on Unix).
+
+    Never ``killpg`` the caller's own process group — that would take down the
+    in-process daemon when a child somehow shares the agent PGID.
+    """
     if pid <= 0:
         return
     if sys.platform == "win32":
@@ -279,6 +356,14 @@ def _kill_process_tree(pid: int, *, sig: int = signal.SIGKILL) -> None:
         pgid = os.getpgid(pid)
     except ProcessLookupError:
         with contextlib.suppress(OSError):
+            os.kill(pid, sig)
+        return
+    try:
+        self_pgid = os.getpgid(0)
+    except OSError:
+        self_pgid = None
+    if self_pgid is not None and pgid == self_pgid:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
             os.kill(pid, sig)
         return
     with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -784,8 +869,10 @@ class KillProcessTool(BaseTool):
 
     name: str = "kill_process"
     description: str = (
-        "Terminate a background process. "
-        "Parameters: pid (required) - process ID from run_background. "
+        "Terminate a background process started with run_background. "
+        "Parameters: pid (required) — only use the PID returned by run_background. "
+        "Do not kill soothed, the live daemon on :8765, or PIDs from `ps | grep soothe`. "
+        "Do not use pkill/killall for Soothe processes. "
         "Returns: termination status. Appends a footer to bg-{pid}.log when present."
     )
     workspace_root: str = Field(default="", description="Working directory fallback for log lookup")
@@ -810,6 +897,10 @@ class KillProcessTool(BaseTool):
         """
         if pid <= 0:
             return f"Error: invalid process ID {pid}"
+
+        refusal = _protected_kill_refusal(pid)
+        if refusal is not None:
+            return refusal
 
         try:
             os.kill(pid, 0)

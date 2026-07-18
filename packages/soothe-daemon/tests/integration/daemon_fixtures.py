@@ -123,12 +123,30 @@ _CACHED_BASE_CONFIG: SootheConfig | None = None
 _LAST_HOME_PATH: str | None = None
 
 
-def alloc_ephemeral_port() -> int:
-    """Allocate an available localhost TCP port for testing."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        s.listen(1)
-        return s.getsockname()[1]
+# Host `soothed` default WebSocket port — integration tests must never bind it.
+PRODUCTION_DAEMON_WS_PORT = 8765
+
+
+def alloc_ephemeral_port(
+    *,
+    exclude: frozenset[int] | None = None,
+) -> int:
+    """Allocate an available localhost TCP port for testing.
+
+    Never returns the live-daemon production port (``8765``) so parallel
+    ``pytest --run-integration`` cannot steal or collide with a running
+    ``soothed`` on the host.
+    """
+    blocked = exclude if exclude is not None else frozenset({PRODUCTION_DAEMON_WS_PORT})
+    for _ in range(32):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            s.listen(1)
+            port = int(s.getsockname()[1])
+        if port not in blocked:
+            return port
+    msg = f"Could not allocate a TCP port outside {sorted(blocked)}"
+    raise RuntimeError(msg)
 
 
 def get_base_config() -> SootheConfig:
@@ -239,6 +257,13 @@ def build_daemon_config(
         ``(agent_config, daemon_server_config)``
     """
     base_config = get_base_config()
+
+    if websocket_port == PRODUCTION_DAEMON_WS_PORT:
+        msg = (
+            f"Integration tests must not bind production daemon port "
+            f"{PRODUCTION_DAEMON_WS_PORT}; pass None or alloc_ephemeral_port()"
+        )
+        raise ValueError(msg)
 
     ws_p = websocket_port if websocket_port is not None else alloc_ephemeral_port()
 

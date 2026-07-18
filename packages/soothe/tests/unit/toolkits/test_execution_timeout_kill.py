@@ -32,7 +32,12 @@ def test_clamp_execute_timeout_respects_ceiling() -> None:
 
 def test_kill_process_tree_uses_killpg_on_unix(monkeypatch) -> None:
     monkeypatch.setattr("soothe.toolkits.execution.sys.platform", "linux")
-    monkeypatch.setattr("soothe.toolkits.execution.os.getpgid", lambda _pid: 999)
+
+    def fake_getpgid(pid: int) -> int:
+        # Distinct from the caller's group so killpg is used (IG-665).
+        return 1 if pid == 0 else 999
+
+    monkeypatch.setattr("soothe.toolkits.execution.os.getpgid", fake_getpgid)
     killed: list[tuple[int, int]] = []
 
     def fake_killpg(pgid: int, sig: int) -> None:

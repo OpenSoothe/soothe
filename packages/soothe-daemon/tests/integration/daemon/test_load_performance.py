@@ -365,11 +365,12 @@ async def test_websocket_parallel_broadcast_latency():
     """
     from soothe_daemon.channels.websocket import WebSocketChannel
     from soothe_daemon.config.models import WebSocketConfig
+    from tests.integration.daemon_fixtures import alloc_ephemeral_port
 
     config = WebSocketConfig(
         enabled=True,
         host="127.0.0.1",
-        port=8765,
+        port=alloc_ephemeral_port(),
         cors_origins=["*"],
     )
     manager = MagicMock()
@@ -617,8 +618,9 @@ async def test_sender_loop_batching():
     from soothe_daemon.config.models import WebSocketConfig
     from soothe_daemon.event import EventBus
     from soothe_daemon.server.session import ClientSessionManager
+    from tests.integration.daemon_fixtures import alloc_ephemeral_port
 
-    config = WebSocketConfig(enabled=True, host="127.0.0.1", port=8765)
+    config = WebSocketConfig(enabled=True, host="127.0.0.1", port=alloc_ephemeral_port())
     manager = MagicMock()
     transport = WebSocketChannel(config, manager=manager)
 
