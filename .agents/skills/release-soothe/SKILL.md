@@ -1,20 +1,25 @@
 ---
 name: release-soothe
 description: >-
-  Release Soothe packages (soothe, soothe-cli, soothe-daemon, soothe-sdk, soothe-plugins).
-  Handles version bumping, changelog maintenance, git tagging, and publishing to PyPI.
-  Use when preparing a new release, hotfix, or when the user asks to cut a release.
+  Release Soothe packages (soothe, soothe-cli, soothe-daemon, soothe-sdk,
+  soothe-plugins) and language clients (Python, TypeScript, Go, Rust).
+  Handles version bumping, changelog maintenance, git tagging, publishing
+  (PyPI / npm / crates.io / Go modules), and monorepo submodule bumps.
+  Use when preparing a new release, hotfix, client SDK release, or when the
+  user asks to cut a release.
 ---
 
 # Release Soothe
 
-Manage Soothe releases: version bumps, changelog updates, git tags, and PyPI publishing.
+Manage Soothe releases: version bumps, changelog updates, git tags, registry
+publishing, and language-client releases (separate repos under `client/`).
 
 ## When to Use
 
 - User asks to release a new version (`v0.8.0`, `v0.7.17`, etc.)
-- User asks to prepare a release notes or update CHANGELOG.md
-- User asks to publish packages to PyPI
+- User asks to prepare release notes or update CHANGELOG.md
+- User asks to publish packages to PyPI / npm / crates.io
+- User asks to release a language client (`soothe-client-python`, Go, TS, Rust)
 - User asks how to bump versions or tag a release
 
 ## Version Convention
@@ -65,11 +70,11 @@ Always maintain this order:
 - Token tracking in daemon/TUI streams
 ```
 
-## Release Workflow
+---
+
+## Monorepo Core Release Workflow
 
 ### 1. Determine Version
-
-Check current versions:
 
 ```bash
 # Monorepo release version (soothe / soothe-cli / soothe-daemon)
@@ -96,7 +101,7 @@ Insert new version block at top (below header, above existing entries):
 ### Fixed
 - (bug fixes)
 
-[Compare with previous version]: https://github.com/mirasurf/soothe/compare/vX.Y.W...vX.Y.Z
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/vX.Y.W...vX.Y.Z
 ```
 
 ### 3. Update Version Files
@@ -114,33 +119,20 @@ echo "X.Y.Z" > VERSION
 # Edit: version = "A.B.C" in packages/soothe-plugins/pyproject.toml
 ```
 
-### 4. Commit Changes
+### 4. Commit, Tag, Publish
 
 ```bash
 git add VERSION CHANGELOG.md packages/*/pyproject.toml
 git commit -m "Release vX.Y.Z"
-```
-
-### 5. Tag Release
-
-```bash
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin main --tags
-```
-
-### 6. Publish to PyPI
-
-```bash
-# Build packages
 ./scripts/build.sh
-
-# Upload (requires PYPI_TOKEN or credentials)
 twine upload dist/soothe-*.whl dist/soothe-*.tar.gz
 ```
 
 Or use the release workflow in `.github/workflows/`.
 
-## Package Inventory
+### Package Inventory (monorepo)
 
 | Package | Directory | Version source | Publishes |
 |---------|-----------|----------------|-----------|
@@ -150,11 +142,98 @@ Or use the release workflow in `.github/workflows/`.
 | soothe-sdk | `packages/soothe-sdk/` | Own `pyproject.toml` | PyPI: `soothe-sdk` |
 | soothe-plugins | `packages/soothe-plugins/` | Own `pyproject.toml` | PyPI: `soothe-plugins` |
 
+---
+
+## Language Client Releases
+
+Clients live in **separate git repos**, checked out as submodules under `client/`.
+Each client has its **own version line** — do **not** tie them to monorepo `VERSION`.
+
+| Client | Path | Repo | Package | Version source | Registry |
+|--------|------|------|---------|----------------|----------|
+| Python | `client/python` | [soothe-client-python](https://github.com/mirasoth/soothe-client-python) | `soothe-client-python` | `VERSION` | PyPI |
+| TypeScript | `client/typescript` | [soothe-client-typescript](https://github.com/mirasoth/soothe-client-typescript) | `@mirasoth/soothe-client` | `package.json` | npm |
+| Go | `client/go` | [soothe-client-go](https://github.com/mirasoth/soothe-client-go) | `github.com/mirasoth/soothe-client-go` | `ClientVersion` in `protocol.go` | Go modules (tag) |
+| Rust | `client/rust` | [soothe-client-rust](https://github.com/mirasoth/soothe-client-rust) | `soothe-client` | `Cargo.toml` `version` | crates.io |
+
+Docs hub: [docs/wiki/clients.md](../../../docs/wiki/clients.md).
+
+### When to release a client
+
+- Wire / event / RPC surface changes that apps consume
+- Compatibility fixes for a new daemon / `soothe-sdk` constraint
+- Feature parity across languages (prefer releasing all affected clients together)
+
+### Client release checklist (per language)
+
+Work **inside the submodule** (its own git remote):
+
+1. **Bump version** in the source listed above (and any mirrored handshake constant).
+2. **Update `CHANGELOG.md`** (Keep a Changelog; no IG-/RFC- in user-facing notes).
+3. **Verify** locally: `make verify` (or language equivalent: `cargo test`, etc.).
+4. **Commit** on `main`: `Release vX.Y.Z` (or package-appropriate message).
+5. **Tag** annotated: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`.
+6. **Push** branch + tag: `git push origin main && git push origin vX.Y.Z`.
+7. **GitHub Release** (triggers `.github/workflows/release.yml`):
+
+```bash
+export GH_TOKEN="${GITHUB_PAT:-$GH_TOKEN}"
+gh release create "vX.Y.Z" --title "vX.Y.Z" --notes "$(cat <<'EOF'
+## Changed
+- …
+
+**Full Changelog**: https://github.com/mirasoth/soothe-client-<lang>/compare/vA.B.C...vX.Y.Z
+EOF
+)"
+```
+
+Publish targets by workflow:
+
+| Client | On `release: published` |
+|--------|-------------------------|
+| Python | PyPI trusted publishing (`soothe-client-python`) |
+| TypeScript | npm trusted publishing (`@mirasoth/soothe-client`) |
+| Go | Verify only (`ClientVersion` must match tag); consumers use the git tag |
+| Rust | `cargo publish` (`soothe-client`, needs `CARGO_REGISTRY_TOKEN`) |
+
+### After client release: bump monorepo submodule
+
+Back in the soothe monorepo:
+
+```bash
+cd client/<lang>
+git fetch origin && git checkout <release-sha-or-main>
+cd ../..
+git add client/<lang>
+git commit -m "chore(client): bump <lang> submodule to vX.Y.Z"
+git push origin main
+```
+
+### Compatibility pitfalls
+
+- **`soothe-sdk` pin**: If core bumps `soothe-sdk` major (e.g. `>=1.0.0`) but a published client still requires `soothe-sdk<1.0.0`, Docker / install resolution can fail. Release a matching client patch **before** or **with** the Docker image rebuild.
+- **Event / subagent renames**: Keep wire constants aligned across all four clients (`explorer`, `deep_research`, …) and release each language that still ships legacy names.
+- **Go**: `ClientVersion` in `protocol.go` **must** equal the release tag (CI enforces this).
+
+### Quick version checks
+
+```bash
+cat client/python/VERSION
+node -p "require('./client/typescript/package.json').version"
+rg 'const ClientVersion' client/go/protocol.go
+rg '^version = ' client/rust/Cargo.toml
+```
+
+---
+
 ## Troubleshooting
 
-- **Version mismatch**: Root `VERSION` drives soothe/cli/daemon only; do not expect soothe-sdk or soothe-plugins to match unless you bump them
+- **Version mismatch**: Root `VERSION` drives soothe/cli/daemon only; do not expect soothe-sdk, soothe-plugins, or clients to match unless you bump them
 - **Changelog merge conflicts**: Preserve existing entries; add new version at top
-- **PyPI upload fails**: Verify credentials and check package names match registered names
+- **PyPI / npm upload fails**: Verify OIDC trusted publishing env and that the version is not already published
+- **crates.io publish fails**: Check `CARGO_REGISTRY_TOKEN` and that `Cargo.toml` version is unique
+- **Go release “fails” publish**: Expected — Go releases verify + tag; no artifact upload
+- **Docker build fails after core release**: Check client ↔ `soothe-sdk` version constraints; release a client patch if needed
 - **Missing changes**: Search git log since last tag: `git log v0.7.15..HEAD --oneline`
 
 ## Quick Reference
@@ -164,7 +243,8 @@ Or use the release workflow in `.github/workflows/`.
 | Check monorepo version | `cat VERSION` |
 | Check soothe-sdk version | `rg '^version = ' packages/soothe-sdk/pyproject.toml` |
 | Check soothe-plugins version | `rg '^version = ' packages/soothe-plugins/pyproject.toml` |
-| List recent tags | `git tag -l 'v0.7.*' \| tail -5` |
-| View tag details | `git show v0.7.16` |
-| Compare versions | `git log v0.7.15..v0.7.16 --oneline` |
-| Build packages | `./scripts/build.sh` |
+| Check client versions | See “Quick version checks” above |
+| List recent tags | `git tag -l 'v0.8.*' \| tail -5` |
+| View tag details | `git show v0.8.3` |
+| Compare versions | `git log v0.8.2..v0.8.3 --oneline` |
+| Build monorepo packages | `./scripts/build.sh` |

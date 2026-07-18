@@ -608,7 +608,7 @@ make daemon-publish
 - **[Architecture Overview](architecture/index.md)** - System design
 - **[Testing Guide](testing-guide.md)** - Testing instructions
 - **[RFC-000](../specs/RFC-000-system-conceptual-design.md)** - Conceptual design
-- **[CLAUDE.md](../../CLAUDE.md)** - AI agent instructions
+- **[AGENTS.md](../../AGENTS.md)** - AI agent instructions
 
 ### Communication
 

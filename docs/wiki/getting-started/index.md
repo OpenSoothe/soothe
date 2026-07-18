@@ -32,6 +32,7 @@ See **[Quick Start](Quick-Start.md)** for the full three-step path (install → 
 
 ## 📚 Additional Resources
 
+- **[Language Clients](../clients.md)** - Python / TypeScript / Go / Rust WebSocket SDKs
 - **[Configuration Guide](../configuration-guide/index.md)** - Customize Soothe for your needs
 - **[CLI Reference](../cli-reference.md)** - Complete command documentation
 - **[TUI Guide](../tui-guide.md)** - Terminal UI usage

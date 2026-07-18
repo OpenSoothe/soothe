@@ -304,6 +304,7 @@ Edit `~/.soothe/config/config.yml` to add providers, models, and router profiles
 | Guide | What you get |
 |-------|----------------|
 | [Installation](Installation.md) | Pip options, packages, verification, troubleshooting |
+| [Language Clients](../clients.md) | Python / TypeScript / Go / Rust WebSocket SDKs |
 | [Basic Concepts](Basic-Concepts.md) | Goals, loops, subagents, context |
 | [Configuration guide](../configuration-guide/index.md) | YAML, providers, patterns |
 | [CLI reference](../cli-reference.md) | All commands |

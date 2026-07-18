@@ -30,7 +30,7 @@ Long-running background server hosting `SootheRunner` instances. Manages WebSock
 
 ### SDK (`soothe_sdk`) — Client & Plugin API
 
-Public API for plugin authors (decorators for tools, subagents, events) and shared contracts (wire, paths, display). Transport clients live in `soothe-client-python`.
+Public API for plugin authors (decorators for tools, subagents, events) and shared contracts (wire, paths, display). Transport clients live in the language SDKs — see **[Language Clients](../clients.md)**.
 
 ## Architectural Tiers
 

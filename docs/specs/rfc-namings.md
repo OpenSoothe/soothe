@@ -17,7 +17,7 @@ This document defines the terminology and naming conventions used in this projec
 | GoalEngine | Autonomous goal management with multi-goal DAGs, scheduling, and long-running workflows. Operates at the highest level with Goal → PLAN → PERFORM → REFLECT loop. Daemon-owned singleton service. | RFC-222 |
 | LoopState | Persistent execution state across plan-execute cycles in StrangeLoop. Contains plan, progress, metrics, and execution context. LangGraph state schema. | RFC-201 |
 
-**Naming Convention**: Use concrete module names (CoreAgent, StrangeLoop, GoalEngine) instead of abstract "Layer N" terminology. This improves clarity and follows CLAUDE.md Rule #9.
+**Naming Convention**: Use concrete module names (CoreAgent, StrangeLoop, GoalEngine) instead of abstract "Layer N" terminology. This improves clarity and follows AGENTS.md terminology rules.
 
 ### Domain Terms
 

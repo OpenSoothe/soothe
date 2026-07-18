@@ -30,6 +30,7 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
   - **[Installation](getting-started/Installation.md)** - System requirements, installation methods, troubleshooting
   - **[Quick Start](getting-started/Quick-Start.md)** - Install, daemon, first prompt, production
   - **[Basic Concepts](getting-started/Basic-Concepts.md)** - Core architecture and concepts
+- **[Language Clients](clients.md)** - Python / TypeScript / Go / Rust WebSocket SDKs
 - **[CLI Reference](cli-reference.md)** - Complete CLI documentation with examples
 - **[TUI Guide](tui-guide.md)** - Terminal UI, slash commands, keyboard shortcuts
 - **[Architecture Overview](architecture/index.md)** ⭐ - System design and concepts
@@ -257,6 +258,6 @@ class MyPlugin:
 
 Interested in contributing to Soothe? See:
 
-- **[CLAUDE.md](../../CLAUDE.md)** - Development guide for AI agents
+- **[AGENTS.md](../../AGENTS.md)** - Development guide for AI agents
 - **[RFCs](../specs/)** - Architecture design documents
 - **[Implementation Guides](../impl/)** - Development documentation

@@ -49,7 +49,18 @@ pip install -U soothe-cli
 soothe -p "Your first task"   # requires a running daemon
 ```
 
-**[Quick Start guide](docs/wiki/getting-started/Quick-Start.md)** — install, Docker (OpenAI / DashScope), local daemon, health check, production deploy.
+**[Quick Start guide](docs/wiki/getting-started/Quick-Start.md)** — install, Docker, local daemon, first prompt.
+
+### Language clients
+
+| | Package | Latest |
+|--|---------|--------|
+| Python | [`soothe-client-python`](https://pypi.org/project/soothe-client-python/) | [![PyPI](https://img.shields.io/pypi/v/soothe-client-python.svg)](https://pypi.org/project/soothe-client-python/) |
+| TypeScript | [`@mirasoth/soothe-client`](https://www.npmjs.com/package/@mirasoth/soothe-client) | [![npm](https://img.shields.io/npm/v/@mirasoth/soothe-client.svg)](https://www.npmjs.com/package/@mirasoth/soothe-client) |
+| Go | [`soothe-client-go`](https://github.com/mirasoth/soothe-client-go) | [![Go](https://img.shields.io/github/v/release/mirasoth/soothe-client-go?label=go)](https://github.com/mirasoth/soothe-client-go/releases) |
+| Rust | [`soothe-client`](https://crates.io/crates/soothe-client) | [![crates.io](https://img.shields.io/crates/v/soothe-client.svg)](https://crates.io/crates/soothe-client) |
+
+**[Clients guide](docs/wiki/clients.md)** — install, API tiers (`DaemonSession` / `CommandClient` / `Client`), protocol notes.
 
 ## Documentation
 
@@ -57,6 +68,7 @@ soothe -p "Your first task"   # requires a running daemon
 |----------|-------------|
 | [Wiki](https://mirasoth.github.io/soothe/) | User, operator, and developer guides ([source](docs/wiki/)) |
 | [Quick Start](docs/wiki/getting-started/Quick-Start.md) | Install, daemon, first prompt |
+| [Language clients](docs/wiki/clients.md) | Python / TypeScript / Go / Rust WebSocket SDKs |
 | [Configuration guide](docs/wiki/configuration-guide/) | YAML, env vars, zero-config |
 | [RFCs](docs/specs/) | Architecture specs |
 | [AGENTS.md](AGENTS.md) | AI agent dev guide |
