@@ -16,10 +16,10 @@
 #
 #   # Dev deps + local daemon (after building image):
 #   docker compose --profile daemon up -d
-#   make docker-daemon-up
 #
 #   # Build local daemon image first:
-#   make docker-daemon-build
+#   docker build -f packages/soothe-daemon/Dockerfile.local \
+#     --build-arg INCLUDE_BROWSER=false -t soothed:local-slim .
 #
 # Production deployment: See deploy/docker-compose.yml and deploy/README.md
 #

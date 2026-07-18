@@ -11,8 +11,6 @@
 
 .PHONY: help setup sync sync-verify
 .PHONY: docker-dev-up docker-dev-down docker-dev-ps
-.PHONY: docker-daemon-build docker-daemon-build-pypi
-.PHONY: docker-daemon-up docker-daemon-down docker-daemon-ps
 .PHONY: docker-prod-pull docker-prod-up docker-prod-down docker-prod-ps
 
 # Docker Compose env file (all commands use deploy/.env)
@@ -55,13 +53,6 @@ help:
 	@echo "  make docker-dev-up    - Start dev dependencies (pgvector + Langfuse)"
 	@echo "  make docker-dev-down  - Stop dev dependencies"
 	@echo "  make docker-dev-ps    - Show dev containers status"
-	@echo ""
-	@echo "Docker (Daemon - Dev):"
-	@echo "  make docker-daemon-build     - Build soothed:local-slim from source (no browser)"
-	@echo "  make docker-daemon-build-pypi - Build soothed from PyPI (requires SOOTHE_VERSION)"
-	@echo "  make docker-daemon-up        - Full dev stack: deps + langfuse + daemon"
-	@echo "  make docker-daemon-down      - Stop dev stack"
-	@echo "  make docker-daemon-ps        - Show daemon stack status"
 	@echo ""
 	@echo "Docker (Production):"
 	@echo "  make docker-prod-pull  - Pull production images (pgvector + soothed)"
@@ -125,11 +116,7 @@ sync-verify:
 #
 # Quick reference:
 #   Dev stack (deps + Langfuse): make docker-dev-up
-#   Full dev stack:             make docker-daemon-build && make docker-daemon-up
 #   Production stack:           cp deploy/env-example deploy/.env && make docker-prod-up
-
-# Version from VERSION file
-SOOTHE_VERSION := $(shell cat VERSION)
 
 # --- Dev Dependencies (pgvector + Langfuse by default) ---------------------
 
@@ -147,46 +134,6 @@ docker-dev-down:
 
 docker-dev-ps:
 	docker compose $(DOCKER_ENV_FILE) --profile langfuse ps
-
-# --- Image Build -----------------------------------------------------------
-
-docker-daemon-build:
-	@echo "Building soothed:local-slim from local source (no browser)..."
-	docker build -f packages/soothe-daemon/Dockerfile.local \
-		--build-arg INCLUDE_BROWSER=false \
-		-t soothed:local-slim .
-	@echo "Build complete: soothed:local-slim"
-	@echo "Run with: make docker-daemon-up"
-
-docker-daemon-build-pypi:
-	@echo "Building soothed:${SOOTHE_VERSION}-local from PyPI (full image with browser)..."
-	docker build -f packages/soothe-daemon/Dockerfile \
-		--build-arg SOOTHE_VERSION=$(SOOTHE_VERSION) \
-		--build-arg INCLUDE_BROWSER=true \
-		-t soothed:$(SOOTHE_VERSION)-local .
-	@echo "Build complete: soothed:$(SOOTHE_VERSION)-local"
-
-# --- Daemon Dev Stack (daemon profile, config/develop/config.yml) ---------------------
-
-docker-daemon-up:
-	@echo "Starting full dev stack: deps + langfuse + daemon..."
-	SOOTHE_IMAGE=soothed:local-slim docker compose $(DOCKER_ENV_FILE) --profile langfuse --profile daemon up -d
-	@echo ""
-	@echo "Stack running. Check status: make docker-daemon-ps"
-	@echo ""
-	@echo "Services:"
-	@echo "  Daemon API:    http://localhost:8765"
-	@echo "  Langfuse UI:   http://localhost:3300"
-	@echo "  PostgreSQL:    port 6432"
-	@echo ""
-	@echo "Langfuse sign-in: dev@soothe.local / SootheLangfuseLocalDev1"
-
-docker-daemon-down:
-	@echo "Stopping dev stack..."
-	docker compose $(DOCKER_ENV_FILE) --profile langfuse --profile daemon down
-
-docker-daemon-ps:
-	docker compose $(DOCKER_ENV_FILE) --profile daemon ps
 
 # --- Production Stack (deploy/docker-compose.yml) --------------------------
 
