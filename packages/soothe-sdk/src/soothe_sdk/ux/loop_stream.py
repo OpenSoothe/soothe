@@ -8,10 +8,9 @@ text path.
 Headless CLI relies on these phases for stdout (IG-343). Delegate-only answers may appear
 as an extra ``phase=goal_completion`` replay after Act when sourced from ``task`` returns (IG-355).
 
-Daemon ``intent_hint`` direct model turns emit a single assistant chunk tagged
+Daemon ``intent_hint`` turns emit a single assistant chunk tagged
 ``phase=<hint>`` (``text_completion``, ``image_to_text``, ``ocr``, ``embed``) so
 clients apply the same preview/stream rules as other user-visible loop output.
-Legacy ``direct_model`` phase may still appear from older daemon versions.
 """
 
 from __future__ import annotations
@@ -25,7 +24,6 @@ LOOP_ASSISTANT_OUTPUT_PHASES: frozenset[str] = frozenset(
         "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
         "chitchat",
         "autonomous_goal",
-        "direct_model",
         "text_completion",
         "image_to_text",
         "ocr",

@@ -13,8 +13,8 @@ from soothe.config import SootheConfig
 from soothe_client import WebSocketClient
 
 from soothe_daemon import SootheDaemon
-from soothe_daemon.services.direct_llm_turn import run_text_completion_turn
-from tests.integration.daemon._structured_direct_llm_helpers import (
+from soothe_daemon.services.intent_hint_turn import run_text_completion_turn
+from tests.integration.daemon._structured_intent_hint_helpers import (
     WORD_REPLY_SCHEMA,
     await_messages_assistant_content,
     parse_word_reply_json,

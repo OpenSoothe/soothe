@@ -1,4 +1,4 @@
-"""Unit tests for intent_hint direct model turns."""
+"""Unit tests for intent-hint turns."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe_daemon.services.direct_llm_turn import (
+from soothe_daemon.services.intent_hint_turn import (
     run_embed_turn,
     run_image_to_text_turn,
     run_intent_hint_turn,

@@ -27,10 +27,10 @@ from soothe_sdk.wire.codec import prepare_stream_data_for_wire
 from soothe_sdk.wire.protocol import _serialize_for_json
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
-from soothe_daemon.protocol.intent_hints import is_daemon_direct_hint
+from soothe_daemon.protocol.intent_hints import is_daemon_intent_hint
 from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
-from soothe_daemon.services.direct_llm_turn import run_intent_hint_turn
 from soothe_daemon.services.image_understanding import enrich_user_text_with_vision
+from soothe_daemon.services.intent_hint_turn import run_intent_hint_turn
 
 logger = logging.getLogger(__name__)
 
@@ -990,13 +990,13 @@ class QueryEngine:
             )
             return
 
-        if is_daemon_direct_hint(intent_hint):
-            await self._start_direct_model_background(
+        if is_daemon_intent_hint(intent_hint):
+            await self._start_intent_hint_background(
                 text=text,
                 thread_id=thread_id,
                 effective_loop_id=effective_loop_id,
                 client_id=client_id,
-                direct_intent_hint=intent_hint,
+                intent_hint_value=intent_hint,
                 model=model,
                 model_params=model_params,
                 attachments=attachments,
@@ -1079,7 +1079,7 @@ class QueryEngine:
         goal_completion_response: list[str] = []
         goal_completion_chars: int = 0
         # Set to True once a phase-tagged loop assistant chunk (plan_direct,
-        # goal_completion, autonomous_goal, direct_model, chitchat) has been
+        # goal_completion, autonomous_goal, intent-hint phases, chitchat) has been
         # persisted by ThreadLogger._log_message_event. When true, the legacy
         # ``log_assistant_response("".join(full_response))`` row at end-of-
         # stream is suppressed — the per-phase rows already cover the user-
@@ -1613,14 +1613,14 @@ class QueryEngine:
                 await d._session_manager.release_loop_ownership(client_id)
             raise
 
-    async def _start_direct_model_background(
+    async def _start_intent_hint_background(
         self,
         *,
         text: str,
         thread_id: str,
         effective_loop_id: str,
         client_id: str | None,
-        direct_intent_hint: str,
+        intent_hint_value: str,
         model: str | None,
         model_params: dict[str, Any] | None,
         attachments: list[dict[str, str]] | None,
@@ -1630,16 +1630,16 @@ class QueryEngine:
         response_schema_strict: bool | None = None,
         turn_generation: int = 0,
     ) -> None:
-        """Spawn background task for ``intent_hint`` direct LLM turns (no agent subprocess)."""
+        """Spawn background task for ``intent_hint`` turns (no agent subprocess)."""
         d = self._daemon
 
-        async def _run_direct() -> None:
-            await self._run_direct_model_body(
+        async def _run_intent_hint() -> None:
+            await self._run_intent_hint_body(
                 text=text,
                 thread_id=thread_id,
                 effective_loop_id=effective_loop_id,
                 client_id=client_id,
-                direct_intent_hint=direct_intent_hint,
+                intent_hint_value=intent_hint_value,
                 model=model,
                 model_params=model_params,
                 attachments=attachments,
@@ -1651,29 +1651,29 @@ class QueryEngine:
             )
 
         try:
-            task = asyncio.create_task(_run_direct())
+            task = asyncio.create_task(_run_intent_hint())
             await self._register_query_task(thread_id, task)
             await asyncio.sleep(0)
         except asyncio.CancelledError:
-            logger.info("Direct model task cancelled during creation")
+            logger.info("Intent-hint task cancelled during creation")
             d._runner.set_current_thread_id(None)
             raise
         except Exception:
-            logger.exception("Failed to create direct model task")
+            logger.exception("Failed to create intent-hint task")
             await self._unregister_query_task(thread_id)
             await self._release_query_admission(effective_loop_id)
             if client_id:
                 await d._session_manager.release_loop_ownership(client_id)
             raise
 
-    async def _run_direct_model_body(
+    async def _run_intent_hint_body(
         self,
         *,
         text: str,
         thread_id: str,
         effective_loop_id: str,
         client_id: str | None,
-        direct_intent_hint: str,
+        intent_hint_value: str,
         model: str | None,
         model_params: dict[str, Any] | None,
         attachments: list[dict[str, str]] | None,
@@ -1683,7 +1683,7 @@ class QueryEngine:
         response_schema_strict: bool | None = None,
         turn_generation: int = 0,
     ) -> None:
-        """Execute one direct model call and broadcast a single assistant ``messages`` event."""
+        """Execute one intent-hint call and broadcast a single assistant ``messages`` event."""
         d = self._daemon
         self._broadcast_turn_generation[effective_loop_id] = turn_generation
 
@@ -1692,7 +1692,7 @@ class QueryEngine:
             subscribed = await d._session_manager.subscribe_loop(client_id, effective_loop_id)
             if not subscribed:
                 logger.warning(
-                    "Client %s not found for loop %s subscription (direct model turn)",
+                    "Client %s not found for loop %s subscription (intent-hint turn)",
                     client_id[:8] if client_id else "?",
                     effective_loop_id[:8],
                 )
@@ -1703,7 +1703,7 @@ class QueryEngine:
             turn_generation=turn_generation,
         )
 
-        user_log_line = text.strip() if text.strip() else f"[{direct_intent_hint}]"
+        user_log_line = text.strip() if text.strip() else f"[{intent_hint_value}]"
         thread_logger.log_user_input(user_log_line)
 
         await d._runner.touch_thread_activity_timestamp(thread_id)
@@ -1714,7 +1714,7 @@ class QueryEngine:
         try:
             answer = await run_intent_hint_turn(
                 d._config,
-                intent_hint=direct_intent_hint,
+                intent_hint=intent_hint_value,
                 user_text=text,
                 model=model,
                 model_params=model_params,
@@ -1727,7 +1727,7 @@ class QueryEngine:
 
             from soothe.foundation.sloop.utils.messages import LoopAIMessage
 
-            phase = direct_intent_hint
+            phase = intent_hint_value
             ai_flat = _serialize_for_json(
                 LoopAIMessage(content=answer, phase=phase, thread_id=thread_id)
             )
@@ -1742,10 +1742,10 @@ class QueryEngine:
             )
             thread_logger.log_assistant_response(answer)
         except asyncio.CancelledError:
-            logger.info("Direct model turn cancelled")
+            logger.info("Intent-hint turn cancelled")
             raise
         except Exception as exc:
-            logger.exception("Direct model turn failed")
+            logger.exception("Intent-hint turn failed")
             await self._broadcast_loop_message(
                 effective_loop_id,
                 {

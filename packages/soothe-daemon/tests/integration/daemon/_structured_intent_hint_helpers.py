@@ -1,4 +1,4 @@
-"""Shared helpers for structured direct_llm integration tests."""
+"""Shared helpers for structured intent_hint integration tests."""
 
 from __future__ import annotations
 

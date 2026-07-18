@@ -1,4 +1,4 @@
-"""Direct model invocations for ``intent_hint`` loop_input turns (no Soothe agent)."""
+"""Intent-hint invocations for ``loop_input`` turns (no Soothe agent graph)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ _DEFAULT_VISION_INSTRUCTION = "Describe the attached image(s) and answer any imp
 _DEFAULT_OCR_INSTRUCTION = "Extract all visible text from the attached image(s)."
 
 
-def _build_direct_invoke_config(
+def _build_intent_hint_invoke_config(
     config: Any,
     *,
     purpose: str,
@@ -91,7 +91,7 @@ async def _invoke_chat_turn(
         chat = config.create_chat_model(role)
         model_label = role
 
-    invoke_cfg = invoke_config_override or _build_direct_invoke_config(
+    invoke_cfg = invoke_config_override or _build_intent_hint_invoke_config(
         config,
         purpose=purpose,
         component=f"daemon.{purpose}",
@@ -306,7 +306,7 @@ async def run_intent_hint_turn(
     response_schema_name: str | None = None,
     response_schema_strict: bool | None = None,
 ) -> str:
-    """Dispatch a daemon direct-model turn by normalized ``intent_hint``."""
+    """Dispatch a daemon intent-hint turn by normalized ``intent_hint``."""
     att = list(attachments or [])
     if intent_hint == TEXT_COMPLETION:
         return await run_text_completion_turn(
@@ -341,5 +341,5 @@ async def run_intent_hint_turn(
         )
     if intent_hint == EMBED:
         return await run_embed_turn(config, user_text=user_text, session_id=session_id)
-    msg = f"unsupported intent_hint for direct model turn: {intent_hint}"
+    msg = f"unsupported intent_hint for intent-hint turn: {intent_hint}"
     raise ValueError(msg)

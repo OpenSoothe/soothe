@@ -7,7 +7,7 @@ import pytest
 from soothe_daemon.protocol.intent_hints import (
     IMAGE_TO_TEXT,
     TEXT_COMPLETION,
-    is_daemon_direct_hint,
+    is_daemon_intent_hint,
     validate_and_normalize_intent_hint,
 )
 
@@ -18,27 +18,31 @@ from soothe_daemon.protocol.intent_hints import (
         ("text_completion", True),
         ("image_to_text", True),
         ("direct_llm", False),
+        ("direct_model", False),
         ("ocr", True),
         ("embed", True),
         ("quiz", False),
         (None, False),
     ],
 )
-def test_is_daemon_direct_hint(hint: str | None, expected: bool) -> None:
-    assert is_daemon_direct_hint(hint) is expected
+def test_is_daemon_intent_hint(hint: str | None, expected: bool) -> None:
+    assert is_daemon_intent_hint(hint) is expected
 
 
-def test_direct_llm_rejected() -> None:
-    hint, err = validate_and_normalize_intent_hint(
-        "direct_llm",
+@pytest.mark.parametrize(
+    "hint",
+    ["direct_llm", "quiz", "direct_model"],
+)
+def test_removed_intent_hints_rejected(hint: str) -> None:
+    normalized, err = validate_and_normalize_intent_hint(
+        hint,
         prompt_text="hello",
         has_attachments=False,
         has_response_schema=False,
     )
-    assert hint is None
+    assert normalized is None
     assert err is not None
     assert "removed" in err
-    assert "text_completion" in err
 
 
 def test_text_completion_rejects_attachments() -> None:
@@ -72,3 +76,14 @@ def test_response_schema_rejected_for_embed() -> None:
     )
     assert err is not None
     assert "text_completion" in err
+
+
+def test_agent_pass_through_hint_allowed() -> None:
+    hint, err = validate_and_normalize_intent_hint(
+        "agent",
+        prompt_text="hello",
+        has_attachments=False,
+        has_response_schema=False,
+    )
+    assert err is None
+    assert hint == "agent"

@@ -25,27 +25,27 @@ def test_legacy_trivial_quiz_phases_removed() -> None:
     assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
-def test_direct_model_phase_in_allowlist() -> None:
-    assert "direct_model" in LOOP_ASSISTANT_OUTPUT_PHASES
+def test_legacy_direct_model_phase_removed() -> None:
+    assert "direct_model" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
-def test_assistant_output_phase_recognizes_direct_model_after_wire_roundtrip() -> None:
-    """Daemon direct model replies serialize ``phase``; clients must classify them."""
+def test_assistant_output_phase_recognizes_text_completion_after_wire_roundtrip() -> None:
+    """Daemon intent-hint replies serialize ``phase``; clients must classify them."""
     flat = {
         "type": "ai",
         "content": "summary text",
-        "phase": "direct_model",
+        "phase": "text_completion",
         "tool_calls": [],
         "invalid_tool_calls": [],
     }
     wrapped = envelope_langchain_message_dict(flat)
     restored = messages_from_dict([wrapped])[0]
-    assert assistant_output_phase(restored) == "direct_model"
+    assert assistant_output_phase(restored) == "text_completion"
 
 
 def test_assistant_output_phase_on_plain_dict() -> None:
-    msg = {"type": "ai", "content": "x", "phase": "direct_model"}
-    assert assistant_output_phase(msg) == "direct_model"
+    msg = {"type": "ai", "content": "x", "phase": "text_completion"}
+    assert assistant_output_phase(msg) == "text_completion"
 
 
 def test_is_stream_terminal_wire_dict_requires_stream_terminal_flag() -> None:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-sdk"
-version = "1.0.0"
+version = "1.0.1"
 description = "Slim SDK for Soothe plugins and shared contracts (events, wire, display, protocols)"
 readme = "README.md"
 license = { text = "MIT" }
