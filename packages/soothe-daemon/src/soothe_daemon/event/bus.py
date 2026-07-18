@@ -270,7 +270,9 @@ class EventBus:
             queue_max=queue_max,
         )
 
-        # Fast drop when already at capacity (avoids exception per put on hot path)
+        # Fast drop when already at capacity (avoids exception per put on hot path).
+        # HIGH events must not be dropped here (IG-258: "Rarely dropped"); they fall
+        # through to put_nowait and block on QueueFull instead.
         if not block_on_full and priority == EventPriority.NORMAL and queue_size >= queue_max:
             _increment_drop_counter("NORMAL", topic)
             if _throttle_log(
@@ -282,22 +284,6 @@ class EventBus:
                     "Queue full for topic %s, dropping NORMAL priority events "
                     "(consumer slower than producer; suppressing similar logs %.0fs)",
                     topic,
-                    _DROP_LOG_INTERVAL_SEC,
-                )
-            return
-        if not block_on_full and priority == EventPriority.HIGH and queue_size >= queue_max:
-            _increment_drop_counter("HIGH", topic)
-            if _throttle_log(
-                _HIGH_DROP_LOG_LAST,
-                topic,
-                interval=_DROP_LOG_INTERVAL_SEC,
-            ):
-                logger.error(
-                    "Dropped HIGH priority event — queue full (topic=%s, queue=%d/%d); "
-                    "suppressing repeat logs %.0fs",
-                    topic,
-                    queue_size,
-                    queue_max,
                     _DROP_LOG_INTERVAL_SEC,
                 )
             return
@@ -315,28 +301,26 @@ class EventBus:
             # Try non-blocking put first
             queue.put_nowait((event, event_meta))
         except asyncio.QueueFull:
-            if block_on_full:
-                logger.warning(
-                    "Queue full for protected event, blocking until space available "
-                    "(topic=%s, priority=%s)",
-                    topic,
-                    priority.name,
-                )
-                await queue.put((event, event_meta))
-            elif priority == EventPriority.HIGH:
-                if _throttle_log(
-                    _HIGH_DROP_LOG_LAST,
-                    topic,
-                    interval=_DROP_LOG_INTERVAL_SEC,
-                ):
-                    logger.error(
-                        "Dropped HIGH priority event due to queue overflow (topic=%s, queue=%d/%d); "
-                        "suppressing repeat logs %.0fs",
+            # CRITICAL and protected events block until space is available.
+            # HIGH events also block: per IG-258 they are "rarely dropped" and carry
+            # tool/subagent results whose loss corrupts client state under load.
+            if block_on_full or priority == EventPriority.HIGH:
+                if priority == EventPriority.HIGH:
+                    logger.warning(
+                        "Queue full for HIGH priority event, blocking until space "
+                        "available (topic=%s, queue=%d/%d)",
                         topic,
                         queue_size,
                         queue_max,
-                        _DROP_LOG_INTERVAL_SEC,
                     )
+                else:
+                    logger.warning(
+                        "Queue full for protected event, blocking until space available "
+                        "(topic=%s, priority=%s)",
+                        topic,
+                        priority.name,
+                    )
+                await queue.put((event, event_meta))
             elif priority == EventPriority.NORMAL:
                 if _throttle_log(
                     _NORMAL_DROP_LOG_LAST,

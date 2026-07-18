@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import importlib
 import os
 import socket
 import tempfile
@@ -162,7 +161,10 @@ def get_base_config() -> SootheConfig:
 def force_isolated_home(home: Path) -> None:
     """Force daemon paths to a test-local SOOTHE_HOME.
 
-    Only reloads modules if home path has changed.
+    Updates the ``SOOTHE_HOME`` module attribute on each path module directly
+    (no ``importlib.reload`` — that leaks file descriptors under the macOS
+    default FD limit). Skips the assignment if ``home`` matches the last
+    applied path.
     """
     global _LAST_HOME_PATH
 
@@ -182,7 +184,6 @@ def force_isolated_home(home: Path) -> None:
     import soothe_daemon.bootstrap.paths as daemon_paths
 
     daemon_paths.SOOTHE_HOME = Path(home_str)
-    importlib.reload(daemon_paths)
 
     import soothe.runner._thread_manager as thread_manager
 
