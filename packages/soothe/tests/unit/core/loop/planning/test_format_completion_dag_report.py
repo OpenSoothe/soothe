@@ -28,6 +28,24 @@ def test_format_completion_dag_report_empty_steps() -> None:
     assert "Step DAG" not in text
 
 
+def test_format_completion_dag_report_omits_attachment_bodies() -> None:
+    body = "FULL_PDF_" + ("Z" * 4000)
+    description = (
+        "Deep research on world models\n\n"
+        "--- Context ---\n"
+        "Attached files: 2512.23676v1.pdf (material)\n\n"
+        "--- Triarch attachments (extracted content) ---\n"
+        f"--- Attachment: 2512.23676v1.pdf (application/pdf) ---\n{body}"
+    )
+    adapter = _make_adapter(description)
+    text = adapter.format_completion_dag_report()
+    assert "Deep research on world models" in text
+    assert "Attached files: 2512.23676v1.pdf (material)" in text
+    assert "Triarch attachments" not in text
+    assert body not in text
+    assert "FULL_PDF_" not in text
+
+
 def test_format_completion_dag_report_lists_steps_and_stats() -> None:
     adapter = _make_adapter("ship feature")
     decision = AgentDecision(

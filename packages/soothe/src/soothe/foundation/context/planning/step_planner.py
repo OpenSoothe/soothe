@@ -24,6 +24,7 @@ from soothe.foundation.context.planning.models import (
     DagPlanningContext,
     PlanWave,
 )
+from soothe.utils.text_preview import goal_description_for_log
 
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import PlanResult, StepResult
@@ -321,7 +322,7 @@ class StepPlanningSubengine:
             "### Context Engine Goal DAG (at goal completion)",
             "",
             f"**Goal {goal.id}** — {goal.status.upper()}",
-            f"- Description: {goal.description}",
+            f"- Description: {goal_description_for_log(goal.description)}",
             f"- Source: {goal.source}, Priority: {goal.priority}",
             "",
         ]
@@ -397,7 +398,7 @@ class StepPlanningSubengine:
         for goal in sorted_goals:
             status_label = goal.status.upper()
             lines.append(f"**Goal {goal.id}** — {status_label}")
-            lines.append(f"- Description: {goal.description}")
+            lines.append(f"- Description: {goal_description_for_log(goal.description)}")
             lines.append(f"- Source: {goal.source}, Priority: {goal.priority}")
             lines.append(f"- Parent: {goal.parent_id or '—'}")
 

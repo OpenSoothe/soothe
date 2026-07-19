@@ -268,7 +268,7 @@ class TestLogPreview:
 
 
 class TestGoalDescriptionForLog:
-    """Goal-description logging should preview attachment dumps."""
+    """Goal-description logging should keep attachment metadata only."""
 
     def test_plain_goal_unchanged_when_short(self) -> None:
         assert goal_description_for_log("Analyze auth flow") == "Analyze auth flow"
@@ -279,7 +279,7 @@ class TestGoalDescriptionForLog:
         assert result == log_preview(text, chars=100)
         assert result.endswith("...")
 
-    def test_attachment_body_is_previewed_not_fully_dumped(self) -> None:
+    def test_attachment_body_omitted_keeps_prior_metadata(self) -> None:
         body = "WebWorldModels " + ("x" * 5000)
         description = (
             "Using the attached knowledge vault items, conduct deep research.\n\n"
@@ -291,15 +291,14 @@ class TestGoalDescriptionForLog:
             "Pages: 34 (text-only extraction)\n\n"
             f"{body}"
         )
-        result = goal_description_for_log(description, attachment_preview_chars=120)
+        result = goal_description_for_log(description)
         assert "conduct deep research" in result
         assert "世界模型最新进展" in result
         assert "Attached files: 2512.23676v1.pdf (material)" in result
-        assert "--- Triarch attachments (extracted content) ---" in result
-        assert "2512.23676v1.pdf" in result
+        assert "--- Triarch attachments (extracted content) ---" not in result
+        assert "Pages: 34" not in result
         assert body not in result
-        assert result.endswith("...")
-        assert len(result) < 800
+        assert "WebWorldModels" not in result
 
     def test_empty_description(self) -> None:
         assert goal_description_for_log("") == ""

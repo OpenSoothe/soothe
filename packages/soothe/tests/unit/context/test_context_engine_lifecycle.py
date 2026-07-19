@@ -45,9 +45,9 @@ class TestContextEngineGoalLifecycle:
         assert f"Created goal {goal.id}" in logged
         assert "Research world models" in logged
         assert "Attached files: paper.pdf" in logged
-        assert "Triarch attachments" in logged
+        assert "Triarch attachments" not in logged
         assert huge_body not in logged
-        assert "PDF_BODY_" in logged  # short preview prefix still visible
+        assert "PDF_BODY_" not in logged
 
     @pytest.mark.asyncio
     async def test_list_goals_by_status(self) -> None:
