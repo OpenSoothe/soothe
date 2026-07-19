@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.8.5] - 2026-07-19
+
+### Added
+- Unified PostgreSQL backend for display card ledger, cron, and identity when `persistence.default_backend: postgresql`
+
 ### Changed
-- Display card ledger (RFC-413) uses PostgreSQL `soothe_metadata` when `persistence.default_backend: postgresql` instead of always writing `$SOOTHE_HOME/data/display.db`
-- Unified persistence rule (AGENTS.md §10): cron and identity follow `default_backend`; mixed durability overrides raise; SQLite WAL housekeeping skipped in Postgres mode
+- Display card ledger uses PostgreSQL `soothe_metadata` in Postgres mode instead of always writing `$SOOTHE_HOME/data/display.db`
+- Cron and identity follow `persistence.default_backend`; mixed durability overrides raise; SQLite WAL housekeeping skipped in Postgres mode
+- Increase default recursion limit from 99 to 200
+- Strip attachment bodies from research topics and goal logs (keep attachment metadata only)
+- Align research source timeouts with wizsearch
+- Promote FAQ, CHANGELOG, and API Reference to top-level docs nav
+
+### Fixed
+- Remove duplicate classmethod on `set_current_workspace`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.8.4...v0.8.5
 
 ## [v0.8.4] - 2026-07-19
 
