@@ -329,7 +329,7 @@ agent:
   runtime:
     lazy_core_agent: true
     general_purpose_subagent: false
-    recursion_limit: 99
+    recursion_limit: 200
     # IG-545: per-hop orchestration (fast) vs generation (default) model roles in CoreAgent
     role_routing:
       enabled: false

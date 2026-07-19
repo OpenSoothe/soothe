@@ -64,4 +64,4 @@ def test_build_passes_filesystem_backend_to_deepagents(
         "grep",
     ]
     assert captured["parent_owned_state_keys"] == frozenset({"workspace"})
-    assert captured["recursion_limit"] == 99
+    assert captured["recursion_limit"] == 200
