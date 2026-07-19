@@ -482,6 +482,10 @@ memory: []
 # ============================================================
 # PersistenceConfig — sqlite default; postgresql via postgres_base_dsn (RFC-612).
 # postgres_databases maps component → DB name when using multi-DB layout.
+# MUST: persistence.default_backend is one mode for the whole process (AGENTS.md §10).
+# When default_backend=postgresql, display cards, cron, identity, checkpoints, CE,
+# durability/metadata, and autopilot all use PostgreSQL (soothe_metadata / soothe_checkpoints).
+# When default_backend=sqlite, use local $SOOTHE_HOME SQLite files — do not mix.
 # VectorStoreProviderConfig — sqlite_vec | pgvector | weaviate | in_memory.
 # vector_store_router values: provider_name:collection_name.
 

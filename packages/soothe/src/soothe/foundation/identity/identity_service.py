@@ -52,45 +52,51 @@ T = TypeVar("T")
 
 
 class IdentityService(IdentityProtocol):
-    """IdentityProtocol implementation using SQLite backend.
+    """IdentityProtocol implementation with SQLite or PostgreSQL storage.
 
     RFC-307 §Protocol Interface implementation.
 
-    This service provides:
-    - User creation and management
-    - AKSK credential provisioning
-    - JWT token generation and validation
-    - Token revocation tracking
-    - External channel identity mapping
-
-    Storage uses the same SQLite database as StrangeLoop persistence
-    (tables added via initialize_identity_tables_sync).
+    Backend follows ``persistence.default_backend`` (unified persistence rule):
+    SQLite file or PostgreSQL ``soothe_metadata`` identity_* tables.
     """
 
     def __init__(
         self,
-        db_path: Path,
-        jwt_key: str,
+        db_path: Path | None = None,
+        jwt_key: str = "",
         access_expiry_hours: int = 1,
         refresh_expiry_days: int = 7,
         default_aksk_expiry_days: int | None = 90,
         max_aksk_expiry_days: int = 365,
         enabled: bool = True,
+        *,
+        postgres_dsn: str | None = None,
     ) -> None:
         """Initialize IdentityService.
 
         Args:
-            db_path: Path to SQLite database (shared with StrangeLoop persistence).
+            db_path: SQLite path (required unless ``postgres_dsn`` is set).
             jwt_key: JWT signing key (256-bit recommended).
             access_expiry_hours: Access token expiry hours (1-24).
             refresh_expiry_days: Refresh token expiry days (1-365).
             default_aksk_expiry_days: Default AKSK expiry, None = never.
             max_aksk_expiry_days: Maximum AKSK expiry days.
             enabled: Service enabled status.
+            postgres_dsn: When set, use PostgreSQL instead of SQLite.
 
         RFC-307 §Configuration.
         """
-        self.db_path = db_path
+        if postgres_dsn:
+            self._backend = "postgresql"
+            self.db_path = None
+            self._postgres_dsn = postgres_dsn
+        else:
+            if db_path is None:
+                raise ValueError("db_path required when postgres_dsn is not set")
+            self._backend = "sqlite"
+            self.db_path = db_path
+            self._postgres_dsn = None
+
         self.enabled = enabled
         self.default_aksk_expiry_days = default_aksk_expiry_days
         self.max_aksk_expiry_days = max_aksk_expiry_days
@@ -101,8 +107,7 @@ class IdentityService(IdentityProtocol):
             refresh_expiry_days=refresh_expiry_days,
         )
 
-        # Connection pool (similar to SQLitePersistenceBackend pattern)
-        self._writer_conn: sqlite3.Connection | None = None
+        self._writer_conn: Any | None = None
         self._writer_thread_lock = threading.Lock()
         self._init_lock = asyncio.Lock()
 
@@ -119,22 +124,13 @@ class IdentityService(IdentityProtocol):
             if self._writer_conn is not None:
                 return
 
-            # Ensure database directory exists
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            from soothe.foundation.identity.db import open_identity_connection
 
-            # Create identity tables
-            initialize_identity_tables_sync(self.db_path)
-
-            # Create writer connection
-            self._writer_conn = sqlite3.connect(
-                str(self.db_path),
-                check_same_thread=False,
-                timeout=30,
+            self._writer_conn = open_identity_connection(
+                backend=self._backend,  # type: ignore[arg-type]
+                db_path=self.db_path,
+                dsn=self._postgres_dsn,
             )
-            self._writer_conn.execute("PRAGMA foreign_keys=ON")
-            self._writer_conn.execute("PRAGMA journal_mode=WAL")
-
-            logger.info("IdentityService initialized: db=%s", self.db_path)
 
     async def _writer_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
         """Run sync_fn on writer connection with thread safety."""
@@ -174,9 +170,7 @@ class IdentityService(IdentityProtocol):
         logger.info("User created: user_id=%s", user_id)
         return user
 
-    def _create_user_sync(
-        self, conn: sqlite3.Connection, user_id: str, created_at: str, metadata: str
-    ) -> None:
+    def _create_user_sync(self, conn: Any, user_id: str, created_at: str, metadata: str) -> None:
         """Sync: insert user."""
         conn.execute(
             """
@@ -202,7 +196,7 @@ class IdentityService(IdentityProtocol):
             metadata=json.loads(row[2]) if row[2] else {},
         )
 
-    def _get_user_sync(self, conn: sqlite3.Connection, user_id: str) -> tuple | None:
+    def _get_user_sync(self, conn: Any, user_id: str) -> tuple | None:
         """Sync: get user."""
         cursor = conn.execute(
             "SELECT user_id, created_at, metadata FROM identity_users WHERE user_id = ?",
@@ -226,7 +220,7 @@ class IdentityService(IdentityProtocol):
             for row in rows
         ]
 
-    def _list_users_sync(self, conn: sqlite3.Connection) -> list[tuple]:
+    def _list_users_sync(self, conn: Any) -> list[tuple]:
         """Sync: list users."""
         cursor = conn.execute(
             "SELECT user_id, created_at, metadata FROM identity_users ORDER BY created_at"
@@ -248,7 +242,7 @@ class IdentityService(IdentityProtocol):
         await self._writer_to_thread(self._delete_user_sync, user_id)
         logger.info("User deleted: user_id=%s (all credentials revoked)", user_id)
 
-    def _delete_user_sync(self, conn: sqlite3.Connection, user_id: str) -> None:
+    def _delete_user_sync(self, conn: Any, user_id: str) -> None:
         """Sync: delete user and cascade."""
         now_iso = datetime.now(UTC).isoformat()
 
@@ -352,7 +346,7 @@ class IdentityService(IdentityProtocol):
 
     def _create_aksk_sync(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         aksk_id: str,
         user_id: str,
         access_key: str,
@@ -392,7 +386,7 @@ class IdentityService(IdentityProtocol):
             for row in rows
         ]
 
-    def _list_aksk_sync(self, conn: sqlite3.Connection, user_id: str) -> list[tuple]:
+    def _list_aksk_sync(self, conn: Any, user_id: str) -> list[tuple]:
         """Sync: list AKSK."""
         cursor = conn.execute(
             """
@@ -423,7 +417,7 @@ class IdentityService(IdentityProtocol):
         await self._writer_to_thread(self._revoke_aksk_sync, aksk_id, now.isoformat())
         logger.info("AKSK revoked: aksk_id=%s (all tokens revoked)", aksk_id)
 
-    def _get_aksk_sync(self, conn: sqlite3.Connection, aksk_id: str) -> tuple | None:
+    def _get_aksk_sync(self, conn: Any, aksk_id: str) -> tuple | None:
         """Sync: get AKSK."""
         cursor = conn.execute(
             "SELECT aksk_id FROM identity_aksk_pairs WHERE aksk_id = ?",
@@ -431,7 +425,7 @@ class IdentityService(IdentityProtocol):
         )
         return cursor.fetchone()
 
-    def _revoke_aksk_sync(self, conn: sqlite3.Connection, aksk_id: str, revoked_at: str) -> None:
+    def _revoke_aksk_sync(self, conn: Any, aksk_id: str, revoked_at: str) -> None:
         """Sync: revoke AKSK and cascade."""
         # Mark AKSK as revoked
         conn.execute(
@@ -538,9 +532,7 @@ class IdentityService(IdentityProtocol):
             expires_in=self._jwt_manager.get_token_expiry_seconds(),
         )
 
-    def _get_aksk_by_access_key_sync(
-        self, conn: sqlite3.Connection, access_key: str
-    ) -> tuple | None:
+    def _get_aksk_by_access_key_sync(self, conn: Any, access_key: str) -> tuple | None:
         """Sync: get AKSK by access_key."""
         cursor = conn.execute(
             """
@@ -554,7 +546,7 @@ class IdentityService(IdentityProtocol):
 
     def _store_tokens_sync(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         access_jti: str,
         user_id: str,
         aksk_id: str,
@@ -602,7 +594,7 @@ class IdentityService(IdentityProtocol):
 
         return claims
 
-    def _check_jti_revoked_sync(self, conn: sqlite3.Connection, jti: str) -> bool:
+    def _check_jti_revoked_sync(self, conn: Any, jti: str) -> bool:
         """Sync: check if JTI is revoked."""
         cursor = conn.execute(
             "SELECT 1 FROM identity_revoked_jtis WHERE jti = ?",
@@ -668,7 +660,7 @@ class IdentityService(IdentityProtocol):
 
     def _rotate_tokens_sync(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         old_jti: str,
         revoked_at: str,
         new_access_jti: str,
@@ -734,7 +726,7 @@ class IdentityService(IdentityProtocol):
         await self._writer_to_thread(self._revoke_token_sync, jti, now.isoformat())
         logger.info("Token revoked: jti=%s", jti)
 
-    def _revoke_token_sync(self, conn: sqlite3.Connection, jti: str, revoked_at: str) -> None:
+    def _revoke_token_sync(self, conn: Any, jti: str, revoked_at: str) -> None:
         """Sync: revoke token."""
         conn.execute(
             """
@@ -763,9 +755,7 @@ class IdentityService(IdentityProtocol):
         await self._writer_to_thread(self._revoke_all_tokens_sync, user_id, now.isoformat())
         logger.info("All tokens revoked: user=%s", user_id)
 
-    def _revoke_all_tokens_sync(
-        self, conn: sqlite3.Connection, user_id: str, revoked_at: str
-    ) -> None:
+    def _revoke_all_tokens_sync(self, conn: Any, user_id: str, revoked_at: str) -> None:
         """Sync: revoke all user tokens."""
         # Get all JTIs
         cursor = conn.execute(
@@ -818,9 +808,7 @@ class IdentityService(IdentityProtocol):
             for row in rows
         ]
 
-    def _list_tokens_sync(
-        self, conn: sqlite3.Connection, user_id: str, active_only: bool
-    ) -> list[tuple]:
+    def _list_tokens_sync(self, conn: Any, user_id: str, active_only: bool) -> list[tuple]:
         """Sync: list tokens."""
         if active_only:
             cursor = conn.execute(
@@ -911,9 +899,7 @@ class IdentityService(IdentityProtocol):
         )
         return mapping
 
-    def _get_mapping_sync(
-        self, conn: sqlite3.Connection, channel: str, sender_id: str
-    ) -> tuple | None:
+    def _get_mapping_sync(self, conn: Any, channel: str, sender_id: str) -> tuple | None:
         """Sync: get mapping."""
         cursor = conn.execute(
             """
@@ -927,7 +913,7 @@ class IdentityService(IdentityProtocol):
 
     def _create_mapping_sync(
         self,
-        conn: sqlite3.Connection,
+        conn: Any,
         mapping_id: str,
         channel: str,
         sender_id: str,
@@ -983,7 +969,7 @@ class IdentityService(IdentityProtocol):
         ]
 
     def _list_mappings_sync(
-        self, conn: sqlite3.Connection, channel: str | None, user_id: str | None
+        self, conn: Any, channel: str | None, user_id: str | None
     ) -> list[tuple]:
         """Sync: list mappings."""
         if channel and user_id:
@@ -1039,7 +1025,7 @@ class IdentityService(IdentityProtocol):
         await self._writer_to_thread(self._delete_mapping_sync, channel, sender_id)
         logger.info("External mapping removed: channel=%s sender=%s", channel, sender_id)
 
-    def _delete_mapping_sync(self, conn: sqlite3.Connection, channel: str, sender_id: str) -> None:
+    def _delete_mapping_sync(self, conn: Any, channel: str, sender_id: str) -> None:
         """Sync: delete mapping."""
         conn.execute(
             """
@@ -1063,14 +1049,14 @@ class IdentityService(IdentityProtocol):
         counts = await self._writer_to_thread(self._get_counts_sync)
         return IdentityStatus(
             enabled=self.enabled,
-            storage_backend="sqlite",
+            storage_backend=self._backend,
             jwt_key_source="config",  # TODO: track actual source
             users_count=counts[0],
             active_aksk_count=counts[1],
             active_tokens_count=counts[2],
         )
 
-    def _get_counts_sync(self, conn: sqlite3.Connection) -> tuple[int, int, int]:
+    def _get_counts_sync(self, conn: Any) -> tuple[int, int, int]:
         """Sync: get counts."""
         cursor = conn.execute("SELECT COUNT(*) FROM identity_users")
         users = cursor.fetchone()[0]

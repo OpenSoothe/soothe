@@ -2,8 +2,10 @@
 
 This package owns the per-loop card ledger that backs the TUI's resume flow:
 
-* ``LoopCardLedger`` — SQLite-backed wrapper around
-  ``soothe_sdk.display.InMemoryCardLedger``; persists to ``display.db``.
+* ``LoopCardLedger`` — durable wrapper around
+  ``soothe_sdk.display.InMemoryCardLedger``; persists via
+  ``get_display_card_store()`` (SQLite ``display.db`` or PostgreSQL
+  ``soothe_metadata`` when ``persistence.default_backend: postgresql``).
 * ``LoopCardManager`` — per-loop lifecycle, real-time binding from stream
   tuples via ``soothe_sdk.display.card_binder``, and ``card.*`` replay-to-client.
 

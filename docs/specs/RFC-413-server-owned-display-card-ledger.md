@@ -8,13 +8,13 @@
 **Authors**: xiaming (with Claude)
 **Dependencies**: RFC-225 (Goal Record Enrichment), RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631 (Goal Display Snapshots)
 **Supersedes**: RFC-411 (history reconstruction model)
-**Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope)
+**Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope); 2026-07-19 persistence backend follows `persistence.default_backend` (PostgreSQL `soothe_metadata` when configured)
 
 ---
 
 ## 1. Abstract
 
-This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them in SQLite (`display.db`). Clients become passive renderers consuming a stable `card.*` wire schema.
+This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them via the configured persistence backend: SQLite (`display.db`) by default, or PostgreSQL (`soothe_metadata` tables) when `persistence.default_backend: postgresql`. Clients become passive renderers consuming a stable `card.*` wire schema.
 
 The design eliminates the live/replay drift class by construction: live rendering and historical resume both flow through the same binding logic. It supersedes the checkpoint-tree reconstruction model in RFC-411 with a forward-write ledger that is recorded as the loop runs.
 
@@ -27,10 +27,10 @@ The design eliminates the live/replay drift class by construction: live renderin
 ### 2.1 Scope
 
 * `CardBinder`: daemon-resident, single source of card-construction rules.
-* `DisplayCardLedger`: in-memory + SQLite-backed store of bound card mutations for the **active goal's live tail** (RFC-631).
+* `DisplayCardLedger`: in-memory + durable store of bound card mutations for the **active goal's live tail** (RFC-631). Backend follows `persistence.default_backend` (SQLite `display.db` or PostgreSQL `soothe_metadata`).
 * `card.*` wire frames: `card.created`, `card.updated`, `card.finalized`, `card.replay_begin`, `card.replay_end`.
 * Catalogue of card kinds (user message, assistant text, step, cognition plan/reason, subagent, error, system notice).
-* Storage in `display.db` (`display_card_mutations` table).
+* Storage: `display_card_mutations` (+ RFC-631 `goal_display_snapshots`) in SQLite `display.db` or PostgreSQL `soothe_metadata`.
 * Live streaming and reattach replay of the **current goal tail** only.
 * Resume of completed goals via RFC-631 goal display snapshots (`loop_history_fetch`).
 
@@ -133,7 +133,7 @@ ThreadLogger     ──┘   (single                │                     (TUI
 
 **Capabilities**:
 * Owns the in-memory dict `card_id → CardState` for the current goal segment.
-* Persists mutations in `display.db` (`display_card_mutations` table).
+* Persists mutations in `display_card_mutations` (SQLite `display.db` or PostgreSQL `soothe_metadata` when `persistence.default_backend: postgresql`).
 * Assigns a monotonic `seq` to every mutation within the active goal segment.
 * `apply(mutation)` — update memory + append a record.
 * `snapshot() -> list[CardState]` — current visible cards in insertion order.
@@ -144,7 +144,7 @@ ThreadLogger     ──┘   (single                │                     (TUI
 
 **Interfaces**:
 * Provides: card frame stream for the wire layer.
-* Requires: file system access under `~/.soothe/data/loops/<loop_id>/`; an append serializer.
+* Requires: durable store access (SQLite under `$SOOTHE_HOME/data/`, or PostgreSQL `metadata` DSN).
 
 ### 5.3 Wire Layer
 
@@ -302,7 +302,9 @@ Future kinds (image attachments, MCP-specific tool cards, etc.) extend the catal
 |---|---|
 | **LangGraph state channel** | Rejected. Checkpoint commits serialize the entire channel value per iteration → O(N²) write cost; couples display projection to graph state, violating RFC-000 "unbounded context, bounded projection"; hard to GC independently. |
 | **SQLite per loop** | Rejected. Cards are pure append-only single-writer single-reader; relational layer adds schema/migration cost without enabling needed queries. One DB per loop scales poorly; one shared DB introduces hot-path lock contention. |
-| **JSONL per loop** | Chosen. O(1) append, O(N) sequential read; co-located with other per-loop artifacts under `~/.soothe/data/loops/<loop_id>/`; operators tail/grep/archive in one place; sub-100 ms first paint for 10k cards; sidecar index can be added later if needed. |
+| **Shared SQLite `display.db`** | Default for `persistence.default_backend: sqlite`. Compact local ledger under `$SOOTHE_HOME/data/`. |
+| **PostgreSQL `soothe_metadata`** | Chosen when `persistence.default_backend: postgresql` (RFC-612). Same schema as SQLite (`display_card_mutations`, `goal_display_snapshots`); avoids host-mounted SQLite corruption under Docker/Colima bind mounts. |
+| **JSONL per loop** | Historical choice superseded by shared SQLite (IG-529), then by backend-aware store selection above. |
 
 ### 10.2 Why Server-Side Binding over Shared-SDK Binding
 

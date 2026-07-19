@@ -16,7 +16,7 @@ from soothe.foundation.autopilot.engine.scheduled_tasks import ScheduleSpec
 from soothe.foundation.cron.extraction import AutopilotDisabledError, CronExtractionService
 from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
 from soothe.foundation.cron.models import CronJob, DuplicateCronJobError, JobStatus
-from soothe.foundation.cron.store import CronJobStore
+from soothe.foundation.cron.store_factory import create_cron_job_store
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
@@ -31,7 +31,7 @@ class CronService:
     Coordinates:
     - NL extraction via CronExtractionService
     - Schedule math via ScheduleSpec
-    - Persistence via CronJobStore
+    - Persistence via CronJobStore / PostgresCronJobStore
     - Execution via AutopilotService.submit_task()
 
     Runs periodic monitoring tick to dispatch due jobs.
@@ -39,28 +39,28 @@ class CronService:
     Args:
         config: SootheConfig for settings and LLM factory.
         autopilot: AutopilotService for goal dispatch.
-        store: Optional CronJobStore (creates default if None).
+        store: Optional store (created from ``persistence.default_backend`` if None).
     """
 
     def __init__(
         self,
         config: SootheConfig,
         autopilot: AutopilotService | None = None,
-        store: CronJobStore | None = None,
+        store: Any | None = None,
     ) -> None:
         """Initialize CronService.
 
         Args:
             config: SootheConfig for settings and LLM factory.
             autopilot: AutopilotService for goal dispatch.
-            store: Optional CronJobStore (creates default if None).
+            store: Optional cron store (created from config when None).
         """
         self._config = config
         self._autopilot = autopilot
         self._cron_config = config.cron
 
         # Create components
-        self._store = store or CronJobStore()
+        self._store = store or create_cron_job_store(config)
         self._extraction_service = CronExtractionService(
             config,
             model_role=self._cron_config.extraction_model,

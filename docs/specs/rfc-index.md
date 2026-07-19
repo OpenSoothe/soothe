@@ -318,7 +318,7 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Status: Draft
   - Created: 2026-06-04
   - Supersedes: RFC-411 (history reconstruction model)
-  - Amended by: RFC-631 (live-only ledger scope)
+  - Amended by: RFC-631 (live-only ledger scope); 2026-07-19 PostgreSQL when `persistence.default_backend: postgresql`
   - Depends on: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631
   - Authors: xiaming (with Claude)
 

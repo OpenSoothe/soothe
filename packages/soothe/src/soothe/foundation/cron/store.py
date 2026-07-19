@@ -12,7 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe.config import SOOTHE_HOME
+from soothe_sdk.paths import SOOTHE_DATA_DIR
+
 from soothe.foundation.cron.models import CronJob, JobStatus, ScheduleKind
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ class CronJobStore:
     Async operations prevent event loop blocking.
 
     Args:
-        db_path: Path to SQLite database file. Defaults to $SOOTHE_HOME/cron.db.
+        db_path: Path to SQLite database file. Defaults to $SOOTHE_DATA_DIR/cron.db.
         reader_pool_size: Number of reader connections for concurrent reads.
     """
 
@@ -37,10 +38,10 @@ class CronJobStore:
         """Initialize CronJobStore.
 
         Args:
-            db_path: Path to SQLite database file. Defaults to $SOOTHE_HOME/cron.db.
+            db_path: Path to SQLite database file. Defaults to $SOOTHE_DATA_DIR/cron.db.
             reader_pool_size: Number of reader connections for concurrent reads.
         """
-        self._db_path = db_path or str(Path(SOOTHE_HOME) / "cron.db")
+        self._db_path = db_path or str(Path(SOOTHE_DATA_DIR) / "cron.db")
         self._reader_pool_size = reader_pool_size
 
         # Writer connection (single writer for consistency)

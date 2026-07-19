@@ -1,4 +1,8 @@
-"""SQLite persistence for per-loop display card mutations."""
+"""Display card mutation persistence (RFC-413).
+
+SQLite (``display.db``) is the default. When ``persistence.default_backend`` is
+``postgresql``, the daemon configures a PostgreSQL store in ``soothe_metadata``.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +11,14 @@ import logging
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from soothe_sdk.display.card_ledger import CardMutation
 
 from soothe.foundation.sloop.state.persistence.runtime_paths import resolve_display_db_path
+
+if TYPE_CHECKING:
+    from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +47,50 @@ CREATE TABLE IF NOT EXISTS goal_display_snapshots (
 CREATE INDEX IF NOT EXISTS idx_goal_snapshots_loop
     ON goal_display_snapshots(loop_id, goal_index);
 """
+
+
+@runtime_checkable
+class DisplayCardStoreProtocol(Protocol):
+    """Shared sync API for SQLite and PostgreSQL display card stores."""
+
+    def list_mutations(self, loop_id: str) -> list[CardMutation]: ...
+
+    def append_mutations(self, loop_id: str, mutations: list[CardMutation]) -> None: ...
+
+    def replace_mutations(self, loop_id: str, mutations: list[CardMutation]) -> None: ...
+
+    def delete_loop(self, loop_id: str) -> None: ...
+
+    def list_goal_snapshots(self, loop_id: str) -> list[dict[str, Any]]: ...
+
+    def goal_snapshot_count(self, loop_id: str) -> int: ...
+
+    def allocate_goal_snapshot_index(self, loop_id: str) -> int: ...
+
+    def insert_goal_snapshot_with_auto_index(
+        self,
+        loop_id: str,
+        *,
+        goal_id: str | None,
+        snapshot: dict[str, Any],
+    ) -> tuple[int, str]: ...
+
+    def insert_goal_snapshot(
+        self,
+        loop_id: str,
+        *,
+        goal_index: int,
+        goal_id: str,
+        snapshot: dict[str, Any],
+    ) -> None: ...
+
+    def peek_user_prompt(self, loop_id: str, *, max_chars: int = 120) -> str | None: ...
+
+    def peek_latest_assistant_response(
+        self, loop_id: str, *, max_chars: int = 120
+    ) -> str | None: ...
+
+    def close(self) -> None: ...
 
 
 class DisplayCardStore:
@@ -376,17 +427,72 @@ class DisplayCardStore:
                 self._conn = None
 
 
-_shared_store: DisplayCardStore | None = None
+_shared_store: DisplayCardStoreProtocol | None = None
 _shared_store_lock = threading.Lock()
 
 
-def get_display_card_store(db_path: Path | None = None) -> DisplayCardStore:
-    """Return a process-wide ``DisplayCardStore`` singleton."""
+def _close_shared_store_unlocked() -> None:
+    global _shared_store
+    if _shared_store is None:
+        return
+    try:
+        _shared_store.close()
+    except Exception:
+        logger.debug("Error closing display card store", exc_info=True)
+    _shared_store = None
+
+
+def configure_display_card_store(config: SootheConfig) -> DisplayCardStoreProtocol:
+    """Select SQLite or PostgreSQL display store from ``persistence.default_backend``.
+
+    Call once during daemon startup after PostgreSQL databases are provisioned.
+    """
     global _shared_store
     with _shared_store_lock:
-        if _shared_store is None or (db_path is not None and _shared_store.db_path != db_path):
-            _shared_store = DisplayCardStore(db_path=db_path)
+        _close_shared_store_unlocked()
+        if config.persistence.default_backend == "postgresql":
+            from soothe.backends.persistence.display_store_postgres import (
+                PostgresDisplayCardStore,
+            )
+
+            dsn = config.resolve_postgres_dsn_for_database("metadata")
+            store: DisplayCardStoreProtocol = PostgresDisplayCardStore(dsn=dsn)
+            logger.info("Display card store backend=postgresql db=metadata")
+        else:
+            store = DisplayCardStore()
+            logger.info("Display card store backend=sqlite path=%s", store.db_path)
+        _shared_store = store
+        return store
+
+
+def get_display_card_store(db_path: Path | None = None) -> DisplayCardStoreProtocol:
+    """Return the process-wide display card store singleton.
+
+    Pass ``db_path`` only in tests to force an isolated SQLite file.
+    """
+    global _shared_store
+    with _shared_store_lock:
+        if db_path is not None:
+            current_path = getattr(_shared_store, "db_path", None)
+            if _shared_store is None or current_path != db_path:
+                _close_shared_store_unlocked()
+                _shared_store = DisplayCardStore(db_path=db_path)
+            return _shared_store
+        if _shared_store is None:
+            _shared_store = DisplayCardStore()
         return _shared_store
 
 
-__all__ = ["DisplayCardStore", "get_display_card_store"]
+def reset_display_card_store_for_tests() -> None:
+    """Clear the process-wide singleton (tests only)."""
+    with _shared_store_lock:
+        _close_shared_store_unlocked()
+
+
+__all__ = [
+    "DisplayCardStore",
+    "DisplayCardStoreProtocol",
+    "configure_display_card_store",
+    "get_display_card_store",
+    "reset_display_card_store_for_tests",
+]

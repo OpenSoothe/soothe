@@ -38,6 +38,22 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ## Chronological Timeline
 
+### Major Changes - 2026-07-19
+
+**Unified persistence backend** (AGENTS.md §10)
+
+- `persistence.default_backend` is one mode for the whole process (postgresql XOR sqlite); mixing is forbidden
+- Display cards, cron jobs, and identity follow the same backend (PostgreSQL → `soothe_metadata`)
+- Durability overrides that disagree with `default_backend` raise at daemon configure time
+
+**RFC-413 amendment**: Display card ledger follows `persistence.default_backend`
+
+- When `persistence.default_backend: postgresql`, store card mutations and goal display snapshots in PostgreSQL `soothe_metadata` (same tables as SQLite `display.db`)
+- SQLite `display.db` remains the default for local/sqlite backends
+- Daemon calls `configure_display_card_store()` after Postgres provisioning at startup
+
+---
+
 ### Major Changes - 2026-06-30
 
 **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) — absorbs triarch's hand-rolled adaptation layer into the Go and TypeScript client libraries

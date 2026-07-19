@@ -1,4 +1,4 @@
-"""SQLite-backed per-loop card ledger."""
+"""Durable per-loop card ledger (SQLite or PostgreSQL via display store)."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class LoopCardLedger:
-    """SQLite-backed ledger for one loop."""
+    """Durable ledger for one loop (backend from ``get_display_card_store``)."""
 
     def __init__(
         self,
@@ -59,7 +59,7 @@ class LoopCardLedger:
         return self._lock
 
     async def ensure_loaded(self) -> None:
-        """Load mutations from ``display.db`` or initialize a header row."""
+        """Load mutations from the display card store or initialize a header row."""
         async with self._lock:
             if self._loaded:
                 return

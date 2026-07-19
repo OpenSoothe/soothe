@@ -5,6 +5,12 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Display card ledger (RFC-413) uses PostgreSQL `soothe_metadata` when `persistence.default_backend: postgresql` instead of always writing `$SOOTHE_HOME/data/display.db`
+- Unified persistence rule (AGENTS.md §10): cron and identity follow `default_backend`; mixed durability overrides raise; SQLite WAL housekeeping skipped in Postgres mode
+
 ## [v0.8.4] - 2026-07-19
 
 ### Changed

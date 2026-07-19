@@ -54,6 +54,16 @@ Prefer **structured light-LLM fields** or **declarative config rules** over keyw
 
 See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLoop migration pattern.
 
+### 10. Unified Persistence Backend (MUST)
+`persistence.default_backend` is **one mode for the whole process**: either `postgresql` or `sqlite`. **Never mix** the two in the same daemon/runtime.
+
+- When `default_backend: postgresql`, **all** durable stores that the daemon owns MUST use PostgreSQL (RFC-612 databases under `postgres_base_dsn` / `postgres_databases`). Do **not** leave cron, identity, display cards, checkpoints, Context Engine, durability/metadata, or autopilot on SQLite “for convenience.”
+- When `default_backend: sqlite`, use the local `$SOOTHE_HOME` / `$SOOTHE_DATA_DIR` SQLite files; do **not** open a parallel Postgres path for a subset of features.
+- Overrides (`agent.protocols.durability.backend` / `.checkpointer`) MUST stay `"default"` unless the operator intentionally switches the **entire** process; do not set them to the opposite of `default_backend`.
+- Vector stores follow the same rule in deploy configs: Postgres mode → `pgvector`; SQLite mode → `sqlite_vec` (or in-memory for tests only).
+- New persistence features MUST branch on `persistence.default_backend` (or a shared `configure_*` / factory) — never hard-code SQLite when Postgres is configured.
+- Leftover SQLite files under `$SOOTHE_DATA_DIR` in Postgres mode are legacy only; do not write new runtime state to them.
+
 ---
 
 ## 📁 Structure

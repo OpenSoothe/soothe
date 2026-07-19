@@ -244,9 +244,20 @@ class SootheDaemon(DaemonHandlersMixin):
                 "or identity.tokens.jwt_signing_key in config for persistence."
             )
 
-        # Use shared data directory for identity database
-        db_path = Path(SOOTHE_DATA_DIR) / "identity.db"
+        # Use shared data directory for identity database (sqlite mode),
+        # or soothe_metadata when persistence.default_backend=postgresql.
+        if self._config.persistence.default_backend == "postgresql":
+            return IdentityService(
+                jwt_key=jwt_key,
+                access_expiry_hours=identity_cfg.tokens.access_token_expiry_hours,
+                refresh_expiry_days=identity_cfg.tokens.refresh_token_expiry_days,
+                default_aksk_expiry_days=identity_cfg.aksk.default_expiry_days,
+                max_aksk_expiry_days=identity_cfg.aksk.max_expiry_days,
+                enabled=True,
+                postgres_dsn=self._config.resolve_postgres_dsn_for_database("metadata"),
+            )
 
+        db_path = Path(SOOTHE_DATA_DIR) / "identity.db"
         return IdentityService(
             db_path=db_path,
             jwt_key=jwt_key,
@@ -488,6 +499,17 @@ class SootheDaemon(DaemonHandlersMixin):
                     logger.exception("PostgreSQL database provisioning failed at daemon startup")
                     raise
 
+            # Unified persistence: display cards, cron, identity follow default_backend.
+            try:
+                from soothe.foundation.persistence.unified import configure_unified_persistence
+
+                configure_unified_persistence(self._config)
+            except Exception:
+                logger.warning(
+                    "Failed to configure unified persistence; falling back to per-store defaults",
+                    exc_info=True,
+                )
+
             # Open shared PostgreSQL pools before any SootheRunner / persist store
             # construction so durability metadata stores never borrow ``open=False`` pools.
             try:
@@ -650,10 +672,12 @@ class SootheDaemon(DaemonHandlersMixin):
                 # RFC-229: Create daemon-owned CronService for scheduled jobs
                 try:
                     from soothe.foundation.cron import CronService
+                    from soothe.foundation.cron.store_factory import create_cron_job_store
 
                     self._cron_service = CronService(
                         config=self._config,
                         autopilot=self._autopilot_service,
+                        store=create_cron_job_store(self._config),
                     )
                     logger.info(
                         "[Cron] daemon-owned CronService constructed (monitoring loop will start)"
@@ -1640,22 +1664,24 @@ class SootheDaemon(DaemonHandlersMixin):
                 await self._persistence_manager.close()
 
         try:
-            from soothe.foundation.sloop.state.persistence.directory_manager import (
-                PersistenceDirectoryManager,
-            )
-            from soothe.foundation.sloop.state.persistence.runtime_paths import (
-                resolve_context_engine_db_path,
-                resolve_display_db_path,
-            )
-            from soothe.foundation.sloop.state.persistence.wal_maintenance import (
-                checkpoint_runtime_databases,
-            )
+            # Skip SQLite WAL housekeeping when the process is in PostgreSQL mode.
+            if self._config.persistence.default_backend != "postgresql":
+                from soothe.foundation.sloop.state.persistence.directory_manager import (
+                    PersistenceDirectoryManager,
+                )
+                from soothe.foundation.sloop.state.persistence.runtime_paths import (
+                    resolve_context_engine_db_path,
+                    resolve_display_db_path,
+                )
+                from soothe.foundation.sloop.state.persistence.wal_maintenance import (
+                    checkpoint_runtime_databases,
+                )
 
-            checkpoint_runtime_databases(
-                PersistenceDirectoryManager.get_loop_checkpoint_path(),
-                resolve_context_engine_db_path(),
-                resolve_display_db_path(),
-            )
+                checkpoint_runtime_databases(
+                    PersistenceDirectoryManager.get_loop_checkpoint_path(),
+                    resolve_context_engine_db_path(),
+                    resolve_display_db_path(),
+                )
         except Exception:
             logger.debug("Runtime database WAL checkpoint skipped", exc_info=True)
 

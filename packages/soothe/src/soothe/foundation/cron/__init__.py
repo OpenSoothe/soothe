@@ -31,6 +31,7 @@ from soothe.foundation.cron.models import (
 )
 from soothe.foundation.cron.service import CronService
 from soothe.foundation.cron.store import CronJobStore
+from soothe.foundation.cron.store_factory import create_cron_job_store
 
 __all__ = [
     "AUTOPILOT_REQUIRED_FOR_CRON",
@@ -45,5 +46,6 @@ __all__ = [
     "ExtractionResult",
     "JobStatus",
     "ScheduleKind",
+    "create_cron_job_store",
     "normalize_cron_description",
 ]

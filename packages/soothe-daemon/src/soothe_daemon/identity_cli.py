@@ -30,12 +30,6 @@ app = typer.Typer(
 console = Console()
 
 
-def _get_db_path() -> Path:
-    """Get persistence database path from config."""
-    soothe_home = Path(os.environ.get("SOOTHE_HOME", "~/.soothe")).expanduser()
-    return soothe_home / "data" / "state.db"
-
-
 def _get_jwt_key() -> str:
     """Get or generate JWT signing key."""
     key = os.environ.get("SOOTHE_JWT_KEY")
@@ -60,14 +54,32 @@ def _get_jwt_key() -> str:
 
 
 def _get_identity_service() -> IdentityService:
-    """Get IdentityService instance."""
+    """Build IdentityService using the same backend as the daemon (unified persistence)."""
     from soothe.foundation.identity import IdentityService
+    from soothe_sdk.paths import SOOTHE_DATA_DIR
 
-    db_path = _get_db_path()
     jwt_key = _get_jwt_key()
 
+    # Prefer agent config so CLI matches daemon persistence.default_backend.
+    try:
+        from soothe.config import SootheConfig
+
+        from soothe_daemon.config import default_soothe_config_path
+
+        agent_path = default_soothe_config_path()
+        if agent_path.exists():
+            cfg = SootheConfig.from_yaml_file(str(agent_path))
+            if cfg.persistence.default_backend == "postgresql":
+                return IdentityService(
+                    jwt_key=jwt_key,
+                    enabled=True,
+                    postgres_dsn=cfg.resolve_postgres_dsn_for_database("metadata"),
+                )
+    except Exception:
+        pass
+
     return IdentityService(
-        db_path=db_path,
+        db_path=Path(SOOTHE_DATA_DIR) / "identity.db",
         jwt_key=jwt_key,
         enabled=True,
     )
