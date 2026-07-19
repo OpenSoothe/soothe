@@ -128,14 +128,16 @@ subagents:
   deep_research:
     config:
       effort: thorough
+      save_reports: true   # false → full report inline instead of workspace file
   academic_research:
     config:
       effort: normal
+      save_reports: true
   planner:
     model_role: think  # router role; optional model: provider:model overrides role
 ```
 
-**Rule of thumb:** research subagents use the `fast` role by default; `planner` wants reasoning (use the `think` role); `browser_use` wants vision-capable models. Disabling all subagents puts you in single-agent mode — simpler but no parallelism or specialized planning.
+**Rule of thumb:** research subagents use the `fast` role by default; `planner` wants reasoning (use the `think` role); `browser_use` wants vision-capable models. Disabling all subagents puts you in single-agent mode — simpler but no parallelism or specialized planning. Set `save_reports: false` when the caller needs the full markdown in the tool/subagent answer rather than a path under `.soothe/agents/`.
 
 ## MCP Servers
 

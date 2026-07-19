@@ -123,6 +123,13 @@ A dict of `SubagentConfig` entries. Each has `enabled`, `model` (optional explic
 
 Built-ins (`planner`, `deep_research`, `academic_research`, `browser_use`, `veritas`) are merged automatically; you only override what you want to change. `browser_use` ships enabled by default in core. Semantic skill search uses top-level `skillify:` (not a subagent).
 
+For `deep_research` and `academic_research`, nested `config` merges into the engine config. Common keys:
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `effort` | `normal` | `normal` \| `thorough` — reflection loops and crawl breadth |
+| `save_reports` | `true` | `true`: write full report under `.soothe/agents/<name>/` and return a short summary + path; `false`: return the full report inline |
+
 ## Tools
 
 `ToolsConfig` holds independently toggleable groups: `execution` (`run_command`, `run_python`, `run_background`, `tail_background_log`, `kill_process`; optional `background_log_dir`, `background_log_retention_days`), `file_ops`, `datetime`, `data`, `wizsearch` (with `default_engines`, `max_results_per_engine`, `timeout`), `image`, `audio`, `video`, `http_requests` (with `allow_dangerous_requests`, `verify_ssl`), `deepxiv` (with `token`, `timeout`, `max_retries`). Disabling a group removes its tools from the model's array entirely (saves context tokens). See [Common Patterns](common-patterns.md) for use-case scoping.

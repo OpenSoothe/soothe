@@ -63,10 +63,11 @@ Planner is a multi-round planning subagent: it iteratively refines a markdown ex
 - **Crawl-on-discovery** — after each search, crawls the top-N result URLs via shared `url_crawl`.
 - **Adaptive report** — research-native scenario classifier (RFC-616 pattern) with mandatory Scope banner.
 - **Effort** — `normal` | `thorough` (loop depth and crawl breadth).
+- **Report delivery** — `config.save_reports` (default `true`) writes the full report under `.soothe/agents/deep_research/` and returns a short summary + path; set `false` to return the full report inline.
 
 ### Academic Research (RFC-619 §11): Academic Literature
 
-`academic_research` mirrors the same engine pattern for **academic sources only** (DeepXiv) plus shared `url_crawl` for paper URLs. Scenarios include literature review, paper comparison, and method survey.
+`academic_research` mirrors the same engine pattern for **academic sources only** (DeepXiv) plus shared `url_crawl` for paper URLs. Scenarios include literature review, paper comparison, and method survey. Same `effort` and `save_reports` nested config keys (reports land under `.soothe/agents/academic_research/` when saving).
 
 Use `deep_research` for general web/industry facts; use `academic_research` for papers and citations.
 

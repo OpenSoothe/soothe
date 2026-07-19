@@ -54,13 +54,21 @@ Iterative **public web** research: search → crawl top URLs → reflect → ada
 
 Set in config (`effort: thorough`) or in the task description (`effort: thorough` on the first line).
 
+**Report delivery** (`save_reports`, default `true`):
+
+| Value | Behavior |
+|-------|----------|
+| `true` | Full markdown saved under `.soothe/agents/deep_research/`; answer is a short summary plus the file path |
+| `false` | Full report returned inline as the subagent answer (no file write) |
+
 **Configuration**:
 ```yaml
 subagents:
   deep_research:
     enabled: true
     config:
-      effort: normal  # normal | thorough
+      effort: normal       # normal | thorough
+      save_reports: true   # true: save to file + short summary; false: full report inline
 ```
 
 For academic papers and literature reviews, use **`academic_research`** instead.
@@ -83,6 +91,8 @@ Iterative **academic literature** research via DeepXiv search, with the same cra
 
 **Effort levels**: same `normal` | `thorough` profiles as `deep_research`.
 
+**Report delivery**: same `save_reports` knob as `deep_research` (default `true` writes under `.soothe/agents/academic_research/`).
+
 **Configuration**:
 ```yaml
 subagents:
@@ -90,6 +100,7 @@ subagents:
     enabled: true
     config:
       effort: normal
+      save_reports: true   # true: save to file + short summary; false: full report inline
 ```
 
 Requires DeepXiv credentials (`DEEPXIV_API_KEY` / `DEEPXIV_TOKEN`) when configured.
