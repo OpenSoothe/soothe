@@ -77,7 +77,14 @@ class AcademicResearchConfig(BaseModel):
     polite_circuit_breaker_threshold: int = Field(default=5, ge=1, le=20)
     polite_circuit_breaker_reset_sec: float = Field(default=60.0, ge=5.0, le=300.0)
     polite_domain_overrides: dict[str, dict[str, float | int]] = Field(default_factory=dict)
-    save_reports: bool = Field(default=True)
+    save_reports: bool = Field(
+        default=False,
+        description=(
+            "When true, write the full report under .soothe/agents/academic_research/ "
+            "and return a short summary + path. When false (default), return the "
+            "full report inline without writing a file."
+        ),
+    )
 
 
 @runtime_checkable

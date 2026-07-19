@@ -68,9 +68,10 @@ def test_build_deep_research_smoke() -> None:
 
     assert result.get("effort") == "normal"
     answer = result.get("answer", "")
-    assert "## Summary" in answer
-    assert "Full report saved to:" in answer
+    assert "## Scope" in answer
+    assert "## Key Findings" in answer
     assert "Done." in answer
+    assert "Full report saved to:" not in answer
 
 
 def test_synthesize_excludes_attached_pdf_body() -> None:

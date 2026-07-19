@@ -10,6 +10,9 @@ class TestDeepResearchConfig:
     def test_default_effort_normal(self) -> None:
         assert DeepResearchConfig().effort == "normal"
 
+    def test_save_reports_disabled_by_default(self) -> None:
+        assert DeepResearchConfig().save_reports is False
+
     def test_scope_banner_text(self) -> None:
         assert "public web" in SCOPE_BANNER.lower()
         assert "local repository" in SCOPE_BANNER.lower()

@@ -409,7 +409,7 @@ subagents:
     endpoint: null
     # Nested keys merge into DeepResearchConfig. Empty config uses those defaults:
     #   effort: normal          # normal | thorough
-    #   save_reports: true      # true: write full report under .soothe/agents/deep_research/ + short summary; false: return full report inline
+    #   save_reports: false     # false: return full report inline; true: write under .soothe/agents/deep_research/ + short summary
     config: {}
     runtime_dir: ''
   academic_research:
@@ -418,7 +418,7 @@ subagents:
     endpoint: null
     # Nested keys merge into AcademicResearchConfig. Empty config uses those defaults:
     #   effort: normal          # normal | thorough
-    #   save_reports: true      # true: write full report under .soothe/agents/academic_research/ + short summary; false: return full report inline
+    #   save_reports: false     # false: return full report inline; true: write under .soothe/agents/academic_research/ + short summary
     config: {}
     runtime_dir: ''
   browser_use:

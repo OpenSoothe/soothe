@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Default `save_reports` to `false` for `deep_research` and `academic_research` (full report inline; set `true` to write under `.soothe/agents/`)
+- Strip attachment bodies from research topics and goal logs (keep attachment metadata only)
+
 ## [v0.8.5] - 2026-07-19
 
 ### Added
@@ -16,7 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Display card ledger uses PostgreSQL `soothe_metadata` in Postgres mode instead of always writing `$SOOTHE_HOME/data/display.db`
 - Cron and identity follow `persistence.default_backend`; mixed durability overrides raise; SQLite WAL housekeeping skipped in Postgres mode
 - Increase default recursion limit from 99 to 200
-- Strip attachment bodies from research topics and goal logs (keep attachment metadata only)
 - Align research source timeouts with wizsearch
 - Promote FAQ, CHANGELOG, and API Reference to top-level docs nav
 

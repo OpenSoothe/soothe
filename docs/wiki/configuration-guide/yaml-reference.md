@@ -128,7 +128,7 @@ For `deep_research` and `academic_research`, nested `config` merges into the eng
 | Key | Default | Purpose |
 |-----|---------|---------|
 | `effort` | `normal` | `normal` \| `thorough` — reflection loops and crawl breadth |
-| `save_reports` | `true` | `true`: write full report under `.soothe/agents/<name>/` and return a short summary + path; `false`: return the full report inline |
+| `save_reports` | `false` | `false`: return the full report inline; `true`: write full report under `.soothe/agents/<name>/` and return a short summary + path |
 
 ## Tools
 
