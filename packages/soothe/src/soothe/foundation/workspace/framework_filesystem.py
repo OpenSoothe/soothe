@@ -96,7 +96,6 @@ class FrameworkFilesystem:
             raise RuntimeError("FrameworkFilesystem not initialized. Call initialize() first.")
         return cls._instance
 
-    @classmethod
     # -----------------------------------------------------------------------
     # Thread-Aware Workspace Methods (RFC-103)
     # -----------------------------------------------------------------------
