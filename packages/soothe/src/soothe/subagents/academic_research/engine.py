@@ -15,6 +15,10 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
+from soothe.subagents._research_topic_util import (
+    planned_research_topic,
+    topic_without_attachments,
+)
 from soothe.subagents.research_wire import ResearchWireEmitter
 from soothe.toolkits.url_crawl import crawl_urls, urls_from_search_results
 from soothe.utils.subagent_emit import emit_subagent_wire_event
@@ -109,16 +113,20 @@ class AcademicResearchEngineState(dict):
 
 
 _PLAN_RESEARCH = """\
-You are an academic literature analyst. For the topic below:
-1. Identify key research sub-questions.
-2. Generate targeted academic search queries (< 50 chars, same language as topic).
+You are an academic literature analyst. For the material below:
+1. Extract research_topic: a concise research goal (1-3 sentences). Use the
+   user ask and any attached materials to refine scope. Do NOT copy attached
+   file bodies, long quotes, or host context/UI blocks into research_topic.
+2. Identify key research sub-questions.
+3. Generate targeted academic search queries (< 50 chars, same language as the user ask).
 
 Current date: {current_date}
-Topic: {topic}
+Material: {topic}
 {effort_hint}
 
 Return ONLY raw JSON:
-{{"sub_questions": [{{"question": "..."}}],
+{{"research_topic": "...",
+  "sub_questions": [{{"question": "..."}}],
   "queries": [{{"query": "..."}}]}}"""
 
 _SUMMARIZE = """\
@@ -298,14 +306,18 @@ def build_academic_research_engine(
         except Exception:
             logger.warning("[academic_research] plan timed out, using fallback", exc_info=True)
             parsed = None
-        sub_questions = (parsed or {}).get("sub_questions") or fallback_sub_questions(topic)
-        queries = (parsed or {}).get("queries") or fallback_queries(topic, sub_questions)
+        planned_topic = planned_research_topic(parsed, topic)
+        sub_questions = (parsed or {}).get("sub_questions") or fallback_sub_questions(planned_topic)
+        queries = (parsed or {}).get("queries") or fallback_queries(planned_topic, sub_questions)
         sub_questions = _cap_list(sub_questions, profile.max_sub_questions)
         queries = _cap_list(queries, profile.max_initial_queries)
         _emit_step("PlanResearch", f"{len(queries)} queries")
+        # LLM-extracted topic (fallback: strip attachments). Attachment bodies
+        # stay out of gather/reflect/synthesize.
         return {
             "_sub_questions": sub_questions,
             "_queries": queries,
+            "research_topic": planned_topic,
             "search_summaries": [],
             "sources_gathered": [],
             "references_gathered": [],
@@ -525,7 +537,8 @@ def build_academic_research_engine(
         return "synthesize"
 
     def synthesize_node(state: dict[str, Any]) -> dict[str, Any]:
-        topic = _extract_topic(state)
+        # Never feed attached file bodies into synthesis — only gathered evidence.
+        topic = topic_without_attachments(_extract_topic(state))
         summaries = "\n\n".join(state.get("search_summaries", []))
         effort = state.get("effort", "normal")
         num_sources = len(state.get("sources_gathered", []))
