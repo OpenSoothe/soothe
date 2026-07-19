@@ -883,7 +883,7 @@ class AutopilotConfig(BaseModel):
     )
     # RFC-222 H5: wall-clock budget per dispatched goal. None disables.
     goal_deadline_seconds: float | None = Field(
-        default=1_209_600,
+        default=1_209_600.0,
         description=(
             "Wall-clock budget per dispatched autopilot goal in seconds; "
             "the AutopilotService monitor cancels the worker on overrun (RFC-222 H5). "

@@ -283,9 +283,9 @@ test: sync test-unit test-integration
 
 test-unit: sync
 	@echo "Running unit tests..."
-	@for pkg in $(PACKAGES); do \
+	@set -e; for pkg in $(PACKAGES); do \
 		if test -d "packages/$$pkg/tests/unit"; then \
-			echo "  $$pkg" && cd packages/$$pkg && uv run pytest tests/unit/ -v --tb=short && cd ../..; \
+			echo "  $$pkg" && (cd packages/$$pkg && uv run pytest tests/unit/ -v --tb=short); \
 		fi; \
 	done
 
