@@ -147,8 +147,8 @@ graph TB
 - `DaemonSession` — dual-socket loop session for CLI/TUI-style apps: subscribed stream socket + RPC sidecar; `Connect` / `SendTurn` / `IterTurnChunks` / `EnsureConnected` / history-cards helpers. Primary happy-path entry for one conversation.
 - `ConnectionPool` — acquire/release/health-check/reuse per logical session, delegating bootstrap/reattach to the core client.
 - `QueryGate` — single-flight per-session query gate (`ErrQueryBusy`) with cancel-before-context ordering.
-- `TurnRunner` — timeout-bounded turn loop: send `loop_input`, consume the multiplexed stream, classify events, resolve deliverable, persist/broadcast.
-- `EventClassifier` — map streamed frames to deliverable/streaming/terminal outcomes, keyed on `(namespace, mode, phase)` with a configurable `DeliverablePhases` set.
+- `TurnRunner` — timeout-bounded pool turn loop: send `loop_input`, consume the multiplexed stream, persist/broadcast. **Turn end follows the `DaemonSession.IterTurnChunks` contract** (`TurnBoundary`: gated `soothe.stream.end` / `status.idle` / `stopped`). Phase deliverables may early-complete for UX but are not the sole terminator.
+- `EventClassifier` — map streamed frames to content deltas, thinking steps, and optional phase early-complete, keyed on `(namespace, mode, phase)` with a configurable `DeliverablePhases` set.
 - `SSEBroadcaster` — string-keyed pub/sub fan-out.
 - `SessionStore` interface — the persistence seam (loop-id mapping, message append, last-used/reset tracking).
 
@@ -180,10 +180,11 @@ graph TB
 2. `ConnectionPool.Acquire(ctx, sessionID, workspaceID, userID)` reuses an active slot, or bootstraps (`loop_new` + `subscribe` with `method:"loop_events"`) / reattaches (`loop_reattach` + `subscribe` + `ReattachAndProbe`) via the core `Client`.
 3. `QueryGate.Acquire(sessionID)` enforces single-flight; returns `ErrQueryBusy` if a query is already running.
 4. `TurnRunner` builds the `loop_input` map and calls `Client.SendMessage` (fire-and-forget notification, or request with a receipt).
-5. `TurnRunner` selects on the multiplexed event stream and the timeout. For each inbound frame, `EventClassifier.Classify` keys on `(namespace, mode, phase)`:
-   - `next` with `mode:"messages"` → accumulate / stream the assistant chunk.
-   - `complete` (or `error`) → terminal.
-6. On a deliverable: `SessionStore.Persist` + `SSEBroadcaster.Broadcast`.
+5. `TurnRunner` selects on the multiplexed event stream and the timeout. For each inbound frame:
+   - `TurnBoundary.Feed` applies DaemonSession end rules (authoritative turn end).
+   - `EventClassifier.Classify` accumulates deltas / thinking steps; deliverable phases may early-complete for UX.
+   - Boundary end with substantive accumulated text → persist + SSE complete (same as CLI when `iter_turn_chunks` returns).
+6. On complete: `SessionStore.Persist` + `SSEBroadcaster.Broadcast`.
 7. `QueryGate.Release(sessionID)`.
 
 ### Flow 2: Connection drop mid-session
