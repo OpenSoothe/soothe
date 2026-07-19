@@ -31,6 +31,7 @@ from soothe.foundation.context.models import (
 )
 from soothe.foundation.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
 from soothe.foundation.context.semantic import SemanticLoader
+from soothe.utils.text_preview import goal_description_for_log
 
 if TYPE_CHECKING:
     pass
@@ -284,7 +285,12 @@ class ContextEngine:
             **filtered_kwargs,
         )
         self._dag.add_goal(goal)
-        logger.info('Created goal %s: "%s" (priority=%d)', goal.id, description, priority)
+        logger.info(
+            'Created goal %s: "%s" (priority=%d)',
+            goal.id,
+            goal_description_for_log(description),
+            priority,
+        )
         self._fire("goal_created", goal.id)
         return goal
 

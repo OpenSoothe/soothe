@@ -15,6 +15,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.types import Send
 
+from soothe.subagents._research_timeouts import effective_source_timeout_sec
 from soothe.subagents._research_topic_util import (
     planned_research_topic,
     topic_without_attachments,
@@ -364,7 +365,7 @@ def build_deep_research_engine(
             try:
                 return await asyncio.wait_for(
                     web_source.query(query, context),
-                    timeout=cfg.source_timeout_sec,
+                    timeout=effective_source_timeout_sec(cfg.source_timeout_sec, soothe_config),
                 )
             except Exception:
                 logger.debug("[deep_research] web search failed", exc_info=True)

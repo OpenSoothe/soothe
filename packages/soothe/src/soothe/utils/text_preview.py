@@ -196,6 +196,58 @@ def log_preview(text: str, chars: int = DEFAULT_PREVIEW_CHARS) -> str:
     return preview(text, mode="chars", first=chars, marker=_ELLIPSIS)
 
 
+# Hosts (e.g. Triarch) may append extracted file bodies after these markers.
+# Logs should keep the user ask + light context, but only preview the dump.
+_ATTACHMENT_BODY_MARKERS: tuple[str, ...] = ("--- Triarch attachments (extracted content) ---",)
+
+DEFAULT_GOAL_LOG_CHARS: int = 1200
+"""Default total character budget for goal-description log previews."""
+
+DEFAULT_ATTACHMENT_LOG_PREVIEW_CHARS: int = 280
+"""Character budget for the extracted-attachment section in goal logs."""
+
+
+def goal_description_for_log(
+    description: str,
+    *,
+    max_chars: int = DEFAULT_GOAL_LOG_CHARS,
+    attachment_preview_chars: int = DEFAULT_ATTACHMENT_LOG_PREVIEW_CHARS,
+) -> str:
+    """Return a log-safe goal description that previews attachment bodies.
+
+    Preserves the user ask and light context metadata (for example attached
+    file names). When an extracted-attachment section is present, only a short
+    preview of that section is included so ``soothe.log`` stays readable.
+
+    The stored goal description is unchanged; this helper is for logging only.
+    """
+    text = description or ""
+    if not text:
+        return ""
+
+    cut: int | None = None
+    for marker in _ATTACHMENT_BODY_MARKERS:
+        idx = text.find(marker)
+        if idx != -1:
+            cut = idx if cut is None else min(cut, idx)
+
+    if cut is None:
+        return log_preview(text, chars=max_chars)
+
+    prefix = text[:cut].rstrip()
+    attachment_preview = log_preview(text[cut:], chars=attachment_preview_chars)
+    if not prefix:
+        return attachment_preview
+
+    sep = "\n\n"
+    prefix_budget = max_chars - len(attachment_preview) - len(sep)
+    if prefix_budget < 80:
+        prefix_budget = 80
+    if len(prefix) > prefix_budget:
+        prefix = log_preview(prefix, chars=prefix_budget)
+    return f"{prefix}{sep}{attachment_preview}"
+
+
 # ---------------------------------------------------------------------------
 # Internal implementations
 # ---------------------------------------------------------------------------

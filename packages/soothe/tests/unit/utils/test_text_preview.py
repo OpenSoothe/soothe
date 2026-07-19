@@ -6,6 +6,7 @@ from soothe.utils.text_preview import (
     DEFAULT_MARKER_TEMPLATE,
     DEFAULT_PREVIEW_CHARS,
     DEFAULT_PREVIEW_LINES,
+    goal_description_for_log,
     log_preview,
     preview,
     preview_first,
@@ -259,6 +260,49 @@ class TestLogPreview:
         result = f"goat={log_preview(goal, 80)}"
         assert result.startswith("goat=" + "A" * 80)
         assert result.endswith("...")
+
+
+# ---------------------------------------------------------------------------
+# goal_description_for_log()
+# ---------------------------------------------------------------------------
+
+
+class TestGoalDescriptionForLog:
+    """Goal-description logging should preview attachment dumps."""
+
+    def test_plain_goal_unchanged_when_short(self) -> None:
+        assert goal_description_for_log("Analyze auth flow") == "Analyze auth flow"
+
+    def test_long_goal_without_attachments_is_previewed(self) -> None:
+        text = "A" * 2000
+        result = goal_description_for_log(text, max_chars=100)
+        assert result == log_preview(text, chars=100)
+        assert result.endswith("...")
+
+    def test_attachment_body_is_previewed_not_fully_dumped(self) -> None:
+        body = "WebWorldModels " + ("x" * 5000)
+        description = (
+            "Using the attached knowledge vault items, conduct deep research.\n\n"
+            "世界模型最新进展\n\n"
+            "--- Context ---\n"
+            "Attached files: 2512.23676v1.pdf (material)\n\n"
+            "--- Triarch attachments (extracted content) ---\n"
+            "--- Attachment: 2512.23676v1.pdf (application/pdf) ---\n"
+            "Pages: 34 (text-only extraction)\n\n"
+            f"{body}"
+        )
+        result = goal_description_for_log(description, attachment_preview_chars=120)
+        assert "conduct deep research" in result
+        assert "世界模型最新进展" in result
+        assert "Attached files: 2512.23676v1.pdf (material)" in result
+        assert "--- Triarch attachments (extracted content) ---" in result
+        assert "2512.23676v1.pdf" in result
+        assert body not in result
+        assert result.endswith("...")
+        assert len(result) < 800
+
+    def test_empty_description(self) -> None:
+        assert goal_description_for_log("") == ""
 
 
 # ---------------------------------------------------------------------------

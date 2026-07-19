@@ -52,7 +52,15 @@ class DeepResearchConfig(BaseModel):
     llm_role: str = Field(default="fast")
     synthesis_role: str = Field(default="fast")
     effort: DeepResearchEffortLevel = Field(default="normal")
-    source_timeout_sec: float = Field(default=10.0, ge=1.0, le=60.0)
+    source_timeout_sec: float = Field(
+        default=45.0,
+        ge=1.0,
+        le=120.0,
+        description=(
+            "Outer wait for one web search gather. Must exceed tools.wizsearch.timeout "
+            "(default 30s); the engine raises this automatically when needed."
+        ),
+    )
     crawl_timeout_sec: float = Field(default=15.0, ge=1.0, le=60.0)
     enable_early_termination: bool = Field(default=True)
     min_results_for_termination: int = Field(default=3, ge=1, le=20)

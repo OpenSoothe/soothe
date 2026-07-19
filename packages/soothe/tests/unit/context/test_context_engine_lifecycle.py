@@ -19,6 +19,37 @@ class TestContextEngineGoalLifecycle:
         assert fetched.description == "Build feature X"
 
     @pytest.mark.asyncio
+    async def test_create_goal_logs_attachment_preview_only(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """soothe.log should preview extracted attachments, not dump full bodies."""
+        import logging
+
+        huge_body = "PDF_BODY_" + ("Z" * 4000)
+        description = (
+            "Research world models\n\n"
+            "--- Context ---\n"
+            "Attached files: paper.pdf (material)\n\n"
+            "--- Triarch attachments (extracted content) ---\n"
+            f"--- Attachment: paper.pdf (application/pdf) ---\n{huge_body}"
+        )
+        engine = ContextEngine()
+        with caplog.at_level(logging.INFO, logger="soothe.foundation.context.engine"):
+            goal = await engine.create_goal(description, priority=50)
+
+        # Stored goal keeps full text for the agent.
+        assert goal.description == description
+        assert huge_body in goal.description
+
+        logged = "\n".join(r.getMessage() for r in caplog.records)
+        assert f"Created goal {goal.id}" in logged
+        assert "Research world models" in logged
+        assert "Attached files: paper.pdf" in logged
+        assert "Triarch attachments" in logged
+        assert huge_body not in logged
+        assert "PDF_BODY_" in logged  # short preview prefix still visible
+
+    @pytest.mark.asyncio
     async def test_list_goals_by_status(self) -> None:
         engine = ContextEngine()
         g1 = await engine.create_goal("A")
