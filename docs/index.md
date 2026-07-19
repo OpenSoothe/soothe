@@ -39,7 +39,14 @@ soothe -p "List all Python files in the current directory and count lines of cod
 
 ## Documentation
 
-Browse the full documentation in the [Soothe Wiki](wiki/):
+| Section | What you'll find |
+|---------|------------------|
+| [Wiki](wiki/) | Guides for users, developers, and operators |
+| [FAQ](faq/) | Frequently asked questions by topic |
+| [CHANGELOG](changelog/) | Version history and release notes |
+| [API Reference](wiki/api-reference/) | Core, daemon, and SDK package APIs |
+
+### Wiki knowledge base
 
 | Section | What you'll find |
 |---------|------------------|
@@ -51,10 +58,7 @@ Browse the full documentation in the [Soothe Wiki](wiki/):
 | [Capabilities](wiki/capabilities/) | Subagents, tools, MCP integration |
 | [Protocols](wiki/protocols/) | Protocol definitions and taxonomy |
 | [Deployment](wiki/deployment/) | Production setup, monitoring, security, scaling |
-| [API Reference](wiki/api-reference/) | Core, daemon, and SDK package APIs |
 | [Troubleshooting](wiki/troubleshooting) | Common issues and solutions |
-| [FAQ](wiki/faq) | Frequently asked questions |
-| [Changelog](wiki/changelog) | Version history and release notes |
 
 ---
 

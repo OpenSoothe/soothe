@@ -1,7 +1,6 @@
 ---
 title: "Daemon Server API"
 parent: API Reference
-grand_parent: Wiki
 nav_order: 2
 description: >-
   The soothe_daemon package — a long-running background server hosting SootheRunner instances with multi-transport communication.

@@ -1,8 +1,9 @@
 ---
-title: "FAQ"
-parent: Wiki
-nav_order: 9.1
+title: FAQ
+layout: default
+nav_order: 3
 description: Frequently asked questions about Soothe, organized by topic with common questions and answers.
+permalink: /faq/
 ---
 
 # Frequently Asked Questions (FAQ)

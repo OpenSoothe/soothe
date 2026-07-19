@@ -1,7 +1,6 @@
 ---
 title: "Client & Plugin SDK API"
 parent: API Reference
-grand_parent: Wiki
 nav_order: 3
 description: >-
   The soothe_sdk package — slim contracts for plugin authors and shared wire/display/protocol APIs.

@@ -1,7 +1,6 @@
 ---
 title: "Core Framework API"
 parent: API Reference
-grand_parent: Wiki
 nav_order: 1
 description: >-
   The soothe package — configuration model, protocol abstractions, agent construction pipeline, and execution runner.

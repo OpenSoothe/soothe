@@ -1,7 +1,10 @@
 # GitHub Pages / Jekyll configuration for Soothe documentation
 #
-# Publishes docs/wiki/ as the user-facing knowledge base at:
+# Publishes docs/ as the user-facing site at:
 # https://mirasoth.github.io/soothe/
+#
+# Top-level nav: Home, Wiki, FAQ, CHANGELOG, API Reference
+# Wiki remains the knowledge-base hub for guides and architecture.
 
 title: Soothe Docs
 description: >-
@@ -105,10 +108,6 @@ defaults:
     values:
       parent: Deployment
   - scope:
-      path: "wiki/api-reference"
-    values:
-      parent: API Reference
-  - scope:
       path: "wiki/user-guides"
     values:
       parent: User Guides
@@ -120,3 +119,5 @@ defaults:
       path: "wiki/development"
     values:
       parent: Development & Contributing
+  # API Reference children declare `parent: API Reference` in frontmatter.
+  # Do not set a path-wide parent default — that would nest the section index under itself.

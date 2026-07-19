@@ -39,10 +39,21 @@ jobs:
         run: |
           test -f _site/index.html
           test -f _site/wiki/index.html
+          test -f _site/faq/index.html
+          test -f _site/changelog/index.html
+          test -f _site/wiki/api-reference/index.html
           test -f _site/.nojekyll
           test ! -e _site/specs
           test ! -e _site/drafts
           echo "Pages artifact verification passed ($(du -sh _site | cut -f1))"
+          # Top-level nav pages must appear as siblings of Wiki (not nested under it)
+          python3 - <<'PY'
+          from pathlib import Path
+          html = Path("_site/index.html").read_text()
+          for label in ("Home", "Wiki", "FAQ", "CHANGELOG", "API Reference"):
+              assert label in html, f"missing nav label: {label}"
+          print("Nav labels present on Home")
+          PY
 
       - name: Deploy to gh-pages branch
         uses: JamesIves/github-pages-deploy-action@v4

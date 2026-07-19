@@ -90,8 +90,14 @@ Welcome to the Soothe documentation. This wiki provides comprehensive guides for
 
 ### 📚 Reference & Community
 
+Top-level docs (also in the site sidebar):
+
 - **[FAQ](faq.md)** ⭐ - Frequently asked questions organized by topic
-- **[Changelog](changelog.md)** - Version history and release notes
+- **[CHANGELOG](changelog.md)** - Version history and release notes
+- **[API Reference](api-reference/index.md)** - Core, daemon, and SDK package APIs
+
+Also in this wiki:
+
 - **[Testing Guide](testing-guide.md)** - Comprehensive testing workflow
 - **[Contributing Guide](contributing-guide.md)** - Development workflow and code standards
 
