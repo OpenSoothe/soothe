@@ -1,26 +1,10 @@
 """Unit tests for PostgreSQLPersistStore retry and pool recovery."""
 
 import asyncio
-import importlib.util
-from pathlib import Path
 
 import pytest
 
-
-def _load_postgres_store_class():
-    """Load PostgreSQLPersistStore directly from source file.
-
-    Importing through ``soothe.backends.persistence`` can pull optional modules
-    that are currently under active refactor in this workspace.
-    """
-    package_root = Path(__file__).resolve().parents[4]
-    module_path = package_root / "src" / "soothe" / "backends" / "persistence" / "postgres_store.py"
-    spec = importlib.util.spec_from_file_location("test_postgres_store_module", module_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Failed to load module spec for {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.PostgreSQLPersistStore
+from soothe.backends.persistence.postgres_store import PostgreSQLPersistStore
 
 
 class _AdminShutdownError(Exception):
@@ -32,7 +16,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_run_with_pool_recovery_retries_once_on_recoverable_error(self) -> None:
         """Recoverable connection failures should reset pool and retry once."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_test() -> None:
             store = postgres_persist_store_cls(dsn="postgresql://unused/test")
@@ -72,7 +56,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_run_with_pool_recovery_does_not_retry_nonrecoverable_error(self) -> None:
         """Nonrecoverable errors should bubble immediately without pool reset."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_test() -> None:
             store = postgres_persist_store_cls(dsn="postgresql://unused/test")
@@ -109,7 +93,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_load_and_list_keys_use_dict_row_column_names(self) -> None:
         """Rows from dict_row pools must be accessed by column name, not index."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_return(value: object) -> object:
             return value
@@ -173,7 +157,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_reset_pool_does_not_close_shared_pool(self) -> None:
         """Shared-pool wrappers must rebind, not close the registry-owned pool."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_test() -> None:
             class _PoolWithClose:
@@ -198,7 +182,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_ensure_pool_rebinds_shared_pool_when_local_ref_cleared(self) -> None:
         """Late durability touches recover when a prior reset cleared ``_pool``."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_test() -> None:
             shared = object()
@@ -216,7 +200,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_ensure_pool_opens_lazy_shared_pool(self) -> None:
         """Shared pools created with ``open=False`` must open on first use."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_test() -> None:
             open_calls = 0
@@ -243,7 +227,7 @@ class TestPostgreSQLPersistStoreUnit:
 
     def test_run_with_pool_recovery_retries_pool_closed(self) -> None:
         """``PoolClosed`` from an unopened pool should reopen and retry once."""
-        postgres_persist_store_cls = _load_postgres_store_class()
+        postgres_persist_store_cls = PostgreSQLPersistStore
 
         async def _async_test() -> None:
             try:

@@ -1,22 +1,19 @@
-"""MemU - File-based memory system for AI agents.
-
-A Python framework for creating and managing AI agent memories through file-based storage.
-Simplified unified memory architecture with a single Memory Agent.
-"""
+"""Shim (IG-668): package re-export for ``soothe_nano.backends.memory.memu``."""
 
 from __future__ import annotations
 
-__version__ = "0.1.9"
-__author__ = "MemU Team"
-__email__ = "support@nevamind.ai"
+import soothe_nano.backends.memory.memu as _mod
+from soothe_nano.backends.memory.memu import *  # noqa: F403
 
-from .llm_client import BaseLLMClient
-from .memory import MemoryAgent, MemoryFileManager
-from .memory_store import MemuMemoryStore
+try:
+    from soothe_nano.backends.memory.memu import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 
-__all__ = [
-    "BaseLLMClient",
-    "MemoryAgent",
-    "MemoryFileManager",
-    "MemuMemoryStore",
-]
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

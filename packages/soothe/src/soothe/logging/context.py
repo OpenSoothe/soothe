@@ -1,28 +1,7 @@
-"""Thread ID context variable for structured logging."""
+"""Shim (IG-668): alias ``logging/context`` to ``soothe_nano.logging.context``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-import contextvars
-
-_current_thread_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "current_thread_id", default=None
-)
-
-
-def set_thread_id(thread_id: str | None) -> None:
-    """Set the current thread ID for structured log records.
-
-    Args:
-        thread_id: The conversation thread ID to include in log messages,
-            or ``None`` to clear the current value.
-    """
-    _current_thread_id.set(thread_id)
-
-
-def get_thread_id() -> str | None:
-    """Get the current thread ID for structured log records.
-
-    Returns:
-        The current thread ID, or ``None`` if not set.
-    """
-    return _current_thread_id.get()
+_nano = import_module("soothe_nano.logging.context")
+sys.modules[__name__] = _nano

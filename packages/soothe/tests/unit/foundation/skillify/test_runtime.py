@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import soothe_nano
+
 from soothe.foundation.skillify.service import _default_warehouse_paths, resolve_warehouse_paths
+
+_BUILTIN_SKILLS = Path(soothe_nano.__file__).resolve().parent / "skills" / "builtin_skills"
 
 
 def test_default_warehouse_paths_include_user_skill_dirs(tmp_path: Path) -> None:
@@ -12,7 +16,7 @@ def test_default_warehouse_paths_include_user_skill_dirs(tmp_path: Path) -> None
     defaults = _default_warehouse_paths(soothe_home)
     assert defaults == [
         str(Path.home() / ".agents" / "skills"),
-        str(Path(__file__).resolve().parents[4] / "src" / "soothe" / "skills" / "builtin_skills"),
+        str(_BUILTIN_SKILLS),
         str(soothe_home / "skills"),
     ]
 

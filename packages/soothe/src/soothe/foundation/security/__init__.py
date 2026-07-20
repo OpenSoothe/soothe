@@ -1,37 +1,19 @@
-"""Security layer for path validation, policy enforcement, and operation security.
-
-This module provides:
-- Path validation, traversal protection, and SecurityEnforcer for filesystem ops
-- Workspace filesystem path validation and banned command matching (RFC-617)
-- Configuration-driven permission policy with named profiles
-"""
+"""Shim (IG-668): package re-export for ``soothe_nano.security``."""
 
 from __future__ import annotations
 
-from .config_policy import (
-    DEFAULT_PROFILES,
-    PRIVILEGED_PROFILE,
-    READONLY_PROFILE,
-    STANDARD_PROFILE,
-    ConfigDrivenPolicy,
-)
-from .enforcement import SecurityEnforcer
-from .operation_security import WorkspaceToolOperationSecurity
-from .policy import PolicyDecision, PolicyViolation, SecurityPolicy
-from .validator import PathValidationError, PathValidator, ValidationResult
+import soothe_nano.security as _mod
+from soothe_nano.security import *  # noqa: F403
 
-__all__ = [
-    "SecurityPolicy",
-    "PolicyDecision",
-    "PolicyViolation",
-    "PathValidator",
-    "ValidationResult",
-    "PathValidationError",
-    "SecurityEnforcer",
-    "WorkspaceToolOperationSecurity",
-    "ConfigDrivenPolicy",
-    "STANDARD_PROFILE",
-    "READONLY_PROFILE",
-    "PRIVILEGED_PROFILE",
-    "DEFAULT_PROFILES",
-]
+try:
+    from soothe_nano.security import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

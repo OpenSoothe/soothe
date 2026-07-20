@@ -1,8 +1,7 @@
-"""VectorStoreProtocol -- async vector database abstraction (RFC-0002 Module 8).
+"""Shim (IG-668): alias ``protocols/vector_store`` to ``soothe_nano.protocols.vector_store``."""
 
-Re-exported from soothe_sdk for backwards compatibility.
-"""
+import sys
+from importlib import import_module
 
-from soothe_sdk.protocols.vector_store import VectorRecord, VectorStoreProtocol  # noqa: F401
-
-__all__ = ["VectorRecord", "VectorStoreProtocol"]
+_nano = import_module("soothe_nano.protocols.vector_store")
+sys.modules[__name__] = _nano

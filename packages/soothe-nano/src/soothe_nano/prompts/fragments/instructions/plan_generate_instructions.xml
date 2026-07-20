@@ -1,0 +1,53 @@
+<PLAN_GENERATE>
+Output wire JSON only: ``reasoning``, ``steps``, optional ``clarify``.
+
+If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; else
+``ASSESSMENT:`` in the user message. Goal is in GOAL:. When ``Status: continue`` and DAG
+STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan only when needed.
+
+**Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
+- If one remaining actionable gap can be completed in one execute wave using projected prior context, emit exactly one step.
+
+**Top-level fields** (only these — never put field names inside ``steps[]``):
+- ``reasoning`` (≤500 chars): First-person cognition for the TUI (I'll / Let me …).
+- ``steps``: Non-empty array of step objects when executing work.
+- ``clarify``: Optional ``{ "questions": ["...?"] }`` when user input is required — mutually
+  exclusive with non-empty ``steps`` (at most one clarify wave; no action steps alongside).
+
+**steps[]** objects (action path):
+- ``description``: Milestone line (&lt;20 words).
+- ``dependencies``: REQUIRED on every step — use ``[]`` when none; sibling ids or cross-wave
+  composite ids from STEP ANCHOR REGISTRY when ordering matters (simple and complex goals).
+- ``expected_output``: Checkable completion signal.
+- ``id``: Optional short token (``01``, ``02``) or per STEP ID HINT.
+- ``delegate``: Optional open-catalog subagent when this step must **exclusively** delegate
+  via ``task`` (``planner`` among built-ins). **Default: omit / null** on every step —
+  execute CoreAgent already has ``task`` and local tools and chooses per hop.
+  Do **not** set ``delegate`` to ``explorer``, ``browser_use``, ``deep_research``, or
+  ``academic_research``
+  (intake/slash routed; never plan-wave delegates).
+
+**``delegate`` rules** (open task catalog — do not over-delegate):
+- Leave ``delegate`` null for workspace/codebase work: file reads, repo search, config edits,
+  gap analysis from local docs, synthesis from prior step outputs, adb/shell on workspace.
+- Set ``delegate`` to ``planner`` only when the step deliverable is an agentic markdown
+  execution-plan design that cannot be done with local tools alone.
+- Never set ``delegate`` on every step in a wave; mixed local + delegated steps are normal
+  (``delegate`` null on local steps, set only where required).
+
+Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps,
+else ``parallel``). Do not emit ``type``, ``execution_mode``, ``full_description``, or ``kind``.
+
+**clarify** (PRIMARY clarification — executor will NOT ask the user for you):
+- REQUIRED when: goal ambiguous; essential context missing; user preference needed; iteration 0
+  and you cannot proceed without answers.
+- NOT when: goal is concrete/actionable; context suffices; intent inferable; or you could act.
+- Put question text in ``clarify.questions`` (each ending in ``?``). Do not use action steps to ask.
+
+**On failure**: If prior steps failed, propose a different approach — do not repeat same step text.
+
+**Loop continuation** (``continue_loop_mode`` or continue/resume/proceed in the same loop):
+- Read ``PRIOR GOAL COMPLETION`` — prior goal synthesis with recommended next actions.
+- Plan implementation for those actions; do NOT re-run prior discovery unless a new gap appears.
+- Use ``dependencies`` when steps build on prior output; cite concrete modules, files, or design-doc items.
+</PLAN_GENERATE>

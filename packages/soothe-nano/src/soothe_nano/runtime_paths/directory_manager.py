@@ -1,0 +1,177 @@
+"""Directory manager for isolated persistence directories.
+
+Ensures thread/loop isolation:
+- data/threads/ (CoreAgent Layer 1)
+- data/loops/ (StrangeLoop Layer 2)
+
+RFC-215: StrangeLoop Persistence Backend Architecture
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+# SOOTHE_HOME will be imported at runtime to allow test mocking
+SOOTHE_HOME = None  # Will be set in methods
+
+THREADS_DATA_DIR = "data/threads"
+"""Directory for CoreAgent thread runtime data (Layer 1)."""
+
+LOOPS_DATA_DIR = "data/loops"
+"""Directory for StrangeLoop checkpoint data (Layer 2)."""
+
+ARCHIVED_LOOPS_DATA_DIR = "data/archived_loops"
+"""Directory for archived StrangeLoop checkpoints (IG-500)."""
+
+
+class PersistenceDirectoryManager:
+    """Manager for isolated persistence directories."""
+
+    @staticmethod
+    def ensure_directories_exist() -> None:
+        """Create isolated data directories if they don't exist."""
+        from soothe_nano.config import SOOTHE_HOME
+
+        threads_dir = Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR
+        loops_dir = Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR
+
+        threads_dir.mkdir(parents=True, exist_ok=True)
+        loops_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def get_thread_directory(thread_id: str) -> Path:
+        """Get CoreAgent thread directory path.
+
+        Args:
+            thread_id: Thread identifier.
+
+        Returns:
+            Path to thread's data directory.
+        """
+        from soothe_nano.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR / thread_id
+
+    @staticmethod
+    def get_thread_checkpoint_path(thread_id: str) -> Path:
+        """Get CoreAgent thread checkpoint database path.
+
+        Returns:
+            Path to thread's checkpoint.db (managed by LangGraph).
+        """
+        # No need to import SOOTHE_HOME here - uses get_thread_directory
+        return PersistenceDirectoryManager.get_thread_directory(thread_id) / "checkpoint.db"
+
+    @staticmethod
+    def get_thread_artifacts_dir(thread_id: str) -> Path:
+        """Get CoreAgent thread artifacts directory.
+
+        Returns:
+            Path to thread's artifacts/ directory.
+        """
+        # No need to import SOOTHE_HOME here - uses get_thread_directory
+        return PersistenceDirectoryManager.get_thread_directory(thread_id) / "artifacts"
+
+    @staticmethod
+    def get_loops_directory() -> Path:
+        """Get StrangeLoop loops base directory path.
+
+        Returns:
+            Path to data/loops/ directory.
+        """
+        from soothe_nano.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR
+
+    @staticmethod
+    def get_loop_directory(loop_id: str) -> Path:
+        """Get StrangeLoop loop directory path.
+
+        Args:
+            loop_id: Loop identifier.
+
+        Returns:
+            Path to loop's data directory.
+        """
+        from soothe_nano.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id
+
+    @staticmethod
+    def get_archived_loops_directory() -> Path:
+        """Get archived StrangeLoop loops base directory path (IG-500).
+
+        Returns:
+            Path to data/archived_loops/ directory.
+        """
+        from soothe_nano.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / ARCHIVED_LOOPS_DATA_DIR
+
+    @staticmethod
+    def get_goal_directory(loop_id: str, goal_id: str) -> Path:
+        """Get StrangeLoop goal directory path.
+
+        Args:
+            loop_id: Loop identifier.
+            goal_id: Goal identifier.
+
+        Returns:
+            Path to goal's directory: data/loops/{loop_id}/goals/{goal_id}/
+        """
+        from soothe_nano.config import SOOTHE_HOME
+
+        return Path(SOOTHE_HOME).expanduser() / LOOPS_DATA_DIR / loop_id / "goals" / goal_id
+
+    @staticmethod
+    def get_step_directory(loop_id: str, goal_id: str, step_id: str) -> Path:
+        """Get StrangeLoop step directory path.
+
+        Args:
+            loop_id: Loop identifier.
+            goal_id: Goal identifier.
+            step_id: Step identifier.
+
+        Returns:
+            Path to step's directory: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/
+        """
+        from soothe_nano.config import SOOTHE_HOME
+
+        return (
+            Path(SOOTHE_HOME).expanduser()
+            / LOOPS_DATA_DIR
+            / loop_id
+            / "goals"
+            / goal_id
+            / "steps"
+            / step_id
+        )
+
+    @staticmethod
+    def get_loop_checkpoint_path() -> Path:
+        """Get StrangeLoop global checkpoint database path (IG-055: unified SQLite).
+
+        Returns:
+            Path to shared soothe_checkpoints.db (managed by StrangeLoop + LangGraph).
+            Table: agentloop_checkpoints (separate from LangGraph checkpoint tables).
+        """
+        from soothe_sdk.paths import SOOTHE_DATA_DIR
+
+        return Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
+
+    @staticmethod
+    def get_loop_working_memory_dir(loop_id: str) -> Path:
+        """Get StrangeLoop working memory spill directory.
+
+        Returns:
+            Path to loop's working_memory/ directory.
+        """
+        # No need to import SOOTHE_HOME here - uses get_loop_directory
+        return PersistenceDirectoryManager.get_loop_directory(loop_id) / "working_memory"
+
+
+__all__ = [
+    "PersistenceDirectoryManager",
+    "THREADS_DATA_DIR",
+    "LOOPS_DATA_DIR",
+]

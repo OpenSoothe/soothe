@@ -71,7 +71,7 @@ class TestSemanticSearch:
         mock_service.retrieve = AsyncMock(return_value=bundle)
 
         with patch(
-            "soothe.foundation.skillify.start_skillify_service",
+            "soothe_nano.skillify.start_skillify_service",
             return_value=mock_service,
         ):
             matches = await search_deferred_skills(
@@ -119,7 +119,7 @@ class TestSemanticSearch:
 
         catalog = {core_weather.name: core_weather, deferred_only.name: deferred_only}
         with patch(
-            "soothe.foundation.skillify.start_skillify_service",
+            "soothe_nano.skillify.start_skillify_service",
             return_value=mock_service,
         ):
             matches = await search_deferred_skills(
@@ -195,7 +195,7 @@ class TestSemanticSearch:
         config = MagicMock()
         config.progressive_skills.semantic_search_enabled = False
 
-        with patch("soothe.foundation.skillify.start_skillify_service") as mock_get:
+        with patch("soothe_nano.skillify.start_skillify_service") as mock_get:
             matches = await search_deferred_skills(
                 "vector-only",
                 deferred,
@@ -229,7 +229,7 @@ class TestSemanticSearch:
         )
 
         with patch(
-            "soothe.foundation.skillify.start_skillify_service",
+            "soothe_nano.skillify.start_skillify_service",
             return_value=mock_service,
         ):
             matches = await search_deferred_skills(

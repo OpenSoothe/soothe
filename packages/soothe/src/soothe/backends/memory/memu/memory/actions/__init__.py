@@ -1,35 +1,21 @@
-"""Memory Actions Module.
+"""Shim (IG-668): package re-export for ``soothe_nano.backends.memory.memu.memory.actions``."""
 
-Individual action implementations for memory operations.
-Each action is a standalone module that can be loaded dynamically.
-"""
+from __future__ import annotations
 
-# Import all actions
-from .add_activity_memory import AddActivityMemoryAction
-from .base_action import BaseAction
-from .cluster_memories import ClusterMemoriesAction
-from .generate_suggestions import GenerateMemorySuggestionsAction
-from .link_related_memories import LinkRelatedMemoriesAction
-from .run_theory_of_mind import RunTheoryOfMindAction
-from .update_memory_with_suggestions import UpdateMemoryWithSuggestionsAction
+import soothe_nano.backends.memory.memu.memory.actions as _mod
+from soothe_nano.backends.memory.memu.memory.actions import *  # noqa: F403
 
-# Registry of all available actions
-ACTION_REGISTRY = {
-    "add_activity_memory": AddActivityMemoryAction,
-    "link_related_memories": LinkRelatedMemoriesAction,
-    "generate_memory_suggestions": GenerateMemorySuggestionsAction,
-    "update_memory_with_suggestions": UpdateMemoryWithSuggestionsAction,
-    "run_theory_of_mind": RunTheoryOfMindAction,
-    "cluster_memories": ClusterMemoriesAction,
-}
+try:
+    from soothe_nano.backends.memory.memu.memory.actions import (
+        __all__ as __all__,  # type: ignore[attr-defined]
+    )
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 
-__all__ = [
-    "ACTION_REGISTRY",
-    "AddActivityMemoryAction",
-    "BaseAction",
-    "ClusterMemoriesAction",
-    "GenerateMemorySuggestionsAction",
-    "LinkRelatedMemoriesAction",
-    "RunTheoryOfMindAction",
-    "UpdateMemoryWithSuggestionsAction",
-]
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

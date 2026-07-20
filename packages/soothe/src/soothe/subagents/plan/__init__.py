@@ -1,57 +1,19 @@
-"""Plan subagent package (RFC-618).
-
-Structured planning delegate for markdown execution plans.
-"""
+"""Shim (IG-668): package re-export for ``soothe_nano.subagents.plan``."""
 
 from __future__ import annotations
 
-from typing import Any
+import soothe_nano.subagents.plan as _mod
+from soothe_nano.subagents.plan import *  # noqa: F403
 
-from soothe_sdk.plugin import plugin, subagent
-
-from .implementation import create_plan_subagent
-from .schemas import (
-    PlanRefinement,
-    PlanSubagentConfig,
-)
-
-__all__ = [
-    "PlanRefinement",
-    "PlanSubagentConfig",
-    "PlanPlugin",
-    "create_plan_subagent",
-]
+try:
+    from soothe_nano.subagents.plan import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 
 
-@plugin(
-    name="planner",
-    version="1.0.0",
-    description="Structured planning subagent",
-    trust_level="built-in",
-)
-class PlanPlugin:
-    """Built-in planner subagent plugin."""
+def __getattr__(name: str):
+    return getattr(_mod, name)
 
-    async def on_load(self, context: Any) -> None:
-        """Record load."""
-        context.logger.info("Loaded planner subagent v1.0.0")
 
-    @subagent(
-        name="planner",
-        description=(
-            "Agentic planning delegate: multi-round markdown plan refinement; one report back "
-            "per task. Use for complex objectives needing a stable execution plan."
-        ),
-        triggers=["planner", "decompose", "roadmap", "break down"],
-    )
-    async def create_subagent(
-        self,
-        model: Any,
-        config: Any,
-        context: Any,
-    ) -> Any:
-        """Create plan subagent runnable."""
-        ctx = {
-            "work_dir": getattr(context, "work_dir", ""),
-        }
-        return create_plan_subagent(model, config, ctx)
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

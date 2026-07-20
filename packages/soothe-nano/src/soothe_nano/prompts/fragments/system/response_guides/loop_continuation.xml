@@ -1,0 +1,5 @@
+Loop continuation approach:
+- Reference prior goal context within this loop
+- Build on previous results
+- Provide incremental updates
+- Avoid repeating full context

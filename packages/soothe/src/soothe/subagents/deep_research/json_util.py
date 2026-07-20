@@ -1,17 +1,7 @@
-"""JSON extraction helpers for Deep Research LLM nodes."""
+"""Shim (IG-668): alias ``subagents/deep_research/json_util`` to ``soothe_nano.subagents.deep_research.json_util``."""
 
-from soothe.subagents._research_json_util import (
-    compact_search_query,
-    fallback_queries,
-    fallback_sub_questions,
-    llm_response_text,
-    parse_json_object,
-)
+import sys
+from importlib import import_module
 
-__all__ = [
-    "compact_search_query",
-    "fallback_queries",
-    "fallback_sub_questions",
-    "llm_response_text",
-    "parse_json_object",
-]
+_nano = import_module("soothe_nano.subagents.deep_research.json_util")
+sys.modules[__name__] = _nano

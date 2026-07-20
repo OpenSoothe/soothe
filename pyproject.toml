@@ -24,6 +24,7 @@ default = true
 
 [tool.uv.sources]
 soothe-sdk = { workspace = true }
+soothe-nano = { workspace = true }
 soothe-client-python = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
@@ -64,6 +65,7 @@ docstring-code-format = true
 [tool.vulture]
 paths = [
     "packages/soothe/src",
+    "packages/soothe-nano/src",
     "packages/soothe-daemon/src",
     "packages/soothe-cli/src",
     "packages/soothe-sdk/src",

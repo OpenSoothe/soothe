@@ -1,39 +1,19 @@
-"""Veritas subagent: intent-grounded clarification auto-answerer (RFC-622).
-
-Veritas is invoked by ``AutoClarificationPolicy`` when the StrangeLoop pauses on
-an ``ask_user`` interrupt in autonomous mode. It is a single structured-output
-LLM call (not a CoreAgent) that produces a best-effort answer from the goal's
-first-principles context.
-
-If veritas cannot answer with sufficient confidence it sets ``defer=True`` and
-the loop transitions the goal to ``awaiting_clarification`` for out-of-band
-resolution.
-"""
+"""Shim (IG-668): package re-export for ``soothe_nano.subagents.veritas``."""
 
 from __future__ import annotations
 
-from soothe.subagents.veritas.events import (
-    SUBAGENT_VERITAS_ANSWERED,
-    SUBAGENT_VERITAS_DEFERRED,
-    SUBAGENT_VERITAS_REQUESTED,
-    VeritasAnsweredEvent,
-    VeritasDeferredEvent,
-    VeritasRequestedEvent,
-)
-from soothe.subagents.veritas.implementation import answer
-from soothe.subagents.veritas.schemas import (
-    VeritasAnswerSchema,
-    build_veritas_response_schema,
-)
+import soothe_nano.subagents.veritas as _mod
+from soothe_nano.subagents.veritas import *  # noqa: F403
 
-__all__ = [
-    "SUBAGENT_VERITAS_ANSWERED",
-    "SUBAGENT_VERITAS_DEFERRED",
-    "SUBAGENT_VERITAS_REQUESTED",
-    "VeritasAnswerSchema",
-    "VeritasAnsweredEvent",
-    "VeritasDeferredEvent",
-    "VeritasRequestedEvent",
-    "answer",
-    "build_veritas_response_schema",
-]
+try:
+    from soothe_nano.subagents.veritas import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

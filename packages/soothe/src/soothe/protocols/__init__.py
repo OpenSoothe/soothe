@@ -1,6 +1,5 @@
 """Soothe protocol definitions -- runtime-agnostic interfaces."""
 
-# Identity protocol (RFC-307) - re-exported from soothe-sdk
 from soothe_sdk.protocols.identity import (
     AKSKPair,
     AuthResult,
@@ -91,14 +90,13 @@ __all__ = [
     "ThreadMetadata",
     "VectorRecord",
     "VectorStoreProtocol",
-    # Identity (RFC-307)
-    "User",
     "AKSKPair",
-    "TokenClaims",
-    "ExternalIdentityMapping",
     "AuthResult",
-    "TokenRefreshResult",
-    "TokenInfo",
-    "IdentityStatus",
+    "ExternalIdentityMapping",
     "IdentityProtocol",
+    "IdentityStatus",
+    "TokenClaims",
+    "TokenInfo",
+    "TokenRefreshResult",
+    "User",
 ]

@@ -1,8 +1,7 @@
-"""AsyncPersistStore protocol -- async key-value persistence interface.
+"""Shim (IG-668): alias ``protocols/persistence`` to ``soothe_nano.protocols.persistence``."""
 
-Re-exported from soothe_sdk.
-"""
+import sys
+from importlib import import_module
 
-from soothe_sdk.protocols.persistence import AsyncPersistStore  # noqa: F401
-
-__all__ = ["AsyncPersistStore"]
+_nano = import_module("soothe_nano.protocols.persistence")
+sys.modules[__name__] = _nano

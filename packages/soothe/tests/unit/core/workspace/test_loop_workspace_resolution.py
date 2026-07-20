@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-import soothe.config as soothe_config
 from soothe.foundation.workspace.loop_workspace import (
     _workspace_mount_from_config,
     compute_scoped_workspace_dir_name,
@@ -57,7 +56,7 @@ def test_resolve_loop_workspace_uses_client_path_directly(tmp_path: Path) -> Non
 def test_resolve_loop_workspace_falls_back_when_client_path_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path))
     missing = tmp_path / "host-only-path"
     loop_id = "loop-missing-ws"
     ws = resolve_loop_workspace(loop_id=loop_id, client_workspace=str(missing))
@@ -68,7 +67,7 @@ def test_resolve_loop_workspace_falls_back_when_client_path_missing(
 def test_resolve_loop_workspace_persisted_with_user_and_workspace_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path))
     ws = resolve_loop_workspace(
         loop_id="loop-abc",
         user_id="alice",
@@ -83,7 +82,7 @@ def test_resolve_loop_workspace_persisted_with_user_and_workspace_id(
 def test_resolve_loop_workspace_persisted_anonymous_uses_loop_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path))
     loop_id = "019e4e5f-3f09-70f3-8246-b34fe2bc0e66"
     ws = resolve_persisted_loop_workspace(
         loop_id=loop_id,
@@ -132,7 +131,7 @@ def test_workspace_mount_from_config_returns_none_when_config_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     missing_config = tmp_path / "missing-config.yml"
-    monkeypatch.setattr(soothe_config, "DEFAULT_CONFIG_PATH", missing_config)
+    monkeypatch.setattr("soothe_nano.config.DEFAULT_CONFIG_PATH", missing_config)
     assert _workspace_mount_from_config() == (None, None)
 
 
@@ -145,5 +144,5 @@ def test_workspace_mount_from_config_reads_config_file(
         "workspace_mount:\n  host_root: /host/work\n  container_root: /container/work\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(soothe_config, "DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setattr("soothe_nano.config.DEFAULT_CONFIG_PATH", config_path)
     assert _workspace_mount_from_config() == ("/host/work", "/container/work")

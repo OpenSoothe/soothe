@@ -1,5 +1,21 @@
-"""Event configuration package."""
+"""Shim (IG-668): package re-export for ``soothe_nano.backends.memory.memu.config.event``."""
 
-from .config import EventConfig, get_config, get_file_info
+from __future__ import annotations
 
-__all__ = ["EventConfig", "get_config", "get_file_info"]
+import soothe_nano.backends.memory.memu.config.event as _mod
+from soothe_nano.backends.memory.memu.config.event import *  # noqa: F403
+
+try:
+    from soothe_nano.backends.memory.memu.config.event import (
+        __all__ as __all__,  # type: ignore[attr-defined]
+    )
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

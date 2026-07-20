@@ -1,12 +1,7 @@
-"""Re-export PluginManifest from SDK.
+"""Shim (IG-668): alias ``plugin/manifest`` to ``soothe_nano.plugin.manifest``."""
 
-This module provides a local import path matching the RFC-600
-specification: src/soothe/plugin/manifest.py
+import sys
+from importlib import import_module
 
-The actual implementation lives in soothe_sdk.plugin.manifest
-to keep the SDK self-contained for third-party distribution.
-"""
-
-from soothe_sdk.plugin import PluginManifest
-
-__all__ = ["PluginManifest"]
+_nano = import_module("soothe_nano.plugin.manifest")
+sys.modules[__name__] = _nano

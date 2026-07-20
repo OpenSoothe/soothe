@@ -1,21 +1,19 @@
-"""Progressive builtin-tool loading (core tier bound, deferred tools listed)."""
+"""Shim (IG-668): package re-export for ``soothe_nano.toolkits.progressive``."""
 
-from soothe.toolkits.progressive.budget import (
-    AVAILABLE_TOOLS_PREAMBLE,
-    ToolBudgetTelemetry,
-    format_tools_within_budget,
-)
-from soothe.toolkits.progressive.registry import (
-    DEFAULT_CORE_TOOL_NAMES,
-    ProgressiveToolRegistry,
-    ToolDescriptor,
-)
+from __future__ import annotations
 
-__all__ = [
-    "AVAILABLE_TOOLS_PREAMBLE",
-    "DEFAULT_CORE_TOOL_NAMES",
-    "ProgressiveToolRegistry",
-    "ToolBudgetTelemetry",
-    "ToolDescriptor",
-    "format_tools_within_budget",
-]
+import soothe_nano.toolkits.progressive as _mod
+from soothe_nano.toolkits.progressive import *  # noqa: F403
+
+try:
+    from soothe_nano.toolkits.progressive import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

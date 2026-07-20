@@ -1,11 +1,19 @@
-"""Durability protocol backends."""
+"""Shim (IG-668): package re-export for ``soothe_nano.backends.durability``."""
 
-from soothe.backends.durability.base import BasePersistStoreDurability
-from soothe.backends.durability.postgresql import PostgreSQLDurability
-from soothe.backends.durability.sqlite import SQLiteDurability
+from __future__ import annotations
 
-__all__ = [
-    "BasePersistStoreDurability",
-    "PostgreSQLDurability",
-    "SQLiteDurability",
-]
+import soothe_nano.backends.durability as _mod
+from soothe_nano.backends.durability import *  # noqa: F403
+
+try:
+    from soothe_nano.backends.durability import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

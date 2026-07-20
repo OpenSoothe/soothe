@@ -1,28 +1,19 @@
-"""Daemon-shared Skillify skill warehouse indexing and semantic retrieval."""
+"""Shim (IG-668): package re-export for ``soothe_nano.skillify``."""
 
-from soothe.config.models import SkillifyConfig
+from __future__ import annotations
 
-from . import events as _events  # noqa: F401 — register soothe.skillify.* wire types
-from .models import SkillBundle, SkillRecord, SkillSearchResult
-from .retriever import SkillRetriever, configure_vector_search_concurrency
-from .service import (
-    SkillifyService,
-    get_skillify_service,
-    resolve_warehouse_paths,
-    start_skillify_service,
-    stop_skillify_service,
-)
+import soothe_nano.skillify as _mod
+from soothe_nano.skillify import *  # noqa: F403
 
-__all__ = [
-    "SkillBundle",
-    "SkillRecord",
-    "SkillRetriever",
-    "SkillSearchResult",
-    "SkillifyConfig",
-    "SkillifyService",
-    "configure_vector_search_concurrency",
-    "get_skillify_service",
-    "resolve_warehouse_paths",
-    "start_skillify_service",
-    "stop_skillify_service",
-]
+try:
+    from soothe_nano.skillify import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

@@ -1,20 +1,19 @@
-"""Soothe logging package — shared logging infrastructure for all layers.
+"""Shim (IG-668): package re-export for ``soothe_nano.logging``."""
 
-Provides thread-ID context variables, logging setup, and the JSONL
-thread logger. Importable by ``core``, ``soothe_daemon``, and ``soothe_cli`` without
-creating cross-layer dependencies.
-"""
+from __future__ import annotations
 
-from soothe.logging.context import get_thread_id, set_thread_id
-from soothe.logging.global_history import GlobalInputHistory
-from soothe.logging.setup import ThreadFormatter, setup_logging
-from soothe.logging.thread_logger import ThreadLogger
+import soothe_nano.logging as _mod
+from soothe_nano.logging import *  # noqa: F403
 
-__all__ = [
-    "GlobalInputHistory",
-    "ThreadFormatter",
-    "ThreadLogger",
-    "get_thread_id",
-    "set_thread_id",
-    "setup_logging",
-]
+try:
+    from soothe_nano.logging import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

@@ -1,47 +1,7 @@
-"""Middleware utility functions."""
+"""Shim (IG-668): alias ``middleware/_utils`` to ``soothe_nano.middleware._utils``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-from typing import Any
-
-
-def create_llm_call_metadata(
-    purpose: str,
-    component: str,
-    phase: str = "unknown",
-    **extra: Any,
-) -> dict[str, Any]:
-    """Create standardized metadata for LLM calls.
-
-    This metadata tags RunnableConfig for Langfuse and other observability
-    integrations. All LLM invocation sites should use this helper for
-    consistent call context (purpose, component, phase).
-
-    Args:
-        purpose: Call purpose (reason, plan, classify, reflect, consensus_vote, etc.)
-        component: Component making the call (planner.simple, classifier.unified, etc.)
-        phase: Execution phase (layer1, layer2, pre-stream, post-loop, etc.)
-        **extra: Additional metadata fields
-
-    Returns:
-        Metadata dict for config["metadata"]
-
-    Example:
-        >>> response = await model.ainvoke(
-        ...     messages,
-        ...     config={
-        ...         "metadata": create_llm_call_metadata(
-        ...             purpose="classify",
-        ...             component="classifier.unified",
-        ...             phase="pre-stream",
-        ...         )
-        ...     },
-        ... )
-    """
-    metadata = {
-        "soothe_call_purpose": purpose,
-        "soothe_call_component": component,
-        "soothe_call_phase": phase,
-    }
-    metadata.update(extra)
-    return metadata
+_nano = import_module("soothe_nano.middleware._utils")
+sys.modules[__name__] = _nano

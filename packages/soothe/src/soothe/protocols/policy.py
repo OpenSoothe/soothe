@@ -1,24 +1,7 @@
-"""PolicyProtocol -- permission-based access control (RFC-0002 Module 4).
+"""Shim (IG-668): alias ``protocols/policy`` to ``soothe_nano.protocols.policy``."""
 
-Re-exported from soothe_sdk for backwards compatibility.
-"""
+import sys
+from importlib import import_module
 
-from soothe_sdk.protocols.policy import (  # noqa: F401
-    ActionRequest,
-    Permission,
-    PermissionSet,
-    PolicyContext,
-    PolicyDecision,
-    PolicyProfile,
-    PolicyProtocol,
-)
-
-__all__ = [
-    "Permission",
-    "PermissionSet",
-    "ActionRequest",
-    "PolicyContext",
-    "PolicyDecision",
-    "PolicyProfile",
-    "PolicyProtocol",
-]
+_nano = import_module("soothe_nano.protocols.policy")
+sys.modules[__name__] = _nano

@@ -13,7 +13,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-import soothe.config as soothe_config
 from soothe.foundation.sloop.state.persistence.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
@@ -72,7 +71,7 @@ async def test_loop_new_persists_client_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A valid client workspace on ``loop_new`` is written into the database."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     project = tmp_path / "myproject"
     project.mkdir()
@@ -106,7 +105,7 @@ async def test_loop_new_persists_is_ephemeral(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``is_ephemeral`` on loop_new is stored in loop metadata."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
 
@@ -140,7 +139,7 @@ async def test_loop_new_omits_client_workspace_when_not_on_daemon_host(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Host paths that do not exist inside the daemon are ignored (remote Docker CLI)."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     missing = tmp_path / "missing-on-daemon"
     assert not missing.exists()
@@ -171,7 +170,7 @@ async def test_loop_new_maps_client_workspace_under_host_root(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """RFC-621: host paths under ``workspace_mount.host_root`` map without existing literally."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     host_root = tmp_path / "host"
     container_root = tmp_path / "container"
@@ -213,7 +212,7 @@ async def test_loop_new_omits_client_workspace_when_invalid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Unsafe workspace values (system dirs) are rejected without aborting loop creation."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
 
@@ -240,7 +239,7 @@ async def test_loop_new_omits_client_workspace_when_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Without a ``workspace`` field the loop falls back to per-loop daemon dir."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
 
@@ -267,7 +266,7 @@ async def test_bind_execution_thread_prefers_client_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``bind_execution_thread_for_loop`` registers the client_workspace, not the per-loop dir."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     project = tmp_path / "myproject"
     project.mkdir()
@@ -325,7 +324,7 @@ async def test_bind_execution_thread_uses_loop_id_as_checkpoint_thread(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """RFC-223: the main StrangeLoop checkpoint thread id equals the loop id."""
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
 
@@ -379,7 +378,7 @@ async def test_bind_execution_thread_preserves_existing_loop_id_binding(
     which silently abandoned the loop's checkpoint and conversation history
     on every continue. Bind must now leave the binding intact.
     """
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(tmp_path / "soothe-home"))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(tmp_path / "soothe-home"))
 
     from soothe.config import SootheConfig
 
@@ -427,7 +426,7 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
 ) -> None:
     """When metadata has no client_workspace use anonymous/ws_<hash(loop_id)>."""
     soothe_home = tmp_path / "soothe-home"
-    monkeypatch.setattr(soothe_config, "SOOTHE_HOME", str(soothe_home))
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", str(soothe_home))
 
     from soothe.config import SootheConfig
     from soothe.foundation.workspace.loop_workspace import (

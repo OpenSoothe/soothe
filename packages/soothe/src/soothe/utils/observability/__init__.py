@@ -1,7 +1,19 @@
-"""Observability helpers (third-party tracing, etc.)."""
+"""Shim (IG-668): package re-export for ``soothe_nano.utils.observability``."""
 
 from __future__ import annotations
 
-from soothe.utils.observability.langfuse import SootheLangfuse
+import soothe_nano.utils.observability as _mod
+from soothe_nano.utils.observability import *  # noqa: F403
 
-__all__ = ["SootheLangfuse"]
+try:
+    from soothe_nano.utils.observability import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

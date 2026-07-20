@@ -1,23 +1,21 @@
-"""Langfuse integration for LangGraph streams and LLM call sites (IG-367, IG-540)."""
+"""Shim (IG-668): package re-export for ``soothe_nano.utils.observability.langfuse``."""
 
 from __future__ import annotations
 
-from soothe.utils.observability.langfuse._client import resolve_langfuse_config_str
-from soothe.utils.observability.langfuse._goal_loop import GoalLoopTrace
-from soothe.utils.observability.langfuse._merge import merge_langfuse_runnable_config
-from soothe.utils.observability.langfuse._names import (
-    intent_classify_langfuse_run_display_name,
-    loop_graph_langfuse_run_display_name,
-)
-from soothe.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
-from soothe.utils.observability.langfuse.tracer import SootheLangfuse
+import soothe_nano.utils.observability.langfuse as _mod
+from soothe_nano.utils.observability.langfuse import *  # noqa: F403
 
-__all__ = [
-    "GoalLoopTrace",
-    "SootheLangfuse",
-    "intent_classify_langfuse_run_display_name",
-    "loop_graph_langfuse_run_display_name",
-    "merge_langfuse_runnable_config",
-    "patch_langfuse_trace_goal_io",
-    "resolve_langfuse_config_str",
-]
+try:
+    from soothe_nano.utils.observability.langfuse import (
+        __all__ as __all__,  # type: ignore[attr-defined]
+    )
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

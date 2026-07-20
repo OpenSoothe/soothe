@@ -1,15 +1,19 @@
-"""Shared utility modules for Soothe."""
+"""Shim (IG-668): package re-export for ``soothe_nano.utils``."""
 
-from soothe.utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpenError
-from soothe.utils.path import expand_path
-from soothe.utils.progress import emit_progress
-from soothe.utils.token_counting import ComplexityLevel, count_tokens
+from __future__ import annotations
 
-__all__ = [
-    "CircuitBreaker",
-    "CircuitBreakerOpenError",
-    "ComplexityLevel",
-    "count_tokens",
-    "emit_progress",
-    "expand_path",
-]
+import soothe_nano.utils as _mod
+from soothe_nano.utils import *  # noqa: F403
+
+try:
+    from soothe_nano.utils import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

@@ -1,16 +1,7 @@
-"""Lightweight text preview for logging (subset of ``soothe.utils.text_preview``)."""
+"""Shim (IG-668): alias ``subagents/browser_use/_preview`` to ``soothe_nano.subagents.browser_use._preview``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-
-def preview_first(text: str, chars: int = 200) -> str:
-    """Return a single-line preview of ``text`` up to ``chars`` characters."""
-    t = str(text).replace("\n", " ").strip()
-    if len(t) <= chars:
-        return t
-    if chars <= 1:
-        return "…"
-    return t[: chars - 1] + "…"
-
-
-__all__ = ["preview_first"]
+_nano = import_module("soothe_nano.subagents.browser_use._preview")
+sys.modules[__name__] = _nano

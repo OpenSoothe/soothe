@@ -1044,7 +1044,7 @@ class TestProtocolConfig:
         from unittest.mock import MagicMock
 
         mock_create = MagicMock()
-        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+        monkeypatch.setattr("soothe_nano.backends.vector_store.create_vector_store", mock_create)
 
         cfg = SootheConfig(
             vector_stores=[{"name": "test_provider", "provider_type": "in_memory"}],
@@ -1079,7 +1079,7 @@ class TestProtocolConfig:
         from unittest.mock import MagicMock
 
         mock_create = MagicMock()
-        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+        monkeypatch.setattr("soothe_nano.backends.vector_store.create_vector_store", mock_create)
 
         cfg.create_vector_store_for_role("my_role")
         call_kwargs = mock_create.call_args[0][2]
@@ -1090,7 +1090,7 @@ class TestProtocolConfig:
         from unittest.mock import MagicMock
 
         mock_create = MagicMock()
-        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+        monkeypatch.setattr("soothe_nano.backends.vector_store.create_vector_store", mock_create)
 
         cfg = SootheConfig(
             vector_stores=[
@@ -1136,7 +1136,7 @@ class TestProtocolConfig:
         from unittest.mock import MagicMock
 
         mock_create = MagicMock()
-        monkeypatch.setattr("soothe.backends.vector_store.create_vector_store", mock_create)
+        monkeypatch.setattr("soothe_nano.backends.vector_store.create_vector_store", mock_create)
 
         cfg = SootheConfig(
             vector_stores=[

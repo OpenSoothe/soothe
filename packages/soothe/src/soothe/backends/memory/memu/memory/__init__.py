@@ -1,30 +1,21 @@
-"""MemU Memory Module - Function Calling Architecture.
+"""Shim (IG-668): package re-export for ``soothe_nano.backends.memory.memu.memory``."""
 
-Modern memory system with function calling interface:
+from __future__ import annotations
 
-CORE ARCHITECTURE:
-- MemoryAgent: Function calling interface for LLM agents (main interface)
-- RecallAgent: File system operations and content retrieval
+import soothe_nano.backends.memory.memu.memory as _mod
+from soothe_nano.backends.memory.memu.memory import *  # noqa: F403
 
-STORAGE:
-- MemoryFileManager: File operations for memory storage (.md files)
-- EmbeddingClient: Vector embedding generation for semantic search
+try:
+    from soothe_nano.backends.memory.memu.memory import (
+        __all__ as __all__,  # type: ignore[attr-defined]
+    )
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 
-WORKFLOW:
-1. LLM Agent → Function Calling → Memory Operations → Markdown Files
-2. Memory stored with embeddings for semantic retrieval (per-line basis)
-3. RecallAgent provides file system scanning and content search capabilities
-4. All memory operations exposed as standardized function calls
-"""
 
-from .embeddings import get_default_embedding_client
-from .file_manager import MemoryFileManager
-from .memory_agent import MemoryAgent
-from .recall_agent import RecallAgent
+def __getattr__(name: str):
+    return getattr(_mod, name)
 
-__all__ = [
-    "MemoryAgent",  # Function calling interface
-    "MemoryFileManager",
-    "RecallAgent",
-    "get_default_embedding_client",
-]
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

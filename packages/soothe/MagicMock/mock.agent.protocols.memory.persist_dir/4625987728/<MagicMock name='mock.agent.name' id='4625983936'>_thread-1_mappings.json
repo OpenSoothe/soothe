@@ -1,0 +1,29 @@
+{
+  "deb70c65-1161-4cfa-8fdb-ddc75ad880e7": {
+    "content": "User name is Alice",
+    "memory_type": "knowledge",
+    "user_id": "thread-1",
+    "agent_id": null,
+    "session_id": null,
+    "importance": 0.5,
+    "context": {},
+    "metadata": {
+      "importance": 0.9
+    },
+    "tags": [
+      "profile",
+      "personal"
+    ],
+    "created_at": "2026-07-20T01:58:46.864789",
+    "updated_at": null,
+    "version": 1,
+    "memory_items": [
+      {
+        "memory_id": "9d4865",
+        "mentioned_at": "2026-07-20",
+        "content": "<MagicMock name='mock.create_chat_model().invoke().content' id='4625941760'>",
+        "links": ""
+      }
+    ]
+  }
+}

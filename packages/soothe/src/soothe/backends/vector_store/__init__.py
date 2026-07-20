@@ -1,50 +1,19 @@
-"""Vector store implementations for VectorStoreProtocol."""
+"""Shim (IG-668): package re-export for ``soothe_nano.backends.vector_store``."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import soothe_nano.backends.vector_store as _mod
+from soothe_nano.backends.vector_store import *  # noqa: F403
 
-if TYPE_CHECKING:
-    from soothe.protocols.vector_store import VectorStoreProtocol
+try:
+    from soothe_nano.backends.vector_store import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
 
 
-def create_vector_store(
-    provider: str,
-    collection: str,
-    config: dict[str, Any] | None = None,
-) -> VectorStoreProtocol:
-    """Factory for vector store backends.
+def __getattr__(name: str):
+    return getattr(_mod, name)
 
-    Args:
-        provider: Backend name (``pgvector``, ``weaviate``, ``sqlite_vec``).
-        collection: Collection / table name.
-        config: Provider-specific configuration.
 
-    Returns:
-        A VectorStoreProtocol implementation.
-
-    Raises:
-        ValueError: If the provider is unknown.
-    """
-    config = config or {}
-
-    if provider == "pgvector":
-        from soothe.backends.vector_store.pgvector import PGVectorStore
-
-        return PGVectorStore(collection=collection, **config)
-
-    if provider == "weaviate":
-        from soothe.backends.vector_store.weaviate import WeaviateVectorStore
-
-        return WeaviateVectorStore(collection=collection, **config)
-
-    if provider == "sqlite_vec":
-        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore
-
-        return SQLiteVecStore(collection=collection, **config)
-
-    msg = (
-        f"Unknown vector store provider: {provider!r}. "
-        "Supported: 'pgvector', 'weaviate', 'sqlite_vec'"
-    )
-    raise ValueError(msg)
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

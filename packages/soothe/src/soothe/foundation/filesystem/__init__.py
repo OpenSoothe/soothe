@@ -1,78 +1,19 @@
-"""Unified filesystem interface for Soothe.
-
-This module provides a consistent, abstract interface for filesystem operations
-across all Soothe components. It unifies the various filesystem backends and
-provides a common API for file operations.
-"""
+"""Shim (IG-668): package re-export for ``soothe_nano.filesystem``."""
 
 from __future__ import annotations
 
-from .exceptions import (
-    DirectoryNotEmptyError,
-    FilesystemError,
-    FileTooLargeError,
-    InvalidPathError,
-    NotADirectoryError,
-    NotAFileError,
-    PathNotFoundError,
-    PathTraversalError,
-    PermissionDeniedError,
-)
-from .factory import (
-    FilesystemConfig,
-    FilesystemFactory,
-    FilesystemType,
-    PathValidationConfig,
-    SecurityConfig,
-    create_filesystem,
-)
-from .langchain_adapter import LangChainAdapter
-from .local import LocalFilesystem
-from .protocol import (
-    DeleteResult,
-    EditResult,
-    FileInfo,
-    GlobResult,
-    GrepMatch,
-    GrepResult,
-    ReadResult,
-    WriteResult,
-)
-from .unified import UnifiedFilesystem
-from .workspace import WorkspaceFilesystem
+import soothe_nano.filesystem as _mod
+from soothe_nano.filesystem import *  # noqa: F403
 
-__all__ = [
-    # Core interface
-    "UnifiedFilesystem",
-    # Implementations
-    "LocalFilesystem",
-    "WorkspaceFilesystem",
-    # Adapters
-    "LangChainAdapter",
-    # Factory and configuration
-    "FilesystemFactory",
-    "FilesystemConfig",
-    "FilesystemType",
-    "PathValidationConfig",
-    "SecurityConfig",
-    "create_filesystem",
-    # Protocol types
-    "FileInfo",
-    "GlobResult",
-    "ReadResult",
-    "WriteResult",
-    "EditResult",
-    "DeleteResult",
-    "GrepResult",
-    "GrepMatch",
-    # Exceptions
-    "FilesystemError",
-    "PathNotFoundError",
-    "PermissionDeniedError",
-    "PathTraversalError",
-    "InvalidPathError",
-    "FileTooLargeError",
-    "DirectoryNotEmptyError",
-    "NotADirectoryError",
-    "NotAFileError",
-]
+try:
+    from soothe_nano.filesystem import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

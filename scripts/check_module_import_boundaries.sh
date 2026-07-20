@@ -88,8 +88,13 @@ run_check "${PKG_DIR}/soothe-daemon/src" \
 
 # Rule 3: soothe-sdk must be standalone.
 run_check "${PKG_DIR}/soothe-sdk/src" \
-  '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli|soothe_client)(\.|\s|$)' \
+  '^\s*(from|import)\s+(soothe|soothe_nano|soothe_daemon|soothe_cli|soothe_client)(\.|\s|$)' \
   "soothe-sdk must not import other workspace packages"
+
+# Rule 3b: soothe-nano must not import soothe / cli / daemon.
+run_check "${PKG_DIR}/soothe-nano/src" \
+  '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' \
+  "soothe-nano must not import soothe/cli/daemon"
 
 # Rule 4: soothe-client-python depends only on soothe-sdk (among workspace pkgs).
 run_check "${ROOT}/client/python/src" \

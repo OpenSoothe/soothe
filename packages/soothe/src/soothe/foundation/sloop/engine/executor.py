@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any, Literal
@@ -28,6 +27,9 @@ from typing import TYPE_CHECKING, Any, Literal
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, Interrupt
+from soothe_nano.agent.execute_stream import (
+    ephemeral_execute_stream_enabled as _ephemeral_execute_stream_enabled,
+)
 from soothe_sdk.utils import get_outcome_type
 from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
@@ -156,20 +158,8 @@ logger = logging.getLogger(__name__)
 
 
 def ephemeral_execute_stream_enabled() -> bool:
-    """Whether execute uses the checkpointer-free twin graph (default: on).
-
-    LangGraph graphs compiled with a checkpointer load checkpoint channel history on
-    each ``astream`` tick, causing unbounded RSS during execute. CoreAgent therefore
-    builds a twin graph with ``checkpointer=None`` for execute-only streaming while
-    the main graph keeps Postgres/SQLite persistence for planner and clarification.
-
-    Set ``SOOTHE_EPHEMERAL_EXECUTE_STREAM=0`` only for emergency rollback.
-    """
-    return os.environ.get("SOOTHE_EPHEMERAL_EXECUTE_STREAM", "1").lower() not in (
-        "0",
-        "false",
-        "no",
-    )
+    """Compat re-export; canonical implementation lives in ``soothe_nano``."""
+    return _ephemeral_execute_stream_enabled()
 
 
 # --- Helper functions ---

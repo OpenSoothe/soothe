@@ -114,7 +114,7 @@ for arg in "$@"; do
 done
 
 # All packages in dependency order (soothe-client-python lives under client/python)
-ALL_PACKAGES=(soothe-sdk soothe-client-python soothe-cli soothe soothe-daemon)
+ALL_PACKAGES=(soothe-sdk soothe-nano soothe-client-python soothe-cli soothe soothe-daemon)
 
 # Resolve package root directory (most packages live under packages/; Python client is under client/).
 package_dir() {
@@ -427,7 +427,7 @@ validate_package_dependencies() {
 
   # Rule 2: soothe-sdk MUST NOT import any other package
   # Optimized: single grep pass instead of two
-  violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe_client|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe_client|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
+  violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe_client|from soothe_nano|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe_client|import soothe_nano|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
   if [ -n "$violations" ]; then
     print_fail "sdk must be independent"
     record_check_outcome "dependencies" "sdk independence" "fail"
@@ -449,6 +449,18 @@ validate_package_dependencies() {
   else
     print_ok "client → sdk only (no core/cli/daemon)"
     record_check_outcome "dependencies" "client → core/cli/daemon boundary" "pass"
+  fi
+
+  # Rule 2c: soothe-nano MUST NOT import soothe / cli / daemon
+  violations=$(grep -rE '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' packages/soothe-nano/src --include='*.py' 2>/dev/null | head -10 || true)
+  if [ -n "$violations" ]; then
+    print_fail "soothe-nano must not import soothe/cli/daemon"
+    record_check_outcome "dependencies" "nano ↛ soothe/cli/daemon" "fail"
+    record_failure_log "Dependency: soothe-nano independence" "$violations"
+    return 1
+  else
+    print_ok "nano ↛ soothe/cli/daemon"
+    record_check_outcome "dependencies" "nano ↛ soothe/cli/daemon" "pass"
   fi
 
   # Rule 3: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
@@ -631,7 +643,7 @@ _run_pkg_tests_streaming() {
   local xdist_opts=""
   if "$VENV_PYTHON" -c "import xdist" 2>/dev/null; then
     case "$pkg" in
-    soothe-sdk | soothe-client-python | soothe-cli)
+    soothe-sdk | soothe-client-python | soothe-cli | soothe-nano)
       xdist_opts="-n4 --dist=loadgroup"
       ;;
     *)

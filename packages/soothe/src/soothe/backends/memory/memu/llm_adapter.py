@@ -1,33 +1,7 @@
-"""MemU LLM adapter compatibility layer."""
+"""Shim (IG-668): alias ``backends/memory/memu/llm_adapter`` to ``soothe_nano.backends.memory.memu.llm_adapter``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-import logging
-from typing import Any
-
-from .llm_client import BaseLLMClient
-
-logger = logging.getLogger(__name__)
-
-################################################################################
-# MemU agent compatibility
-################################################################################
-
-
-def _get_llm_client_memu_compatible(**kwargs: Any) -> BaseLLMClient:
-    """Get an LLM client with MemU system compatibility.
-
-    This is a placeholder that should not be used directly.
-    Use LangChainLLMAdapter instead to wrap LangChain models.
-
-    Args:
-        **kwargs: Additional arguments (unused).
-
-    Returns:
-        BaseLLMClient: Configured LLM client.
-
-    Raises:
-        NotImplementedError: Always, use LangChainLLMAdapter instead.
-    """
-    msg = "Use LangChainLLMAdapter to wrap LangChain models instead"
-    raise NotImplementedError(msg)
+_nano = import_module("soothe_nano.backends.memory.memu.llm_adapter")
+sys.modules[__name__] = _nano

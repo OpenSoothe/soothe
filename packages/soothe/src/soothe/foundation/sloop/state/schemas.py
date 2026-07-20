@@ -11,6 +11,13 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from soothe_nano.agent.subagent_catalog import (  # noqa: F401
+    INTAKE_ONLY_WIRE_SUBAGENTS,
+    filter_task_catalog_subagent_names,
+    is_intake_only_wire_subagent,
+    partition_subagent_specs,
+    spec_subagent_name,
+)
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -31,17 +38,6 @@ _BUILTIN_WIRE_SUBAGENTS = frozenset(
     }
 )
 
-# IG-600: specialists reachable only via Pass 2 / slash → invoke_wired_subagent.
-# ``planner`` is intentionally excluded — it stays in the open task catalog.
-INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
-    {
-        "explorer",
-        "browser_use",
-        "deep_research",
-        "academic_research",
-    }
-)
-
 
 def resolve_wire_subagent(
     *,
@@ -52,41 +48,6 @@ def resolve_wire_subagent(
     if name and name in _BUILTIN_WIRE_SUBAGENTS:
         return name
     return None
-
-
-def is_intake_only_wire_subagent(name: str | None) -> bool:
-    """True when ``name`` is an intake-only specialist (not open task catalog)."""
-    token = (name or "").strip()
-    return bool(token) and token in INTAKE_ONLY_WIRE_SUBAGENTS
-
-
-def filter_task_catalog_subagent_names(names: list[str] | tuple[str, ...] | set[str]) -> list[str]:
-    """Drop intake-only specialists from open CoreAgent / planner capability lists."""
-    return [n for n in names if n and not is_intake_only_wire_subagent(n)]
-
-
-def spec_subagent_name(spec: Any) -> str | None:
-    """Best-effort name from a SubAgent / CompiledSubAgent dict or object."""
-    if isinstance(spec, dict):
-        raw = spec.get("name")
-        return raw.strip() if isinstance(raw, str) and raw.strip() else None
-    raw_name = getattr(spec, "name", None)
-    if isinstance(raw_name, str) and raw_name.strip():
-        return raw_name.strip()
-    return None
-
-
-def partition_subagent_specs(specs: list[Any]) -> tuple[list[Any], list[Any]]:
-    """Split specs into (task-catalog, intake-only) lists (IG-601)."""
-    catalog: list[Any] = []
-    intake_only: list[Any] = []
-    for spec in specs:
-        name = spec_subagent_name(spec)
-        if is_intake_only_wire_subagent(name):
-            intake_only.append(spec)
-        else:
-            catalog.append(spec)
-    return catalog, intake_only
 
 
 class EvidenceEntry(BaseModel):

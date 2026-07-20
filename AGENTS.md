@@ -71,6 +71,7 @@ See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLo
 ```
 packages/
 ├── soothe/          # Core framework: GoalEngine/StrangeLoop/CoreAgent, protocols, backends, middleware
+├── soothe-nano/     # Batteries-included Coding CoreAgent (deepagents); soothe depends on this
 ├── soothe-daemon/   # Daemon server (soothed): WebSocket/HTTP transports, event bus, client sessions
 ├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)
 ├── soothe-sdk/      # Plugin decorators, shared events/display/wire contracts

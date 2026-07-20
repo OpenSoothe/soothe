@@ -1,9 +1,11 @@
 """Main orchestration entry point with execution, branching, and analysis."""
 
+from soothe_nano.agent.execute_stream import ephemeral_execute_stream_enabled
+
 from .act_wave_finalize import DELEGATE_FINAL_WAVE_CAP, compute_act_wave_finalize
 from .anchor_manager import CheckpointAnchorManager
 from .context_window_manager import ContextCompactionResult, ContextWindowManager
-from .executor import Executor, ephemeral_execute_stream_enabled
+from .executor import Executor
 from .metadata_generator import generate_outcome_metadata
 from .scenario_classifier import ScenarioClassification
 from .step_wave_types import StepWaveQueued, StepWaveStart

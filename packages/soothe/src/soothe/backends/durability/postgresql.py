@@ -1,22 +1,7 @@
-"""PostgreSQL-based durability backend for thread lifecycle and metadata."""
+"""Shim (IG-668): alias ``backends/durability/postgresql`` to ``soothe_nano.backends.durability.postgresql``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-from soothe.backends.durability.base import BasePersistStoreDurability
-from soothe.protocols.persistence import AsyncPersistStore
-
-
-class PostgreSQLDurability(BasePersistStoreDurability):
-    """DurabilityProtocol implementation using PostgreSQL.
-
-    Uses PostgreSQLPersistStore for thread metadata storage.
-    All ThreadInfo objects are serialized as JSONB.
-    """
-
-    def __init__(self, persist_store: AsyncPersistStore) -> None:
-        """Initialize with PostgreSQL persist store.
-
-        Args:
-            persist_store: An AsyncPersistStore instance backed by PostgreSQL.
-        """
-        super().__init__(persist_store)
+_nano = import_module("soothe_nano.backends.durability.postgresql")
+sys.modules[__name__] = _nano

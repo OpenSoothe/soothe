@@ -1,18 +1,7 @@
-"""One-line summary for browser_use subagent completion display (IG-344)."""
+"""Shim (IG-668): alias ``subagents/browser_use/display_summary`` to ``soothe_nano.subagents.browser_use.display_summary``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-
-def browser_use_result_summary_for_display(result: str, *, max_len: int = 160) -> str:
-    """First non-empty line from browser-use ``final_result()`` style markdown/prose."""
-    for line in (result or "").split("\n"):
-        s = line.strip()
-        if s:
-            out = " ".join(s.split())
-            if len(out) > max_len:
-                return out[: max_len - 1] + "…"
-            return out
-    return ""
-
-
-__all__ = ["browser_use_result_summary_for_display"]
+_nano = import_module("soothe_nano.subagents.browser_use.display_summary")
+sys.modules[__name__] = _nano

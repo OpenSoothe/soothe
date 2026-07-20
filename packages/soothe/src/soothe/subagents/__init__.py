@@ -1,14 +1,19 @@
-"""Built-in subagents shipped with the core ``soothe`` package.
+"""Shim (IG-668): package re-export for ``soothe_nano.subagents``."""
 
-Importing this package registers curated ``soothe.subagent.*`` wire types from each
-subagent's ``events`` module. ``browser_use`` ships with core dependencies; its
-``on_load`` hook still verifies that runtime dependencies are installed.
-"""
+from __future__ import annotations
 
-from .academic_research import events as _academic_research_events  # noqa: F401
-from .browser_use import events as _browser_use_events  # noqa: F401
-from .deep_research import events as _deep_research_events  # noqa: F401
-from .explore import events as _explore_events  # noqa: F401
-from .veritas import events as _veritas_events  # noqa: F401
+import soothe_nano.subagents as _mod
+from soothe_nano.subagents import *  # noqa: F403
 
-__all__: list[str] = []
+try:
+    from soothe_nano.subagents import __all__ as __all__  # type: ignore[attr-defined]
+except ImportError:
+    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+
+
+def __getattr__(name: str):
+    return getattr(_mod, name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(dir(_mod)))

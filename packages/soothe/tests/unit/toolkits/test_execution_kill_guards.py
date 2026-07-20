@@ -23,7 +23,7 @@ def test_kill_process_refuses_self_pid() -> None:
 def test_protected_kill_refusal_soothed_pidfile(tmp_path: Path, monkeypatch) -> None:
     pid_file = tmp_path / "soothed.pid"
     pid_file.write_text("424242\n", encoding="utf-8")
-    monkeypatch.setattr("soothe.config.SOOTHE_HOME", tmp_path)
+    monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", tmp_path)
 
     msg = _protected_kill_refusal(424242)
     assert msg is not None

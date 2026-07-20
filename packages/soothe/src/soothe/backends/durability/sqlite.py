@@ -1,40 +1,7 @@
-"""DurabilityProtocol implementation using SQLite backend."""
+"""Shim (IG-668): alias ``backends/durability/sqlite`` to ``soothe_nano.backends.durability.sqlite``."""
 
-from __future__ import annotations
+import sys
+from importlib import import_module
 
-from typing import TYPE_CHECKING
-
-from soothe.backends.durability.base import BasePersistStoreDurability
-from soothe.backends.persistence.sqlite_store import SQLitePersistStore
-
-if TYPE_CHECKING:
-    from soothe.protocols.persistence import AsyncPersistStore
-
-
-class SQLiteDurability(BasePersistStoreDurability):
-    """Durability protocol implementation backed by SQLite.
-
-    Wraps SQLitePersistStore via the BasePersistStoreDurability composition pattern.
-    """
-
-    def __init__(
-        self,
-        persist_store: AsyncPersistStore | None = None,
-        db_path: str | None = None,
-    ) -> None:
-        """Initialize SQLite durability backend.
-
-        Args:
-            persist_store: Optional AsyncPersistStore instance. If None, creates SQLitePersistStore.
-            db_path: Database file path. Used only when persist_store is None.
-                Defaults to metadata.db for ThreadInfo storage.
-        """
-        if persist_store is None:
-            # Default to data/metadata.db for clear separation from data/langgraph_checkpoints.db
-            from pathlib import Path
-
-            from soothe_sdk.paths import SOOTHE_DATA_DIR
-
-            actual_path = db_path or str(Path(SOOTHE_DATA_DIR) / "metadata.db")
-            persist_store = SQLitePersistStore(actual_path, namespace="durability")
-        super().__init__(persist_store)
+_nano = import_module("soothe_nano.backends.durability.sqlite")
+sys.modules[__name__] = _nano
