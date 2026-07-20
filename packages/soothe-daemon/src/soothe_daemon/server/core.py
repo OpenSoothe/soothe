@@ -770,7 +770,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # QueryEngine is created in __init__; runner is now available for queries
             # Initialize global cross-thread input history
             if self._config.logging.global_history.enabled:
-                from soothe_nano.logging.global_history import GlobalInputHistory
+                from soothe.logging.global_history import GlobalInputHistory
 
                 self._global_history = GlobalInputHistory(
                     max_size=self._config.logging.global_history.max_size,

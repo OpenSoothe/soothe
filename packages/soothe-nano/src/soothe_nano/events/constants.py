@@ -8,10 +8,6 @@ MEMORY_STORED = "soothe.internal.memory.stored"
 POLICY_CHECKED = "soothe.internal.policy.checked"
 POLICY_DENIED = "soothe.internal.policy.denied"
 
-DAEMON_HEARTBEAT = "soothe.internal.daemon.heartbeat"
-
-CONFIG_RELOADED = "soothe.system.config.reloaded"
-
 ERROR = "soothe.error.general.failed"
 
 STREAM_END = "soothe.stream.end"
@@ -30,8 +26,6 @@ SKILL_BODY_LOADED = "soothe.internal.skill.body.loaded"
 REPLAY_COMPLETE = "replay_complete"
 
 __all__ = [
-    "CONFIG_RELOADED",
-    "DAEMON_HEARTBEAT",
     "ERROR",
     "LLM_RETRY_ATTEMPT",
     "MCP_LIST_CHANGED",

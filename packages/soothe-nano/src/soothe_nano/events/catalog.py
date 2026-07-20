@@ -1,4 +1,4 @@
-"""Core events and event registry for soothe.* events (CoreAgent protocol subset)."""
+"""Core events and event registry for Coding CoreAgent protocol events."""
 
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ from soothe_sdk.core.events import (
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from .constants import (
-    CONFIG_RELOADED,
-    DAEMON_HEARTBEAT,
     LLM_RETRY_ATTEMPT,
     MEMORY_RECALLED,
     MEMORY_STORED,
@@ -31,30 +29,6 @@ StreamChunk = tuple[tuple[str, ...], str, Any]
 def custom_event(data: dict[str, Any]) -> StreamChunk:
     """Build a soothe protocol custom event chunk."""
     return ((), "custom", data)
-
-
-class DaemonHeartbeatEvent(LifecycleEvent):
-    """Heartbeat event broadcast by daemon to keep clients alive during long operations."""
-
-    type: Literal["soothe.internal.daemon.heartbeat"] = "soothe.internal.daemon.heartbeat"
-    thread_id: str = ""
-    timestamp: str = ""
-    state: str = "running"
-
-
-class ConfigReloadedEvent(SootheEvent):
-    """Event emitted when a configuration file is hot-reloaded."""
-
-    type: Literal["soothe.system.config.reloaded"] = "soothe.system.config.reloaded"
-    config_type: str
-    config_path: str = ""
-    old_config: dict[str, Any] = {}  # noqa: RUF012
-    new_config: dict[str, Any] = {}  # noqa: RUF012
-    old_config_hash: str = ""
-    new_config_hash: str = ""
-    timestamp: str = ""
-    success: bool = True
-    error: str | None = None
 
 
 class StreamEndEvent(LifecycleEvent):
@@ -248,19 +222,6 @@ def register_event(
 
 
 _reg(
-    DAEMON_HEARTBEAT,
-    DaemonHeartbeatEvent,
-    verbosity=VerbosityTier.INTERNAL,
-    summary_template="Daemon heartbeat: state={state}",
-)
-_reg(
-    CONFIG_RELOADED,
-    ConfigReloadedEvent,
-    verbosity=VerbosityTier.NORMAL,
-    summary_template="Config reloaded: {config_type}",
-    priority=EventPriority.HIGH,
-)
-_reg(
     STREAM_END,
     StreamEndEvent,
     verbosity=VerbosityTier.NORMAL,
@@ -281,8 +242,6 @@ _reg(POLICY_DENIED, PolicyDeniedEvent, summary_template="Denied: {reason}")
 
 __all__ = [
     "REGISTRY",
-    "ConfigReloadedEvent",
-    "DaemonHeartbeatEvent",
     "EventMeta",
     "EventPriority",
     "EventRegistry",

@@ -154,7 +154,7 @@ class GlobalInputHistory:
     Manages persistent history of user inputs across sessions.
 
     This is a minimal implementation for CLI use. Full implementation
-    is in soothe.logging.global_history (daemon-side).
+    is in ``soothe.logging.global_history`` (daemon / host).
     """
 
     def __init__(self, history_file: Path | str):

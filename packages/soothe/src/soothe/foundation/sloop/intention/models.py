@@ -8,6 +8,9 @@ checkpoint, not classified here.
 
 Two-pass intake (RFC-630 IG-554): Pass 1 (social vs task) → Pass 2 (scope).
 Pass 1 returns ``is_task`` boolean; Pass 2 returns ``scope`` for work requests.
+
+CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
+``soothe_nano.intention.models`` and re-exported here.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
+from soothe_nano.intention.models import RoutingClassification, TaskComplexity
 
 
 class IntakeLabel(StrEnum):
@@ -37,22 +41,6 @@ class IntakeLabel(StrEnum):
     COMPLEX = "complex"
 
 
-class TaskComplexity(StrEnum):
-    """Unified task complexity levels for routing decisions.
-
-    Used by both IntentClassification and RoutingClassification.
-    - minimal: No tools needed (chitchat intake)
-    - simple: Single focused step
-    - medium: Multi-step with moderate tool use
-    - complex: Architecture, migration, deep multi-phase work
-    """
-
-    MINIMAL = "minimal"
-    SIMPLE = "simple"
-    MEDIUM = "medium"
-    COMPLEX = "complex"
-
-
 def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplexity:
     """Map intake label to execute-phase task complexity.
 
@@ -71,27 +59,6 @@ def derive_task_complexity_from_intake(intake_label: IntakeLabel) -> TaskComplex
     if intake_label == IntakeLabel.SIMPLE:
         return TaskComplexity.SIMPLE
     return TaskComplexity.COMPLEX
-
-
-class RoutingClassification(BaseModel):
-    """Routing complexity classification for execution path selection.
-
-    Args:
-        task_complexity: Routing complexity level.
-        preferred_subagent: Wire or classifier hint for which subagent to prefer in StrangeLoop.
-        routing_hint: Routing strategy hint.
-    """
-
-    task_complexity: TaskComplexity = Field(
-        description="Routing complexity: minimal (no tools), simple, medium, or complex"
-    )
-    preferred_subagent: str | None = Field(
-        default=None,
-        description="Preferred subagent name from slash routing or classifier (e.g. 'deep_research', 'plan')",
-    )
-    routing_hint: str | None = Field(
-        default=None, description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc."
-    )
 
 
 class IntentClassification(BaseModel):

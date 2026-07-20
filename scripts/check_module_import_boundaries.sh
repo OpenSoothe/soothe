@@ -112,7 +112,7 @@ check_nano_l2_l3_ban() {
   local matches
   matches=$(
     rg --line-number --glob '*.py' \
-      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|goal_completion|INTAKE_ONLY|intake_only|intake/slash|soothe_goal_synthesis|soothe_step_subagent|DEFAULT_MAX_ITERATIONS|DEFAULT_MAX_TOOL_CALLS_PER_STEP|Agent Loop Iteration' \
+      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|goal_completion|INTAKE_ONLY|intake_only|intake/slash|soothe_goal_synthesis|soothe_step_subagent|DEFAULT_MAX_ITERATIONS|DEFAULT_MAX_TOOL_CALLS_PER_STEP|Agent Loop Iteration|DaemonHeartbeat|ConfigReloaded|DAEMON_HEARTBEAT|CONFIG_RELOADED|GlobalInputHistory' \
       "$path" 2>/dev/null \
       | grep -v -E 'no StrangeLoop|without StrangeLoop|not StrangeLoop|Pure CoreAgent|batteries-included Coding CoreAgent \(no |no host intake policy' \
       || true

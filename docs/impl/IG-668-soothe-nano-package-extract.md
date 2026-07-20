@@ -164,5 +164,6 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 - Done: nano `prompts/` CoreAgent-only; host loop/intake/plan prompts live under `soothe.prompts`
 - Done: intake-only catalog / partition / task guard moved to `soothe.foundation.sloop`; nano retains `spec_subagent_name` only; Rule 3c bans intake-only tokens in nano src
 - Done: agent-loop iteration constants + `soothe_goal_synthesis` / `soothe_step_subagent` hooks moved to host (`GoalStepGuardMiddleware`); nano ToolEnforcement is preferred_subagent-only
+- Done: nano events CoreAgent-only; `GlobalInputHistory` → `soothe.logging`; host intention re-exports nano routing types
 - Optional later: move `IdentityMiddleware` / runtime out of nano into soothe
 - Session handover (next agent): [HANDOVER-2026-07-20-soothe-nano.md](HANDOVER-2026-07-20-soothe-nano.md)

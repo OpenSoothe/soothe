@@ -6,22 +6,20 @@ from soothe_sdk.core.verbosity import VerbosityTier
 
 from .catalog import (
     REGISTRY,
-    ConfigReloadedEvent,
-    DaemonHeartbeatEvent,
     EventMeta,
     EventPriority,
     EventRegistry,
+    LLMRetryAttemptEvent,
     MemoryRecalledEvent,
     MemoryStoredEvent,
     PolicyCheckedEvent,
     PolicyDeniedEvent,
     StreamChunk,
+    StreamEndEvent,
     custom_event,
     register_event,
 )
 from .constants import (
-    CONFIG_RELOADED,
-    DAEMON_HEARTBEAT,
     ERROR,
     LLM_RETRY_ATTEMPT,
     MEMORY_RECALLED,
@@ -32,8 +30,6 @@ from .constants import (
 )
 
 __all__ = [
-    "CONFIG_RELOADED",
-    "DAEMON_HEARTBEAT",
     "ERROR",
     "LLM_RETRY_ATTEMPT",
     "MEMORY_RECALLED",
@@ -42,16 +38,16 @@ __all__ = [
     "POLICY_DENIED",
     "REGISTRY",
     "STREAM_END",
-    "ConfigReloadedEvent",
-    "DaemonHeartbeatEvent",
     "EventMeta",
     "EventPriority",
     "EventRegistry",
+    "LLMRetryAttemptEvent",
     "MemoryRecalledEvent",
     "MemoryStoredEvent",
     "PolicyCheckedEvent",
     "PolicyDeniedEvent",
     "StreamChunk",
+    "StreamEndEvent",
     "VerbosityTier",
     "custom_event",
     "register_event",

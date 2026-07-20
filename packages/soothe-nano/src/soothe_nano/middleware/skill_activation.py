@@ -13,7 +13,6 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from soothe_nano.config import SootheConfig
-from soothe_nano.skills.events import InternalSkillActivatedEvent
 from soothe_nano.skills.index import SkillIndexEntry
 from soothe_nano.skills.registry import (
     ProgressiveSkillRegistry,
@@ -176,25 +175,6 @@ class SkillActivationMiddleware(AgentMiddleware):
                     sync_specific_skill_to_workspace(self._config, workspace, skill_name)
                 except Exception:  # noqa: BLE001
                     logger.exception("[Skill] sync failed for %s", skill_name)
-                try:
-                    try:
-                        from soothe_nano.events.internal_bus import get_internal_event_bus
-                    except ImportError:
-                        get_internal_event_bus = None
-
-                    if get_internal_event_bus is not None:
-                        bus = get_internal_event_bus()
-                        if bus is not None:
-                            await bus.emit(
-                                InternalSkillActivatedEvent(
-                                    skill_name=skill_name,
-                                    matched_path=matched_path,
-                                    pattern=pattern,
-                                    thread_id=thread_id,
-                                )
-                            )
-                except Exception:  # noqa: BLE001
-                    logger.debug("[Skill] internal bus emit failed", exc_info=True)
 
         state["skill_activation"] = activation_state
         return await handler(request)

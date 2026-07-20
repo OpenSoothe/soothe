@@ -72,6 +72,11 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 | Goal synthesis / step-subagent CoreAgent guards | `soothe.foundation.sloop.middleware.goal_step_guard` (suffix) + `config_keys` |
 | Agent-loop max iterations / tool-calls-per-step | `soothe.config.constants` (`DEFAULT_MAX_ITERATIONS`, …) — not in nano |
 | Nano ToolEnforcement | preferred_subagent first-hop only (`soothe_nano.middleware.tool_enforcement`) |
+| CoreAgent `TaskComplexity` / `RoutingClassification` | `soothe_nano.intention.models` (host sloop intention re-exports) |
+| Host intake / Pass1 / Pass2 models | `soothe.foundation.sloop.intention.models` |
+| Full `GlobalInputHistory` | `soothe.logging.global_history` (daemon uses this; CLI uses sdk thin helper) |
+| CoreAgent events registry | `soothe_nano.events` (policy/memory/stream/LLM retry; no daemon heartbeat) |
+| Daemon / sloop / wire visibility events | `soothe.foundation.events` |
 | Nano subagent helper (name only) | `soothe_nano.agent.subagent_catalog.spec_subagent_name` |
 | Loop-only protocols | `soothe.protocols` (thin) |
 | Host `create_soothe_agent` + planner + intake bind | `soothe.foundation.coreagent.coding` |
@@ -84,7 +89,7 @@ Weaver: sdk DTOs + `get_skillify_service` only (no `start_skillify_service` in p
 
 ## Verification
 
-Last full gate: `./scripts/verify_finally.sh` green after loop-limits / goal-step scrub (2026-07-20).
+Last full gate: `./scripts/verify_finally.sh` green after events/history/intention polish (2026-07-20).
 
 Before next commit/PR: re-run `./scripts/verify_finally.sh` if more edits land.
 
@@ -107,6 +112,8 @@ From IG-668 follow-ups and leftover polish:
 **Done in intake-catalog extract (2026-07-20):** `INTAKE_ONLY_*` / partition helpers moved to `soothe.foundation.sloop.subagent_catalog`; nano builder keeps all specialists on open `task` unless host overrides `_filter_subagents_for_graph`; host `CodingCoreAgent.bind_intake_only_subagents` + `IntakeOnlyTaskGuardMiddleware` (via `_host_middleware_prefix`); Rule 3c bans `INTAKE_ONLY` / `intake_only` / `intake/slash` in nano src.
 
 **Done in loop-limits scrub (2026-07-20):** dropped nano `DEFAULT_MAX_ITERATIONS` / `DEFAULT_MAX_TOOL_CALLS_PER_STEP`; host `GoalStepGuardMiddleware` owns `soothe_goal_synthesis` + `soothe_step_subagent` (suffix after ToolEnforcement); nano ToolEnforcement / RoleRouting no longer read those configurables; Rule 3c extended.
+
+**Done in events / history / intention polish (2026-07-20):** nano events slimmed (no daemon heartbeat/config-reload/visibility/stubs); `GlobalInputHistory` canonical in `soothe.logging`; host intake models re-export nano `TaskComplexity`/`RoutingClassification`.
 
 ---
 
