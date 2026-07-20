@@ -4,7 +4,7 @@
 **Branch**: `feat/nano-agent` (synced with `origin/feat/nano-agent`)  
 **HEAD**: `58ec867b` — *chore(nano): declare direct deps, polish agent gate, version 0.9.0*  
 **Tracking IG**: [IG-668](IG-668-soothe-nano-package-extract.md)  
-**Working tree**: clean after push
+**Working tree**: dirty — intake-catalog extract uncommitted (see below)
 
 Use this to continue without re-deriving context. Prefer IG-668 + this file over chat history.
 
@@ -67,8 +67,11 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 | `extract_text_from_ai_message` | `soothe_sdk.display.text_extract` (`soothe.foundation` re-exports) |
 | CoreAgent system prompts / identity / context XML | `soothe_nano.prompts` (slim fragments: default/simple/medium + assistant_identity) |
 | Host loop / intake / plan / synthesis prompts | `soothe.prompts` (`foundation.sloop.prompts` is a shim) |
+| Intake-only subagent catalog + partition | `soothe.foundation.sloop.subagent_catalog` |
+| Intake-only ``task`` guard middleware | `soothe.foundation.sloop.middleware.intake_task_guard` |
+| Nano subagent helper (name only) | `soothe_nano.agent.subagent_catalog.spec_subagent_name` |
 | Loop-only protocols | `soothe.protocols` (thin) |
-| Host `create_soothe_agent` + planner injection | `soothe.foundation.coreagent.coding` |
+| Host `create_soothe_agent` + planner + intake bind | `soothe.foundation.coreagent.coding` |
 | Host config (`skillify:`, loop, autopilot, …) | `soothe.config` |
 | Nano config slice | `soothe_nano.config` (`extra="ignore"` for host-only YAML keys) |
 
@@ -78,9 +81,9 @@ Weaver: sdk DTOs + `get_skillify_service` only (no `start_skillify_service` in p
 
 ## Verification
 
-Last full gate: `./scripts/verify_finally.sh` green after execute_stream polish and after nano-deps work (before/around version bump; version bump is pyproject/lock/docs only).
+Last full gate: `./scripts/verify_finally.sh` green after intake-catalog extract (2026-07-20).
 
-Before next commit/PR: re-run `./scripts/verify_finally.sh`.
+Before next commit/PR: re-run `./scripts/verify_finally.sh` if more edits land.
 
 ---
 
@@ -97,6 +100,8 @@ From IG-668 follow-ups and leftover polish:
 7. **Identity middleware host move** (optional) — `IdentityMiddleware` / `IdentityConfig` / `IdentityRuntime` still live in `soothe_nano.middleware.identity`; errors already in sdk. Moving middleware into soothe is a larger daemon/builder churn.
 
 **Done in boundary polish (2026-07-20):** identity errors → `soothe_sdk.identity`; deleted nano/soothe duplicate `base_events.py` (canonical `soothe_sdk.core.events`); `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`; nano prompts purified to CoreAgent-only; host loop prompts moved to `soothe.prompts`.
+
+**Done in intake-catalog extract (2026-07-20):** `INTAKE_ONLY_*` / partition helpers moved to `soothe.foundation.sloop.subagent_catalog`; nano builder keeps all specialists on open `task` unless host overrides `_filter_subagents_for_graph`; host `CodingCoreAgent.bind_intake_only_subagents` + `IntakeOnlyTaskGuardMiddleware` (via `_host_middleware_prefix`); Rule 3c bans `INTAKE_ONLY` / `intake_only` / `intake/slash` in nano src.
 
 ---
 

@@ -28,9 +28,7 @@ from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 
 _INTERNAL_TERM_RE = re.compile(r"\b(?:IG|RFC)-\d+\b", re.IGNORECASE)
 
-_FRAGMENTS_DIR = (
-    Path(__file__).resolve().parents[4] / "src" / "soothe" / "prompts" / "fragments"
-)
+_FRAGMENTS_DIR = Path(__file__).resolve().parents[4] / "src" / "soothe" / "prompts" / "fragments"
 
 
 def _assert_no_internal_terms(text: str, *, label: str) -> None:

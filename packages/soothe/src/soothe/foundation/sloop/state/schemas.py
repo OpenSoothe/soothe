@@ -11,15 +11,15 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
-from soothe_nano.agent.subagent_catalog import (  # noqa: F401
+
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.foundation.sloop.subagent_catalog import (  # noqa: F401
     INTAKE_ONLY_WIRE_SUBAGENTS,
     filter_task_catalog_subagent_names,
     is_intake_only_wire_subagent,
     partition_subagent_specs,
     spec_subagent_name,
 )
-
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.foundation.sloop.utils.outcome_preview import planner_outcome_text_preview
 

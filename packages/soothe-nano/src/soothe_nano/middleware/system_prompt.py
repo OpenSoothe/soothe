@@ -79,7 +79,7 @@ class SystemPromptMiddleware(AgentMiddleware):
 
     Uses task_complexity from RoutingClassification (determined by fast LLM)
     to select appropriate prompt verbosity:
-    - minimal: Minimal prompt for greetings and quick questions (chitchat intake)
+    - minimal: Minimal prompt for greetings and quick questions
     - simple: Compact execution prompt for small tasks
     - medium: Standard prompt with guidelines
     - complex: Full prompt with all context
@@ -338,7 +338,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Static Tier (session-stable, maximum cache hits):
         - Base behavioral prompt + tool orchestration guide
         - Execution policies
-        - Subagent routing directive (when the user explicitly requests a routed subagent via slash command)
+        - Subagent routing directive (when the host requests a preferred subagent)
 
         Semi-Static Tier (goal-stable, changes infrequently):
         - Thread context (complex only)

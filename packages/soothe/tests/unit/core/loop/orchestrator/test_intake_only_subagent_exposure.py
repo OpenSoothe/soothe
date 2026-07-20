@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 from langchain_core.messages import ToolMessage
-from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 
+from soothe.foundation.sloop.middleware.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 from soothe.foundation.sloop.state.schemas import (
     INTAKE_ONLY_WIRE_SUBAGENTS,
     filter_task_catalog_subagent_names,
@@ -67,8 +67,8 @@ def test_plan_delegate_rejects_intake_only() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_enforcement_always_blocks_intake_only_task() -> None:
-    mw = ToolEnforcementMiddleware()
+async def test_intake_task_guard_always_blocks_intake_only_task() -> None:
+    mw = IntakeOnlyTaskGuardMiddleware()
     request = SimpleNamespace(
         tool_call={
             "name": "task",
@@ -82,4 +82,5 @@ async def test_tool_enforcement_always_blocks_intake_only_task() -> None:
     handler.assert_not_awaited()
     assert isinstance(result, ToolMessage)
     assert result.status == "error"
+    assert "not available via" in result.content
     assert "intake-only" in result.content

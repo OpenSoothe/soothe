@@ -27,7 +27,7 @@ soothe-daemon  → soothe-nano (direct) + soothe
 
 1. Scaffold `packages/soothe-nano` (layout + `pyproject.toml` + workspace wiring).
 2. Move CoreAgent runtime wrappers into `soothe_nano.agent` (`CodingCoreAgent`, `LazyCoreAgent`).
-3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled` now lives on `soothe_nano.agent.core_agent`, intake-only partition helpers).
+3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled` now lives on `soothe_nano.agent.core_agent`; intake-only partition helpers live on `soothe.foundation.sloop.subagent_catalog`).
 4. Soothe re-exports / shims keep existing import paths working.
 5. Verify scripts know about `soothe-nano` and enforce `nano ↛ soothe`.
 
@@ -162,5 +162,6 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 - Done: Skillify service moved to `soothe_daemon.skillify`; DTOs in `soothe_sdk.skillify`; nano progressive search is substring-only
 - Done: identity errors → `soothe_sdk.identity.errors`; base events consolidated on `soothe_sdk.core.events`; `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`
 - Done: nano `prompts/` CoreAgent-only; host loop/intake/plan prompts live under `soothe.prompts`
+- Done: intake-only catalog / partition / task guard moved to `soothe.foundation.sloop`; nano retains `spec_subagent_name` only; Rule 3c bans intake-only tokens in nano src
 - Optional later: move `IdentityMiddleware` / runtime out of nano into soothe
 - Session handover (next agent): [HANDOVER-2026-07-20-soothe-nano.md](HANDOVER-2026-07-20-soothe-nano.md)

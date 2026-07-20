@@ -49,7 +49,7 @@ def format_friendly_local_date() -> str:
 
 
 def build_canonical_datetime_reply() -> str:
-    """Deterministic date reply for Pass 1 datetime social turns."""
+    """Deterministic date reply for lightweight datetime social turns."""
     return f"Today is {format_friendly_local_date()}."
 
 

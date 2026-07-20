@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.protocols.core_agent import CoreAgentCapabilities
 
-from soothe_nano.agent.subagent_catalog import spec_subagent_name
 from soothe_nano.utils.text_preview import log_preview
 
 if TYPE_CHECKING:
@@ -34,7 +33,7 @@ def ephemeral_execute_stream_enabled() -> bool:
     LangGraph graphs compiled with a checkpointer load checkpoint channel history on
     each ``astream`` tick, causing unbounded RSS during execute. CoreAgent therefore
     builds a twin graph with ``checkpointer=None`` for execute-only streaming while
-    the main graph keeps Postgres/SQLite persistence for planner and clarification.
+    the main graph keeps durable checkpointer state for other sessions.
 
     Set ``SOOTHE_EPHEMERAL_EXECUTE_STREAM=0`` only for emergency rollback.
     """
@@ -112,7 +111,6 @@ class CodingCoreAgent:
         planner: Any | None = None,
         policy: Any | None = None,
         subagents: list[SubAgent | CompiledSubAgent] | None = None,
-        intake_only_subagents: list[SubAgent | CompiledSubAgent] | None = None,
         capabilities: CoreAgentCapabilities | None = None,
         execute_graph: CompiledStateGraph | None = None,
         execute_graph_compiler: Callable[[], CompiledStateGraph] | None = None,
@@ -125,8 +123,6 @@ class CodingCoreAgent:
         self._planner = planner
         self._policy = policy
         self._subagents = list(subagents) if subagents else []
-        # Intake-only specialists are never bound to the open task tool.
-        self._intake_only_subagents = list(intake_only_subagents) if intake_only_subagents else []
         if capabilities is None:
             capabilities = CoreAgentCapabilities(
                 subagents=tuple(str(getattr(subagent, "name", "")) for subagent in self._subagents),
@@ -179,23 +175,8 @@ class CodingCoreAgent:
 
     @property
     def subagents(self) -> list[SubAgent | CompiledSubAgent]:
-        """Open task-catalog subagents bound on the CoreAgent graph."""
+        """Subagents bound on the CoreAgent ``task`` catalog."""
         return self._subagents
-
-    @property
-    def intake_only_subagents(self) -> list[SubAgent | CompiledSubAgent]:
-        """Intake-only specialists (not on the open ``task`` catalog)."""
-        return self._intake_only_subagents
-
-    def lookup_intake_only_subagent(self, name: str) -> SubAgent | CompiledSubAgent | None:
-        """Return an intake-only CompiledSubAgent/SubAgent spec by name."""
-        target = (name or "").strip()
-        if not target:
-            return None
-        for spec in self._intake_only_subagents:
-            if spec_subagent_name(spec) == target:
-                return spec
-        return None
 
     def list_capabilities(self) -> CoreAgentCapabilities:
         return self._capabilities

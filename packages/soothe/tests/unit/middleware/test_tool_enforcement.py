@@ -55,7 +55,12 @@ def test_wire_subagent_routing_after_first_hop_keeps_full_tools() -> None:
 
 
 def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
-    """IG-601: intake-only preferred_subagent is ignored for CoreAgent task enforcement."""
+    """Host guard clears intake-only preferred_subagent before tool enforcement."""
+    from soothe.foundation.sloop.middleware.intake_task_guard import (
+        IntakeOnlyTaskGuardMiddleware,
+    )
+
+    guard = IntakeOnlyTaskGuardMiddleware()
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
         task_complexity="medium",
@@ -69,8 +74,11 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
         tools=[SimpleNamespace(name="search_web"), SimpleNamespace(name="task")],
         state={"routing_classification": classification},
     )
-    modified = middleware.modify_request(request)
+    scrubbed = guard.modify_request(request)
+    modified = middleware.modify_request(scrubbed)
     assert len(modified.tools) == 2
+    preferred = getattr(modified.state["routing_classification"], "preferred_subagent", None)
+    assert preferred is None
 
 
 def test_step_subagent_enforces_task_only_on_all_hops() -> None:

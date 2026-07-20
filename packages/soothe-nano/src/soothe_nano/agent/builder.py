@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from soothe_sdk.protocols.core_agent import CoreAgentCapabilities
 
 from soothe_nano.agent.core_agent import CodingCoreAgent, ephemeral_execute_stream_enabled
-from soothe_nano.agent.subagent_catalog import partition_subagent_specs
 from soothe_nano.config import SootheConfig
 from soothe_nano.middleware import build_soothe_middleware_stack
 from soothe_nano.resolve import (
@@ -185,7 +184,12 @@ class AgentBuilder:
                     mw.set_tool_catalog(all_tools)
                 elif isinstance(mw, MCPActivationMiddleware) and registry is not None:
                     mw.set_tool_catalog()
-        all_middleware: tuple[AgentMiddleware, ...] = (*default_middleware, *middleware)
+        host_prefix = self._host_middleware_prefix()
+        all_middleware: tuple[AgentMiddleware, ...] = (
+            *host_prefix,
+            *default_middleware,
+            *middleware,
+        )
 
         from soothe_nano.middleware.model_call_profiler import (
             install_model_call_profiler,
@@ -194,9 +198,8 @@ class AgentBuilder:
 
         install_model_call_profiler(enabled=is_profiler_enabled(self._config))
 
-        # IG-601: intake-only specialists stay off the main CoreAgent graph.
-        catalog_subagents, intake_only_subagents = partition_subagent_specs(all_subagents)
-        catalog_names = self._collect_subagent_names(catalog_subagents)
+        graph_subagents = self._filter_subagents_for_graph(all_subagents)
+        catalog_names = self._collect_subagent_names(graph_subagents)
 
         def _compile_deep_agent(cp: Checkpointer | None) -> Any:
             gp_enabled = self._config.agent.runtime.general_purpose_subagent
@@ -205,7 +208,7 @@ class AgentBuilder:
                 tools=all_tools or None,
                 system_prompt=self._config.resolve_system_prompt(),
                 middleware=all_middleware,
-                subagents=catalog_subagents or None,
+                subagents=graph_subagents or None,
                 skills=None,
                 memory=self._config.memory or None,
                 checkpointer=cp,
@@ -234,7 +237,6 @@ class AgentBuilder:
 
         capabilities = CoreAgentCapabilities(
             tools=tuple(self._collect_tool_names(all_tools)),
-            # Open catalog only — intake-only names never appear (IG-601).
             subagents=tuple(catalog_names),
             features=(
                 "langgraph",
@@ -246,8 +248,7 @@ class AgentBuilder:
             metadata={
                 "runtime_kind": "coding",
                 "tool_count": len(all_tools),
-                "subagent_count": len(catalog_subagents),
-                "intake_only_subagent_count": len(intake_only_subagents),
+                "subagent_count": len(graph_subagents),
             },
         )
 
@@ -257,8 +258,7 @@ class AgentBuilder:
             memory=resolved_memory,
             planner=resolved_planner,
             policy=resolved_policy,
-            subagents=catalog_subagents,
-            intake_only_subagents=intake_only_subagents,
+            subagents=graph_subagents,
             capabilities=capabilities,
             execute_graph=execute_graph,
             execute_graph_compiler=execute_graph_compiler,
@@ -267,6 +267,19 @@ class AgentBuilder:
         total_ms = (time.perf_counter() - create_start) * 1000
         logger.info("[Init] CoreAgent ready (%.1fms total)", total_ms)
         return agent
+
+    def _filter_subagents_for_graph(
+        self, all_subagents: list[SubAgent | CompiledSubAgent]
+    ) -> list[SubAgent | CompiledSubAgent]:
+        """Return subagent specs bound on the open ``task`` catalog.
+
+        Host builders may override to withhold specialists for outer wiring.
+        """
+        return list(all_subagents)
+
+    def _host_middleware_prefix(self) -> tuple[AgentMiddleware, ...]:
+        """Optional host middleware prepended before the default nano stack."""
+        return ()
 
     def _resolve_core_agent_kind(self) -> str:
         runtime_cfg = getattr(getattr(self._config, "agent", None), "runtime", None)

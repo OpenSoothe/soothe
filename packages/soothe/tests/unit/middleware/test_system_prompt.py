@@ -430,8 +430,12 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     assert "subagent_type='planner'" in content
 
 
-def test_intake_only_step_subagent_hint_does_not_narrow_tools() -> None:
-    """IG-601: intake-only names never force CoreAgent task-only enforcement."""
+def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
+    """Host step resolver drops intake-only names; nano itself has no intake policy."""
+    from soothe.foundation.sloop.state.schemas import resolve_step_wire_subagent
+
+    assert resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
+
     enforcement = ToolEnforcementMiddleware()
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
@@ -442,10 +446,12 @@ def test_intake_only_step_subagent_hint_does_not_narrow_tools() -> None:
         tools=tools,
         state={},
     )
+    # If a host incorrectly set soothe_step_subagent, nano would narrow (no intake catalog).
     lg_config = {"configurable": {"soothe_step_subagent": "deep_research"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         enforced = enforcement.modify_request(request)
-    assert len(enforced.tools) == 2
+    assert len(enforced.tools) == 1
+    assert getattr(enforced.tools[0], "name", None) == "task"
 
 
 def test_goal_synthesis_disables_all_tools() -> None:

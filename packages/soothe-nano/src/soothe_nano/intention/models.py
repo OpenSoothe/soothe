@@ -36,7 +36,7 @@ class RoutingClassification(BaseModel):
     )
     preferred_subagent: str | None = Field(
         default=None,
-        description="Preferred subagent name from slash routing or host wiring",
+        description="Preferred subagent name when the host requests a specialist",
     )
     routing_hint: str | None = Field(
         default=None, description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc."

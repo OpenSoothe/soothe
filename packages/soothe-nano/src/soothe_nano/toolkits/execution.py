@@ -876,8 +876,8 @@ class KillProcessTool(BaseTool):
     description: str = (
         "Terminate a background process started with run_background. "
         "Parameters: pid (required) — only use the PID returned by run_background. "
-        "Do not kill soothed, the live daemon on :8765, or PIDs from `ps | grep soothe`. "
-        "Do not use pkill/killall for Soothe processes. "
+        "Do not kill the agent host process or use pkill/killall against the runtime "
+        "that spawned you. "
         "Returns: termination status. Appends a footer to bg-{pid}.log when present."
     )
     workspace_root: str = Field(default="", description="Working directory fallback for log lookup")

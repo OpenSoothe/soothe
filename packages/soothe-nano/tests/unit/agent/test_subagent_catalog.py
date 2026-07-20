@@ -1,34 +1,18 @@
 """Unit tests for soothe-nano agent catalog helpers."""
 
 from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
-from soothe_nano.agent.subagent_catalog import (
-    INTAKE_ONLY_WIRE_SUBAGENTS,
-    is_intake_only_wire_subagent,
-    partition_subagent_specs,
-    spec_subagent_name,
-)
+from soothe_nano.agent.subagent_catalog import spec_subagent_name
 
 
-def test_intake_only_set_excludes_planner() -> None:
-    assert "planner" not in INTAKE_ONLY_WIRE_SUBAGENTS
-    assert "explorer" in INTAKE_ONLY_WIRE_SUBAGENTS
+def test_spec_subagent_name_from_dict() -> None:
+    assert spec_subagent_name({"name": "planner"}) == "planner"
+    assert spec_subagent_name({"name": "  "}) is None
+    assert spec_subagent_name({}) is None
 
 
-def test_partition_subagent_specs_splits_intake_only() -> None:
-    specs = [
-        {"name": "planner"},
-        {"name": "explorer"},
-        {"name": "deep_research"},
-    ]
-    catalog, intake = partition_subagent_specs(specs)
-    assert [spec_subagent_name(s) for s in catalog] == ["planner"]
-    assert {spec_subagent_name(s) for s in intake} == {"explorer", "deep_research"}
-
-
-def test_is_intake_only_wire_subagent() -> None:
-    assert is_intake_only_wire_subagent("explorer") is True
-    assert is_intake_only_wire_subagent("planner") is False
-    assert is_intake_only_wire_subagent(None) is False
+def test_spec_subagent_name_from_object() -> None:
+    assert spec_subagent_name(type("S", (), {"name": "explorer"})()) == "explorer"
+    assert spec_subagent_name(type("S", (), {"name": None})()) is None
 
 
 def test_ephemeral_execute_stream_enabled_default(monkeypatch) -> None:

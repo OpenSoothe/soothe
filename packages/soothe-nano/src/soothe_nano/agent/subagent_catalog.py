@@ -1,34 +1,8 @@
-"""Intake-only vs open-task subagent catalog helpers for CoreAgent.
-
-Specialists in ``INTAKE_ONLY_WIRE_SUBAGENTS`` stay off the open ``task`` tool
-catalog and are invoked via host wiring (intake Pass 2 / slash).
-"""
+"""Generic subagent spec helpers for Coding CoreAgent (no host intake policy)."""
 
 from __future__ import annotations
 
 from typing import Any
-
-# Specialists reachable only via host intake wiring — not the open task catalog.
-# ``planner`` is intentionally excluded — it stays in the open task catalog.
-INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
-    {
-        "explorer",
-        "browser_use",
-        "deep_research",
-        "academic_research",
-    }
-)
-
-
-def is_intake_only_wire_subagent(name: str | None) -> bool:
-    """True when ``name`` is an intake-only specialist (not open task catalog)."""
-    token = (name or "").strip()
-    return bool(token) and token in INTAKE_ONLY_WIRE_SUBAGENTS
-
-
-def filter_task_catalog_subagent_names(names: list[str] | tuple[str, ...] | set[str]) -> list[str]:
-    """Drop intake-only specialists from open CoreAgent / planner capability lists."""
-    return [n for n in names if n and not is_intake_only_wire_subagent(n)]
 
 
 def spec_subagent_name(spec: Any) -> str | None:
@@ -42,14 +16,4 @@ def spec_subagent_name(spec: Any) -> str | None:
     return None
 
 
-def partition_subagent_specs(specs: list[Any]) -> tuple[list[Any], list[Any]]:
-    """Split specs into (task-catalog, intake-only) lists."""
-    catalog: list[Any] = []
-    intake_only: list[Any] = []
-    for spec in specs:
-        name = spec_subagent_name(spec)
-        if is_intake_only_wire_subagent(name):
-            intake_only.append(spec)
-        else:
-            catalog.append(spec)
-    return catalog, intake_only
+__all__ = ["spec_subagent_name"]

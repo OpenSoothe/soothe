@@ -107,13 +107,6 @@ class LazyCoreAgent:
     def subagents(self) -> list[SubAgent | CompiledSubAgent]:
         return self.materialize().subagents
 
-    @property
-    def intake_only_subagents(self) -> list[SubAgent | CompiledSubAgent]:
-        return self.materialize().intake_only_subagents
-
-    def lookup_intake_only_subagent(self, name: str) -> SubAgent | CompiledSubAgent | None:
-        return self.materialize().lookup_intake_only_subagent(name)
-
     def list_capabilities(self) -> CoreAgentCapabilities:
         return self.materialize().list_capabilities()
 
