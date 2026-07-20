@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.utils.stream_normalize import extract_text_from_message_content
+from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 from soothe_sdk.protocols.policy import ActionRequest, PermissionSet, PolicyContext
 from soothe_sdk.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 

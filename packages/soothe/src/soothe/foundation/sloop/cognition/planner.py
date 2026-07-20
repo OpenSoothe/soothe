@@ -12,7 +12,6 @@ from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
 from soothe_nano.utils.llm.invoke_policy import await_with_llm_call_policy
 from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat_typed
-from soothe_nano.utils.network_errors import calculate_network_backoff, is_transient_network_error
 from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe_nano.utils.token_counting import estimate_content_chars
 from soothe_sdk.protocols.planner import PlanContext
@@ -53,6 +52,10 @@ from soothe.foundation.sloop.utils.json_parsing import (
     _try_parse_json_dict,
 )
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage, last_ledger_ai_content
+from soothe.foundation.sloop.utils.network_errors import (
+    calculate_network_backoff,
+    is_transient_network_error,
+)
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.reflection import (
     _default_agent_decision,

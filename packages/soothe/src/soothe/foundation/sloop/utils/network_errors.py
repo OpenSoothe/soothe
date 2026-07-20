@@ -1,14 +1,10 @@
-"""Shared helpers for outbound network failures (connection refused, TLS verify, etc.)."""
+"""Shared helpers for outbound network failures in host loop runtime."""
 
 from __future__ import annotations
 
 import errno
 import re
 import ssl
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
 
 
 def collect_related_exceptions(exc: BaseException) -> list[BaseException]:
@@ -41,7 +37,7 @@ def is_expected_connection_refusal(exc: BaseException) -> bool:
 
 
 def format_connection_refusal_message(exc: BaseException) -> str:
-    """Short, actionable message for connection-refused chains (e.g. aiohttp → OSError)."""
+    """Short, actionable message for connection-refused chains (e.g. aiohttp -> OSError)."""
     combined = " ".join(str(e) for e in collect_related_exceptions(exc))
     m = re.search(r"Connect call failed\s*\(\s*'([^']+)'\s*,\s*(\d+)", combined)
     if m:
@@ -103,22 +99,8 @@ def format_tool_network_error(exc: BaseException) -> str:
     return str(exc)
 
 
-# IG-503: Transient network error detection for LLM calls
-
-
 def is_transient_network_error(exc: Exception) -> bool:
-    """Detect transient network errors that warrant retry with exponential backoff.
-
-    Covers connection errors, timeouts, and SSL/TLS errors from various providers
-    (httpx, OpenAI SDK, Anthropic SDK, aiohttp, requests, etc.).
-
-    Args:
-        exc: Exception to check.
-
-    Returns:
-        True if this is a transient network error that should be retried.
-    """
-    # Check by exception class name (works across httpx, OpenAI, Anthropic, etc.)
+    """Detect transient network errors that warrant retry with exponential backoff."""
     exc_type_name = type(exc).__name__
     transient_types = {
         "ConnectionError",
@@ -136,7 +118,6 @@ def is_transient_network_error(exc: Exception) -> bool:
     if exc_type_name in transient_types:
         return True
 
-    # Check module name for httpx exceptions
     exc_module = str(type(exc).__module__)
     if "httpx" in exc_module:
         if exc_type_name in (
@@ -150,7 +131,6 @@ def is_transient_network_error(exc: Exception) -> bool:
         ):
             return True
 
-    # Check for aiohttp exceptions
     if "aiohttp" in exc_module:
         if exc_type_name in (
             "ClientConnectionError",
@@ -164,7 +144,6 @@ def is_transient_network_error(exc: Exception) -> bool:
         ):
             return True
 
-    # Check for requests exceptions
     if "requests" in exc_module:
         if exc_type_name in (
             "ConnectionError",
@@ -175,7 +154,6 @@ def is_transient_network_error(exc: Exception) -> bool:
         ):
             return True
 
-    # Fallback: keyword matching in error string
     error_str = str(exc).lower()
     transient_keywords = [
         "connection error",
@@ -204,15 +182,6 @@ def is_transient_network_error(exc: Exception) -> bool:
 
 
 def calculate_network_backoff(attempt: int, base: float = 2.0, max_delay: float = 30.0) -> float:
-    """Calculate exponential backoff delay for network error retry.
-
-    Args:
-        attempt: Retry attempt number (0-indexed).
-        base: Base delay in seconds (default 2.0).
-        max_delay: Maximum delay cap in seconds (default 30.0).
-
-    Returns:
-        Backoff delay in seconds, capped at max_delay.
-    """
+    """Calculate exponential backoff delay for network error retry."""
     delay = base * (2**attempt)
     return min(delay, max_delay)

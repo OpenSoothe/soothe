@@ -31,12 +31,6 @@ from langgraph.types import Command, Interrupt
 # IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
 from soothe_nano.middleware.tool_call_args_registry import init_tool_call_args_registry
 from soothe_nano.middleware.tool_optimization_middleware import get_tool_reuse_metrics_snapshot
-from soothe_nano.utils.network_errors import (
-    format_tool_network_error as _format_tool_network_error,
-)
-from soothe_nano.utils.network_errors import (
-    is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
-)
 from soothe_nano.utils.text_preview import (
     create_output_summary,
     log_preview,
@@ -150,6 +144,12 @@ from soothe.foundation.sloop.utils.messages import (
     LoopAIMessage,
     LoopHumanMessage,
     _record_ledger_message,
+)
+from soothe.foundation.sloop.utils.network_errors import (
+    format_tool_network_error as _format_tool_network_error,
+)
+from soothe.foundation.sloop.utils.network_errors import (
+    is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
 )
 
 if TYPE_CHECKING:
