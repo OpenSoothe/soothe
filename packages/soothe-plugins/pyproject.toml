@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "soothe-sdk>=1.0.2,<2.0.0",
-    "soothe-nano>=0.9.2,<1.0.0",
+    "soothe-nano>=0.9.3,<1.0.0",
     "langgraph>=1.1.1,<2.0.0",
     "arxiv>=2.0.0,<3.0.0",
     "pyzotero>=1.5.0,<2.0.0",
