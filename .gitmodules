@@ -16,3 +16,6 @@
 [submodule "client/rust"]
 	path = client/rust
 	url = git@github.com:mirasoth/soothe-client-rust.git
+[submodule "packages/soothe-nano"]
+	path = packages/soothe-nano
+	url = git@github.com:mirasoth/soothe-nano.git
