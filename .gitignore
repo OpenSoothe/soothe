@@ -230,3 +230,6 @@ manifest.json
 _bmad
 __MACOSX
 .qoder
+
+# Accidental MemU test persist_dir artifacts
+packages/soothe/MagicMock/

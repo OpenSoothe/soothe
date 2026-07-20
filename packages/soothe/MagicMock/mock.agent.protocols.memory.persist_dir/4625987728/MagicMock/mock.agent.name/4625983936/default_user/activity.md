@@ -1,1 +1,0 @@
-[9d4865][mentioned at 2026-07-20] <MagicMock name='mock.create_chat_model().invoke().content' id='4625941760'> []
