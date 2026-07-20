@@ -8830,7 +8830,7 @@ test = [
 
 [[package]]
 name = "soothe-nano"
-version = "0.9.0"
+version = "0.9.1"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },

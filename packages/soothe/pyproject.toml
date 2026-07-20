@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "soothe-sdk>=1.0.0,<2.0.0",    # Subagent wire registry + community delegate types
-    "soothe-nano>=0.9.0,<1.0.0",   # Coding CoreAgent runtime (IG-668)
+    "soothe-nano>=0.9.1,<1.0.0",   # Coding CoreAgent runtime
     "aiohttp>=3.9.0,<4.0.0",
     "aiosqlite>=0.22.1,<1.0.0",
     "anyio>=3.0.0,<5.0.0",
