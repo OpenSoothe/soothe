@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.9.0] - 2026-07-20
+
+### Added
+- Coding CoreAgent lives in standalone `soothe-nano` (batteries-included deepagents stack); host composes StrangeLoop, Autopilot, and daemon around it
+- Split develop/runtime config into `nano.yml` (nano-owned) and `soothe.yml` (host-owned) with composition
+
 ### Changed
+- Require `soothe-nano>=0.9.2` and `soothe-deepagents>=0.7.24` for the host Coding CoreAgent path
+- Host package depends only on orchestration-owned libraries; nano owns Coding CoreAgent transitive deps
+- Shared protocols, identity errors, and Langfuse helpers move to `soothe-sdk`; drop nano re-export shims
 - Default `save_reports` to `false` for `deep_research` and `academic_research` (full report inline; set `true` to write under `.soothe/agents/`)
 - Strip attachment bodies from research topics and goal logs (keep attachment metadata only)
+
+### Removed
+- In-tree Coding CoreAgent / nano module ownership from the host package (use `soothe-nano` instead)
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.8.5...v0.9.0
 
 ## [v0.8.5] - 2026-07-19
 
