@@ -19,7 +19,7 @@ from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
     from soothe_nano.mcp.loader import MCPSessionManager
-    from soothe_nano.protocols.durability import DurabilityProtocol, ThreadInfo
+    from soothe_sdk.protocols.durability import DurabilityProtocol, ThreadInfo
 
     from soothe.config import SootheConfig
 
@@ -126,7 +126,7 @@ class ThreadContextManager:
         Returns:
             ThreadInfo for the created thread
         """
-        from soothe_nano.protocols.durability import ThreadMetadata
+        from soothe_sdk.protocols.durability import ThreadMetadata
 
         # Convert dict to ThreadMetadata if needed
         thread_metadata = ThreadMetadata(**metadata) if metadata else ThreadMetadata()
@@ -197,7 +197,7 @@ class ThreadContextManager:
         Raises:
             KeyError: If no durable metadata and no run artifacts exist.
         """
-        from soothe_nano.protocols.durability import ThreadInfo, ThreadMetadata
+        from soothe_sdk.protocols.durability import ThreadInfo, ThreadMetadata
 
         def _find_matching_thread() -> str | None:
             """Find a thread ID matching the provided ID or prefix."""

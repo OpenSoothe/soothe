@@ -14,8 +14,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from soothe_sdk.protocols.vector_store import VectorRecord
+
 from soothe_nano.config import SOOTHE_HOME
-from soothe_nano.protocols.vector_store import VectorRecord
 
 logger = logging.getLogger(__name__)
 

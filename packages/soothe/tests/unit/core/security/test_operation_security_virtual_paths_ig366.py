@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe_nano.protocols.operation_security import OperationSecurityContext
 from soothe_nano.security.operation_security import WorkspaceToolOperationSecurity
+from soothe_sdk.protocols.operation_security import OperationSecurityContext
 
 from soothe.config.models import SecurityConfig
 

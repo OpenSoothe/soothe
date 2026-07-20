@@ -52,7 +52,7 @@ Bulk-migrated into `soothe_nano/`:
 | MCP | `soothe_nano.mcp` |
 | Plugin hooks | `soothe_nano.plugin` |
 | Config (CoreAgent slice) | `soothe_nano.config` |
-| Protocols (CoreAgent-oriented) | `soothe_nano.protocols` |
+| Protocols | `soothe_sdk.protocols` (not nano) |
 | Utils / logging (CoreAgent) | `soothe_nano.utils`, `soothe_nano.logging` |
 | Core subagents | `soothe_nano.subagents` |
 | FS / security / workspace / events | `soothe_nano.filesystem`, `.security`, `.workspace`, `.events` |
@@ -120,6 +120,7 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 | `soothe_nano.config.*` (slim) | `soothe.config.*` (full composition) |
 | `soothe_nano.toolkits.*` etc. | Direct `soothe_nano` imports (no leaf shims) |
 | `resolve_planner` → `None` in nano | soothe builder injects StrangeLoop planner |
+| Shared contracts (`CoreAgentProtocol`, planner/memory/durability/…, policy, persistence, vector store, identity) | Canonical **only** in ``soothe_sdk.protocols`` (nano protocols package removed) |
 
 ---
 

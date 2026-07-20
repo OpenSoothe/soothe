@@ -1,21 +1,17 @@
-"""CoreAgentProtocol - Layer 1 runtime interface.
+"""CoreAgentProtocol — Coding CoreAgent runtime interface.
 
-CoreAgent is the foundational execution runtime, unaware of Loop or Autopilot
-concepts. It provides pure tool/subagent execution with middleware processing.
+CoreAgent is the foundational execution runtime, unaware of host orchestration.
+It provides pure tool/subagent execution with middleware processing.
+
+LangGraph / config types are typed as ``Any`` so this contract stays in
+``soothe-sdk`` without depending on ``soothe-nano`` or ``langgraph``.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
-
-if TYPE_CHECKING:
-    from langchain_core.runnables import RunnableConfig
-    from langgraph.graph.state import CompiledStateGraph
-    from langgraph.pregel.base import BaseCheckpointSaver
-
-    from soothe_nano.config import SootheConfig
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass(slots=True)
@@ -30,7 +26,7 @@ class CoreAgentCapabilities:
 
 @runtime_checkable
 class CoreAgentProtocol(Protocol):
-    """Layer 1 runtime interface - unaware of Loop or Autopilot concepts.
+    """Coding CoreAgent runtime interface — unaware of host orchestration layers.
 
     CoreAgent provides pure execution runtime for:
     - Tool invocation
@@ -39,7 +35,7 @@ class CoreAgentProtocol(Protocol):
     - Streaming execution
 
     This protocol enables alternative CoreAgent implementations while
-    keeping the execution contract stable for Loop/Autopilot layers.
+    keeping the execution contract stable for host orchestration.
 
     Implementation requirements:
     - Must support config.configurable hints:
@@ -52,8 +48,8 @@ class CoreAgentProtocol(Protocol):
     """
 
     @property
-    def graph(self) -> CompiledStateGraph:
-        """Underlying LangGraph for advanced operations.
+    def graph(self) -> Any:
+        """Underlying graph for advanced operations (typically a LangGraph).
 
         Note: This property is implementation-specific. Alternative
         implementations may not use LangGraph and should raise
@@ -62,8 +58,8 @@ class CoreAgentProtocol(Protocol):
         ...
 
     @property
-    def checkpointer(self) -> BaseCheckpointSaver | None:
-        """LangGraph checkpointer for thread state persistence.
+    def checkpointer(self) -> Any | None:
+        """Checkpointer for thread state persistence.
 
         Returns None if checkpointing is disabled.
         """
@@ -71,7 +67,7 @@ class CoreAgentProtocol(Protocol):
 
     async def aget_state(
         self,
-        config: RunnableConfig | None = None,
+        config: Any | None = None,
     ) -> Any:
         """Get current graph state for a thread.
 
@@ -88,7 +84,7 @@ class CoreAgentProtocol(Protocol):
 
     async def execution_aget_state(
         self,
-        config: RunnableConfig | None = None,
+        config: Any | None = None,
     ) -> Any:
         """Get execution-graph state when execute graph differs from primary graph.
 
@@ -99,7 +95,7 @@ class CoreAgentProtocol(Protocol):
 
     async def read_runtime_state(
         self,
-        config: RunnableConfig | None = None,
+        config: Any | None = None,
         *,
         execution_scope: bool = False,
     ) -> Any:
@@ -109,7 +105,7 @@ class CoreAgentProtocol(Protocol):
     async def astream(
         self,
         input_arg: str | dict,
-        config: RunnableConfig | None = None,
+        config: Any | None = None,
         *,
         stream_mode: list[str] | None = None,
         subgraphs: bool = False,
@@ -139,7 +135,7 @@ class CoreAgentProtocol(Protocol):
     def execution_astream(
         self,
         input_arg: str | dict,
-        config: RunnableConfig | None = None,
+        config: Any | None = None,
         *,
         stream_mode: list[str] | None = None,
         subgraphs: bool = False,
@@ -154,7 +150,7 @@ class CoreAgentProtocol(Protocol):
     def execute_stream(
         self,
         input_arg: str | dict,
-        config: RunnableConfig | None = None,
+        config: Any | None = None,
         *,
         stream_mode: list[str] | None = None,
         subgraphs: bool = False,
@@ -168,15 +164,15 @@ class CoreAgentProtocol(Protocol):
         ...
 
     def list_capabilities(self) -> CoreAgentCapabilities:
-        """Return tools/subagents/features visible to Layer 2 planning."""
+        """Return tools/subagents/features visible to host planning."""
         ...
 
     @classmethod
-    def create(cls, config: SootheConfig, **kwargs: Any) -> CoreAgentProtocol:
+    def create(cls, config: Any, **kwargs: Any) -> CoreAgentProtocol:
         """Factory method for creating CoreAgent instances.
 
         Args:
-            config: SootheConfig with provider/model settings
+            config: Host config with provider/model settings (e.g. SootheConfig)
             **kwargs: Implementation-specific arguments
 
         Returns:

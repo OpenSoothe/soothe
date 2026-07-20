@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_nano.protocols.persistence import AsyncPersistStore
+from soothe_sdk.protocols.persistence import AsyncPersistStore
 
 
 def create_persist_store(

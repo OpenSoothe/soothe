@@ -14,7 +14,7 @@ from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_t
 _EVIDENCE_SUMMARY_MAX_CHARS = 600
 
 if TYPE_CHECKING:
-    from soothe_nano.protocols.planner import PlanContext
+    from soothe_sdk.protocols.planner import PlanContext
 
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 

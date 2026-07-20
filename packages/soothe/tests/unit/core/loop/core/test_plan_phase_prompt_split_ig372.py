@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import SystemMessage
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.intention.models import ResponseLanguage
 from soothe.foundation.sloop.prompts import PromptBuilder

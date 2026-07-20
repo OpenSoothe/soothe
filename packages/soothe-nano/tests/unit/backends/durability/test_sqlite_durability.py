@@ -53,8 +53,9 @@ class TestSQLiteDurabilityUnit:
 
     def test_protocol_compliance(self) -> None:
         """Test implements required protocol methods."""
+        from soothe_sdk.protocols.durability import DurabilityProtocol
+
         from soothe_nano.backends.durability.sqlite import SQLiteDurability
-        from soothe_nano.protocols.durability import DurabilityProtocol
 
         tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         tmp.close()

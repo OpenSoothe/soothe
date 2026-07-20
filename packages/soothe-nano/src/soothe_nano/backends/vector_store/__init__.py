@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from soothe_nano.protocols.vector_store import VectorStoreProtocol
+    from soothe_sdk.protocols.vector_store import VectorStoreProtocol
 
 
 def create_vector_store(

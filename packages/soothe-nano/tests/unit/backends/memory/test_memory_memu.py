@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from soothe_sdk.protocols.memory import MemoryItem
 
 from soothe_nano.backends.memory.memu.models import MemoryItem as MemuMemoryItem
 from soothe_nano.backends.memory.memu_adapter import MemUMemory
-from soothe_nano.protocols.memory import MemoryItem
 
 
 @pytest.fixture

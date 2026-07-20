@@ -472,7 +472,7 @@ def test_goal_synthesis_disables_all_tools() -> None:
 
 def test_memory_section_uses_memory_summary_tag():
     """RFC-214: Memory section should use <MEMORY_SUMMARY> tag."""
-    from soothe_nano.protocols.memory import MemoryItem
+    from soothe_sdk.protocols.memory import MemoryItem
 
     config = SootheConfig()
     middleware = SystemPromptMiddleware(config=config)
@@ -883,7 +883,7 @@ def test_modify_request_resolves_workspace_from_request_messages_first_hop(tmp_p
 
 def test_execute_step_has_workspace_tail_plan_generate_does_not(tmp_path) -> None:
     """Workspace blocks are execute-step only; plan-generate stays lean."""
-    from soothe_nano.protocols.planner import PlanContext
+    from soothe_sdk.protocols.planner import PlanContext
 
     from soothe.foundation.sloop.prompts import PromptBuilder
     from soothe.foundation.sloop.state.schemas import LoopState

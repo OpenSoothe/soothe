@@ -48,11 +48,11 @@ def __getattr__(name: str) -> Any:
 
         return EvidenceBundle
     if name == "GoalDirective":
-        from soothe_nano.protocols.planner import GoalDirective
+        from soothe_sdk.protocols.planner import GoalDirective
 
         return GoalDirective
     if name == "GoalReport":
-        from soothe_nano.protocols.planner import GoalReport
+        from soothe_sdk.protocols.planner import GoalReport
 
         return GoalReport
     if name == "AutopilotService":

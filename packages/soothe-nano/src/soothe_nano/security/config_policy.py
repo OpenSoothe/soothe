@@ -5,24 +5,23 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe_sdk.tools.metadata import (
-    extract_filesystem_path_for_policy,
-    get_tool_meta,
-    is_policy_filesystem_tool,
-)
-
-from soothe_nano.protocols.operation_security import (
+from soothe_sdk.protocols.operation_security import (
     OperationKind,
     OperationSecurityContext,
     OperationSecurityRequest,
 )
-from soothe_nano.protocols.policy import (
+from soothe_sdk.protocols.policy import (
     ActionRequest,
     Permission,
     PermissionSet,
     PolicyContext,
     PolicyDecision,
     PolicyProfile,
+)
+from soothe_sdk.tools.metadata import (
+    extract_filesystem_path_for_policy,
+    get_tool_meta,
+    is_policy_filesystem_tool,
 )
 
 from .operation_security import WorkspaceToolOperationSecurity

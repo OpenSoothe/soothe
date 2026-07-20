@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.config.models import (
     ExecutePromptLedgerConfig,

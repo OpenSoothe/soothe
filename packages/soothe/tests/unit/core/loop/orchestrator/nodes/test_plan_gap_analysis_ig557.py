@@ -5,8 +5,8 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe_nano.protocols.planner import PlanContext
 from soothe_nano.utils.llm.structured import StructuredOutputError
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.cognition.plan_step_safety import assess_respects_gap_analysis
 from soothe.foundation.sloop.orchestrator.nodes.bounded_evidence_gather import (

@@ -8,7 +8,7 @@ from soothe_nano.backends.durability.base import BasePersistStoreDurability
 from soothe_nano.backends.persistence.sqlite_store import SQLitePersistStore
 
 if TYPE_CHECKING:
-    from soothe_nano.protocols.persistence import AsyncPersistStore
+    from soothe_sdk.protocols.persistence import AsyncPersistStore
 
 
 class SQLiteDurability(BasePersistStoreDurability):

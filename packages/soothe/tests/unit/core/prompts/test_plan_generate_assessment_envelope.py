@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from langchain_core.messages import SystemMessage
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder

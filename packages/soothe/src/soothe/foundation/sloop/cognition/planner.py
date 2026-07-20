@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
 from pydantic import ValidationError
-from soothe_nano.protocols.planner import PlanContext
 from soothe_nano.utils.llm.invoke_policy import await_with_llm_call_policy
 from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat_typed
 from soothe_nano.utils.network_errors import calculate_network_backoff, is_transient_network_error
 from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
 from soothe_nano.utils.text_preview import create_output_summary, preview_first
 from soothe_nano.utils.token_counting import estimate_content_chars
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.config.models import LLMRateLimitConfig
 from soothe.foundation.sloop.cognition.plan_gap_wire import (

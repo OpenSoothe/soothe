@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode

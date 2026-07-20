@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 from soothe.foundation.sloop.intention.models import IntakeLabel

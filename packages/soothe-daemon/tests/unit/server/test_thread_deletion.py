@@ -16,7 +16,7 @@ class TestThreadDeletion:
         import shutil
 
         from soothe_nano.backends.durability.sqlite import SQLiteDurability
-        from soothe_nano.protocols.durability import ThreadMetadata
+        from soothe_sdk.protocols.durability import ThreadMetadata
 
         # Create a thread with artifacts
         thread_id = "test-thread-delete-123"

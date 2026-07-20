@@ -1472,7 +1472,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         from datetime import datetime, timedelta
 
-        from soothe_nano.protocols.durability import ThreadFilter
+        from soothe_sdk.protocols.durability import ThreadFilter
 
         # Get timeout from config (in hours)
         timeout_hours = self._config.agent.protocols.durability.thread_inactivity_timeout_hours

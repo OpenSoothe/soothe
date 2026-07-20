@@ -6,8 +6,16 @@ from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-from soothe_nano.protocols.concurrency import ConcurrencyPolicy
-from soothe_nano.utils.outcome_preview import planner_outcome_text_preview
+from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
+
+
+def planner_outcome_text_preview(outcome: dict[str, Any]) -> str | None:
+    """Resolve bounded planner-facing text from an RFC-211 outcome dict."""
+    for key in ("wave_join_preview", "task_return_preview", "output_summary"):
+        val = outcome.get(key)
+        if isinstance(val, str) and val.strip():
+            return val.strip()
+    return None
 
 
 class PlanStep(BaseModel):
@@ -17,7 +25,7 @@ class PlanStep(BaseModel):
         id: Unique step identifier.
         description: What this step should accomplish.
         execution_hint: Preferred execution method.
-        subagent: Delegate name when routing through a subagent (legacy ``LLMPlanner`` Plan path, IG-352).
+        subagent: Delegate name when routing through a subagent (legacy ``LLMPlanner`` Plan path).
         status: Current step status.
         result: Output from execution (set after completion).
         depends_on: IDs of steps that must complete before this one.
@@ -106,7 +114,10 @@ class StepResult(BaseModel):
             files = self.outcome.get("success_indicators", {}).get("files_found", 0)
             entities = self.outcome.get("entities", [])
             entity_preview = ", ".join(entities[:3]) if entities else "files"
-            return f"Step {self.step_id}: ✓ {tool_name} ({lines} lines, {files} files) - {entity_preview}"
+            return (
+                f"Step {self.step_id}: ✓ {tool_name} ({lines} lines, {files} files)"
+                f" - {entity_preview}"
+            )
         elif outcome_type == "web_search":
             results = self.outcome.get("success_indicators", {}).get("results_count", 0)
             return f"Step {self.step_id}: ✓ {tool_name} ({results} results)"
@@ -134,9 +145,9 @@ class PlanContext(BaseModel):
         recent_messages: Recent conversation messages for context.
         available_capabilities: Names of available tools and subagents.
         completed_steps: Results from already-completed steps.
-        routing_classification: Pre-computed routing classification (``RoutingClassification``; IG-383).
+        routing_classification: Pre-computed routing classification.
         workspace: Current workspace directory path.
-        working_memory_excerpt: Reserved; not embedded in Plan-phase human text (IG-371).
+        working_memory_excerpt: Reserved; not embedded in Plan-phase human text.
         thread_id: Daemon thread id for observability (Langfuse session on plan LLM calls).
     """
 

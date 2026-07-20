@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from langchain_core.language_models.chat_models import BaseChatModel
-    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+    from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
     from soothe.foundation.sloop.state.schemas import PlanResult

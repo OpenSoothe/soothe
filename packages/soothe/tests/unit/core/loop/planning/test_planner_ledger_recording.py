@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import
 from soothe.foundation.context.engine import ContextEngine

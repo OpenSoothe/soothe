@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
 from soothe.foundation.sloop.prompts import PromptBuilder

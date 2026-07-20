@@ -16,10 +16,11 @@ from soothe_nano.utils.text_preview import preview_first
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from soothe_sdk.protocols.memory import MemoryItem
+
     from soothe_nano.config import SootheConfig
     from soothe_nano.intention import RoutingClassification  # IG-226
     from soothe_nano.middleware._tool_context import ToolContextRegistry, ToolTriggerRegistry
-    from soothe_nano.protocols.memory import MemoryItem
 
 logger = logging.getLogger(__name__)
 

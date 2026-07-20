@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-from soothe_nano.protocols.vector_store import VectorRecord
+from soothe_sdk.protocols.vector_store import VectorRecord
 
 logger = logging.getLogger(__name__)
 

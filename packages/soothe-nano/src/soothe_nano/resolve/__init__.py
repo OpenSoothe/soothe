@@ -1,4 +1,4 @@
-"""Protocol, subagent, and tool resolution logic for create_soothe_agent.
+"""Protocol, subagent, and tool resolution logic for create_nano_agent.
 
 Protocol resolution (memory, planner, policy) lives here.
 Tool/subagent resolution is in ``_resolver_tools.py`` and infrastructure
@@ -22,10 +22,9 @@ from ._resolver_tools import (
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-
-    from soothe_nano.protocols.memory import MemoryProtocol
-    from soothe_nano.protocols.planner import PlannerProtocol
-    from soothe_nano.protocols.policy import PolicyProtocol
+    from soothe_sdk.protocols.memory import MemoryProtocol
+    from soothe_sdk.protocols.planner import PlannerProtocol
+    from soothe_sdk.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
 

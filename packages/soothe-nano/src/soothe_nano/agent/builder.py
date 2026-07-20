@@ -6,12 +6,13 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.protocols.core_agent import CoreAgentCapabilities
+
 from soothe_nano.agent.core_agent import CodingCoreAgent
 from soothe_nano.agent.execute_stream import ephemeral_execute_stream_enabled
 from soothe_nano.agent.subagent_catalog import partition_subagent_specs
 from soothe_nano.config import SootheConfig
 from soothe_nano.middleware import build_soothe_middleware_stack
-from soothe_nano.protocols.core_agent import CoreAgentCapabilities
 from soothe_nano.resolve import (
     resolve_memory,
     resolve_planner,
@@ -31,11 +32,11 @@ if TYPE_CHECKING:
     from soothe_deepagents.backends.protocol import BackendFactory, BackendProtocol
     from soothe_deepagents.middleware.filesystem import FsToolName
     from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
+    from soothe_sdk.protocols.memory import MemoryProtocol
+    from soothe_sdk.protocols.planner import PlannerProtocol
+    from soothe_sdk.protocols.policy import PolicyProtocol
 
     from soothe_nano.middleware.identity import IdentityRuntime
-    from soothe_nano.protocols.memory import MemoryProtocol
-    from soothe_nano.protocols.planner import PlannerProtocol
-    from soothe_nano.protocols.policy import PolicyProtocol
 
 from langchain_core.language_models import BaseChatModel  # noqa: E402
 
@@ -384,7 +385,7 @@ class AgentBuilder:
         )
 
 
-def create_soothe_agent(
+def create_nano_agent(
     config: SootheConfig | None = None,
     *,
     model: str | BaseChatModel | None = None,

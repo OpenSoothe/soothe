@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from soothe_sdk.protocols.persistence import AsyncPersistStore
+
 from soothe_nano.backends.durability.base import BasePersistStoreDurability
-from soothe_nano.protocols.persistence import AsyncPersistStore
 
 
 class PostgreSQLDurability(BasePersistStoreDurability):

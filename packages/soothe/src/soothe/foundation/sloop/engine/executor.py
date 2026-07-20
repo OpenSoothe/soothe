@@ -156,7 +156,7 @@ from soothe.foundation.sloop.utils.messages import (
 )
 
 if TYPE_CHECKING:
-    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+    from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
 

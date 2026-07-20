@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.protocols.planner import PlanContext, StepResult
 from soothe_nano.utils.text_preview import log_preview
+from soothe_sdk.protocols.planner import PlanContext, StepResult
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
@@ -38,7 +38,7 @@ from .anchor_manager import CheckpointAnchorManager
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+    from soothe_sdk.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
     from soothe.foundation.autopilot.engine.proposal_queue import ProposalQueue

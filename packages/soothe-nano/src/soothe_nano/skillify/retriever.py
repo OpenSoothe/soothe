@@ -7,7 +7,8 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+from soothe_sdk.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+
 from soothe_nano.utils.stream_normalize import extract_text_from_message_content
 
 from .models import SkillBundle, SkillRecord, SkillSearchResult
@@ -16,8 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from langchain_core.embeddings import Embeddings
-
-    from soothe_nano.protocols.vector_store import VectorStoreProtocol
+    from soothe_sdk.protocols.vector_store import VectorStoreProtocol
 
 logger = logging.getLogger(__name__)
 

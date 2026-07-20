@@ -109,7 +109,7 @@ def test_envelope_functions_do_not_embed_project_instructions() -> None:
 
 def test_plan_generate_context_without_project_instructions(tmp_path: Path) -> None:
     """plan-generate omits AGENT_INSTRUCTIONS in system and human messages."""
-    from soothe_nano.protocols.planner import PlanContext
+    from soothe_sdk.protocols.planner import PlanContext
 
     (tmp_path / "CLAUDE.md").write_text("Plan must follow CLAUDE rules\n", encoding="utf-8")
     state = LoopState(goal="plan me", thread_id="t1", max_iterations=5, workspace=str(tmp_path))

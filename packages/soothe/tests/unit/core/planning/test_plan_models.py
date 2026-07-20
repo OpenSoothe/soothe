@@ -1,7 +1,7 @@
 """Tests for plan models: StepReport, GoalReport, PlanStep (soothe.protocols.planner)."""
 
 import pytest
-from soothe_nano.protocols.planner import GoalReport, PlanStep, StepReport
+from soothe_sdk.protocols.planner import GoalReport, PlanStep, StepReport
 
 
 class TestStepReport:

@@ -752,7 +752,7 @@ class AutopilotService:
                 directives_data = data.get("goal_directives", [])
                 if directives_data:
                     try:
-                        from soothe_nano.protocols.planner import GoalDirective
+                        from soothe_sdk.protocols.planner import GoalDirective
 
                         directives = [GoalDirective(**d) for d in directives_data]
                         created_ids = await self._ce.apply_directives(

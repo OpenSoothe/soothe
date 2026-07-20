@@ -5,8 +5,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from soothe_sdk.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
+
 from soothe_nano.backends.persistence import AsyncPersistStore
-from soothe_nano.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 from soothe_nano.utils.thread_id import generate_thread_id
 
 

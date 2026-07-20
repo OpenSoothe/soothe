@@ -12,7 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult

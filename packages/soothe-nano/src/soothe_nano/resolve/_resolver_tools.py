@@ -1,4 +1,4 @@
-"""Tool, goal, and subagent resolution for create_soothe_agent.
+"""Tool, goal, and subagent resolution for create_nano_agent.
 
 Extracted from ``resolver.py`` to isolate tool/subagent wiring from
 protocol and infrastructure resolution.

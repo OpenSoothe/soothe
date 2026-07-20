@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from soothe_sdk.protocols.memory import MemoryItem as SootheMemoryItem
+from soothe_sdk.protocols.memory import MemoryProtocol
+
 from soothe_nano.backends.memory.memu.langchain_adapter import LangChainLLMAdapter
 from soothe_nano.backends.memory.memu.memory_store import MemuMemoryStore
 from soothe_nano.config import SOOTHE_HOME, SootheConfig
-from soothe_nano.protocols.memory import MemoryItem as SootheMemoryItem
-from soothe_nano.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
 

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe_nano.protocols.concurrency import ConcurrencyPolicy
+    from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
 
 logger = logging.getLogger(__name__)
 

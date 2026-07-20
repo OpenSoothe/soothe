@@ -11,9 +11,10 @@ import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from soothe_sdk.protocols.core_agent import CoreAgentCapabilities
+
 from soothe_nano.agent.execute_stream import ephemeral_execute_stream_enabled
 from soothe_nano.agent.subagent_catalog import spec_subagent_name
-from soothe_nano.protocols.core_agent import CoreAgentCapabilities
 from soothe_nano.utils.text_preview import log_preview
 
 if TYPE_CHECKING:

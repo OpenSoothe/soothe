@@ -9,7 +9,7 @@ import logging
 import re
 from typing import Any
 
-from soothe_nano.protocols.planner import Plan, PlanStep
+from soothe_sdk.protocols.planner import Plan, PlanStep
 
 logger = logging.getLogger(__name__)
 

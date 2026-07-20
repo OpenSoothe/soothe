@@ -6,12 +6,13 @@ import fnmatch
 import re
 from pathlib import Path
 
-from soothe_nano.protocols.operation_security import (
+from soothe_sdk.protocols.operation_security import (
     OperationSecurityContext,
     OperationSecurityDecision,
     OperationSecurityProtocol,
     OperationSecurityRequest,
 )
+
 from soothe_nano.utils import expand_path
 from soothe_nano.workspace.tool_path_resolution import (
     resolve_backend_os_path,

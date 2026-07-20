@@ -172,7 +172,7 @@ class TestSQLiteVecStoreUnit:
 
     def test_vector_protocols_runtime_checkable(self) -> None:
         """Test SQLiteVecStore is a VectorStoreProtocol at runtime."""
-        from soothe_nano.protocols.vector_store import VectorStoreProtocol
+        from soothe_sdk.protocols.vector_store import VectorStoreProtocol
 
         store = self._make_store()
         tmp_path = store._db_path

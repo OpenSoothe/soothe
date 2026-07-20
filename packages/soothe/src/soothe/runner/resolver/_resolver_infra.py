@@ -16,7 +16,7 @@ from soothe.config import SootheConfig
 
 if TYPE_CHECKING:
     from langgraph.types import Checkpointer
-    from soothe_nano.protocols.durability import DurabilityProtocol
+    from soothe_sdk.protocols.durability import DurabilityProtocol
 
 logger = logging.getLogger(__name__)
 

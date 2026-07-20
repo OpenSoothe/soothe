@@ -6,12 +6,12 @@ import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
-from soothe_nano.protocols.planner import Plan, PlanStep
 from soothe_nano.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
 from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
+from soothe_sdk.protocols.planner import Plan, PlanStep
 
 from soothe.config.models import StructuredPlanConfig
 from soothe.foundation.sloop.cognition.parser import parse_plan_from_text

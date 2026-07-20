@@ -28,8 +28,8 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.protocols.planner import Plan, PlannerProtocol
-from soothe_nano.protocols.policy import PolicyProtocol
+from soothe_sdk.protocols.planner import Plan, PlannerProtocol
+from soothe_sdk.protocols.policy import PolicyProtocol
 
 from soothe.config import SootheConfig
 from soothe.foundation.workspace import resolve_workspace_for_stream
@@ -50,8 +50,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from soothe_nano.middleware.identity import IdentityRuntime
-    from soothe_nano.protocols.core_agent import CoreAgentProtocol
-    from soothe_nano.protocols.memory import MemoryProtocol
+    from soothe_sdk.protocols.core_agent import CoreAgentProtocol
+    from soothe_sdk.protocols.memory import MemoryProtocol
 
     from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
 
@@ -93,7 +93,7 @@ class SootheRunner(
         """
         import time
 
-        from soothe_nano.protocols.concurrency import ConcurrencyPolicy
+        from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
 
         from soothe.foundation.coreagent import create_soothe_agent
         from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent

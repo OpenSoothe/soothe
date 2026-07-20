@@ -22,7 +22,7 @@ from soothe.foundation.sloop.prompts.planner_assembly import (
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from soothe_nano.protocols.planner import PlanContext
+    from soothe_sdk.protocols.planner import PlanContext
 
     from soothe.config import SootheConfig
     from soothe.foundation.context.projection import ContextBundle

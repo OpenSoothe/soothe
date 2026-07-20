@@ -27,7 +27,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from soothe_nano.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import PlanContext
 
 import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import at import time
 from soothe.foundation.sloop.prompts import PromptBuilder
