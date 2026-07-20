@@ -11,7 +11,7 @@ Use case: Full-featured agent capable of:
 - Delegating specialized tasks to subagents
 
 Run:
-    python examples/nano_agent/06_full_composition_example.py
+    python examples/nano_agent/05_nano_full_composition_example.py
 """
 
 import asyncio
@@ -132,7 +132,7 @@ async def demonstrate_full_agent(agent) -> None:
         thread_id="full-composition-3",
     )
 
-    # Query 4: Research task (uses web search tool if enabled)
+    # Query 4: Research task (uses configured search tooling if enabled)
     print("\n[Query 4] Research with tool")
     print("-" * 40)
     await stream_nano_agent(
@@ -145,15 +145,15 @@ async def demonstrate_full_agent(agent) -> None:
 async def main() -> None:
     """Run nano agent full composition example."""
     print("=" * 60)
-    print("Example 06: Nano Agent Full Composition")
+    print("Example 05: Nano Agent Full Composition")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
-    print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")
+    print(f"[Config] Memory enabled: {config.agent.protocols.memory.enabled}")
     print(
-        f"[Config] Tools: execution={config.tools.execution.enabled}, web_search={config.tools.web_search.enabled}"
+        f"[Config] Tools: execution={config.tools.execution.enabled}, wizsearch={config.tools.wizsearch.enabled}"
     )
 
     # Create nano agent with full composition

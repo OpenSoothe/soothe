@@ -8,7 +8,7 @@ This example demonstrates a nano agent WITH tools:
 Use case: Agent that can execute commands, read files, search web, etc.
 
 Run:
-    python examples/nano_agent/02_with_tools_example.py
+    python examples/nano_agent/02_nano_with_tools_example.py
 """
 
 import asyncio

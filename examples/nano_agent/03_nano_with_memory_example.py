@@ -10,7 +10,7 @@ Use case: Agent with persistent cross-thread memory for long-term knowledge
 retention and semantic retrieval.
 
 Run:
-    python examples/nano_agent/04_with_memory_example.py
+    python examples/nano_agent/03_nano_with_memory_example.py
 """
 
 import asyncio
@@ -119,13 +119,13 @@ async def demonstrate_memory_protocol(agent) -> None:
 async def main() -> None:
     """Run nano agent with memory example."""
     print("=" * 60)
-    print("Example 04: Nano Agent with Memory Protocol")
+    print("Example 03: Nano Agent with Memory Protocol")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
     config = load_example_config()
     print(f"\n[Config] Model: {config.router.default}")
-    print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")
+    print(f"[Config] Memory enabled: {config.agent.protocols.memory.enabled}")
 
     # Create nano agent with memory enabled (from config)
     agent = create_nano_agent(

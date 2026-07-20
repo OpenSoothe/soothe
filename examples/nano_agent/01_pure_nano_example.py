@@ -11,7 +11,7 @@ Just the raw LLM conversation capability.
 Use case: Simple chat or Q&A without any external integrations.
 
 Run:
-    python examples/nano_agent/01_pure_core_example.py
+    python examples/nano_agent/01_pure_nano_example.py
 """
 
 import asyncio

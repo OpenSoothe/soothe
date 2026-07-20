@@ -9,7 +9,7 @@ Use case: Agent that can delegate specialized tasks to expert subagents
 (filesystem search, planning, research, etc.)
 
 Run:
-    python examples/nano_agent/05_with_subagents_example.py
+    python examples/nano_agent/04_nano_with_subagents_example.py
 """
 
 import asyncio
@@ -30,7 +30,7 @@ load_dotenv()
 async def main() -> None:
     """Run nano agent with subagents example."""
     print("=" * 60)
-    print("Example 05: Nano Agent with Subagents")
+    print("Example 04: Nano Agent with Subagents")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
