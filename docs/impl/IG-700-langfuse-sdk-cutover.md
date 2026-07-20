@@ -33,7 +33,8 @@ Move shared Langfuse observability utilities out of `soothe-nano` and into `soot
 
 ## Verification
 
-- Run targeted Langfuse unit tests for `soothe-nano` and `soothe`.
+- Langfuse unit tests live under `packages/soothe-sdk/tests/unit/observability/`.
+- Host-specific Langfuse tests remain under `packages/soothe/tests/`.
 - Run final repository verification:
   - `./scripts/verify_finally.sh`
 
