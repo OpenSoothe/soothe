@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from soothe_sdk.observability.langfuse import (
     SootheLangfuse as _SdkSootheLangfuse,
+)
+from soothe_sdk.observability.langfuse import (
     merge_langfuse_runnable_config,
     resolve_langfuse_config_str,
 )
