@@ -13,11 +13,11 @@ import logging
 from typing import Any
 
 from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+from soothe.foundation.sloop.state.schemas import StatusAssessment
+from soothe.prompts.plan_ledger_projection import (
     _current_goal_has_execute_ledger,
     resolve_planner_projection_mode,
 )
-from soothe.foundation.sloop.state.schemas import StatusAssessment
 
 from ..runtime_context import LoopRuntimeContext
 

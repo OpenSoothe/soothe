@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field, model_validator
 
-from soothe.foundation.sloop.prompts.fragments import (
+from soothe.prompts.fragments import (
     SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT,
     SCENARIO_CLASSIFIER_USER_FRAGMENT,
 )

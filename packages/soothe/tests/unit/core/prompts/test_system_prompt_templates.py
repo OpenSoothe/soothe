@@ -11,12 +11,12 @@ def test_configuration_defaults():
 
 def test_prompt_templates_exist():
     """Test that all prompt templates are defined."""
-    from soothe.foundation.sloop.prompts import (
+    from soothe.prompts import (
         _DEFAULT_SYSTEM_PROMPT,
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
     )
-    from soothe.foundation.sloop.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
+    from soothe.prompts.fragments import ASSISTANT_IDENTITY_FRAGMENT
 
     # All templates should be non-empty strings
     assert isinstance(_SIMPLE_SYSTEM_PROMPT, str)
@@ -43,11 +43,11 @@ def test_token_reduction_estimates():
     config = SootheConfig()
 
     # Get prompts for each complexity
-    from soothe.foundation.sloop.prompts import (
+    from soothe.prompts import (
         _MEDIUM_SYSTEM_PROMPT,
         _SIMPLE_SYSTEM_PROMPT,
     )
-    from soothe.foundation.sloop.prompts.system_templates import (
+    from soothe.prompts.system_templates import (
         format_complex_agent_system_prompt_core,
     )
 
@@ -57,7 +57,7 @@ def test_token_reduction_estimates():
         config.agent.system_prompt,
         config.agent.name,
     )
-    from soothe.foundation.sloop.prompts.identity import build_assistant_identity_block
+    from soothe.prompts.identity import build_assistant_identity_block
 
     identity = build_assistant_identity_block(config.agent.name)
     simple_with_identity = f"{identity}\n\n{simple_prompt}"

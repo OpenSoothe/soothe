@@ -31,11 +31,6 @@ from soothe.foundation.sloop.orchestrator.routing import (
     route_by_intent,
 )
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-    _GOAL_COMPLETION_CONTEXT_BOUNDARY,
-    project_planner_ledger,
-    resolve_planner_projection_mode,
-)
 from soothe.foundation.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
@@ -49,6 +44,11 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.prompts.plan_ledger_projection import (
+    _GOAL_COMPLETION_CONTEXT_BOUNDARY,
+    project_planner_ledger,
+    resolve_planner_projection_mode,
+)
 
 
 def _multi_step_plan_result() -> PlanResult:

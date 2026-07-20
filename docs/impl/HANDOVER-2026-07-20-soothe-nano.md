@@ -65,6 +65,8 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 | Identity error hierarchy (RFC-307) | `soothe_sdk.identity.errors` (service remains `soothe.foundation.identity`) |
 | Base event classes / wire constants | `soothe_sdk.core.events` |
 | `extract_text_from_ai_message` | `soothe_sdk.display.text_extract` (`soothe.foundation` re-exports) |
+| CoreAgent system prompts / identity / context XML | `soothe_nano.prompts` (slim fragments: default/simple/medium + assistant_identity) |
+| Host loop / intake / plan / synthesis prompts | `soothe.prompts` (`foundation.sloop.prompts` is a shim) |
 | Loop-only protocols | `soothe.protocols` (thin) |
 | Host `create_soothe_agent` + planner injection | `soothe.foundation.coreagent.coding` |
 | Host config (`skillify:`, loop, autopilot, …) | `soothe.config` |
@@ -94,7 +96,7 @@ From IG-668 follow-ups and leftover polish:
 6. **Release skill / docs** — nano is listed as standalone; keep sdk/nano/plugins bumps intentional and separate from root `VERSION`.
 7. **Identity middleware host move** (optional) — `IdentityMiddleware` / `IdentityConfig` / `IdentityRuntime` still live in `soothe_nano.middleware.identity`; errors already in sdk. Moving middleware into soothe is a larger daemon/builder churn.
 
-**Done in boundary polish (2026-07-20):** identity errors → `soothe_sdk.identity`; deleted nano/soothe duplicate `base_events.py` (canonical `soothe_sdk.core.events`); `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`.
+**Done in boundary polish (2026-07-20):** identity errors → `soothe_sdk.identity`; deleted nano/soothe duplicate `base_events.py` (canonical `soothe_sdk.core.events`); `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`; nano prompts purified to CoreAgent-only; host loop prompts moved to `soothe.prompts`.
 
 ---
 

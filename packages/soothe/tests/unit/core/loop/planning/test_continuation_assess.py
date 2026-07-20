@@ -8,8 +8,8 @@ import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import ContinuationAssessment, LoopState
+from soothe.prompts import PromptBuilder
 
 
 def _make_planner() -> LLMPlanner:

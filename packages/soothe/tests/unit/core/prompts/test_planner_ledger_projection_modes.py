@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.prompts import PromptBuilder
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment, StepResult
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.prompts import PromptBuilder
+from soothe.prompts.plan_ledger_projection import (
     project_planner_ledger,
     resolve_planner_projection_mode,
 )
-from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment, StepResult
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_resolve_planner_projection_mode_new_goal() -> None:
@@ -44,7 +44,7 @@ def test_project_planner_ledger_mid_goal_isolates_prior_execute() -> None:
 
 def test_project_planner_ledger_surfaces_interrupted_goal_in_slice_a() -> None:
     """An interrupted goal's digest must be projected in Slice A (carried forward)."""
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         collect_cross_goal_completion_units,
     )
 
@@ -73,7 +73,7 @@ def test_project_planner_ledger_surfaces_interrupted_goal_in_slice_a() -> None:
 
 def test_interrupted_goal_bounds_segment_alone() -> None:
     """The interrupted goal's execute rows must not bleed into the new goal's segment."""
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         _current_goal_segment_start,
     )
 
@@ -92,7 +92,7 @@ def test_interrupted_goal_bounds_segment_alone() -> None:
 
 def test_completion_and_interrupted_units_both_collected() -> None:
     """A completed goal then an interrupted goal both surface in Slice A."""
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         collect_cross_goal_completion_units,
     )
 
@@ -114,7 +114,7 @@ def test_completion_and_interrupted_units_both_collected() -> None:
 
 def test_intake_projection_excludes_interrupted_units() -> None:
     """Intake classify must NOT see interrupted digests (completion-only)."""
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         project_last_goal_completion_for_intake,
     )
 

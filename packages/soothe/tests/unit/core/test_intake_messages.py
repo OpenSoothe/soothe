@@ -84,7 +84,7 @@ class TestIntakePriorGoalProjection:
     """Prior goal completion projection for intake classify."""
 
     def test_projects_last_goal_completion_pair(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             _GOAL_COMPLETION_CONTEXT_BOUNDARY,
             project_last_goal_completion_for_intake,
         )
@@ -104,7 +104,7 @@ class TestIntakePriorGoalProjection:
 
     def test_intake_pass2_omits_boundary_marker(self) -> None:
         """IG-555: Intake Pass 2 projection omits boundary (classifier needs prior scope)."""
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             _GOAL_COMPLETION_CONTEXT_BOUNDARY,
             project_last_goal_completion_for_intake,
         )
@@ -123,7 +123,7 @@ class TestIntakePriorGoalProjection:
         assert projected[-1].content == "synthesized report"
 
     def test_prefers_latest_goal_completion_before_trailing_plan_rows(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
@@ -140,7 +140,7 @@ class TestIntakePriorGoalProjection:
         assert projected[-1].content == "latest report"
 
     def test_returns_empty_when_no_goal_completion_unit(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
@@ -154,7 +154,7 @@ class TestIntakePriorGoalProjection:
         assert projected == []
 
     def test_goal_completion_unit_projects_for_intake(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
@@ -167,7 +167,7 @@ class TestIntakePriorGoalProjection:
         assert projected[-1].content == "It is 3 PM."
 
     def test_no_legacy_phase_fallback_when_no_goal_completion(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
@@ -179,7 +179,7 @@ class TestIntakePriorGoalProjection:
         assert projected == []
 
     def test_empty_ledger_projects_nothing(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_last_goal_completion_for_intake,
         )
 
@@ -190,7 +190,7 @@ class TestIntentClassifyLedgerProjection:
     """Intent-classify humans use GOAL RECAP in plan ledger projection (D1)."""
 
     def test_project_loop_messages_rewrites_intent_classify_goal(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_loop_messages_for_plan,
         )
 
@@ -212,7 +212,7 @@ class TestIntentClassifyLedgerProjection:
         assert projected[1] is ledger[1]
 
     def test_project_planner_ledger_new_goal_includes_compacted_intent_classify(self) -> None:
-        from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+        from soothe.prompts.plan_ledger_projection import (
             project_planner_ledger,
         )
 

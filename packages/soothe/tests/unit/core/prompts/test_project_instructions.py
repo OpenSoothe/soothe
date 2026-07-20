@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import LoopState
+from soothe.prompts import PromptBuilder
 
 
 def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts.project_instructions import (
         load_agent_instructions,
     )
 
@@ -24,7 +24,7 @@ def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
 
 
 def test_load_agent_instructions_reads_first_500_lines(tmp_path: Path) -> None:
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts.project_instructions import (
         load_agent_instructions,
     )
 
@@ -48,7 +48,7 @@ def test_load_agent_instructions_reads_first_500_lines(tmp_path: Path) -> None:
 
 def test_load_agent_instructions_claude_fallback(tmp_path: Path) -> None:
     """CLAUDE.md fallback: 600 lines fits under 25K headline cap but trips line cap."""
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts.project_instructions import (
         load_agent_instructions,
     )
 
@@ -74,7 +74,7 @@ def test_load_agent_instructions_claude_fallback(tmp_path: Path) -> None:
 
 
 def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts.project_instructions import (
         load_agent_instructions,
     )
 
@@ -90,7 +90,7 @@ def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
 
 def test_envelope_functions_do_not_embed_project_instructions() -> None:
     """Envelope builders no longer embed project_instructions (moved to system prompt)."""
-    from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
+    from soothe.prompts.user_message import UserMessageBuilder
 
     # Envelope functions don't have project_instructions parameter anymore
     builder = UserMessageBuilder()
@@ -161,7 +161,7 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
 
 def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
     """Files under the headline cap inline verbatim with no read_file hint."""
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts.project_instructions import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
         load_agent_instructions,
     )
@@ -179,7 +179,7 @@ def test_inlines_small_agents_md_fully(tmp_path: Path) -> None:
 
 def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
     """Files above the headline cap emit a paragraph-clean prefix + read_file hint."""
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts.project_instructions import (
         PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
         load_agent_instructions,
     )
@@ -210,8 +210,8 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
 
 def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
     """Second load with unchanged mtime hits the cache; no second disk read."""
-    from soothe.foundation.sloop.prompts import project_instructions
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts import project_instructions
+    from soothe.prompts.project_instructions import (
         load_agent_instructions,
     )
 
@@ -238,8 +238,8 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
     """Editing the file (advancing mtime) returns updated content on next load."""
     import os
 
-    from soothe.foundation.sloop.prompts import project_instructions
-    from soothe.foundation.sloop.prompts.project_instructions import (
+    from soothe.prompts import project_instructions
+    from soothe.prompts.project_instructions import (
         load_agent_instructions,
     )
 

@@ -1,9 +1,0 @@
-GOAL: {goal}
-INTENT: {intent_type} (complexity: {task_complexity})
-
-EXECUTION SUMMARY:
-- Total steps: {total_steps}
-- Successful: {successful_steps}
-- Step types: {step_types}
-- Tools used: {tools_used}
-- Evidence volume: {evidence_volume} chars

@@ -1,6 +1,0 @@
-<PROMPT_TIMESTAMP>
-Current local date: {current_date}
-Current local time: {current_time}
-Timezone: {schedule_timezone}
-When answering date or time questions, use these values — not your training cutoff.
-</PROMPT_TIMESTAMP>

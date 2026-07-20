@@ -161,5 +161,6 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 - Optional: remove leftover package-level lazy `__getattr__` bridges once call sites are fully on nano
 - Done: Skillify service moved to `soothe_daemon.skillify`; DTOs in `soothe_sdk.skillify`; nano progressive search is substring-only
 - Done: identity errors → `soothe_sdk.identity.errors`; base events consolidated on `soothe_sdk.core.events`; `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`
+- Done: nano `prompts/` CoreAgent-only; host loop/intake/plan prompts live under `soothe.prompts`
 - Optional later: move `IdentityMiddleware` / runtime out of nano into soothe
 - Session handover (next agent): [HANDOVER-2026-07-20-soothe-nano.md](HANDOVER-2026-07-20-soothe-nano.md)

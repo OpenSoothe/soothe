@@ -17,8 +17,6 @@ from soothe.foundation.sloop.orchestrator.nodes.plan_gap_analysis import (
 )
 from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.prompts import PromptBuilder
-from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.sloop.state.schemas import (
     GoalComponentStatus,
     LoopState,
@@ -26,6 +24,8 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
     StepResult,
 )
+from soothe.prompts import PromptBuilder
+from soothe.prompts.user_message import UserMessageBuilder
 
 
 def test_should_skip_gap_at_iter0_without_execution() -> None:

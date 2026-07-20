@@ -13,13 +13,13 @@ from soothe.foundation.sloop.intention.prompts import (
     INTAKE_PASS2_HUMAN_TASK,
     INTAKE_PASS2_SYSTEM_PROMPT,
 )
-from soothe.foundation.sloop.prompts.fragments import (
+from soothe.prompts.fragments import (
     EXECUTION_POLICIES_FRAGMENT,
     PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
     PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
     PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
 )
-from soothe.foundation.sloop.prompts.system_templates import (
+from soothe.prompts.system_templates import (
     _TOOL_ORCHESTRATION_GUIDE,
     EXECUTE_WORKSPACE_RULES_FRAGMENT,
     RESPONSE_LANGUAGE_HINT_FALLBACK,
@@ -29,13 +29,7 @@ from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 _INTERNAL_TERM_RE = re.compile(r"\b(?:IG|RFC)-\d+\b", re.IGNORECASE)
 
 _FRAGMENTS_DIR = (
-    Path(__file__).resolve().parents[4]
-    / "src"
-    / "soothe"
-    / "foundation"
-    / "sloop"
-    / "prompts"
-    / "fragments"
+    Path(__file__).resolve().parents[4] / "src" / "soothe" / "prompts" / "fragments"
 )
 
 

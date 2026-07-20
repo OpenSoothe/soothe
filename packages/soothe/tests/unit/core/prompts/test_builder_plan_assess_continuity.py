@@ -10,9 +10,9 @@ from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.models import GoalNode
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
 from soothe.foundation.context.projection import ContextBundle
-from soothe.foundation.sloop.prompts import PromptBuilder
-from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment
+from soothe.prompts import PromptBuilder
+from soothe.prompts.user_message import UserMessageBuilder
 
 
 def test_previous_assessment_rendered_from_ce_goal() -> None:

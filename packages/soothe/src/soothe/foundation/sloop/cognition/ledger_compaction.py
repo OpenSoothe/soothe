@@ -48,7 +48,7 @@ def compact_execute_human_content(step: Any, *, envelope: str = "") -> str:
     SKILL CONTEXT, INSTRUCTIONS, EXECUTION METADATA) and predecessor context (projected separately
     into CoreAgent input) are omitted.
     """
-    from soothe.foundation.sloop.prompts.user_message import (
+    from soothe.prompts.user_message import (
         EXECUTION_TASK_LABEL,
         flatten_user_message_content,
     )

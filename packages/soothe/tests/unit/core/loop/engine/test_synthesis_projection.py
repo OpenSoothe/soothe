@@ -10,9 +10,9 @@ from soothe.foundation.sloop.engine.synthesis_projection import (
     flatten_execute_human_content,
     render_synthesis_system_prompt,
 )
-from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.prompts.user_message import UserMessageBuilder
 
 
 def test_flatten_execute_envelope_extracts_goal() -> None:

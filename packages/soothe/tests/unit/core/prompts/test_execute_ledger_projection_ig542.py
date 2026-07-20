@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.prompts.plan_ledger_projection import (
     collect_cross_goal_completion_units,
     project_cross_goal_completion_tail,
     project_execute_step_graph_input,
     resolve_execute_projection_mode,
 )
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_resolve_execute_projection_mode_goal_boundary() -> None:
@@ -236,7 +236,7 @@ def test_project_execute_step_graph_input_predecessor_false_when_ledger_empty() 
 
 
 def test_execute_step_ids_subsumed_by_cross_goal_completion() -> None:
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         execute_step_ids_subsumed_by_cross_goal_completion,
     )
 

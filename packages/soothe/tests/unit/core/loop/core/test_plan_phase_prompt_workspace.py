@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 from langchain_core.messages import SystemMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.prompts import PromptBuilder
 
 
 def test_build_loop_plan_messages_with_config_omits_workspace_blocks() -> None:

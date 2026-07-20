@@ -1,19 +1,31 @@
-"""System prompt templates for Coding CoreAgent (defaults and tool guides).
+"""System prompt templates for Soothe agents (CoreAgent defaults and tool guides).
 
-Static system prompt bodies live as ``.xml`` fragments under
-``soothe_nano.prompts.fragments``; this module composes them with the
-in-process tool/subagent guides into the final templates.
+Moved from ``soothe.config.prompts`` (IG-384); imported by config package for re-exports.
 
-Host loop plan/classifier templates live under ``soothe.prompts``.
+Static prose (system prompts and scenario response guides) lives as ``.xml``
+fragments under ``soothe.prompts.fragments``. CoreAgent defaults also live in
+``soothe_nano.prompts``; this host module composes loop-facing templates.
 """
 
 from __future__ import annotations
 
-from soothe_nano.prompts.fragments import (
+from soothe.prompts.fragments import (
+    ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT,
     DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
+    LOOP_CONTINUATION_GUIDE_FRAGMENT,
     MEDIUM_SYSTEM_PROMPT_FRAGMENT,
+    RESEARCH_SYNTHESIS_GUIDE_FRAGMENT,
     SIMPLE_SYSTEM_PROMPT_FRAGMENT,
 )
+
+# ---------------------------------------------------------------------------
+# Scenario-specific guides (IG-268: Intelligent response length control)
+# Sourced from prompts/fragments/system/response_guides/*.xml.
+# ---------------------------------------------------------------------------
+
+_ARCHITECTURE_ANALYSIS_GUIDE = ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT
+_RESEARCH_SYNTHESIS_GUIDE = RESEARCH_SYNTHESIS_GUIDE_FRAGMENT
+_LOOP_CONTINUATION_GUIDE = LOOP_CONTINUATION_GUIDE_FRAGMENT
 
 # ---------------------------------------------------------------------------
 # Domain-scoped tool guides (RFC-0016)
@@ -156,16 +168,26 @@ _RESPONSE_LANGUAGE_DISPLAY: dict[str, str] = {
 
 
 def build_response_language_hint(language: object | None) -> str:
-    """Build explicit or fallback ``RESPONSE_LANGUAGE_HINT`` for system prompts."""
-    if language is None:
+    """Build explicit or fallback ``RESPONSE_LANGUAGE_HINT`` for system prompts.
+
+    Args:
+        language: ``ResponseLanguage`` or wire string (``en``, ``zh``, etc.).
+
+    Returns:
+        XML fragment instructing the model which language to use for user-facing prose.
+    """
+    from soothe.foundation.sloop.intention.models import (
+        ResponseLanguage,
+        normalize_response_language,
+    )
+
+    resolved = normalize_response_language(language)
+    if resolved is None or resolved == ResponseLanguage.OTHER:
         return RESPONSE_LANGUAGE_HINT_FALLBACK
-    text = str(language).strip().lower()
-    if not text or text == "other":
-        return RESPONSE_LANGUAGE_HINT_FALLBACK
-    display = _RESPONSE_LANGUAGE_DISPLAY.get(text, text)
+    display = _RESPONSE_LANGUAGE_DISPLAY.get(resolved.value, resolved.value)
     return (
         f"<RESPONSE_LANGUAGE_HINT>\n"
-        f"Write all user-facing prose in {display} ({text}). "
+        f"Write all user-facing prose in {display} ({resolved.value}). "
         f"Keep code, file paths, identifiers, and quoted literals unchanged.\n"
         f"</RESPONSE_LANGUAGE_HINT>"
     )

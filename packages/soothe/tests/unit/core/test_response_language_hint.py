@@ -1,7 +1,7 @@
 """Tests for dynamic response-language hint builder."""
 
 from soothe.foundation.sloop.intention.models import ResponseLanguage
-from soothe.foundation.sloop.prompts.system_templates import (
+from soothe.prompts.system_templates import (
     RESPONSE_LANGUAGE_HINT_FALLBACK,
     build_response_language_hint,
 )

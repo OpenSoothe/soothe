@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_CLASSIFIER_FRAGMENTS_DIR = (
-    Path(__file__).resolve().parent.parent / "prompts" / "fragments" / "classifiers"
-)
+import soothe.prompts.fragments as _prompt_fragments
+
+_CLASSIFIER_FRAGMENTS_DIR = Path(_prompt_fragments.__file__).resolve().parent / "classifiers"
 
 
 def _read_classifier_fragment(name: str) -> str:
@@ -21,7 +21,7 @@ def build_prompt_timestamp_block() -> str:
     """Build the live ``<PROMPT_TIMESTAMP>`` block for LLM system prompts."""
     from soothe_nano.utils.prompt_clock import prompt_datetime_context
 
-    from soothe.foundation.sloop.prompts.fragments import PROMPT_TIMESTAMP_FRAGMENT
+    from soothe.prompts.fragments import PROMPT_TIMESTAMP_FRAGMENT
 
     return PROMPT_TIMESTAMP_FRAGMENT.format(**prompt_datetime_context()).strip()
 
@@ -63,7 +63,7 @@ def build_intake_pass1_system_prompt(body: str, assistant_name: str) -> str:
     """Assemble Pass 1 system prompt with identity and live timestamp at the tail."""
     from soothe_nano.utils.prompt_clock import prompt_datetime_context
 
-    from soothe.foundation.sloop.prompts.identity import (
+    from soothe.prompts.identity import (
         build_assistant_identity_block,
         normalize_assistant_name,
     )

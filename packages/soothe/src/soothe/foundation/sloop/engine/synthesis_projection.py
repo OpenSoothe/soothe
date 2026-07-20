@@ -16,14 +16,14 @@ from soothe.foundation.sloop.engine.scenario_classifier import (
     ScenarioClassification,
     format_hint_for_scenario,
 )
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.prompts.plan_ledger_projection import (
     project_loop_messages_for_synthesis,
 )
-from soothe.foundation.sloop.prompts.user_message import (
+from soothe.prompts.user_message import (
     _goal_text,
     flatten_user_message_content,
 )
-from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from soothe.config.models import PlanPromptLedgerConfig
@@ -60,9 +60,9 @@ def render_synthesis_system_prompt(
     response_language: object | None = None,
 ) -> str:
     """Render system instructions from the synthesis template (no orchestration terms)."""
-    from soothe.foundation.sloop.prompts.loader import load_prompt_fragment
-    from soothe.foundation.sloop.prompts.project_instructions import load_agent_instructions
-    from soothe.foundation.sloop.prompts.system_templates import (
+    from soothe.prompts.loader import load_prompt_fragment
+    from soothe.prompts.project_instructions import load_agent_instructions
+    from soothe.prompts.system_templates import (
         build_response_language_hint,
         build_timestamp_xml_footer,
     )
@@ -101,7 +101,7 @@ def build_synthesis_messages(
     agent_instructions_max_chars: int = 8000,
 ) -> list[BaseMessage]:
     """Assemble system + execute ledger + TASK human for goal-completion synthesis."""
-    from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
+    from soothe.prompts.user_message import UserMessageBuilder
 
     user_goal = normalize_user_query(user_query if user_query is not None else state.goal)
     system_text = render_synthesis_system_prompt(

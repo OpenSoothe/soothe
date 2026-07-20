@@ -7,12 +7,6 @@ from types import SimpleNamespace
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
-from soothe.foundation.sloop.prompts import PromptBuilder
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
-    project_planner_ledger,
-    project_planner_ledger_for_assess,
-)
-from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.sloop.state.schemas import (
     AgentDecision,
     LoopState,
@@ -20,12 +14,18 @@ from soothe.foundation.sloop.state.schemas import (
     StepResult,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.prompts import PromptBuilder
+from soothe.prompts.plan_ledger_projection import (
+    project_planner_ledger,
+    project_planner_ledger_for_assess,
+)
+from soothe.prompts.user_message import UserMessageBuilder
 
 
 def test_assess_execute_ai_compaction_keeps_head_and_tail() -> None:
     """Oversized execute AI must keep deliverable head + closing tail (not tail-only)."""
     from soothe.config.models import PlanAssessPromptConfig
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         _compact_execute_ai_for_assess,
     )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.prompts.identity import (
+from soothe.prompts.identity import (
     build_assistant_identity_block,
     normalize_assistant_name,
     prepend_assistant_identity,

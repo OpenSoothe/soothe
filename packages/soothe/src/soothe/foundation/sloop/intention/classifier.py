@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import BaseMessage
 
 from soothe.foundation.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
-from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+from soothe.prompts.plan_ledger_projection import (
     project_last_goal_completion_for_intake,
 )
 

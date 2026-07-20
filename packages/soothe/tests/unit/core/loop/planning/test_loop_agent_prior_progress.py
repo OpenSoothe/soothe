@@ -16,12 +16,12 @@ from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.engine.executor import Executor
 from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult
-from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import (
     LoopState,
     StepAction,
     StepResult,
 )
+from soothe.prompts import PromptBuilder
 
 
 def _mock_context_engine() -> MagicMock:

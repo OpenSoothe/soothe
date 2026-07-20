@@ -63,7 +63,7 @@ async def parse_plan_structured(
     from langchain_core.messages import HumanMessage
     from soothe_nano.utils.observability.langfuse import SootheLangfuse
 
-    from soothe.foundation.sloop.prompts.fragments import STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT
+    from soothe.prompts.fragments import STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT
 
     prompt = STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT.format(
         goal=goal,

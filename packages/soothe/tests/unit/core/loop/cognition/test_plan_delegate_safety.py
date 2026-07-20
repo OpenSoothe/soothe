@@ -78,7 +78,7 @@ def test_resolve_user_requested_wire_subagent_from_slash_routing() -> None:
 
 
 def test_build_plan_generate_message_includes_subagent_routing_block() -> None:
-    from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
+    from soothe.prompts.user_message import UserMessageBuilder
 
     msg = UserMessageBuilder().build_plan_generate_message(
         "analyze local repo",

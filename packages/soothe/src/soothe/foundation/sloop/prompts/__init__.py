@@ -1,51 +1,23 @@
-"""Soothe prompt construction module."""
+"""Compatibility shim — host prompts live in ``soothe.prompts``.
 
-from .builder import PromptBuilder
-from .context_xml import (
-    build_context_sections_for_complexity,
-    build_soothe_environment_section,
-    build_soothe_workspace_section,
-)
-from .plan_ledger_projection import (
-    project_loop_messages_for_core_agent,
-    project_loop_messages_for_plan,
-)
-from .system_templates import (
-    _DATA_GUIDE,
-    _DEFAULT_SYSTEM_PROMPT,
-    _FILE_OPS_GUIDE,
-    _MEDIUM_SYSTEM_PROMPT,
-    _RESEARCH_GUIDE,
-    _SHELL_GUIDE,
-    _SIMPLE_SYSTEM_PROMPT,
-    _SUBAGENT_GUIDE,
-    _TOOL_ORCHESTRATION_GUIDE,
-    RESPONSE_LANGUAGE_HINT_FALLBACK,
-    build_response_language_hint,
-)
-from .user_message import (
-    UserMessageBuilder,
-    flatten_user_message_content,
-)
+Import from ``soothe.prompts`` (or submodules) in new code.
+"""
 
-__all__ = [
-    "PromptBuilder",
-    "RESPONSE_LANGUAGE_HINT_FALLBACK",
-    "UserMessageBuilder",
-    "build_response_language_hint",
-    "_DATA_GUIDE",
-    "_DEFAULT_SYSTEM_PROMPT",
-    "_FILE_OPS_GUIDE",
-    "_MEDIUM_SYSTEM_PROMPT",
-    "_RESEARCH_GUIDE",
-    "_SHELL_GUIDE",
-    "_SIMPLE_SYSTEM_PROMPT",
-    "_SUBAGENT_GUIDE",
-    "_TOOL_ORCHESTRATION_GUIDE",
-    "build_context_sections_for_complexity",
-    "build_soothe_environment_section",
-    "build_soothe_workspace_section",
-    "flatten_user_message_content",
-    "project_loop_messages_for_core_agent",
-    "project_loop_messages_for_plan",
-]
+from __future__ import annotations
+
+from typing import Any
+
+from soothe.prompts import *  # noqa: F403
+from soothe.prompts import __all__ as __all__  # noqa: F401
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy-load submodule attributes for ``from soothe.foundation.sloop.prompts.X``."""
+    import importlib
+
+    if name.startswith("_"):
+        raise AttributeError(name)
+    try:
+        return importlib.import_module(f"soothe.prompts.{name}")
+    except ModuleNotFoundError as exc:
+        raise AttributeError(name) from exc

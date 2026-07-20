@@ -6,7 +6,7 @@ from __future__ import annotations
 # resolves cleanly during standalone collection (otherwise loading
 # soothe.core.prompts triggers a circular import via soothe.config).
 import soothe.foundation.sloop.state.schemas  # noqa: F401
-from soothe.foundation.sloop.prompts.fragments import PLAN_ASSESS_INSTRUCTIONS_FRAGMENT
+from soothe.prompts.fragments import PLAN_ASSESS_INSTRUCTIONS_FRAGMENT
 
 _FRAGMENT_TEXT = PLAN_ASSESS_INSTRUCTIONS_FRAGMENT
 

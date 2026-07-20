@@ -261,8 +261,8 @@ class TestPromptBuilderContextBundle:
         """When context_bundle is None, behavior is unchanged."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
+        from soothe.prompts.builder import PromptBuilder
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -279,8 +279,8 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects memory instructions into system (not agent/project rules)."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
+        from soothe.prompts.builder import PromptBuilder
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -310,8 +310,8 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects goal/step lineage into generate human (not assess)."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
+        from soothe.prompts.builder import PromptBuilder
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -349,8 +349,8 @@ class TestPromptBuilderContextBundle:
         """GOAL LINEAGE matching GOAL alone is not injected."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
+        from soothe.prompts.builder import PromptBuilder
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -373,8 +373,8 @@ class TestPromptBuilderContextBundle:
         """Empty ContextBundle fields are not injected."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.prompts.builder import PromptBuilder
         from soothe.foundation.sloop.state.schemas import LoopState
+        from soothe.prompts.builder import PromptBuilder
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")

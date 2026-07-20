@@ -11,8 +11,8 @@ from soothe.foundation.sloop.engine.step_predecessor_context import (
     ExecuteStepEnvelopeBody,
     build_dependent_execution_hints,
 )
-from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.sloop.state.schemas import StepAction
+from soothe.prompts.user_message import UserMessageBuilder
 
 
 def _envelope_body(*, subagent: str | None, expected_output: str | None) -> ExecuteStepEnvelopeBody:

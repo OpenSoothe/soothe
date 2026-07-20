@@ -378,7 +378,7 @@ def assess_may_route_complete(
     if intake_label != IntakeLabel.COMPLEX:
         return True
 
-    from soothe.foundation.sloop.prompts.plan_ledger_projection import (
+    from soothe.prompts.plan_ledger_projection import (
         _current_goal_has_execute_ledger,
     )
 

@@ -1,15 +1,54 @@
-"""Soothe prompts: L2 user_message + CoreAgent templates from nano."""
+"""Host prompt construction (loop planner, envelopes, classifiers).
 
-from __future__ import annotations
+CoreAgent system templates live in ``soothe_nano.prompts``.
+"""
 
-from typing import Any
+from .builder import PromptBuilder
+from .context_xml import (
+    build_context_sections_for_complexity,
+    build_soothe_environment_section,
+    build_soothe_workspace_section,
+)
+from .plan_ledger_projection import (
+    project_loop_messages_for_core_agent,
+    project_loop_messages_for_plan,
+)
+from .system_templates import (
+    _DATA_GUIDE,
+    _DEFAULT_SYSTEM_PROMPT,
+    _FILE_OPS_GUIDE,
+    _MEDIUM_SYSTEM_PROMPT,
+    _RESEARCH_GUIDE,
+    _SHELL_GUIDE,
+    _SIMPLE_SYSTEM_PROMPT,
+    _SUBAGENT_GUIDE,
+    _TOOL_ORCHESTRATION_GUIDE,
+    RESPONSE_LANGUAGE_HINT_FALLBACK,
+    build_response_language_hint,
+)
+from .user_message import (
+    UserMessageBuilder,
+    flatten_user_message_content,
+)
 
-from soothe.prompts.user_message import *  # noqa: F403
-
-__all__ = [n for n in globals() if not n.startswith("_")]
-
-
-def __getattr__(name: str) -> Any:
-    from importlib import import_module
-
-    return getattr(import_module("soothe_nano.prompts"), name)
+__all__ = [
+    "PromptBuilder",
+    "RESPONSE_LANGUAGE_HINT_FALLBACK",
+    "UserMessageBuilder",
+    "build_response_language_hint",
+    "_DATA_GUIDE",
+    "_DEFAULT_SYSTEM_PROMPT",
+    "_FILE_OPS_GUIDE",
+    "_MEDIUM_SYSTEM_PROMPT",
+    "_RESEARCH_GUIDE",
+    "_SHELL_GUIDE",
+    "_SIMPLE_SYSTEM_PROMPT",
+    "_SUBAGENT_GUIDE",
+    "_TOOL_ORCHESTRATION_GUIDE",
+    "build_context_sections_for_complexity",
+    "build_soothe_environment_section",
+    "build_soothe_workspace_section",
+    "flatten_user_message_content",
+    "project_loop_messages_for_core_agent",
+    "project_loop_messages_for_plan",
+]

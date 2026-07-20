@@ -139,7 +139,7 @@ def build_prior_steps_summary_block(
     evidence_in_ledger: bool = True,
 ) -> str:
     """Render transitive predecessor steps for the execute-step human envelope."""
-    from soothe.foundation.sloop.prompts.user_message import render_prior_steps_tree
+    from soothe.prompts.user_message import render_prior_steps_tree
 
     summaries = build_prior_steps_summaries(step, decision, loop_state)
     return render_prior_steps_tree(summaries, evidence_in_ledger=evidence_in_ledger)

@@ -807,7 +807,7 @@ class TestStepPlanManagerAdapter:
 
     def test_format_dag_context_produces_text(self) -> None:
         """Verify the DagPlanningContext from adapter works with _format_dag_context."""
-        from soothe.foundation.sloop.prompts.builder import _format_dag_context
+        from soothe.prompts.builder import _format_dag_context
 
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")
@@ -824,7 +824,7 @@ class TestStepPlanManagerAdapter:
         assert "KFA-02" in text
 
     def test_format_dag_context_empty_when_no_prior_state(self) -> None:
-        from soothe.foundation.sloop.prompts.builder import _format_dag_context
+        from soothe.prompts.builder import _format_dag_context
 
         ce = ContextEngine()
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id="")

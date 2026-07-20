@@ -885,9 +885,9 @@ def test_execute_step_has_workspace_tail_plan_generate_does_not(tmp_path) -> Non
     """Workspace blocks are execute-step only; plan-generate stays lean."""
     from soothe_sdk.protocols.planner import PlanContext
 
-    from soothe.foundation.sloop.prompts import PromptBuilder
     from soothe.foundation.sloop.state.schemas import LoopState
     from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+    from soothe.prompts import PromptBuilder
 
     (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
     ws = str(tmp_path)
