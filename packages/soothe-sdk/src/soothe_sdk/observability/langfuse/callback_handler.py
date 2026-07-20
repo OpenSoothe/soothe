@@ -1,8 +1,4 @@
-"""Langfuse LangChain callback that preserves CoreAgent system prompts on generations (IG-385).
-
-Also ensures structured output (tool_calls) is properly captured for Langfuse traces
-when using `with_structured_output` with OpenAI-compatible providers.
-"""
+"""Langfuse LangChain callback with system-prompt and structured-output fixes."""
 
 from __future__ import annotations
 
@@ -13,7 +9,6 @@ from uuid import UUID
 
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 
-# Optional dependency - langfuse may not be installed
 try:
     from langfuse.langchain import CallbackHandler as LangfuseCallbackHandler
 
@@ -22,31 +17,18 @@ except ImportError:
     LangfuseCallbackHandler = None  # type: ignore[misc,assignment]
     LANGFUSE_AVAILABLE = False
 
-from soothe_nano.utils.observability.langfuse_system_hint import get_langfuse_system_prompt_hint
+from soothe_sdk.observability.langfuse.system_hint import get_langfuse_system_prompt_hint
 
 logger = logging.getLogger(__name__)
 
 
 def _extract_structured_output_from_message(message: AIMessage) -> dict[str, Any] | None:
-    """Extract structured output from AIMessage for Langfuse generation output.
-
-    When models return structured output via tool calling, the JSON is in `tool_calls`
-    while `content` may be empty or contain thinking text. This ensures Langfuse
-    captures the actual structured response.
-
-    Args:
-        message: AIMessage from LLM response.
-
-    Returns:
-        Dict with tool_calls for structured output, or None if no tool_calls.
-    """
+    """Extract structured output from AIMessage for Langfuse generation output."""
     if not hasattr(message, "tool_calls") or not message.tool_calls:
         return None
 
-    # Format tool_calls for Langfuse (matches their expected structure)
     tool_calls_data = []
     for tc in message.tool_calls:
-        # Tool call format: {"name": "...", "args": {...}, "id": "..."}
         tool_calls_data.append(
             {
                 "name": tc.get("name", ""),
@@ -62,19 +44,11 @@ def _extract_structured_output_from_message(message: AIMessage) -> dict[str, Any
     }
 
 
-def _system_message_has_visible_text(msg: SystemMessage) -> bool:
-    if isinstance(msg.content, str):
-        return bool(msg.content.strip())
-    if isinstance(msg.content, list):
-        return bool(msg.content)
-    return bool(str(msg.content).strip())
-
-
 def _apply_effective_system_prompt_to_batches(
     messages: list[list[BaseMessage]],
     hint: str,
 ) -> list[list[BaseMessage]]:
-    """Ensure Langfuse sees the middleware-built system prompt (includes WORKSPACE_* blocks)."""
+    """Ensure Langfuse sees the middleware-built system prompt."""
     out: list[list[BaseMessage]] = []
     for batch in messages:
         b = list(batch)
@@ -174,12 +148,7 @@ def _should_mirror_system_prompt_on_chain(name: str | None) -> bool:
 
 
 class _LangfuseTracePinnedParent:
-    """Inject ``trace_context`` into root LLM observations (Langfuse chain-only gap).
-
-    Langfuse's ``LangchainCallbackHandler`` passes ``trace_context`` for root chains but
-    not for root chat-model generations. Goal-loop intake uses standalone structured LLM
-    calls, so we wrap the client returned by ``_get_parent_observation(None)``.
-    """
+    """Inject ``trace_context`` into root LLM observations (Langfuse chain-only gap)."""
 
     __slots__ = ("_client", "_trace_context")
 
@@ -208,12 +177,7 @@ def _patch_chain_input_with_system_message(
     inputs: Any,
     system_prompt: str,
 ) -> Any:
-    """Prepend a SystemMessage to the chain's ``messages`` list so Langfuse renders it.
-
-    Mirrors ``_apply_effective_system_prompt_to_batches`` semantics: replace the leading
-    SystemMessage when present, otherwise prepend. Returns ``inputs`` unchanged when it
-    is not a dict carrying a ``messages`` list (no safe place to inject).
-    """
+    """Prepend a SystemMessage to the chain ``messages`` list when available."""
     if not isinstance(inputs, dict):
         return inputs
     msgs = inputs.get("messages")
@@ -227,18 +191,10 @@ def _patch_chain_input_with_system_message(
     return out
 
 
-# Only define the handler class when langfuse is available
 if LANGFUSE_AVAILABLE:
 
     class SootheLangfuseCallbackHandler(LangfuseCallbackHandler):
-        """Extends Langfuse's handler so chat model traces include the effective system prompt.
-
-        ``SystemPromptMiddleware`` registers the effective system text (with
-        ``WORKSPACE_RULES`` / ``AGENT_INSTRUCTIONS`` when applicable) before each model
-        call. LangChain often passes only the shorter graph ``resolve_system_prompt()`` text;
-        this handler replaces or prepends the effective prompt on the traced message batch and
-        reaffirms generation ``input`` on ``on_llm_end`` so Langfuse UI and exports show it.
-        """
+        """Extend Langfuse handler so traces include the effective system prompt."""
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
@@ -327,12 +283,7 @@ if LANGFUSE_AVAILABLE:
 
         @staticmethod
         def _sanitize_cancelled_error(error: BaseException) -> BaseException:
-            """Replace unreadable ``<object object at 0x...>`` in CancelledError status messages.
-
-            LangGraph's ``AsyncBackgroundExecutor`` cancels tasks with ``task.cancel(object())``,
-            making ``str(CancelledError)`` render as the useless ``<object object at 0x...>``.
-            Return a clean CancelledError so Langfuse records a readable status message.
-            """
+            """Replace unreadable cancellation payload text in status messages."""
             if isinstance(error, asyncio.CancelledError):
                 return asyncio.CancelledError("Cancelled")
             return error
@@ -372,34 +323,19 @@ if LANGFUSE_AVAILABLE:
             )
 
         def on_llm_end(self, response: Any, *, run_id: UUID, **kwargs: Any) -> Any:
-            """Handle LLM completion, ensuring structured output (tool_calls) is captured.
-
-            Langfuse's default handler may not properly capture tool_calls from structured
-            output responses. This override ensures the full tool_call data is included
-            in the generation output for traces.
-
-            Args:
-                response: LLMResult from the model call.
-                run_id: UUID for this run.
-                **kwargs: Additional arguments including potential output override.
-            """
+            """Handle LLM completion, ensuring structured output (tool_calls) is captured."""
             traced_input = self._generation_traced_inputs.pop(run_id, None)
             kwargs = dict(kwargs)
 
             if traced_input is not None:
-                # Parent handler overwrites generation input with kwargs["inputs"], which
-                # lacks middleware-built system text. Inject the patched batch here.
                 kwargs["inputs"] = traced_input
 
-            # Extract structured output from tool_calls if present
-            # This fixes the issue where Langfuse shows empty {"json": null} for structured output
             try:
                 if response.generations and response.generations[0]:
                     gen = response.generations[0][0]
                     if hasattr(gen, "message") and isinstance(gen.message, AIMessage):
                         structured_output = _extract_structured_output_from_message(gen.message)
                         if structured_output is not None:
-                            # Override the output to include tool_calls
                             kwargs["output"] = structured_output
                             logger.debug(
                                 "Langfuse: captured structured output with %d tool_calls for run_id=%s",
@@ -416,7 +352,7 @@ if LANGFUSE_AVAILABLE:
 
 
 else:
-    # Placeholder when langfuse is not installed
+
     class SootheLangfuseCallbackHandler:
         """Placeholder when langfuse is not installed."""
 

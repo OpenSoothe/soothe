@@ -1,6 +1,6 @@
-"""Shared Langfuse trace/run display-name helpers."""
+"""Shared Langfuse trace/run display-name helpers for Nano runtime."""
 
-_ROOT_GRAPH_RUN_NAME = "coreagent-graph"
+_ROOT_GRAPH_RUN_NAME = "nanoagent-graph"
 _INTAKE_CLASSIFY_RUN_NAME = "intake-classify"
 _EXECUTE_STEP_RUN_NAME = "execute-step"
 

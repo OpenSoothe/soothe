@@ -6,15 +6,14 @@ from uuid import uuid4
 
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
-
-from soothe_nano.utils.observability.langfuse_callback_handler import (
+from soothe_sdk.observability.langfuse.callback_handler import (
     _apply_effective_system_prompt_to_batches,
     _is_execute_step_run_name,
     _is_model_chain_run_name,
     _patch_chain_input_with_system_message,
     _should_mirror_system_prompt_on_chain,
 )
-from soothe_nano.utils.observability.langfuse_system_hint import (
+from soothe_sdk.observability.langfuse.system_hint import (
     clear_langfuse_system_prompt_hint,
     get_langfuse_system_prompt_hint,
     publish_langfuse_system_prompt_hint,
@@ -59,13 +58,14 @@ def test_ensure_system_replaces_empty_system() -> None:
 
 def test_merge_uses_soothe_langfuse_handler() -> None:
     pytest.importorskip("langfuse")
-    import soothe_nano.utils.observability.langfuse._handlers as handlers_mod
-    from soothe_nano.config import SootheConfig
-    from soothe_nano.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    import soothe_sdk.observability.langfuse._handlers as handlers_mod
+    from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
+
+    from soothe_nano.config import SootheConfig
+    from soothe_nano.config.models import LangfuseIntegrationConfig, ObservabilityConfig
 
     handlers_mod._HANDLERS.clear()
 
@@ -82,7 +82,7 @@ def test_merge_uses_soothe_langfuse_handler() -> None:
 
 def test_handler_thread_key_hint_registry() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -103,7 +103,7 @@ def test_on_chat_model_start_stores_traced_input_when_hint_set() -> None:
     pytest.importorskip("langfuse")
     from unittest.mock import patch
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -141,7 +141,7 @@ def test_on_llm_end_passes_traced_input_to_parent() -> None:
     pytest.importorskip("langfuse")
     from unittest.mock import MagicMock, patch
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -219,7 +219,7 @@ def test_on_chain_end_does_not_patch_chain_input() -> None:
     pytest.importorskip("langfuse")
     from unittest.mock import patch as mpatch
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -240,7 +240,7 @@ def test_sanitize_cancelled_error_replaces_object_sentinel() -> None:
     """LangGraph cancels tasks with ``task.cancel(object())``; str() of that is unreadable."""
     import asyncio
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -254,7 +254,7 @@ def test_sanitize_cancelled_error_replaces_object_sentinel() -> None:
 
 
 def test_sanitize_cancelled_error_passes_through_other_errors() -> None:
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -267,7 +267,7 @@ def test_on_chain_error_sanitizes_cancelled_error() -> None:
     import asyncio
     from unittest.mock import patch as mpatch
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -292,7 +292,7 @@ def test_on_llm_error_sanitizes_cancelled_error() -> None:
     import asyncio
     from unittest.mock import patch as mpatch
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -314,13 +314,14 @@ def test_on_llm_error_sanitizes_cancelled_error() -> None:
 
 def test_publish_langfuse_system_prompt_hint_registers_on_handler() -> None:
     pytest.importorskip("langfuse")
-    import soothe_nano.utils.observability.langfuse._handlers as handlers_mod
-    from soothe_nano.config import SootheConfig
-    from soothe_nano.config.models import LangfuseIntegrationConfig, ObservabilityConfig
-    from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    import soothe_sdk.observability.langfuse._handlers as handlers_mod
+    from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
+
+    from soothe_nano.config import SootheConfig
+    from soothe_nano.config.models import LangfuseIntegrationConfig, ObservabilityConfig
 
     handlers_mod._HANDLERS.clear()
     obs = ObservabilityConfig(langfuse=LangfuseIntegrationConfig(enabled=True))

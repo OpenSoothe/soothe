@@ -3,23 +3,37 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from soothe_nano.config import SootheConfig
+from soothe_sdk.observability.langfuse._types import SootheConfigLike
 
 logger = logging.getLogger(__name__)
 
 _ENV_REF = re.compile(r"^\$\{(\w+)\}$")
+_ENV_VAR_RE = re.compile(r"\$\{(\w+)\}")
 _INIT_LOCK = threading.Lock()
 _CLIENT_INITIALIZED_FOR_PUBLIC_KEY: set[str] = set()
 _LANGFUSE_EXECUTOR: ThreadPoolExecutor | None = None
 
 
-def resolved_langfuse_tags(soothe_config: SootheConfig) -> list[str] | None:
+def _resolve_env(value: str) -> str:
+    """Resolve ``${ENV_VAR}`` placeholders in a string."""
+
+    def replacer(match: re.Match[str]) -> str:
+        var_name = match.group(1)
+        resolved = os.environ.get(var_name)
+        if resolved is not None:
+            return resolved
+        return match.group(0)
+
+    return _ENV_VAR_RE.sub(replacer, value)
+
+
+def resolved_langfuse_tags(soothe_config: SootheConfigLike) -> list[str] | None:
     """Normalize ``observability.langfuse.tags`` to non-empty stripped strings."""
     raw = soothe_config.observability.langfuse.tags
     if not raw:
@@ -30,8 +44,6 @@ def resolved_langfuse_tags(soothe_config: SootheConfig) -> list[str] | None:
 
 def resolve_str(value: str | None) -> str | None:
     """Strip and resolve ``${ENV}`` placeholders; return None if unresolved or empty."""
-    from soothe_nano.config.env import _resolve_env
-
     if value is None:
         return None
     s = str(value).strip()
@@ -63,7 +75,7 @@ def _init_langfuse_client_sync(kwargs: dict[str, Any]) -> None:
     Langfuse(**kwargs)
 
 
-def ensure_langfuse_client(soothe_config: SootheConfig) -> None:
+def ensure_langfuse_client(soothe_config: SootheConfigLike) -> None:
     """Register a Langfuse SDK client when both public and secret keys are configured."""
     lf = soothe_config.observability.langfuse
     pub = resolve_str(lf.public_key)
@@ -96,6 +108,6 @@ def ensure_langfuse_client(soothe_config: SootheConfig) -> None:
         logger.debug("Langfuse client initialization submitted to background thread")
 
 
-async def ensure_langfuse_client_async(soothe_config: SootheConfig) -> None:
+async def ensure_langfuse_client_async(soothe_config: SootheConfigLike) -> None:
     """Async wrapper for Langfuse client initialization."""
     ensure_langfuse_client(soothe_config)

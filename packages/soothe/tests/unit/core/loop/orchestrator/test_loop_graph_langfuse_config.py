@@ -154,7 +154,7 @@ def test_begin_goal_loop_disabled_returns_none() -> None:
 
 def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -186,10 +186,10 @@ def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
 
 def test_goal_trace_execute_invoke_config_pins_trace_id() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse._names import (
+    from soothe_sdk.observability.langfuse._names import (
         execute_step_langfuse_run_display_name,
     )
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 

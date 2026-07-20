@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from soothe_nano.utils.observability.langfuse._client import resolve_str, resolved_langfuse_tags
-from soothe_nano.utils.observability.langfuse._handlers import (
+from soothe_sdk.observability.langfuse._client import resolve_str, resolved_langfuse_tags
+from soothe_sdk.observability.langfuse._handlers import (
     cached_langfuse_callback_handler,
     create_fresh_langfuse_handler,
     handler_for_pinned_trace,
 )
-
-if TYPE_CHECKING:
-    from soothe_nano.config import SootheConfig
-
-    SootheConfigOrNone = SootheConfig | None
-
-logger = logging.getLogger(__name__)
+from soothe_sdk.observability.langfuse._types import SootheConfigLike
 
 
 def iter_callback_handlers(callbacks: Any) -> list[Any]:
@@ -39,8 +32,8 @@ def iter_callback_handlers(callbacks: Any) -> list[Any]:
 
 
 def langfuse_handler_from_runnable_config(config: dict[str, Any]) -> Any | None:
-    """Return the Soothe Langfuse LangChain handler from RunnableConfig if present."""
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    """Return the SDK Langfuse LangChain handler from RunnableConfig if present."""
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -66,7 +59,7 @@ def pinned_trace_id_from_config(config: dict[str, Any] | None) -> str | None:
 
 def merge_langfuse_runnable_config(
     base: dict[str, Any],
-    soothe_config: SootheConfig | None,
+    soothe_config: SootheConfigLike | None,
     *,
     session_id: str | None = None,
     run_name: str | None = None,
@@ -75,23 +68,7 @@ def merge_langfuse_runnable_config(
     fresh_handler: bool = False,
     pinned_trace_id: str | None = None,
 ) -> dict[str, Any]:
-    """Return Runnable config with Langfuse callbacks and session metadata merged in.
-
-    When Langfuse is disabled, missing, or the package is not installed, returns ``base``
-    unchanged (same object).
-
-    Args:
-        base: RunnableConfig-compatible dict.
-        soothe_config: Active Soothe configuration, or None to skip Langfuse integration.
-        session_id: Optional thread id stored as ``langfuse_session_id`` metadata.
-        run_name: Optional root run name.
-        loop_id: Optional loop identifier for trace correlation.
-        inherit_callbacks_from: Reuse Langfuse handler from parent config (nested synthesis).
-        fresh_handler: New handler instance for independent root traces.
-        pinned_trace_id: Shared trace id for related stages; each merge gets a fresh
-            handler pinned to this id so classifier and root-graph runs land on one
-            Langfuse trace without reusing stale handler state across invocations.
-    """
+    """Return Runnable config with Langfuse callbacks and session metadata merged in."""
     if soothe_config is None or not soothe_config.observability.langfuse.enabled:
         return base
 

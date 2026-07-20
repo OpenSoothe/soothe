@@ -128,7 +128,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             ContextVar reset token from :func:`publish_langfuse_system_prompt_hint`, or None.
         """
-        from soothe_nano.utils.observability.langfuse_system_hint import (
+        from soothe_sdk.observability.langfuse.system_hint import (
             publish_langfuse_system_prompt_hint,
         )
 
@@ -695,7 +695,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             Model response from handler.
         """
-        from soothe_nano.utils.observability.langfuse_system_hint import (
+        from soothe_sdk.observability.langfuse.system_hint import (
             clear_langfuse_system_prompt_hint,
         )
 
@@ -721,7 +721,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             Model response from handler.
         """
-        from soothe_nano.utils.observability.langfuse_system_hint import (
+        from soothe_sdk.observability.langfuse.system_hint import (
             clear_langfuse_system_prompt_hint,
         )
 

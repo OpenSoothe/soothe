@@ -61,7 +61,7 @@ async def parse_plan_structured(
 ) -> Plan:
     """Use LLM structured output to extract a plan from planner markdown/text."""
     from langchain_core.messages import HumanMessage
-    from soothe_nano.utils.observability.langfuse import SootheLangfuse
+    from soothe_sdk.observability.langfuse import SootheLangfuse
 
     from soothe.prompts.fragments import STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT
 

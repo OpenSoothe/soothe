@@ -8,7 +8,7 @@ import pytest
 
 
 def test_langfuse_trace_pinned_parent_injects_trace_context() -> None:
-    from soothe_nano.utils.observability.langfuse_callback_handler import _LangfuseTracePinnedParent
+    from soothe_sdk.observability.langfuse.callback_handler import _LangfuseTracePinnedParent
 
     client = MagicMock()
     client.start_observation.return_value = MagicMock()
@@ -25,7 +25,7 @@ def test_langfuse_trace_pinned_parent_injects_trace_context() -> None:
 
 
 def test_langfuse_trace_pinned_parent_preserves_explicit_trace_context() -> None:
-    from soothe_nano.utils.observability.langfuse_callback_handler import _LangfuseTracePinnedParent
+    from soothe_sdk.observability.langfuse.callback_handler import _LangfuseTracePinnedParent
 
     client = MagicMock()
     explicit = {"trace_id": "other-trace"}
@@ -41,8 +41,7 @@ def test_langfuse_trace_pinned_parent_preserves_explicit_trace_context() -> None
 def test_soothe_handler_wraps_root_client_when_trace_context_set() -> None:
     pytest.importorskip("langfuse")
     from langfuse._client.client import Langfuse
-
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
         _LangfuseTracePinnedParent,
     )
@@ -58,7 +57,7 @@ def test_soothe_handler_does_not_wrap_when_parent_run_exists() -> None:
     pytest.importorskip("langfuse")
     from uuid import uuid4
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
         _LangfuseTracePinnedParent,
     )

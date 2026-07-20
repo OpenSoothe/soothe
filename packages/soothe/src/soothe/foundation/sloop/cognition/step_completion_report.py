@@ -79,7 +79,7 @@ async def summarize_step_completion_report(
             phase="execute_step",
         )
     elif soothe_config is not None:
-        from soothe_nano.utils.observability.langfuse import SootheLangfuse
+        from soothe_sdk.observability.langfuse import SootheLangfuse
 
         trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
         config = SootheLangfuse(soothe_config).traced_llm(

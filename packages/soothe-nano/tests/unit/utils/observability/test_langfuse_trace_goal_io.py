@@ -6,24 +6,24 @@ import pytest
 
 
 def test_loop_graph_langfuse_run_display_name() -> None:
-    from soothe_nano.utils.observability.langfuse._names import (
+    from soothe_sdk.observability.langfuse._names import (
         loop_graph_langfuse_run_display_name,
     )
 
-    assert loop_graph_langfuse_run_display_name("soothe-dev") == "soothe-dev:coreagent-graph"
-    assert loop_graph_langfuse_run_display_name(None) == "coreagent-graph"
+    assert loop_graph_langfuse_run_display_name("soothe-dev") == "soothe-dev:nanoagent-graph"
+    assert loop_graph_langfuse_run_display_name(None) == "nanoagent-graph"
 
 
 def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
+    from soothe_sdk.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
 
     with patch("langfuse.get_client") as gc:
         patch_langfuse_trace_goal_io(
             {},
             goal_text="g",
             output_text="o",
-            trace_display_name="coreagent-graph",
+            trace_display_name="nanoagent-graph",
             public_key=None,
         )
     gc.assert_not_called()
@@ -31,8 +31,8 @@ def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
 
 def test_patch_langfuse_trace_goal_io_skips_without_trace_id() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -44,7 +44,7 @@ def test_patch_langfuse_trace_goal_io_skips_without_trace_id() -> None:
             {"callbacks": [h]},
             goal_text="goal",
             output_text="out",
-            trace_display_name="x:coreagent-graph",
+            trace_display_name="x:nanoagent-graph",
             public_key="pk",
         )
     gc.assert_not_called()
@@ -52,8 +52,8 @@ def test_patch_langfuse_trace_goal_io_skips_without_trace_id() -> None:
 
 def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -64,7 +64,7 @@ def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
     mock_client = MagicMock()
 
     with patch(
-        "soothe_nano.utils.observability.langfuse._trace_io._merge_trace_fields_via_ingestion",
+        "soothe_sdk.observability.langfuse._trace_io._merge_trace_fields_via_ingestion",
         return_value=True,
     ):
         with patch("langfuse.get_client", return_value=mock_client):
@@ -72,7 +72,7 @@ def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
                 {"callbacks": [h]},
                 goal_text="my goal",
                 output_text="final answer",
-                trace_display_name="soothe-dev:coreagent-graph",
+                trace_display_name="soothe-dev:nanoagent-graph",
                 session_id="thread-1",
                 public_key="pk-test",
             )
@@ -83,8 +83,8 @@ def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
 
 def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -97,7 +97,7 @@ def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
     mock_client.start_span.return_value = mock_span
 
     with patch(
-        "soothe_nano.utils.observability.langfuse._trace_io._merge_trace_fields_via_ingestion",
+        "soothe_sdk.observability.langfuse._trace_io._merge_trace_fields_via_ingestion",
         return_value=False,
     ):
         with patch("langfuse.get_client", return_value=mock_client):
@@ -105,15 +105,15 @@ def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
                 {"callbacks": [h]},
                 goal_text="my goal",
                 output_text="final answer",
-                trace_display_name="soothe-dev:coreagent-graph",
+                trace_display_name="soothe-dev:nanoagent-graph",
                 public_key="pk-test",
             )
 
     mock_client.start_span.assert_called_once()
     assert mock_client.start_span.call_args[1]["trace_context"]["trace_id"] == tid
-    assert mock_client.start_span.call_args[1]["name"] == "soothe-dev:coreagent-graph"
+    assert mock_client.start_span.call_args[1]["name"] == "soothe-dev:nanoagent-graph"
     mock_span.update_trace.assert_called_once_with(
-        name="soothe-dev:coreagent-graph",
+        name="soothe-dev:nanoagent-graph",
         input="my goal",
         output="final answer",
     )
@@ -123,7 +123,7 @@ def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
 
 def test_merge_trace_fields_via_ingestion_enqueues() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse._trace_io import _merge_trace_fields_via_ingestion
+    from soothe_sdk.observability.langfuse._trace_io import _merge_trace_fields_via_ingestion
 
     tid = "b" * 32
     mock_rs = MagicMock()
@@ -134,7 +134,7 @@ def test_merge_trace_fields_via_ingestion_enqueues() -> None:
     ok = _merge_trace_fields_via_ingestion(
         mock_client,
         trace_id=tid,
-        display_name="soothe-dev:coreagent-graph",
+        display_name="soothe-dev:nanoagent-graph",
         input_text="in",
         output_text="out",
         session_id="sid",
@@ -145,7 +145,7 @@ def test_merge_trace_fields_via_ingestion_enqueues() -> None:
     assert evt["type"] == "trace-create"
     body = evt["body"]
     assert body.id == tid
-    assert body.name == "soothe-dev:coreagent-graph"
+    assert body.name == "soothe-dev:nanoagent-graph"
     assert body.input == "in"
     assert body.output == "out"
     assert body.session_id == "sid"

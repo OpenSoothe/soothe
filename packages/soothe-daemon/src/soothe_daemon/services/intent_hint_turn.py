@@ -40,7 +40,7 @@ def _build_intent_hint_invoke_config(
 ) -> dict[str, Any]:
     """Langfuse-traced RunnableConfig for direct daemon LLM calls."""
     try:
-        from soothe_nano.utils.observability.langfuse import SootheLangfuse
+        from soothe_sdk.observability.langfuse import SootheLangfuse
 
         return SootheLangfuse(config).traced_llm(
             purpose=purpose,

@@ -1,24 +1,39 @@
-"""Unified Langfuse caller facade for CoreAgent (no goal-loop session API)."""
+"""Unified Langfuse caller facade for CoreAgent-style LLM calls."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from soothe_nano.utils.observability.langfuse._merge import merge_langfuse_runnable_config
-from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
+from soothe_sdk.observability.langfuse._client import resolve_langfuse_config_str
+from soothe_sdk.observability.langfuse._merge import merge_langfuse_runnable_config
+from soothe_sdk.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
+from soothe_sdk.observability.langfuse._types import SootheConfigLike
 
-if TYPE_CHECKING:
-    from soothe_nano.config import SootheConfig
+
+def create_llm_call_metadata(
+    purpose: str,
+    component: str,
+    phase: str = "unknown",
+    **extra: Any,
+) -> dict[str, Any]:
+    """Create standardized metadata for LLM calls."""
+    metadata = {
+        "soothe_call_purpose": purpose,
+        "soothe_call_component": component,
+        "soothe_call_phase": phase,
+    }
+    metadata.update(extra)
+    return metadata
 
 
 class SootheLangfuse:
     """Langfuse RunnableConfig helpers for CoreAgent LLM calls."""
 
-    def __init__(self, soothe_config: SootheConfig | None) -> None:
+    def __init__(self, soothe_config: SootheConfigLike | None) -> None:
         self._config = soothe_config
 
     @property
-    def config(self) -> SootheConfig | None:
+    def config(self) -> SootheConfigLike | None:
         return self._config
 
     @property
@@ -48,8 +63,6 @@ class SootheLangfuse:
                 phase=phase,
                 extra_metadata=extra_metadata,
             )
-
-        from soothe_nano.utils.llm.observability import create_llm_call_metadata
 
         metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
         if extra_metadata:
@@ -105,8 +118,6 @@ class SootheLangfuse:
         """Set trace-level input/output after graph completion."""
         if self._config is None:
             return
-        from soothe_nano.utils.observability.langfuse._client import resolve_langfuse_config_str
-
         pub = resolve_langfuse_config_str(self._config.observability.langfuse.public_key)
         patch_langfuse_trace_goal_io(
             config,

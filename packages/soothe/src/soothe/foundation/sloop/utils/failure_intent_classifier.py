@@ -150,7 +150,7 @@ async def classify_failure_intent_async(
 
     try:
         from langchain_core.messages import HumanMessage
-        from soothe_nano.utils.observability.langfuse import SootheLangfuse
+        from soothe_sdk.observability.langfuse import SootheLangfuse
 
         prompt = (
             "Classify this tool/step failure for an autonomous agent.\n"

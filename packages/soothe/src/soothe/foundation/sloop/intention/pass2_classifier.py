@@ -228,7 +228,7 @@ class IntakePass2Classifier:
             )
 
         if self._soothe_config is not None:
-            from soothe_nano.utils.observability.langfuse import SootheLangfuse
+            from soothe_sdk.observability.langfuse import SootheLangfuse
 
             trace_name = (self._soothe_config.observability.langfuse.trace_name or "").strip()
             return SootheLangfuse(self._soothe_config).traced_llm(

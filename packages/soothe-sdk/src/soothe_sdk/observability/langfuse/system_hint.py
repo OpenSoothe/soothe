@@ -1,10 +1,4 @@
-"""Thread-local hint so Langfuse can record CoreAgent system prompts on generations (IG-385).
-
-``SystemPromptMiddleware`` sets the effective system text before each model
-call; :class:`SootheLangfuseCallbackHandler` reads it and injects a ``SystemMessage``
-into LangChain's traced message list when the batch has no usable system content, so
-Langfuse generations show the same prompt the model received.
-"""
+"""Thread-local hint so Langfuse can record system prompts on generations."""
 
 from __future__ import annotations
 
@@ -15,14 +9,7 @@ _VAR: ContextVar[str | None] = ContextVar("soothe_langfuse_system_prompt_hint", 
 
 
 def push_langfuse_system_prompt_hint(text: str | None) -> Token | None:
-    """Attach plain-text system prompt for the next traced chat model start in this context.
-
-    Args:
-        text: Full system prompt, or None to skip.
-
-    Returns:
-        Token for :func:`reset_langfuse_system_prompt_hint`, or None if nothing pushed.
-    """
+    """Attach plain-text system prompt for the next traced chat model start in this context."""
     if not text or not str(text).strip():
         return None
     return _VAR.set(str(text))
@@ -45,18 +32,7 @@ def publish_langfuse_system_prompt_hint(
     *,
     runnable_config: dict[str, Any] | None = None,
 ) -> Token | None:
-    """Push ContextVar hint and register on the Langfuse handler for this thread.
-
-    Parallel execute steps share one cached handler; thread-keyed registration avoids
-    hint races when ContextVar does not propagate into callback threads.
-
-    Args:
-        text: Effective system prompt from middleware.
-        runnable_config: LangGraph RunnableConfig (``get_config()``), optional.
-
-    Returns:
-        ContextVar token from :func:`push_langfuse_system_prompt_hint`, or None.
-    """
+    """Push ContextVar hint and register on the Langfuse handler for this thread."""
     tok = push_langfuse_system_prompt_hint(text)
     if not text or not str(text).strip():
         return tok
@@ -70,10 +46,10 @@ def publish_langfuse_system_prompt_hint(
     if not isinstance(runnable_config, dict):
         return tok
     try:
-        from soothe_nano.utils.observability.langfuse._merge import (
+        from soothe_sdk.observability.langfuse._merge import (
             langfuse_handler_from_runnable_config,
         )
-        from soothe_nano.utils.observability.langfuse_callback_handler import (
+        from soothe_sdk.observability.langfuse.callback_handler import (
             SootheLangfuseCallbackHandler,
         )
 
@@ -102,10 +78,10 @@ def clear_langfuse_system_prompt_hint(
     if not isinstance(runnable_config, dict):
         return
     try:
-        from soothe_nano.utils.observability.langfuse._merge import (
+        from soothe_sdk.observability.langfuse._merge import (
             langfuse_handler_from_runnable_config,
         )
-        from soothe_nano.utils.observability.langfuse_callback_handler import (
+        from soothe_sdk.observability.langfuse.callback_handler import (
             SootheLangfuseCallbackHandler,
         )
 

@@ -10,7 +10,7 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 
 def test_extract_structured_output_from_message_with_tool_calls() -> None:
     """Verify _extract_structured_output_from_message captures tool_calls."""
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         _extract_structured_output_from_message,
     )
 
@@ -36,7 +36,7 @@ def test_extract_structured_output_from_message_with_tool_calls() -> None:
 
 def test_extract_structured_output_returns_none_without_tool_calls() -> None:
     """Verify _extract_structured_output_from_message returns None for regular messages."""
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         _extract_structured_output_from_message,
     )
 
@@ -47,7 +47,7 @@ def test_extract_structured_output_returns_none_without_tool_calls() -> None:
 
 def test_extract_structured_output_with_content_and_tool_calls() -> None:
     """Verify both content and tool_calls are captured when both present."""
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         _extract_structured_output_from_message,
     )
 
@@ -69,7 +69,7 @@ def test_on_llm_end_captures_structured_output() -> None:
     """Verify on_llm_end passes structured output to parent handler."""
     # This test requires langfuse to be installed
     try:
-        from soothe_nano.utils.observability.langfuse_callback_handler import (
+        from soothe_sdk.observability.langfuse.callback_handler import (
             LANGFUSE_AVAILABLE,
             SootheLangfuseCallbackHandler,
         )

@@ -323,7 +323,7 @@ class Executor:
         elif self._config is None:
             return base
         else:
-            from soothe_nano.utils.observability.langfuse._merge import (
+            from soothe_sdk.observability.langfuse._merge import (
                 merge_langfuse_runnable_config,
                 pinned_trace_id_from_config,
             )

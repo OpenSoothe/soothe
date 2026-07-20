@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from soothe_nano.utils.observability.langfuse._client import ensure_langfuse_client, resolve_str
-
-if TYPE_CHECKING:
-    from soothe_nano.config import SootheConfig
+from soothe_sdk.observability.langfuse._client import ensure_langfuse_client, resolve_str
+from soothe_sdk.observability.langfuse._types import SootheConfigLike
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +45,8 @@ def _warn_handler_unavailable() -> None:
         _LANGFUSE_HANDLER_UNAVAILABLE_WARNED = True
 
 
-def cached_langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
+def cached_langfuse_callback_handler(soothe_config: SootheConfigLike) -> Any | None:
     """Return the process-wide cached handler for standalone LLM calls."""
-    global _LANGFUSE_NOT_INSTALLED_WARNED, _LANGFUSE_HANDLER_UNAVAILABLE_WARNED
     lf = soothe_config.observability.langfuse
     if not _import_langfuse_langchain():
         _warn_langfuse_not_installed()
@@ -60,7 +57,7 @@ def cached_langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
     cache_key = pub_resolved or "__env__"
     with _INIT_LOCK:
         if cache_key not in _HANDLERS:
-            from soothe_nano.utils.observability.langfuse_callback_handler import (
+            from soothe_sdk.observability.langfuse.callback_handler import (
                 LANGFUSE_AVAILABLE,
                 SootheLangfuseCallbackHandler,
             )
@@ -83,7 +80,7 @@ def cached_langfuse_callback_handler(soothe_config: SootheConfig) -> Any | None:
         return _HANDLERS[cache_key]
 
 
-def create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
+def create_fresh_langfuse_handler(soothe_config: SootheConfigLike) -> Any | None:
     """Create a new Langfuse handler (not cached) for independent root traces."""
     if not _import_langfuse_langchain():
         _warn_langfuse_not_installed()
@@ -91,7 +88,7 @@ def create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
 
     ensure_langfuse_client(soothe_config)
 
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         LANGFUSE_AVAILABLE,
         SootheLangfuseCallbackHandler,
     )
@@ -113,7 +110,7 @@ def create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
     return SootheLangfuseCallbackHandler()
 
 
-def allocate_langfuse_trace_id(soothe_config: SootheConfig) -> str | None:
+def allocate_langfuse_trace_id(soothe_config: SootheConfigLike) -> str | None:
     """Reserve a Langfuse trace id for one grouped multi-stage execution."""
     try:
         from langfuse import get_client
@@ -128,16 +125,16 @@ def allocate_langfuse_trace_id(soothe_config: SootheConfig) -> str | None:
 
 
 def new_soothe_langfuse_handler(
-    soothe_config: SootheConfig,
+    soothe_config: SootheConfigLike,
     *,
     trace_context: dict[str, str] | None = None,
 ) -> Any | None:
-    """Create a non-cached ``SootheLangfuseCallbackHandler`` (optional pinned ``trace_context``)."""
+    """Create a non-cached callback handler (optional pinned ``trace_context``)."""
     handler = create_fresh_langfuse_handler(soothe_config)
     if handler is None or trace_context is None:
         return handler
     pub_resolved = resolve_str(soothe_config.observability.langfuse.public_key)
-    from soothe_nano.utils.observability.langfuse_callback_handler import (
+    from soothe_sdk.observability.langfuse.callback_handler import (
         SootheLangfuseCallbackHandler,
     )
 
@@ -155,10 +152,10 @@ def new_soothe_langfuse_handler(
 
 
 def handler_for_pinned_trace(
-    soothe_config: SootheConfig,
+    soothe_config: SootheConfigLike,
     trace_id: str | None,
 ) -> Any | None:
-    """Fresh handler pinned to ``trace_id`` (one per LangChain invocation, shared trace)."""
+    """Fresh handler pinned to ``trace_id`` (one per invocation, shared trace)."""
     if not trace_id:
         return create_fresh_langfuse_handler(soothe_config)
     return new_soothe_langfuse_handler(soothe_config, trace_context={"trace_id": trace_id})

@@ -176,7 +176,7 @@ async def enrich_user_text_with_vision(
 def _build_vision_invoke_config(config: Any, *, session_id: str | None = None) -> dict[str, Any]:
     """Build Langfuse-traced RunnableConfig for vision preflight."""
     try:
-        from soothe_nano.utils.observability.langfuse import SootheLangfuse
+        from soothe_sdk.observability.langfuse import SootheLangfuse
 
         return SootheLangfuse(config).traced_llm(
             purpose="vision_preflight",

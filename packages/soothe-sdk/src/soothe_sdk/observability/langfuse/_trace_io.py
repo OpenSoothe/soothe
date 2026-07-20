@@ -1,11 +1,11 @@
-"""Langfuse trace-level goal I/O patching for loop graph runs."""
+"""Langfuse trace-level goal I/O patching for graph runs."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-from soothe_nano.utils.observability.langfuse._merge import langfuse_handler_from_runnable_config
+from soothe_sdk.observability.langfuse._merge import langfuse_handler_from_runnable_config
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ def patch_langfuse_trace_goal_io(
     public_key: str | None = None,
     session_id: str | None = None,
 ) -> None:
-    """Set Langfuse trace-level ``name`` / ``input`` / ``output`` for the loop graph run."""
+    """Set Langfuse trace-level ``name`` / ``input`` / ``output`` for the root graph run."""
     handler = langfuse_handler_from_runnable_config(config)
     if handler is None:
         return

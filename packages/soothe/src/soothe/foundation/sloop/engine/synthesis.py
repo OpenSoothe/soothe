@@ -21,7 +21,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
+from soothe_sdk.observability.langfuse import merge_langfuse_runnable_config
 
 from soothe.foundation.sloop.engine.scenario_classifier import (
     ScenarioClassification,

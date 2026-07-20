@@ -188,7 +188,7 @@ def _build_traced_invoke_config(
     if soothe_config is None:
         return None
     try:
-        from soothe_nano.utils.observability.langfuse import SootheLangfuse
+        from soothe_sdk.observability.langfuse import SootheLangfuse
 
         trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
         run_name = f"{trace_name}:veritas" if trace_name else "veritas"

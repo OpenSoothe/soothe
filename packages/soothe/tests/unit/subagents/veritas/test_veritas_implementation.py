@@ -147,7 +147,7 @@ async def test_traced_invoke_config_forwarded_when_config_provided(
             return sentinel
 
     monkeypatch.setattr(
-        "soothe_nano.utils.observability.langfuse.SootheLangfuse",
+        "soothe_sdk.observability.langfuse.SootheLangfuse",
         lambda _cfg: _StubTracer(),
         raising=True,
     )
