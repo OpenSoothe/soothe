@@ -3,6 +3,7 @@ name: Release Soothe Packages
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -77,97 +78,6 @@ jobs:
 
     - name: Publish SDK to PyPI
       if: steps.sdk-check.outputs.exists == 'false'
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        packages-dir: dist/
-        verbose: true
-        print-hash: true
-
-  deploy-nano:
-    runs-on: ubuntu-latest
-    needs: deploy-sdk
-    environment:
-      name: pypi
-      url: https://pypi.org/p/soothe-nano
-
-    steps:
-    - uses: actions/checkout@v5
-      with:
-        submodules: true
-
-    - name: Install uv
-      uses: astral-sh/setup-uv@v7
-      with:
-        version: "latest"
-
-    - name: Set up Python
-      run: uv python install 3.12
-
-    - name: Wait for soothe-sdk on PyPI
-      run: |
-        VERSION=$(grep '^version = "' packages/soothe-sdk/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-        for i in {1..30}; do
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://pypi.org/pypi/soothe-sdk/${VERSION}/json" 2>/dev/null || echo "000")
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✓ soothe-sdk ${VERSION} is available on PyPI"
-            exit 0
-          fi
-          echo "Waiting for soothe-sdk ${VERSION} on PyPI... attempt $i/30 (HTTP ${HTTP_STATUS})"
-          sleep 10
-        done
-        echo "❌ Timeout: soothe-sdk ${VERSION} not found on PyPI after 5 minutes"
-        exit 1
-
-    - name: Sync soothe-nano dependencies
-      run: |
-        cd packages/soothe-nano
-        uv sync --all-extras
-
-    - name: Get soothe-nano version
-      id: nano-version
-      run: |
-        cd packages/soothe-nano
-        VERSION=$(grep '^version = "' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-    - name: Check if soothe-nano version exists on PyPI
-      id: nano-check
-      run: |
-        cd packages/soothe-nano
-        VERSION="${{ steps.nano-version.outputs.version }}"
-        echo "Checking if soothe-nano $VERSION exists on PyPI..."
-        if pip index versions soothe-nano 2>/dev/null | grep -q "$VERSION"; then
-          echo "exists=true" >> $GITHUB_OUTPUT
-          echo "⚠️ Version $VERSION already exists on PyPI, skipping publish"
-        else
-          echo "exists=false" >> $GITHUB_OUTPUT
-          echo "✓ Version $VERSION not found on PyPI, will publish"
-        fi
-
-    - name: Build soothe-nano package
-      if: steps.nano-check.outputs.exists == 'false'
-      run: |
-        rm -rf dist/
-        cd packages/soothe-nano
-        uv build --out-dir ../../dist
-
-    - name: Verify soothe-nano dist directory
-      if: steps.nano-check.outputs.exists == 'false'
-      run: |
-        if [ ! -d "dist" ]; then
-          echo "❌ Error: dist directory not found"
-          exit 1
-        fi
-        if [ -z "$(ls -A dist | grep soothe_nano)" ]; then
-          echo "❌ Error: dist directory doesn't contain soothe-nano packages"
-          exit 1
-        fi
-        echo "✓ dist directory exists and contains soothe-nano packages"
-        ls -la dist/ | grep soothe_nano
-
-    - name: Publish soothe-nano to PyPI
-      if: steps.nano-check.outputs.exists == 'false'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         packages-dir: dist/
@@ -265,7 +175,7 @@ jobs:
 
   deploy-core:
     runs-on: ubuntu-latest
-    needs: deploy-nano
+    needs: deploy-sdk
     environment:
       name: pypi
       url: https://pypi.org/p/soothe
@@ -290,6 +200,8 @@ jobs:
 
     - name: Wait for soothe-nano on PyPI
       run: |
+        # soothe-nano publishes from mirasoth/soothe-nano (independent repo).
+        # Monorepo release only waits for the pinned submodule version on PyPI.
         VERSION=$(grep '^version = "' packages/soothe-nano/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -302,6 +214,7 @@ jobs:
           sleep 10
         done
         echo "❌ Timeout: soothe-nano ${VERSION} not found on PyPI after 5 minutes"
+        echo "Publish soothe-nano from https://github.com/mirasoth/soothe-nano first, then re-run."
         exit 1
 
     - name: Sync soothe core dependencies
@@ -460,7 +373,7 @@ jobs:
 
   deploy-plugins:
     runs-on: ubuntu-latest
-    needs: deploy-nano
+    needs: deploy-sdk
     environment:
       name: pypi
       url: https://pypi.org/p/soothe-plugins
@@ -480,6 +393,7 @@ jobs:
 
     - name: Wait for soothe-nano on PyPI
       run: |
+        # soothe-nano publishes from mirasoth/soothe-nano (independent repo).
         VERSION=$(grep '^version = "' packages/soothe-nano/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -492,6 +406,7 @@ jobs:
           sleep 10
         done
         echo "❌ Timeout: soothe-nano ${VERSION} not found on PyPI after 5 minutes"
+        echo "Publish soothe-nano from https://github.com/mirasoth/soothe-nano first, then re-run."
         exit 1
 
     - name: Sync soothe-plugins dependencies
