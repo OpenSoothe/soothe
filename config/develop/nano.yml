@@ -1,20 +1,6 @@
-# Team develop profile — overrides Pydantic defaults only.
-# Full reference: config/config.template.yml
-# Internal tuning (loop concurrency defaults, checkpoint async, tool_timeout, lazy_core_agent,
-# code_interpreter, MemU memory) lives in packages/soothe/src/soothe/config/models.py.
-#
-# Zero-config: export OPENAI_API_KEY — no YAML required for OpenAI-only use.
-# Persistence: PostgreSQL (docker compose up soothe-pgvector, port 6432)
-# Langfuse: docker compose --profile langfuse up -d (UI on :3300)
-# Keys: pk-lf-soothe-local / sk-lf-soothe-local; export DASHSCOPE_*
+# Team develop nano profile (nano-owned keys only).
+# Compose with config/develop/soothe.yml for full soothe host behavior.
 
-# ============================================================
-# SOOTHE-NANO BASELINE (shared by soothe + soothe-nano)
-# ============================================================
-
-# ============================================================
-# PROVIDERS
-# ============================================================
 providers:
   - name: dashscope
     provider_type: openai
@@ -26,7 +12,7 @@ providers:
       - kimi-k2.5
       - kimi-k2.7-code
       - MiniMax-M3
-      - text-embedding-v4  # DashScope OpenAI-compatible text embedding (replaces multimodal-embedding-v1, which 404s in compat mode)
+      - text-embedding-v4
 
   - name: agnes
     provider_type: openai
@@ -81,40 +67,17 @@ router_profiles:
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
-# Switch profiles: production (DashScope) | local-deploy (oMLX :9642)
 active_router_profile: production
 
 embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
-# ============================================================
-# AGENT (develop-specific overrides)
-# ============================================================
 agent:
   runtime:
     role_routing:
       enabled: true
 
-  # ---------------- soothe host-only agent extensions ----------------
-  autopilot:
-    enabled: false
-    max_parallel_goals: 6
-    max_loops: 8
-  loop:
-    concurrency:
-      max_parallel_goals: 8
-      max_parallel_steps: 8
-      max_parallel_subagents: 6
-      max_parallel_tools: 99
-      global_max_llm_calls: 16
-      step_parallelism: max
-    max_subagent_tasks_per_wave: 8
-    plan_assess_model_role: fast
-
-# ============================================================
-# PERSISTENCE
-# ============================================================
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
@@ -124,9 +87,6 @@ persistence:
 security:
   allow_paths_outside_workspace: true
 
-# ============================================================
-# OBSERVABILITY
-# ============================================================
 observability:
   log_file_level: DEBUG
   langfuse:
@@ -138,9 +98,6 @@ observability:
     tags:
       - soothe
 
-# ============================================================
-# VECTOR STORES (pgvector; DSN auto-resolved from postgres_base_dsn)
-# ============================================================
 vector_stores:
   - name: pgvector_dev
     provider_type: pgvector
@@ -148,14 +105,9 @@ vector_stores:
 vector_store_router:
   default: pgvector_dev:soothe_default
 
-# ============================================================
-# TOOLS (execution background logs + web search)
-# ============================================================
 tools:
   wizsearch:
-    # Prefer free/local engines; omit tavily (needs TAVILY_API_KEY).
     default_engines:
       - duckduckgo
       - bing
-    # Local Clash/V2Ray HTTP proxy for duckduckgo/bing.
     proxy: http://127.0.0.1:7890

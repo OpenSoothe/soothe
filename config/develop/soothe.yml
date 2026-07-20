@@ -1,0 +1,17 @@
+# Team develop host overlay (soothe-owned keys only).
+# Compose with config/develop/nano.yml.
+
+agent:
+  autopilot:
+    max_parallel_goals: 6
+    max_loops: 8
+
+  loop:
+    concurrency:
+      max_parallel_goals: 8
+      max_parallel_steps: 8
+      max_parallel_subagents: 6
+      global_max_llm_calls: 16
+      step_parallelism: max
+    max_subagent_tasks_per_wave: 8
+    plan_assess_model_role: fast
