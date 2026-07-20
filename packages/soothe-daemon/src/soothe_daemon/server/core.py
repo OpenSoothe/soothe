@@ -721,7 +721,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
             if self._config.skillify.enabled:
                 try:
-                    from soothe_nano.skillify import start_skillify_service
+                    from soothe_daemon.skillify import start_skillify_service
 
                     if await start_skillify_service(self._config) is not None:
                         logger.info("[Skillify] Daemon service started")
@@ -1644,7 +1644,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         if self._config.skillify.enabled:
             try:
-                from soothe_nano.skillify import stop_skillify_service
+                from soothe_daemon.skillify import stop_skillify_service
 
                 await stop_skillify_service()
                 logger.info("[Skillify] Service shutdown complete")

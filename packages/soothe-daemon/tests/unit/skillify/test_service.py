@@ -6,16 +6,16 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from soothe.config import SootheConfig
+from soothe_sdk.skillify.models import SkillBundle
 
-from soothe_nano.config import SootheConfig
-from soothe_nano.skillify import (
+from soothe_daemon.skillify import (
     get_skillify_service,
     start_skillify_service,
     stop_skillify_service,
 )
-from soothe_nano.skillify import service as skillify_service_module
-from soothe_nano.skillify.models import SkillBundle
-from soothe_nano.skillify.service import SkillifyService
+from soothe_daemon.skillify import service as skillify_service_module
+from soothe_daemon.skillify.service import SkillifyService
 
 
 @pytest.fixture(autouse=True)
@@ -33,7 +33,7 @@ async def test_start_skillify_service_returns_singleton() -> None:
     with patch.object(SootheConfig, "create_vector_store_for_role", return_value=MagicMock()):
         with patch.object(SootheConfig, "create_embedding_model", return_value=MagicMock()):
             with patch(
-                "soothe_nano.skillify.service.SkillIndexer.start",
+                "soothe_daemon.skillify.service.SkillIndexer.start",
                 new_callable=AsyncMock,
             ):
                 first = await start_skillify_service(config)
@@ -59,11 +59,11 @@ async def test_stop_skillify_service_clears_singleton() -> None:
     with patch.object(SootheConfig, "create_vector_store_for_role", return_value=MagicMock()):
         with patch.object(SootheConfig, "create_embedding_model", return_value=MagicMock()):
             with patch(
-                "soothe_nano.skillify.service.SkillIndexer.start",
+                "soothe_daemon.skillify.service.SkillIndexer.start",
                 new_callable=AsyncMock,
             ):
                 with patch(
-                    "soothe_nano.skillify.service.SkillIndexer.stop",
+                    "soothe_daemon.skillify.service.SkillIndexer.stop",
                     new_callable=AsyncMock,
                 ):
                     service = await start_skillify_service(config)
@@ -109,7 +109,7 @@ def test_service_uses_configured_skillify_model_role_for_embeddings() -> None:
 
 @pytest.mark.asyncio
 async def test_indexer_stop_skips_shared_pool_close() -> None:
-    from soothe_nano.skillify.indexer import SkillIndexer
+    from soothe_daemon.skillify.indexer import SkillIndexer
 
     vector_store = MagicMock()
     vector_store._owns_pool = False

@@ -8,6 +8,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.protocols.vector_store import VectorStoreProtocol
+from soothe_sdk.skillify.models import SkillRecord
 
 from .events import (
     SkillifyIndexFailedEvent,
@@ -15,7 +16,6 @@ from .events import (
     SkillifyIndexUnchangedEvent,
     SkillifyIndexUpdatedEvent,
 )
-from .models import SkillRecord
 from .warehouse import SkillWarehouse
 
 if TYPE_CHECKING:

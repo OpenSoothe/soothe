@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_nano.skillify.retriever import SkillRetriever
+from soothe_daemon.skillify.retriever import SkillRetriever
 
 
 class _FakeEmbeddings:

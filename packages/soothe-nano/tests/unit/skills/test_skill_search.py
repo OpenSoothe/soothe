@@ -1,4 +1,4 @@
-"""Tests for unified deferred skill search (IG-543 P1/P2)."""
+"""Tests for unified deferred skill search (substring / corpus matching)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import HumanMessage
 
-from soothe_nano.config import SootheConfig
 from soothe_nano.middleware.skill_activation import SkillActivationMiddleware
-from soothe_nano.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 from soothe_nano.skills.index import SkillIndexEntry
 from soothe_nano.skills.registry import ProgressiveSkillRegistry
 from soothe_nano.skills.search import (
@@ -47,94 +45,39 @@ class TestMergeSearchResults:
         assert [entry.name for entry in merged] == ["alpha"]
 
 
-class TestSemanticSearch:
+class TestSubstringSearch:
     @pytest.mark.asyncio
-    async def test_supplements_substring_when_enabled(self) -> None:
+    async def test_search_deferred_uses_substring_only(self) -> None:
         registry = ProgressiveSkillRegistry()
         deferred = [_entry("db-migrate"), _entry("vector-only")]
-        config = SootheConfig()
-        config.progressive_skills.semantic_search_enabled = True
-        config.progressive_skills.semantic_search_min_score = 0.0
-
-        record = SkillRecord(
-            id="vector-only",
-            name="vector-only",
-            description="semantic hit",
-            path="/tmp/vector-only",
-            tags=["ops"],
+        matches = await search_deferred_skills(
+            "deploy",
+            deferred,
+            discovered=set(),
+            limit=5,
+            registry=registry,
+            config=MagicMock(),
+            catalog_by_name={entry.name: entry for entry in deferred},
         )
-        bundle = SkillBundle(
-            query="deploy database",
-            results=[SkillSearchResult(record=record, score=0.88)],
-        )
-        mock_service = MagicMock()
-        mock_service.retrieve = AsyncMock(return_value=bundle)
-
-        with patch(
-            "soothe_nano.skillify.start_skillify_service",
-            return_value=mock_service,
-        ):
-            matches = await search_deferred_skills(
-                "deploy",
-                deferred,
-                discovered=set(),
-                limit=5,
-                registry=registry,
-                config=config,
-                catalog_by_name={entry.name: entry for entry in deferred},
-            )
-
-        names = [entry.name for entry in matches]
-        assert "vector-only" in names
+        # "deploy" does not substring-match either name/description tag set here
+        assert matches == []
 
     @pytest.mark.asyncio
-    async def test_semantic_hits_outside_search_corpus_are_ignored(self) -> None:
+    async def test_search_deferred_matches_by_name_substring(self) -> None:
         registry = ProgressiveSkillRegistry()
-        core_weather = SkillIndexEntry(
-            name="weather",
-            description="Get current weather and forecasts",
-            tags="weather, 天气, forecast",
-            source="builtin",
-            path="/tmp/weather",
-            mtime=0.0,
+        deferred = [_entry("db-migrate"), _entry("vector-only")]
+        matches = await search_deferred_skills(
+            "migrate",
+            deferred,
+            discovered=set(),
+            limit=5,
+            registry=registry,
+            config=MagicMock(),
+            catalog_by_name={entry.name: entry for entry in deferred},
         )
-        deferred_only = _entry("platonic-coding")
-        config = SootheConfig()
-        config.progressive_skills.semantic_search_enabled = True
-        config.progressive_skills.semantic_search_min_score = 0.0
+        assert [entry.name for entry in matches] == ["db-migrate"]
 
-        record = SkillRecord(
-            id="platonic-coding",
-            name="platonic-coding",
-            description="spec-driven development lifecycle",
-            path="/tmp/platonic-coding",
-            tags=["workflow"],
-        )
-        bundle = SkillBundle(
-            query="北京今天的天气",
-            results=[SkillSearchResult(record=record, score=0.92)],
-        )
-        mock_service = MagicMock()
-        mock_service.retrieve = AsyncMock(return_value=bundle)
-
-        catalog = {core_weather.name: core_weather, deferred_only.name: deferred_only}
-        with patch(
-            "soothe_nano.skillify.start_skillify_service",
-            return_value=mock_service,
-        ):
-            matches = await search_deferred_skills(
-                "北京今天的天气",
-                [core_weather],
-                discovered=set(),
-                limit=2,
-                registry=registry,
-                config=config,
-                catalog_by_name=catalog,
-            )
-
-        assert [entry.name for entry in matches] == ["weather"]
-
-    def test_prefetch_core_corpus_excludes_semantic_only_hits(self) -> None:
+    def test_prefetch_core_corpus_excludes_unrelated_skills(self) -> None:
         registry = ProgressiveSkillRegistry()
         weather = SkillIndexEntry(
             name="weather",
@@ -187,63 +130,6 @@ class TestSemanticSearch:
             registry=registry,
         )
         assert [entry.name for entry in matches] == ["clawhub"]
-
-    @pytest.mark.asyncio
-    async def test_skips_semantic_when_disabled(self) -> None:
-        registry = ProgressiveSkillRegistry()
-        deferred = [_entry("vector-only")]
-        config = MagicMock()
-        config.progressive_skills.semantic_search_enabled = False
-
-        with patch("soothe_nano.skillify.start_skillify_service") as mock_get:
-            matches = await search_deferred_skills(
-                "vector-only",
-                deferred,
-                discovered=set(),
-                limit=5,
-                registry=registry,
-                config=config,
-                catalog_by_name={entry.name: entry for entry in deferred},
-            )
-
-        mock_get.assert_not_called()
-        assert len(matches) == 1
-        assert matches[0].name == "vector-only"
-
-    @pytest.mark.asyncio
-    async def test_falls_back_to_substring_when_embedding_service_unavailable(self) -> None:
-        registry = ProgressiveSkillRegistry()
-        deferred = [_entry("vector-only")]
-        config = SootheConfig()
-        config.progressive_skills.semantic_search_enabled = True
-
-        mock_service = MagicMock()
-        mock_service.retrieve = AsyncMock(
-            return_value=SkillBundle(
-                query=(
-                    "[Embedding unavailable] Semantic skill search is temporarily unavailable. "
-                    "Falling back to keyword matching."
-                ),
-                results=[],
-            )
-        )
-
-        with patch(
-            "soothe_nano.skillify.start_skillify_service",
-            return_value=mock_service,
-        ):
-            matches = await search_deferred_skills(
-                "vector-only",
-                deferred,
-                discovered=set(),
-                limit=5,
-                registry=registry,
-                config=config,
-                catalog_by_name={entry.name: entry for entry in deferred},
-            )
-
-        assert len(matches) == 1
-        assert matches[0].name == "vector-only"
 
 
 class TestIntentPrefetch:

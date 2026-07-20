@@ -179,7 +179,7 @@ def _build_weaver_graph(
         _emit_event(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict(), logger)
 
         # Fetch skills (with indexing-not-ready tolerance)
-        from soothe_nano.skillify.models import SkillBundle
+        from soothe_sdk.skillify.models import SkillBundle
 
         skill_bundle = SkillBundle(query=capability.description)
         if skillify_service is not None:
@@ -370,12 +370,12 @@ class WeaverPlugin:
         import soothe_plugins.weaver.events  # noqa: F401
 
         try:
-            from soothe_nano.skillify.models import SkillBundle  # noqa: F401
+            from soothe_sdk.skillify.models import SkillBundle  # noqa: F401
 
-            context.logger.info("Weaver plugin loaded (Skillify available)")
+            context.logger.info("Weaver plugin loaded (Skillify DTOs available)")
         except ImportError:
             raise PluginError(
-                "Weaver requires Skillify (built into soothe core).",
+                "Weaver requires Skillify models from soothe-sdk.",
             )
 
     async def on_unload(self) -> None:
@@ -472,15 +472,15 @@ class WeaverPlugin:
         generator_inst = AgentGenerator(model=resolved_model)
         registry_inst = GeneratedAgentRegistry(base_dir=Path(generated_agents_dir))
 
-        # Shared Skillify service for skill harmonization
+        # Use daemon-started Skillify service only (do not start here).
         skillify_service = None
-        if soothe_cfg.skillify.enabled:
+        if getattr(soothe_cfg, "skillify", None) is not None and soothe_cfg.skillify.enabled:
             try:
-                from soothe_nano.skillify import start_skillify_service
+                from soothe_daemon.skillify import get_skillify_service
 
-                skillify_service = await start_skillify_service(soothe_cfg)
+                skillify_service = get_skillify_service(soothe_cfg)
             except Exception:
-                logger.debug("Failed to create Skillify service for Weaver", exc_info=True)
+                logger.debug("Skillify service unavailable for Weaver", exc_info=True)
 
         runnable = _build_weaver_graph(
             analyzer=analyzer_inst,

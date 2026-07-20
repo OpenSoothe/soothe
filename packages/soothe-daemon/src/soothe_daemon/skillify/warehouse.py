@@ -8,7 +8,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .models import SkillRecord
+from soothe_sdk.skillify.models import SkillRecord
 
 logger = logging.getLogger(__name__)
 

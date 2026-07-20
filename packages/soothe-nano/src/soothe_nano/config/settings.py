@@ -32,7 +32,6 @@ from soothe_nano.config.models import (
     ReportOutputConfig,
     RouterProfile,
     SecurityConfig,
-    SkillifyConfig,
     SubagentConfig,
     ToolsConfig,
     UIConfig,
@@ -457,9 +456,13 @@ class SootheConfig(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _strip_legacy_skillify_subagent_config(cls, data: Any) -> Any:
-        """Drop removed ``subagents.skillify`` entries from YAML (use top-level ``skillify``)."""
+        """Drop removed ``subagents.skillify`` and top-level ``skillify`` from nano YAML.
+
+        Skillify is owned by the host/daemon config (``soothe.config``), not nano.
+        """
         if not isinstance(data, dict):
             return data
+        data.pop("skillify", None)
         subagents = data.get("subagents")
         if isinstance(subagents, dict) and "skillify" in subagents:
             data["subagents"] = {
@@ -561,9 +564,6 @@ class SootheConfig(BaseSettings):
 
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     """Unified observability configuration for debugging and monitoring."""
-
-    skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
-    """Daemon-shared Skillify semantic skill warehouse indexing and retrieval."""
 
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     """Security policy configuration."""

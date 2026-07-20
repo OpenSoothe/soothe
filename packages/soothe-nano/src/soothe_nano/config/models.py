@@ -1573,26 +1573,6 @@ class AgentConfig(BaseModel):
     )
 
 
-class SkillifyConfig(BaseModel):
-    """Configuration for the daemon-shared Skillify semantic skill search service."""
-
-    enabled: bool = False
-    model_role: ModelRole = Field(
-        default="embedding",
-        description="Router model role used for Skillify embedding calls.",
-    )
-    warehouse_paths: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Extra SKILL.md roots for vector indexing. "
-            "Defaults (~/.soothe/skills and ~/.agents/skills) are always prepended when absent."
-        ),
-    )
-    index_collection: str = "soothe_skillify"
-    index_interval_seconds: int = 300
-    retrieval_top_k: int = 10
-
-
 class SecurityConfig(BaseModel):
     """Security policy configuration for filesystem access control.
 

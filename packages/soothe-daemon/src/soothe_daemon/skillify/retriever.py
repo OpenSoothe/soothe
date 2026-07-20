@@ -7,11 +7,9 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe_sdk.protocols.policy import ActionRequest, PermissionSet, PolicyContext
-
 from soothe_nano.utils.stream_normalize import extract_text_from_message_content
-
-from .models import SkillBundle, SkillRecord, SkillSearchResult
+from soothe_sdk.protocols.policy import ActionRequest, PermissionSet, PolicyContext
+from soothe_sdk.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable

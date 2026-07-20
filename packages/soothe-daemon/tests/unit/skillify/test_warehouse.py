@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe_nano.skillify.warehouse import SkillWarehouse
+from soothe_daemon.skillify.warehouse import SkillWarehouse
 
 
 def _write_skill(skill_dir: Path, *, name: str, description: str) -> None:

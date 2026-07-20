@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from soothe.config import SootheConfig
+from soothe_sdk.skillify.models import SkillBundle
 
-from soothe_nano.config import SootheConfig
-from soothe_nano.skillify.models import SkillBundle
-from soothe_nano.skillify.service import SkillifyService
+from soothe_daemon.skillify.service import SkillifyService
 
 
 class APIConnectionError(Exception):

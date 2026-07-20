@@ -1,4 +1,4 @@
-"""Skillify data models."""
+"""Skillify data models (shared DTOs for daemon service and plugins)."""
 
 from __future__ import annotations
 

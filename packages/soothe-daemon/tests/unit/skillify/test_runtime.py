@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import soothe_nano
-from soothe_nano.skillify.service import _default_warehouse_paths, resolve_warehouse_paths
+import soothe_nano.skills as skills_pkg
 
-_BUILTIN_SKILLS = Path(soothe_nano.__file__).resolve().parent / "skills" / "builtin_skills"
+from soothe_daemon.skillify.service import _default_warehouse_paths, resolve_warehouse_paths
+
+_BUILTIN_SKILLS = Path(skills_pkg.__file__).resolve().parent / "builtin_skills"
 
 
 def test_default_warehouse_paths_include_user_skill_dirs(tmp_path: Path) -> None:

@@ -1,9 +1,9 @@
-"""Daemon-shared Skillify skill warehouse indexing and semantic retrieval."""
+"""Daemon Skillify service — skill warehouse indexing and semantic retrieval."""
 
-from soothe_nano.config.models import SkillifyConfig
+from soothe.config.models import SkillifyConfig
+from soothe_sdk.skillify.models import SkillBundle, SkillRecord, SkillSearchResult
 
 from . import events as _events  # noqa: F401 — register soothe.skillify.* wire types
-from .models import SkillBundle, SkillRecord, SkillSearchResult
 from .retriever import SkillRetriever, configure_vector_search_concurrency
 from .service import (
     SkillifyService,

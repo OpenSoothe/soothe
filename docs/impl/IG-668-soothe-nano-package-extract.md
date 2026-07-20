@@ -48,7 +48,8 @@ Bulk-migrated into `soothe_nano/`:
 |------|----------------|
 | Toolkits | `soothe_nano.toolkits` |
 | Middleware | `soothe_nano.middleware` |
-| Skills + skillify | `soothe_nano.skills`, `soothe_nano.skillify` |
+| Skills (catalog / progressive) | `soothe_nano.skills` |
+| Skillify (semantic warehouse) | `soothe_daemon.skillify` (+ DTOs in `soothe_sdk.skillify`) |
 | MCP | `soothe_nano.mcp` |
 | Plugin hooks | `soothe_nano.plugin` |
 | Config (CoreAgent slice) | `soothe_nano.config` |
@@ -92,7 +93,7 @@ Exit gate: `scripts/check_module_import_boundaries.sh` Rule 3c bans L2/L3 symbol
 
 ## Test home (Phase 1)
 
-Pure-nano tests live under `packages/soothe-nano/tests/` (mcp, backends, toolkits, skills, skillify, filesystem, most subagents except veritas, matching integration).
+Pure-nano tests live under `packages/soothe-nano/tests/` (mcp, backends, toolkits, skills, filesystem, most subagents except veritas, matching integration). Skillify tests live under `packages/soothe-daemon/tests/` (`unit/skillify`, `integration/skillify`).
 
 - Slim `conftest.py`: env + temp workspace; **no** `SootheRunner`.
 - Loop / sloop / context / cron / autopilot / runner / veritas / mixed tests remain in `packages/soothe/tests/`.
@@ -121,6 +122,9 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 | `soothe_nano.toolkits.*` etc. | Direct `soothe_nano` imports (no leaf shims) |
 | `resolve_planner` → `None` in nano | soothe builder injects StrangeLoop planner |
 | Shared contracts (`CoreAgentProtocol`, planner/memory/durability/…, policy, persistence, vector store, identity) | Canonical **only** in ``soothe_sdk.protocols`` (nano protocols package removed) |
+| Skills catalog / progressive search | `soothe_nano.skills` (substring only; no Skillify import) |
+| Skillify DTOs | `soothe_sdk.skillify` |
+| Skillify service | `soothe_daemon.skillify` (host config `skillify:` on `soothe.config`) |
 
 ---
 
@@ -152,3 +156,4 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 
 - RFC-100: further slim `NanoConfig` vs `SootheConfig` field ownership
 - Optional: remove leftover package-level lazy `__getattr__` bridges once call sites are fully on nano
+- Done: Skillify service moved to `soothe_daemon.skillify`; DTOs in `soothe_sdk.skillify`; nano progressive search is substring-only

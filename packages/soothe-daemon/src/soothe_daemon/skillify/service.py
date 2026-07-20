@@ -1,4 +1,4 @@
-"""Daemon-shared Skillify indexing and semantic skill search."""
+"""Daemon Skillify indexing and semantic skill search."""
 
 from __future__ import annotations
 
@@ -8,28 +8,34 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.config import SOOTHE_HOME
+from soothe.config import SOOTHE_HOME
+from soothe_sdk.skillify.models import SkillBundle
 
 from .indexer import SkillIndexer
-from .models import SkillBundle
 from .retriever import SkillRetriever, configure_vector_search_concurrency
 from .warehouse import SkillWarehouse
 
 if TYPE_CHECKING:
-    from soothe_nano.config import SootheConfig
+    from soothe.config import SootheConfig
 
 logger = logging.getLogger(__name__)
 
 _shared_instance: SkillifyService | None = None
 _shared_lock = asyncio.Lock()
-_BUILTIN_SKILLS_DIR = Path(__file__).resolve().parents[1] / "skills" / "builtin_skills"
+
+
+def _builtin_skills_dir() -> Path:
+    """Resolve soothe-nano builtin skills directory for warehouse defaults."""
+    import soothe_nano.skills as skills_pkg
+
+    return Path(skills_pkg.__file__).resolve().parent / "builtin_skills"
 
 
 def _default_warehouse_paths(soothe_home: Path) -> list[str]:
     """Default Skillify scan roots (same user skill dirs as the skill catalog)."""
     return [
         str(Path.home() / ".agents" / "skills"),
-        str(_BUILTIN_SKILLS_DIR),
+        str(_builtin_skills_dir()),
         str(soothe_home / "skills"),
     ]
 

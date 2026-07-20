@@ -127,7 +127,7 @@ def warmup_worker_runner_on_loop(
     materialize_start = time.perf_counter()
     try:
         if config.skillify.enabled:
-            from soothe_nano.skillify import start_skillify_service
+            from soothe_daemon.skillify import start_skillify_service
 
             loop.run_until_complete(start_skillify_service(config))
 
