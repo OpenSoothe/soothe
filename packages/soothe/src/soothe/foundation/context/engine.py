@@ -16,7 +16,6 @@ from langchain_core.messages import (
     SystemMessage,
     ToolMessage,
 )
-from soothe_nano.utils.text_preview import goal_description_for_log
 
 from soothe.foundation.context.ledger import LedgerManager
 from soothe.foundation.context.models import (
@@ -32,6 +31,7 @@ from soothe.foundation.context.models import (
 )
 from soothe.foundation.context.projection import ContextBundle, ProjectionConfig, ProjectionEngine
 from soothe.foundation.context.semantic import SemanticLoader
+from soothe.utils.text_preview import goal_description_for_log
 
 if TYPE_CHECKING:
     pass

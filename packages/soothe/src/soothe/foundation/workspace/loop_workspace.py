@@ -6,11 +6,11 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from soothe_nano.workspace.resolution import (
+from soothe.foundation.workspace.resolution import (
     translate_client_path_to_container,
     validate_client_workspace,
 )
-from soothe_nano.workspace.scoped import (
+from soothe.foundation.workspace.scoped import (
     compute_scoped_workspace_dir_name,
     normalize_user_id,
     user_id_for_hash,

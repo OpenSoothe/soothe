@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from soothe_nano.utils.prompt_clock import prompt_datetime_context
-
 from soothe.foundation.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
     build_intake_pass1_system_prompt,
     build_prompt_timestamp_block,
 )
+from soothe.utils.prompt_clock import prompt_datetime_context
 
 
 def test_build_prompt_timestamp_block_includes_live_values() -> None:

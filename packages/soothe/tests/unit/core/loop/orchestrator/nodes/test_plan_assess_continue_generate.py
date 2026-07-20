@@ -288,7 +288,9 @@ async def test_continuation_bootstrap_emits_single_combined_reason_card() -> Non
 @pytest.mark.asyncio
 async def test_continuation_complex_intake_skips_bootstrap() -> None:
     """Complex intake on continuation must not bootstrap (loop 0b37 goal_4 shape)."""
-    from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.foundation.sloop.intention import IntentClassification
     from soothe.foundation.sloop.intention.models import IntakeLabel
 
     goal = (

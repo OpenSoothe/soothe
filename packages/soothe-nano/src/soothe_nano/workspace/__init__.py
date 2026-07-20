@@ -14,33 +14,17 @@ __all__ = [
     "ResolvedWorkspace",
     "WorkspaceAwareBackend",
     "WorkspaceContext",
-    "WorkspacePrecedence",
-    "cleanup_anonymous_workspaces",
-    "clear_virtual_mode_context",
-    "compute_scoped_workspace_dir_name",
-    "normalize_user_id",
     "get_virtual_home",
     "get_virtual_home_relative_path",
     "get_virtual_mode",
-    "resolve_daemon_workspace",
-    "resolve_workspace",
     "resolve_workspace_for_stream",
     "resolve_workspace_for_tool_execution",
     "set_virtual_mode_context",
-    "translate_client_path_to_container",
-    "translate_container_path_to_client",
-    "validate_client_workspace",
     "get_workspace_backend",
+    "clear_virtual_mode_context",
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "resolve_daemon_workspace": (".resolution", "resolve_daemon_workspace"),
-    "normalize_user_id": (".scoped", "normalize_user_id"),
-    "compute_scoped_workspace_dir_name": (".scoped", "compute_scoped_workspace_dir_name"),
-    "cleanup_anonymous_workspaces": (".resolution", "cleanup_anonymous_workspaces"),
-    "validate_client_workspace": (".resolution", "validate_client_workspace"),
-    "translate_client_path_to_container": (".resolution", "translate_client_path_to_container"),
-    "translate_container_path_to_client": (".resolution", "translate_container_path_to_client"),
     "ResolvedWorkspace": (".stream_resolution", "ResolvedWorkspace"),
     "resolve_workspace_for_stream": (".stream_resolution", "resolve_workspace_for_stream"),
     "resolve_workspace_for_tool_execution": (
@@ -60,9 +44,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "get_virtual_home_relative_path": (".virtual_home", "get_virtual_home_relative_path"),
     # Unified context
     "WorkspaceContext": (".context", "WorkspaceContext"),
-    # Shared resolution core
-    "WorkspacePrecedence": (".core_resolution", "WorkspacePrecedence"),
-    "resolve_workspace": (".core_resolution", "resolve_workspace"),
 }
 
 

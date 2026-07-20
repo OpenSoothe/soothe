@@ -12,8 +12,6 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.utils.text_preview import goal_description_for_log
-
 from soothe.foundation.context.models import GoalNode, GoalStepDAG, StepExecution, StepNode
 from soothe.foundation.context.planning.completion import (
     determine_completion_strategy as _determine_completion_strategy,
@@ -26,6 +24,7 @@ from soothe.foundation.context.planning.models import (
     DagPlanningContext,
     PlanWave,
 )
+from soothe.utils.text_preview import goal_description_for_log
 
 if TYPE_CHECKING:
     from soothe.foundation.sloop.state.schemas import PlanResult, StepResult

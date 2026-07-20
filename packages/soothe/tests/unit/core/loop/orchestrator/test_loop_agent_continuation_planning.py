@@ -12,11 +12,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_sdk.intention.models import TaskComplexity
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+from soothe.foundation.sloop.intention import IntentClassification
 from soothe.foundation.sloop.intention.models import IntakeLabel
 from soothe.foundation.sloop.orchestrator.nodes.bounded_evidence_gather import (
     node_bounded_evidence_gather,

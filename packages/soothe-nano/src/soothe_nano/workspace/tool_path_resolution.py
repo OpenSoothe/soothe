@@ -7,12 +7,13 @@ use ``resolve_backend_os_path`` so resolution matches ``NormalizedPathBackend`` 
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from soothe_nano.config import SootheConfig
 from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
-from soothe_nano.workspace.resolution import resolve_daemon_workspace
 
 # First path segment after ``/`` for absolute POSIX paths that usually denote host
 # roots (not virtual sandbox paths like ``/README.md``).
@@ -39,6 +40,16 @@ _UNIX_HOST_ROOT_TOP_NAMES: frozenset[str] = frozenset(
 )
 
 
+def resolve_process_workspace_root() -> Path:
+    """Resolve process-default workspace root when no explicit workspace is bound."""
+    env_workspace = os.environ.get("SOOTHE_WORKSPACE")
+    if env_workspace:
+        return Path(env_workspace).expanduser().resolve()
+    workspace = Path(tempfile.gettempdir()) / "soothe-workspace"
+    workspace.mkdir(parents=True, exist_ok=True)
+    return workspace.resolve()
+
+
 def config_workspace_root(config: Any | None) -> str | None:
     """Return configured ``filesystem_middleware.workspace_root`` when set."""
     if config is None:
@@ -55,7 +66,7 @@ def static_tool_workspace_fallback(config: Any | None = None) -> Path:
     root = config_workspace_root(config)
     if root:
         return Path(root).expanduser().resolve()
-    return resolve_daemon_workspace()
+    return resolve_process_workspace_root()
 
 
 def resolve_effective_tool_workspace(

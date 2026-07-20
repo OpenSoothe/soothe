@@ -14,7 +14,6 @@ from soothe_nano.utils.llm.invoke_policy import await_with_llm_call_policy
 from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat_typed
 from soothe_nano.utils.network_errors import calculate_network_backoff, is_transient_network_error
 from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
-from soothe_nano.utils.text_preview import create_output_summary, preview_first
 from soothe_nano.utils.token_counting import estimate_content_chars
 from soothe_sdk.protocols.planner import PlanContext
 
@@ -59,6 +58,7 @@ from soothe.foundation.sloop.utils.reflection import (
     _default_agent_decision,
     _extract_text_content,
 )
+from soothe.utils.text_preview import create_output_summary, preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -914,9 +914,8 @@ class LLMPlanner:
         Returns:
             PlanResult with combined reasoning and action fields
         """
-        from soothe_nano.utils.text_preview import preview_first
-
         from soothe.foundation.sloop.state.schemas import PlanResult
+        from soothe.utils.text_preview import preview_first
 
         action_text = resolve_plan_action_text(plan_result)
         plan_reasoning = (plan_result.reasoning or "").strip()

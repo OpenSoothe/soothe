@@ -10,7 +10,7 @@ Two-pass intake (RFC-630 IG-554): Pass 1 (social vs task) → Pass 2 (scope).
 Pass 1 returns ``is_task`` boolean; Pass 2 returns ``scope`` for work requests.
 
 CoreAgent ``TaskComplexity`` / ``RoutingClassification`` are owned by
-``soothe_nano.intention.models`` and re-exported here.
+``soothe_sdk.intention.models`` and re-exported here.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
-from soothe_nano.intention.models import RoutingClassification, TaskComplexity
+from soothe_sdk.intention.models import RoutingClassification, TaskComplexity
 
 
 class IntakeLabel(StrEnum):

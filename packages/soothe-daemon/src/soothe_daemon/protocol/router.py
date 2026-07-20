@@ -1906,7 +1906,7 @@ class MessageRouter:
         request_id = msg.get("request_id")
         is_ephemeral = bool(msg.get("is_ephemeral", False))
 
-        from soothe_nano.workspace.resolution import translate_client_path_to_container
+        from soothe.foundation.workspace import translate_client_path_to_container
 
         mount = d._config.workspace_mount
         host_root = mount.host_root if mount and mount.is_configured else None

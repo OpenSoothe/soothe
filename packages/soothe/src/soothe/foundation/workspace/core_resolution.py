@@ -62,12 +62,11 @@ def _resolve_loop(
     workspace_mapping: dict[str, Any] | None = None,
 ) -> ResolvedWorkspace:
     """LOOP precedence: client_workspace > persisted > daemon fallback."""
-    from soothe_nano.workspace.resolution import resolve_daemon_workspace
-
     from soothe.foundation.workspace.loop_workspace import (
         resolve_client_workspace_on_host,
         resolve_loop_workspace,
     )
+    from soothe.foundation.workspace.resolution import resolve_daemon_workspace
 
     client_ws = str(client_workspace).strip() if client_workspace else None
     try:

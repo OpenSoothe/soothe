@@ -40,14 +40,16 @@ class FileOpsPlugin:
         """
         from soothe_deepagents.backends.filesystem import FilesystemBackend
 
-        from soothe_nano.workspace.resolution import resolve_daemon_workspace
         from soothe_nano.workspace.tool_path_resolution import (
             filesystem_virtual_mode_from_soothe_config,
             max_file_size_mb_for_filesystem_backend,
+            resolve_process_workspace_root,
         )
 
         sc = context.soothe_config
-        workspace_root = context.config.get("workspace_root") or str(resolve_daemon_workspace())
+        workspace_root = context.config.get("workspace_root") or str(
+            resolve_process_workspace_root()
+        )
         fs_config = dict(context.config.get("filesystem_middleware", {}))
         virtual_mode = filesystem_virtual_mode_from_soothe_config(sc)
         max_file_size_mb = fs_config.get(

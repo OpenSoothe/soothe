@@ -9,8 +9,8 @@ from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
+from soothe_sdk.intention.models import RoutingClassification
 
-from soothe.foundation.sloop.intention import RoutingClassification
 from soothe.foundation.sloop.middleware.config_keys import (
     SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
     SOOTHE_STEP_SUBAGENT_CONFIG_KEY,

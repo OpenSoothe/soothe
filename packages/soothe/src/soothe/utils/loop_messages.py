@@ -270,7 +270,8 @@ def tag_messages_stream_chunk_for_assistant_phase(
     from langchain_core.messages import AIMessage as LCAIMessage
     from langchain_core.messages import AIMessageChunk as LCAIMessageChunk
     from langchain_core.messages import ToolMessage
-    from soothe_nano.utils.stream_normalize import parse_tuple_stream_chunk
+
+    from soothe.foundation.sloop.utils.stream_normalize import parse_tuple_stream_chunk
 
     parsed = parse_tuple_stream_chunk(chunk)
     if parsed is None:

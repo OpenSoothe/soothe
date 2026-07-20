@@ -10,9 +10,9 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from soothe_nano.middleware import SystemPromptMiddleware
 from soothe_nano.middleware.progressive_listing import ProgressiveListingMiddleware
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
+from soothe_sdk.intention.models import RoutingClassification
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.intention import RoutingClassification
 
 _VOLATILE_PROMPT_SECTION_RE = re.compile(
     r"<(?:ENVIRONMENT|TIMESTAMP)>.*?</(?:ENVIRONMENT|TIMESTAMP)>\n?",

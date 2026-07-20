@@ -72,7 +72,7 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 | Goal synthesis / step-subagent CoreAgent guards | `soothe.foundation.sloop.middleware.goal_step_guard` (suffix) + `config_keys` |
 | Agent-loop max iterations / tool-calls-per-step | `soothe.config.constants` (`DEFAULT_MAX_ITERATIONS`, …) — not in nano |
 | Nano ToolEnforcement | preferred_subagent first-hop only (`soothe_nano.middleware.tool_enforcement`) |
-| CoreAgent `TaskComplexity` / `RoutingClassification` | `soothe_nano.intention.models` (host sloop intention re-exports) |
+| CoreAgent `TaskComplexity` / `RoutingClassification` | `soothe_sdk.intention.models` (host and nano consume shared canonical models) |
 | Host intake / Pass1 / Pass2 models | `soothe.foundation.sloop.intention.models` |
 | Full `GlobalInputHistory` | `soothe.logging.global_history` (daemon uses this; CLI uses sdk thin helper) |
 | CoreAgent events registry | `soothe_nano.events` (policy/memory/stream/LLM retry; no daemon heartbeat) |
@@ -113,7 +113,7 @@ From IG-668 follow-ups and leftover polish:
 
 **Done in loop-limits scrub (2026-07-20):** dropped nano `DEFAULT_MAX_ITERATIONS` / `DEFAULT_MAX_TOOL_CALLS_PER_STEP`; host `GoalStepGuardMiddleware` owns `soothe_goal_synthesis` + `soothe_step_subagent` (suffix after ToolEnforcement); nano ToolEnforcement / RoleRouting no longer read those configurables; Rule 3c extended.
 
-**Done in events / history / intention polish (2026-07-20):** nano events slimmed (no daemon heartbeat/config-reload/visibility/stubs); `GlobalInputHistory` canonical in `soothe.logging`; host intake models re-export nano `TaskComplexity`/`RoutingClassification`.
+**Done in events / history / intention polish (2026-07-20):** nano events slimmed (no daemon heartbeat/config-reload/visibility/stubs); `GlobalInputHistory` canonical in `soothe.logging`; `TaskComplexity`/`RoutingClassification` canonicalized in `soothe_sdk.intention.models`.
 
 ---
 

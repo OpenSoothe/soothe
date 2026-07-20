@@ -15,7 +15,7 @@ from pathlib import Path
 import wcmatch.glob as wcglob
 from pathspec import PathSpec
 
-from soothe_nano.workspace.resolution import resolve_daemon_workspace
+from soothe_nano.workspace.tool_path_resolution import resolve_process_workspace_root
 
 from .local import LocalFilesystem
 from .protocol import (
@@ -731,9 +731,9 @@ class WorkspaceFilesystem(UnifiedFilesystem):
         virtual_mode: bool = True,
         max_file_size_mb: int = 10,
     ) -> WorkspaceFilesystem:
-        """Create a WorkspaceFilesystem using the framework's daemon workspace.
+        """Create a WorkspaceFilesystem using the process-default workspace.
 
-        This factory method resolves the daemon workspace and creates a
+        This factory method resolves the process workspace and creates a
         WorkspaceFilesystem instance configured for framework operations.
 
         Args:
@@ -741,9 +741,9 @@ class WorkspaceFilesystem(UnifiedFilesystem):
             max_file_size_mb: Maximum file size in MB.
 
         Returns:
-            WorkspaceFilesystem instance configured for the daemon workspace.
+            WorkspaceFilesystem instance configured for the process workspace.
         """
-        workspace = resolve_daemon_workspace()
+        workspace = resolve_process_workspace_root()
         return cls(
             workspace=workspace,
             virtual_mode=virtual_mode,

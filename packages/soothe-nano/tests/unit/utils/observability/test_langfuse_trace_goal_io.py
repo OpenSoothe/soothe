@@ -6,7 +6,9 @@ import pytest
 
 
 def test_loop_graph_langfuse_run_display_name() -> None:
-    from soothe_nano.utils.observability.langfuse import loop_graph_langfuse_run_display_name
+    from soothe_nano.utils.observability.langfuse._names import (
+        loop_graph_langfuse_run_display_name,
+    )
 
     assert loop_graph_langfuse_run_display_name("soothe-dev") == "soothe-dev:strange-loop-graph"
     assert loop_graph_langfuse_run_display_name(None) == "strange-loop-graph"
@@ -14,7 +16,7 @@ def test_loop_graph_langfuse_run_display_name() -> None:
 
 def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse import patch_langfuse_trace_goal_io
+    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
 
     with patch("langfuse.get_client") as gc:
         patch_langfuse_trace_goal_io(
@@ -29,7 +31,7 @@ def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
 
 def test_patch_langfuse_trace_goal_io_skips_without_trace_id() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse import patch_langfuse_trace_goal_io
+    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
     from soothe_nano.utils.observability.langfuse_callback_handler import (
         SootheLangfuseCallbackHandler,
     )
@@ -50,7 +52,7 @@ def test_patch_langfuse_trace_goal_io_skips_without_trace_id() -> None:
 
 def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse import patch_langfuse_trace_goal_io
+    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
     from soothe_nano.utils.observability.langfuse_callback_handler import (
         SootheLangfuseCallbackHandler,
     )
@@ -81,7 +83,7 @@ def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
 
 def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
     pytest.importorskip("langfuse")
-    from soothe_nano.utils.observability.langfuse import patch_langfuse_trace_goal_io
+    from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
     from soothe_nano.utils.observability.langfuse_callback_handler import (
         SootheLangfuseCallbackHandler,
     )

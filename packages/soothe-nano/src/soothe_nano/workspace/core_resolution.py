@@ -1,7 +1,4 @@
-"""Unified workspace resolution core for STREAM and TOOL precedence (RFC-621).
-
-LOOP precedence lives in ``soothe.foundation.workspace.core_resolution``.
-"""
+"""Unified workspace resolution core for STREAM and TOOL precedence (RFC-621)."""
 
 from __future__ import annotations
 
@@ -15,7 +12,6 @@ from soothe_nano.workspace.stream_resolution import ResolvedWorkspace
 class WorkspacePrecedence(Enum):
     """Which precedence chain to use for workspace resolution."""
 
-    LOOP = "loop"
     STREAM = "stream"
     TOOL_EXECUTION = "tool"
 
@@ -33,9 +29,6 @@ def resolve_workspace(
     Returns:
         ``ResolvedWorkspace`` with absolute ``path`` and ``source`` label.
     """
-    if precedence == WorkspacePrecedence.LOOP:
-        msg = "LOOP workspace resolution lives in soothe.foundation.workspace"
-        raise NotImplementedError(msg)
     if precedence == WorkspacePrecedence.STREAM:
         return _resolve_stream(**sources)
     if precedence == WorkspacePrecedence.TOOL_EXECUTION:

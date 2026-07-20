@@ -45,17 +45,17 @@ class FrameworkFilesystem:
             Initialized FilesystemBackend instance (workspace-aware wrapper).
         """
         from soothe_nano.workspace.normalized_backend import WorkspaceAwareBackend
-        from soothe_nano.workspace.resolution import resolve_daemon_workspace
         from soothe_nano.workspace.tool_path_resolution import (
             config_workspace_root,
             max_file_size_mb_for_filesystem_backend,
+            resolve_process_workspace_root,
         )
 
         configured_root = config_workspace_root(config)
         resolved_workspace = (
             Path(configured_root).expanduser().resolve()
             if configured_root
-            else resolve_daemon_workspace()
+            else resolve_process_workspace_root()
         )
 
         # virtual_mode semantics (documented clearly, not as a "bug"):

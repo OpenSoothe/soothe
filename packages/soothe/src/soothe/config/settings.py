@@ -990,7 +990,8 @@ class SootheConfig(BaseSettings):
         from soothe_nano.prompts.system_templates import (
             format_complex_agent_system_prompt_core,
         )
-        from soothe_nano.utils.prompt_clock import local_date_str, local_timezone_label
+
+        from soothe.utils.prompt_clock import local_date_str, local_timezone_label
 
         current_date = local_date_str()
         tz_label = local_timezone_label()

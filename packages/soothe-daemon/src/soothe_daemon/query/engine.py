@@ -17,7 +17,6 @@ from typing import Any
 
 from soothe.foundation.events import ERROR
 from soothe.logging import ThreadLogger, set_thread_id
-from soothe_nano.utils.error_format import emit_error_event
 from soothe_sdk.display.text_extract import extract_text_from_ai_message
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
@@ -31,6 +30,7 @@ from soothe_daemon.protocol.intent_hints import is_daemon_intent_hint
 from soothe_daemon.query.stream_delivery import StreamDeliveryCoalescer
 from soothe_daemon.services.image_understanding import enrich_user_text_with_vision
 from soothe_daemon.services.intent_hint_turn import run_intent_hint_turn
+from soothe_daemon.utils.error_events import emit_error_event
 
 logger = logging.getLogger(__name__)
 

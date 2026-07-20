@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from soothe_nano.workspace import (
+from soothe_nano.workspace.resolution import (
     resolve_daemon_workspace,
     validate_client_workspace,
 )

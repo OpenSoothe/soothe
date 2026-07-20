@@ -3,8 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from soothe_sdk.intention.models import TaskComplexity
 
-from soothe.foundation.sloop.intention import IntentClassification, IntentClassifier, TaskComplexity
+from soothe.foundation.sloop.intention import IntentClassification, IntentClassifier
 from soothe.foundation.sloop.intention.models import (
     IntakeLabel,
     IntakePass1Confidence,

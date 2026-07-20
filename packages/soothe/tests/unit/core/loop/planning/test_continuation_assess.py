@@ -159,7 +159,9 @@ async def test_continuation_assess_uses_unified_message_list() -> None:
 
 @pytest.mark.asyncio
 async def test_continuation_assess_guardrail_overrides_bootstrap_for_complex_intake() -> None:
-    from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
+    from soothe_sdk.intention.models import TaskComplexity
+
+    from soothe.foundation.sloop.intention import IntentClassification
     from soothe.foundation.sloop.intention.models import IntakeLabel
 
     planner = _make_planner()

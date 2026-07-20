@@ -1,4 +1,4 @@
-"""Routing classification models for CoreAgent system prompt tiers."""
+"""Shared routing classification models for CoreAgent execution paths."""
 
 from __future__ import annotations
 
@@ -39,7 +39,8 @@ class RoutingClassification(BaseModel):
         description="Preferred subagent name when the host requests a specialist",
     )
     routing_hint: str | None = Field(
-        default=None, description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc."
+        default=None,
+        description="Routing strategy hint: 'subagent', 'tool', 'llm_only', etc.",
     )
 
 
