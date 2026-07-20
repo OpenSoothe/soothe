@@ -23,7 +23,8 @@ from dotenv import load_dotenv
 from langchain_core.tools import tool
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from soothe import MemoryItem, create_soothe_agent
+from soothe_nano import create_nano_agent
+from soothe_sdk.protocols.memory import MemoryItem
 
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
@@ -157,7 +158,7 @@ async def main() -> None:
 
     # Create CoreAgent with full composition
     # Everything is enabled from config by default
-    agent = create_soothe_agent(
+    agent = create_nano_agent(
         config,
         # Add additional custom tools beyond config
         tools=[get_project_status, log_decision],

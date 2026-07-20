@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "soothe-nano"
-dynamic = ["version"]
+version = "0.9.0"
 description = "Soothe Nano — batteries-included Coding CoreAgent on deepagents (no StrangeLoop/Autopilot)"
 readme = "README.md"
 license = { text = "MIT" }
@@ -94,10 +94,6 @@ exclude = [
     "**/*.pyc",
     "**/*.pyo",
 ]
-
-[tool.hatch.version]
-path = "../../VERSION"
-pattern = "^(?P<version>[0-9]+\\.[0-9]+\\.[0-9]+)$"
 
 [tool.ruff]
 line-length = 100

@@ -1,7 +1,5 @@
 """Main orchestration entry point with execution, branching, and analysis."""
 
-from soothe_nano.agent.execute_stream import ephemeral_execute_stream_enabled
-
 from .act_wave_finalize import DELEGATE_FINAL_WAVE_CAP, compute_act_wave_finalize
 from .anchor_manager import CheckpointAnchorManager
 from .context_window_manager import ContextCompactionResult, ContextWindowManager
@@ -33,7 +31,6 @@ __all__ = [
     "ContextCompactionResult",
     "ContextWindowManager",
     "DELEGATE_FINAL_WAVE_CAP",
-    "ephemeral_execute_stream_enabled",
     "Executor",
     "generate_outcome_metadata",
     "generate_user_fallback_summary",

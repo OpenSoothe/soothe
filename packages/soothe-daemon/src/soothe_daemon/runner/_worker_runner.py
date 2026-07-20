@@ -68,7 +68,7 @@ async def _warmup_worker_core_agent(
         return
 
     from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
-    from soothe.foundation.sloop.engine.executor import ephemeral_execute_stream_enabled
+    from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 
     if config.agent.runtime.lazy_core_agent:
         core_agent = runner._core_agent

@@ -6,6 +6,7 @@ description = "Soothe monorepo workspace (meta-package, no dependencies)"
 requires-python = ">=3.11,<3.15"
 dependencies = [
     "soothe-sdk",
+    "soothe-nano",
     "soothe-client-python",
     "soothe-cli",
     "soothe",

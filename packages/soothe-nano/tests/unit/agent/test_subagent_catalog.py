@@ -1,6 +1,6 @@
 """Unit tests for soothe-nano agent catalog helpers."""
 
-from soothe_nano.agent.execute_stream import ephemeral_execute_stream_enabled
+from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 from soothe_nano.agent.subagent_catalog import (
     INTAKE_ONLY_WIRE_SUBAGENTS,
     is_intake_only_wire_subagent,

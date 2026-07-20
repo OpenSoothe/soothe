@@ -1,11 +1,12 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
-# This Makefile manages five packages:
-# 1. soothe-sdk        - Shared SDK (WebSocket client, protocol, types)
-# 2. soothe-cli        - CLI client (Typer CLI + Textual TUI)
-# 3. soothe            - In-process agent core (library)
-# 4. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
-# 5. soothe-plugins    - Official plugins (built-in tools/subagents)
+# This Makefile manages packages:
+# 1. soothe-sdk        - Shared SDK (events/display/wire/protocols)
+# 2. soothe-nano       - Batteries-included Coding CoreAgent
+# 3. soothe-cli        - CLI client (Typer CLI + Textual TUI)
+# 4. soothe            - StrangeLoop / Autopilot / host composition
+# 5. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
+# 6. soothe-plugins    - Official plugins (depends on soothe-nano)
 #
 # Uses .venv managed by uv for development.
 
@@ -20,14 +21,14 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml $(DOCKER_ENV_
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
-.PHONY: sdk-publish cli-publish soothe-publish daemon-publish publish
-.PHONY: sdk-publish-test cli-publish-test soothe-publish-test daemon-publish-test publish-test
+.PHONY: sdk-publish nano-publish cli-publish soothe-publish daemon-publish publish
+.PHONY: sdk-publish-test nano-publish-test cli-publish-test soothe-publish-test daemon-publish-test publish-test
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-sdk soothe-cli soothe soothe-daemon soothe-plugins
+PACKAGES = soothe-sdk soothe-nano soothe-cli soothe soothe-daemon soothe-plugins
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
@@ -324,6 +325,9 @@ clean:
 sdk-publish:
 	cd packages/soothe-sdk && uv publish dist/* --native-tls
 
+nano-publish:
+	cd packages/soothe-nano && uv publish dist/* --native-tls
+
 cli-publish:
 	cd packages/soothe-cli && uv publish dist/* --native-tls
 
@@ -333,11 +337,14 @@ soothe-publish:
 daemon-publish:
 	cd packages/soothe-daemon && uv publish dist/* --native-tls
 
-publish: build sdk-publish cli-publish soothe-publish daemon-publish
+publish: build sdk-publish nano-publish cli-publish soothe-publish daemon-publish
 	@echo "Published to PyPI"
 
 sdk-publish-test:
 	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
+
+nano-publish-test:
+	cd packages/soothe-nano && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
 cli-publish-test:
 	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls

@@ -7,7 +7,7 @@ import importlib.metadata
 from soothe_sdk.protocols.core_agent import CoreAgentCapabilities
 
 from soothe_nano.agent import CodingCoreAgent, LazyCoreAgent
-from soothe_nano.agent.execute_stream import ephemeral_execute_stream_enabled
+from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 from soothe_nano.agent.factory import create_nano_agent
 from soothe_nano.agent.subagent_catalog import (
     INTAKE_ONLY_WIRE_SUBAGENTS,

@@ -8685,6 +8685,7 @@ dependencies = [
     { name = "slackify-markdown" },
     { name = "soothe" },
     { name = "soothe-client-python" },
+    { name = "soothe-nano" },
     { name = "soothe-sdk" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
@@ -8735,6 +8736,7 @@ requires-dist = [
     { name = "soothe", editable = "packages/soothe" },
     { name = "soothe-cli", marker = "extra == 'dev'", editable = "packages/soothe-cli" },
     { name = "soothe-client-python", editable = "client/python" },
+    { name = "soothe-nano", editable = "packages/soothe-nano" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "typer", specifier = ">=0.9.0,<2.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0,<1.0.0" },
@@ -8827,6 +8829,7 @@ test = [
 
 [[package]]
 name = "soothe-nano"
+version = "0.9.0"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },
@@ -9025,6 +9028,7 @@ dependencies = [
     { name = "soothe-cli" },
     { name = "soothe-client-python" },
     { name = "soothe-daemon" },
+    { name = "soothe-nano" },
     { name = "soothe-sdk" },
 ]
 
@@ -9045,6 +9049,7 @@ requires-dist = [
     { name = "soothe-cli", editable = "packages/soothe-cli" },
     { name = "soothe-client-python", editable = "client/python" },
     { name = "soothe-daemon", editable = "packages/soothe-daemon" },
+    { name = "soothe-nano", editable = "packages/soothe-nano" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
 ]
 

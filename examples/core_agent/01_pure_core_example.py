@@ -21,7 +21,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from soothe import create_soothe_agent
+from soothe_nano import create_nano_agent
 
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
@@ -41,7 +41,7 @@ async def main() -> None:
 
     # Create CoreAgent with minimal configuration
     # Disable all tools and subagents for pure LLM execution
-    agent = create_soothe_agent(
+    agent = create_nano_agent(
         config,
         tools=[],  # No tools
         subagents=[],  # No subagents

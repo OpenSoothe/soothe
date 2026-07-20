@@ -70,12 +70,12 @@ See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLo
 
 ```
 packages/
-├── soothe/          # Core framework: GoalEngine/StrangeLoop/CoreAgent, protocols, backends, middleware
-├── soothe-nano/     # Batteries-included Coding CoreAgent (deepagents); soothe depends on this
-├── soothe-daemon/   # Daemon server (soothed): WebSocket/HTTP transports, event bus, client sessions
+├── soothe-sdk/      # Shared contracts: events/display/wire + soothe_sdk.protocols
+├── soothe-nano/     # Batteries-included Coding CoreAgent (deepagents); no StrangeLoop/Autopilot
+├── soothe/          # Host composition: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
+├── soothe-daemon/   # Daemon server (soothed); depends on soothe + soothe-nano directly
 ├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)
-├── soothe-sdk/      # Plugin decorators, shared events/display/wire contracts
-└── soothe-plugins/  # Community plugins (delegated subagents)
+└── soothe-plugins/  # Community plugins (depends on soothe-nano, not full soothe)
 
 client/
 ├── go/              # soothe-client-go
@@ -91,9 +91,12 @@ client/
 
 | What | Where |
 |------|-------|
-| Agent factory | `packages/soothe/src/soothe/foundation/core/agent/_builder.py` |
-| Config | `packages/soothe/src/soothe/config/settings.py` |
-| Protocols | `packages/soothe/src/soothe/protocols/` |
+| Nano agent factory | `packages/soothe-nano/src/soothe_nano/agent/factory.py` (`create_nano_agent`) |
+| Host agent factory | `packages/soothe/src/soothe/foundation/coreagent/coding/factory.py` (`create_soothe_agent`) |
+| Nano config | `packages/soothe-nano/src/soothe_nano/config/settings.py` |
+| Host config | `packages/soothe/src/soothe/config/settings.py` |
+| Shared protocols | `packages/soothe-sdk/src/soothe_sdk/protocols/` |
+| Loop protocols | `packages/soothe/src/soothe/protocols/` |
 | RFCs | `docs/specs/` |
 | IGs | `docs/impl/` |
 | Debug guide | `docs/wiki/howto_debug.md` |

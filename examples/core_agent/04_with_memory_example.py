@@ -20,7 +20,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from soothe import MemoryItem, create_soothe_agent
+from soothe_nano import create_nano_agent
+from soothe_sdk.protocols.memory import MemoryItem
 
 from examples._config_helper import load_example_config
 from examples.core_agent._shared.streaming import stream_core_agent
@@ -127,7 +128,7 @@ async def main() -> None:
     print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")
 
     # Create CoreAgent with memory enabled (from config)
-    agent = create_soothe_agent(
+    agent = create_nano_agent(
         config,
         tools=[],  # No tools for this example
         subagents=[],  # No subagents

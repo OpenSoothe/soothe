@@ -12,10 +12,12 @@
 
 ```
 soothe-deepagents → soothe-sdk → soothe-nano → soothe → daemon/cli
+                         ↑_______________|
 soothe-plugins → soothe-nano
+soothe-daemon  → soothe-nano (direct) + soothe
 ```
 
-`soothe-nano` owns the Coding CoreAgent runtime (tools, core subagents, skills, MCP, config slice, protocols, FS/security/workspace). Full `soothe` owns StrangeLoop, Autopilot, Context Engine, cron, identity service, and runner orchestration.
+`soothe-nano` owns the Coding CoreAgent runtime (tools, core subagents, skills, MCP, config slice, FS/security/workspace). Shared protocols live in `soothe_sdk.protocols`. Full `soothe` owns StrangeLoop, Autopilot, Context Engine, cron, identity service, and runner orchestration. Consumers that import `soothe_nano` declare a **direct** `soothe-nano` dependency (do not rely only on transitive `soothe`).
 
 **Hard rule**: `soothe_nano` must never import `soothe`, and must not know about StrangeLoop / Autopilot / Context Engine / cron / identity **service** / daemon loop orchestration.
 
@@ -25,7 +27,7 @@ soothe-plugins → soothe-nano
 
 1. Scaffold `packages/soothe-nano` (layout + `pyproject.toml` + workspace wiring).
 2. Move CoreAgent runtime wrappers into `soothe_nano.agent` (`CodingCoreAgent`, `LazyCoreAgent`).
-3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled`, intake-only partition helpers).
+3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled` now lives on `soothe_nano.agent.core_agent`, intake-only partition helpers).
 4. Soothe re-exports / shims keep existing import paths working.
 5. Verify scripts know about `soothe-nano` and enforce `nano ↛ soothe`.
 
@@ -66,8 +68,9 @@ Bulk-migrated into `soothe_nano/`:
 
 ## Phase D — Plugins + cleanup
 
-1. `soothe-plugins` depends on `soothe-nano` (not full `soothe`).
-2. `./scripts/verify_finally.sh` green across all packages.
+1. `soothe-plugins` and `soothe-daemon` depend on `soothe-nano` directly (plugins: not full `soothe`).
+2. Workspace root + Makefile include `soothe-nano` in sync/build/publish paths.
+3. `./scripts/verify_finally.sh` green across all packages.
 
 ---
 

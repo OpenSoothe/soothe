@@ -107,7 +107,7 @@ async def test_warmup_worker_core_agent_touches_execution_graph(
         _FakeLazyCoreAgent,
     )
     monkeypatch.setattr(
-        "soothe.foundation.sloop.engine.executor.ephemeral_execute_stream_enabled",
+        "soothe_nano.agent.core_agent.ephemeral_execute_stream_enabled",
         lambda: True,
     )
 
@@ -141,7 +141,7 @@ async def test_warmup_worker_core_agent_skips_execution_graph_when_disabled(
         _FakeLazyCoreAgent,
     )
     monkeypatch.setattr(
-        "soothe.foundation.sloop.engine.executor.ephemeral_execute_stream_enabled",
+        "soothe_nano.agent.core_agent.ephemeral_execute_stream_enabled",
         lambda: False,
     )
 
