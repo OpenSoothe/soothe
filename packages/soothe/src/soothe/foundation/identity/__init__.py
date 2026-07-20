@@ -3,13 +3,7 @@
 This module provides AKSK-based authentication and JWT token management.
 """
 
-from soothe.foundation.identity.credentials import (
-    generate_access_key,
-    generate_secret_key,
-    hash_secret_key,
-    verify_secret_key,
-)
-from soothe.foundation.identity.errors import (
+from soothe_sdk.identity.errors import (
     AKSKExpiredError,
     AKSKRevokedError,
     IdentityDisabledError,
@@ -19,6 +13,13 @@ from soothe.foundation.identity.errors import (
     TokenExpiredError,
     TokenRevokedError,
     UnmappedIdentityError,
+)
+
+from soothe.foundation.identity.credentials import (
+    generate_access_key,
+    generate_secret_key,
+    hash_secret_key,
+    verify_secret_key,
 )
 from soothe.foundation.identity.identity_service import (
     IdentityService,

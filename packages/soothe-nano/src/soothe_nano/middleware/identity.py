@@ -9,13 +9,12 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from langchain.agents.middleware.types import AgentMiddleware, ToolCallRequest
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field
-from soothe_sdk.protocols.identity import IdentityProtocol
-
-from soothe_nano.identity_errors import (
+from soothe_sdk.identity.errors import (
     MissingTokenError,
     TokenError,
     UnmappedIdentityError,
 )
+from soothe_sdk.protocols.identity import IdentityProtocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable

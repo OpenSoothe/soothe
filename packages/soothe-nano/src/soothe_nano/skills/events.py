@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pydantic import BaseModel
+from soothe_sdk.core.events import SootheEvent
 
-from soothe_nano.base_events import SootheEvent
 from soothe_nano.events.catalog import register_event
 
 

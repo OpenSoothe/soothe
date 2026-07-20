@@ -52,6 +52,12 @@ from soothe_sdk.display.snapshot_types import (
     GoalDisplaySnapshot,
     snapshot_from_dataclass_dict,
 )
+from soothe_sdk.display.text_extract import (
+    extract_ai_text_for_display,
+    extract_text_from_ai_message,
+    extract_user_text_for_display,
+    normalize_stream_message,
+)
 from soothe_sdk.display.transcript_types import (
     UPDATABLE_FIELDS,
     MessageData,
@@ -65,6 +71,11 @@ __all__ = [
     "MessageType",
     "ToolStatus",
     "UPDATABLE_FIELDS",
+    # Text extract
+    "extract_ai_text_for_display",
+    "extract_text_from_ai_message",
+    "extract_user_text_for_display",
+    "normalize_stream_message",
     # Binder
     "collect_cognition_card_replay",
     "convert_combined_to_data",

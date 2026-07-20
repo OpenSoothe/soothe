@@ -80,7 +80,7 @@ class TestChannelMessageReceived:
 
     def test_inherits_from_protocol_event(self):
         """Test event inherits from ProtocolEvent."""
-        from soothe.foundation.base_events import ProtocolEvent
+        from soothe_sdk.core.events import ProtocolEvent
 
         event = ChannelMessageReceived(
             channel="test",
@@ -112,7 +112,7 @@ class TestTextEvent:
 
     def test_inherits_from_output_event(self):
         """Test inherits from OutputEvent."""
-        from soothe.foundation.base_events import OutputEvent
+        from soothe_sdk.core.events import OutputEvent
 
         event = TextEvent(content="text")
         assert isinstance(event, OutputEvent)
@@ -277,7 +277,7 @@ class TestEventHierarchy:
 
     def test_all_output_events_share_base(self):
         """Test all output events inherit from OutputEvent."""
-        from soothe.foundation.base_events import OutputEvent
+        from soothe_sdk.core.events import OutputEvent
 
         events = [
             TextEvent(content="text"),

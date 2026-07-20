@@ -15,10 +15,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from soothe.foundation import extract_text_from_ai_message
 from soothe.foundation.events import ERROR
 from soothe.logging import ThreadLogger, set_thread_id
 from soothe_nano.utils.error_format import emit_error_event
+from soothe_sdk.display.text_extract import extract_text_from_ai_message
 from soothe_sdk.ux.stream_tool_wire import (
     TOOL_CALL_UPDATES_BATCH,
     extract_tool_call_updates_from_wire_message,

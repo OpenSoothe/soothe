@@ -293,7 +293,7 @@ def is_allowed(self, sender_id: str) -> bool:
 | ChannelMessage | `soothe_daemon/channels/message.py` |
 | Event types | `soothe_daemon/channels/events.py` |
 | Registry | `soothe_daemon/channels/registry.py` |
-| OutputEvent subclasses | `soothe/foundation/base_events.py` |
+| OutputEvent subclasses | `soothe_sdk.core.events` |
 
 ### Phase 2: Convert Existing Transports
 

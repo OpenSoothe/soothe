@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 
 

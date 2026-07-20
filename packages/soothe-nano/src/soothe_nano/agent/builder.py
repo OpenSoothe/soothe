@@ -8,8 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.protocols.core_agent import CoreAgentCapabilities
 
-from soothe_nano.agent.core_agent import CodingCoreAgent
-from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
+from soothe_nano.agent.core_agent import CodingCoreAgent, ephemeral_execute_stream_enabled
 from soothe_nano.agent.subagent_catalog import partition_subagent_specs
 from soothe_nano.config import SootheConfig
 from soothe_nano.middleware import build_soothe_middleware_stack

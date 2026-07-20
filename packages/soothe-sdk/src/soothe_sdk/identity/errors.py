@@ -164,3 +164,21 @@ class MappingConflictError(IdentityError):
 
     error_code = "mapping_conflict"
     message = "External identity mapping already exists"
+
+
+__all__ = [
+    "AKSKExpiredError",
+    "AKSKNotFoundError",
+    "AKSKRevokedError",
+    "IdentityDisabledError",
+    "IdentityError",
+    "InvalidCredentialsError",
+    "MappingConflictError",
+    "MappingNotFoundError",
+    "MissingTokenError",
+    "TokenError",
+    "TokenExpiredError",
+    "TokenRevokedError",
+    "UnmappedIdentityError",
+    "UserNotFoundError",
+]

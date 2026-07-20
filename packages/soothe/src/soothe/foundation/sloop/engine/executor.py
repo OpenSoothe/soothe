@@ -27,7 +27,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
 from langgraph.types import Command, Interrupt
-from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 
 # IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
 from soothe_nano.middleware.tool_call_args_registry import init_tool_call_args_registry

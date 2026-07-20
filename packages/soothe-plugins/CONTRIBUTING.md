@@ -288,7 +288,7 @@ Register custom events in `events.py`:
 
 ```python
 from soothe.core.event_catalog import register_event
-from soothe.core.base_events import SootheEvent
+from soothe_sdk.core.events import SootheEvent
 
 class YourCustomEvent(SootheEvent):
     type: str = "soothe.community.your_plugin.custom"
