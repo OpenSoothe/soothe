@@ -28,9 +28,9 @@ Move tests that validate `soothe_nano` modules out of `packages/soothe/tests` an
 
 ## Verification
 
-- `pytest packages/soothe-nano/tests/unit/config/test_expand_path.py`
-- `pytest packages/soothe-nano/tests/unit/core/loop/engine/test_ephemeral_execute_stream.py`
+- `pytest packages/soothe-nano/tests/unit/test_expand_path.py`
+- `pytest packages/soothe-nano/tests/unit/core/test_ephemeral_execute_stream.py`
 - `pytest packages/soothe-nano/tests/unit/core/security`
 - `pytest packages/soothe-nano/tests/unit/core/workspace`
 - `pytest packages/soothe-nano/tests/unit/middleware`
-- `pytest packages/soothe-nano/tests/unit/plugin`
+- `pytest packages/soothe-nano/tests/unit/test_plugin_loader_library_dependency.py packages/soothe-nano/tests/unit/test_plugin_registry_metadata.py`

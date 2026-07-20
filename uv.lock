@@ -8886,6 +8886,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "twine" },
 ]
 
 [package.metadata]
@@ -8938,6 +8939,7 @@ requires-dist = [
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "tavily-python", specifier = ">=0.5.0" },
+    { name = "twine", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "watchdog", specifier = ">=3.0.0,<5.0.0" },
     { name = "wizsearch", specifier = ">=1.1.8,<2.0.0" },
 ]
@@ -8991,7 +8993,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-sdk"
-version = "1.0.1"
+version = "1.1.0"
 source = { editable = "packages/soothe-sdk" }
 dependencies = [
     { name = "langchain-core" },
