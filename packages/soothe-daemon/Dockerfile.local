@@ -1,7 +1,8 @@
 # Soothe daemon — local source build (no PyPI dependency).
 #
 # Build context must be the monorepo root (parent of `packages/`). Installs from
-# local source directories: packages/soothe-sdk, packages/soothe, packages/soothe-daemon.
+# local source directories: packages/soothe-sdk, packages/soothe-deepagents,
+# packages/soothe-nano, packages/soothe, packages/soothe-daemon.
 #
 # Build (full image with browser subagent):
 #   docker build -f packages/soothe-daemon/Dockerfile.local \
@@ -52,6 +53,10 @@ RUN mkdir -p /opt/ms-playwright
 COPY VERSION /app/VERSION
 COPY packages/soothe-sdk/pyproject.toml /app/packages/soothe-sdk/pyproject.toml
 COPY packages/soothe-sdk/README.md /app/packages/soothe-sdk/README.md
+COPY packages/soothe-deepagents/pyproject.toml /app/packages/soothe-deepagents/pyproject.toml
+COPY packages/soothe-deepagents/README.md /app/packages/soothe-deepagents/README.md
+COPY packages/soothe-nano/pyproject.toml /app/packages/soothe-nano/pyproject.toml
+COPY packages/soothe-nano/README.md /app/packages/soothe-nano/README.md
 COPY packages/soothe/pyproject.toml /app/packages/soothe/pyproject.toml
 COPY packages/soothe/README.md /app/packages/soothe/README.md
 COPY packages/soothe-daemon/pyproject.toml /app/packages/soothe-daemon/pyproject.toml
@@ -68,6 +73,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Copy local packages after third-party dependencies are cached.
 COPY packages/soothe-sdk /app/packages/soothe-sdk
+COPY packages/soothe-deepagents /app/packages/soothe-deepagents
+COPY packages/soothe-nano /app/packages/soothe-nano
 COPY packages/soothe /app/packages/soothe
 COPY packages/soothe-daemon /app/packages/soothe-daemon
 
@@ -76,6 +83,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /app/.venv/bin/python \
         --no-deps \
         "/app/packages/soothe-sdk" \
+        "/app/packages/soothe-deepagents" \
+        "/app/packages/soothe-nano" \
         "/app/packages/soothe" \
         "/app/packages/soothe-daemon"; \
     if [ "${INCLUDE_BROWSER}" = "true" ]; then \

@@ -1477,7 +1477,7 @@ class ContextEngineConfig(BaseModel):
     separate ``persistence_backend`` knob is needed. When the global backend
     is ``postgresql``, CE uses PgsqlContextPersistence with the same DSN.
     When ``sqlite``, CE uses SqliteContextPersistence (default). If
-    ``postgresql`` is configured but ``asyncpg`` is not installed, CE
+    ``postgresql`` is configured but ``psycopg`` is unavailable, CE
     falls back to SQLite automatically.
 
     Args:

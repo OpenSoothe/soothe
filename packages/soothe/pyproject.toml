@@ -23,58 +23,25 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "soothe-sdk>=1.0.0,<2.0.0",    # Subagent wire registry + community delegate types
-    "soothe-nano>=0.9.1,<1.0.0",   # Coding CoreAgent runtime
-    "aiohttp>=3.9.0,<4.0.0",
-    "aiosqlite>=0.22.1,<1.0.0",
-    "anyio>=3.0.0,<5.0.0",
-    "pexpect>=4.9.0,<5.0.0",
-    "pydantic-settings>=2.0.0,<3.0.0",
-    "pydantic>=2.0.0,<3.0.0",
-    "jsonschema>=4.0.0,<5.0.0",
-    "python-dotenv>=1.0.0,<2.0.0",
-    "pyyaml>=6.0.0,<7.0.0",
-    "pathspec>=0.12.0,<2.0.0",
-    "requests>=2.32.3,<3.0.0",
-    "bubus>=1.5.6",
-    "jinja2>=3.1.0",    # Prompt fragment template rendering
-    "aiofiles>=24.1.0", # Async file I/O (IG-517)
-    # Direct pin: langchain-openai needs openai>=1.104.2 (DefaultHttpxClient, etc.).
-    "openai>=1.104.2,<3.0.0",
-    "dashscope>=1.20.0",
-    # Direct pin: langchain-anthropic (via deepagents) needs anthropic>=0.96 with DefaultHttpxClient.
-    "anthropic>=0.96.0,<1.0.0",
+    # First-party (Coding CoreAgent stack lives in soothe-nano; do not re-pin its deps here)
+    "soothe-sdk>=1.0.2,<2.0.0",
+    "soothe-nano>=0.9.2,<1.0.0",
     "soothe-deepagents>=0.7.24,<1.0.0",
+    # Host-owned runtime (StrangeLoop / config / identity / checkpointers)
+    "aiosqlite>=0.22.1,<1.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
+    "jinja2>=3.1.0",
+    "pyjwt>=2.8.0,<3.0.0",
     "langchain>=1.2.11,<2.0.0",
-    "langchain-community>=0.3.0,<1.0.0",
-    "langchain-experimental>=0.0.50,<1.0.0",
     "langchain-core>=1.2.18,<2.0.0",
-    "langchain-mcp-adapters>=0.2.0,<1.0.0",
-    "pyjwt>=2.8.0,<3.0.0",  # JWT token generation/validation for IdentityProtocol (RFC-307)
-    "langchain-openai>=0.3.0,<1.0.0",
-    "langchain-quickjs>=0.1.0",
     "langgraph>=1.1.1,<2.0.0",
     "langgraph-checkpoint>=4.0.0,<5.0.0",
     "langgraph-checkpoint-sqlite>=3.0.0,<4.0.0",
     "langgraph-checkpoint-postgres>=3.1.0,<4.0.0",
-    "sqlite-vec>=0.1.0",
-    # Promoted from optional group: research
-    "arxiv>=2.1.0",
-    "langchain-tavily>=0.2.17",
-    "tavily-python>=0.5.0",
-    "wizsearch>=1.1.8,<2.0.0",
-    "chardet<6",
-    "deepxiv-sdk>=0.2.5",
-    # Promoted from optional group: browser_use
-    "browser-use>=0.11.0,<0.13.0",
     "psycopg[binary,pool]>=3.2.0,<4.0.0",
-    "asyncpg>=0.30.0,<1.0.0",  # CE PostgreSQL persistence (PgsqlContextPersistence)
-    "watchdog>=3.0.0,<5.0.0",   # Config hot-reload file watching
-    # Promoted from optional group: data tools (tools.data enabled by default)
-    "pandas>=2.0.0",
-    "openpyxl>=3.1.0",
-    "PyMuPDF>=1.24.0",
-    "docx2txt>=0.8.0",
+    "watchdog>=3.0.0,<5.0.0",
 ]
 
 [project.optional-dependencies]
