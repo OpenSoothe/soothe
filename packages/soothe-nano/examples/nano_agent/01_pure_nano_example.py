@@ -11,7 +11,7 @@ Just the raw LLM conversation capability.
 Use case: Simple chat or Q&A without any external integrations.
 
 Run:
-    python examples/nano_agent/01_pure_nano_example.py
+    python packages/soothe-nano/examples/nano_agent/01_pure_nano_example.py
 """
 
 import asyncio
@@ -20,11 +20,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+_PACKAGES_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-nano" / "src"))
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-sdk" / "src"))
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-deepagents"))
+
 from soothe_nano import create_nano_agent
 
-from examples._config_helper import load_example_config
-from examples.nano_agent._shared.streaming import stream_nano_agent
+from _shared.config import load_nano_example_config
+from _shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -35,22 +39,18 @@ async def main() -> None:
     print("Example 01: Pure Nano Agent (Model Only)")
     print("=" * 60)
 
-    # Load configuration from config/develop/config.yml
-    config = load_example_config()
+    config = load_nano_example_config()
     print(f"\n[Config] Model: {config.router.default}")
 
-    # Create nano agent with minimal configuration
-    # Disable all tools and subagents for pure LLM execution
     agent = create_nano_agent(
         config,
-        tools=[],  # No tools
-        subagents=[],  # No subagents
+        tools=[],
+        subagents=[],
     )
 
     print(f"[Agent] Memory: {agent.memory}")
     print(f"[Agent] Subagents: {len(agent.subagents)}")
 
-    # Example queries demonstrating pure LLM capabilities
     queries = [
         "What is the difference between a list and a tuple in Python?",
         "Explain the concept of middleware in software architecture.",

@@ -10,8 +10,12 @@
 # Env overrides: SOOTHE_<KEY> or SOOTHE_<SECTION>__<KEY>
 #
 # Legacy top-level keys merged at load (prefer nested forms):
-#   logging: → observability (+ agent.loop.report_output)
-#   strange_loop: → agent.loop
+#   logging: → observability (+ agent.loop.report_output in soothe / agent.middleware.report_output in nano)
+#   strange_loop: → agent.loop (soothe only)
+
+# ============================================================
+# SOOTHE-NANO BASELINE (shared by soothe + soothe-nano)
+# ============================================================
 
 # ============================================================
 # MODELS & ROUTING
@@ -31,13 +35,9 @@ providers:
   - o3-mini
   - text-embedding-3-small
 
-# ============================================================
-# ROUTER PROFILES
-# ============================================================
 # RouterProfile — named preset of ModelRouter for chat/image/ocr routing.
 # ModelRole keys: default | think | fast | image | ocr (null → default).
 # active_router_profile selects preset; env SOOTHE_ACTIVE_ROUTER_PROFILE overrides YAML.
-
 router_profiles:
 - name: default
   router:
@@ -47,18 +47,17 @@ router_profiles:
     image: null
     ocr: null
 
-active_router_profile: default
-
 embedding_profile:
   - model_role: openai:text-embedding-3-small
     embedding_dims: 1536
 
+active_router_profile: default
+
 # ============================================================
 # AGENT
 # ============================================================
-# AgentConfig — identity, self-driving, StrangeLoop, protocol backends.
-# goal_completion_mode / final_response at agent.* are mirrored under agent.loop.* for loop reads.
-
+# Shared keys are listed first in soothe-nano order.
+# Soothe host-only agent extensions are grouped at the end.
 agent:
   # Identity
   name: Soothe
@@ -67,8 +66,67 @@ agent:
   # Custom value replaces body only (no tool guide); supports {assistant_name}.
   # system_prompt: null
   agent_instructions_max_chars: 8000
+
+  # Protocol backends — planner, policy, durability, MemU (ProtocolsConfig)
+  protocols:
+    memory:
+      enabled: false
+      persist_dir: null
+      llm_chat_role: fast
+      llm_embed_role: embedding
+      enable_embeddings: true
+      enable_auto_categorization: true
+      enable_category_summaries: true
+      memory_categories:
+      - name: personal_info
+        description: Personal information
+      - name: preferences
+        description: User preferences and interests
+      - name: knowledge
+        description: Facts and learned information
+      - name: experiences
+        description: Past experiences and events
+      - name: goals
+        description: Goals and objectives
+    planner:
+      model: think
+      routing: auto
+    policy:
+      profile: standard
+    durability:
+      backend: default
+      checkpointer: default
+      persist_dir: null
+      thread_inactivity_timeout_hours: 72
+
+  # QuickJS programmatic tool calling; opt-in (CodeInterpreterConfig)
+  code_interpreter:
+    enabled: false
+    ptc_allowlist: []
+    memory_limit_mb: 128
+    timeout_seconds: 30
+    max_ptc_calls: 50
+    max_result_size: 100000
+    console_capture: true
+    snapshot_between_turns: false
+
+  # CoreAgent cold-start — lazy_core_agent defers graph compile (AgentRuntimeConfig)
+  runtime:
+    lazy_core_agent: true
+    general_purpose_subagent: false
+    recursion_limit: 200
+    # IG-545: per-hop orchestration (fast) vs generation (default) model roles in CoreAgent
+    role_routing:
+      enabled: false
+      orchestration_model_role: fast
+      generation_model_role: default
+      max_orchestration_hops: 1
+
+  # ---------------- soothe host-only agent extensions ----------------
+  # goal_completion_mode / final_response at agent.* are mirrored under agent.loop.* for loop reads.
   goal_completion_mode: llm_only
   final_response: auto
+
   # Autopilot — AutopilotService scheduling and goal pool (AutopilotConfig)
   autopilot:
     enabled: false
@@ -119,6 +177,7 @@ agent:
     workspace_reservation:
       enabled: true
       strict_overlap: true
+
   # StrangeLoop — plan/execute loop tuning (StrangeLoopConfig)
   loop:
     enabled: true
@@ -284,76 +343,20 @@ agent:
       respect_retry_after_header: true
       rate_limit_retry_timeout_seconds: 120
     loop_orchestrator_evidence_validate: true
-  # Protocol backends — planner, policy, durability, MemU (ProtocolsConfig)
-  protocols:
-    memory:
-      enabled: false
-      persist_dir: null
-      llm_chat_role: fast
-      llm_embed_role: embedding
-      enable_embeddings: true
-      enable_auto_categorization: true
-      enable_category_summaries: true
-      memory_categories:
-      - name: personal_info
-        description: Personal information
-      - name: preferences
-        description: User preferences and interests
-      - name: knowledge
-        description: Facts and learned information
-      - name: experiences
-        description: Past experiences and events
-      - name: goals
-        description: Goals and objectives
-    planner:
-      model: think
-      routing: auto
-    policy:
-      profile: standard
-    durability:
-      backend: default
-      checkpointer: default
-      persist_dir: null
-      thread_inactivity_timeout_hours: 72
-  # QuickJS programmatic tool calling; opt-in (CodeInterpreterConfig)
-  code_interpreter:
-    enabled: false
-    ptc_allowlist: []
-    memory_limit_mb: 128
-    timeout_seconds: 30
-    max_ptc_calls: 50
-    max_result_size: 100000
-    console_capture: true
-    snapshot_between_turns: false
-  # CoreAgent cold-start — lazy_core_agent defers graph compile (AgentRuntimeConfig)
-  runtime:
-    lazy_core_agent: true
-    general_purpose_subagent: false
-    recursion_limit: 200
-    # IG-545: per-hop orchestration (fast) vs generation (default) model roles in CoreAgent
-    role_routing:
-      enabled: false
-      orchestration_model_role: fast
-      generation_model_role: default
-      max_orchestration_hops: 1
+
   # ask_user interrupt relay: auto (veritas) or manual TUI (ClarificationConfig)
   clarification:
     auto_policy: veritas
     auto_min_confidence: 0.4
     max_defer_age_hours: 168
     default_mode: auto
+
   # Auto-answerer for clarification interrupts (VeritasConfig)
   veritas:
     model_role: think
     max_context_steps: 8
 
-# ============================================================
-# TOOLS & EXTENSIONS
-# ============================================================
-# ToolsConfig groups, SubagentConfig overrides, MCP (RFC-412), plugins, skills, memory paths.
-# progressive_* — token budget for deferred tool/skill/MCP listings in prompts.
-# MCP example: {name, transport: stdio, command, args, defer: true}
-
+# ToolsConfig groups.
 tools:
   execution:
     enabled: true
@@ -429,15 +432,6 @@ subagents:
     config: {}
     runtime_dir: ''
 
-# SkillifyConfig — daemon-shared semantic skill warehouse indexing and retrieval
-skillify:
-  enabled: false
-  model_role: embedding
-  warehouse_paths: []
-  index_collection: soothe_skillify
-  index_interval_seconds: 300
-  retrieval_top_k: 10
-
 # MCPServerConfig — unique name per server; defer=true for progressive disclosure
 # mcp_builtins — opt-in daily-use servers (not connected when empty). All defer=true.
 #   Available: playwright, github, slack, postgres, gdrive, chrome-devtools
@@ -466,6 +460,7 @@ progressive_skills:
   core_intent_auto_invoke_enabled: true
   intent_prefetch_top_k: 2
   intent_prefetch_min_query_chars: 4
+
 progressive_tools:
   enabled: true
   budget_pct: 0.01
@@ -477,8 +472,18 @@ progressive_tools:
 # AGENTS.md paths (MemoryMiddleware)
 memory: []
 
+# UIConfig theme, UpdateConfig PyPI check, LangGraph debug flag.
+debug: false
+activity_max_lines: 300
+tui_debug: false
+ui:
+  theme: null
+update:
+  check: true
+  auto_update: true
+
 # ============================================================
-# PERSISTENCE & VECTOR STORES
+# PERSISTENCE / OBSERVABILITY / SECURITY
 # ============================================================
 # PersistenceConfig — sqlite default; postgresql via postgres_base_dsn (RFC-612).
 # postgres_databases maps component → DB name when using multi-DB layout.
@@ -486,9 +491,6 @@ memory: []
 # When default_backend=postgresql, display cards, cron, identity, checkpoints, CE,
 # durability/metadata, and autopilot all use PostgreSQL (soothe_metadata / soothe_checkpoints).
 # When default_backend=sqlite, use local $SOOTHE_HOME SQLite files — do not mix.
-# VectorStoreProviderConfig — sqlite_vec | pgvector | weaviate | in_memory.
-# vector_store_router values: provider_name:collection_name.
-
 persistence:
   default_backend: sqlite
   postgres_base_dsn: null
@@ -511,70 +513,7 @@ persistence:
   archive_retention_days: 90
   archive_max_count: 1000
 
-vector_stores:
-- name: sqlite_vec_default
-  provider_type: sqlite_vec
-  dsn: null
-  index_type: hnsw
-  url: null
-  api_key: null
-  grpc_port: 50051
-
-vector_store_router:
-  default: sqlite_vec_default:soothe_default
-
-# ============================================================
-# SECURITY & WORKSPACE
-# ============================================================
-# SecurityConfig — path evaluation: denied_paths → allowed_paths → workspace boundary.
-# FilesystemMiddlewareConfig — backup on delete; sandboxing from security.allow_paths_outside_workspace.
-# WorkspaceMountConfig — host_root + container_root for container deployments (RFC-621).
-
-security:
-  allow_paths_outside_workspace: false
-  require_approval_for_outside_paths: true
-  denied_paths:
-  - /etc/**
-  - /bin/**
-  - /sbin/**
-  - /usr/**
-  - /System/**
-  - /Library/**
-  - /private/etc/**
-  - ~/.ssh/**
-  - ~/.gnupg/**
-  - ~/.aws/**
-  - "**/.env"
-  - "**/credentials.json"
-  - "**/secrets.json"
-  allowed_paths:
-  - "**"
-  denied_file_types: []
-  require_approval_for_file_types:
-  - .env
-  - .pem
-  - .key
-  - .p12
-  - .pfx
-  - .crt
-  whitelist_paths_bypass: []
-  whitelist_commands_bypass: []
-filesystem_middleware:
-  backup_enabled: true
-  backup_dir: null
-  workspace_root: null
-  max_file_size_mb: 10
-  tool_token_limit_before_evict: 20000
-workspace_mount:
-  host_root: null
-  container_root: null
-
-# ============================================================
-# OBSERVABILITY & SCHEDULING
-# ============================================================
 # ObservabilityConfig — file/console logging, verbosity, Langfuse callbacks.
-# CronConfig — natural-language scheduled jobs via Autopilot (RFC-229).
-
 observability:
   log_file_level: INFO
   log_file_path: null
@@ -606,6 +545,87 @@ observability:
     trace_name: null
     tags: null
     user_id: null
+
+# SecurityConfig — path evaluation: denied_paths → allowed_paths → workspace boundary.
+# FilesystemMiddlewareConfig — backup on delete; sandboxing from security.allow_paths_outside_workspace.
+# WorkspaceMountConfig — host_root + container_root for container deployments (RFC-621).
+security:
+  allow_paths_outside_workspace: false
+  require_approval_for_outside_paths: true
+  denied_paths:
+  - /etc/**
+  - /bin/**
+  - /sbin/**
+  - /usr/**
+  - /System/**
+  - /Library/**
+  - /private/etc/**
+  - ~/.ssh/**
+  - ~/.gnupg/**
+  - ~/.aws/**
+  - "**/.env"
+  - "**/credentials.json"
+  - "**/secrets.json"
+  allowed_paths:
+  - "**"
+  denied_file_types: []
+  require_approval_for_file_types:
+  - .env
+  - .pem
+  - .key
+  - .p12
+  - .pfx
+  - .crt
+  whitelist_paths_bypass: []
+  whitelist_commands_bypass: []
+
+filesystem_middleware:
+  backup_enabled: true
+  backup_dir: null
+  workspace_root: null
+  max_file_size_mb: 10
+  tool_token_limit_before_evict: 20000
+
+workspace_mount:
+  host_root: null
+  container_root: null
+
+# OptimizationConfig — failure intent classification and structured plan parsing (IG-433).
+optimization:
+  failure_intent:
+    enabled: true
+    llm_confidence_threshold: 0.7
+  structured_plan:
+    enabled: true
+
+# VectorStoreProviderConfig — sqlite_vec | pgvector | weaviate | in_memory.
+# vector_store_router values: provider_name:collection_name.
+vector_stores:
+- name: sqlite_vec_default
+  provider_type: sqlite_vec
+  dsn: null
+  index_type: hnsw
+  url: null
+  api_key: null
+  grpc_port: 50051
+
+vector_store_router:
+  default: sqlite_vec_default:soothe_default
+
+# ============================================================
+# SOOTHE HOST-ONLY TOP-LEVEL EXTENSIONS
+# ============================================================
+
+# SkillifyConfig — daemon-shared semantic skill warehouse indexing and retrieval
+skillify:
+  enabled: false
+  model_role: embedding
+  warehouse_paths: []
+  index_collection: soothe_skillify
+  index_interval_seconds: 300
+  retrieval_top_k: 10
+
+# CronConfig — natural-language scheduled jobs via Autopilot (RFC-229).
 cron:
   max_jobs: 100
   poll_interval: 60
@@ -613,29 +633,3 @@ cron:
   extraction_timeout: 30
   default_priority: 50
   timezone: local
-
-# ============================================================
-# CLIENT & TUI
-# ============================================================
-# UIConfig theme, UpdateConfig PyPI check, LangGraph debug flag.
-
-debug: false
-activity_max_lines: 300
-tui_debug: false
-ui:
-  theme: null
-update:
-  check: true
-  auto_update: true
-
-# ============================================================
-# OPTIMIZATION
-# ============================================================
-# OptimizationConfig — failure intent classification and structured plan parsing (IG-433).
-
-optimization:
-  failure_intent:
-    enabled: true
-    llm_confidence_threshold: 0.7
-  structured_plan:
-    enabled: true

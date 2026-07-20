@@ -40,17 +40,7 @@ async def stream_nano_agent(
     thread_id: str = "example-thread",
     show_tool_calls: bool = True,
 ) -> str:
-    """Stream nano agent execution with real-time output.
-
-    Args:
-        agent: Nano agent instance to execute.
-        query: User query string.
-        thread_id: Thread identifier for persistence.
-        show_tool_calls: Whether to display tool call results.
-
-    Returns:
-        Final response text from the agent.
-    """
+    """Stream nano agent execution with real-time output."""
     print(f"\n[Query] {query}\n", flush=True)
     print("[Streaming] Starting Nano Agent...\n", flush=True)
 
@@ -69,36 +59,32 @@ async def stream_nano_agent(
             if not isinstance(chunk, tuple) or len(chunk) != 3:
                 continue
 
-            namespace, mode, data = chunk
+            _namespace, mode, data = chunk
 
             if mode == "messages":
                 if not isinstance(data, tuple) or len(data) != 2:
                     continue
-                message_obj, metadata = data
+                message_obj, _metadata = data
 
                 if isinstance(message_obj, AIMessage):
-                    # Handle AI message content
                     if isinstance(message_obj.content, str) and message_obj.content:
                         sys.stdout.write(message_obj.content)
                         sys.stdout.flush()
                         final_response = message_obj.content
 
-                    # Handle tool calls in AI message
                     if show_tool_calls and hasattr(message_obj, "tool_calls"):
                         for tc in message_obj.tool_calls:
                             if isinstance(tc, dict):
                                 tool_name = tc.get("name", "unknown")
                                 print(f"\n  [Tool Call] {tool_name}", flush=True)
 
-                elif isinstance(message_obj, ToolMessage):
-                    if show_tool_calls:
-                        content_preview = _truncate(_format_content(message_obj.content))
-                        print(f"\n  [Tool Result] {content_preview}", flush=True)
+                elif isinstance(message_obj, ToolMessage) and show_tool_calls:
+                    content_preview = _truncate(_format_content(message_obj.content))
+                    print(f"\n  [Tool Result] {content_preview}", flush=True)
 
-            elif mode == "custom":
-                if isinstance(data, dict):
-                    event_type = data.get("type", "unknown")
-                    print(f"\n  [Event] {event_type}", flush=True)
+            elif mode == "custom" and isinstance(data, dict):
+                event_type = data.get("type", "unknown")
+                print(f"\n  [Event] {event_type}", flush=True)
 
             elif mode == "updates":
                 if isinstance(data, dict) and "__interrupt__" in data:

@@ -6,11 +6,8 @@ This example demonstrates a nano agent WITH memory protocol:
 - Memory recall by tags: Filtering by categorical tags
 - Memory forget: Removing outdated memories
 
-Use case: Agent with persistent cross-thread memory for long-term knowledge
-retention and semantic retrieval.
-
 Run:
-    python examples/nano_agent/03_nano_with_memory_example.py
+    python packages/soothe-nano/examples/nano_agent/03_nano_with_memory_example.py
 """
 
 import asyncio
@@ -19,12 +16,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+_PACKAGES_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-nano" / "src"))
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-sdk" / "src"))
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-deepagents"))
+
 from soothe_nano import create_nano_agent
 from soothe_sdk.protocols.memory import MemoryItem
 
-from examples._config_helper import load_example_config
-from examples.nano_agent._shared.streaming import stream_nano_agent
+from _shared.config import load_nano_example_config
+from _shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -39,8 +40,6 @@ async def demonstrate_memory_protocol(agent) -> None:
         return
 
     memory = agent.memory
-
-    # 1. Store memory items (cross-thread knowledge)
     print("\n[1] Storing memory items...")
     items = [
         MemoryItem(
@@ -75,29 +74,24 @@ async def demonstrate_memory_protocol(agent) -> None:
         stored_ids.append(item_id)
         print(f"  Stored: {item_id[:8]}... - {item.content[:50]}...")
 
-    # 2. Semantic recall
     print("\n[2] Semantic recall...")
     recalled = await memory.recall(
         query="How should I handle API authentication?",
         limit=3,
     )
-
     print(f"  Found {len(recalled)} relevant memories:")
     for item in recalled:
         print(f"  - [{item.importance:.1f}] {item.content[:60]}...")
 
-    # 3. Tag-based recall
     print("\n[3] Tag-based recall...")
     tag_recalled = await memory.recall_by_tags(
         tags=["security"],
         limit=5,
     )
-
     print(f"  Found {len(tag_recalled)} memories with tag 'security':")
     for item in tag_recalled:
         print(f"  - {item.content[:60]}...")
 
-    # 4. Update memory
     print("\n[4] Updating memory content...")
     if stored_ids:
         try:
@@ -109,7 +103,6 @@ async def demonstrate_memory_protocol(agent) -> None:
         except KeyError:
             print("  Update failed: item not found")
 
-    # 5. Forget (remove) a memory
     print("\n[5] Forgetting memory...")
     if len(stored_ids) > 1:
         forgotten = await memory.forget(stored_ids[-1])
@@ -122,29 +115,24 @@ async def main() -> None:
     print("Example 03: Nano Agent with Memory Protocol")
     print("=" * 60)
 
-    # Load configuration from config/develop/config.yml
-    config = load_example_config()
+    config = load_nano_example_config()
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Memory enabled: {config.agent.protocols.memory.enabled}")
 
-    # Create nano agent with memory enabled (from config)
     agent = create_nano_agent(
         config,
-        tools=[],  # No tools for this example
-        subagents=[],  # No subagents
+        tools=[],
+        subagents=[],
     )
 
     print(f"[Agent] Memory: {type(agent.memory).__name__ if agent.memory else 'None'}")
     print(f"[Agent] Policy: {type(agent.policy).__name__ if agent.policy else 'None'}")
 
-    # Demonstrate memory protocol capabilities
     await demonstrate_memory_protocol(agent)
 
-    # Now query the agent - it can use memory for informed responses
     print("\n" + "=" * 40)
     print("Querying with accumulated memory")
     print("=" * 40)
-
     await stream_nano_agent(
         agent,
         "What security best practices should I follow for storing API keys?",

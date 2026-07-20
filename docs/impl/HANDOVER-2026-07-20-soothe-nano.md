@@ -103,7 +103,7 @@ From IG-668 follow-ups and leftover polish:
 2. **Agent package polish** — optional: fold thin `factory.py` into `builder.py` / package `__init__` (explicitly out of last execute_stream plan).
 3. **PyPI first publish** — publish `soothe-nano==0.9.0` when cutting a release (trusted publishing job already wired).
 4. **PR to main** — branch is ahead of `origin/main` by the commits above; no PR created yet in this session.
-5. **Examples outside `nano_agent/`** — `examples/agents/*` / `inproc_soothe_agent.py` still use host `create_soothe_agent`; only `examples/nano_agent/*` switched to `create_nano_agent`.
+5. **Examples outside `nano_agent/`** — `examples/agents/*` / `inproc_soothe_agent.py` still use host `create_soothe_agent`; nano examples now live in `packages/soothe-nano/examples/nano_agent/*`.
 6. **Release skill / docs** — nano is listed as standalone; keep sdk/nano/plugins bumps intentional and separate from root `VERSION`.
 7. **Identity middleware host move** (optional) — `IdentityMiddleware` / `IdentityConfig` / `IdentityRuntime` still live in `soothe_nano.middleware.identity`; errors already in sdk. Moving middleware into soothe is a larger daemon/builder churn.
 

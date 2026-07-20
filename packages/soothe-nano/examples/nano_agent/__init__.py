@@ -9,5 +9,5 @@ This folder contains examples demonstrating pure `soothe_nano` functionality:
 05_nano_full_composition_example.py - Full composition example
 
 Run examples:
-    python examples/nano_agent/01_pure_nano_example.py
+    python packages/soothe-nano/examples/nano_agent/01_pure_nano_example.py
 """

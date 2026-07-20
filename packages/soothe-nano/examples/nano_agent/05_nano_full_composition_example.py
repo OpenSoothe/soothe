@@ -5,13 +5,8 @@ This example demonstrates a nano agent with full composition:
 - Tools: Built-in tools from config + custom tools
 - Subagents: Delegation to specialized agents
 
-Use case: Full-featured agent capable of:
-- Remembering information across sessions
-- Executing commands and operations via tools
-- Delegating specialized tasks to subagents
-
 Run:
-    python examples/nano_agent/05_nano_full_composition_example.py
+    python packages/soothe-nano/examples/nano_agent/05_nano_full_composition_example.py
 """
 
 import asyncio
@@ -22,31 +17,30 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_core.tools import tool
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+_PACKAGES_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-nano" / "src"))
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-sdk" / "src"))
+sys.path.insert(0, str(_PACKAGES_ROOT / "soothe-deepagents"))
+
 from soothe_nano import create_nano_agent
 from soothe_sdk.protocols.memory import MemoryItem
 
-from examples._config_helper import load_example_config
-from examples.nano_agent._shared.streaming import stream_nano_agent
+from _shared.config import load_nano_example_config
+from _shared.streaming import stream_nano_agent
 
 load_dotenv()
 
 
-# Custom ad-hoc tools
 @tool
 def get_project_status() -> str:
-    """Get the current project status and progress.
-
-    Returns:
-        JSON string with project status information.
-    """
+    """Get the current project status and progress."""
     import json
 
     status = {
         "phase": "development",
         "progress": "75%",
         "last_updated": datetime.now().isoformat(),
-        " blockers": [],
+        "blockers": [],
         "team_size": 5,
     }
     return json.dumps(status)
@@ -54,23 +48,13 @@ def get_project_status() -> str:
 
 @tool
 def log_decision(decision: str, rationale: str) -> str:
-    """Log a project decision with its rationale.
-
-    Args:
-        decision: The decision made.
-        rationale: The reason for the decision.
-
-    Returns:
-        Confirmation message.
-    """
+    """Log a project decision with its rationale."""
     return f"Logged decision: '{decision}' with rationale: '{rationale}'"
 
 
 async def setup_memory(agent) -> None:
     """Set up initial memory for the session."""
     print("\n[Setup] Pre-populating memory...")
-
-    # Memory: Cross-thread persistent knowledge
     if agent.memory:
         memory_items = [
             MemoryItem(
@@ -103,7 +87,6 @@ async def demonstrate_full_agent(agent) -> None:
     print("Demonstrating Full Agent Composition")
     print("=" * 60)
 
-    # Query 1: Uses context + memory for informed response
     print("\n[Query 1] Context and Memory-aware planning")
     print("-" * 40)
     await stream_nano_agent(
@@ -113,7 +96,6 @@ async def demonstrate_full_agent(agent) -> None:
         thread_id="full-composition-1",
     )
 
-    # Query 2: Uses tools for action
     print("\n[Query 2] Tool usage for project management")
     print("-" * 40)
     await stream_nano_agent(
@@ -122,7 +104,6 @@ async def demonstrate_full_agent(agent) -> None:
         thread_id="full-composition-2",
     )
 
-    # Query 3: Combines everything
     print("\n[Query 3] Full integration - context + memory + tools")
     print("-" * 40)
     await stream_nano_agent(
@@ -132,7 +113,6 @@ async def demonstrate_full_agent(agent) -> None:
         thread_id="full-composition-3",
     )
 
-    # Query 4: Research task (uses configured search tooling if enabled)
     print("\n[Query 4] Research with tool")
     print("-" * 40)
     await stream_nano_agent(
@@ -148,23 +128,18 @@ async def main() -> None:
     print("Example 05: Nano Agent Full Composition")
     print("=" * 60)
 
-    # Load configuration from config/develop/config.yml
-    config = load_example_config()
+    config = load_nano_example_config()
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Memory enabled: {config.agent.protocols.memory.enabled}")
     print(
         f"[Config] Tools: execution={config.tools.execution.enabled}, wizsearch={config.tools.wizsearch.enabled}"
     )
 
-    # Create nano agent with full composition
-    # Everything is enabled from config by default
     agent = create_nano_agent(
         config,
-        # Add additional custom tools beyond config
         tools=[get_project_status, log_decision],
     )
 
-    # Print agent composition
     print("\n[Agent Composition]")
     print(f"  Memory: {type(agent.memory).__name__ if agent.memory else 'None'}")
     print(f"  Planner: {type(agent.planner).__name__ if agent.planner else 'None'}")
@@ -174,13 +149,9 @@ async def main() -> None:
         name = getattr(subagent, "name", getattr(subagent, "__class__", "unknown"))
         print(f"    - {name}")
 
-    # Set up initial memory
     await setup_memory(agent)
-
-    # Demonstrate full agent capabilities
     await demonstrate_full_agent(agent)
 
-    # Show final memory state
     if agent.memory:
         print("\n[Final Memory State]")
         recalled = await agent.memory.recall("project testing", limit=3)

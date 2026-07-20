@@ -121,7 +121,6 @@ class SootheDaemon(DaemonHandlersMixin):
         self._cron_service: Any = None  # CronService | None (RFC-229)
         self._running = False
         self._current_query_task: asyncio.Task | None = None
-        self._thread_stop = threading.Event()
         self._stop_event: asyncio.Event | None = None
         max_queue_size = self._daemon_config.max_input_queue_size
         self._loop_input_dispatcher = LoopInputDispatcher(self, max_queue_size=max_queue_size)
@@ -1014,7 +1013,6 @@ class SootheDaemon(DaemonHandlersMixin):
 
     def request_stop(self) -> None:
         """Thread-safe method to request daemon shutdown from any thread."""
-        self._thread_stop.set()
         if self._stop_event is not None:
             loop = self._stop_event._loop  # type: ignore[attr-defined]
             loop.call_soon_threadsafe(self._stop_event.set)
@@ -1118,9 +1116,8 @@ class SootheDaemon(DaemonHandlersMixin):
         Supports both signal-based shutdown (main thread) and thread-safe
         shutdown via ``request_stop()`` (background thread).
         """
-        # With multi-channel architecture, we don't need self._server
-        # The channel manager handles all servers
-        if not self._channel_manager and not self._server:
+        # Multi-channel architecture: channel manager owns all transports.
+        if not self._channel_manager:
             return
 
         loop = asyncio.get_running_loop()
@@ -1848,28 +1845,11 @@ class SootheDaemon(DaemonHandlersMixin):
         1. PID file with valid process (fast, no config loading)
         2. WebSocket port accepting connections (fallback)
         """
-        # Use daemon config for port - avoid SootheDaemon import but allow YAML override
-        ws_host = "127.0.0.1"
-        ws_port = 8765
-        with contextlib.suppress(Exception):
-            from soothe_daemon.config import SootheDaemonConfig
-
-            _cfg = SootheDaemonConfig.from_default_yaml()
-            ws_host = _cfg.transports.websocket.host
-            ws_port = _cfg.transports.websocket.port
+        ws_host, ws_port = SootheDaemon._default_ws_endpoint()
 
         # 1. Check PID file first (fastest)
-        pf = pid_path()
-        if pf.exists():
-            try:
-                pid = int(pf.read_text().strip())
-                os.kill(pid, 0)  # Check process exists
-            except (ValueError, ProcessLookupError, PermissionError):
-                cleanup_pid()
-                # PID file stale, check port below
-            else:
-                # PID valid - process is running, trust it
-                return True
+        if SootheDaemon._read_live_pid_from_file() is not None:
+            return True
 
         # 2. Check WebSocket port (fallback when no PID file)
         return SootheDaemon._is_port_live(ws_host, ws_port)
@@ -1887,24 +1867,12 @@ class SootheDaemon(DaemonHandlersMixin):
             PID if daemon is running, None otherwise.
         """
         # 1. Check PID file first (fastest)
-        pf = pid_path()
-        if pf.exists():
-            try:
-                pid = int(pf.read_text().strip())
-                os.kill(pid, 0)
-            except (ValueError, ProcessLookupError, PermissionError):
-                cleanup_pid()
-                # Continue to check other indicators
-            else:
-                return pid
+        pid = SootheDaemon._read_live_pid_from_file()
+        if pid is not None:
+            return pid
 
-        # 2. Check WebSocket port (use daemon config, skip SootheDaemon import)
-        ws_port = 8765
-        with contextlib.suppress(Exception):
-            from soothe_daemon.config import SootheDaemonConfig
-
-            _cfg = SootheDaemonConfig.from_default_yaml()
-            ws_port = _cfg.transports.websocket.port
+        # 2. Check WebSocket port (use daemon config when available)
+        _, ws_port = SootheDaemon._default_ws_endpoint()
         pid = SootheDaemon._find_port_process(ws_port)
         if pid:
             return pid
@@ -2005,12 +1973,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         # 2. Fallback: find orphan by port (PID file missing/stale)
         if not stopped:
-            ws_port = 8765
-            with contextlib.suppress(Exception):
-                from soothe_daemon.config import SootheDaemonConfig
-
-                _cfg = SootheDaemonConfig.from_default_yaml()
-                ws_port = _cfg.transports.websocket.port
+            _, ws_port = SootheDaemon._default_ws_endpoint()
             orphan_pid = SootheDaemon._find_port_process(ws_port)
             if orphan_pid and orphan_pid != pid:
                 logger.info(
@@ -2026,6 +1989,33 @@ class SootheDaemon(DaemonHandlersMixin):
         # Cleanup PID file regardless of outcome
         cleanup_pid()
         return stopped
+
+    @staticmethod
+    def _default_ws_endpoint() -> tuple[str, int]:
+        """Resolve daemon WebSocket host/port from config with safe defaults."""
+        host = "127.0.0.1"
+        port = 8765
+        with contextlib.suppress(Exception):
+            from soothe_daemon.config import SootheDaemonConfig
+
+            cfg = SootheDaemonConfig.from_default_yaml()
+            host = cfg.transports.websocket.host
+            port = cfg.transports.websocket.port
+        return host, port
+
+    @staticmethod
+    def _read_live_pid_from_file() -> int | None:
+        """Return live daemon PID from pidfile, cleaning stale files."""
+        pf = pid_path()
+        if not pf.exists():
+            return None
+        try:
+            pid = int(pf.read_text().strip())
+            os.kill(pid, 0)
+            return pid
+        except (ValueError, ProcessLookupError, PermissionError):
+            cleanup_pid()
+            return None
 
     @staticmethod
     def _wait_for_pid_exit(pid: int, timeout: float) -> bool:

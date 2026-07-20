@@ -102,6 +102,7 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
+per-file-ignores = { "examples/nano_agent/*.py" = ["N999"] }
 
 [tool.ruff.format]
 docstring-code-format = true

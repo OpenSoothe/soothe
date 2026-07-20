@@ -57,7 +57,7 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
 # Example files are intentionally numbered for ordering (01_, 02_, etc.)
-per-file-ignores = { "examples/nano_agent/*.py" = ["N999"] }
+per-file-ignores = { "packages/soothe-nano/examples/nano_agent/*.py" = ["N999"] }
 
 [tool.ruff.format]
 docstring-code-format = true

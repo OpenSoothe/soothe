@@ -9,6 +9,14 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+from soothe_nano.config.settings import (
+    default_embedding_profile as _nano_default_embedding_profile,
+)
+from soothe_nano.config.settings import default_router_profiles as _nano_default_router_profiles
+from soothe_nano.config.settings import (
+    default_vector_store_router as _nano_default_vector_store_router,
+)
+from soothe_nano.config.settings import default_vector_stores as _nano_default_vector_stores
 
 from soothe.config.env import _expand_env_in_config, _resolve_env, _resolve_provider_env
 from soothe.config.models import (
@@ -50,38 +58,32 @@ if TYPE_CHECKING:
 
 
 def default_router_profiles() -> list[RouterProfile]:
-    """Built-in profile used when YAML omits ``router_profiles``."""
+    """Host alias to nano default router profiles."""
     return [
-        RouterProfile(
-            name="default",
-            router=ModelRouter(default="openai:gpt-4o-mini"),
-        )
+        RouterProfile.model_validate(profile.model_dump())
+        for profile in _nano_default_router_profiles()
     ]
 
 
 def default_embedding_profile() -> list[EmbeddingProfile]:
-    """Built-in embedding profile used when YAML omits ``embedding_profile``."""
+    """Host alias to nano default embedding profile."""
     return [
-        EmbeddingProfile(
-            model_role="openai:text-embedding-3-small",
-            embedding_dims=1536,
-        )
+        EmbeddingProfile.model_validate(profile.model_dump())
+        for profile in _nano_default_embedding_profile()
     ]
 
 
 def default_vector_stores() -> list[VectorStoreProviderConfig]:
-    """Built-in sqlite_vec provider used when YAML omits ``vector_stores``."""
+    """Host alias to nano default vector store providers."""
     return [
-        VectorStoreProviderConfig(
-            name="sqlite_vec_default",
-            provider_type="sqlite_vec",
-        )
+        VectorStoreProviderConfig.model_validate(provider.model_dump())
+        for provider in _nano_default_vector_stores()
     ]
 
 
 def default_vector_store_router() -> VectorStoreRouter:
-    """Built-in vector store routing used when YAML omits ``vector_store_router``."""
-    return VectorStoreRouter(default="sqlite_vec_default:soothe_default")
+    """Host alias to nano default vector store routing."""
+    return VectorStoreRouter.model_validate(_nano_default_vector_store_router().model_dump())
 
 
 _logger = logging.getLogger(__name__)

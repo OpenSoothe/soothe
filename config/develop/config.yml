@@ -9,6 +9,10 @@
 # Keys: pk-lf-soothe-local / sk-lf-soothe-local; export DASHSCOPE_*
 
 # ============================================================
+# SOOTHE-NANO BASELINE (shared by soothe + soothe-nano)
+# ============================================================
+
+# ============================================================
 # PROVIDERS
 # ============================================================
 providers:
@@ -91,6 +95,8 @@ agent:
   runtime:
     role_routing:
       enabled: true
+
+  # ---------------- soothe host-only agent extensions ----------------
   autopilot:
     enabled: false
     max_parallel_goals: 6
