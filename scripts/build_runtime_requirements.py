@@ -12,7 +12,14 @@ import re
 import tomllib
 from pathlib import Path
 
-SKIP_LOCAL = {"soothe", "soothe-sdk", "soothe-nano", "soothe-deepagents", "soothe-daemon", "soothe-cli"}
+SKIP_LOCAL = {
+    "soothe",
+    "soothe-sdk",
+    "soothe-nano",
+    "soothe-deepagents",
+    "soothe-daemon",
+    "soothe-cli",
+}
 
 
 def req_name(requirement: str) -> str:
