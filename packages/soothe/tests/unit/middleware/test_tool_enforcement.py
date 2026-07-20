@@ -1,4 +1,4 @@
-"""Tests for ToolEnforcementMiddleware tool-narrowing boundaries."""
+"""Tests for ToolEnforcementMiddleware and host goal/step guards."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 from soothe.foundation.sloop.intention import RoutingClassification
+from soothe.foundation.sloop.middleware.config_keys import (
+    SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
+    SOOTHE_STEP_SUBAGENT_CONFIG_KEY,
+)
+from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+from soothe.foundation.sloop.middleware.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 
 
 def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
@@ -56,10 +62,6 @@ def test_wire_subagent_routing_after_first_hop_keeps_full_tools() -> None:
 
 def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
     """Host guard clears intake-only preferred_subagent before tool enforcement."""
-    from soothe.foundation.sloop.middleware.intake_task_guard import (
-        IntakeOnlyTaskGuardMiddleware,
-    )
-
     guard = IntakeOnlyTaskGuardMiddleware()
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
@@ -82,7 +84,7 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
 
 
 def test_step_subagent_enforces_task_only_on_all_hops() -> None:
-    middleware = ToolEnforcementMiddleware()
+    middleware = GoalStepGuardMiddleware()
     request = ModelRequest(
         model=GenericFakeChatModel(messages=iter([AIMessage(content="ok")])),
         messages=[HumanMessage(content="x"), AIMessage(content="delegating")],
@@ -92,7 +94,7 @@ def test_step_subagent_enforces_task_only_on_all_hops() -> None:
     )
     with patch(
         "langgraph.config.get_config",
-        return_value={"configurable": {"soothe_step_subagent": "planner"}},
+        return_value={"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}},
     ):
         modified = middleware.modify_request(request)
 
@@ -102,7 +104,7 @@ def test_step_subagent_enforces_task_only_on_all_hops() -> None:
 
 
 def test_goal_synthesis_disables_tools() -> None:
-    middleware = ToolEnforcementMiddleware()
+    middleware = GoalStepGuardMiddleware()
     request = ModelRequest(
         model=GenericFakeChatModel(messages=iter([AIMessage(content="ok")])),
         messages=[HumanMessage(content="synthesize")],
@@ -112,7 +114,7 @@ def test_goal_synthesis_disables_tools() -> None:
     )
     with patch(
         "langgraph.config.get_config",
-        return_value={"configurable": {"soothe_goal_synthesis": True}},
+        return_value={"configurable": {SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY: True}},
     ):
         modified = middleware.modify_request(request)
 

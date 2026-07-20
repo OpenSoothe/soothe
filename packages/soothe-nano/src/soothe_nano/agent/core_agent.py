@@ -193,7 +193,6 @@ class CodingCoreAgent:
         thread_id = (
             config.get("configurable", {}).get("thread_id", "unknown") if config else "unknown"
         )
-        hints = config.get("configurable", {}) if config else {}
 
         input_preview = (
             input_arg if isinstance(input_arg, str) else log_preview(str(input_arg), chars=150)
@@ -203,8 +202,6 @@ class CodingCoreAgent:
             thread_id,
             input_preview,
         )
-        if hints.get("soothe_step_subagent"):
-            logger.debug("[Exec] Hint: suggested subagent=%s", hints["soothe_step_subagent"])
 
         graph_input = _normalize_layer1_input(input_arg)
         if stream_mode:

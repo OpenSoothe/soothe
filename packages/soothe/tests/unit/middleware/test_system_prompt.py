@@ -345,9 +345,12 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
 
 
 def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
-    """StrangeLoop ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
+    """Host ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
+    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+
     config = SootheConfig()
-    enforcement = ToolEnforcementMiddleware()
+    guard = GoalStepGuardMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -362,9 +365,9 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "planner"}}
+    lg_config = {"configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = enforcement.modify_request(request)
+        enforced = guard.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
@@ -374,8 +377,11 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
 
 def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
     """Wired catalog step subagents stay task-only after the first model hop."""
+    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+
     config = SootheConfig()
-    enforcement = ToolEnforcementMiddleware()
+    guard = GoalStepGuardMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -394,9 +400,9 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", "soothe_step_subagent": "planner"}}
+    lg_config = {"configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = enforcement.modify_request(request)
+        enforced = guard.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
@@ -404,9 +410,13 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
-    """``soothe_step_subagent`` configurable wins over wire ``preferred_subagent`` on first hop."""
+    """Host step wire wins over preferred_subagent when GoalStep runs after ToolEnforcement."""
+    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+
     config = SootheConfig()
     enforcement = ToolEnforcementMiddleware()
+    guard = GoalStepGuardMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
@@ -422,21 +432,25 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"soothe_step_subagent": "planner"}}
+    lg_config = {"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = enforcement.modify_request(request)
+        after_te = enforcement.modify_request(request)
+        enforced = guard.modify_request(after_te)
         modified = middleware.modify_request(enforced)
     content = modified.system_message.content
     assert "subagent_type='planner'" in content
 
 
 def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
-    """Host step resolver drops intake-only names; nano itself has no intake policy."""
+    """Host step resolver drops intake-only names before CoreAgent runs."""
+    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
     from soothe.foundation.sloop.state.schemas import resolve_step_wire_subagent
 
     assert resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
 
-    enforcement = ToolEnforcementMiddleware()
+    # Host incorrectly setting step wire still narrows via GoalStepGuard (not nano).
+    guard = GoalStepGuardMiddleware()
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
     request = ModelRequest(
@@ -446,18 +460,20 @@ def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
         tools=tools,
         state={},
     )
-    # If a host incorrectly set soothe_step_subagent, nano would narrow (no intake catalog).
-    lg_config = {"configurable": {"soothe_step_subagent": "deep_research"}}
+    lg_config = {"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "deep_research"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = enforcement.modify_request(request)
+        enforced = guard.modify_request(request)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
 
 
 def test_goal_synthesis_disables_all_tools() -> None:
     """Goal-completion synthesis must not expose tools (read-only ledger synthesis)."""
+    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
+    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+
     config = SootheConfig()
-    enforcement = ToolEnforcementMiddleware()
+    guard = GoalStepGuardMiddleware()
     middleware = SystemPromptMiddleware(config=config)
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
     tools = [SimpleNamespace(name="read_file"), SimpleNamespace(name="task")]
@@ -468,9 +484,9 @@ def test_goal_synthesis_disables_all_tools() -> None:
         tools=tools,
         state={},
     )
-    lg_config = {"configurable": {"soothe_goal_synthesis": True}}
+    lg_config = {"configurable": {SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY: True}}
     with patch("langgraph.config.get_config", return_value=lg_config):
-        enforced = enforcement.modify_request(request)
+        enforced = guard.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert enforced.tools == []
     assert modified.tools == []

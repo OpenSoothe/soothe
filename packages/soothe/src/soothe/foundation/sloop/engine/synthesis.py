@@ -28,6 +28,7 @@ from soothe.foundation.sloop.engine.scenario_classifier import (
     classify_synthesis_scenario,
 )
 from soothe.foundation.sloop.engine.synthesis_projection import build_synthesis_messages
+from soothe.foundation.sloop.middleware.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
 from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.utils.messages import tag_messages_stream_chunk_for_goal_completion
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
@@ -47,7 +48,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_SYNTHESIS_EVIDENCE_MAX = 120_000
 
 _SYNTH_GC_MARKER = "__synth_gc__"
-SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY = "soothe_goal_synthesis"
 
 
 def synthesis_checkpoint_thread_id(parent_thread_id: str) -> str:

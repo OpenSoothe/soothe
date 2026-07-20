@@ -100,7 +100,8 @@ run_check "${PKG_DIR}/soothe-nano/src" \
   "soothe-nano must not import soothe/cli/daemon"
 
 # Rule 3c: soothe-nano must not contain L2/L3 orchestration symbols
-# (StrangeLoop, Autopilot, Context Engine, cron config, intake-only catalog).
+# (StrangeLoop, Autopilot, Context Engine, cron config, intake-only catalog,
+# goal-synthesis / step-wire hooks, agent-loop iteration constants).
 # Docstrings that explicitly say "no StrangeLoop" are allowed.
 check_nano_l2_l3_ban() {
   local path="${PKG_DIR}/soothe-nano/src"
@@ -111,7 +112,7 @@ check_nano_l2_l3_ban() {
   local matches
   matches=$(
     rg --line-number --glob '*.py' \
-      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|goal_completion|INTAKE_ONLY|intake_only|intake/slash' \
+      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|goal_completion|INTAKE_ONLY|intake_only|intake/slash|soothe_goal_synthesis|soothe_step_subagent|DEFAULT_MAX_ITERATIONS|DEFAULT_MAX_TOOL_CALLS_PER_STEP|Agent Loop Iteration' \
       "$path" 2>/dev/null \
       | grep -v -E 'no StrangeLoop|without StrangeLoop|not StrangeLoop|Pure CoreAgent|batteries-included Coding CoreAgent \(no |no host intake policy' \
       || true

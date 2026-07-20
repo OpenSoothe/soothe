@@ -201,7 +201,7 @@ def build_soothe_middleware_stack(
         stack.append(progressive_tool_middleware)
         logger.info("[Middleware] Progressive tool loading enabled")
 
-    # 12. Request-time tool enforcement (goal synthesis + delegated subagent routing)
+    # 12. Request-time tool enforcement (preferred_subagent routing)
     from .tool_enforcement import ToolEnforcementMiddleware
 
     stack.append(ToolEnforcementMiddleware())

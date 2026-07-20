@@ -97,19 +97,15 @@ class TestResolveModelRoleForRequest:
         )
         assert role == "default"
 
-    def test_goal_synthesis_configurable_uses_generation(self) -> None:
-        req = _request(messages=[HumanMessage(content="synthesize")])
-        lg_config = {"configurable": {"soothe_goal_synthesis": True}}
-        with patch(
-            "soothe_nano.middleware.role_routing._langgraph_configurable",
-            return_value=lg_config["configurable"],
-        ):
-            role = resolve_model_role_for_request(
-                req,
-                orchestration_model_role="fast",
-                generation_model_role="default",
-                max_orchestration_hops=3,
-            )
+    def test_goal_synthesis_empty_tools_uses_generation(self) -> None:
+        """Host goal-synthesis clears tools; empty tools select generation role."""
+        req = _request(messages=[HumanMessage(content="synthesize")], tools=[])
+        role = resolve_model_role_for_request(
+            req,
+            orchestration_model_role="fast",
+            generation_model_role="default",
+            max_orchestration_hops=3,
+        )
         assert role == "default"
 
     def test_tool_choice_none_uses_generation(self) -> None:

@@ -185,9 +185,11 @@ class AgentBuilder:
                 elif isinstance(mw, MCPActivationMiddleware) and registry is not None:
                     mw.set_tool_catalog()
         host_prefix = self._host_middleware_prefix()
+        host_suffix = self._host_middleware_suffix()
         all_middleware: tuple[AgentMiddleware, ...] = (
             *host_prefix,
             *default_middleware,
+            *host_suffix,
             *middleware,
         )
 
@@ -279,6 +281,10 @@ class AgentBuilder:
 
     def _host_middleware_prefix(self) -> tuple[AgentMiddleware, ...]:
         """Optional host middleware prepended before the default nano stack."""
+        return ()
+
+    def _host_middleware_suffix(self) -> tuple[AgentMiddleware, ...]:
+        """Optional host middleware appended after the default nano stack."""
         return ()
 
     def _resolve_core_agent_kind(self) -> str:

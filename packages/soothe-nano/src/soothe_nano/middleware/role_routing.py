@@ -19,20 +19,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _langgraph_configurable() -> dict[str, Any]:
-    """Return LangGraph ``configurable`` dict when running inside a graph."""
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return {}
-    if not isinstance(lg_cfg, dict):
-        return {}
-    conf = lg_cfg.get("configurable")
-    return conf if isinstance(conf, dict) else {}
-
-
 def model_hop_index_since_user(messages: list[AnyMessage]) -> int:
     """Count completed model hops since the last user message.
 
@@ -73,10 +59,6 @@ def resolve_model_role_for_request(
     """
     tools = request.tools or []
     if not tools:
-        return generation_model_role
-
-    configurable = _langgraph_configurable()
-    if configurable.get("soothe_goal_synthesis"):
         return generation_model_role
 
     tool_choice = request.tool_choice

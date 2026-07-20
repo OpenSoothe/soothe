@@ -2,7 +2,6 @@
 
 from soothe_nano.config.constants import (
     DEFAULT_EXECUTE_TIMEOUT,
-    DEFAULT_MAX_ITERATIONS,
 )
 from soothe_nano.config.env import (
     _ENV_VAR_RE,
@@ -63,7 +62,6 @@ NanoConfig = SootheConfig
 __all__ = [
     "DEFAULT_CONFIG_PATH",
     "DEFAULT_DAEMON_CONFIG_PATH",
-    "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_EXECUTE_TIMEOUT",
     "SOOTHE_HOME",
     "_DEFAULT_SYSTEM_PROMPT",

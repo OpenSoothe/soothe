@@ -7,6 +7,7 @@ from typing import Any
 from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 from soothe_nano.agent.builder import AgentBuilder as _NanoAgentBuilder
 
+from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
 from soothe.foundation.sloop.middleware.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 from soothe.foundation.sloop.subagent_catalog import partition_subagent_specs
 
@@ -26,7 +27,12 @@ class AgentBuilder(_NanoAgentBuilder):
         return catalog
 
     def _host_middleware_prefix(self) -> tuple:
+        # Clear intake-only preferred_subagent before nano ToolEnforcement.
         return (IntakeOnlyTaskGuardMiddleware(),)
+
+    def _host_middleware_suffix(self) -> tuple:
+        # Apply after ToolEnforcement so step/synthesis configurables win.
+        return (GoalStepGuardMiddleware(),)
 
     def build(self, *args: Any, **kwargs: Any):  # type: ignore[override]
         if kwargs.get("planner") is None and "planner" not in kwargs:

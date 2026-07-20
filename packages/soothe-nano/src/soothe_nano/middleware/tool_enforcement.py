@@ -19,42 +19,6 @@ logger = logging.getLogger(__name__)
 _TASK_TOOL_NAME = "task"
 
 
-def _configurable_goal_synthesis() -> bool:
-    """Return True when CoreAgent is running goal-completion synthesis (read-only)."""
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return False
-    if not isinstance(lg_cfg, dict):
-        return False
-    conf = lg_cfg.get("configurable")
-    if not isinstance(conf, dict):
-        return False
-    return bool(conf.get("soothe_goal_synthesis"))
-
-
-def _configurable_step_subagent() -> str | None:
-    """Return per-step catalog subagent hint from LangGraph RunnableConfig when set."""
-    try:
-        from langgraph.config import get_config
-
-        lg_cfg = get_config()
-    except Exception:
-        return None
-    if not isinstance(lg_cfg, dict):
-        return None
-    conf = lg_cfg.get("configurable")
-    if not isinstance(conf, dict):
-        return None
-    raw = conf.get("soothe_step_subagent")
-    if not isinstance(raw, str):
-        return None
-    stripped = raw.strip()
-    return stripped or None
-
-
 def _last_message_is_human(messages: list[Any] | None) -> bool:
     """True when the model is about to produce first reply to latest user turn."""
     if not messages:
@@ -81,12 +45,11 @@ def _filter_tools_to_task_only(
 
 
 class ToolEnforcementMiddleware(AgentMiddleware):
-    """Apply request-time tool availability policies.
+    """Apply request-time tool availability from CoreAgent routing state.
 
     Policies:
-    - Goal synthesis: disable all tools.
-    - Explicit wire subagent routing on first hop: task-only tools.
-    - Per-step configured subagent routing: task-only tools for full step.
+    - Explicit preferred_subagent routing on first hop: task-only tools.
+    Host layers may add goal-synthesis / step-wire policies separately.
     """
 
     def modify_request(self, request: ModelRequest[ContextT]) -> ModelRequest[ContextT]:
@@ -108,32 +71,11 @@ class ToolEnforcementMiddleware(AgentMiddleware):
         msgs_for_hop = getattr(request, "messages", None) or []
         first_after_user = _last_message_is_human(msgs_for_hop)
         explicit_subagent = routing_hint == "subagent" and bool(preferred_subagent)
-        step_subagent = _configurable_step_subagent()
-        # Wired step subagents stay task-only for the whole execute step so the
-        # model cannot silently fall back to non-task tools.
-        step_enforce = step_subagent is not None
         wire_enforce = explicit_subagent and first_after_user
-        goal_synthesis = _configurable_goal_synthesis()
 
         overrides: dict[str, Any] = {}
 
-        if goal_synthesis:
-            logger.info("Goal synthesis read-only: disabling model tools")
-            overrides["tools"] = []
-            try:
-                request.state.pop("_subagent_routing_directive", None)
-            except (AttributeError, TypeError):
-                pass
-            return request.override(**overrides)
-
-        if step_enforce:
-            directive = step_subagent
-            logger.info(
-                "CoreAgent step subagent hint (enforce): soothe_step_subagent=%s",
-                step_subagent,
-            )
-            request.state["_subagent_routing_directive"] = directive
-        elif wire_enforce:
+        if wire_enforce:
             directive = (
                 preferred_subagent.strip()
                 if isinstance(preferred_subagent, str)

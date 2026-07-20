@@ -68,7 +68,10 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 | CoreAgent system prompts / identity / context XML | `soothe_nano.prompts` (slim fragments: default/simple/medium + assistant_identity) |
 | Host loop / intake / plan / synthesis prompts | `soothe.prompts` (`foundation.sloop.prompts` is a shim) |
 | Intake-only subagent catalog + partition | `soothe.foundation.sloop.subagent_catalog` |
-| Intake-only ``task`` guard middleware | `soothe.foundation.sloop.middleware.intake_task_guard` |
+| Intake-only ``task`` guard middleware | `soothe.foundation.sloop.middleware.intake_task_guard` (prefix) |
+| Goal synthesis / step-subagent CoreAgent guards | `soothe.foundation.sloop.middleware.goal_step_guard` (suffix) + `config_keys` |
+| Agent-loop max iterations / tool-calls-per-step | `soothe.config.constants` (`DEFAULT_MAX_ITERATIONS`, …) — not in nano |
+| Nano ToolEnforcement | preferred_subagent first-hop only (`soothe_nano.middleware.tool_enforcement`) |
 | Nano subagent helper (name only) | `soothe_nano.agent.subagent_catalog.spec_subagent_name` |
 | Loop-only protocols | `soothe.protocols` (thin) |
 | Host `create_soothe_agent` + planner + intake bind | `soothe.foundation.coreagent.coding` |
@@ -81,7 +84,7 @@ Weaver: sdk DTOs + `get_skillify_service` only (no `start_skillify_service` in p
 
 ## Verification
 
-Last full gate: `./scripts/verify_finally.sh` green after intake-catalog extract (2026-07-20).
+Last full gate: `./scripts/verify_finally.sh` green after loop-limits / goal-step scrub (2026-07-20).
 
 Before next commit/PR: re-run `./scripts/verify_finally.sh` if more edits land.
 
@@ -102,6 +105,8 @@ From IG-668 follow-ups and leftover polish:
 **Done in boundary polish (2026-07-20):** identity errors → `soothe_sdk.identity`; deleted nano/soothe duplicate `base_events.py` (canonical `soothe_sdk.core.events`); `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`; nano prompts purified to CoreAgent-only; host loop prompts moved to `soothe.prompts`.
 
 **Done in intake-catalog extract (2026-07-20):** `INTAKE_ONLY_*` / partition helpers moved to `soothe.foundation.sloop.subagent_catalog`; nano builder keeps all specialists on open `task` unless host overrides `_filter_subagents_for_graph`; host `CodingCoreAgent.bind_intake_only_subagents` + `IntakeOnlyTaskGuardMiddleware` (via `_host_middleware_prefix`); Rule 3c bans `INTAKE_ONLY` / `intake_only` / `intake/slash` in nano src.
+
+**Done in loop-limits scrub (2026-07-20):** dropped nano `DEFAULT_MAX_ITERATIONS` / `DEFAULT_MAX_TOOL_CALLS_PER_STEP`; host `GoalStepGuardMiddleware` owns `soothe_goal_synthesis` + `soothe_step_subagent` (suffix after ToolEnforcement); nano ToolEnforcement / RoleRouting no longer read those configurables; Rule 3c extended.
 
 ---
 

@@ -6,10 +6,10 @@ from typing import Any
 
 
 def agent_middleware_config(config: Any) -> Any:
-    """Return ``agent.middleware`` (nano) or ``agent.loop`` (full soothe).
+    """Return ``agent.middleware`` (nano) or host ``agent.loop`` fallback.
 
     Coding CoreAgent reads context/tool caps from ``agent.middleware``.
-    Full ``SootheConfig`` still stores those fields on ``agent.loop``.
+    Full host config may still store those shared caps on ``agent.loop``.
     """
     agent = getattr(config, "agent", None)
     if agent is None:
