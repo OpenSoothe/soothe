@@ -1,8 +1,25 @@
-"""Soothe workspace: loop resolution + re-exports of nano CoreAgent helpers."""
+"""Soothe workspace: loop resolution + explicit nano workspace re-exports."""
 
-from __future__ import annotations
-
-from typing import Any
+from soothe_nano.workspace.workspace_api import (
+    ResolvedWorkspace,
+    resolve_workspace_for_stream,
+    resolve_workspace_for_tool_execution,
+)
+from soothe_nano.workspace.workspace_filesystem import (
+    FrameworkFilesystem,
+    NormalizedPathBackend,
+    WorkspaceAwareBackend,
+    get_workspace_backend,
+)
+from soothe_nano.workspace.workspace_policy import user_id_for_hash
+from soothe_nano.workspace.workspace_runtime import (
+    WorkspaceContext,
+    clear_virtual_mode_context,
+    get_virtual_home,
+    get_virtual_home_relative_path,
+    get_virtual_mode,
+    set_virtual_mode_context,
+)
 
 from soothe.foundation.workspace.core_resolution import (
     WorkspacePrecedence,
@@ -23,22 +40,29 @@ from soothe.foundation.workspace.resolution import (
 )
 
 __all__ = [
+    "FrameworkFilesystem",
+    "NormalizedPathBackend",
+    "ResolvedWorkspace",
+    "WorkspaceAwareBackend",
+    "WorkspaceContext",
     "WorkspacePrecedence",
     "cleanup_anonymous_workspaces",
+    "clear_virtual_mode_context",
     "compute_scoped_workspace_dir_name",
+    "get_virtual_home",
+    "get_virtual_home_relative_path",
+    "get_virtual_mode",
+    "get_workspace_backend",
     "normalize_user_id",
     "resolve_daemon_workspace",
     "resolve_loop_workspace",
     "resolve_persisted_loop_workspace",
     "translate_client_path_to_container",
     "translate_container_path_to_client",
+    "resolve_workspace_for_stream",
+    "resolve_workspace_for_tool_execution",
+    "set_virtual_mode_context",
+    "user_id_for_hash",
     "validate_client_workspace",
     "resolve_workspace",
 ]
-
-
-def __getattr__(name: str) -> Any:
-    """Lazy-load CoreAgent workspace helpers from soothe_nano."""
-    from importlib import import_module
-
-    return getattr(import_module("soothe_nano.workspace"), name)

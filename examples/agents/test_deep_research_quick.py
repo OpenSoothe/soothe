@@ -11,10 +11,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from examples.nano_agent._shared.streaming import stream_nano_agent
 from soothe.foundation.core.agent import create_soothe_agent
 
 from examples._config_helper import load_example_config
-from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
