@@ -50,8 +50,8 @@ class TestSootheConfig:
         assert cfg.vector_stores[0].name == "sqlite_vec_default"
         assert cfg.vector_store_router.default == "sqlite_vec_default:soothe_default"
 
-    def test_yaml_with_daemon_top_level_block_loads(self, tmp_path: Path) -> None:
-        """Daemon-only keys may appear in legacy agent YAML; they must not break parsing."""
+    def test_yaml_with_daemon_top_level_block_is_rejected(self, tmp_path: Path) -> None:
+        """Agent config rejects daemon-only top-level keys."""
         p = tmp_path / "cfg.yml"
         p.write_text(
             "agent:\n"
@@ -61,27 +61,23 @@ class TestSootheConfig:
             "  event_size_stats_interval_seconds: 90\n",
             encoding="utf-8",
         )
-        cfg = SootheConfig.from_yaml_file(str(p))
-        assert cfg.agent.name == "TestDaemonStrip"
+        with pytest.raises(ValueError, match="daemon"):
+            SootheConfig.from_yaml_file(str(p))
 
-    def test_yaml_legacy_top_level_strange_loop_folds_into_strange_loop(
-        self, tmp_path: Path
-    ) -> None:
-        """Legacy ``strange_loop:`` YAML must load under ``agent.loop`` (IG-407)."""
+    def test_yaml_top_level_strange_loop_is_rejected(self, tmp_path: Path) -> None:
+        """Top-level ``strange_loop`` is no longer accepted."""
         p = tmp_path / "cfg.yml"
         p.write_text(
             "agent:\n"
-            "  name: LegacyFold\n"
+            "  name: NoFold\n"
             "strange_loop:\n"
             "  max_iterations: 42\n"
             "  concurrency:\n"
             "    max_parallel_steps: 7\n",
             encoding="utf-8",
         )
-        cfg = SootheConfig.from_yaml_file(str(p))
-        assert cfg.agent.name == "LegacyFold"
-        assert cfg.agent.loop.max_iterations == 42
-        assert cfg.agent.loop.concurrency.max_parallel_steps == 7
+        with pytest.raises(ValueError, match="strange_loop"):
+            SootheConfig.from_yaml_file(str(p))
 
     def test_llm_rate_limit_enabled_by_default(self) -> None:
         cfg = SootheConfig()
@@ -131,7 +127,7 @@ class TestSootheConfig:
         assert cfg.skillify.model_role == "embedding"
         assert cfg.skillify.retrieval_top_k == 10
 
-    def test_legacy_subagents_skillify_is_stripped(self) -> None:
+    def test_subagents_skillify_is_no_longer_rewritten(self) -> None:
         cfg = SootheConfig(
             subagents={
                 "skillify": {
@@ -140,7 +136,8 @@ class TestSootheConfig:
                 }
             }
         )
-        assert "skillify" not in cfg.subagents
+        assert "skillify" in cfg.subagents
+        assert cfg.subagents["skillify"].enabled is False
         assert cfg.skillify.enabled is False
 
     def test_legacy_claude_core_agent_fields_stripped(self) -> None:

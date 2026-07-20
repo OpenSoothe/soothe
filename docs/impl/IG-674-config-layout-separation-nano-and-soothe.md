@@ -230,3 +230,6 @@ These compatibility behaviors should move to `soothe/config/compat.py` and
 ## Implementation status
 
 Design polished and ready for phased implementation.
+
+Execution checklist and sequencing live in:
+`docs/impl/IG-675-config-separation-execution-checklist.md`.

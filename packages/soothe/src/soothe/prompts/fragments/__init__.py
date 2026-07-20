@@ -15,6 +15,13 @@ loaded on demand via ``prompts.loader.load_prompt_fragment``.
 
 from pathlib import Path
 
+from soothe_nano.prompts.fragments import (
+    ASSISTANT_IDENTITY_FRAGMENT,
+    DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
+    MEDIUM_SYSTEM_PROMPT_FRAGMENT,
+    SIMPLE_SYSTEM_PROMPT_FRAGMENT,
+)
+
 _FRAGMENTS_DIR = Path(__file__).parent
 
 
@@ -54,11 +61,7 @@ EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", st
 # Byte-for-byte preserved from previous Python literals — do not ``.strip()``.
 # ---------------------------------------------------------------------------
 
-DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT = _read("system/prompts/default_system_body.xml")
-ASSISTANT_IDENTITY_FRAGMENT = _read("system/prompts/assistant_identity.xml", strip=True)
 PROMPT_TIMESTAMP_FRAGMENT = _read("system/prompts/prompt_timestamp.xml", strip=True)
-SIMPLE_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/simple_system.xml")
-MEDIUM_SYSTEM_PROMPT_FRAGMENT = _read("system/prompts/medium_system.xml")
 
 ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT = _read("system/response_guides/architecture_analysis.xml")
 RESEARCH_SYNTHESIS_GUIDE_FRAGMENT = _read("system/response_guides/research_synthesis.xml")

@@ -9,23 +9,19 @@ fragments under ``soothe.prompts.fragments``. CoreAgent defaults also live in
 
 from __future__ import annotations
 
-from soothe.prompts.fragments import (
-    ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT,
-    DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
-    LOOP_CONTINUATION_GUIDE_FRAGMENT,
-    MEDIUM_SYSTEM_PROMPT_FRAGMENT,
-    RESEARCH_SYNTHESIS_GUIDE_FRAGMENT,
-    SIMPLE_SYSTEM_PROMPT_FRAGMENT,
+from soothe_nano.prompts.system_templates import (
+    _DATA_GUIDE,
+    _FILE_OPS_GUIDE,
+    _RESPONSE_LANGUAGE_DISPLAY,
+    _SURGICAL_EDIT_GUIDE,
+    RESPONSE_LANGUAGE_HINT_FALLBACK,
 )
 
-# ---------------------------------------------------------------------------
-# Scenario-specific guides (IG-268: Intelligent response length control)
-# Sourced from prompts/fragments/system/response_guides/*.xml.
-# ---------------------------------------------------------------------------
-
-_ARCHITECTURE_ANALYSIS_GUIDE = ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT
-_RESEARCH_SYNTHESIS_GUIDE = RESEARCH_SYNTHESIS_GUIDE_FRAGMENT
-_LOOP_CONTINUATION_GUIDE = LOOP_CONTINUATION_GUIDE_FRAGMENT
+from soothe.prompts.fragments import (
+    DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT,
+    MEDIUM_SYSTEM_PROMPT_FRAGMENT,
+    SIMPLE_SYSTEM_PROMPT_FRAGMENT,
+)
 
 # ---------------------------------------------------------------------------
 # Domain-scoped tool guides (RFC-0016)
@@ -49,51 +45,12 @@ Choose run_command vs run_background:
 - Integration tests for soothe-daemon: use ephemeral ports from fixtures — never bind or target host :8765.
 """
 
-_FILE_OPS_GUIDE = """\
-File operation tools:
-- read_file: Read file contents (optional start_line, end_line for ranges).
-- write_file: Write to files (mode='overwrite' or 'append').
-- delete: Delete files (use backup=true to create automatic backup).
-- search_files: Search for pattern in files (grep-like).
-- list_files: List files matching pattern.
-- file_info: Get file metadata.
-"""
-
-_SURGICAL_EDIT_GUIDE = """\
-Surgical editing tools (PREFERRED over full-file rewrites):
-- edit_lines: Replace specific line range (safer than read→modify→write).
-- insert_lines: Insert content at specific line.
-- delete_lines: Delete specific line range.
-- apply_diff: Apply unified diff patch.
-
-When to use surgical editing:
-- Changing a specific function → use edit_lines
-- Adding imports → use insert_lines at line 1
-- Removing unused code → use delete_lines
-- Applying code review patches → use apply_diff
-
-Benefits:
-- Safer: Only touch the lines you need to change
-- Faster: No need to read/write entire large files
-- Clearer: Changes are scoped and precise
-"""
-
 _RESEARCH_GUIDE = """\
 Research tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
 - search_web: Quick web search for factual lookups, news, current events (single call).
 - crawl_web: Extract clean content from a web page URL.
 Thorough multi-source public-web or academic research is intake/slash routed
 (deep_research / academic_research) — those specialists are not available via `task`.\
-"""
-
-_DATA_GUIDE = """\
-Data inspection tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
-- inspect_data: Inspect data file structure - columns, types, samples (CSV, Excel, JSON, Parquet).
-- summarize_data: Get statistical summary of data (tabular) or document summary (PDF, DOCX).
-- check_data_quality: Validate data quality - missing values, duplicates, anomalies (tabular only).
-- extract_text: Extract raw text from documents (PDF, DOCX, TXT, MD).
-- get_data_info: Get file metadata - size, format, page count, modification time.
-- ask_about_file: Answer questions about file content (documents use AI, tabular shows schema).\
 """
 
 _SUBAGENT_GUIDE = """\
@@ -137,34 +94,6 @@ Key rules:
 - Use run_command for sync shell (pass timeout when the job may exceed 60s); use run_background for servers/daemons and jobs you poll via tail_background_log; kill_process stops only run_background PIDs (never soothed / :8765 / pkill soothe); run_python for Python code.
 - When you need a deferred tool (data, wizsearch, HTTP, etc.), check <AVAILABLE_TOOLS> or run search_tools first.\
 """
-
-SKILL_CONTEXT_ACTIVE_GUIDE = (
-    "<SKILL_CONTEXT_GUIDE>\n"
-    "One or more skills are pre-loaded in <SKILL_CONTEXT> below. Follow their "
-    "instructions on this hop before any other discovery path.\n"
-    "Use run_command or run_python exactly as the skill documents. Do NOT call "
-    "search_tools, search_skills, task, deep_research, or browser_use for work the "
-    "loaded skill already covers.\n"
-    "For simple lookups, one compact command is usually enough — avoid a second "
-    "full JSON fetch unless the user asked for detailed data.\n"
-    "</SKILL_CONTEXT_GUIDE>"
-)
-
-# Cache-stable fallback when response language is unknown (fail-safe).
-RESPONSE_LANGUAGE_HINT_FALLBACK = (
-    "<RESPONSE_LANGUAGE_HINT>\n"
-    "Prefer the same natural language as the user's goal for explanations, "
-    "summaries, and conclusions; keep code, file paths, identifiers, and "
-    "quoted literals unchanged.\n"
-    "</RESPONSE_LANGUAGE_HINT>"
-)
-
-_RESPONSE_LANGUAGE_DISPLAY: dict[str, str] = {
-    "en": "English",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-}
 
 
 def build_response_language_hint(language: object | None) -> str:

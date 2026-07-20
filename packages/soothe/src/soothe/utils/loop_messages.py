@@ -9,7 +9,7 @@ from pydantic import Field
 from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES as ASSISTANT_OUTPUT_PHASES
 
 if TYPE_CHECKING:
-    from soothe.foundation.coreagent.coding.subagent_catalog import LoopState
+    from soothe.foundation.sloop.state.schemas import LoopState
 
 
 def _char_split_for_trim(text: str, chunk_size: int = 400) -> list[str]:

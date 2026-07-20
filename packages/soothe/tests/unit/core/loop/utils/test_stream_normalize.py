@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from soothe.foundation.coreagent.coding.core_agent import _normalize_layer1_input
+from soothe.foundation.coreagent.core_agent import _normalize_layer1_input
 from soothe.foundation.sloop.utils.stream_normalize import (
     GoalCompletionAccumState,
     extract_text_from_message_content,

@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
     from soothe_sdk.protocols.memory import MemoryProtocol
 
-    from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
+    from soothe.foundation.coreagent.lazy import LazyCoreAgent
     from soothe.foundation.identity.runtime import IdentityRuntime
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ class SootheRunner(
         from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
 
         from soothe.foundation.coreagent import create_soothe_agent
-        from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
+        from soothe.foundation.coreagent.lazy import LazyCoreAgent
         from soothe.foundation.sloop.intention import IntentClassifier
         from soothe.runner.resolver import (
             resolve_checkpointer,
@@ -227,7 +227,7 @@ class SootheRunner(
 
     async def _materialize_core_agent(self) -> CoreAgentProtocol:
         """Ensure CoreAgent graph is compiled and checkpointer is attached."""
-        from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
+        from soothe.foundation.coreagent.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent):
             return await self._core_agent.amaterialize()
@@ -236,7 +236,7 @@ class SootheRunner(
 
     def _materialized_core_agent(self) -> CoreAgentProtocol:
         """Return a compiled CoreAgent, materializing lazily when needed."""
-        from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
+        from soothe.foundation.coreagent.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent):
             return self._core_agent.materialize()

@@ -11,7 +11,6 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from soothe_nano.config.env import _expand_env_in_config, _resolve_env, _resolve_provider_env
-from soothe_nano.config.middleware_access import agent_middleware_config
 from soothe_nano.config.models import (
     AgentConfig,
     ConsoleLoggingConfig,
@@ -137,7 +136,7 @@ class SootheConfigLoggingView:
 
     @property
     def report_output(self) -> ReportOutputConfig:
-        return agent_middleware_config(self._cfg).report_output
+        return self._cfg.agent.middleware.report_output
 
     @property
     def level(self) -> str:
@@ -360,16 +359,6 @@ class SootheConfig(BaseSettings):
             data["agent"] = agent
         return data
 
-    @model_validator(mode="before")
-    @classmethod
-    def _strip_legacy_top_level_yaml(cls, data: Any) -> Any:
-        """Drop legacy top-level YAML keys not used by NanoConfig."""
-        if not isinstance(data, dict):
-            return data
-        data.pop("cron", None)
-        data.pop("strange_loop", None)
-        return data
-
     @model_validator(mode="after")
     def _validate_router_profile_names(self) -> SootheConfig:
         """Ensure router profile names are unique."""
@@ -452,23 +441,6 @@ class SootheConfig(BaseSettings):
             if duplicates:
                 raise ValueError(f"MCP server names must be unique. Duplicates: {set(duplicates)}")
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def _strip_legacy_skillify_subagent_config(cls, data: Any) -> Any:
-        """Drop removed ``subagents.skillify`` and top-level ``skillify`` from nano YAML.
-
-        Skillify is owned by the host/daemon config (``soothe.config``), not nano.
-        """
-        if not isinstance(data, dict):
-            return data
-        data.pop("skillify", None)
-        subagents = data.get("subagents")
-        if isinstance(subagents, dict) and "skillify" in subagents:
-            data["subagents"] = {
-                key: value for key, value in subagents.items() if key != "skillify"
-            }
-        return data
 
     @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:

@@ -31,7 +31,7 @@ class CodingCoreAgent(_NanoCodingCoreAgent):
 
     @classmethod
     def create(cls, config: Any | None = None, **kwargs: Any) -> CodingCoreAgent:
-        from soothe.foundation.coreagent.coding.builder import create_soothe_agent
+        from soothe.foundation.coreagent.builder import create_soothe_agent
 
         return create_soothe_agent(config, **kwargs)
 

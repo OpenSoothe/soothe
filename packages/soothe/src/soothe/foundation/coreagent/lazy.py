@@ -1,4 +1,4 @@
-"""Lazy CoreAgent wrapper (IG-506).
+"""Lazy CoreAgent wrapper.
 
 Host subclass forwards intake-only registry access after materialization.
 """

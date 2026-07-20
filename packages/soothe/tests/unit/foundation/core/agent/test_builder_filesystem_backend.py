@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.coreagent.coding.builder import AgentBuilder
+from soothe.foundation.coreagent.builder import AgentBuilder
 
 
 def test_build_passes_filesystem_backend_to_deepagents(

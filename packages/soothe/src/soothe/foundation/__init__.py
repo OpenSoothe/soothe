@@ -64,11 +64,11 @@ __all__ = [
 def __getattr__(name: str) -> Any:
     """Lazy import for modules with potential circular deps."""
     if name == "CodingCoreAgent":
-        from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
+        from soothe.foundation.coreagent.core_agent import CodingCoreAgent
 
         return CodingCoreAgent
     if name == "create_soothe_agent":
-        from soothe.foundation.coreagent.coding.builder import create_soothe_agent
+        from soothe.foundation.coreagent.builder import create_soothe_agent
 
         return create_soothe_agent
     if name == "StrangeLoop":

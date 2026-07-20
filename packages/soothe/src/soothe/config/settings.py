@@ -18,6 +18,7 @@ from soothe_nano.config.settings import (
 )
 from soothe_nano.config.settings import default_vector_stores as _nano_default_vector_stores
 
+from soothe.config.composition import compose_host_agent_config
 from soothe.config.env import _expand_env_in_config, _resolve_env, _resolve_provider_env
 from soothe.config.models import (
     AgentConfig,
@@ -204,6 +205,46 @@ class SootheConfig(BaseSettings):
         config_data = _expand_env_in_config(config_data)
         return cls(**config_data)
 
+    @classmethod
+    def from_split_yaml_files(
+        cls,
+        *,
+        nano_path: str,
+        soothe_path: str,
+    ) -> SootheConfig:
+        """Load configuration from split ``nano.yml`` and ``soothe.yml`` files.
+
+        Args:
+            nano_path: Path to ``nano.yml`` (required).
+            soothe_path: Path to ``soothe.yml`` (required).
+
+        Returns:
+            A composed ``SootheConfig`` instance.
+        """
+        nano_data = cls._load_yaml_config_data(nano_path)
+        soothe_data = cls._load_yaml_config_data(soothe_path)
+        merged = compose_host_agent_config(
+            nano_data,
+            soothe_data,
+            nano_source_file=Path(nano_path).name,
+            soothe_source_file=Path(soothe_path).name,
+        )
+        return cls(**merged)
+
+    @staticmethod
+    def _load_yaml_config_data(path: str | None) -> dict[str, Any]:
+        """Load and env-expand one YAML config file into a dict."""
+        if not path:
+            return {}
+        import yaml
+
+        with Path(path).open() as f:
+            config_data = yaml.safe_load(f) or {}
+        if not isinstance(config_data, dict):
+            msg = f"Config file must load to a mapping: {path}"
+            raise ValueError(msg)
+        return _expand_env_in_config(config_data)
+
     # --- Multi-provider model config ---
 
     providers: list[ModelProviderConfig] = Field(default_factory=list)
@@ -312,19 +353,6 @@ class SootheConfig(BaseSettings):
 
     @model_validator(mode="before")
     @classmethod
-    def _strip_daemon_top_level(cls, data: Any) -> Any:
-        """Drop ``daemon:`` from agent YAML or kwargs.
-
-        Daemon transport and server limits live in ``daemon.yml`` (``SootheDaemonConfig``).
-        Older unified configs sometimes nested those keys under ``daemon`` here; they are ignored
-        for ``SootheConfig`` so startup does not fail with extra_forbidden.
-        """
-        if isinstance(data, dict):
-            data.pop("daemon", None)
-        return data
-
-    @model_validator(mode="before")
-    @classmethod
     def _merge_top_level_logging_yaml(cls, data: Any) -> Any:
         """Fold top-level ``logging:`` YAML into ``observability`` and ``agent.loop.report_output``."""
         if not isinstance(data, dict):
@@ -361,32 +389,6 @@ class SootheConfig(BaseSettings):
             loop["report_output"] = merged_ro
             agent["loop"] = loop
             data["agent"] = agent
-        return data
-
-    @model_validator(mode="before")
-    @classmethod
-    def _merge_top_level_strange_loop_yaml(cls, data: Any) -> Any:
-        """Fold legacy top-level ``strange_loop:`` into ``agent.loop`` (IG-407)."""
-        if not isinstance(data, dict):
-            return data
-        legacy_loop = data.pop("strange_loop", None)
-        if not isinstance(legacy_loop, dict):
-            return data
-
-        def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-            merged = dict(base)
-            for key, value in overlay.items():
-                existing = merged.get(key)
-                if isinstance(existing, dict) and isinstance(value, dict):
-                    merged[key] = _deep_merge(existing, value)
-                else:
-                    merged[key] = value
-            return merged
-
-        agent = dict(data.get("agent") or {})
-        loop = dict(agent.get("loop") or {})
-        agent["loop"] = _deep_merge(loop, legacy_loop)
-        data["agent"] = agent
         return data
 
     @model_validator(mode="after")
@@ -471,19 +473,6 @@ class SootheConfig(BaseSettings):
             if duplicates:
                 raise ValueError(f"MCP server names must be unique. Duplicates: {set(duplicates)}")
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def _strip_legacy_skillify_subagent_config(cls, data: Any) -> Any:
-        """Drop removed ``subagents.skillify`` entries from YAML (use top-level ``skillify``)."""
-        if not isinstance(data, dict):
-            return data
-        subagents = data.get("subagents")
-        if isinstance(subagents, dict) and "skillify" in subagents:
-            data["subagents"] = {
-                key: value for key, value in subagents.items() if key != "skillify"
-            }
-        return data
 
     @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:

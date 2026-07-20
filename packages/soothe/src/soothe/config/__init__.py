@@ -11,6 +11,11 @@ from soothe_nano.prompts.system_templates import (
     _TOOL_ORCHESTRATION_GUIDE,
 )
 
+from soothe.config.composition import (
+    CompositionConflict,
+    CompositionConflictError,
+    compose_host_agent_config,
+)
 from soothe.config.constants import (
     DEFAULT_EXECUTE_TIMEOUT,
     DEFAULT_MAX_ITERATIONS,
@@ -56,6 +61,12 @@ from soothe.config.models import (
     VectorStoreRouter,
     WebSearchConfig,
 )
+from soothe.config.ownership import (
+    OwnershipViolation,
+    OwnershipViolationError,
+    validate_host_file_ownership,
+    validate_nano_file_ownership,
+)
 from soothe.config.reload import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_DAEMON_CONFIG_PATH,
@@ -84,6 +95,13 @@ __all__ = [
     "ConfigReloadCallback",
     "ConfigReloadEvent",
     "ConfigWatcher",
+    "CompositionConflict",
+    "CompositionConflictError",
+    "OwnershipViolation",
+    "OwnershipViolationError",
+    "compose_host_agent_config",
+    "validate_host_file_ownership",
+    "validate_nano_file_ownership",
     "get_config_watcher",
     "start_config_watcher",
     "stop_config_watcher",

@@ -259,9 +259,7 @@ class TestCoreAgentModuleExports:
         """CoreAgent.create() factory method works."""
         from soothe.foundation.coreagent import CodingCoreAgent as CoreAgent
 
-        with patch(
-            "soothe.foundation.coreagent.coding.builder.create_soothe_agent"
-        ) as mock_factory:
+        with patch("soothe.foundation.coreagent.builder.create_soothe_agent") as mock_factory:
             mock_agent = MagicMock(spec=CoreAgent)
             mock_factory.return_value = mock_agent
 

@@ -1,4 +1,4 @@
-"""Shim: Coding CoreAgent builder (canonical in soothe-nano; host injections here)."""
+"""Soothe CoreAgent builder: host injections over soothe-nano builder."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ class AgentBuilder(_NanoAgentBuilder):
             agent = super().build(*args, **kwargs)
         finally:
             self._identity_runtime = None
-        from soothe.foundation.coreagent.coding.core_agent import CodingCoreAgent
+        from soothe.foundation.coreagent.core_agent import CodingCoreAgent
 
         if not isinstance(agent, CodingCoreAgent):
             agent.__class__ = CodingCoreAgent

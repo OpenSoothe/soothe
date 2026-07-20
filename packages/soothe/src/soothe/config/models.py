@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from soothe_nano.config.models import CoreAgentMiddlewareConfig as NanoCoreAgentMiddlewareConfig
 
 from soothe.config.constants import (
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
@@ -2529,7 +2530,8 @@ class AgentConfig(BaseModel):
         goal_completion_mode: How planner completion combines with execution heuristics.
         final_response: Whether to always synthesize final report or use auto heuristics.
         autopilot: Autopilot scheduling and self-running configuration.
-        loop: StrangeLoop configuration (IG-407: unified agentic+execution).
+        loop: StrangeLoop configuration (host orchestration).
+        middleware: CoreAgent middleware tuning (nano-owned).
         protocols: Protocol backends configuration (planner, policy, durability).
     """
 
@@ -2632,6 +2634,11 @@ class AgentConfig(BaseModel):
     runtime: AgentRuntimeConfig = Field(
         default_factory=AgentRuntimeConfig,
         description="CoreAgent cold-start and materialization tuning",
+    )
+
+    middleware: NanoCoreAgentMiddlewareConfig = Field(
+        default_factory=NanoCoreAgentMiddlewareConfig,
+        description="CoreAgent middleware tuning (context limits, tool caps, rate limits)",
     )
 
     # === CLARIFICATION RELAY (RFC-622) ===

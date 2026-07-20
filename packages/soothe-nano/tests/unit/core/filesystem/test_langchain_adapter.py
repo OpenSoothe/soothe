@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 
 from soothe_nano.filesystem import (
+    GrepResult,
     LangChainAdapter,
     LocalFilesystem,
     PathNotFoundError,
 )
+from soothe_nano.filesystem.grep_search import is_grep_available
 
 
 class TestLangChainAdapter:
@@ -144,12 +146,20 @@ class TestLangChainAdapter:
 
     def test_grep(self, adapter: LangChainAdapter, temp_dir: Path):
         """Test grep method."""
+        if not is_grep_available():
+            pytest.skip("grep backend is unavailable in this environment")
+
         (temp_dir / "test1.txt").write_text("hello world")
         (temp_dir / "test2.txt").write_text("hello universe")
 
         result = adapter.grep("hello")
-        assert "test1.txt" in result
-        assert "test2.txt" in result
+        if isinstance(result, list):
+            assert "test1.txt" in result
+            assert "test2.txt" in result
+            return
+        assert isinstance(result, GrepResult)
+        assert any(match.path.endswith("test1.txt") for match in result.matches)
+        assert any(match.path.endswith("test2.txt") for match in result.matches)
 
     def test_info(self, adapter: LangChainAdapter, temp_dir: Path):
         """Test info method."""

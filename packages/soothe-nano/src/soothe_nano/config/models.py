@@ -1502,30 +1502,6 @@ class AgentConfig(BaseModel):
             data.pop(key, None)
         return data
 
-    @model_validator(mode="before")
-    @classmethod
-    def _fold_legacy_agent_sections(cls, data: Any) -> Any:
-        """Fold legacy ``agent.loop`` YAML into ``agent.middleware``."""
-        if not isinstance(data, dict):
-            return data
-        legacy = data.pop("loop", None)
-        if isinstance(legacy, dict):
-            middleware = dict(data.get("middleware") or {})
-            fold_keys = (
-                "context_window_limit",
-                "tool_output",
-                "llm_rate_limit",
-                "tool_timeout",
-                "tool_call_limit",
-                "tool_retry",
-                "report_output",
-            )
-            for key in fold_keys:
-                if key in legacy and key not in middleware:
-                    middleware[key] = legacy[key]
-            data["middleware"] = middleware
-        return data
-
     name: str = "Soothe"
     """Display name for the assistant identity in system prompts."""
 
