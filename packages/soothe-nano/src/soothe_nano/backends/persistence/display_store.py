@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from soothe_sdk.display.card_ledger import CardMutation
 
-from soothe_nano.runtime_paths.runtime_paths import resolve_display_db_path
+from soothe_nano.paths.sqlite_paths import resolve_display_db_path
 
 if TYPE_CHECKING:
     from soothe_nano.config import SootheConfig

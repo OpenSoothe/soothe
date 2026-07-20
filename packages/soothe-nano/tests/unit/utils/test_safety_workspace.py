@@ -7,9 +7,9 @@ from unittest import mock
 
 import pytest
 
-from soothe_nano.workspace.resolution import (
+from soothe_nano.workspace.workspace_policy import validate_client_workspace
+from soothe_nano.workspace.workspace_runtime import (
     resolve_daemon_workspace,
-    validate_client_workspace,
 )
 
 
@@ -74,7 +74,7 @@ class TestValidateClientWorkspace:
         """Should log when workspace doesn't exist (debug — callers may fall back)."""
         import logging
 
-        from soothe_nano.workspace.resolution import logger as ws_logger
+        from soothe_nano.workspace.workspace_policy import logger as ws_logger
 
         nonexistent = tmp_path / "nonexistent"
 

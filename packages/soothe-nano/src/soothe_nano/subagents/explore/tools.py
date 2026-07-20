@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
-from soothe_nano.workspace.normalized_backend import (
+from soothe_nano.workspace.workspace_filesystem import (
     NormalizedPathBackend,
     get_workspace_backend,
 )

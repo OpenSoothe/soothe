@@ -76,7 +76,7 @@ def get_workspace_subagent_output_dir(subagent_name: str) -> Path:
 
     Falls back to ``SOOTHE_HOME/agents/<name>/`` when no workspace is active.
     """
-    from soothe_nano.workspace.context import get_workspace_context
+    from soothe_nano.workspace.workspace_runtime import get_workspace_context
 
     ctx = get_workspace_context()
     if ctx.workspace is not None:

@@ -232,7 +232,7 @@ class SystemPromptMiddleware(AgentMiddleware):
         """
         if not state:
             return None
-        from soothe_nano.workspace.runtime_resolution import (
+        from soothe_nano.workspace.workspace_api import (
             resolve_workspace_for_tool_execution,
         )
 

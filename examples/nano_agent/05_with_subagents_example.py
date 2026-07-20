@@ -1,6 +1,6 @@
-"""CoreAgent with subagents example -- CoreAgent runtime with delegation capabilities.
+"""Nano agent with subagents example.
 
-This example demonstrates CoreAgent with configured subagents:
+This example demonstrates a nano agent with configured subagents:
 - Subagent configuration from config/develop/config.yml
 - Delegation to first-party subagents such as explorer, plan, and research when enabled
 - Optional community plugins when installed and configured
@@ -9,7 +9,7 @@ Use case: Agent that can delegate specialized tasks to expert subagents
 (filesystem search, planning, research, etc.)
 
 Run:
-    python examples/core_agent/05_with_subagents_example.py
+    python examples/nano_agent/05_with_subagents_example.py
 """
 
 import asyncio
@@ -22,15 +22,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from soothe_nano import create_nano_agent
 
 from examples._config_helper import load_example_config
-from examples.core_agent._shared.streaming import stream_core_agent
+from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
 
 async def main() -> None:
-    """Run CoreAgent with subagents example."""
+    """Run nano agent with subagents example."""
     print("=" * 60)
-    print("Example 05: CoreAgent with Subagents")
+    print("Example 05: Nano Agent with Subagents")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
@@ -44,7 +44,7 @@ async def main() -> None:
             status = "enabled" if subagent_config.enabled else "disabled"
             print(f"  - {name}: {status}")
 
-    # Create CoreAgent with subagents enabled from config
+    # Create nano agent with subagents enabled from config
     # Subagents are automatically loaded based on config.subagents settings
     agent = create_nano_agent(
         config,
@@ -66,7 +66,7 @@ async def main() -> None:
     print("\n" + "=" * 40)
     print("Query 1: Simple task (no delegation needed)")
     print("=" * 40)
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "What is the capital of France?",
         thread_id="subagents-example-1",
@@ -84,7 +84,7 @@ async def main() -> None:
     print("\n" + "=" * 40)
     print("Query 3: Research task")
     print("=" * 40)
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Search for the latest Python 3.12 features and summarize the key improvements.",
         thread_id="subagents-example-3",

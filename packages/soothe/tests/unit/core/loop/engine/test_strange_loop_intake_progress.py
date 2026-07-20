@@ -98,7 +98,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
             "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
-            "soothe_nano.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
+            "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
         ),
         patch("soothe_nano.skills.catalog.parse_slash_skill_user_line", return_value=None),

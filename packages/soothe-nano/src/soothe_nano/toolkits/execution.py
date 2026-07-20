@@ -57,7 +57,7 @@ from soothe_nano.config.constants import (
     DEFAULT_EXECUTE_TIMEOUT,
     clamp_execute_timeout,
 )
-from soothe_nano.security.operation_security import WorkspaceToolOperationSecurity
+from soothe_nano.security.operation_guard import WorkspaceToolOperationSecurity
 from soothe_nano.toolkits.shell_compat import macos_shell_compatibility_error
 from soothe_nano.utils import expand_path
 
@@ -78,7 +78,7 @@ _VIRTUAL_PATH_TOKEN_RE = re.compile(
 
 def _resolve_workspace(workspace_root: str, tool_runtime: Any = None) -> str | None:
     """Resolve effective workspace for shell tools (RFC-103, IG-300)."""
-    from soothe_nano.workspace.runtime_resolution import resolve_workspace_for_tool_execution
+    from soothe_nano.workspace.workspace_api import resolve_workspace_for_tool_execution
 
     resolved = resolve_workspace_for_tool_execution(
         runtime=tool_runtime,
@@ -223,7 +223,7 @@ def _translate_virtual_paths_in_command(
     if not virtual_mode or not workspace or not command:
         return command
 
-    from soothe_nano.workspace.tool_path_resolution import should_use_virtual_path_resolution
+    from soothe_nano.workspace.workspace_paths import should_use_virtual_path_resolution
 
     workspace_path = Path(workspace).expanduser()
     workspace_str = str(workspace_path).rstrip("/")

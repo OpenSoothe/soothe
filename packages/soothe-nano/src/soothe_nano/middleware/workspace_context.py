@@ -57,7 +57,7 @@ class WorkspaceContextMiddleware(AgentMiddleware):
         from langgraph.config import get_config
 
         from soothe_nano.workspace import FrameworkFilesystem, set_virtual_mode_context
-        from soothe_nano.workspace.runtime_resolution import (
+        from soothe_nano.workspace.workspace_api import (
             resolve_workspace_for_tool_execution,
         )
 

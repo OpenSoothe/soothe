@@ -188,7 +188,7 @@ class StrangeLoop:
             try_expand_slash_skill_user_line,
         )
         from soothe_nano.skills.workspace_sync import sync_specific_skill_to_workspace
-        from soothe_nano.workspace.tool_path_resolution import (
+        from soothe_nano.workspace.workspace_paths import (
             filesystem_virtual_mode_from_soothe_config,
         )
 

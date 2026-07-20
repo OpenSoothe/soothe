@@ -7,7 +7,7 @@ from pathlib import Path
 
 from soothe_nano.filesystem.protocol import GlobResult
 from soothe_nano.filesystem.workspace import WorkspaceFilesystem
-from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
+from soothe_nano.workspace.workspace_filesystem import NormalizedPathBackend
 
 
 def test_normalized_backend_glob_uses_workspace_filesystem(tmp_path: Path) -> None:

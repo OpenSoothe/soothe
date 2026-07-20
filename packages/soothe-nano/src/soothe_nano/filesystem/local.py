@@ -92,7 +92,7 @@ class LocalFilesystem(UnifiedFilesystem):
         Raises:
             PathTraversalError: If path escapes workspace.
         """
-        from soothe_nano.workspace.tool_path_resolution import (
+        from soothe_nano.workspace.workspace_paths import (
             should_use_virtual_path_resolution,
         )
 

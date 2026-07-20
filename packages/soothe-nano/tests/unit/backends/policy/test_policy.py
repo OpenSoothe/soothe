@@ -15,7 +15,7 @@ from soothe_nano.security import (
     STANDARD_PROFILE,
     ConfigDrivenPolicy,
 )
-from soothe_nano.security.config_policy import _extract_required_permission
+from soothe_nano.security.policy_profiles import _extract_required_permission
 
 
 class TestPermission:

@@ -7,7 +7,7 @@ from typing import Any
 
 from soothe_deepagents.backends.utils import validate_path
 
-from soothe_nano.workspace.tool_path_resolution import (
+from soothe_nano.workspace.workspace_paths import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
     resolve_backend_os_path,

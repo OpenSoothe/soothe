@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from soothe.foundation.core.agent import create_soothe_agent
 
 from examples._config_helper import load_example_config
-from examples.core_agent._shared.streaming import stream_core_agent
+from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -131,7 +131,7 @@ async def main() -> None:
     print("=" * 60)
     print("The agent will delegate to academic_research for academic sources.\n")
 
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Find recent papers on transformer attention mechanisms and their computational efficiency. "
         "I'm interested in academic research from arXiv or Semantic Scholar.",
@@ -147,7 +147,7 @@ async def main() -> None:
         "Tip: You can mention 'thorough' or 'comprehensive' in your query.\n"
     )
 
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Research the state of the art in retrieval-augmented generation (RAG) systems. "
         "Focus on academic papers from the last 2 years. Cover architectural innovations, "
@@ -160,7 +160,7 @@ async def main() -> None:
     print("Query 3: Comparative Methodology Research")
     print("=" * 60)
 
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Compare LoRA and QLoRA fine-tuning methods for large language models using "
         "academic research. What are the trade-offs in terms of memory efficiency, "

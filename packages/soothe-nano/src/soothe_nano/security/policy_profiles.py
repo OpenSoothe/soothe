@@ -1,4 +1,4 @@
-"""ConfigDrivenPolicy -- configuration-driven policy implementation."""
+"""Predefined policy profiles and profile-driven permission policy."""
 
 from __future__ import annotations
 
@@ -24,7 +24,8 @@ from soothe_sdk.tools.metadata import (
     is_policy_filesystem_tool,
 )
 
-from .operation_security import WorkspaceToolOperationSecurity
+from .operation_guard import WorkspaceToolOperationSecurity
+from .policy_models import PolicyAction, SecurityPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,137 @@ DEFAULT_PROFILES: dict[str, PolicyProfile] = {
 }
 
 
+STRICT_POLICY = SecurityPolicy(
+    name="strict",
+    description="Maximum security - blocks all dangerous operations",
+    allow_absolute=False,
+    allow_traversal=False,
+    allow_home_expansion=False,
+    allow_symlinks=False,
+    blocked_extensions=frozenset(
+        {
+            ".exe",
+            ".dll",
+            ".so",
+            ".dylib",
+            ".bin",
+            ".sh",
+            ".bat",
+            ".cmd",
+            ".ps1",
+            ".pyz",
+            ".egg",
+            ".whl",
+        }
+    ),
+    blocked_patterns=frozenset(
+        {
+            "*.key",
+            "*.pem",
+            "*.p12",
+            "*.pfx",
+            ".env*",
+            "*.secret",
+            "*.credentials",
+            ".git/*",
+            ".svn/*",
+            ".hg/*",
+        }
+    ),
+    blocked_paths=frozenset(
+        {
+            "/etc",
+            "/bin",
+            "/sbin",
+            "/usr",
+            "/lib",
+            "/lib64",
+            "/dev",
+            "/proc",
+            "/sys",
+            "/root",
+            "/boot",
+            "/var/log",
+            "/tmp/..",
+        }
+    ),
+    on_violation=PolicyAction.DENY,
+    on_suspicious=PolicyAction.DENY,
+)
+
+PERMISSIVE_POLICY = SecurityPolicy(
+    name="permissive",
+    description="Permissive policy for trusted environments",
+    allow_absolute=True,
+    allow_traversal=False,
+    allow_home_expansion=True,
+    allow_symlinks=True,
+    on_violation=PolicyAction.DENY,
+    on_suspicious=PolicyAction.LOG,
+)
+
+READONLY_POLICY = SecurityPolicy(
+    name="readonly",
+    description="Read-only access only",
+    allowed_operations=frozenset({"read", "ls", "glob", "exists"}),
+    allow_absolute=False,
+    allow_traversal=False,
+    on_violation=PolicyAction.DENY,
+)
+
+SANDBOX_POLICY = SecurityPolicy(
+    name="sandbox",
+    description="Strict sandbox for untrusted code",
+    allow_absolute=False,
+    allow_traversal=False,
+    allow_home_expansion=False,
+    allow_symlinks=False,
+    allow_hidden_files=False,
+    max_file_size=1024 * 1024,
+    max_path_length=256,
+    max_components=32,
+    blocked_extensions=frozenset(
+        {
+            ".exe",
+            ".dll",
+            ".so",
+            ".dylib",
+            ".sh",
+            ".bat",
+            ".cmd",
+            ".ps1",
+            ".vbs",
+            ".py",
+            ".pyw",
+            ".pyc",
+            ".pyo",
+            ".rb",
+            ".pl",
+            ".php",
+            ".jsp",
+            ".jar",
+            ".war",
+            ".ear",
+        }
+    ),
+    blocked_patterns=frozenset(
+        {
+            "*..*",
+            "*~*",
+            "*.tmp",
+            "*.temp",
+            ".*",
+            "*/.*",
+            "*/.git/*",
+            "*/.svn/*",
+        }
+    ),
+    allowed_operations=frozenset({"read", "ls", "glob"}),
+    on_violation=PolicyAction.DENY,
+    on_suspicious=PolicyAction.DENY,
+)
+
+
 def _extract_required_permission(action: ActionRequest) -> Permission | None:
     """Extract the permission required for an action request."""
     if action.action_type == "tool_call" and action.tool_name:
@@ -125,16 +257,7 @@ def _extract_required_permission(action: ActionRequest) -> Permission | None:
 
 
 class ConfigDrivenPolicy:
-    """PolicyProtocol implementation driven by named policy profiles.
-
-    Evaluation order: (1) deny rules, (2) granted permissions,
-    (3) approvable set, (4) default deny.
-
-    Args:
-        profiles: Mapping of profile name to PolicyProfile.
-        child_restrictions: Per-child permission overrides.
-        config: SootheConfig instance for security policy checks.
-    """
+    """PolicyProtocol implementation driven by named policy profiles."""
 
     def __init__(
         self,
@@ -142,20 +265,12 @@ class ConfigDrivenPolicy:
         child_restrictions: dict[str, frozenset[Permission]] | None = None,
         config: Any = None,
     ) -> None:
-        """Initialize the config-driven policy.
-
-        Args:
-            profiles: Mapping of profile name to PolicyProfile.
-            child_restrictions: Per-child permission overrides.
-            config: SootheConfig instance for security policy checks.
-        """
         self._profiles = profiles or dict(DEFAULT_PROFILES)
         self._child_restrictions = child_restrictions or {}
         self._config = config
         self._operation_security = WorkspaceToolOperationSecurity()
 
     def check(self, action: ActionRequest, context: PolicyContext) -> PolicyDecision:
-        """Check if an action is permitted under the active profile."""
         if action.action_type == "tool_call" and action.tool_name:
             request = self._build_operation_security_request(action)
             op_context = OperationSecurityContext(
@@ -172,7 +287,6 @@ class ConfigDrivenPolicy:
             return PolicyDecision(verdict="allow", reason="No permission required")
 
         permissions: PermissionSet = context.active_permissions
-
         profile = self._find_profile(permissions)
 
         if profile and any(
@@ -205,14 +319,12 @@ class ConfigDrivenPolicy:
         )
 
     def narrow_for_child(self, parent_permissions: PermissionSet, child_name: str) -> PermissionSet:
-        """Compute narrowed permissions for a child subagent."""
         restrictions = self._child_restrictions.get(child_name)
         if restrictions:
             return parent_permissions.narrow(restrictions)
         return parent_permissions
 
     def get_profile(self, name: str) -> PolicyProfile | None:
-        """Get a policy profile by name."""
         return self._profiles.get(name)
 
     def _find_profile(self, permissions: PermissionSet) -> PolicyProfile | None:

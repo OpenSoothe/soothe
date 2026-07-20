@@ -1,4 +1,4 @@
-"""Operation security implementation for workspace + tool execution (RFC-617)."""
+"""Operation security implementation for workspace + tool execution."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from soothe_sdk.protocols.operation_security import (
 )
 
 from soothe_nano.utils import expand_path
-from soothe_nano.workspace.tool_path_resolution import (
+from soothe_nano.workspace.workspace_paths import (
     resolve_backend_os_path,
     should_use_virtual_path_resolution,
 )
@@ -32,8 +32,6 @@ _BANNED_COMMAND_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"chmod\s+-R\s+777\s+/", "command.dangerous.chmod_root"),
     (r"chown\s+-R\s+.+\s+/", "command.dangerous.chown_root"),
     (r"\bgit\s+push(\s|$)", "command.git.remote_push"),
-    # Do not let in-daemon agents wipe the host soothed / soothe daemon process tree.
-    # Prefer kill_process on a run_background PID instead of broad pkill.
     (r"\bpkill\b[^\n]*\bsoothe", "command.dangerous.pkill_soothe"),
     (r"\bkillall\b[^\n]*\bsoothe", "command.dangerous.killall_soothe"),
     (r"\bsoothed\s+(stop|restart)\b", "command.dangerous.soothed_lifecycle"),

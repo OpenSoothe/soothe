@@ -224,10 +224,10 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
         Returns:
             BackendProtocol instance for the effective workspace.
         """
-        from soothe_nano.workspace.normalized_backend import get_workspace_backend
-        from soothe_nano.workspace.runtime_resolution import (
+        from soothe_nano.workspace.workspace_api import (
             resolve_workspace_for_tool_execution,
         )
+        from soothe_nano.workspace.workspace_filesystem import get_workspace_backend
 
         workspace = resolve_workspace_for_tool_execution(
             runtime=runtime,
@@ -248,7 +248,7 @@ class SootheFilesystemMiddleware(FilesystemMiddleware):
             if isinstance(configurable, dict):
                 soothe_config = configurable.get("soothe_config")
                 if soothe_config is not None:
-                    from soothe_nano.workspace.tool_path_resolution import (
+                    from soothe_nano.workspace.workspace_paths import (
                         filesystem_virtual_mode_from_soothe_config,
                         max_file_size_mb_for_filesystem_backend,
                     )

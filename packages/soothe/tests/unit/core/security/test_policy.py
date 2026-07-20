@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import pytest
-from soothe_nano.security.policy import (
-    PERMISSIVE_POLICY,
-    READONLY_POLICY,
-    SANDBOX_POLICY,
-    STRICT_POLICY,
+from soothe_nano.security.policy_models import (
     PolicyAction,
     PolicyDecision,
     PolicyViolation,
     SecurityPolicy,
+)
+from soothe_nano.security.policy_profiles import (
+    PERMISSIVE_POLICY,
+    READONLY_POLICY,
+    SANDBOX_POLICY,
+    STRICT_POLICY,
 )
 
 

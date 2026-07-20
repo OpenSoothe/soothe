@@ -1,8 +1,4 @@
-"""Security policy definitions and enforcement rules.
-
-This module provides policy-based security controls for filesystem operations,
-including configurable rules for different security contexts.
-"""
+"""Core policy models and evaluation logic for filesystem security."""
 
 from __future__ import annotations
 
@@ -18,11 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _path_is_under(path: str, prefix: str) -> bool:
-    """True if ``path`` equals ``prefix`` or sits beneath it as a path-component prefix.
-
-    Used in place of substring (``in``) matching, which produced false positives
-    like treating ``/tmp/x/etc/foo`` as being under ``/etc``.
-    """
+    """True if `path` equals `prefix` or sits beneath it."""
     if not path or not prefix:
         return False
     prefix_norm = prefix.rstrip("/") or "/"
@@ -124,60 +116,34 @@ class PolicyDecision:
 
 @dataclass
 class SecurityPolicy:
-    """Security policy for filesystem operations.
-
-    Policies define rules for what operations are allowed and under what
-    conditions. Multiple policies can be combined for layered security.
-
-    Example:
-        >>> policy = SecurityPolicy(
-        ...     name="strict_workspace",
-        ...     allow_absolute=False,
-        ...     allow_traversal=False,
-        ...     blocked_extensions={".exe", ".dll"},
-        ... )
-    """
+    """Security policy for filesystem operations."""
 
     name: str
     description: str = ""
     scope: PolicyScope = PolicyScope.WORKSPACE
-
-    # Path restrictions
     allow_absolute: bool = False
     allow_traversal: bool = False
     allow_home_expansion: bool = False
     allow_symlinks: bool = False
     allow_hidden_files: bool = True
-
-    # Size limits
-    max_file_size: int = 10 * 1024 * 1024  # 10 MB
+    max_file_size: int = 10 * 1024 * 1024
     max_path_length: int = 4096
     max_components: int = 256
-
-    # Blocked patterns
     blocked_extensions: frozenset[str] = field(default_factory=frozenset)
     blocked_patterns: frozenset[str] = field(default_factory=frozenset)
     blocked_paths: frozenset[str] = field(default_factory=frozenset)
-    allowed_paths: frozenset[str] | None = None  # If set, only these paths allowed
-
-    # Operation restrictions
+    allowed_paths: frozenset[str] | None = None
     allowed_operations: frozenset[str] = field(
         default_factory=lambda: frozenset({"read", "write", "delete", "ls", "glob", "mkdir"})
     )
     read_only_paths: frozenset[str] = field(default_factory=frozenset)
     no_delete_paths: frozenset[str] = field(default_factory=frozenset)
-
-    # Rate limiting
     max_operations_per_minute: int = 1000
     max_file_reads_per_minute: int = 100
     max_file_writes_per_minute: int = 50
-    per_path_rate_limit: int | None = None  # If set, per-path rate limit
-
-    # Actions
+    per_path_rate_limit: int | None = None
     on_violation: PolicyAction = PolicyAction.DENY
     on_suspicious: PolicyAction = PolicyAction.LOG
-
-    # Custom rules
     custom_validators: list[Callable[[str, str], PolicyDecision | None]] = field(
         default_factory=list,
         repr=False,
@@ -189,19 +155,7 @@ class SecurityPolicy:
         operation: str,
         context: dict[str, Any] | None = None,
     ) -> PolicyDecision:
-        """Evaluate policy against a path and operation.
-
-        Args:
-            path: The path being accessed.
-            operation: The operation being performed.
-            context: Additional context for evaluation.
-
-        Returns:
-            PolicyDecision indicating whether operation is allowed.
-        """
         violations: list[PolicyViolation] = []
-
-        # Check operation is allowed
         if operation not in self.allowed_operations:
             return PolicyDecision(
                 allowed=False,
@@ -219,7 +173,6 @@ class SecurityPolicy:
                 ],
             )
 
-        # Check path length
         if len(path) > self.max_path_length:
             violations.append(
                 PolicyViolation(
@@ -232,25 +185,19 @@ class SecurityPolicy:
                 )
             )
 
-        # Check absolute path (skip if path is in allowed_paths whitelist).
-        # When the caller passes ``context["workspace"]``, a leading-'/' path
-        # whose first segment is not a known UNIX host root (e.g. ``/CHANGELOG.md``
-        # vs. ``/etc/passwd``) is treated as a workspace-virtual path and not
-        # rejected — otherwise virtual_mode tools could never call this policy.
         if path.startswith("/") and not self.allow_absolute:
             ws = (context or {}).get("workspace")
             is_virtual_under_workspace = False
             if ws is not None:
                 from pathlib import Path as _Path
 
-                from soothe_nano.workspace.tool_path_resolution import (
+                from soothe_nano.workspace.workspace_paths import (
                     should_use_virtual_path_resolution,
                 )
 
                 is_virtual_under_workspace = should_use_virtual_path_resolution(path, _Path(ws))
 
             if not is_virtual_under_workspace:
-                # Whitelist bypass: if allowed_paths is set, check if path is whitelisted
                 if self.allowed_paths is not None:
                     is_whitelisted = any(
                         _path_is_under(path, allowed_path) for allowed_path in self.allowed_paths
@@ -278,7 +225,6 @@ class SecurityPolicy:
                         )
                     )
 
-        # Check traversal
         if ".." in path and not self.allow_traversal:
             violations.append(
                 PolicyViolation(
@@ -291,7 +237,6 @@ class SecurityPolicy:
                 )
             )
 
-        # Check home expansion
         if "~" in path and not self.allow_home_expansion:
             violations.append(
                 PolicyViolation(
@@ -304,7 +249,6 @@ class SecurityPolicy:
                 )
             )
 
-        # Check blocked patterns
         for pattern in self.blocked_patterns:
             import fnmatch
 
@@ -321,7 +265,6 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check blocked extensions
         path_lower = path.lower()
         for ext in self.blocked_extensions:
             if path_lower.endswith(ext.lower()):
@@ -337,8 +280,6 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check blocked paths (component-prefix match — avoid substring false positives
-        # like "/etc" matching "/tmp/x/etc/foo").
         for blocked in self.blocked_paths:
             if _path_is_under(path, blocked):
                 violations.append(
@@ -353,7 +294,6 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check allowed paths (whitelist mode) — same component-prefix semantics.
         if self.allowed_paths is not None:
             allowed = any(_path_is_under(path, allowed_path) for allowed_path in self.allowed_paths)
             if not allowed:
@@ -368,7 +308,6 @@ class SecurityPolicy:
                     )
                 )
 
-        # Check read-only paths for write operations (component-prefix match).
         if operation in ("write", "edit", "delete"):
             for ro_path in self.read_only_paths:
                 if _path_is_under(path, ro_path):
@@ -383,7 +322,6 @@ class SecurityPolicy:
                         )
                     )
 
-        # Check no-delete paths (component-prefix match).
         if operation == "delete":
             for nd_path in self.no_delete_paths:
                 if _path_is_under(path, nd_path):
@@ -398,7 +336,6 @@ class SecurityPolicy:
                         )
                     )
 
-        # Run custom validators
         for validator in self.custom_validators:
             try:
                 result = validator(path, operation)
@@ -409,10 +346,8 @@ class SecurityPolicy:
             except Exception as e:
                 logger.warning("Custom validator failed: %s", e)
 
-        # Determine final decision
         if violations:
             critical = any(v.severity == "critical" for v in violations)
-
             if critical:
                 return PolicyDecision(
                     allowed=False,
@@ -420,21 +355,19 @@ class SecurityPolicy:
                     reason="Critical policy violations detected",
                     violations=violations,
                 )
-            elif self.on_violation == PolicyAction.DENY:
-                # on_violation=DENY denies all violations (high or medium)
+            if self.on_violation == PolicyAction.DENY:
                 return PolicyDecision(
                     allowed=False,
                     action=PolicyAction.DENY,
                     reason="Policy violations detected and denied by policy",
                     violations=violations,
                 )
-            else:
-                return PolicyDecision(
-                    allowed=True,
-                    action=self.on_suspicious,
-                    reason="Policy violations detected but not denied",
-                    violations=violations,
-                )
+            return PolicyDecision(
+                allowed=True,
+                action=self.on_suspicious,
+                reason="Policy violations detected but not denied",
+                violations=violations,
+            )
 
         return PolicyDecision(
             allowed=True,
@@ -471,136 +404,3 @@ class SecurityPolicy:
         }
         current.update(kwargs)
         return SecurityPolicy(**current)
-
-
-# Predefined security policies
-
-STRICT_POLICY = SecurityPolicy(
-    name="strict",
-    description="Maximum security - blocks all dangerous operations",
-    allow_absolute=False,
-    allow_traversal=False,
-    allow_home_expansion=False,
-    allow_symlinks=False,
-    blocked_extensions=frozenset(
-        {
-            ".exe",
-            ".dll",
-            ".so",
-            ".dylib",
-            ".bin",
-            ".sh",
-            ".bat",
-            ".cmd",
-            ".ps1",
-            ".pyz",
-            ".egg",
-            ".whl",
-        }
-    ),
-    blocked_patterns=frozenset(
-        {
-            "*.key",
-            "*.pem",
-            "*.p12",
-            "*.pfx",
-            ".env*",
-            "*.secret",
-            "*.credentials",
-            ".git/*",
-            ".svn/*",
-            ".hg/*",
-        }
-    ),
-    blocked_paths=frozenset(
-        {
-            "/etc",
-            "/bin",
-            "/sbin",
-            "/usr",
-            "/lib",
-            "/lib64",
-            "/dev",
-            "/proc",
-            "/sys",
-            "/root",
-            "/boot",
-            "/var/log",
-            "/tmp/..",
-        }
-    ),
-    on_violation=PolicyAction.DENY,
-    on_suspicious=PolicyAction.DENY,
-)
-
-PERMISSIVE_POLICY = SecurityPolicy(
-    name="permissive",
-    description="Permissive policy for trusted environments",
-    allow_absolute=True,
-    allow_traversal=False,
-    allow_home_expansion=True,
-    allow_symlinks=True,
-    on_violation=PolicyAction.DENY,
-    on_suspicious=PolicyAction.LOG,
-)
-
-READONLY_POLICY = SecurityPolicy(
-    name="readonly",
-    description="Read-only access only",
-    allowed_operations=frozenset({"read", "ls", "glob", "exists"}),
-    allow_absolute=False,
-    allow_traversal=False,
-    on_violation=PolicyAction.DENY,
-)
-
-SANDBOX_POLICY = SecurityPolicy(
-    name="sandbox",
-    description="Strict sandbox for untrusted code",
-    allow_absolute=False,
-    allow_traversal=False,
-    allow_home_expansion=False,
-    allow_symlinks=False,
-    allow_hidden_files=False,
-    max_file_size=1024 * 1024,  # 1 MB
-    max_path_length=256,
-    max_components=32,
-    blocked_extensions=frozenset(
-        {
-            ".exe",
-            ".dll",
-            ".so",
-            ".dylib",
-            ".sh",
-            ".bat",
-            ".cmd",
-            ".ps1",
-            ".vbs",
-            ".py",
-            ".pyw",
-            ".pyc",
-            ".pyo",
-            ".rb",
-            ".pl",
-            ".php",
-            ".jsp",
-            ".jar",
-            ".war",
-            ".ear",
-        }
-    ),
-    blocked_patterns=frozenset(
-        {
-            "*..*",
-            "*~*",
-            "*.tmp",
-            "*.temp",
-            ".*",
-            "*/.*",
-            "*/.git/*",
-            "*/.svn/*",
-        }
-    ),
-    allowed_operations=frozenset({"read", "ls", "glob"}),
-    on_violation=PolicyAction.DENY,
-    on_suspicious=PolicyAction.DENY,
-)

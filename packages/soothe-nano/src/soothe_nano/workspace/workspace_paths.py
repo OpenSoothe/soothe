@@ -1,22 +1,13 @@
-"""Resolve tool and policy paths using unified filesystem rules (IG-316, IG-366).
-
-Virtual absolute paths (for example ``/README.md`` under ``virtual_mode=True``) must
-use ``resolve_backend_os_path`` so resolution matches ``NormalizedPathBackend`` /
-``LocalFilesystem`` — not ``workspace / normalized`` joins.
-"""
+"""Workspace path helpers for tool and filesystem operations."""
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
 from soothe_nano.config import SootheConfig
-from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
+from soothe_nano.workspace.workspace_runtime import resolve_process_workspace_root
 
-# First path segment after ``/`` for absolute POSIX paths that usually denote host
-# roots (not virtual sandbox paths like ``/README.md``).
 _UNIX_HOST_ROOT_TOP_NAMES: frozenset[str] = frozenset(
     {
         "Applications",
@@ -38,16 +29,6 @@ _UNIX_HOST_ROOT_TOP_NAMES: frozenset[str] = frozenset(
         "Volumes",
     }
 )
-
-
-def resolve_process_workspace_root() -> Path:
-    """Resolve process-default workspace root when no explicit workspace is bound."""
-    env_workspace = os.environ.get("SOOTHE_WORKSPACE")
-    if env_workspace:
-        return Path(env_workspace).expanduser().resolve()
-    workspace = Path(tempfile.gettempdir()) / "soothe-workspace"
-    workspace.mkdir(parents=True, exist_ok=True)
-    return workspace.resolve()
 
 
 def config_workspace_root(config: Any | None) -> str | None:
@@ -74,22 +55,8 @@ def resolve_effective_tool_workspace(
     *,
     runtime: Any | None = None,
 ) -> Path:
-    """Resolve workspace for tool construction and filesystem operations (IG-570).
-
-    Uses the same priority chain as ``resolve_workspace_for_tool_execution``:
-    RunnableConfig / graph state / ContextVar, then config ``workspace_root``,
-    then daemon fallback.
-
-    Args:
-        config: Optional ``SootheConfig`` for static fallback.
-        runtime: Optional LangGraph ``ToolRuntime`` during tool invocation.
-
-    Returns:
-        Absolute workspace path.
-    """
-    from soothe_nano.workspace.runtime_resolution import (
-        resolve_workspace_for_tool_execution,
-    )
+    """Resolve workspace for tool construction and filesystem operations."""
+    from soothe_nano.workspace.workspace_policy import resolve_workspace_for_tool_execution
 
     fallback = static_tool_workspace_fallback(config)
     resolved = resolve_workspace_for_tool_execution(
@@ -112,7 +79,6 @@ def workspace_path_for_tool_resolution(
 
 
 def _posix_first_segment_name(expanded: Path) -> str | None:
-    """Return first path segment for a POSIX absolute path, or None."""
     parts = expanded.parts
     if not parts or parts[0] != "/":
         return None
@@ -122,12 +88,7 @@ def _posix_first_segment_name(expanded: Path) -> str | None:
 
 
 def should_use_virtual_path_resolution(file_path: str, workspace_root: Path) -> bool:
-    """True when a leading-``/`` path should use virtual sandbox resolution (IG-366).
-
-    Host-style absolutes outside the workspace (for example ``/tmp/other``) must not
-    be remapped into the workspace; virtual absolutes (``/README.md``, ``/``) must
-    align with ``NormalizedPathBackend``.
-    """
+    """True when a leading-``/`` path should use virtual sandbox resolution."""
     if not file_path.strip().startswith("/"):
         return False
     expanded = Path(file_path.strip()).expanduser()
@@ -151,6 +112,8 @@ def resolve_backend_os_path(
     max_file_size_mb: int = 10,
 ) -> Path:
     """Resolve *path* to the on-disk path the unified filesystem would use."""
+    from soothe_nano.workspace.workspace_filesystem import NormalizedPathBackend
+
     backend = NormalizedPathBackend(
         root_dir=workspace.resolve(),
         virtual_mode=virtual_mode,
@@ -160,12 +123,7 @@ def resolve_backend_os_path(
 
 
 def join_workspace_normalized_path(workspace: Path, normalized: str) -> Path:
-    """Convert a validator-normalized logical path to an on-disk path.
-
-    Prefer ``resolve_backend_os_path`` when ``virtual_mode`` applies; this helper
-    is for the optional security layer where paths are already validated as
-    workspace-relative or host-absolute.
-    """
+    """Convert a validator-normalized logical path to an on-disk path."""
     path = Path(normalized)
     if path.is_absolute():
         return path.resolve()

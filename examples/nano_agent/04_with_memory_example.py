@@ -1,6 +1,6 @@
-"""CoreAgent with memory example -- Layer 1 runtime with memory protocol.
+"""Nano agent with memory example.
 
-This example demonstrates CoreAgent WITH memory protocol:
+This example demonstrates a nano agent WITH memory protocol:
 - Memory remember: Storing long-term knowledge across threads
 - Memory recall: Retrieving relevant memories semantically
 - Memory recall by tags: Filtering by categorical tags
@@ -10,7 +10,7 @@ Use case: Agent with persistent cross-thread memory for long-term knowledge
 retention and semantic retrieval.
 
 Run:
-    python examples/core_agent/04_with_memory_example.py
+    python examples/nano_agent/04_with_memory_example.py
 """
 
 import asyncio
@@ -24,7 +24,7 @@ from soothe_nano import create_nano_agent
 from soothe_sdk.protocols.memory import MemoryItem
 
 from examples._config_helper import load_example_config
-from examples.core_agent._shared.streaming import stream_core_agent
+from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -117,9 +117,9 @@ async def demonstrate_memory_protocol(agent) -> None:
 
 
 async def main() -> None:
-    """Run CoreAgent with memory example."""
+    """Run nano agent with memory example."""
     print("=" * 60)
-    print("Example 04: CoreAgent with Memory Protocol")
+    print("Example 04: Nano Agent with Memory Protocol")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
@@ -127,7 +127,7 @@ async def main() -> None:
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Memory enabled: {config.protocols.memory.enabled}")
 
-    # Create CoreAgent with memory enabled (from config)
+    # Create nano agent with memory enabled (from config)
     agent = create_nano_agent(
         config,
         tools=[],  # No tools for this example
@@ -145,7 +145,7 @@ async def main() -> None:
     print("Querying with accumulated memory")
     print("=" * 40)
 
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "What security best practices should I follow for storing API keys?",
         thread_id="memory-example-thread",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe_nano.workspace.context import (
+from soothe_nano.workspace.workspace_runtime import (
     get_workspace_context,
     reset_workspace_context,
     set_workspace_context,

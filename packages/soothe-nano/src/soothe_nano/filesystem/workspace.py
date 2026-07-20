@@ -15,7 +15,7 @@ from pathlib import Path
 import wcmatch.glob as wcglob
 from pathspec import PathSpec
 
-from soothe_nano.workspace.tool_path_resolution import resolve_process_workspace_root
+from soothe_nano.workspace.workspace_runtime import resolve_process_workspace_root
 
 from .local import LocalFilesystem
 from .protocol import (

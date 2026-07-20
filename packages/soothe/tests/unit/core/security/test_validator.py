@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from soothe_nano.security.validator import (
+from soothe_nano.security.path_security import (
     PathValidationError,
     PathValidator,
     ValidationSeverity,

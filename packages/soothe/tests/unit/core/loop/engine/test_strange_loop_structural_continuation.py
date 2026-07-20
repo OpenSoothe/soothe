@@ -105,7 +105,7 @@ async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
             "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
-            "soothe_nano.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
+            "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
         ),
         patch("soothe_nano.skills.catalog.parse_slash_skill_user_line", return_value=None),
@@ -194,7 +194,7 @@ async def test_embedded_continue_the_loop_bypasses_pass1_social_fast_path() -> N
             "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
-            "soothe_nano.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
+            "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
         ),
         patch("soothe_nano.skills.catalog.parse_slash_skill_user_line", return_value=None),

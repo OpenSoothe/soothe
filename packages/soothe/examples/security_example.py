@@ -11,19 +11,21 @@ import tempfile
 from pathlib import Path
 
 from soothe_nano.security import SecurityEnforcer
-from soothe_nano.security.enforcement import (
+from soothe_nano.security.integration import SecureFilesystemWrapper
+from soothe_nano.security.path_security import (
+    create_strict_validator,
+)
+from soothe_nano.security.policy_models import (
+    SecurityPolicy,
+)
+from soothe_nano.security.policy_profiles import (
+    PERMISSIVE_POLICY,
+    STRICT_POLICY,
+)
+from soothe_nano.security.security_enforcer import (
     SecurityContext,
     SecurityError,
     create_enforcer,
-)
-from soothe_nano.security.integration import SecureFilesystemWrapper
-from soothe_nano.security.policy import (
-    PERMISSIVE_POLICY,
-    STRICT_POLICY,
-    SecurityPolicy,
-)
-from soothe_nano.security.validator import (
-    create_strict_validator,
 )
 
 
@@ -232,7 +234,7 @@ def example_custom_policy() -> None:
     def block_temp_files(path: str, operation: str) -> None:
         """Custom validator that blocks temp files."""
         if "temp" in path.lower():
-            from soothe_nano.security.policy import PolicyAction, PolicyDecision
+            from soothe_nano.security.policy_models import PolicyAction, PolicyDecision
 
             return PolicyDecision(
                 allowed=False,

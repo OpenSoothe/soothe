@@ -1,6 +1,6 @@
-"""Streaming helper for CoreAgent examples.
+"""Streaming helper for nano agent examples.
 
-Provides ``stream_core_agent`` which wraps CoreAgent.astream() for
+Provides ``stream_nano_agent`` which wraps the agent ``astream()`` API for
 real-time output rendering of messages, tool calls, and custom events.
 """
 
@@ -11,7 +11,7 @@ import sys
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from soothe_nano import CodingCoreAgent as CoreAgent
+from soothe_nano import CodingCoreAgent as NanoAgent
 
 
 def _truncate(text: str, limit: int = 200) -> str:
@@ -33,17 +33,17 @@ def _format_content(content: Any) -> str:
     return str(content)[:200]
 
 
-async def stream_core_agent(
-    agent: CoreAgent,
+async def stream_nano_agent(
+    agent: NanoAgent,
     query: str,
     *,
     thread_id: str = "example-thread",
     show_tool_calls: bool = True,
 ) -> str:
-    """Stream CoreAgent execution with real-time output.
+    """Stream nano agent execution with real-time output.
 
     Args:
-        agent: CoreAgent instance to execute.
+        agent: Nano agent instance to execute.
         query: User query string.
         thread_id: Thread identifier for persistence.
         show_tool_calls: Whether to display tool call results.
@@ -52,7 +52,7 @@ async def stream_core_agent(
         Final response text from the agent.
     """
     print(f"\n[Query] {query}\n", flush=True)
-    print("[Streaming] Starting CoreAgent...\n", flush=True)
+    print("[Streaming] Starting Nano Agent...\n", flush=True)
 
     messages = [HumanMessage(content=query)]
     config = {"configurable": {"thread_id": thread_id}}
@@ -110,3 +110,19 @@ async def stream_core_agent(
 
     print("\n\n[Streaming] Done.", flush=True)
     return final_response
+
+
+async def stream_core_agent(
+    agent: NanoAgent,
+    query: str,
+    *,
+    thread_id: str = "example-thread",
+    show_tool_calls: bool = True,
+) -> str:
+    """Backward-compatible alias for older example imports."""
+    return await stream_nano_agent(
+        agent,
+        query,
+        thread_id=thread_id,
+        show_tool_calls=show_tool_calls,
+    )

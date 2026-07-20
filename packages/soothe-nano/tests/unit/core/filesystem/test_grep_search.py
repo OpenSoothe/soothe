@@ -363,7 +363,7 @@ def test_grep_write_rejects_host_absolute_outside_workspace(tmp_path: Path) -> N
 
 
 def test_normalized_backend_grep_via_ag(tmp_path: Path) -> None:
-    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.workspace_filesystem import NormalizedPathBackend
 
     (tmp_path / "needle.txt").write_text("find AgentLoop here\n")
 

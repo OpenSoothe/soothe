@@ -15,7 +15,7 @@ from soothe_nano.toolkits.file_ops_catalog import (
     build_filesystem_tools,
     build_surgical_file_ops_tools,
 )
-from soothe_nano.workspace.tool_path_resolution import (
+from soothe_nano.workspace.workspace_paths import (
     filesystem_virtual_mode_from_soothe_config,
     max_file_size_mb_for_filesystem_backend,
     resolve_effective_tool_workspace,
@@ -40,7 +40,7 @@ def _workspace_backend_factory(
     max_file_size_mb: int,
 ) -> Callable[[str], Any]:
     """Build a workspace-scoped backend factory for surgical file tools."""
-    from soothe_nano.workspace.normalized_backend import get_workspace_backend
+    from soothe_nano.workspace.workspace_filesystem import get_workspace_backend
 
     def factory(workspace: str) -> Any:
         return get_workspace_backend(
@@ -309,7 +309,7 @@ def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) ->
     """
     import time
 
-    from soothe_nano.workspace.framework_filesystem import FrameworkFilesystem
+    from soothe_nano.workspace.workspace_filesystem import FrameworkFilesystem
 
     from ._tool_cache import cache_tools, get_cached_tools
 

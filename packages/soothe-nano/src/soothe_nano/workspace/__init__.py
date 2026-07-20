@@ -1,12 +1,34 @@
-"""Workspace management package - unified workspace resolution, validation, and backend.
+"""Workspace management package."""
 
-This package provides workspace-aware filesystem operations using the native
-Soothe UnifiedFilesystem interface.
-"""
-
-from __future__ import annotations
-
-from typing import Any
+from soothe_nano.workspace.workspace_api import (
+    ResolvedWorkspace,
+    WorkspacePrecedence,
+    resolve_workspace,
+    resolve_workspace_for_stream,
+    resolve_workspace_for_tool_execution,
+)
+from soothe_nano.workspace.workspace_filesystem import (
+    FrameworkFilesystem,
+    NormalizedPathBackend,
+    WorkspaceAwareBackend,
+    get_workspace_backend,
+)
+from soothe_nano.workspace.workspace_policy import (
+    compute_scoped_workspace_dir_name,
+    normalize_user_id,
+    translate_client_path_to_container,
+    translate_container_path_to_client,
+    user_id_for_hash,
+    validate_client_workspace,
+)
+from soothe_nano.workspace.workspace_runtime import (
+    WorkspaceContext,
+    clear_virtual_mode_context,
+    get_virtual_home,
+    get_virtual_home_relative_path,
+    get_virtual_mode,
+    set_virtual_mode_context,
+)
 
 __all__ = [
     "FrameworkFilesystem",
@@ -14,47 +36,20 @@ __all__ = [
     "ResolvedWorkspace",
     "WorkspaceAwareBackend",
     "WorkspaceContext",
+    "WorkspacePrecedence",
+    "clear_virtual_mode_context",
+    "compute_scoped_workspace_dir_name",
     "get_virtual_home",
     "get_virtual_home_relative_path",
     "get_virtual_mode",
+    "get_workspace_backend",
+    "normalize_user_id",
+    "resolve_workspace",
     "resolve_workspace_for_stream",
     "resolve_workspace_for_tool_execution",
     "set_virtual_mode_context",
-    "get_workspace_backend",
-    "clear_virtual_mode_context",
+    "translate_client_path_to_container",
+    "translate_container_path_to_client",
+    "user_id_for_hash",
+    "validate_client_workspace",
 ]
-
-_LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "ResolvedWorkspace": (".stream_resolution", "ResolvedWorkspace"),
-    "resolve_workspace_for_stream": (".stream_resolution", "resolve_workspace_for_stream"),
-    "resolve_workspace_for_tool_execution": (
-        ".runtime_resolution",
-        "resolve_workspace_for_tool_execution",
-    ),
-    # Normalized backend
-    "WorkspaceAwareBackend": (".normalized_backend", "WorkspaceAwareBackend"),
-    "NormalizedPathBackend": (".normalized_backend", "NormalizedPathBackend"),
-    "FrameworkFilesystem": (".framework_filesystem", "FrameworkFilesystem"),
-    "get_workspace_backend": (".normalized_backend", "get_workspace_backend"),
-    # Virtual home
-    "get_virtual_home": (".virtual_home", "get_virtual_home"),
-    "get_virtual_mode": (".virtual_home", "get_virtual_mode"),
-    "set_virtual_mode_context": (".virtual_home", "set_virtual_mode_context"),
-    "clear_virtual_mode_context": (".virtual_home", "clear_virtual_mode_context"),
-    "get_virtual_home_relative_path": (".virtual_home", "get_virtual_home_relative_path"),
-    # Unified context
-    "WorkspaceContext": (".context", "WorkspaceContext"),
-}
-
-
-def __getattr__(name: str) -> Any:
-    """Lazy-load workspace submodules to keep daemon import path lightweight."""
-    spec = _LAZY_EXPORTS.get(name)
-    if spec is None:
-        msg = f"module {__name__!r} has no attribute {name!r}"
-        raise AttributeError(msg)
-    module_name, attr_name = spec
-    import importlib
-
-    module = importlib.import_module(module_name, package=__name__)
-    return getattr(module, attr_name)

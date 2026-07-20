@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from soothe.foundation.core.agent import create_soothe_agent
 
 from examples._config_helper import load_example_config
-from examples.core_agent._shared.streaming import stream_core_agent
+from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -130,7 +130,7 @@ async def main() -> None:
     print("=" * 60)
     print("The agent will delegate to deep_research for web-based research.\n")
 
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "What are the key features of Python 3.12 and how do they compare to Python 3.11?",
         thread_id="deep-research-example-1",
@@ -146,7 +146,7 @@ async def main() -> None:
         "or use the effort parameter when calling the task tool directly.\n"
     )
 
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Research the current state of AI agent frameworks in 2024-2025. "
         "Compare LangGraph, AutoGen, CrewAI, and similar frameworks. "

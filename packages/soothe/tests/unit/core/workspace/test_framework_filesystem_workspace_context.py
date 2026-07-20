@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from soothe_nano.workspace.framework_filesystem import FrameworkFilesystem
+from soothe_nano.workspace.workspace_filesystem import FrameworkFilesystem
 
 
 @pytest.mark.asyncio

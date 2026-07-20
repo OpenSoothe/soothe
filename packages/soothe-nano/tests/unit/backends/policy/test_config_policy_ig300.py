@@ -10,7 +10,7 @@ from soothe_sdk.protocols.policy import (
     PolicyContext,
 )
 
-from soothe_nano.security.config_policy import (
+from soothe_nano.security.policy_profiles import (
     ConfigDrivenPolicy,
     _extract_required_permission,
 )

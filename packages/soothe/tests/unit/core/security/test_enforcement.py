@@ -7,19 +7,21 @@ import time
 from pathlib import Path
 
 import pytest
-from soothe_nano.security.enforcement import (
+from soothe_nano.security.policy_models import (
+    PolicyAction,
+    PolicyDecision,
+    PolicyViolation,
+)
+from soothe_nano.security.policy_profiles import (
+    PERMISSIVE_POLICY,
+    STRICT_POLICY,
+)
+from soothe_nano.security.security_enforcer import (
     RateLimiter,
     SecurityContext,
     SecurityEnforcer,
     SecurityError,
     create_enforcer,
-)
-from soothe_nano.security.policy import (
-    PERMISSIVE_POLICY,
-    STRICT_POLICY,
-    PolicyAction,
-    PolicyDecision,
-    PolicyViolation,
 )
 
 

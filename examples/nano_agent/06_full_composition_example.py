@@ -1,6 +1,6 @@
-"""CoreAgent full composition example -- Layer 1 with all protocols.
+"""Nano agent full composition example.
 
-This example demonstrates CoreAgent with FULL composition:
+This example demonstrates a nano agent with full composition:
 - Memory protocol: Cross-thread long-term memory
 - Tools: Built-in tools from config + custom tools
 - Subagents: Delegation to specialized agents
@@ -11,7 +11,7 @@ Use case: Full-featured agent capable of:
 - Delegating specialized tasks to subagents
 
 Run:
-    python examples/core_agent/06_full_composition_example.py
+    python examples/nano_agent/06_full_composition_example.py
 """
 
 import asyncio
@@ -27,7 +27,7 @@ from soothe_nano import create_nano_agent
 from soothe_sdk.protocols.memory import MemoryItem
 
 from examples._config_helper import load_example_config
-from examples.core_agent._shared.streaming import stream_core_agent
+from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -106,7 +106,7 @@ async def demonstrate_full_agent(agent) -> None:
     # Query 1: Uses context + memory for informed response
     print("\n[Query 1] Context and Memory-aware planning")
     print("-" * 40)
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Based on what we know about the project status and previous work, "
         "what should be our priority for the next sprint?",
@@ -116,7 +116,7 @@ async def demonstrate_full_agent(agent) -> None:
     # Query 2: Uses tools for action
     print("\n[Query 2] Tool usage for project management")
     print("-" * 40)
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Get the current project status and log a decision to focus on testing infrastructure.",
         thread_id="full-composition-2",
@@ -125,7 +125,7 @@ async def demonstrate_full_agent(agent) -> None:
     # Query 3: Combines everything
     print("\n[Query 3] Full integration - context + memory + tools")
     print("-" * 40)
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Considering our deployment schedule and security requirements, "
         "log a decision about when to deploy the new API changes.",
@@ -135,7 +135,7 @@ async def demonstrate_full_agent(agent) -> None:
     # Query 4: Research task (uses web search tool if enabled)
     print("\n[Query 4] Research with tool")
     print("-" * 40)
-    await stream_core_agent(
+    await stream_nano_agent(
         agent,
         "Search for best practices for JWT token refresh strategies and summarize key recommendations.",
         thread_id="full-composition-4",
@@ -143,9 +143,9 @@ async def demonstrate_full_agent(agent) -> None:
 
 
 async def main() -> None:
-    """Run CoreAgent full composition example."""
+    """Run nano agent full composition example."""
     print("=" * 60)
-    print("Example 06: CoreAgent Full Composition")
+    print("Example 06: Nano Agent Full Composition")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
@@ -156,7 +156,7 @@ async def main() -> None:
         f"[Config] Tools: execution={config.tools.execution.enabled}, web_search={config.tools.web_search.enabled}"
     )
 
-    # Create CoreAgent with full composition
+    # Create nano agent with full composition
     # Everything is enabled from config by default
     agent = create_nano_agent(
         config,

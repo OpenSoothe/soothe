@@ -1,6 +1,6 @@
-"""CoreAgent with tools example -- Layer 1 runtime with tool capabilities.
+"""Nano agent with tools example.
 
-This example demonstrates CoreAgent WITH tools:
+This example demonstrates a nano agent WITH tools:
 - Built-in tools from config (execution, file_ops, etc.)
 - Custom ad-hoc tools defined inline
 - Tool execution and results
@@ -8,7 +8,7 @@ This example demonstrates CoreAgent WITH tools:
 Use case: Agent that can execute commands, read files, search web, etc.
 
 Run:
-    python examples/core_agent/02_with_tools_example.py
+    python examples/nano_agent/02_with_tools_example.py
 """
 
 import asyncio
@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from soothe_nano import create_nano_agent
 
 from examples._config_helper import load_example_config
-from examples.core_agent._shared.streaming import stream_core_agent
+from examples.nano_agent._shared.streaming import stream_nano_agent
 
 load_dotenv()
 
@@ -58,9 +58,9 @@ def calculate_sum(numbers: str) -> str:
 
 
 async def main() -> None:
-    """Run CoreAgent with tools example."""
+    """Run nano agent with tools example."""
     print("=" * 60)
-    print("Example 02: CoreAgent with Tools")
+    print("Example 02: Nano Agent with Tools")
     print("=" * 60)
 
     # Load configuration from config/develop/config.yml
@@ -68,7 +68,7 @@ async def main() -> None:
     print(f"\n[Config] Model: {config.router.default}")
     print(f"[Config] Built-in tools enabled: execution={config.tools.execution.enabled}")
 
-    # Create CoreAgent with tools from config + custom tools
+    # Create nano agent with tools from config + custom tools
     # Tools from config are automatically loaded based on config.tools settings
     agent = create_nano_agent(
         config,
@@ -93,7 +93,7 @@ async def main() -> None:
         print(f"\n{'=' * 40}")
         print(f"Query {i + 1}")
         print("=" * 40)
-        await stream_core_agent(
+        await stream_nano_agent(
             agent,
             query,
             thread_id=f"tools-example-{i}",

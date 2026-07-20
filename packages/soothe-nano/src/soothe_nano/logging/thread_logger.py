@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe_nano.config import SOOTHE_HOME
-from soothe_nano.runtime_paths.directory_manager import (
+from soothe_nano.paths.thread_paths import (
     THREADS_DATA_DIR,
     PersistenceDirectoryManager,
 )

@@ -7,8 +7,8 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from soothe_nano.workspace.framework_filesystem import FrameworkFilesystem
-from soothe_nano.workspace.runtime_resolution import resolve_workspace_for_tool_execution
+from soothe_nano.workspace.workspace_api import resolve_workspace_for_tool_execution
+from soothe_nano.workspace.workspace_filesystem import FrameworkFilesystem
 
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 

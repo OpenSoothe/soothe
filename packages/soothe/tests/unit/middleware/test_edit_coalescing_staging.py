@@ -845,7 +845,7 @@ class TestWorkspaceBackendIntegration:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: object,
     ) -> None:
-        from soothe_nano.workspace.context import (
+        from soothe_nano.workspace.workspace_runtime import (
             reset_workspace_context,
             set_workspace_context,
         )
@@ -861,7 +861,7 @@ class TestWorkspaceBackendIntegration:
             return sentinel_backend
 
         monkeypatch.setattr(
-            "soothe_nano.workspace.normalized_backend.get_workspace_backend",
+            "soothe_nano.workspace.workspace_filesystem.get_workspace_backend",
             _fake_get_workspace_backend,
         )
 

@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
-from soothe_nano.workspace.framework_filesystem import FrameworkFilesystem
-from soothe_nano.workspace.tool_path_resolution import (
+from soothe_nano.workspace.workspace_filesystem import FrameworkFilesystem
+from soothe_nano.workspace.workspace_paths import (
     resolve_effective_tool_workspace,
     workspace_path_for_tool_resolution,
 )

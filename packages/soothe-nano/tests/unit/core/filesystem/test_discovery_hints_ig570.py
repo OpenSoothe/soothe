@@ -15,7 +15,7 @@ from soothe_nano.filesystem.discovery_hints import (
     format_glob_timeout_error,
 )
 from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
-from soothe_nano.workspace.normalized_backend import get_workspace_backend
+from soothe_nano.workspace.workspace_filesystem import get_workspace_backend
 
 
 def test_glob_tool_description_includes_discovery_fallback() -> None:

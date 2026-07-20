@@ -26,7 +26,7 @@ def test_slugify_report_title() -> None:
 def test_save_deep_research_report_writes_workspace_relative_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from soothe_nano.workspace.context import set_workspace_context
+    from soothe_nano.workspace.workspace_runtime import set_workspace_context
 
     token = set_workspace_context(workspace=tmp_path, virtual_mode=False)
     try:
@@ -40,7 +40,7 @@ def test_save_deep_research_report_writes_workspace_relative_file(
         assert "key-findings" in saved.host_path.name
         assert "Finding one" in saved.brief_summary
     finally:
-        from soothe_nano.workspace.context import reset_workspace_context
+        from soothe_nano.workspace.workspace_runtime import reset_workspace_context
 
         reset_workspace_context(token)
 

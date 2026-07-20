@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain.tools import ToolRuntime
-from soothe_nano.workspace.tool_path_resolution import (
+from soothe_nano.workspace.workspace_paths import (
     filesystem_virtual_mode_from_soothe_config,
     join_workspace_normalized_path,
     resolve_backend_os_path,
@@ -67,7 +67,7 @@ def test_join_workspace_normalized_path_handles_absolute(tmp_path: Path) -> None
 
 def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Path) -> None:
     """Host-absolute paths inside the workspace resolve with ``virtual_mode=True`` (IG-300)."""
-    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.workspace_filesystem import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -91,7 +91,7 @@ def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Pa
 
 def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path: Path) -> None:
     """``WorkspaceAwareBackend.ls_info`` accepts host-absolute dirs when ``virtual_mode=True`` (IG-300)."""
-    from soothe_nano.workspace.normalized_backend import WorkspaceAwareBackend
+    from soothe_nano.workspace.workspace_filesystem import WorkspaceAwareBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -206,7 +206,7 @@ def test_normalized_backend_read_host_absolute_outside_workspace_rejected_on_wri
     tmp_path: Path,
 ) -> None:
     """Writes to host absolutes outside the workspace remain blocked in virtual mode."""
-    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.workspace_filesystem import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -240,7 +240,7 @@ def test_normalized_backend_multi_level_path_allowed_non_virtual_mode(tmp_path: 
     Paths like `/Users/xxx/file` are legitimate user file paths and should work
     when virtual_mode=False and allow_paths_outside_workspace=True.
     """
-    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.workspace_filesystem import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()

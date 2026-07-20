@@ -35,7 +35,7 @@ def slugify_report_title(title: str, *, max_len: int = 60) -> str:
 
 def _display_path_for(host_path: Path) -> str:
     """Return a workspace-relative path when possible."""
-    from soothe_nano.workspace.context import get_workspace_context
+    from soothe_nano.workspace.workspace_runtime import get_workspace_context
 
     ctx = get_workspace_context()
     if ctx.workspace is not None:
