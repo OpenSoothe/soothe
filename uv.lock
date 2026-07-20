@@ -8636,7 +8636,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
-version = "0.7.24"
+version = "0.8.1"
 source = { editable = "packages/soothe-deepagents" }
 dependencies = [
     { name = "langchain" },
@@ -8718,7 +8718,7 @@ test = [
 
 [[package]]
 name = "soothe-nano"
-version = "0.9.2"
+version = "0.9.4"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },

@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "soothe>=0.5.25,<1.0.0",        # in-proc agent core (PyPI)
-    "soothe-nano>=0.9.3,<1.0.0",   # Coding CoreAgent runtime (skills/MCP/backends; direct, not only via soothe)
+    "soothe-nano>=0.9.4,<1.0.0",   # Coding CoreAgent runtime (skills/MCP/backends; direct, not only via soothe)
     "soothe-sdk>=1.0.2,<2.0.0",    # Subagent wire helpers (types owned by soothe subagents)
     "soothe-client-python>=0.10.0,<1.0.0",  # admin CLI + tests WebSocket client
     "aiohttp>=3.9.0,<4.0.0",
