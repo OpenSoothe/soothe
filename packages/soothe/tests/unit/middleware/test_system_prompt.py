@@ -7,12 +7,12 @@ from unittest.mock import patch
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from soothe_nano.middleware import SystemPromptMiddleware
+from soothe_nano.middleware.progressive_listing import ProgressiveListingMiddleware
+from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 from soothe.config import SootheConfig
 from soothe.foundation.sloop.intention import RoutingClassification
-from soothe.middleware import SystemPromptMiddleware
-from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
-from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 _VOLATILE_PROMPT_SECTION_RE = re.compile(
     r"<(?:ENVIRONMENT|TIMESTAMP)>.*?</(?:ENVIRONMENT|TIMESTAMP)>\n?",
@@ -472,7 +472,7 @@ def test_goal_synthesis_disables_all_tools() -> None:
 
 def test_memory_section_uses_memory_summary_tag():
     """RFC-214: Memory section should use <MEMORY_SUMMARY> tag."""
-    from soothe.protocols.memory import MemoryItem
+    from soothe_nano.protocols.memory import MemoryItem
 
     config = SootheConfig()
     middleware = SystemPromptMiddleware(config=config)
@@ -512,7 +512,7 @@ class TestSkillActivationInStateDict:
 class TestComposeSkillsBlockJustInvokedExclusion:
     def test_just_invoked_skills_excluded_from_listing_entries(self) -> None:
         """just_invoked skill names are filtered from listing_entries."""
-        from soothe.skills.index import SkillIndexEntry
+        from soothe_nano.skills.index import SkillIndexEntry
 
         weather = SkillIndexEntry(
             name="weather",
@@ -600,7 +600,7 @@ class TestComposeSkillsBlockJustInvokedExclusion:
         assert "wttr.in" in skill_context_blocks[0]
 
     def test_compose_includes_skill_context_guide_when_preloaded(self) -> None:
-        from soothe.middleware.system_prompt import SystemPromptMiddleware
+        from soothe_nano.middleware.system_prompt import SystemPromptMiddleware
 
         config = SootheConfig()
         listing = ProgressiveListingMiddleware(config=config)
@@ -630,7 +630,7 @@ class TestComposeSkillsBlockJustInvokedExclusion:
 
 class TestToolSelectionGuidance:
     def test_prompt_includes_tool_selection_block(self) -> None:
-        from soothe.middleware.system_prompt import SystemPromptMiddleware
+        from soothe_nano.middleware.system_prompt import SystemPromptMiddleware
 
         middleware = SystemPromptMiddleware(config=SootheConfig())
         prompt = middleware._get_prompt_for_complexity("simple", {})
@@ -760,7 +760,7 @@ class TestWorkspaceInjection:
         the workspace blocks silently vanish from the execute-step system
         prompt even when state["workspace"] was set upstream.
         """
-        from soothe.middleware.system_prompt import _SystemPromptState
+        from soothe_nano.middleware.system_prompt import _SystemPromptState
 
         annotations = getattr(_SystemPromptState, "__annotations__", {})
         assert "workspace" in annotations, (
@@ -776,7 +776,7 @@ class TestWorkspaceInjection:
 
 
 def test_available_tools_block_when_progressive_enabled() -> None:
-    from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
+    from soothe_nano.middleware.progressive_tools import ProgressiveToolMiddleware
 
     config = SootheConfig()
     config.progressive_tools.enabled = True
@@ -883,10 +883,11 @@ def test_modify_request_resolves_workspace_from_request_messages_first_hop(tmp_p
 
 def test_execute_step_has_workspace_tail_plan_generate_does_not(tmp_path) -> None:
     """Workspace blocks are execute-step only; plan-generate stays lean."""
+    from soothe_nano.protocols.planner import PlanContext
+
     from soothe.foundation.sloop.prompts import PromptBuilder
     from soothe.foundation.sloop.state.schemas import LoopState
     from soothe.foundation.sloop.utils.messages import LoopHumanMessage
-    from soothe.protocols.planner import PlanContext
 
     (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
     ws = str(tmp_path)

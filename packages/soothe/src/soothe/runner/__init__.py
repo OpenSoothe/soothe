@@ -28,10 +28,11 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.protocols.planner import Plan, PlannerProtocol
+from soothe_nano.protocols.policy import PolicyProtocol
+
 from soothe.config import SootheConfig
 from soothe.foundation.workspace import resolve_workspace_for_stream
-from soothe.protocols.planner import Plan, PlannerProtocol
-from soothe.protocols.policy import PolicyProtocol
 
 from ._runner_autopilot_worker import AutopilotWorkerMixin
 from ._runner_phases import PhasesMixin
@@ -48,10 +49,11 @@ __all__ = [
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from soothe_nano.middleware.identity import IdentityRuntime
+    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+    from soothe_nano.protocols.memory import MemoryProtocol
+
     from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
-    from soothe.middleware.identity import IdentityRuntime
-    from soothe.protocols.core_agent import CoreAgentProtocol
-    from soothe.protocols.memory import MemoryProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -91,10 +93,11 @@ class SootheRunner(
         """
         import time
 
+        from soothe_nano.protocols.concurrency import ConcurrencyPolicy
+
         from soothe.foundation.coreagent import create_soothe_agent
         from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
         from soothe.foundation.sloop.intention import IntentClassifier
-        from soothe.protocols.concurrency import ConcurrencyPolicy
         from soothe.runner.resolver import (
             resolve_checkpointer,
             resolve_durability,

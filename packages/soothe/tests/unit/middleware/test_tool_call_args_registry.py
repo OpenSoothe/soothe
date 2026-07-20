@@ -10,8 +10,8 @@ from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
 # IG-519: Use ToolCallArgsMiddleware (semaphore removed from stack)
-from soothe.middleware.tool_call_args_middleware import ToolCallArgsMiddleware
-from soothe.middleware.tool_call_args_registry import (
+from soothe_nano.middleware.tool_call_args_middleware import ToolCallArgsMiddleware
+from soothe_nano.middleware.tool_call_args_registry import (
     get_recorded_tool_call_args,
     init_tool_call_args_registry,
     record_tool_call_args_from_request,
@@ -70,8 +70,9 @@ def test_main_middleware_stack_mounts_tool_call_args_recording() -> None:
     TUI stopped showing tool-call args on step and non-explore subagent
     activities. The args-recording middleware must stay in the main stack.
     """
+    from soothe_nano.middleware._builder import build_soothe_middleware_stack
+
     from soothe.config import SootheConfig
-    from soothe.middleware._builder import build_soothe_middleware_stack
 
     stack = build_soothe_middleware_stack(SootheConfig(), policy=None)
     assert any(type(m).__name__ == "ToolCallArgsMiddleware" for m in stack)
@@ -79,8 +80,9 @@ def test_main_middleware_stack_mounts_tool_call_args_recording() -> None:
 
 def test_tool_call_args_middleware_wraps_edit_coalescing() -> None:
     """ToolCallArgs must be outer so coalesced edit_file calls still record kwargs."""
+    from soothe_nano.middleware._builder import build_soothe_middleware_stack
+
     from soothe.config import SootheConfig
-    from soothe.middleware._builder import build_soothe_middleware_stack
 
     names = [type(m).__name__ for m in build_soothe_middleware_stack(SootheConfig(), policy=None)]
     args_idx = names.index("ToolCallArgsMiddleware")
@@ -91,7 +93,10 @@ def test_tool_call_args_middleware_wraps_edit_coalescing() -> None:
 @pytest.mark.asyncio
 async def test_outer_tool_call_args_records_before_coalescing_intercepts_edit_file() -> None:
     """Regression: edit_file cards need args even when coalescing never calls the tool handler."""
-    from soothe.middleware.edit_coalescing import EditCoalescingConfig, EditCoalescingMiddleware
+    from soothe_nano.middleware.edit_coalescing import (
+        EditCoalescingConfig,
+        EditCoalescingMiddleware,
+    )
 
     init_tool_call_args_registry()
     coalescing = EditCoalescingMiddleware(

@@ -15,8 +15,8 @@ class TestThreadDeletion:
         """Verify thread deletion removes the entire runs/{thread_id}/ directory."""
         import shutil
 
-        from soothe.backends.durability.sqlite import SQLiteDurability
-        from soothe.protocols.durability import ThreadMetadata
+        from soothe_nano.backends.durability.sqlite import SQLiteDurability
+        from soothe_nano.protocols.durability import ThreadMetadata
 
         # Create a thread with artifacts
         thread_id = "test-thread-delete-123"

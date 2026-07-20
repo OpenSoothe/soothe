@@ -25,15 +25,15 @@ def test_build_passes_filesystem_backend_to_deepagents(
     monkeypatch.setattr("soothe.runner.resolver.resolve_tools", lambda *args, **kwargs: [])
     monkeypatch.setattr("soothe.runner.resolver.resolve_subagents", lambda *args, **kwargs: [])
     monkeypatch.setattr(
-        "soothe.middleware._builder.build_soothe_middleware_stack",
+        "soothe_nano.middleware._builder.build_soothe_middleware_stack",
         lambda *args, **kwargs: (),
     )
     monkeypatch.setattr(
-        "soothe.middleware.model_call_profiler.install_model_call_profiler",
+        "soothe_nano.middleware.model_call_profiler.install_model_call_profiler",
         lambda **kwargs: None,
     )
     monkeypatch.setattr(
-        "soothe.middleware.model_call_profiler.is_profiler_enabled",
+        "soothe_nano.middleware.model_call_profiler.is_profiler_enabled",
         lambda config: False,
     )
 

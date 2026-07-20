@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from soothe_nano.protocols.planner import PlanContext
+
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
@@ -12,7 +14,6 @@ from soothe.foundation.sloop.state.schemas import (
     PlanResult,
     StepAction,
 )
-from soothe.protocols.planner import PlanContext
 
 
 def _step(n: int) -> StepAction:

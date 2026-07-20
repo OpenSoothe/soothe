@@ -329,7 +329,7 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
     )
 
     async def _astream(_input, stream_mode=None):  # type: ignore[no-untyped-def]
-        from soothe.utils.progress import emit_progress
+        from soothe_nano.utils.progress import emit_progress
 
         emit_progress(
             {
@@ -455,7 +455,7 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     )
 
     async def _ainvoke(_input):  # type: ignore[no-untyped-def]
-        from soothe.utils.progress import emit_progress
+        from soothe_nano.utils.progress import emit_progress
 
         emit_progress(
             {
@@ -520,7 +520,7 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
     )
 
     async def _ainvoke(_input):  # type: ignore[no-untyped-def]
-        from soothe.utils.progress import emit_progress
+        from soothe_nano.utils.progress import emit_progress
 
         fresh_context = contextvars.Context()
 

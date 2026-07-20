@@ -19,8 +19,6 @@ __all__ = [
     "clear_virtual_mode_context",
     "compute_scoped_workspace_dir_name",
     "normalize_user_id",
-    "resolve_loop_workspace",
-    "resolve_persisted_loop_workspace",
     "get_virtual_home",
     "get_virtual_home_relative_path",
     "get_virtual_mode",
@@ -37,10 +35,8 @@ __all__ = [
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "resolve_daemon_workspace": (".resolution", "resolve_daemon_workspace"),
-    "normalize_user_id": (".loop_workspace", "normalize_user_id"),
-    "compute_scoped_workspace_dir_name": (".loop_workspace", "compute_scoped_workspace_dir_name"),
-    "resolve_loop_workspace": (".loop_workspace", "resolve_loop_workspace"),
-    "resolve_persisted_loop_workspace": (".loop_workspace", "resolve_persisted_loop_workspace"),
+    "normalize_user_id": (".scoped", "normalize_user_id"),
+    "compute_scoped_workspace_dir_name": (".scoped", "compute_scoped_workspace_dir_name"),
     "cleanup_anonymous_workspaces": (".resolution", "cleanup_anonymous_workspaces"),
     "validate_client_workspace": (".resolution", "validate_client_workspace"),
     "translate_client_path_to_container": (".resolution", "translate_client_path_to_container"),

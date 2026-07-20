@@ -31,7 +31,7 @@ def test_resolve_subagents_passes_config_and_context_to_deep_research() -> None:
             return_value=fake_model,
         ),
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=False,
         ),
         patch(
@@ -74,7 +74,7 @@ def test_resolve_subagents_deep_research_uses_explicit_model_spec() -> None:
             "soothe.config.settings.SootheConfig.create_chat_model",
         ) as create_model,
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=False,
         ),
     ):

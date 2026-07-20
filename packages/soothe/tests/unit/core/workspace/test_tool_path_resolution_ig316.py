@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from langchain.tools import ToolRuntime
-
-from soothe.foundation.workspace.tool_path_resolution import (
+from soothe_nano.workspace.tool_path_resolution import (
     filesystem_virtual_mode_from_soothe_config,
     join_workspace_normalized_path,
     resolve_backend_os_path,
@@ -68,7 +67,7 @@ def test_join_workspace_normalized_path_handles_absolute(tmp_path: Path) -> None
 
 def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Path) -> None:
     """Host-absolute paths inside the workspace resolve with ``virtual_mode=True`` (IG-300)."""
-    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -92,7 +91,7 @@ def test_normalized_path_backend_read_host_absolute_under_workspace(tmp_path: Pa
 
 def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path: Path) -> None:
     """``WorkspaceAwareBackend.ls_info`` accepts host-absolute dirs when ``virtual_mode=True`` (IG-300)."""
-    from soothe.foundation.workspace.normalized_backend import WorkspaceAwareBackend
+    from soothe_nano.workspace.normalized_backend import WorkspaceAwareBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -107,8 +106,7 @@ def test_workspace_aware_backend_ls_info_host_absolute_under_workspace(tmp_path:
 def test_filesystem_middleware_file_info_virtual_path(tmp_path: Path) -> None:
     """Surgical ``file_info`` resolves virtual absolute paths via backend (IG-316)."""
     from soothe_deepagents.backends.filesystem import FilesystemBackend
-
-    from soothe.middleware.filesystem import SootheFilesystemMiddleware
+    from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
 
     ws = tmp_path / "ws"
     ws.mkdir()
@@ -161,8 +159,9 @@ def test_resolve_file_ops_file_info_virtual_path_with_soothe_config(tmp_path: Pa
 
 def test_get_data_info_resolves_virtual_path(tmp_path: Path) -> None:
     """Data toolkit resolves virtual paths when ``SootheConfig`` is set."""
+    from soothe_nano.toolkits.data import GetDataInfoTool
+
     from soothe.config import SootheConfig
-    from soothe.toolkits.data import GetDataInfoTool
 
     wdir = tmp_path / "agent_ws"
     wdir.mkdir()
@@ -188,8 +187,7 @@ def test_soothe_filesystem_middleware_uses_workspace_relative_artifact_prefix(
     causes OSError. SootheFilesystemMiddleware must override to workspace-relative paths.
     """
     from soothe_deepagents.backends.filesystem import FilesystemBackend
-
-    from soothe.middleware.filesystem import SootheFilesystemMiddleware
+    from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
 
     ws = tmp_path / "ws"
     ws.mkdir()
@@ -208,7 +206,7 @@ def test_normalized_backend_read_host_absolute_outside_workspace_rejected_on_wri
     tmp_path: Path,
 ) -> None:
     """Writes to host absolutes outside the workspace remain blocked in virtual mode."""
-    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()
@@ -242,7 +240,7 @@ def test_normalized_backend_multi_level_path_allowed_non_virtual_mode(tmp_path: 
     Paths like `/Users/xxx/file` are legitimate user file paths and should work
     when virtual_mode=False and allow_paths_outside_workspace=True.
     """
-    from soothe.foundation.workspace.normalized_backend import NormalizedPathBackend
+    from soothe_nano.workspace.normalized_backend import NormalizedPathBackend
 
     ws = tmp_path / "repo"
     ws.mkdir()

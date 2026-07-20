@@ -8,7 +8,7 @@ from pydantic import ConfigDict
 from soothe_sdk.core.events import SubagentEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe_nano.events import register_event
+from soothe_nano.events.catalog import register_event
 
 # Event type constants defined locally (self-contained pattern, RFC-0018)
 SUBAGENT_BROWSER_USE_STARTED = "soothe.subagent.browser_use.started"

@@ -1,7 +1,7 @@
 """Intake-only vs open-task subagent catalog helpers for CoreAgent.
 
 Specialists in ``INTAKE_ONLY_WIRE_SUBAGENTS`` stay off the open ``task`` tool
-catalog and are invoked via host wiring (StrangeLoop Pass 2 / slash).
+catalog and are invoked via host wiring (intake Pass 2 / slash).
 """
 
 from __future__ import annotations

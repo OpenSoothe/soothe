@@ -1,19 +1,16 @@
-"""Shim (IG-668): package re-export for ``soothe_nano.subagents``."""
+"""Subagents package: CoreAgent delegates (nano) + veritas (soothe)."""
 
 from __future__ import annotations
 
-import soothe_nano.subagents as _mod
-from soothe_nano.subagents import *  # noqa: F403
+from importlib import import_module
 
-try:
-    from soothe_nano.subagents import __all__ as __all__  # type: ignore[attr-defined]
-except ImportError:
-    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+# Register nano CoreAgent subagent wire events (no veritas)
+import soothe_nano.subagents  # noqa: F401
+
+__all__: list[str] = ["veritas"]
 
 
 def __getattr__(name: str):
-    return getattr(_mod, name)
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(dir(_mod)))
+    if name == "veritas":
+        return import_module("soothe.subagents.veritas")
+    return getattr(import_module("soothe_nano.subagents"), name)

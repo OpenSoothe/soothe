@@ -8,7 +8,7 @@ from pydantic import ConfigDict
 from soothe_sdk.core.events import SubagentEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe_nano.events import register_event
+from soothe_nano.events.catalog import register_event
 
 SKILLIFY_RETRIEVE_COMPLETED = "soothe.skillify.retrieve_completed"
 SKILLIFY_INDEX_STARTED = "soothe.skillify.index_started"

@@ -23,7 +23,7 @@ def configure_unified_persistence(config: SootheConfig) -> None:
     _validate_no_mixed_overrides(config)
     _warn_vector_store_mismatch(config)
 
-    from soothe.backends.persistence.display_store import configure_display_card_store
+    from soothe_nano.backends.persistence.display_store import configure_display_card_store
 
     configure_display_card_store(config)
     logger.info(

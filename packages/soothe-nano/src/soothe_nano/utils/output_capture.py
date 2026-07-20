@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from typing import Self
 
-logger = logging.getLogger("soothe.utils.output_capture")
+logger = logging.getLogger("soothe_nano.utils.output_capture")
 
 
 class OutputCapture:

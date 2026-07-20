@@ -8,13 +8,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from soothe_nano.config.env import _expand_env_in_config, _resolve_env, _resolve_provider_env
+from soothe_nano.config.middleware_access import agent_middleware_config
 from soothe_nano.config.models import (
     AgentConfig,
     ConsoleLoggingConfig,
-    CronConfig,
     EmbeddingProfile,
     FilesystemMiddlewareConfig,
     GlobalHistoryConfig,
@@ -138,7 +138,7 @@ class SootheConfigLoggingView:
 
     @property
     def report_output(self) -> ReportOutputConfig:
-        return self._cfg.agent.loop.report_output
+        return agent_middleware_config(self._cfg).report_output
 
     @property
     def level(self) -> str:
@@ -152,7 +152,7 @@ class SootheConfig(BaseSettings):
     Can be driven by environment variables (prefix ``SOOTHE_``) or passed directly.
     """
 
-    model_config = {"env_prefix": "SOOTHE_"}
+    model_config = SettingsConfigDict(env_prefix="SOOTHE_", extra="ignore")
 
     _llm_factory: Any = None  # LLMFactory instance (lazy-initialized)
 
@@ -228,7 +228,7 @@ class SootheConfig(BaseSettings):
     # --- Agent behaviour (unified) ---
 
     agent: AgentConfig = Field(default_factory=AgentConfig)
-    """Unified agent configuration (IG-434): identity, behavior, autopilot, loop, protocols."""
+    """Unified agent configuration: identity, protocols, CoreAgent middleware tuning."""
 
     subagents: dict[str, SubagentConfig] = Field(default_factory=dict)
     """Subagent name to config mapping. Set ``enabled: false`` to disable.
@@ -324,7 +324,7 @@ class SootheConfig(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def _merge_top_level_logging_yaml(cls, data: Any) -> Any:
-        """Fold top-level ``logging:`` YAML into ``observability`` and ``agent.loop.report_output``."""
+        """Fold top-level ``logging:`` YAML into ``observability`` and ``agent.middleware.report_output``."""
         if not isinstance(data, dict):
             return data
         logging_block = data.pop("logging", None)
@@ -353,38 +353,22 @@ class SootheConfig(BaseSettings):
         ro = logging_block.get("report_output")
         if isinstance(ro, dict):
             agent = dict(data.get("agent") or {})
-            loop = dict(agent.get("loop") or {})
-            prev_ro = loop.get("report_output")
+            middleware = dict(agent.get("middleware") or {})
+            prev_ro = middleware.get("report_output")
             merged_ro = {**(prev_ro if isinstance(prev_ro, dict) else {}), **ro}
-            loop["report_output"] = merged_ro
-            agent["loop"] = loop
+            middleware["report_output"] = merged_ro
+            agent["middleware"] = middleware
             data["agent"] = agent
         return data
 
     @model_validator(mode="before")
     @classmethod
-    def _merge_top_level_strange_loop_yaml(cls, data: Any) -> Any:
-        """Fold legacy top-level ``strange_loop:`` into ``agent.loop`` (IG-407)."""
+    def _strip_legacy_top_level_yaml(cls, data: Any) -> Any:
+        """Drop legacy top-level YAML keys not used by NanoConfig."""
         if not isinstance(data, dict):
             return data
-        legacy_loop = data.pop("strange_loop", None)
-        if not isinstance(legacy_loop, dict):
-            return data
-
-        def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-            merged = dict(base)
-            for key, value in overlay.items():
-                existing = merged.get(key)
-                if isinstance(existing, dict) and isinstance(value, dict):
-                    merged[key] = _deep_merge(existing, value)
-                else:
-                    merged[key] = value
-            return merged
-
-        agent = dict(data.get("agent") or {})
-        loop = dict(agent.get("loop") or {})
-        agent["loop"] = _deep_merge(loop, legacy_loop)
-        data["agent"] = agent
+        data.pop("cron", None)
+        data.pop("strange_loop", None)
         return data
 
     @model_validator(mode="after")
@@ -578,9 +562,6 @@ class SootheConfig(BaseSettings):
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     """Unified observability configuration for debugging and monitoring."""
 
-    cron: CronConfig = Field(default_factory=CronConfig)
-    """RFC-229: Cron service configuration for natural language scheduled jobs."""
-
     skillify: SkillifyConfig = Field(default_factory=SkillifyConfig)
     """Daemon-shared Skillify semantic skill warehouse indexing and retrieval."""
 
@@ -611,7 +592,7 @@ class SootheConfig(BaseSettings):
 
     @property
     def logging(self) -> SootheConfigLoggingView:
-        """Maps CLI-style logging fields to ``observability`` and ``agent.loop.report_output``."""
+        """Maps CLI-style logging fields to ``observability`` and ``agent.middleware.report_output``."""
         return SootheConfigLoggingView(self)
 
     # --- Persistence helpers ---

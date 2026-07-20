@@ -145,11 +145,9 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         The runner will create AsyncSqliteSaver from the path in async context.
     """
     try:
-        from soothe_nano.runtime_paths.directory_manager import (
-            PersistenceDirectoryManager,
-        )
+        from soothe_sdk.paths import SOOTHE_DATA_DIR
 
-        db_path = str(PersistenceDirectoryManager.get_loop_checkpoint_path())
+        db_path = str(Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db")
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     except Exception as exc:
         logger.warning("Failed to create SQLite checkpointer path: %s", exc)

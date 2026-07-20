@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from soothe.config import SootheConfig
 from soothe.logging import setup_logging
-from soothe.logging.setup import PACKAGE_LOGGER_NAMES
+from soothe_nano.logging.setup import PACKAGE_LOGGER_NAMES
 
 from soothe_daemon.bootstrap.logging import (
     DEFAULT_DAEMON_LOG,
@@ -55,6 +55,8 @@ class TestDaemonLogging:
         home = tmp_path / "soothe-home"
         monkeypatch.setattr("soothe_daemon.bootstrap.logging.SOOTHE_HOME", str(home))
         monkeypatch.setattr("soothe.logging.setup.SOOTHE_HOME", str(home))
+        monkeypatch.setattr("soothe_nano.logging.setup.SOOTHE_HOME", home)
+        monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", home)
 
         cfg = SootheConfig()
         setup_logging(cfg)

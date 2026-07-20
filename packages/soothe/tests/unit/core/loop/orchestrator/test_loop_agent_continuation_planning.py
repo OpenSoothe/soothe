@@ -12,6 +12,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.context.engine import ContextEngine
 from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
@@ -48,7 +49,6 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 
 def _multi_step_plan_result() -> PlanResult:

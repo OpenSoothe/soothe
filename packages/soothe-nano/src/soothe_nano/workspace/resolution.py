@@ -52,7 +52,7 @@ def cleanup_anonymous_workspaces() -> None:
     import shutil
 
     from soothe_nano.config import SOOTHE_HOME
-    from soothe_nano.workspace.loop_workspace import normalize_user_id
+    from soothe_nano.workspace.scoped import normalize_user_id
 
     cleaned = 0
 

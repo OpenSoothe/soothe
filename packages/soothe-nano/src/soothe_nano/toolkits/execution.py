@@ -39,6 +39,8 @@ from langchain_core.tools.base import InjectedToolArg
 from langchain_experimental.tools.python.tool import PythonREPLTool, sanitize_input
 from langchain_experimental.utilities.python import PythonREPL
 
+from soothe_nano.config.middleware_access import agent_middleware_config
+
 try:
     from langchain.tools import ToolRuntime
 except ImportError:  # pragma: no cover - optional at static analysis time
@@ -1037,7 +1039,7 @@ def _execution_max_output_from_config(config: Any | None) -> int:
     if config is None:
         return DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
     try:
-        return int(config.agent.loop.tool_output.code_exec_max_output_chars)
+        return int(agent_middleware_config(config).tool_output.code_exec_max_output_chars)
     except (AttributeError, TypeError, ValueError):
         return DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS
 

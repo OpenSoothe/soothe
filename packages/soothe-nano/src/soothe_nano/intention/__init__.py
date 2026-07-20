@@ -1,3 +1,5 @@
-from soothe_nano.intention.models import RoutingClassification
+from soothe_nano.intention.models import RoutingClassification, TaskComplexity
 
-__all__ = ['RoutingClassification']
+__all__ = ["RoutingClassification", "TaskComplexity"]
+
+__all__ = ["RoutingClassification"]

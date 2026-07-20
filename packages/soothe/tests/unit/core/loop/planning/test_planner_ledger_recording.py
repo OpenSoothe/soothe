@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import
 from soothe.foundation.context.engine import ContextEngine
@@ -23,7 +24,6 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
 )
 from soothe.foundation.sloop.utils.messages import LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 GOAL = "translate the README into French"
 

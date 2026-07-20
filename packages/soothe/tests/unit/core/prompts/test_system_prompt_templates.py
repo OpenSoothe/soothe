@@ -33,7 +33,7 @@ def test_prompt_templates_exist():
 
 def test_middleware_can_be_imported():
     """Test that middleware can be imported from package."""
-    from soothe.middleware import SystemPromptMiddleware
+    from soothe_nano.middleware import SystemPromptMiddleware
 
     assert SystemPromptMiddleware is not None
 

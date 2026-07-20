@@ -128,7 +128,7 @@ def test_early_completion_preserves_action() -> None:
 
 def test_word_boundary_respect_in_cli_display() -> None:
     """IG-152: CLI pipeline should truncate at word boundaries for display."""
-    from soothe.utils.text_preview import preview_first
+    from soothe_nano.utils.text_preview import preview_first
 
     long_action = (
         "I'll examine the UX module subdirectories (cli, client, shared, tui) "

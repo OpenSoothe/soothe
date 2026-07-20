@@ -3,16 +3,17 @@
 Provides JSON utilities, reflection logic, and helper components.
 """
 
+from soothe.utils.goal_completion_stream import (
+    GoalCompletionAccumState,
+    resolve_goal_completion_text,
+    update_goal_completion_from_message,
+)
+
 from .events import LoopAgentReasonEvent
 from .json_parsing import _load_llm_json_dict
 from .messages import LoopHumanMessage
 from .reflection import _default_agent_decision
-from .stream_normalize import (
-    GoalCompletionAccumState,
-    iter_messages_for_act_aggregation,
-    resolve_goal_completion_text,
-    update_goal_completion_from_message,
-)
+from .stream_normalize import iter_messages_for_act_aggregation
 
 __all__ = [
     "_load_llm_json_dict",

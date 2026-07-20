@@ -1,7 +1,3 @@
-"""Shim (IG-668): alias ``logging/global_history`` to ``soothe_nano.logging.global_history``."""
+"""Re-export CoreAgent global history from soothe_nano."""
 
-import sys
-from importlib import import_module
-
-_nano = import_module("soothe_nano.logging.global_history")
-sys.modules[__name__] = _nano
+from soothe_nano.logging.global_history import *  # noqa: F403

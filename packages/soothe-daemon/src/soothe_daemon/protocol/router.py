@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import ValidationError
 from soothe import __version__ as core_version
 from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
-from soothe.utils.text_preview import preview_first
+from soothe_nano.utils.text_preview import preview_first
 from soothe_sdk.wire.protocol import _serialize_for_json
 
 from soothe_daemon import __version__ as daemon_version
@@ -37,7 +37,7 @@ _LOOP_AI_RESPONSE_PREVIEW_MAX = 160
 def _peek_loop_prompt(loop_id: str) -> str | None:
     """Return the loop's initial user prompt from ``display.db``, if available."""
     try:
-        from soothe.backends.persistence.display_store import get_display_card_store
+        from soothe_nano.backends.persistence.display_store import get_display_card_store
 
         return get_display_card_store().peek_user_prompt(
             loop_id, max_chars=_LOOP_PROMPT_PREVIEW_MAX
@@ -50,7 +50,7 @@ def _peek_loop_prompt(loop_id: str) -> str | None:
 def _peek_latest_assistant_response(loop_id: str) -> str | None:
     """Return latest assistant response preview from ``display.db``."""
     try:
-        from soothe.backends.persistence.display_store import get_display_card_store
+        from soothe_nano.backends.persistence.display_store import get_display_card_store
 
         return get_display_card_store().peek_latest_assistant_response(
             loop_id,
@@ -1025,7 +1025,7 @@ class MessageRouter:
         import asyncio
 
         d = self._daemon
-        from soothe.skills.catalog import wire_entries_for_agent_config
+        from soothe_nano.skills.catalog import wire_entries_for_agent_config
 
         # Use client's loop workspace if subscribed, otherwise cwd
         workspace: str | None = None
@@ -1114,7 +1114,7 @@ class MessageRouter:
     async def _handle_invoke_skill(self, client_id: str, msg: dict[str, Any]) -> None:
         """Resolve a skill on the daemon host, ack the client, then queue the composed turn."""
         d = self._daemon
-        from soothe.skills.catalog import (
+        from soothe_nano.skills.catalog import (
             format_slash_skill_invoke_line,
             read_skill_markdown,
             resolve_skill_directory,
@@ -1906,7 +1906,7 @@ class MessageRouter:
         request_id = msg.get("request_id")
         is_ephemeral = bool(msg.get("is_ephemeral", False))
 
-        from soothe.foundation.workspace.resolution import translate_client_path_to_container
+        from soothe_nano.workspace.resolution import translate_client_path_to_container
 
         mount = d._config.workspace_mount
         host_root = mount.host_root if mount and mount.is_configured else None
@@ -2159,7 +2159,7 @@ class MessageRouter:
         response_schema = q_opts.get("response_schema")
         if response_schema is not None:
             try:
-                from soothe.utils.llm.schema_wire import validate_response_schema
+                from soothe_nano.utils.llm.schema_wire import validate_response_schema
 
                 q_opts["response_schema"] = validate_response_schema(response_schema)
             except ValueError as exc:

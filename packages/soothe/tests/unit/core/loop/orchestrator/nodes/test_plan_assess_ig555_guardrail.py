@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.intention import IntentClassification, TaskComplexity
 from soothe.foundation.sloop.intention.models import IntakeLabel
@@ -25,7 +26,6 @@ from soothe.foundation.sloop.state.schemas import (
     StepAction,
     StepResult,
 )
-from soothe.protocols.planner import PlanContext
 
 
 def _make_ctx(

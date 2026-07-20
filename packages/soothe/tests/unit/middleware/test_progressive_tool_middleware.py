@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
+from soothe_nano.middleware.progressive_tools import ProgressiveToolMiddleware
+from soothe_nano.toolkits.progressive.registry import merge_tool_activation
 
 from soothe.config import SootheConfig
-from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
-from soothe.toolkits.progressive.registry import merge_tool_activation
 
 
 def _tool(name: str) -> MagicMock:

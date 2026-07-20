@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
+from soothe_nano.utils import expand_path
+
 from soothe.config import SootheConfig
-from soothe.utils import expand_path
 
 
 def test_workspace_root_tilde_expansion():

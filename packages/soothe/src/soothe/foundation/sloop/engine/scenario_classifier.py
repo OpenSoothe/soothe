@@ -437,12 +437,11 @@ async def classify_synthesis_scenario(
     # Call LLM with structured output
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
-
-        from soothe.utils.llm.invoke_policy import (
+        from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
-        from soothe.utils.observability.langfuse import SootheLangfuse
+        from soothe_nano.utils.observability.langfuse import SootheLangfuse
 
         invoke_config = SootheLangfuse(soothe_config).traced_llm(
             purpose="scenario_classify",

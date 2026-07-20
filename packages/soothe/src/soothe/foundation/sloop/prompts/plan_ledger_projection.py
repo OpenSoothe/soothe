@@ -405,7 +405,7 @@ def _compact_execute_ai_for_assess(msg: BaseMessage, max_chars: int) -> BaseMess
     so assess/gap still see deliverable tables near the start and closing
     observations near the end.
     """
-    from soothe.utils.text_preview import preview
+    from soothe_nano.utils.text_preview import preview
 
     text = extract_text_from_message_content(getattr(msg, "content", ""))
     lines: list[str] = []

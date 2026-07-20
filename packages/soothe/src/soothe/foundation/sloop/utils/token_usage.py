@@ -73,7 +73,7 @@ def accumulate_loop_tokens_from_llm_result(response: LLMResult) -> int:
     target = _loop_token_target.get()
     if target is None:
         return 0
-    from soothe.utils.llm.observability import extract_token_counts_from_llm_result
+    from soothe_nano.utils.llm.observability import extract_token_counts_from_llm_result
 
     counts = extract_token_counts_from_llm_result(response)
     if not counts:

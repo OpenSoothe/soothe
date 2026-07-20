@@ -18,6 +18,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.types import Command, Overwrite
 
+from soothe_nano.config.middleware_access import agent_middleware_config
 from soothe_nano.utils.llm.structured import (
     StructuredOutputError,
     invoke_structured_chat_typed,
@@ -1124,11 +1125,11 @@ def build_explore_middleware_stack(
     # Build tool limit and retry middleware from config
     tool_middlewares: list[AgentMiddleware[Any, None]] = []
     if soothe_config is not None:
-        loop = soothe_config.agent.loop
+        mw = agent_middleware_config(soothe_config)
         thread_limit = (
-            explore_config.tool_call_limit_thread or loop.tool_call_limit.global_thread_limit
+            explore_config.tool_call_limit_thread or mw.tool_call_limit.global_thread_limit
         )
-        run_limit = explore_config.tool_call_limit_run or loop.tool_call_limit.global_run_limit
+        run_limit = explore_config.tool_call_limit_run or mw.tool_call_limit.global_run_limit
 
         tool_middlewares.append(
             ToolCallLimitMiddleware(
@@ -1139,9 +1140,9 @@ def build_explore_middleware_stack(
         )
         tool_middlewares.append(
             ToolRetryMiddleware(
-                max_retries=loop.tool_retry.max_retries,
-                backoff_factor=loop.tool_retry.backoff_factor,
-                initial_delay=loop.tool_retry.initial_delay,
+                max_retries=mw.tool_retry.max_retries,
+                backoff_factor=mw.tool_retry.backoff_factor,
+                initial_delay=mw.tool_retry.initial_delay,
                 on_failure="continue",
             )
         )

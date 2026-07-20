@@ -5,12 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-from soothe.config.models import WorkspaceMountConfig
-from soothe.foundation.workspace.resolution import (
+from soothe_nano.workspace.resolution import (
     translate_client_path_to_container,
     translate_container_path_to_client,
 )
+
+from soothe.config.models import WorkspaceMountConfig
 
 
 class TestTranslateClientPathToContainer:

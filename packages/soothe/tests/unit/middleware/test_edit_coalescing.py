@@ -12,9 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import ToolMessage
-
-from soothe.foundation.filesystem.protocol import BatchedEditOperation
-from soothe.middleware.edit_coalescing import (
+from soothe_nano.filesystem.protocol import BatchedEditOperation
+from soothe_nano.middleware.edit_coalescing import (
     DEFAULT_DETECTION_WINDOW_MS,
     EDIT_TOOL_NAMES,
     EditBatch,

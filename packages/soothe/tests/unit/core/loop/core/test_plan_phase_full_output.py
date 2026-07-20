@@ -5,10 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.cognition.phase import PlanPhase
 from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
-from soothe.protocols.planner import PlanContext
 
 
 @pytest.mark.asyncio

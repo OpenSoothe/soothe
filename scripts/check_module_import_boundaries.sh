@@ -21,6 +21,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG_DIR="${ROOT}/packages"
 
+# Rule 3b–3c in usage text
 usage() {
   cat <<'EOF'
 check_module_import_boundaries.sh — Soothe monorepo import boundaries.
@@ -29,6 +30,8 @@ Rules:
   1. soothe must not import soothe_daemon or soothe_cli.
   2. soothe-daemon must not import soothe_cli.
   3. soothe-sdk must not import other workspace packages.
+  3b. soothe-nano must not import soothe/cli/daemon.
+  3c. soothe-nano must not contain L2/L3 symbols (StrangeLoop/Autopilot/CE/cron).
   4. soothe-client-python must not import soothe/cli/daemon.
 
 Usage: ./scripts/check_module_import_boundaries.sh [--help]
@@ -95,6 +98,33 @@ run_check "${PKG_DIR}/soothe-sdk/src" \
 run_check "${PKG_DIR}/soothe-nano/src" \
   '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' \
   "soothe-nano must not import soothe/cli/daemon"
+
+# Rule 3c: soothe-nano must not contain L2/L3 orchestration symbols
+# (StrangeLoop, Autopilot, Context Engine, cron config). Docstrings that
+# explicitly say "no StrangeLoop" are allowed.
+check_nano_l2_l3_ban() {
+  local path="${PKG_DIR}/soothe-nano/src"
+  if [[ ! -d "$path" ]]; then
+    echo "WARN: skip missing path: $path" >&2
+    return 0
+  fi
+  local matches
+  matches=$(
+    rg --line-number --glob '*.py' \
+      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|goal_completion' \
+      "$path" 2>/dev/null \
+      | grep -v -E 'no StrangeLoop|without StrangeLoop|not StrangeLoop|Pure CoreAgent|batteries-included Coding CoreAgent \(no ' \
+      || true
+  )
+  if [[ -n "$matches" ]]; then
+    echo ""
+    echo "FAILED: soothe-nano must not contain L2/L3 orchestration symbols"
+    echo "  Path: $path"
+    echo "$matches" | sed 's/^/  /'
+    failures=$((failures + 1))
+  fi
+}
+check_nano_l2_l3_ban
 
 # Rule 4: soothe-client-python depends only on soothe-sdk (among workspace pkgs).
 run_check "${ROOT}/client/python/src" \

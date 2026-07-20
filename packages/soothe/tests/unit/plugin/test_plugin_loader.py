@@ -52,11 +52,10 @@ def test_plugin_decorator_accepts_config_requirements():
 
 def test_config_dependency_resolution():
     """PluginLoader should validate config_requirements."""
+    from soothe_nano.plugin.exceptions import DependencyError
+    from soothe_nano.plugin.loader import PluginLoader
+    from soothe_nano.plugin.registry import PluginRegistry
     from soothe_sdk.plugin.manifest import PluginManifest
-
-    from soothe.plugin.exceptions import DependencyError
-    from soothe.plugin.loader import PluginLoader
-    from soothe.plugin.registry import PluginRegistry
 
     registry = PluginRegistry()
     loader = PluginLoader(registry)
@@ -109,7 +108,7 @@ def test_config_dependency_resolution():
 
 def test_health_check_event_exists():
     """PluginHealthCheckedEvent should exist and be importable."""
-    from soothe.plugin.events import PluginHealthCheckedEvent
+    from soothe_nano.plugin.events import PluginHealthCheckedEvent
 
     event = PluginHealthCheckedEvent(
         name="test-plugin",
@@ -128,8 +127,8 @@ def test_health_check_event_exists():
 @pytest.mark.asyncio
 async def test_health_check_invocation():
     """health_check_all should call health_check() on plugins that have it."""
-    from soothe.plugin.lifecycle import PluginLifecycleManager
-    from soothe.plugin.registry import PluginRegistry
+    from soothe_nano.plugin.lifecycle import PluginLifecycleManager
+    from soothe_nano.plugin.registry import PluginRegistry
 
     registry = PluginRegistry()
     manager = PluginLifecycleManager(registry)
@@ -157,11 +156,10 @@ async def test_health_check_invocation():
 
 def test_untrusted_plugin_blocked_by_default():
     """Untrusted plugins should be blocked unless env var is set."""
+    from soothe_nano.plugin.exceptions import ValidationError
+    from soothe_nano.plugin.loader import PluginLoader
+    from soothe_nano.plugin.registry import PluginRegistry
     from soothe_sdk.plugin.manifest import PluginManifest
-
-    from soothe.plugin.exceptions import ValidationError
-    from soothe.plugin.loader import PluginLoader
-    from soothe.plugin.registry import PluginRegistry
 
     # Ensure env var is not set
     original = os.environ.pop("SOOTHE_ALLOW_UNTRUSTED_PLUGINS", None)
@@ -189,10 +187,9 @@ def test_untrusted_plugin_blocked_by_default():
 
 def test_trusted_plugin_allowed():
     """Built-in, trusted, and standard plugins should always be allowed."""
+    from soothe_nano.plugin.loader import PluginLoader
+    from soothe_nano.plugin.registry import PluginRegistry
     from soothe_sdk.plugin.manifest import PluginManifest
-
-    from soothe.plugin.loader import PluginLoader
-    from soothe.plugin.registry import PluginRegistry
 
     registry = PluginRegistry()
     loader = PluginLoader(registry)
@@ -213,7 +210,7 @@ def test_trusted_plugin_allowed():
 
 def test_filesystem_discovery_adds_sys_path():
     """discover_filesystem should add plugin directory to sys.path."""
-    from soothe.plugin.discovery import discover_filesystem
+    from soothe_nano.plugin.discovery import discover_filesystem
 
     with tempfile.TemporaryDirectory() as tmpdir:
         plugin_dir = Path(tmpdir) / "test_plugin"

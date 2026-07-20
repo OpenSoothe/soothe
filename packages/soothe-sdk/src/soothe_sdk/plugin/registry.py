@@ -23,7 +23,7 @@ class PluginEventMeta:
     only what plugin authors need to provide.
 
     Args:
-        type_string: The event type identifier (e.g., "soothe.plugin.myevent").
+        type_string: The event type identifier (e.g., "soothe_nano.plugin.myevent").
         model: The Pydantic event class (must inherit from SootheEvent).
         verbosity: Default verbosity tier for this event.
         summary_template: Template string for event summaries.
@@ -60,7 +60,7 @@ def register_event(
 
 
     class MyCustomEvent(SubagentEvent):
-        type: str = "soothe.plugin.myplugin.custom"
+        type: str = "soothe_nano.plugin.myplugin.custom"
         data: str
 
 

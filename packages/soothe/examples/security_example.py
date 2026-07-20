@@ -10,20 +10,19 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from soothe.foundation.security.integration import SecureFilesystemWrapper
-
-from soothe.foundation.security import SecurityEnforcer
-from soothe.foundation.security.enforcement import (
+from soothe_nano.security import SecurityEnforcer
+from soothe_nano.security.enforcement import (
     SecurityContext,
     SecurityError,
     create_enforcer,
 )
-from soothe.foundation.security.policy import (
+from soothe_nano.security.integration import SecureFilesystemWrapper
+from soothe_nano.security.policy import (
     PERMISSIVE_POLICY,
     STRICT_POLICY,
     SecurityPolicy,
 )
-from soothe.foundation.security.validator import (
+from soothe_nano.security.validator import (
     create_strict_validator,
 )
 
@@ -233,7 +232,7 @@ def example_custom_policy() -> None:
     def block_temp_files(path: str, operation: str) -> None:
         """Custom validator that blocks temp files."""
         if "temp" in path.lower():
-            from soothe.foundation.security.policy import PolicyAction, PolicyDecision
+            from soothe_nano.security.policy import PolicyAction, PolicyDecision
 
             return PolicyDecision(
                 allowed=False,

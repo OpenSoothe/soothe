@@ -10,7 +10,7 @@ _BUILTIN_SKILLS_DIR_NAME = "builtin_skills"
 
 
 def is_builtin_skill_directory(skill_dir: str | Path) -> bool:
-    """Return True for package-bundled skills under ``soothe/skills/builtin_skills/``."""
+    """Return True for package-bundled skills under ``soothe_nano/skills/builtin_skills/``."""
     resolved = Path(skill_dir).expanduser().resolve()
     package_builtins = Path(__file__).resolve().parent / _BUILTIN_SKILLS_DIR_NAME
     try:
@@ -26,7 +26,7 @@ def get_built_in_skills_paths(workspace: str | None = None) -> list[str]:
 
     A valid skill directory contains a `SKILL.md` file. The search includes:
     - User skills in `~/.agents/skills/`
-    - Package-bundled built-ins (`soothe/skills/builtin_skills/`)
+    - Package-bundled built-ins (`soothe_nano/skills/builtin_skills/`)
     - User skills in `~/.soothe/skills/`
     - Project skills in `<workspace>/.soothe/skills/` (if workspace provided)
 

@@ -6,9 +6,8 @@ import pytest
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.types import Command
-
-from soothe.mcp.budget import MCPToolDescriptor
-from soothe.middleware.mcp_activation import MCPActivationMiddleware
+from soothe_nano.mcp.budget import MCPToolDescriptor
+from soothe_nano.middleware.mcp_activation import MCPActivationMiddleware
 
 
 def _registry() -> MagicMock:

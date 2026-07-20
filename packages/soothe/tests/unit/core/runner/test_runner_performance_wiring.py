@@ -3,11 +3,11 @@
 import os
 
 import pytest
+from soothe_nano.middleware import build_soothe_middleware_stack
+from soothe_nano.middleware.system_prompt import SystemPromptMiddleware
 from support_config import config_with_router_profile
 
 from soothe.config import SootheConfig
-from soothe.middleware import build_soothe_middleware_stack
-from soothe.middleware.system_prompt import SystemPromptMiddleware
 from soothe.runner import SootheRunner
 
 # Mark all tests in this module as integration tests

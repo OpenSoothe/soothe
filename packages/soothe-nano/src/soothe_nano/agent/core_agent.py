@@ -75,7 +75,7 @@ class CodingCoreAgent:
 
     Self-contained module wrapping CompiledStateGraph with explicit typed
     protocol properties. Pure execution runtime for tools, subagents, and
-    middlewares — no goal infrastructure (StrangeLoop / Autopilot).
+    middlewares — no goal infrastructure (host orchestration layers).
 
     Attributes:
         graph: Underlying CompiledStateGraph for advanced LangGraph operations.

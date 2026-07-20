@@ -33,7 +33,7 @@ async def pgvector_store(pgvector_config):
     is not bound to a loop that ``asyncio.run`` closes before tests run.
     """
     try:
-        from soothe.backends.vector_store.pgvector import PGVectorStore
+        from soothe_nano.backends.vector_store.pgvector import PGVectorStore
 
         collection = f"test_collection_{uuid.uuid4().hex[:8]}"
         store = PGVectorStore(

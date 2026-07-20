@@ -3,8 +3,8 @@
 import asyncio
 
 import pytest
+from soothe_nano.protocols.concurrency import ConcurrencyPolicy
 
-from soothe.protocols.concurrency import ConcurrencyPolicy
 from soothe.runner._concurrency import ConcurrencyController
 
 

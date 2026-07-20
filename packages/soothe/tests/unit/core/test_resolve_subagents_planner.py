@@ -46,7 +46,7 @@ def test_resolve_subagents_planner_uses_model_role() -> None:
             return_value=fast_model,
         ) as create_model,
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=False,
         ),
         patch(
@@ -78,7 +78,7 @@ def test_resolve_subagents_planner_defaults_to_think_role() -> None:
             return_value=think_model,
         ) as create_model,
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=False,
         ),
     ):
@@ -109,7 +109,7 @@ def test_resolve_subagents_planner_uses_explicit_model_spec() -> None:
             "soothe.config.settings.SootheConfig.create_chat_model",
         ) as create_model,
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=False,
         ),
     ):

@@ -19,10 +19,11 @@ from soothe.foundation.sloop.state.sloop_manager import (
 from .phase_scratch import LoopPhaseScratch
 
 if TYPE_CHECKING:
+    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+
     from soothe.foundation.autopilot.engine.proposal_queue import ProposalQueue
     from soothe.foundation.sloop.clarification.protocol import ClarificationPolicy
     from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
-    from soothe.protocols.core_agent import CoreAgentProtocol
     from soothe.utils.observability.langfuse import GoalLoopTrace
 
 EmitFn = Callable[[str, Any], Awaitable[None]]

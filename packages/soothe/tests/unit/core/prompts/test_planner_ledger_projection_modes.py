@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soothe_nano.protocols.planner import PlanContext
+
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_planner_ledger,
@@ -9,7 +11,6 @@ from soothe.foundation.sloop.prompts.plan_ledger_projection import (
 )
 from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 
 def test_resolve_planner_projection_mode_new_goal() -> None:

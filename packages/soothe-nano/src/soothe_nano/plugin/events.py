@@ -87,7 +87,7 @@ class PluginUnloadedEvent(SootheEvent):
 # This happens at module load time
 from soothe_sdk.core.verbosity import VerbosityTier  # noqa: E402
 
-from soothe_nano.events import register_event  # noqa: E402
+from soothe_nano.events.catalog import register_event  # noqa: E402
 
 register_event(
     PluginLoadedEvent,

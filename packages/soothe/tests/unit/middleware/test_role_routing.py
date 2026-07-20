@@ -8,14 +8,14 @@ from unittest.mock import patch
 import pytest
 from langchain.agents.middleware.types import ModelRequest, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-
-from soothe.config import SootheConfig
-from soothe.middleware._builder import build_soothe_middleware_stack
-from soothe.middleware.role_routing import (
+from soothe_nano.middleware._builder import build_soothe_middleware_stack
+from soothe_nano.middleware.role_routing import (
     RoleRoutingMiddleware,
     model_hop_index_since_user,
     resolve_model_role_for_request,
 )
+
+from soothe.config import SootheConfig
 
 
 def _request(
@@ -101,7 +101,7 @@ class TestResolveModelRoleForRequest:
         req = _request(messages=[HumanMessage(content="synthesize")])
         lg_config = {"configurable": {"soothe_goal_synthesis": True}}
         with patch(
-            "soothe.middleware.role_routing._langgraph_configurable",
+            "soothe_nano.middleware.role_routing._langgraph_configurable",
             return_value=lg_config["configurable"],
         ):
             role = resolve_model_role_for_request(

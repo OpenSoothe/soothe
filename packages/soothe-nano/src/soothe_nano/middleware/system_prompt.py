@@ -47,8 +47,7 @@ class _SystemPromptState(TypedDict):
     them survive across nodes.
 
     Declares:
-      - ``routing_classification`` so StrangeLoop's complexity hint reaches the
-        prompt builder (IG-383).
+      - ``routing_classification`` so task complexity reaches the prompt builder.
       - ``workspace`` so the executor's ``_execute_graph_input``
         and ``WorkspaceContextMiddleware.abefore_agent`` writes propagate to
         ``modify_request``. Without this declaration, ``state.get("workspace")``
@@ -85,7 +84,7 @@ class SystemPromptMiddleware(AgentMiddleware):
     - complex: Full prompt with all context
 
     This middleware expects ``routing_classification`` in agent state before the
-    first model call (runner / StrangeLoop inject).
+    first model call (host inject).
 
     Args:
         config: Soothe configuration for resolving prompt templates.
@@ -296,7 +295,6 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         Conditions:
         1. Multi-turn conversation (messages > 1)
-        2. OR active goals exist
 
         Args:
             state: Request state.
@@ -304,17 +302,8 @@ class SystemPromptMiddleware(AgentMiddleware):
         Returns:
             True if THREAD should be injected.
         """
-        # Check conversation turns
         messages = state.get("messages", [])
-        if len(messages) > 1:
-            return True
-
-        # Check active goals
-        active_goals = state.get("active_goals", [])
-        if active_goals:
-            return True
-
-        return False
+        return len(messages) > 1
 
     def _get_base_prompt_core(self, complexity: str) -> str:
         """Behavioral system prompt for complexity (no volatile date line; RFC-104 cache order)."""
@@ -349,7 +338,6 @@ class SystemPromptMiddleware(AgentMiddleware):
         - Base behavioral prompt + tool orchestration guide
         - Execution policies
         - Subagent routing directive (when the user explicitly requests a routed subagent via slash command)
-        - Agent loop output contract (execute-step only)
 
         Semi-Static Tier (goal-stable, changes infrequently):
         - Thread context (complex only)
@@ -427,21 +415,9 @@ class SystemPromptMiddleware(AgentMiddleware):
 
         # ── Gated static blocks ─────────────────────────────────────────
 
-        # Context projection (static — changes infrequently)
+        # Memory summary — long-term persona/preferences only (RFC-214)
         if state and self._tool_trigger_registry:
             messages = state.get("messages", [])
-            recent_tools = self._extract_recent_tool_calls(messages)
-            triggered = self._tool_trigger_registry.get_triggered_sections(recent_tools)
-
-            projection = state.get("context_projection")
-            if projection and projection.entries and "context" in triggered:
-                static_sections.append(self._build_context_section(projection))
-
-        # Memory summary — long-term persona/preferences only (RFC-214)
-        # Per-turn memories go in the user message envelope <RETRIEVED_KNOWLEDGE>
-        if state and self._tool_trigger_registry:
-            if not messages:
-                messages = state.get("messages", [])
             recent_tools = self._extract_recent_tool_calls(messages)
             triggered = self._tool_trigger_registry.get_triggered_sections(recent_tools)
             memories = state.get("recalled_memories")
@@ -467,11 +443,7 @@ class SystemPromptMiddleware(AgentMiddleware):
             )
             static_sections.append(directive_section)
 
-        # Agent loop output contract (execute-step only)
-        if state and state.get("current_decision"):
-            contract_section = self._build_strange_loop_output_contract_section(self._config)
-            if contract_section:
-                static_sections.append(contract_section)
+        # Agent loop output contract removed from nano (L2-only).
 
         # ── Semi-Static Tier (goal-stable) ────────────────────────────
         semi_static_sections: list[str] = []
@@ -492,20 +464,7 @@ class SystemPromptMiddleware(AgentMiddleware):
                 if proto_section:
                     semi_static_sections.append(proto_section)
 
-        # Scenario guidance (RFC-225: continue_loop_mode replaces intent_type plumbing)
-        if state:
-            continue_loop_mode = bool(state.get("continue_loop_mode"))
-            goal_type = ""
-            scen = (state.get("synthesis_scenario") or "").strip()
-            if scen == "code_architecture_design":
-                goal_type = "architecture_analysis"
-            elif scen == "research_synthesis":
-                goal_type = "research_synthesis"
-
-            if continue_loop_mode or goal_type:
-                scenario_section = self._build_scenario_section(continue_loop_mode, goal_type)
-                if scenario_section:
-                    semi_static_sections.append(scenario_section.strip())
+        # Scenario guidance removed from nano (L2-only).
 
         # Tool-specific sections from context registry (semi-static)
         if state and self._tool_context_registry:
@@ -633,60 +592,6 @@ class SystemPromptMiddleware(AgentMiddleware):
         result = build_soothe_protocols_section(protocol_summary)
         return result or None
 
-    def _build_scenario_section(self, continue_loop_mode: bool, goal_type: str) -> str | None:
-        """Build scenario-specific guidance section (RFC-225).
-
-        Args:
-            continue_loop_mode: True when the loop has prior goals.
-            goal_type: Goal type classification (architecture_analysis/research_synthesis/etc).
-
-        Returns:
-            Scenario guidance text, or None if no matching scenario.
-        """
-        from soothe_nano.prompts.system_templates import (
-            _ARCHITECTURE_ANALYSIS_GUIDE,
-            _LOOP_CONTINUATION_GUIDE,
-            _RESEARCH_SYNTHESIS_GUIDE,
-        )
-
-        # Loop continuation: build on prior goal context within this loop
-        if continue_loop_mode:
-            return _LOOP_CONTINUATION_GUIDE
-
-        # Architecture analysis: structured layers + components
-        if goal_type == "architecture_analysis":
-            return _ARCHITECTURE_ANALYSIS_GUIDE
-
-        # Research synthesis: methodology + findings
-        if goal_type == "research_synthesis":
-            return _RESEARCH_SYNTHESIS_GUIDE
-
-        # No specific scenario guidance
-        return None
-
-    def _build_strange_loop_output_contract_section(
-        self, config: SootheConfig | None = None
-    ) -> str | None:
-        """Build <STRANGE_LOOP_OUTPUT_CONTRACT> section for Layer 2 agent loop.
-
-        Args:
-            config: Optional SootheConfig to check if contract is enabled.
-
-        Returns:
-            XML section string, or None if contract is disabled.
-        """
-        if config is None or not config.agent.loop.strange_loop_output_contract_enabled:
-            return None
-
-        return (
-            "<STRANGE_LOOP_OUTPUT_CONTRACT>\n"
-            "- After tool or subagent results arrive, add at most two short wrap-up sentences in your own words.\n"
-            "- Do NOT paste the full tool/subagent output again unless the user explicitly asked for a "
-            "verbatim repeat.\n"
-            "- If the tool output already satisfies the user-visible deliverable, stop there.\n"
-            "</STRANGE_LOOP_OUTPUT_CONTRACT>"
-        )
-
     @staticmethod
     def _extract_execution_hints_from_state(state: Any) -> str | None:
         """Extract execution hints text from state for user message envelope (RFC-214).
@@ -750,12 +655,8 @@ class SystemPromptMiddleware(AgentMiddleware):
                 "thread_context": request.state.get("thread_context", {}),
                 "protocol_summary": request.state.get("protocol_summary", {}),
                 "messages": effective_messages,
-                "active_goals": request.state.get("active_goals", []),
-                "context_projection": request.state.get("context_projection"),
                 "recalled_memories": request.state.get("recalled_memories"),
                 "_subagent_routing_directive": request.state.get("_subagent_routing_directive"),
-                "continue_loop_mode": request.state.get("continue_loop_mode"),
-                "synthesis_scenario": request.state.get("synthesis_scenario"),
                 "skill_activation": request.state.get("skill_activation"),
                 "tool_activation": request.state.get("tool_activation"),
                 "mcp_activation": request.state.get("mcp_activation"),

@@ -22,10 +22,9 @@ from ._resolver_tools import (
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-
-    from soothe.protocols.memory import MemoryProtocol
-    from soothe.protocols.planner import PlannerProtocol
-    from soothe.protocols.policy import PolicyProtocol
+    from soothe_nano.protocols.memory import MemoryProtocol
+    from soothe_nano.protocols.planner import PlannerProtocol
+    from soothe_nano.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +78,7 @@ def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
         return None
 
     try:
-        from soothe.backends.memory.memu_adapter import MemUMemory
+        from soothe_nano.backends.memory.memu_adapter import MemUMemory
 
         logger.info(
             "Using MemU memory backend (chat: %s, embed: %s)",
@@ -151,6 +150,6 @@ def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
     Returns:
         A PolicyProtocol instance.
     """
-    from soothe.foundation.security import ConfigDrivenPolicy
+    from soothe_nano.security import ConfigDrivenPolicy
 
     return ConfigDrivenPolicy(config=config)

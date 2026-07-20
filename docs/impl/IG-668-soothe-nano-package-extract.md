@@ -3,8 +3,8 @@
 **Guide**: IG-668  
 **Title**: Extract batteries-included Coding CoreAgent into `soothe-nano`  
 **Created**: 2026-07-20  
-**Related**: RFC-000, RFC-100, RFC-001; design draft `docs/drafts/2026-07-20-soothe-nano-package-layout-design.md`  
-**Status**: Complete (Phases A–D, 2026-07-20)
+**Related**: RFC-000, RFC-100, RFC-001; archived design draft `docs/archive/drafts/2026-07-20-soothe-nano-package-layout-design.md`  
+**Status**: Complete (Phases A–D + purification Phases 0–3, 2026-07-20)
 
 ---
 
@@ -15,9 +15,9 @@ soothe-deepagents → soothe-sdk → soothe-nano → soothe → daemon/cli
 soothe-plugins → soothe-nano
 ```
 
-`soothe-nano` owns the Coding CoreAgent runtime (tools, core subagents, skills, MCP, config, protocols, FS/security/workspace). Full `soothe` owns StrangeLoop, Autopilot, Context Engine, cron, identity service, and runner orchestration.
+`soothe-nano` owns the Coding CoreAgent runtime (tools, core subagents, skills, MCP, config slice, protocols, FS/security/workspace). Full `soothe` owns StrangeLoop, Autopilot, Context Engine, cron, identity service, and runner orchestration.
 
-**Hard rule**: `soothe_nano` must never import `soothe`.
+**Hard rule**: `soothe_nano` must never import `soothe`, and must not know about StrangeLoop / Autopilot / Context Engine / cron / identity **service** / daemon loop orchestration.
 
 ---
 
@@ -34,7 +34,7 @@ soothe-plugins → soothe-nano
 ## Phase B — Builder / factory / middleware
 
 1. Move `AgentBuilder`, `create_soothe_agent` / `create_nano_agent`, middleware stack builder into `soothe_nano`.
-2. `NanoConfig` alias → `SootheConfig` (proper subset split deferred to RFC-100 follow-up).
+2. `NanoConfig` alias → slim CoreAgent config; full `SootheConfig` stays in soothe (composition).
 3. Soothe `AgentBuilder` subclass injects StrangeLoop `resolve_planner` when omitted.
 4. Soothe `create_soothe_agent` promotes returned agent to `soothe.foundation.coreagent.coding.CodingCoreAgent`.
 
@@ -42,7 +42,7 @@ soothe-plugins → soothe-nano
 
 ## Phase C — Toolkits, subagents, infra cluster
 
-Bulk-migrated into `soothe_nano/` (via `scripts/migrate_soothe_nano_cluster.py`):
+Bulk-migrated into `soothe_nano/`:
 
 | Area | Canonical path |
 |------|----------------|
@@ -51,17 +51,15 @@ Bulk-migrated into `soothe_nano/` (via `scripts/migrate_soothe_nano_cluster.py`)
 | Skills + skillify | `soothe_nano.skills`, `soothe_nano.skillify` |
 | MCP | `soothe_nano.mcp` |
 | Plugin hooks | `soothe_nano.plugin` |
-| Config | `soothe_nano.config` |
+| Config (CoreAgent slice) | `soothe_nano.config` |
 | Protocols (CoreAgent-oriented) | `soothe_nano.protocols` |
-| Utils / logging | `soothe_nano.utils`, `soothe_nano.logging` |
+| Utils / logging (CoreAgent) | `soothe_nano.utils`, `soothe_nano.logging` |
 | Core subagents | `soothe_nano.subagents` |
 | FS / security / workspace / events | `soothe_nano.filesystem`, `.security`, `.workspace`, `.events` |
 | Backends (CoreAgent cluster) | `soothe_nano.backends` |
 | Resolvers | `soothe_nano.resolve` |
 
-**Left in soothe** (StrangeLoop-only): `foundation/sloop`, loop persistence writer/reconciler, loop planner/runner protocols, cron, identity service, runner orchestration.
-
-**Shim pattern**: leaf modules use `sys.modules` alias or explicit re-export; config uses re-export (not module replacement) to preserve Pydantic model identity.
+**Left in soothe** (StrangeLoop-only): `foundation/sloop`, loop persistence, loop planner/runner protocols, cron, identity service, runner orchestration, veritas, loop messages, goal-loop Langfuse.
 
 ---
 
@@ -69,49 +67,87 @@ Bulk-migrated into `soothe_nano/` (via `scripts/migrate_soothe_nano_cluster.py`)
 
 1. `soothe-plugins` depends on `soothe-nano` (not full `soothe`).
 2. `./scripts/verify_finally.sh` green across all packages.
-3. RFC-100 slim-config follow-up remains optional.
+
+---
+
+## Boundary purification (Phase 0)
+
+Move L2/L3-owned modules out of nano into soothe, then scrub nano:
+
+| Moved to soothe | Kept / scrubbed in nano |
+|-----------------|-------------------------|
+| L2/L3 events, internal bus | Client stream / tool / subagent lifecycle events |
+| Full `SootheConfig` (`agent.loop`, cron, Autopilot, CE) | `NanoConfig` / `agent.middleware` CoreAgent slice |
+| `loop_messages`, goal-completion stream helpers | Generic stream parsers |
+| Clarification / veritas | Core subagents (explore, research, plan, …) |
+| Loop workspace + CE persistence | Non-loop workspace / FS / security |
+| Pass1/Pass2 intention models | `RoutingClassification` / `TaskComplexity` |
+| Langfuse `_goal_loop` | CoreAgent Langfuse helpers |
+
+`agent_middleware_config()` reads `agent.middleware` or falls back to `agent.loop` when a full soothe config is passed into nano middleware.
+
+Exit gate: `scripts/check_module_import_boundaries.sh` Rule 3c bans L2/L3 symbols in nano (except allowed “no StrangeLoop” docs).
+
+---
+
+## Test home (Phase 1)
+
+Pure-nano tests live under `packages/soothe-nano/tests/` (mcp, backends, toolkits, skills, skillify, filesystem, most subagents except veritas, matching integration).
+
+- Slim `conftest.py`: env + temp workspace; **no** `SootheRunner`.
+- Loop / sloop / context / cron / autopilot / runner / veritas / mixed tests remain in `packages/soothe/tests/`.
+
+---
+
+## Option B production imports (Phase 2)
+
+Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under `soothe` were deleted.
+
+**Kept permanently (or until RFC-100):**
+
+- `soothe.config` — host composition (`SootheConfig` wrapping nano slice)
+- `soothe.foundation.coreagent.coding.*` — planner injection + class promotion
+- Soothe-native L2/L3 modules (events, sloop, loop_workspace, veritas, …)
+- Mixed package surfaces: `soothe.logging` (ThreadLogger + nano setup), `soothe.utils` (loop_messages / goal_completion), `soothe.utils.observability.langfuse` (goal-loop facade)
 
 ---
 
 ## Module placement (summary)
 
-| Canonical in `soothe_nano` | Compat in `soothe` |
-|----------------------------|-------------------|
+| Canonical in `soothe_nano` | Compat / host in `soothe` |
+|----------------------------|---------------------------|
 | `soothe_nano.agent.*` | `soothe.foundation.coreagent.coding.*` (subclass + planner injection) |
-| `soothe_nano.config.*` | `soothe.config.*` re-exports |
-| `soothe_nano.toolkits.*` etc. | `soothe.toolkits.*` etc. shims |
-| `soothe_nano.filesystem.*` | `soothe.foundation.filesystem.*` shims |
+| `soothe_nano.config.*` (slim) | `soothe.config.*` (full composition) |
+| `soothe_nano.toolkits.*` etc. | Direct `soothe_nano` imports (no leaf shims) |
 | `resolve_planner` → `None` in nano | soothe builder injects StrangeLoop planner |
 
 ---
 
 ## Exit criteria
 
-### Phase A
-- [x] `packages/soothe-nano` is a uv workspace member
-- [x] `soothe` depends on `soothe-nano`
-- [x] CoreAgent wrappers live under `soothe_nano.agent` with no `soothe` imports
-- [x] Existing `soothe.foundation.coreagent` import paths still work
-- [x] verify enforces nano must not import soothe
+### Phase A–D
+- [x] Package extract, shims (interim), plugins → nano, verify green
 
-### Phase B
-- [x] `AgentBuilder` / factory in `soothe_nano.agent`
-- [x] `create_nano_agent` public API
-- [x] Soothe builder injects planner; compat `CodingCoreAgent.create()`
+### Phase 0 — Purify
+- [x] L2/L3 modules restored in soothe; nano scrubbed
+- [x] Config split: nano middleware slice vs soothe orchestration
+- [x] Boundary gate for L2/L3 symbols
 
-### Phase C
-- [x] Toolkits, middleware, skills, MCP, subagents, config, protocols, backends in nano
-- [x] Soothe shims preserve import paths
-- [x] StrangeLoop-only modules remain in soothe
+### Phase 1 — Tests
+- [x] Pure-nano tests under `soothe-nano/tests`
+- [x] Slim nano conftest
 
-### Phase D
-- [x] `soothe-plugins` → `soothe-nano`
-- [x] `./scripts/verify_finally.sh` green
+### Phase 2 — Option B
+- [x] Production imports → `soothe_nano.*`
+- [x] Leaf shims deleted; host wrappers retained
+
+### Phase 3 — Docs / enforce
+- [x] This IG updated
+- [x] `check_module_import_boundaries.sh` Rule 3c
 
 ---
 
 ## Follow-ups
 
-- RFC-100: split `NanoConfig` proper subset from `SootheConfig`
-- Point plugin implementations at `soothe_nano.*` imports directly (shims work today)
-- Retire `scripts/migrate_soothe_nano_cluster.py` once no longer needed for reference
+- RFC-100: further slim `NanoConfig` vs `SootheConfig` field ownership
+- Optional: remove leftover package-level lazy `__getattr__` bridges once call sites are fully on nano

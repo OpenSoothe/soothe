@@ -1,0 +1,655 @@
+"""Unit tests for vector store implementations (PGVectorStore and WeaviateVectorStore)."""
+
+import uuid
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+
+class TestPGVectorStoreUnit:
+    """Unit tests for PGVectorStore focusing on interface compliance."""
+
+    def test_class_can_be_imported(self) -> None:
+        """Test that PGVectorStore class can be imported."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            assert PGVectorStore is not None
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    def test_initialization_signature(self) -> None:
+        """Test that __init__ has expected signature."""
+        try:
+            import inspect
+
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            init_sig = inspect.signature(PGVectorStore.__init__)
+            params = list(init_sig.parameters.keys())
+
+            # Should have these parameters
+            assert "self" in params
+            assert "collection" in params
+
+            # Check defaults
+            assert init_sig.parameters["collection"].default == "soothe_vectors"
+            assert init_sig.parameters["dsn"].default == "postgresql://localhost/soothe"
+            assert init_sig.parameters["pool_size"].default == 16
+            assert init_sig.parameters["index_type"].default == "hnsw"
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    def test_required_methods_exist(self) -> None:
+        """Test that all required methods exist on the class."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            required_methods = [
+                "create_collection",
+                "insert",
+                "search",
+                "delete",
+                "update",
+                "get",
+                "list_records",
+                "delete_collection",
+                "reset",
+            ]
+
+            for method_name in required_methods:
+                assert hasattr(PGVectorStore, method_name), f"Missing method: {method_name}"
+                assert callable(getattr(PGVectorStore, method_name)), (
+                    f"Method not callable: {method_name}"
+                )
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_can_instantiate_without_connection(self) -> None:
+        """Test that class can be instantiated without immediate connection."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(
+                collection="test_collection",
+                dsn="postgresql://localhost/test",
+                pool_size=5,
+                index_type="hnsw",
+            )
+
+            assert store._collection == "test_collection"
+            assert store._dsn == "postgresql://localhost/test"
+            assert store._pool_size == 5
+            assert store._index_type == "hnsw"
+            assert store._pool is None  # Lazy connection (unless shared_pool injected)
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_create_collection_creates_table(self) -> None:
+        """Test create_collection creates the table and index."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+
+            # Set up the async context manager properly
+            mock_conn.execute = AsyncMock()
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+            store._table_vector_dimension = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+            await store.create_collection(vector_size=768, distance="cosine")
+
+            # Should execute CREATE TABLE and CREATE INDEX
+            assert mock_conn.execute.call_count >= 2
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_create_collection_recreates_on_dimension_mismatch(self) -> None:
+        """Test create_collection drops and recreates when vector size changes."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors", vector_size=1024)
+            store._table_vector_dimension = AsyncMock(return_value=1024)  # type: ignore[method-assign]
+            store.delete_collection = AsyncMock()  # type: ignore[method-assign]
+
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock()
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+            store._pool = mock_pool
+
+            await store.create_collection(vector_size=768, distance="cosine")
+
+            store.delete_collection.assert_awaited_once()
+            assert store._vector_size == 768
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_insert_vectors(self) -> None:
+        """Test inserting vectors with payloads."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock()
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+            store._table_vector_dimension = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+            vectors = [[0.1, 0.2, 0.3] * 256]
+            payloads = [{"data": "test"}]
+            ids = ["test_id_1"]
+
+            await store.insert(vectors=vectors, payloads=payloads, ids=ids)
+
+            # Should execute INSERT
+            mock_conn.execute.assert_called()
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_search_vectors(self) -> None:
+        """Test searching for vectors."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_rows = AsyncMock()
+            mock_rows.fetchall = AsyncMock(
+                return_value=[
+                    ("id1", {"data": "test1"}, 0.95),
+                    ("id2", {"data": "test2"}, 0.85),
+                ]
+            )
+            mock_conn.execute = AsyncMock(return_value=mock_rows)
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+
+            query_vector = [0.1, 0.2, 0.3] * 256
+            results = await store.search(query="test query", vector=query_vector, limit=5)
+
+            assert len(results) == 2
+            assert results[0].id == "id1"
+            assert results[0].score == 0.95
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_delete_record(self) -> None:
+        """Test deleting a record."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock()
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+
+            await store.delete("test_id")
+
+            mock_conn.execute.assert_called_once()
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_update_record(self) -> None:
+        """Test updating a record."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_conn.execute = AsyncMock()
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+
+            await store.update(
+                record_id="test_id",
+                vector=[0.1, 0.2, 0.3] * 256,
+                payload={"updated": True},
+            )
+
+            mock_conn.execute.assert_called_once()
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_get_record(self) -> None:
+        """Test retrieving a record by ID."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_row = AsyncMock()
+            mock_row.fetchone = AsyncMock(return_value=("test_id", {"data": "test"}))
+            mock_conn.execute = AsyncMock(return_value=mock_row)
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+
+            result = await store.get("test_id")
+
+            assert result is not None
+            assert result.id == "test_id"
+            assert result.payload == {"data": "test"}
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    @pytest.mark.asyncio
+    async def test_get_nonexistent_record(self) -> None:
+        """Test retrieving a nonexistent record returns None."""
+        try:
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = PGVectorStore(collection="test_vectors")
+
+            # Mock the connection pool properly
+            mock_pool = AsyncMock()
+            mock_conn = AsyncMock()
+            mock_row = AsyncMock()
+            mock_row.fetchone = AsyncMock(return_value=None)
+            mock_conn.execute = AsyncMock(return_value=mock_row)
+            mock_pool.connection = MagicMock()
+            mock_pool.connection.return_value.__aenter__ = AsyncMock(return_value=mock_conn)
+            mock_pool.connection.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            store._pool = mock_pool
+
+            result = await store.get("nonexistent_id")
+
+            assert result is None
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+
+class TestWeaviateVectorStoreUnit:
+    """Unit tests for WeaviateVectorStore focusing on interface compliance."""
+
+    def test_class_can_be_imported(self) -> None:
+        """Test that WeaviateVectorStore class can be imported."""
+        try:
+            from soothe_nano.backends.vector_store.weaviate import WeaviateVectorStore
+
+            assert WeaviateVectorStore is not None
+        except ImportError:
+            pytest.skip("weaviate dependencies not installed")
+
+    def test_initialization_signature(self) -> None:
+        """Test that __init__ has expected signature."""
+        try:
+            import inspect
+
+            from soothe_nano.backends.vector_store.weaviate import WeaviateVectorStore
+
+            init_sig = inspect.signature(WeaviateVectorStore.__init__)
+            params = list(init_sig.parameters.keys())
+
+            # Should have these parameters
+            assert "self" in params
+            assert "collection" in params
+
+            # Check defaults
+            assert init_sig.parameters["collection"].default == "SootheVectors"
+            assert init_sig.parameters["url"].default == "http://localhost:8080"
+            assert init_sig.parameters["api_key"].default is None
+            assert init_sig.parameters["grpc_port"].default == 50051
+
+        except ImportError:
+            pytest.skip("weaviate dependencies not installed")
+
+    def test_required_methods_exist(self) -> None:
+        """Test that all required methods exist on the class."""
+        try:
+            from soothe_nano.backends.vector_store.weaviate import WeaviateVectorStore
+
+            required_methods = [
+                "create_collection",
+                "insert",
+                "search",
+                "delete",
+                "update",
+                "get",
+                "list_records",
+                "delete_collection",
+                "reset",
+            ]
+
+            for method_name in required_methods:
+                assert hasattr(WeaviateVectorStore, method_name), f"Missing method: {method_name}"
+                assert callable(getattr(WeaviateVectorStore, method_name)), (
+                    f"Method not callable: {method_name}"
+                )
+
+        except ImportError:
+            pytest.skip("weaviate dependencies not installed")
+
+    def test_can_instantiate_without_connection(self) -> None:
+        """Test that class can be instantiated without immediate connection."""
+        try:
+            from soothe_nano.backends.vector_store.weaviate import WeaviateVectorStore
+
+            store = WeaviateVectorStore(
+                collection="test_collection",
+                url="http://localhost:8080",
+                api_key="test_key",
+                grpc_port=50051,
+            )
+
+            assert store._collection_name == "test_collection"
+            assert store._url == "http://localhost:8080"
+            assert store._api_key == "test_key"
+            assert store._grpc_port == 50051
+            assert store._client is None  # Lazy connection
+
+        except ImportError:
+            pytest.skip("weaviate dependencies not installed")
+
+    def test_weaviate_uuid_generation(self) -> None:
+        """Test deterministic UUID generation."""
+        try:
+            from soothe_nano.backends.vector_store.weaviate import weaviate_uuid_from_str
+
+            uuid1 = weaviate_uuid_from_str("test_string")
+            uuid2 = weaviate_uuid_from_str("test_string")
+
+            # Same input should produce same UUID
+            assert uuid1 == uuid2
+
+            # Different inputs should produce different UUIDs
+            uuid3 = weaviate_uuid_from_str("different_string")
+            assert uuid1 != uuid3
+
+            # Should be valid UUID format
+            uuid.UUID(uuid1)
+
+        except ImportError:
+            pytest.skip("weaviate dependencies not installed")
+
+
+class TestSQLiteVecStoreUnit:
+    """Unit tests for SQLiteVecStore focusing on interface compliance."""
+
+    def test_class_can_be_imported(self) -> None:
+        """Test that SQLiteVecStore class can be imported."""
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        assert SQLiteVecStore is not None
+
+    def test_initialization_signature(self) -> None:
+        """Test that __init__ has expected signature."""
+        import inspect
+
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        init_sig = inspect.signature(SQLiteVecStore.__init__)
+        params = list(init_sig.parameters.keys())
+
+        # Should have these parameters
+        assert "self" in params
+        assert "collection" in params
+        assert "db_path" in params
+        assert "vector_size" in params
+        assert "distance" in params
+
+        # Check defaults
+        assert init_sig.parameters["collection"].default == "soothe_vectors"
+        assert init_sig.parameters["db_path"].default is None
+        assert init_sig.parameters["vector_size"].default == 1536
+        assert init_sig.parameters["distance"].default == "cosine"
+
+    def test_required_methods_exist(self) -> None:
+        """Test that all required methods exist on the class."""
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        required_methods = [
+            "create_collection",
+            "insert",
+            "search",
+            "delete",
+            "update",
+            "get",
+            "list_records",
+            "delete_collection",
+            "reset",
+            "close",
+        ]
+
+        for method_name in required_methods:
+            assert hasattr(SQLiteVecStore, method_name), f"Missing method: {method_name}"
+            assert callable(getattr(SQLiteVecStore, method_name)), (
+                f"Method not callable: {method_name}"
+            )
+
+    def test_can_instantiate_without_connection(self) -> None:
+        """Test that class can be instantiated without immediate connection."""
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        store = SQLiteVecStore(
+            collection="test_collection",
+            db_path="/tmp/test.db",
+            vector_size=768,
+            distance="l2",
+        )
+
+        assert store._collection == "test_collection"
+        assert store._db_path == "/tmp/test.db"
+        assert store._vector_size == 768
+        assert store._distance == "l2"
+        assert store._writer_conn is None  # Lazy connection (writer)
+        assert store._reader_pool == []  # Reader pool not initialized
+        assert store._has_vec_ext is False  # Not loaded yet
+
+    def test_vector_packing_function(self) -> None:
+        """Test _pack_vector utility function."""
+        from soothe_nano.backends.vector_store.sqlite_vec import _pack_vector
+
+        # Test packing a simple vector
+        vector = [1.0, 2.0, 3.0, 4.0]
+        packed = _pack_vector(vector)
+
+        # Should return bytes
+        assert isinstance(packed, bytes)
+        assert len(packed) == len(vector) * 4  # 4 bytes per float32
+
+    def test_similarity_functions(self) -> None:
+        """Test similarity/distance computation functions."""
+        from soothe_nano.backends.vector_store.sqlite_vec import (
+            _cosine_similarity,
+            _ip_similarity,
+            _l2_distance,
+        )
+
+        a = [1.0, 0.0, 0.0]
+        b = [0.0, 1.0, 0.0]
+        c = [1.0, 0.0, 0.0]
+
+        # Cosine similarity
+        assert _cosine_similarity(a, b) == 0.0  # Orthogonal
+        assert _cosine_similarity(a, c) == 1.0  # Same vector
+
+        # L2 distance
+        assert _l2_distance(a, c) == 0.0  # Same vector
+        assert _l2_distance(a, b) == 2.0**0.5  # sqrt(2)
+
+        # Inner product
+        assert _ip_similarity(a, b) == 0.0  # Orthogonal
+        assert _ip_similarity(a, c) == 1.0  # Same vector
+
+    def test_filter_matching(self) -> None:
+        """Test _match_filters utility function."""
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        payload = {"type": "document", "category": "test"}
+
+        # Should match when all filters match
+        assert SQLiteVecStore._match_filters(payload, {"type": "document"})
+        assert SQLiteVecStore._match_filters(payload, {"type": "document", "category": "test"})
+
+        # Should not match when any filter doesn't match
+        assert not SQLiteVecStore._match_filters(payload, {"type": "image"})
+        assert not SQLiteVecStore._match_filters(payload, {"type": "document", "category": "other"})
+
+        # Should match empty filters (no constraints)
+        assert SQLiteVecStore._match_filters(payload, {})
+
+
+class TestVectorStoreFactory:
+    """Tests for create_vector_store factory function."""
+
+    def test_creates_pgvector_store(self) -> None:
+        """Test that factory creates PGVectorStore."""
+        try:
+            from soothe_nano.backends.vector_store import create_vector_store
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = create_vector_store(
+                provider="pgvector",
+                collection="test_collection",
+                config={"dsn": "postgresql://localhost/test"},
+            )
+
+            assert isinstance(store, PGVectorStore)
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    def test_creates_weaviate_store(self) -> None:
+        """Test that factory creates WeaviateVectorStore."""
+        try:
+            from soothe_nano.backends.vector_store import create_vector_store
+            from soothe_nano.backends.vector_store.weaviate import WeaviateVectorStore
+
+            store = create_vector_store(
+                provider="weaviate",
+                collection="test_collection",
+                config={"url": "http://localhost:8080"},
+            )
+
+            assert isinstance(store, WeaviateVectorStore)
+
+        except ImportError:
+            pytest.skip("weaviate dependencies not installed")
+
+    def test_creates_sqlite_vec_store(self) -> None:
+        """Test that factory creates SQLiteVecStore."""
+        import os
+        import tempfile
+
+        from soothe_nano.backends.vector_store import create_vector_store
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        try:
+            store = create_vector_store(
+                provider="sqlite_vec",
+                collection="test_collection",
+                config={"db_path": tmp.name, "vector_size": 1536},
+            )
+
+            assert isinstance(store, SQLiteVecStore)
+            assert store._collection == "test_collection"
+        finally:
+            os.unlink(tmp.name)
+
+    def test_raises_error_for_unknown_provider(self) -> None:
+        """Test that factory raises error for unknown provider."""
+        from soothe_nano.backends.vector_store import create_vector_store
+
+        with pytest.raises(ValueError, match="Unknown vector store provider"):
+            create_vector_store(
+                provider="unknown",
+                collection="test_collection",
+            )
+
+    def test_creates_with_defaults(self) -> None:
+        """Test that factory creates store with default config."""
+        try:
+            from soothe_nano.backends.vector_store import create_vector_store
+            from soothe_nano.backends.vector_store.pgvector import PGVectorStore
+
+            store = create_vector_store(
+                provider="pgvector",
+                collection="test_collection",
+            )
+
+            assert isinstance(store, PGVectorStore)
+            assert store._collection == "test_collection"
+
+        except ImportError:
+            pytest.skip("pgvector dependencies not installed")
+
+    def test_sqlite_vec_factory_with_defaults(self) -> None:
+        """Test that factory creates SQLiteVecStore with default config."""
+        from soothe_nano.backends.vector_store import create_vector_store
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore
+
+        store = create_vector_store(
+            provider="sqlite_vec",
+            collection="default_collection",
+        )
+
+        assert isinstance(store, SQLiteVecStore)
+        assert store._collection == "default_collection"
+        # Default vector_size and distance from SQLiteVecStore.__init__
+        assert store._vector_size == 1536
+        assert store._distance == "cosine"

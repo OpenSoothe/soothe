@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from soothe_nano.protocols.operation_security import OperationSecurityContext
+from soothe_nano.security.operation_security import WorkspaceToolOperationSecurity
+
 from soothe.config.models import SecurityConfig
-from soothe.foundation.security.operation_security import WorkspaceToolOperationSecurity
-from soothe.protocols.operation_security import OperationSecurityContext
 
 
 def test_virtual_absolute_readme_under_workspace(tmp_path: Path) -> None:

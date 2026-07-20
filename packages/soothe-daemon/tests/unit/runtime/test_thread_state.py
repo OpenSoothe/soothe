@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from soothe.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 from soothe.runner._thread_manager import ThreadContextManager
+from soothe_nano.protocols.durability import ThreadFilter, ThreadInfo, ThreadMetadata
 
 
 @pytest.fixture
@@ -111,7 +111,7 @@ async def test_resume_thread_recovers_missing_metadata(mock_durability, mock_con
 @pytest.mark.asyncio
 async def test_list_threads_with_filter(mock_durability, mock_config):
     """Test thread filtering."""
-    from soothe.protocols.durability import ThreadMetadata
+    from soothe_nano.protocols.durability import ThreadMetadata
 
     mock_durability.list_threads = AsyncMock(
         return_value=[
@@ -144,7 +144,7 @@ async def test_list_threads_with_filter(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_get_thread_stats(mock_durability, mock_config):
     """Test statistics calculation."""
-    from soothe.protocols.durability import ThreadMetadata
+    from soothe_nano.protocols.durability import ThreadMetadata
 
     mock_durability.list_threads = AsyncMock(
         return_value=[
@@ -289,7 +289,7 @@ async def test_delete_thread(mock_durability, mock_config, tmp_path):
 @pytest.mark.asyncio
 async def test_thread_filter_by_status(mock_durability, mock_config):
     """Test filtering threads by status."""
-    from soothe.protocols.durability import ThreadMetadata
+    from soothe_nano.protocols.durability import ThreadMetadata
 
     mock_durability.list_threads = AsyncMock(
         return_value=[
@@ -330,7 +330,7 @@ async def test_thread_filter_by_status(mock_durability, mock_config):
 @pytest.mark.asyncio
 async def test_thread_filter_by_date_range(mock_durability, mock_config):
     """Test filtering threads by date range."""
-    from soothe.protocols.durability import ThreadMetadata
+    from soothe_nano.protocols.durability import ThreadMetadata
 
     mock_durability.list_threads = AsyncMock(
         return_value=[

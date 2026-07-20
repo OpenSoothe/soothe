@@ -82,71 +82,74 @@ __all__ = [
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "AKSKConfig": ("soothe.middleware.identity", "AKSKConfig"),
+    "AKSKConfig": ("soothe_nano.middleware.identity", "AKSKConfig"),
     "build_soothe_middleware_stack": (
-        "soothe.middleware._builder",
+        "soothe_nano.middleware._builder",
         "build_soothe_middleware_stack",
     ),
     "CodeInterpreterMiddleware": (
-        "soothe.middleware.code_interpreter",
+        "soothe_nano.middleware.code_interpreter",
         "CodeInterpreterMiddleware",
     ),
-    "create_llm_call_metadata": ("soothe.middleware._utils", "create_llm_call_metadata"),
-    "SootheFilesystemMiddleware": ("soothe.middleware.filesystem", "SootheFilesystemMiddleware"),
-    "IdentityConfig": ("soothe.middleware.identity", "IdentityConfig"),
-    "IdentityMiddleware": ("soothe.middleware.identity", "IdentityMiddleware"),
-    "IdentityRuntime": ("soothe.middleware.identity", "IdentityRuntime"),
+    "create_llm_call_metadata": ("soothe_nano.middleware._utils", "create_llm_call_metadata"),
+    "SootheFilesystemMiddleware": (
+        "soothe_nano.middleware.filesystem",
+        "SootheFilesystemMiddleware",
+    ),
+    "IdentityConfig": ("soothe_nano.middleware.identity", "IdentityConfig"),
+    "IdentityMiddleware": ("soothe_nano.middleware.identity", "IdentityMiddleware"),
+    "IdentityRuntime": ("soothe_nano.middleware.identity", "IdentityRuntime"),
     "LLMRateLimitMiddleware": (
         "soothe_deepagents.middleware.llm_rate_limit",
         "LLMRateLimitMiddleware",
     ),
-    "MCPActivationMiddleware": ("soothe.middleware.mcp_activation", "MCPActivationMiddleware"),
-    "PerTurnModelMiddleware": ("soothe.middleware.per_turn_model", "PerTurnModelMiddleware"),
-    "SoothePolicyMiddleware": ("soothe.middleware.policy", "SoothePolicyMiddleware"),
+    "MCPActivationMiddleware": ("soothe_nano.middleware.mcp_activation", "MCPActivationMiddleware"),
+    "PerTurnModelMiddleware": ("soothe_nano.middleware.per_turn_model", "PerTurnModelMiddleware"),
+    "SoothePolicyMiddleware": ("soothe_nano.middleware.policy", "SoothePolicyMiddleware"),
     "SystemPromptMiddleware": (
-        "soothe.middleware.system_prompt",
+        "soothe_nano.middleware.system_prompt",
         "SystemPromptMiddleware",
     ),
     "ProgressiveListingMiddleware": (
-        "soothe.middleware.progressive_listing",
+        "soothe_nano.middleware.progressive_listing",
         "ProgressiveListingMiddleware",
     ),
-    "TokenConfig": ("soothe.middleware.identity", "TokenConfig"),
-    "ThreadContextProvider": ("soothe.middleware.identity", "ThreadContextProvider"),
+    "TokenConfig": ("soothe_nano.middleware.identity", "TokenConfig"),
+    "ThreadContextProvider": ("soothe_nano.middleware.identity", "ThreadContextProvider"),
     "ToolTimeoutMiddleware": (
         "soothe_deepagents.middleware.tool_timeout",
         "ToolTimeoutMiddleware",
     ),
     "ToolEnforcementMiddleware": (
-        "soothe.middleware.tool_enforcement",
+        "soothe_nano.middleware.tool_enforcement",
         "ToolEnforcementMiddleware",
     ),
     "ToolOptimizationMiddleware": (
-        "soothe.middleware.tool_optimization_middleware",
+        "soothe_nano.middleware.tool_optimization_middleware",
         "ToolOptimizationMiddleware",
     ),
     "WorkspaceContextMiddleware": (
-        "soothe.middleware.workspace_context",
+        "soothe_nano.middleware.workspace_context",
         "WorkspaceContextMiddleware",
     ),
     "ModelCallProfilerMiddleware": (
-        "soothe.middleware.model_call_profiler",
+        "soothe_nano.middleware.model_call_profiler",
         "ModelCallProfilerMiddleware",
     ),
     "InnerModelCallProfilerMiddleware": (
-        "soothe.middleware.model_call_profiler",
+        "soothe_nano.middleware.model_call_profiler",
         "InnerModelCallProfilerMiddleware",
     ),
     "LLMCallProfilerMiddleware": (
-        "soothe.middleware.model_call_profiler",
+        "soothe_nano.middleware.model_call_profiler",
         "LLMCallProfilerMiddleware",
     ),
     "is_profiler_enabled": (
-        "soothe.middleware.model_call_profiler",
+        "soothe_nano.middleware.model_call_profiler",
         "is_profiler_enabled",
     ),
     "install_model_call_profiler": (
-        "soothe.middleware.model_call_profiler",
+        "soothe_nano.middleware.model_call_profiler",
         "install_model_call_profiler",
     ),
 }

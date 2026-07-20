@@ -7,13 +7,12 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-from soothe.foundation.workspace.framework_filesystem import FrameworkFilesystem
-from soothe.foundation.workspace.tool_path_resolution import (
+from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
+from soothe_nano.workspace.framework_filesystem import FrameworkFilesystem
+from soothe_nano.workspace.tool_path_resolution import (
     resolve_effective_tool_workspace,
     workspace_path_for_tool_resolution,
 )
-from soothe.middleware.filesystem import SootheFilesystemMiddleware
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 Loop workers set a `ContextVar` for the duration of ``SootheRunner.astream``
 (via ``stream_turn_overrides``) so ``PerTurnModelMiddleware`` can swap the chat
-model without threading kwargs through ``StrangeLoop`` and every ``astream``
+model without threading kwargs through the host runner and every ``astream``
 callsite.
 """
 

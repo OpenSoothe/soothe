@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.config.models import (
     ExecutePromptLedgerConfig,
@@ -20,7 +21,6 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
     StepAction,
 )
-from soothe.protocols.planner import PlanContext
 
 
 def _three_step_decision() -> AgentDecision:

@@ -34,7 +34,7 @@ class LoopRunnerActor:
         configure_loop_runner_worker_logging(self._runner.config, request.loop_id)
 
         try:
-            from soothe.middleware._stream_turn_overrides import stream_turn_overrides
+            from soothe_nano.middleware._stream_turn_overrides import stream_turn_overrides
 
             with stream_turn_overrides(
                 model=request.model,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.middleware.model_call_profiler import _block_char_sizes
+from soothe_nano.middleware.model_call_profiler import _block_char_sizes
 
 
 def test_block_char_sizes_counts_agent_instructions() -> None:

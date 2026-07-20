@@ -40,11 +40,11 @@ def test_resolve_subagents_browser_use_passes_soothe_config_not_model() -> None:
 
     with (
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=True,
         ),
         patch(
-            "soothe.plugin.global_registry.get_plugin_registry",
+            "soothe_nano.plugin.global_registry.get_plugin_registry",
         ) as registry_mock,
         patch(
             "soothe.runner.resolver._resolver_tools._call_subagent_factory",
@@ -84,7 +84,7 @@ def test_resolve_subagents_browser_use_fallback_passes_soothe_config_not_model()
 
     with (
         patch(
-            "soothe.plugin.global_registry.is_plugins_loaded",
+            "soothe_nano.plugin.global_registry.is_plugins_loaded",
             return_value=False,
         ),
         patch(
@@ -104,8 +104,9 @@ def test_resolve_subagents_browser_use_fallback_passes_soothe_config_not_model()
 
 def test_call_subagent_factory_browser_use_plugin_accepts_model_none() -> None:
     """Regression: @subagent wrapper requires model kwarg even when unused."""
+    from soothe_nano.subagents.browser_use import BrowserUsePlugin
+
     from soothe.runner.resolver._resolver_tools import _call_subagent_factory
-    from soothe.subagents.browser_use import BrowserUsePlugin
 
     cfg = SootheConfig()
     plugin = BrowserUsePlugin()

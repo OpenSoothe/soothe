@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from langchain.agents.middleware.types import AgentMiddleware
-
-from soothe.config import SootheConfig
-from soothe.middleware.model_call_profiler import (
+from soothe_nano.middleware.model_call_profiler import (
     _implements_model_call_hook,
     _patch_deepagents_awrap_model_call,
     install_model_call_profiler,
     is_profiler_enabled,
 )
+
+from soothe.config import SootheConfig
 
 
 class _FakeMiddleware:
@@ -50,8 +50,7 @@ def test_implements_model_call_hook() -> None:
 def test_install_skips_patch_tool_calls_middleware() -> None:
     from langchain.agents.middleware.types import AgentMiddleware
     from soothe_deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
-
-    from soothe.middleware.model_call_profiler import _DEEPAGENTS_PATCHED_ATTR
+    from soothe_nano.middleware.model_call_profiler import _DEEPAGENTS_PATCHED_ATTR
 
     install_model_call_profiler(enabled=True)
 
@@ -63,7 +62,7 @@ def test_install_skips_patch_tool_calls_middleware() -> None:
 async def test_patch_deepagents_awrap_model_call_logs_timing(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    from soothe.middleware import model_call_profiler as mod
+    from soothe_nano.middleware import model_call_profiler as mod
 
     cls = _FakeMiddleware
     cls._soothe_deepagents_profiler_patched = False

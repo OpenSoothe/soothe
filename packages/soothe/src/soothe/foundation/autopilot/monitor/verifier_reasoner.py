@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
+from soothe_nano.utils.text_preview import preview_first
 
 from soothe.foundation.autopilot.monitor.verifier_prompts import (
     DAG_HEALTH_VERIFICATION_PROMPT,
@@ -25,7 +26,6 @@ from soothe.foundation.autopilot.monitor.verifier_prompts import (
     format_goals_detail,
     format_step_progress,
 )
-from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -401,8 +401,8 @@ class DagVerificationReasoner:
             HumanMessage(content=prompt),
         ]
 
-        from soothe.middleware._utils import create_llm_call_metadata
-        from soothe.utils.llm.invoke_policy import (
+        from soothe_nano.middleware._utils import create_llm_call_metadata
+        from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )

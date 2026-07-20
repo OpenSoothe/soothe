@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from soothe_nano.plugin.registry import PluginRegistry
 from soothe_sdk.plugin import PluginManifest
-
-from soothe.plugin.registry import PluginRegistry
 
 
 def _minimal_manifest(name: str = "test-plugin") -> PluginManifest:

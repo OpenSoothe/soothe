@@ -16,8 +16,7 @@ from soothe.config import SootheConfig
 
 if TYPE_CHECKING:
     from langgraph.types import Checkpointer
-
-    from soothe.protocols.durability import DurabilityProtocol
+    from soothe_nano.protocols.durability import DurabilityProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +35,9 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
     backend = config.resolve_durability_backend()  # Resolve inheritance
     if backend == "postgresql":
         try:
-            from soothe.backends.durability.postgresql import PostgreSQLDurability
-            from soothe.backends.persistence import create_persist_store
+            from soothe_nano.backends.durability.postgresql import PostgreSQLDurability
+            from soothe_nano.backends.persistence import create_persist_store
+
             from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
 
             # RFC-612: Use dedicated metadata database
@@ -67,7 +67,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
 
     if backend == "sqlite":
         try:
-            from soothe.backends.durability.sqlite import SQLiteDurability
+            from soothe_nano.backends.durability.sqlite import SQLiteDurability
 
             logger.info("Using SQLite durability backend (metadata.db)")
             return SQLiteDurability()

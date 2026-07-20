@@ -168,26 +168,16 @@ _RESPONSE_LANGUAGE_DISPLAY: dict[str, str] = {
 
 
 def build_response_language_hint(language: object | None) -> str:
-    """Build explicit or fallback ``RESPONSE_LANGUAGE_HINT`` for system prompts.
-
-    Args:
-        language: ``ResponseLanguage`` or wire string (``en``, ``zh``, etc.).
-
-    Returns:
-        XML fragment instructing the model which language to use for user-facing prose.
-    """
-    from soothe_nano.intention.models import (
-        ResponseLanguage,
-        normalize_response_language,
-    )
-
-    resolved = normalize_response_language(language)
-    if resolved is None or resolved == ResponseLanguage.OTHER:
+    """Build explicit or fallback ``RESPONSE_LANGUAGE_HINT`` for system prompts."""
+    if language is None:
         return RESPONSE_LANGUAGE_HINT_FALLBACK
-    display = _RESPONSE_LANGUAGE_DISPLAY.get(resolved.value, resolved.value)
+    text = str(language).strip().lower()
+    if not text or text == "other":
+        return RESPONSE_LANGUAGE_HINT_FALLBACK
+    display = _RESPONSE_LANGUAGE_DISPLAY.get(text, text)
     return (
         f"<RESPONSE_LANGUAGE_HINT>\n"
-        f"Write all user-facing prose in {display} ({resolved.value}). "
+        f"Write all user-facing prose in {display} ({text}). "
         f"Keep code, file paths, identifiers, and quoted literals unchanged.\n"
         f"</RESPONSE_LANGUAGE_HINT>"
     )

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from soothe_nano.protocols.planner import PlanContext
+
 from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
@@ -18,7 +20,6 @@ from soothe.foundation.sloop.state.schemas import (
     StepResult,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 
 def test_assess_execute_ai_compaction_keeps_head_and_tail() -> None:

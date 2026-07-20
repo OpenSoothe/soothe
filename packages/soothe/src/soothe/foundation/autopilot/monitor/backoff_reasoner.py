@@ -14,10 +14,10 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
+from soothe_nano.utils.text_preview import preview_first
 
 from soothe.foundation.autopilot.engine.models import BackoffDecision, EvidenceBundle
 from soothe.foundation.context.models import GoalNode
-from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
@@ -153,8 +153,8 @@ class GoalBackoffReasoner:
             HumanMessage(content=prompt),
         ]
 
-        from soothe.middleware._utils import create_llm_call_metadata
-        from soothe.utils.llm.invoke_policy import (
+        from soothe_nano.middleware._utils import create_llm_call_metadata
+        from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )

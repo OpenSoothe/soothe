@@ -69,7 +69,6 @@ class ThreadLogger:
         # Buffer for batched writes (performance optimization)
         self._buffer: list[str] = []
         self._last_flush_time: float = time.time()
-        self._goal_completion_chunk_accum: list[str] = []
 
     @property
     def thread_dir(self) -> Path:
@@ -167,10 +166,9 @@ class ThreadLogger:
         namespace: tuple[str, ...],
         data: Any,
     ) -> None:
-        """Log tool calls / tool results / loop assistant output from messages-mode chunks."""
+        """Log tool calls / tool results / assistant output from messages-mode chunks."""
         try:
-            from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-            from soothe_sdk.ux.loop_stream import assistant_output_phase
+            from langchain_core.messages import AIMessage, ToolMessage
 
             msg, _metadata = data
             if isinstance(msg, ToolMessage):
@@ -184,29 +182,6 @@ class ThreadLogger:
                         "content": _truncate_for_log(content),
                     }
                 )
-            elif isinstance(msg, AIMessageChunk):
-                from soothe_sdk.ux.loop_stream import is_goal_completion_stream_terminal
-
-                phase = assistant_output_phase(msg)
-                if phase != "goal_completion":
-                    return
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                if content:
-                    self._goal_completion_chunk_accum.append(content)
-                if is_goal_completion_stream_terminal(msg):
-                    cleaned = "".join(self._goal_completion_chunk_accum).strip()
-                    self._goal_completion_chunk_accum.clear()
-                    if cleaned:
-                        self._write_record(
-                            {
-                                "timestamp": datetime.now(UTC).isoformat(),
-                                "kind": "conversation",
-                                "role": "assistant",
-                                "text": cleaned,
-                                "phase": "goal_completion",
-                                "namespace": list(namespace),
-                            }
-                        )
             elif isinstance(msg, AIMessage):
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 for tc in tool_calls:
@@ -221,8 +196,7 @@ class ThreadLogger:
                             }
                         )
 
-                phase = assistant_output_phase(msg)
-                if phase and not tool_calls:
+                if not tool_calls:
                     content = msg.content if isinstance(msg.content, str) else str(msg.content)
                     cleaned = content.strip()
                     if cleaned:
@@ -232,7 +206,6 @@ class ThreadLogger:
                                 "kind": "conversation",
                                 "role": "assistant",
                                 "text": cleaned,
-                                "phase": phase,
                                 "namespace": list(namespace),
                             }
                         )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from soothe_nano.protocols.planner import PlanContext
+
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import (
     LoopState,
@@ -9,7 +11,6 @@ from soothe.foundation.sloop.state.schemas import (
     ToolCallHead,
     WaveStepProgress,
 )
-from soothe.protocols.planner import PlanContext
 
 
 def _digest(iteration: int = 1) -> PriorProgressDigest:

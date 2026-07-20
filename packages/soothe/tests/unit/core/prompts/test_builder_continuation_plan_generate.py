@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from soothe_nano.protocols.planner import PlanContext
+
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.prompts.plan_ledger_projection import (
     project_planner_ledger,
@@ -17,7 +19,6 @@ from soothe.foundation.sloop.state.checkpoint import (
 from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
 from soothe.foundation.sloop.state.schemas import LoopState, StepResult
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 
 def _make_checkpoint(*records: GoalIndexEntry) -> StrangeLoopCheckpoint:

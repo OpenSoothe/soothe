@@ -7,10 +7,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
+from soothe_nano.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 import soothe.config as soothe_config
 from soothe.config.settings import SootheConfig
-from soothe.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 from soothe.runner.worker_logging import (
     RUNNER_LOG_FILENAME,
     configure_loop_runner_worker_logging,
@@ -50,7 +50,7 @@ def test_configure_writes_runner_log(soothe_home_tmp: Path) -> None:
 
 def test_configure_sets_log_context_to_loop_id(soothe_home_tmp: Path) -> None:
     """Worker log tags use the daemon loop_id, not a separate checkpoint id."""
-    from soothe.logging.context import get_thread_id
+    from soothe_nano.logging.context import get_thread_id
 
     cfg = SootheConfig()
     loop_id = "019e0bcd-fead-7531-a0bb-b6d1dfba353f"

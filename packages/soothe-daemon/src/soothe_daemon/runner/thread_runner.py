@@ -30,8 +30,8 @@ from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.runner.response_bridge import ResponsePusher
 
 if TYPE_CHECKING:
-    from soothe.middleware.identity import IdentityRuntime
     from soothe.runner._runner_shared import StreamChunk
+    from soothe_nano.middleware.identity import IdentityRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ def _thread_worker_body(
                 timeout_ctx = asyncio.timeout(timeout_seconds) if timeout_enabled else None
 
                 async def _stream() -> None:
-                    from soothe.middleware._stream_turn_overrides import stream_turn_overrides
+                    from soothe_nano.middleware._stream_turn_overrides import stream_turn_overrides
 
                     with stream_turn_overrides(
                         model=req.model,

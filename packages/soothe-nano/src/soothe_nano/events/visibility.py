@@ -181,7 +181,7 @@ def resolve_event_verbosity_tier(
     if not event_type:
         return None
     if event_type.startswith("soothe."):
-        from soothe_nano.events.catalog import REGISTRY
+        from .catalog import REGISTRY
 
         return REGISTRY.get_verbosity(event_type)
     from soothe_sdk.ux.classification import classify_event_to_tier
@@ -248,7 +248,7 @@ def _decide_visibility(
         logger.warning(
             "Unknown daemon wire envelope shape suppressed (type=%s mode=%s). "
             "Update WireEnvelopeKind + _decide_visibility in "
-            "soothe.foundation.events.visibility if this is a new wire shape.",
+            "soothe_nano.events.visibility if this is a new wire shape.",
             msg.get("type"),
             msg.get("mode"),
         )
@@ -294,7 +294,7 @@ def is_custom_stream_payload_client_visible(data: Any) -> bool:
         return True
     event_meta = None
     if event_type.startswith("soothe."):
-        from soothe_nano.events.catalog import REGISTRY
+        from .catalog import REGISTRY
 
         event_meta = REGISTRY.get_meta(event_type)
     return is_catalog_event_client_wire_visible(event_type, event_meta)

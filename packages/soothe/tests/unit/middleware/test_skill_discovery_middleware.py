@@ -5,14 +5,13 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from soothe.middleware.skill_activation import (
+from soothe_nano.middleware.skill_activation import (
     INVOKE_SKILL_TOOL,
     SEARCH_SKILLS_TOOL,
     SkillActivationMiddleware,
 )
-from soothe.skills.index import SkillIndexEntry
-from soothe.skills.registry import ProgressiveSkillRegistry
+from soothe_nano.skills.index import SkillIndexEntry
+from soothe_nano.skills.registry import ProgressiveSkillRegistry
 
 
 def _entry(name: str, *, source: str = "user") -> SkillIndexEntry:

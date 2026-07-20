@@ -8,7 +8,7 @@ import platform as platform_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from soothe.utils.text_preview import preview_first
+from soothe_nano.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig

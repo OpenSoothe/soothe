@@ -177,18 +177,22 @@ class SkillActivationMiddleware(AgentMiddleware):
                 except Exception:  # noqa: BLE001
                     logger.exception("[Skill] sync failed for %s", skill_name)
                 try:
-                    from soothe_nano.events.internal_bus import get_internal_event_bus
+                    try:
+                        from soothe_nano.events.internal_bus import get_internal_event_bus
+                    except ImportError:
+                        get_internal_event_bus = None
 
-                    bus = get_internal_event_bus()
-                    if bus is not None:
-                        await bus.emit(
-                            InternalSkillActivatedEvent(
-                                skill_name=skill_name,
-                                matched_path=matched_path,
-                                pattern=pattern,
-                                thread_id=thread_id,
+                    if get_internal_event_bus is not None:
+                        bus = get_internal_event_bus()
+                        if bus is not None:
+                            await bus.emit(
+                                InternalSkillActivatedEvent(
+                                    skill_name=skill_name,
+                                    matched_path=matched_path,
+                                    pattern=pattern,
+                                    thread_id=thread_id,
+                                )
                             )
-                        )
                 except Exception:  # noqa: BLE001
                     logger.debug("[Skill] internal bus emit failed", exc_info=True)
 

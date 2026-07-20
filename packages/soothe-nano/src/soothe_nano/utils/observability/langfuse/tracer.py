@@ -1,10 +1,9 @@
-"""Unified Langfuse caller facade for the Soothe codebase."""
+"""Unified Langfuse caller facade for CoreAgent (no goal-loop session API)."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.utils.observability.langfuse._goal_loop import GoalLoopTrace
 from soothe_nano.utils.observability.langfuse._merge import merge_langfuse_runnable_config
 from soothe_nano.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
 
@@ -13,7 +12,7 @@ if TYPE_CHECKING:
 
 
 class SootheLangfuse:
-    """Single entry point for Langfuse RunnableConfig and goal-loop trace sessions."""
+    """Langfuse RunnableConfig helpers for CoreAgent LLM calls."""
 
     def __init__(self, soothe_config: SootheConfig | None) -> None:
         self._config = soothe_config
@@ -28,21 +27,6 @@ class SootheLangfuse:
             return False
         return self._config.observability.langfuse.enabled
 
-    def begin_goal_loop(
-        self,
-        *,
-        session_id: str | None,
-        loop_id: str | None,
-    ) -> GoalLoopTrace | None:
-        """Start a shared trace for intent-classify + strange-loop-graph."""
-        if not self.enabled or self._config is None:
-            return None
-        return GoalLoopTrace.begin(
-            self._config,
-            session_id=session_id,
-            loop_id=loop_id,
-        )
-
     def traced_llm(
         self,
         *,
@@ -54,10 +38,10 @@ class SootheLangfuse:
         extra_metadata: dict[str, Any] | None = None,
         loop_id: str | None = None,
         independent_trace: bool = False,
-        goal_trace: GoalLoopTrace | None = None,
+        goal_trace: Any | None = None,
     ) -> dict[str, Any]:
         """RunnableConfig for a standalone or nested LLM ``ainvoke`` / ``astream``."""
-        if goal_trace is not None:
+        if goal_trace is not None and hasattr(goal_trace, "intake_invoke_config"):
             return goal_trace.intake_invoke_config(
                 purpose=purpose,
                 component=component,
@@ -92,11 +76,12 @@ class SootheLangfuse:
         loop_id: str | None = None,
         inherit_callbacks_from: dict[str, Any] | None = None,
         fresh_handler: bool = False,
-        goal_trace: GoalLoopTrace | None = None,
+        goal_trace: Any | None = None,
     ) -> dict[str, Any]:
         """Merge Langfuse callbacks into an existing RunnableConfig."""
         if self._config is None:
             return base
+        pinned = getattr(goal_trace, "trace_id", None) if goal_trace is not None else None
         return merge_langfuse_runnable_config(
             base,
             self._config,
@@ -105,7 +90,7 @@ class SootheLangfuse:
             loop_id=loop_id,
             inherit_callbacks_from=inherit_callbacks_from,
             fresh_handler=fresh_handler,
-            pinned_trace_id=goal_trace.trace_id if goal_trace else None,
+            pinned_trace_id=pinned,
         )
 
     def patch_goal_io(

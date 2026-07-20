@@ -8,12 +8,12 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage
-from soothe.utils.llm.invoke_policy import (
+from soothe_nano.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe.utils.llm.structured import StructuredOutputError, invoke_structured_chat
-from soothe.utils.text_preview import log_preview
+from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat
+from soothe_nano.utils.text_preview import log_preview
 
 from soothe_daemon.protocol.intent_hints import (
     EMBED,
@@ -40,7 +40,7 @@ def _build_intent_hint_invoke_config(
 ) -> dict[str, Any]:
     """Langfuse-traced RunnableConfig for direct daemon LLM calls."""
     try:
-        from soothe.utils.observability.langfuse import SootheLangfuse
+        from soothe_nano.utils.observability.langfuse import SootheLangfuse
 
         return SootheLangfuse(config).traced_llm(
             purpose=purpose,

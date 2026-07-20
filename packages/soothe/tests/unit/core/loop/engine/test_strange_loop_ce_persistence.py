@@ -46,11 +46,11 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
         patch("soothe.foundation.sloop.engine.strange_loop.asyncio.Queue"),
         patch.object(sl, "plan_phase"),
         patch(
-            "soothe.foundation.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
+            "soothe_nano.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
         ),
-        patch("soothe.skills.catalog.parse_slash_skill_user_line", return_value=None),
-        patch("soothe.skills.catalog.try_expand_slash_skill_user_line", return_value=None),
+        patch("soothe_nano.skills.catalog.parse_slash_skill_user_line", return_value=None),
+        patch("soothe_nano.skills.catalog.try_expand_slash_skill_user_line", return_value=None),
     ):
         ce_instance = MagicMock()
         ce_instance.load = AsyncMock(return_value=True)

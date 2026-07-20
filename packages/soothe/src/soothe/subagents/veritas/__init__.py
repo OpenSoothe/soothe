@@ -1,19 +1,39 @@
-"""Shim (IG-668): package re-export for ``soothe_nano.subagents.veritas``."""
+"""Veritas subagent: intent-grounded clarification auto-answerer (RFC-622)."""
 
 from __future__ import annotations
 
-import soothe_nano.subagents.veritas as _mod
-from soothe_nano.subagents.veritas import *  # noqa: F403
+from importlib import import_module
+from typing import Any
 
-try:
-    from soothe_nano.subagents.veritas import __all__ as __all__  # type: ignore[attr-defined]
-except ImportError:
-    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+# Side-effect: register wire events (must not pull implementation)
+from soothe.subagents.veritas import events as _veritas_events  # noqa: F401
+from soothe.subagents.veritas.events import (
+    SUBAGENT_VERITAS_ANSWERED,
+    SUBAGENT_VERITAS_DEFERRED,
+    SUBAGENT_VERITAS_REQUESTED,
+    VeritasAnsweredEvent,
+    VeritasDeferredEvent,
+    VeritasRequestedEvent,
+)
+from soothe.subagents.veritas.schemas import (
+    VeritasAnswerSchema,
+    build_veritas_response_schema,
+)
+
+__all__ = [
+    "SUBAGENT_VERITAS_ANSWERED",
+    "SUBAGENT_VERITAS_DEFERRED",
+    "SUBAGENT_VERITAS_REQUESTED",
+    "VeritasAnswerSchema",
+    "VeritasAnsweredEvent",
+    "VeritasDeferredEvent",
+    "VeritasRequestedEvent",
+    "answer",
+    "build_veritas_response_schema",
+]
 
 
-def __getattr__(name: str):
-    return getattr(_mod, name)
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(dir(_mod)))
+def __getattr__(name: str) -> Any:
+    if name == "answer":
+        return import_module("soothe.subagents.veritas.implementation").answer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

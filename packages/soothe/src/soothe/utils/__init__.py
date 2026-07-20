@@ -1,19 +1,8 @@
-"""Shim (IG-668): package re-export for ``soothe_nano.utils``."""
+"""Soothe utils: L2 helpers. CoreAgent utilities live in ``soothe_nano.utils``."""
 
 from __future__ import annotations
 
-import soothe_nano.utils as _mod
-from soothe_nano.utils import *  # noqa: F403
+from soothe.utils.goal_completion_stream import *  # noqa: F403
+from soothe.utils.loop_messages import *  # noqa: F403
 
-try:
-    from soothe_nano.utils import __all__ as __all__  # type: ignore[attr-defined]
-except ImportError:
-    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
-
-
-def __getattr__(name: str):
-    return getattr(_mod, name)
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(dir(_mod)))
+__all__ = [n for n in globals() if not n.startswith("_")]

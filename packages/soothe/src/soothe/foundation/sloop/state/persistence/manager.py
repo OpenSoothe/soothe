@@ -237,7 +237,8 @@ class StrangeLoopCheckpointPersistenceManager:
         """Delete loop row and related execution tables (keeps workspace dirs)."""
         import asyncio
 
-        from soothe.backends.persistence.display_store import get_display_card_store
+        from soothe_nano.backends.persistence.display_store import get_display_card_store
+
         from soothe.foundation.context.persistence.sqlite_backend import (
             purge_loop_context_engine_state,
         )

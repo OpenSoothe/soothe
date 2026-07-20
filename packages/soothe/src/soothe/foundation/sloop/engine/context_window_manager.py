@@ -171,7 +171,7 @@ class ContextWindowManager:
         Returns:
             Estimated token count in checkpoint messages.
         """
-        from soothe.utils.token_counting import count_tokens
+        from soothe_nano.utils.token_counting import count_tokens
 
         # Get messages from checkpoint channel_values
         channel_values = getattr(checkpoint, "channel_values", None)
@@ -289,7 +289,7 @@ class ContextWindowManager:
             async def _invoke() -> Any:
                 return await model.ainvoke([HumanMessage(content=prompt)])
 
-            from soothe.utils.llm.invoke_policy import (
+            from soothe_nano.utils.llm.invoke_policy import (
                 await_with_llm_call_policy,
                 llm_rate_limit_config_from,
             )

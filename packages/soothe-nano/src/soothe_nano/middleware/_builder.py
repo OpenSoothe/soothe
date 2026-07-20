@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.config.middleware_access import agent_middleware_config
+
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
 
@@ -178,7 +180,7 @@ def build_soothe_middleware_stack(
     logger.debug("[Middleware] Network tool error recovery enabled")
 
     # 10. Cap tool output before graph state / model context
-    tool_output = config.agent.loop.tool_output
+    tool_output = agent_middleware_config(config).tool_output
     stack.append(
         ToolOutputCapMiddleware(
             default_max_chars=int(tool_output.tool_output_max_chars),
@@ -217,7 +219,7 @@ def build_soothe_middleware_stack(
     )
     logger.info("[Middleware] Progressive listing middleware enabled")
 
-    # 14. System prompt assembly (requires routing_classification from StrangeLoop / runner)
+    # 14. System prompt assembly (requires routing_classification from host inject)
     trigger_registry, context_registry = _build_tool_registries(config)
 
     stack.append(
@@ -239,7 +241,7 @@ def build_soothe_middleware_stack(
 
     # 16. LLM rate limiting (throttles API calls, not threads)
     # This prevents thread hanging by blocking only LLM calls, not entire threads
-    llm_rl = config.agent.loop.llm_rate_limit
+    llm_rl = agent_middleware_config(config).llm_rate_limit
     if llm_rl.enabled:
         stack.append(
             LLMRateLimitMiddleware(
@@ -312,7 +314,7 @@ def build_soothe_middleware_stack(
 
     # 20. Tool timeout wrapper (IG-511: prevent indefinite hangs from slow tools)
     # Positioned after other tool-related middleware, innermost around actual execution
-    tool_timeout_config = config.agent.loop.tool_timeout
+    tool_timeout_config = agent_middleware_config(config).tool_timeout
     if tool_timeout_config.enabled:
         from soothe_nano.config.constants import DEFAULT_TASK_TIMEOUT_SECONDS
 

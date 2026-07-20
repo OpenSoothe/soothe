@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.config.models import (
     ExecutePromptLedgerConfig,
@@ -29,7 +30,6 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
     StepAction,
 )
-from soothe.protocols.planner import PlanContext
 
 
 class _StubPolicy:

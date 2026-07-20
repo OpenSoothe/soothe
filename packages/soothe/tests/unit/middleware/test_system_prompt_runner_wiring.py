@@ -1,12 +1,12 @@
 """Integration tests for system prompt optimization middleware (always-on)."""
 
 import pytest
+from soothe_nano.middleware import build_soothe_middleware_stack
+from soothe_nano.middleware.progressive_listing import ProgressiveListingMiddleware
+from soothe_nano.middleware.system_prompt import SystemPromptMiddleware
+from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 from soothe.config import SootheConfig
-from soothe.middleware import build_soothe_middleware_stack
-from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
-from soothe.middleware.system_prompt import SystemPromptMiddleware
-from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 from soothe.runner import SootheRunner
 
 

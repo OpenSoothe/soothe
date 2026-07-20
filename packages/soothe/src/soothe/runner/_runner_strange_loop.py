@@ -10,6 +10,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.utils.text_preview import preview_first
 from soothe_sdk.core.subagent_wire import is_curated_subagent_wire_event_type
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
@@ -52,7 +53,6 @@ from soothe.foundation.sloop.utils.messages import (
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
 from soothe.runner._runner_shared import StreamChunk, _custom
-from soothe.utils.text_preview import preview_first
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from soothe.subagents.deep_research import DeepResearchConfig, GatherContext, SourceResult
+from soothe_nano.subagents.deep_research import DeepResearchConfig, GatherContext, SourceResult
 
 
 class TestSourceResult:
@@ -29,12 +28,12 @@ class TestDeepResearchConfig:
 
 class TestDeepResearchSubagent:
     def test_factory(self) -> None:
-        from soothe.subagents.deep_research import create_deep_research_subagent
+        from soothe_nano.subagents.deep_research import create_deep_research_subagent
 
         assert callable(create_deep_research_subagent)
 
     def test_plugin(self) -> None:
-        from soothe.subagents.deep_research import DeepResearchPlugin
+        from soothe_nano.subagents.deep_research import DeepResearchPlugin
 
         assert DeepResearchPlugin is not None
 

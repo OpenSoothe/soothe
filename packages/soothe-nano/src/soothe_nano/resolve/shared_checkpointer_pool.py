@@ -127,7 +127,6 @@ class SharedCheckpointerPool:
             setup: Async callable that runs ``AsyncPostgresSaver.setup()``.
         """
 
-
         global _checkpointer_setup_done, _setup_waiter
 
         if _checkpointer_setup_done:

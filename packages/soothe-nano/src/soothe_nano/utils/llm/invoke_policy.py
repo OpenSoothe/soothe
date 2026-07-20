@@ -70,7 +70,7 @@ async def await_with_llm_call_policy(
 
     Args:
         coro_factory: Zero-arg callable returning the awaitable LLM operation.
-        config: Rate-limit / timeout configuration (from ``agent.loop.llm_rate_limit``).
+        config: Rate-limit / timeout configuration (from ``agent.middleware.llm_rate_limit``).
         thread_id: Optional thread id for retry telemetry and budget allocation.
 
     Returns:

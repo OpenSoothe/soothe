@@ -179,7 +179,7 @@ def _build_weaver_graph(
         _emit_event(WeaverReuseMissEvent(best_confidence=round(best_conf, 3)).to_dict(), logger)
 
         # Fetch skills (with indexing-not-ready tolerance)
-        from soothe.foundation.skillify.models import SkillBundle
+        from soothe_nano.skillify.models import SkillBundle
 
         skill_bundle = SkillBundle(query=capability.description)
         if skillify_service is not None:
@@ -370,7 +370,7 @@ class WeaverPlugin:
         import soothe_plugins.weaver.events  # noqa: F401
 
         try:
-            from soothe.foundation.skillify.models import SkillBundle  # noqa: F401
+            from soothe_nano.skillify.models import SkillBundle  # noqa: F401
 
             context.logger.info("Weaver plugin loaded (Skillify available)")
         except ImportError:
@@ -476,7 +476,7 @@ class WeaverPlugin:
         skillify_service = None
         if soothe_cfg.skillify.enabled:
             try:
-                from soothe.foundation.skillify import start_skillify_service
+                from soothe_nano.skillify import start_skillify_service
 
                 skillify_service = await start_skillify_service(soothe_cfg)
             except Exception:

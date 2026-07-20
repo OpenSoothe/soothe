@@ -315,7 +315,7 @@ Examples:
 
             metadata = create_llm_call_metadata(
                 purpose="intent_detection",
-                component="soothe.subagents.browser_use",
+                component="soothe_nano.subagents.browser_use",
                 phase="initialization",
                 existing_browser_check=True,
             )

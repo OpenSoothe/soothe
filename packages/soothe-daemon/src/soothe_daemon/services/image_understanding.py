@@ -149,7 +149,7 @@ async def enrich_user_text_with_vision(
 
     invoke_config = _build_vision_invoke_config(config, session_id=session_id)
 
-    from soothe.utils.llm.invoke_policy import (
+    from soothe_nano.utils.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,
     )
@@ -176,7 +176,7 @@ async def enrich_user_text_with_vision(
 def _build_vision_invoke_config(config: Any, *, session_id: str | None = None) -> dict[str, Any]:
     """Build Langfuse-traced RunnableConfig for vision preflight."""
     try:
-        from soothe.utils.observability.langfuse import SootheLangfuse
+        from soothe_nano.utils.observability.langfuse import SootheLangfuse
 
         return SootheLangfuse(config).traced_llm(
             purpose="vision_preflight",

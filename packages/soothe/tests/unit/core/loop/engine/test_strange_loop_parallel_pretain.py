@@ -107,11 +107,11 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
         patch("soothe.foundation.sloop.engine.strange_loop.asyncio.Queue"),
         patch.object(sl, "plan_phase"),
         patch(
-            "soothe.foundation.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
+            "soothe_nano.workspace.tool_path_resolution.filesystem_virtual_mode_from_soothe_config",
             return_value=False,
         ),
-        patch("soothe.skills.catalog.parse_slash_skill_user_line", return_value=None),
-        patch("soothe.skills.catalog.try_expand_slash_skill_user_line", return_value=None),
+        patch("soothe_nano.skills.catalog.parse_slash_skill_user_line", return_value=None),
+        patch("soothe_nano.skills.catalog.try_expand_slash_skill_user_line", return_value=None),
     ):
         sm = MagicMock()
         sm.loop_id = "L1"

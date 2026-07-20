@@ -16,8 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import ToolMessage
-
-from soothe.middleware.edit_coalescing import (
+from soothe_nano.middleware.edit_coalescing import (
     DEFAULT_DETECTION_WINDOW_MS,
     DEFAULT_STAGING_BUFFER_EVICTION_POLICY,
     DEFAULT_STAGING_BUFFER_MAX_ENTRIES,
@@ -164,7 +163,7 @@ class TestEditCoalescingConfig:
 
     def test_middleware_lock_registry_injected(self) -> None:
         """Middleware should accept and use injected lock registry."""
-        from soothe.foundation.filesystem._lock_registry import FileEditLockRegistry
+        from soothe_nano.filesystem._lock_registry import FileEditLockRegistry
 
         registry = FileEditLockRegistry()
         middleware = EditCoalescingMiddleware(lock_registry=registry)
@@ -787,7 +786,7 @@ class TestFileEditLockRegistryIntegration:
     @pytest.mark.asyncio
     async def test_external_lock_registry_accepted(self) -> None:
         """Middleware should accept an externally provided lock registry."""
-        from soothe.foundation.filesystem._lock_registry import FileEditLockRegistry
+        from soothe_nano.filesystem._lock_registry import FileEditLockRegistry
 
         registry = FileEditLockRegistry()
         middleware = EditCoalescingMiddleware(lock_registry=registry)
@@ -846,7 +845,7 @@ class TestWorkspaceBackendIntegration:
         monkeypatch: pytest.MonkeyPatch,
         tmp_path: object,
     ) -> None:
-        from soothe.foundation.workspace.context import (
+        from soothe_nano.workspace.context import (
             reset_workspace_context,
             set_workspace_context,
         )
@@ -862,7 +861,7 @@ class TestWorkspaceBackendIntegration:
             return sentinel_backend
 
         monkeypatch.setattr(
-            "soothe.foundation.workspace.normalized_backend.get_workspace_backend",
+            "soothe_nano.workspace.normalized_backend.get_workspace_backend",
             _fake_get_workspace_backend,
         )
 

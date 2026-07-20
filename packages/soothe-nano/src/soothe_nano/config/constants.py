@@ -8,9 +8,9 @@ Centralizing constants ensures consistency and easier maintenance.
 # Agent Loop Iteration Limits
 # ============================================================================
 
-# Default maximum iterations for StrangeLoop execution (RFC-201)
+# Default maximum iterations for agent loop execution (RFC-201)
 # Higher values allow more complex multi-step reasoning and execution
-DEFAULT_STRANGE_LOOP_MAX_ITERATIONS = 99
+DEFAULT_MAX_ITERATIONS = 99
 
 # ============================================================================
 # Execution Tool Limits
@@ -32,10 +32,10 @@ def clamp_execute_timeout(seconds: int | float) -> int:
     return min(int(seconds), MAX_EXECUTE_TIMEOUT)
 
 
-# Max chars for shell/code tool stdout (run_command) and code_exec aggregation in StrangeLoop execute.
+# Max chars for shell/code tool stdout (run_command) and code_exec aggregation.
 DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS = 100_000
 
-# Max chars for non-code_exec tool output in StrangeLoop execute-stream aggregation.
+# Max chars for non-code_exec tool output in stream aggregation.
 DEFAULT_TOOL_OUTPUT_CHARS = 10_000
 
 # Per execute-step cap on root-graph tool results consumed from the Act stream.

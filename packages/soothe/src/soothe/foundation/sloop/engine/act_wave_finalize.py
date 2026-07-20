@@ -21,9 +21,8 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, ToolMessage
+from soothe_nano.utils.text_preview import preview_first
 from soothe_sdk.display.tool_result import is_error_tool_result_text
-
-from soothe.utils.text_preview import preview_first
 
 ActWaveAnswerProvenance = Literal["root_assistant_stream", "task_tool_aggregate", "none"]
 

@@ -221,7 +221,7 @@ def discover_all_plugins(
         ("academic_research", "academic_research"),
         ("browser_use", "browser_use"),
     ):
-        module_path = f"soothe.subagents.{module_suffix}"
+        module_path = f"soothe_nano.subagents.{module_suffix}"
         discovered[subagent_name] = (module_path, {}, "built-in")
         logger.debug("Discovered built-in subagent plugin: %s", subagent_name)
 
@@ -238,7 +238,7 @@ def discover_all_plugins(
         "audio",
         "video",
     ]:
-        module_path = f"soothe.toolkits.{tool_name}"
+        module_path = f"soothe_nano.toolkits.{tool_name}"
         discovered[tool_name] = (module_path, {}, "built-in")
         logger.debug("Discovered built-in tool plugin: %s", tool_name)
 

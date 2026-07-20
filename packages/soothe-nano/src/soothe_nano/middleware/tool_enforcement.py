@@ -154,7 +154,7 @@ class ToolEnforcementMiddleware(AgentMiddleware):
         if step_enforce:
             directive = step_subagent
             logger.info(
-                "StrangeLoop step subagent hint (enforce): soothe_step_subagent=%s",
+                "CoreAgent step subagent hint (enforce): soothe_step_subagent=%s",
                 step_subagent,
             )
             request.state["_subagent_routing_directive"] = directive

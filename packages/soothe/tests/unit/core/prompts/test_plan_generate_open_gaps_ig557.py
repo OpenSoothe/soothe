@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.prompts import PromptBuilder
@@ -17,7 +18,6 @@ from soothe.foundation.sloop.state.schemas import (
     PlanGeneration,
     StatusAssessment,
 )
-from soothe.protocols.planner import PlanContext
 
 
 def test_generate_message_includes_open_gaps_from_remaining_gaps() -> None:

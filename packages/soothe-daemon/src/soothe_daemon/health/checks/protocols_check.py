@@ -46,16 +46,18 @@ async def check_protocols(config: SootheConfig | None = None) -> CategoryResult:
     checks = []
 
     # Memory protocol backend (MemU)
-    checks.append(_check_import("soothe.backends.memory.memu_adapter", "MemU Memory"))
+    checks.append(_check_import("soothe_nano.backends.memory.memu_adapter", "MemU Memory"))
 
     # Durability protocol backends
-    checks.append(_check_import("soothe.backends.durability.postgresql", "PostgreSQL Durability"))
-    checks.append(_check_import("soothe.backends.durability.sqlite", "SQLite Durability"))
+    checks.append(
+        _check_import("soothe_nano.backends.durability.postgresql", "PostgreSQL Durability")
+    )
+    checks.append(_check_import("soothe_nano.backends.durability.sqlite", "SQLite Durability"))
 
     # Vector store protocol backends
-    checks.append(_check_import("soothe.backends.vector_store.pgvector", "PGVector"))
-    checks.append(_check_import("soothe.backends.vector_store.weaviate", "Weaviate"))
-    checks.append(_check_import("soothe.backends.vector_store.sqlite_vec", "sqlite_vec"))
+    checks.append(_check_import("soothe_nano.backends.vector_store.pgvector", "PGVector"))
+    checks.append(_check_import("soothe_nano.backends.vector_store.weaviate", "Weaviate"))
+    checks.append(_check_import("soothe_nano.backends.vector_store.sqlite_vec", "sqlite_vec"))
 
     overall_status = aggregate_status([check.status for check in checks])
 

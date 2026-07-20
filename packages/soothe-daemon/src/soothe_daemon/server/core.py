@@ -109,7 +109,7 @@ class SootheDaemon(DaemonHandlersMixin):
         logger.info("Daemon workspace: %s", self._daemon_workspace)
 
         # Incremental skill index (mtime-cached, global user skills only)
-        from soothe.skills.index import SkillIndex
+        from soothe_nano.skills.index import SkillIndex
 
         self._skill_index = SkillIndex()
 
@@ -277,7 +277,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._identity_service is None:
             return None
 
-        from soothe.middleware.identity import IdentityRuntime
+        from soothe_nano.middleware.identity import IdentityRuntime
 
         return IdentityRuntime(
             service=self._identity_service,
@@ -566,7 +566,6 @@ class SootheDaemon(DaemonHandlersMixin):
             #
             # RFC-625: Uses ContextEngine + AutopilotMonitor instead of GoalEngine.
             try:
-                from soothe.backends.persistence import create_persist_store
                 from soothe.foundation.autopilot.monitor import AutopilotMonitor
                 from soothe.foundation.autopilot.service import (
                     AutopilotService,
@@ -576,6 +575,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 )
                 from soothe.foundation.context import ContextEngine
                 from soothe.foundation.events.internal_bus import InternalEventBus
+                from soothe_nano.backends.persistence import create_persist_store
                 from soothe_sdk.paths import SOOTHE_DATA_DIR
 
                 # Isolated bus for the daemon's autopilot domain.
@@ -721,7 +721,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
             if self._config.skillify.enabled:
                 try:
-                    from soothe.foundation.skillify import start_skillify_service
+                    from soothe_nano.skillify import start_skillify_service
 
                     if await start_skillify_service(self._config) is not None:
                         logger.info("[Skillify] Daemon service started")
@@ -752,7 +752,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # RFC-412: Initialize MCP registry (daemon-singleton)
             if self._config.mcp_servers:
                 try:
-                    from soothe.mcp.registry import MCPRegistry
+                    from soothe_nano.mcp.registry import MCPRegistry
 
                     self._mcp_registry = MCPRegistry(
                         servers=self._config.mcp_servers,
@@ -770,7 +770,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # QueryEngine is created in __init__; runner is now available for queries
             # Initialize global cross-thread input history
             if self._config.logging.global_history.enabled:
-                from soothe.logging.global_history import GlobalInputHistory
+                from soothe_nano.logging.global_history import GlobalInputHistory
 
                 self._global_history = GlobalInputHistory(
                     max_size=self._config.logging.global_history.max_size,
@@ -1472,7 +1472,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         from datetime import datetime, timedelta
 
-        from soothe.protocols.durability import ThreadFilter
+        from soothe_nano.protocols.durability import ThreadFilter
 
         # Get timeout from config (in hours)
         timeout_hours = self._config.agent.protocols.durability.thread_inactivity_timeout_hours
@@ -1644,7 +1644,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
         if self._config.skillify.enabled:
             try:
-                from soothe.foundation.skillify import stop_skillify_service
+                from soothe_nano.skillify import stop_skillify_service
 
                 await stop_skillify_service()
                 logger.info("[Skillify] Service shutdown complete")

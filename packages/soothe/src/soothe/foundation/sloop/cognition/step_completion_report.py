@@ -47,8 +47,7 @@ async def summarize_step_completion_report(
         First-person summary text, or None when input is empty or the call fails.
     """
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-
-    from soothe.utils.llm.invoke_policy import (
+    from soothe_nano.utils.llm.invoke_policy import (
         await_with_llm_call_policy,
         llm_rate_limit_config_from,
     )
@@ -80,7 +79,7 @@ async def summarize_step_completion_report(
             phase="execute_step",
         )
     elif soothe_config is not None:
-        from soothe.utils.observability.langfuse import SootheLangfuse
+        from soothe_nano.utils.observability.langfuse import SootheLangfuse
 
         trace_name = (soothe_config.observability.langfuse.trace_name or "").strip()
         config = SootheLangfuse(soothe_config).traced_llm(

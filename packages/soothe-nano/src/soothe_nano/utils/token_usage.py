@@ -1,4 +1,4 @@
-"""Loop-scoped token usage helpers for StrangeLoop state."""
+"""Token usage helpers for CoreAgent and direct LLM calls."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
     from langchain_core.outputs import LLMResult
 
-    from soothe_nano.agent.subagent_catalog import LoopState
-
 
 class _TokenTotalTarget(Protocol):
     total_tokens_used: int
@@ -20,13 +18,13 @@ class _TokenTotalTarget(Protocol):
 
 @dataclass
 class DirectLLMTokenTarget:
-    """Mutable token sink used before ``LoopState`` exists (e.g. pre-graph Pass 1)."""
+    """Mutable token sink for direct (non-CoreAgent-graph) LLM invocations."""
 
     total_tokens_used: int = 0
 
 
-_loop_token_target: ContextVar[_TokenTotalTarget | None] = ContextVar(
-    "loop_token_target",
+_token_target: ContextVar[_TokenTotalTarget | None] = ContextVar(
+    "token_target",
     default=None,
 )
 _direct_llm_token_accumulation: ContextVar[bool] = ContextVar(
@@ -37,12 +35,12 @@ _direct_llm_token_accumulation: ContextVar[bool] = ContextVar(
 
 @contextmanager
 def loop_token_accumulation_scope(target: _TokenTotalTarget):
-    """Bind loop token accumulation to ``target`` for the current async context."""
-    token = _loop_token_target.set(target)
+    """Bind token accumulation to ``target`` for the current async context."""
+    token = _token_target.set(target)
     try:
         yield
     finally:
-        _loop_token_target.reset(token)
+        _token_target.reset(token)
 
 
 @contextmanager
@@ -56,10 +54,10 @@ def direct_llm_token_call_scope():
 
 
 def merge_direct_llm_tokens_into_state(
-    state: LoopState,
+    state: _TokenTotalTarget,
     source: _TokenTotalTarget,
 ) -> int:
-    """Fold tokens accumulated before ``LoopState`` existed into ``state``."""
+    """Fold tokens accumulated before state existed into ``state``."""
     delta = max(0, int(getattr(source, "total_tokens_used", 0) or 0))
     if delta > 0:
         state.total_tokens_used += delta
@@ -67,10 +65,10 @@ def merge_direct_llm_tokens_into_state(
 
 
 def accumulate_loop_tokens_from_llm_result(response: LLMResult) -> int:
-    """Add direct LLM usage into the active loop token target when scoped."""
+    """Add direct LLM usage into the active token target when scoped."""
     if not _direct_llm_token_accumulation.get():
         return 0
-    target = _loop_token_target.get()
+    target = _token_target.get()
     if target is None:
         return 0
     from soothe_nano.utils.llm.observability import extract_token_counts_from_llm_result
@@ -137,12 +135,7 @@ def _sum_token_usage_from_messages(
 
 
 def extract_token_usage_from_messages(messages: list[BaseMessage]) -> dict[str, int]:
-    """Sum prompt/completion/total across all CoreAgent AI turns in ``messages``.
-
-    Multi-hop tool loops emit one ``AIMessage`` per model call; summing every turn
-    matches Langfuse generation totals. Falls back to stream chunks when providers
-    only attach usage to the final chunk.
-    """
+    """Sum prompt/completion/total across all CoreAgent AI turns in ``messages``."""
     usage = _sum_token_usage_from_messages(messages, include_chunks=False)
     if usage:
         return usage

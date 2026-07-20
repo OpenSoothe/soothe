@@ -30,7 +30,7 @@ class SootheEvent(BaseModel):
 
     def emit(self, logger: logging.Logger) -> None:
         """Emit this event via the LangGraph stream writer."""
-        from soothe.utils.progress import emit_progress
+        from soothe_nano.utils.progress import emit_progress
 
         emit_progress(self.to_dict(), logger)
 

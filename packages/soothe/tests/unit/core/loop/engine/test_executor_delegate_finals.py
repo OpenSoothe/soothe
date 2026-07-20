@@ -672,7 +672,7 @@ async def test_stream_and_collect_logs_tool_call_args_from_invocation_registry(
     from langchain.agents.middleware.types import ToolCallRequest
 
     # IG-519: Use registry directly (semaphore removed from stack)
-    from soothe.middleware.tool_call_args_registry import (
+    from soothe_nano.middleware.tool_call_args_registry import (
         get_recorded_tool_call_args,
         init_tool_call_args_registry,
         record_tool_call_args_from_request,

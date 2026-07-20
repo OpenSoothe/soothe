@@ -23,7 +23,7 @@ from .models import (
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
-    from soothe.foundation.skillify.models import SkillBundle
+    from soothe_nano.skillify.models import SkillBundle
 
 logger = logging.getLogger(__name__)
 

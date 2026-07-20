@@ -1,19 +1,18 @@
-"""Shim (IG-668): package re-export for ``soothe_nano.logging``."""
+"""Logging package: CoreAgent helpers from nano + soothe ThreadLogger (goal completion)."""
 
 from __future__ import annotations
 
-import soothe_nano.logging as _mod
-from soothe_nano.logging import *  # noqa: F403
+from soothe_nano.logging.context import get_thread_id, set_thread_id
+from soothe_nano.logging.global_history import GlobalInputHistory
+from soothe_nano.logging.setup import ThreadFormatter, setup_logging
 
-try:
-    from soothe_nano.logging import __all__ as __all__  # type: ignore[attr-defined]
-except ImportError:
-    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+from soothe.logging.thread_logger import ThreadLogger
 
-
-def __getattr__(name: str):
-    return getattr(_mod, name)
-
-
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(dir(_mod)))
+__all__ = [
+    "GlobalInputHistory",
+    "ThreadFormatter",
+    "ThreadLogger",
+    "get_thread_id",
+    "set_thread_id",
+    "setup_logging",
+]

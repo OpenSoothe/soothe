@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
-
-from soothe.middleware.tool_optimization_middleware import ToolOptimizationMiddleware
+from soothe_nano.middleware.tool_optimization_middleware import ToolOptimizationMiddleware
 
 
 def test_main_stack_mounts_tool_optimization_middleware() -> None:
+    from soothe_nano.middleware._builder import build_soothe_middleware_stack
+
     from soothe.config import SootheConfig
-    from soothe.middleware._builder import build_soothe_middleware_stack
 
     names = [type(m).__name__ for m in build_soothe_middleware_stack(SootheConfig(), policy=None)]
     assert "ToolOptimizationMiddleware" in names
@@ -21,8 +21,9 @@ def test_main_stack_mounts_tool_optimization_middleware() -> None:
 
 def test_tool_optimization_wraps_edit_coalescing() -> None:
     """Optimization middleware should run before coalescing interception."""
+    from soothe_nano.middleware._builder import build_soothe_middleware_stack
+
     from soothe.config import SootheConfig
-    from soothe.middleware._builder import build_soothe_middleware_stack
 
     names = [type(m).__name__ for m in build_soothe_middleware_stack(SootheConfig(), policy=None)]
     opt_idx = names.index("ToolOptimizationMiddleware")

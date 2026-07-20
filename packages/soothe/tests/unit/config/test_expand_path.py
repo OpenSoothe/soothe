@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from soothe.utils import expand_path
+from soothe_nano.utils import expand_path
 
 
 def test_expand_path_home_directory():

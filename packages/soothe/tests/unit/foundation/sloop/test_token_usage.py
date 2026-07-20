@@ -39,7 +39,7 @@ def test_accumulate_loop_tokens_from_llm_result_requires_direct_scope() -> None:
 
     with loop_token_accumulation_scope(target), direct_llm_token_call_scope():
         with patch(
-            "soothe.utils.llm.observability.extract_token_counts_from_llm_result",
+            "soothe_nano.utils.llm.observability.extract_token_counts_from_llm_result",
             return_value={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
         ):
             delta = accumulate_loop_tokens_from_llm_result(response)

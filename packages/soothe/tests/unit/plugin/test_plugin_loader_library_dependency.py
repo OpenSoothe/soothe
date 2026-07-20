@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
-from soothe.plugin.loader import PluginLoader
-from soothe.plugin.registry import PluginRegistry
+from soothe_nano.plugin.loader import PluginLoader
+from soothe_nano.plugin.registry import PluginRegistry
 
 
 def test_check_library_dependency_true_when_version_satisfies_specifier() -> None:

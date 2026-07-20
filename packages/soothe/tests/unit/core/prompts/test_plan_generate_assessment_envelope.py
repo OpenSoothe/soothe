@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from langchain_core.messages import SystemMessage
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.prompts.user_message import UserMessageBuilder
 from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 
 def test_generate_message_includes_assessment_section_when_inline() -> None:

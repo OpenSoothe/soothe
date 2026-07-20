@@ -14,10 +14,6 @@ from soothe_nano.prompts.system_templates import (
     build_response_language_hint,
     default_agent_system_prompt_body,
 )
-from soothe_nano.prompts.user_message import (
-    UserMessageBuilder,
-    flatten_user_message_content,
-)
 
 __all__ = [
     "RESPONSE_LANGUAGE_HINT_FALLBACK",
@@ -25,11 +21,9 @@ __all__ = [
     "_MEDIUM_SYSTEM_PROMPT",
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
-    "UserMessageBuilder",
     "build_response_language_hint",
     "build_context_sections_for_complexity",
     "build_soothe_environment_section",
     "build_soothe_workspace_section",
     "default_agent_system_prompt_body",
-    "flatten_user_message_content",
 ]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.state.schemas import (
@@ -13,7 +14,6 @@ from soothe.foundation.sloop.state.schemas import (
     StatusAssessment,
     StepAction,
 )
-from soothe.protocols.planner import PlanContext
 
 
 @pytest.mark.asyncio

@@ -5,11 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from soothe_nano.protocols.planner import PlanContext
 
 from soothe.foundation.sloop.cognition.planner import LLMPlanner
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import ContinuationAssessment, LoopState
-from soothe.protocols.planner import PlanContext
 
 
 def _make_planner() -> LLMPlanner:

@@ -17,8 +17,7 @@ from soothe_deepagents.middleware.llm_rate_limit import (
     calc_rate_limit_backoff,
     effective_llm_call_timeout,
 )
-
-from soothe.utils.llm.structured import StructuredOutputError
+from soothe_nano.utils.llm.structured import StructuredOutputError
 
 
 @pytest.fixture(autouse=True)
@@ -316,7 +315,7 @@ def test_executor_error_extraction_enhanced_timeout() -> None:
 
 def test_error_format_enhanced_timeout_large_prompt() -> None:
     """Test error format provides actionable suggestions for large prompt timeouts."""
-    from soothe.utils.error_format import format_cli_error
+    from soothe_nano.utils.error_format import format_cli_error
 
     exc = EnhancedTimeoutError(
         timeout_seconds=480,
@@ -332,7 +331,7 @@ def test_error_format_enhanced_timeout_large_prompt() -> None:
 
 def test_error_format_enhanced_timeout_general() -> None:
     """Test error format for general timeout after retries."""
-    from soothe.utils.error_format import format_cli_error
+    from soothe_nano.utils.error_format import format_cli_error
 
     exc = EnhancedTimeoutError(
         timeout_seconds=120,
@@ -348,7 +347,7 @@ def test_error_format_enhanced_timeout_general() -> None:
 
 def test_error_format_generic_timeout() -> None:
     """Test error format for generic TimeoutError."""
-    from soothe.utils.error_format import format_cli_error
+    from soothe_nano.utils.error_format import format_cli_error
 
     exc = TimeoutError("Operation timed out")
 
@@ -393,7 +392,7 @@ def test_executor_timeout_not_misclassified_as_rate_limit() -> None:
 
 def test_error_format_worker_subprocess_lost() -> None:
     """Pool worker exit should map to actionable daemon copy."""
-    from soothe.utils.error_format import format_cli_error
+    from soothe_nano.utils.error_format import format_cli_error
 
     exc = RuntimeError(
         "Worker subprocess exited unexpectedly during query execution; "

@@ -13,8 +13,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel
 from soothe_deepagents.backends.filesystem import FilesystemBackend
-
-from soothe.middleware.filesystem import (
+from soothe_nano.middleware.filesystem import (
     ApplyDiffSchema,
     SootheFilesystemMiddleware,
     coerce_provider_safe_tool_message,
@@ -86,14 +85,14 @@ class TestApplyDiffUpstreamContract:
 
     def test_filesystem_module_imports_without_eager_apply_diff_schema(self) -> None:
         """Daemon path imports SootheFilesystemMiddleware; schema is lazy."""
-        module = importlib.import_module("soothe.middleware.filesystem")
+        module = importlib.import_module("soothe_nano.middleware.filesystem")
         assert hasattr(module, "SootheFilesystemMiddleware")
         assert "ApplyDiffSchema" not in module.__dict__
         assert module.ApplyDiffSchema is ApplyDiffSchema
 
     def test_daemon_startup_import_chain_resolves(self) -> None:
         """Mirror the runner -> resolver -> file_ops_catalog import chain."""
-        catalog = importlib.import_module("soothe.toolkits.file_ops_catalog")
+        catalog = importlib.import_module("soothe_nano.toolkits.file_ops_catalog")
         assert catalog.SootheFilesystemMiddleware is SootheFilesystemMiddleware
         assert "apply_diff" in catalog.SURGICAL_FILE_OP_TOOL_NAMES
 
@@ -131,8 +130,7 @@ class TestSootheFilesystemMiddlewareSchemas:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import soothe_deepagents.middleware.filesystem as da_filesystem
-
-        from soothe.middleware import filesystem as fs_mod
+        from soothe_nano.middleware import filesystem as fs_mod
 
         monkeypatch.delattr(da_filesystem, "ApplyDiffSchema")
         with pytest.raises(ImportError, match="Upgrade with: pip install -U soothe-deepagents"):

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from soothe_nano.utils.llm.structured import StructuredOutputError
 
 from soothe.foundation.sloop.clarification.protocol import (
     ClarificationRequest,
@@ -13,7 +14,6 @@ from soothe.foundation.sloop.clarification.protocol import (
 )
 from soothe.subagents.veritas import answer
 from soothe.subagents.veritas import implementation as veritas_impl
-from soothe.utils.llm.structured import StructuredOutputError
 
 
 def _request(num_q: int = 1) -> ClarificationRequest:

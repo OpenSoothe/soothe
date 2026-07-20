@@ -5,16 +5,18 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.utils.text_preview import log_preview
+
 from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StatusAssessment
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
-from soothe.utils.text_preview import log_preview
 
 # Maximum evidence summary length before truncating model-supplied evidence
 _EVIDENCE_SUMMARY_MAX_CHARS = 600
 
 if TYPE_CHECKING:
+    from soothe_nano.protocols.planner import PlanContext
+
     from soothe.protocols.loop_planner import LoopPlannerProtocol
-    from soothe.protocols.planner import PlanContext
 
 logger = logging.getLogger(__name__)
 

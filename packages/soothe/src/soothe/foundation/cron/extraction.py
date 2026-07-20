@@ -211,7 +211,7 @@ class CronExtractionService:
         Raises:
             Exception: If LLM call fails.
         """
-        from soothe.utils.llm.invoke_policy import (
+        from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )

@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.middleware.identity import IdentityRuntime
     from soothe.runner import SootheRunner
+    from soothe_nano.middleware.identity import IdentityRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ def warmup_worker_runner_on_loop(
     materialize_start = time.perf_counter()
     try:
         if config.skillify.enabled:
-            from soothe.foundation.skillify import start_skillify_service
+            from soothe_nano.skillify import start_skillify_service
 
             loop.run_until_complete(start_skillify_service(config))
 

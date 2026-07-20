@@ -55,7 +55,7 @@ def emit_progress(event: dict[str, Any] | Any, logger: logging.Logger | None = N
         # ... do work ...
         emit_progress(
             {
-                "type": "soothe.plugin.myplugin.progress",
+                "type": "soothe_nano.plugin.myplugin.progress",
                 "message": "Processing...",
             },
             logger=logger,

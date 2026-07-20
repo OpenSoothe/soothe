@@ -1,4 +1,4 @@
--- soothe_checkpoints: StrangeLoop persistence, Context Engine, hot/cold checkpoint split.
+-- soothe_checkpoints: shared LangGraph checkpoint storage.
 -- Idempotent bootstrap via init.sql; incremental changes use NNN_name.sql migrations.
 
 CREATE TABLE IF NOT EXISTS soothe_schema_migrations (

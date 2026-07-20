@@ -1,19 +1,32 @@
-"""Shim (IG-668): package re-export for ``soothe_nano.workspace``."""
+"""Soothe workspace: loop resolution + re-exports of nano CoreAgent helpers."""
 
 from __future__ import annotations
 
-import soothe_nano.workspace as _mod
-from soothe_nano.workspace import *  # noqa: F403
+from typing import Any
 
-try:
-    from soothe_nano.workspace import __all__ as __all__  # type: ignore[attr-defined]
-except ImportError:
-    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+from soothe.foundation.workspace.core_resolution import (
+    WorkspacePrecedence,
+    resolve_workspace,
+)
+from soothe.foundation.workspace.loop_workspace import (
+    compute_scoped_workspace_dir_name,
+    normalize_user_id,
+    resolve_loop_workspace,
+    resolve_persisted_loop_workspace,
+)
+
+__all__ = [
+    "WorkspacePrecedence",
+    "compute_scoped_workspace_dir_name",
+    "normalize_user_id",
+    "resolve_loop_workspace",
+    "resolve_persisted_loop_workspace",
+    "resolve_workspace",
+]
 
 
-def __getattr__(name: str):
-    return getattr(_mod, name)
+def __getattr__(name: str) -> Any:
+    """Lazy-load CoreAgent workspace helpers from soothe_nano."""
+    from importlib import import_module
 
-
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(dir(_mod)))
+    return getattr(import_module("soothe_nano.workspace"), name)

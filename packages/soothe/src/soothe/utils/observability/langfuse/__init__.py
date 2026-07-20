@@ -1,21 +1,54 @@
-"""Shim (IG-668): package re-export for ``soothe_nano.utils.observability.langfuse``."""
+"""Langfuse integration for soothe (CoreAgent helpers + goal-loop tracing)."""
 
 from __future__ import annotations
 
-import soothe_nano.utils.observability.langfuse as _mod
-from soothe_nano.utils.observability.langfuse import *  # noqa: F403
+from typing import Any
 
-try:
-    from soothe_nano.utils.observability.langfuse import (
-        __all__ as __all__,  # type: ignore[attr-defined]
-    )
-except ImportError:
-    __all__ = [n for n in dir(_mod) if not n.startswith("_")]
+from soothe_nano.utils.observability.langfuse import (
+    SootheLangfuse as _NanoSootheLangfuse,
+)
+from soothe_nano.utils.observability.langfuse import (
+    intent_classify_langfuse_run_display_name,
+    loop_graph_langfuse_run_display_name,
+    merge_langfuse_runnable_config,
+    patch_langfuse_trace_goal_io,
+    resolve_langfuse_config_str,
+)
+
+from soothe.utils.observability.langfuse._goal_loop import GoalLoopTrace
 
 
-def __getattr__(name: str):
-    return getattr(_mod, name)
+class SootheLangfuse(_NanoSootheLangfuse):
+    """Soothe Langfuse facade with StrangeLoop goal-loop sessions."""
+
+    def begin_goal_loop(
+        self,
+        *,
+        session_id: str | None,
+        loop_id: str | None,
+    ) -> GoalLoopTrace | None:
+        """Start a shared trace for intent-classify + strange-loop-graph."""
+        if not self.enabled or self._config is None:
+            return None
+        return GoalLoopTrace.begin(
+            self._config,
+            session_id=session_id,
+            loop_id=loop_id,
+        )
 
 
-def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(dir(_mod)))
+__all__ = [
+    "GoalLoopTrace",
+    "SootheLangfuse",
+    "intent_classify_langfuse_run_display_name",
+    "loop_graph_langfuse_run_display_name",
+    "merge_langfuse_runnable_config",
+    "patch_langfuse_trace_goal_io",
+    "resolve_langfuse_config_str",
+]
+
+
+def __getattr__(name: str) -> Any:
+    from importlib import import_module
+
+    return getattr(import_module("soothe_nano.utils.observability.langfuse"), name)

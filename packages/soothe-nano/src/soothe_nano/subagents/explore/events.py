@@ -8,7 +8,7 @@ from pydantic import ConfigDict
 from soothe_sdk.core.events import SootheEvent, SubagentEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe_nano.events import register_event
+from soothe_nano.events.catalog import register_event
 
 SUBAGENT_EXPLORE_STARTED = "soothe.subagent.explorer.started"
 SUBAGENT_EXPLORE_MILESTONE = "soothe.subagent.explorer.milestone"

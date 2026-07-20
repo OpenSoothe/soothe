@@ -19,8 +19,9 @@ def _read_classifier_fragment(name: str) -> str:
 
 def build_prompt_timestamp_block() -> str:
     """Build the live ``<PROMPT_TIMESTAMP>`` block for LLM system prompts."""
+    from soothe_nano.utils.prompt_clock import prompt_datetime_context
+
     from soothe.foundation.sloop.prompts.fragments import PROMPT_TIMESTAMP_FRAGMENT
-    from soothe.utils.prompt_clock import prompt_datetime_context
 
     return PROMPT_TIMESTAMP_FRAGMENT.format(**prompt_datetime_context()).strip()
 
@@ -60,11 +61,12 @@ def _substitute_prompt_placeholders(template: str, values: dict[str, str]) -> st
 
 def build_intake_pass1_system_prompt(body: str, assistant_name: str) -> str:
     """Assemble Pass 1 system prompt with identity and live timestamp at the tail."""
+    from soothe_nano.utils.prompt_clock import prompt_datetime_context
+
     from soothe.foundation.sloop.prompts.identity import (
         build_assistant_identity_block,
         normalize_assistant_name,
     )
-    from soothe.utils.prompt_clock import prompt_datetime_context
 
     name = normalize_assistant_name(assistant_name)
     format_ctx = {"assistant_name": name, **prompt_datetime_context()}

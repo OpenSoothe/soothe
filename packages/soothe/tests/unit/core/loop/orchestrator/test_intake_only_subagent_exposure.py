@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from langchain_core.messages import ToolMessage
+from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 from soothe.foundation.sloop.state.schemas import (
     INTAKE_ONLY_WIRE_SUBAGENTS,
@@ -16,7 +17,6 @@ from soothe.foundation.sloop.state.schemas import (
     resolve_step_wire_subagent,
     resolve_wire_subagent,
 )
-from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 
 def test_intake_only_set_excludes_planner() -> None:

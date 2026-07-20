@@ -10,18 +10,19 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.config import SootheConfig, SubagentConfig
-from soothe.config.models import ModelRole
-from soothe.foundation.workspace.tool_path_resolution import (
-    filesystem_virtual_mode_from_soothe_config,
-    max_file_size_mb_for_filesystem_backend,
-    resolve_effective_tool_workspace,
-)
-from soothe.toolkits.file_ops_catalog import (
+from soothe_nano.toolkits.file_ops_catalog import (
     SURGICAL_FILE_OP_TOOL_NAME_SET,
     build_filesystem_tools,
     build_surgical_file_ops_tools,
 )
+from soothe_nano.workspace.tool_path_resolution import (
+    filesystem_virtual_mode_from_soothe_config,
+    max_file_size_mb_for_filesystem_backend,
+    resolve_effective_tool_workspace,
+)
+
+from soothe.config import SootheConfig, SubagentConfig
+from soothe.config.models import ModelRole
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,7 +40,7 @@ def _workspace_backend_factory(
     max_file_size_mb: int,
 ) -> Callable[[str], Any]:
     """Build a workspace-scoped backend factory for surgical file tools."""
-    from soothe.foundation.workspace.normalized_backend import get_workspace_backend
+    from soothe_nano.workspace.normalized_backend import get_workspace_backend
 
     def factory(workspace: str) -> Any:
         return get_workspace_backend(
@@ -92,11 +93,11 @@ def _get_subagent_factories() -> dict[str, Callable[..., SubAgent | CompiledSubA
 
     This avoids importing heavy subagent modules at module load time.
     """
-    from soothe.subagents.academic_research import create_academic_research_subagent
-    from soothe.subagents.browser_use import create_browser_use_subagent
-    from soothe.subagents.deep_research import create_deep_research_subagent
-    from soothe.subagents.explore import create_explorer_subagent
-    from soothe.subagents.plan import create_plan_subagent
+    from soothe_nano.subagents.academic_research import create_academic_research_subagent
+    from soothe_nano.subagents.browser_use import create_browser_use_subagent
+    from soothe_nano.subagents.deep_research import create_deep_research_subagent
+    from soothe_nano.subagents.explore import create_explorer_subagent
+    from soothe_nano.subagents.plan import create_plan_subagent
 
     return {
         "planner": create_plan_subagent,
@@ -308,7 +309,7 @@ def _resolve_single_tool_group(name: str, config: SootheConfig | None = None) ->
     """
     import time
 
-    from soothe.foundation.workspace.framework_filesystem import FrameworkFilesystem
+    from soothe_nano.workspace.framework_filesystem import FrameworkFilesystem
 
     from ._tool_cache import cache_tools, get_cached_tools
 
@@ -343,7 +344,7 @@ def _resolve_single_tool_group_uncached(
     """
     # Try plugin registry first
     try:
-        from soothe.plugin.global_registry import get_plugin_registry, is_plugins_loaded
+        from soothe_nano.plugin.global_registry import get_plugin_registry, is_plugins_loaded
 
         if is_plugins_loaded():
             registry = get_plugin_registry()
@@ -360,13 +361,13 @@ def _resolve_single_tool_group_uncached(
 
     # Toolkit dispatch using new toolkit classes
     if name == "datetime":
-        from soothe.toolkits.datetime import DatetimeToolkit
+        from soothe_nano.toolkits.datetime import DatetimeToolkit
 
         toolkit = DatetimeToolkit()
         return toolkit.get_tools()
 
     if name == "wizsearch":
-        from soothe.toolkits.wizsearch import WizsearchToolkit
+        from soothe_nano.toolkits.wizsearch import WizsearchToolkit
 
         web_search_config: dict = {}
         if config and hasattr(config, "tools") and hasattr(config.tools, "wizsearch"):
@@ -383,7 +384,7 @@ def _resolve_single_tool_group_uncached(
         return toolkit.get_tools()
 
     if name == "execution":
-        from soothe.toolkits.execution import build_execution_toolkit
+        from soothe_nano.toolkits.execution import build_execution_toolkit
 
         resolved_cwd = str(resolve_effective_tool_workspace(config))
         return build_execution_toolkit(
@@ -392,7 +393,7 @@ def _resolve_single_tool_group_uncached(
         ).get_tools()
 
     if name == "http_requests":
-        from soothe.toolkits.http_requests import HttpRequestsToolkit
+        from soothe_nano.toolkits.http_requests import HttpRequestsToolkit
 
         toolkit = HttpRequestsToolkit(config=config)
         return toolkit.get_tools()
@@ -406,7 +407,7 @@ def _resolve_single_tool_group_uncached(
         "run_python",
     ):
         # Host-execution tools do not require a sandbox backend.
-        from soothe.toolkits.execution import build_execution_toolkit
+        from soothe_nano.toolkits.execution import build_execution_toolkit
 
         resolved_cwd = str(resolve_effective_tool_workspace(config))
         all_tools = build_execution_toolkit(
@@ -450,13 +451,13 @@ def _resolve_single_tool_group_uncached(
         return []
 
     if name == "data":
-        from soothe.toolkits.data import DataToolkit
+        from soothe_nano.toolkits.data import DataToolkit
 
         toolkit = DataToolkit(config=config)
         return toolkit.get_tools()
 
     if name == "deepxiv":
-        from soothe.toolkits.deepxiv import DeepxivToolkit, resolve_deepxiv_token
+        from soothe_nano.toolkits.deepxiv import DeepxivToolkit, resolve_deepxiv_token
 
         token: str | None = None
         timeout = 60
@@ -483,7 +484,7 @@ def _resolve_single_tool_group_uncached(
         "get_data_info",
         "ask_about_file",
     ):
-        from soothe.toolkits.data import DataToolkit
+        from soothe_nano.toolkits.data import DataToolkit
 
         toolkit = DataToolkit(config=config)
         all_tools = toolkit.get_tools()
@@ -534,7 +535,7 @@ def resolve_subagents(
         factory = None
         resolved_via_plugin = False
         try:
-            from soothe.plugin.global_registry import get_plugin_registry, is_plugins_loaded
+            from soothe_nano.plugin.global_registry import get_plugin_registry, is_plugins_loaded
 
             if is_plugins_loaded():
                 registry = get_plugin_registry()
@@ -565,7 +566,7 @@ def resolve_subagents(
             model_override = sub_cfg.model or default_model or config.resolve_model("default")
 
         if resolved_via_plugin:
-            from soothe.plugin.context import create_plugin_context
+            from soothe_nano.plugin.context import create_plugin_context
 
             plugin_instance = factory.__self__
             pname = plugin_instance.manifest.name
@@ -599,7 +600,7 @@ def resolve_subagents(
             extra_kwargs["config"] = config
             extra_kwargs["context"] = {"work_dir": resolved_cwd}
         elif name == "browser_use":
-            from soothe.subagents.browser_use.config_model import BrowserUseSubagentConfig
+            from soothe_nano.subagents.browser_use.config_model import BrowserUseSubagentConfig
 
             extra_kwargs.clear()
             cfg_dict = dict(sub_cfg.config)

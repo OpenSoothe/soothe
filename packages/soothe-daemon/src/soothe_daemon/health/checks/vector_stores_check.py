@@ -32,7 +32,7 @@ def _check_pgvector(config: SootheConfig | None) -> CheckResult:
 
     # Try to import
     try:
-        from soothe.backends.vector_store.pgvector import PGVectorStore  # noqa: F401
+        from soothe_nano.backends.vector_store.pgvector import PGVectorStore  # noqa: F401
 
         return CheckResult(
             name="pgvector",
@@ -75,7 +75,7 @@ def _check_weaviate(config: SootheConfig | None) -> CheckResult:
 
     # Try to import
     try:
-        from soothe.backends.vector_store.weaviate import WeaviateVectorStore  # noqa: F401
+        from soothe_nano.backends.vector_store.weaviate import WeaviateVectorStore  # noqa: F401
 
         return CheckResult(
             name="weaviate",
@@ -116,7 +116,7 @@ def _check_sqlite_vec(config: SootheConfig | None) -> CheckResult:
         )
 
     try:
-        from soothe.backends.vector_store.sqlite_vec import SQLiteVecStore  # noqa: F401
+        from soothe_nano.backends.vector_store.sqlite_vec import SQLiteVecStore  # noqa: F401
 
         return CheckResult(
             name="sqlite_vec",

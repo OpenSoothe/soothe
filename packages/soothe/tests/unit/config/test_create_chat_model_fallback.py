@@ -5,9 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from soothe_nano.utils.llm.factory import LLMFactory
 
 from soothe.config import SootheConfig
-from soothe.utils.llm.factory import LLMFactory
 
 
 def test_think_falls_back_to_default_on_failure() -> None:

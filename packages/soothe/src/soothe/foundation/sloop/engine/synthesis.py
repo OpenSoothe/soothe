@@ -21,6 +21,8 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.utils.observability.langfuse import merge_langfuse_runnable_config
+
 from soothe.foundation.sloop.engine.scenario_classifier import (
     ScenarioClassification,
     classify_synthesis_scenario,
@@ -30,16 +32,15 @@ from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.foundation.sloop.utils.messages import tag_messages_stream_chunk_for_goal_completion
 from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
 from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
-from soothe.utils.observability.langfuse import merge_langfuse_runnable_config
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from langchain_core.language_models.chat_models import BaseChatModel
+    from soothe_nano.protocols.core_agent import CoreAgentProtocol
 
     from soothe.config import SootheConfig
     from soothe.foundation.sloop.state.schemas import PlanResult
-    from soothe.protocols.core_agent import CoreAgentProtocol
 
 logger = logging.getLogger(__name__)
 

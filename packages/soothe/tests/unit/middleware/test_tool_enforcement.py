@@ -8,9 +8,9 @@ from unittest.mock import patch
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 from soothe.foundation.sloop.intention import RoutingClassification
-from soothe.middleware.tool_enforcement import ToolEnforcementMiddleware
 
 
 def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:

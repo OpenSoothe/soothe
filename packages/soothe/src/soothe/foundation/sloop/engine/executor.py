@@ -30,6 +30,22 @@ from langgraph.types import Command, Interrupt
 from soothe_nano.agent.execute_stream import (
     ephemeral_execute_stream_enabled as _ephemeral_execute_stream_enabled,
 )
+
+# IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
+from soothe_nano.middleware.tool_call_args_registry import init_tool_call_args_registry
+from soothe_nano.middleware.tool_optimization_middleware import get_tool_reuse_metrics_snapshot
+from soothe_nano.utils.network_errors import (
+    format_tool_network_error as _format_tool_network_error,
+)
+from soothe_nano.utils.network_errors import (
+    is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
+)
+from soothe_nano.utils.text_preview import (
+    create_output_summary,
+    log_preview,
+    preview,
+    preview_first,
+)
 from soothe_sdk.utils import get_outcome_type
 from soothe_sdk.ux.execute_namespace import is_step_level_execute_namespace_key
 
@@ -139,20 +155,10 @@ from soothe.foundation.sloop.utils.messages import (
     _record_ledger_message,
 )
 
-# IG-519: Import registry directly (removed ToolConcurrencyMiddleware from stack)
-from soothe.middleware.tool_call_args_registry import init_tool_call_args_registry
-from soothe.middleware.tool_optimization_middleware import get_tool_reuse_metrics_snapshot
-from soothe.utils.network_errors import (
-    format_tool_network_error as _format_tool_network_error,
-)
-from soothe.utils.network_errors import (
-    is_recoverable_tool_network_error as _is_recoverable_tool_network_error,
-)
-from soothe.utils.text_preview import create_output_summary, log_preview, preview, preview_first
-
 if TYPE_CHECKING:
+    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+
     from soothe.config import SootheConfig
-    from soothe.protocols.core_agent import CoreAgentProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +331,7 @@ class Executor:
         elif self._config is None:
             return base
         else:
-            from soothe.utils.observability.langfuse._merge import (
+            from soothe_nano.utils.observability.langfuse._merge import (
                 merge_langfuse_runnable_config,
                 pinned_trace_id_from_config,
             )
@@ -849,7 +855,7 @@ class Executor:
         }
 
         if has_slash:
-            from soothe.skills.registry import ProgressiveSkillRegistry
+            from soothe_nano.skills.registry import ProgressiveSkillRegistry
 
             registry = ProgressiveSkillRegistry()
             registry.mark_invoked(
@@ -1084,7 +1090,7 @@ class Executor:
             )
         elif output:
             # Fallback: use tiktoken for accurate estimation
-            from soothe.utils.token_counting import count_tokens
+            from soothe_nano.utils.token_counting import count_tokens
 
             estimated_tokens = count_tokens(output)
             state.total_tokens_used += estimated_tokens

@@ -178,7 +178,7 @@ def merge_token_usage_callbacks(config: dict[str, Any] | None) -> dict[str, Any]
 
     Structured-output runnables invoke the inner chat model without passing through
     ``SootheTokenUsageChatModel._agenerate``; attaching the handler here ensures
-    planner/intent calls still fold usage into ``LoopState`` when scoped.
+    planner/intent calls still fold usage into scoped token targets when active.
     """
     from langchain_core.runnables.config import merge_configs
 

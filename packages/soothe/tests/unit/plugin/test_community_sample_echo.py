@@ -7,11 +7,11 @@ import asyncio
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import HumanMessage
+from soothe_nano.plugin.global_registry import load_plugins
 
 from soothe.config import SootheConfig
 from soothe.config.models import SubagentConfig, ToolsConfig
 from soothe.foundation.coreagent import create_soothe_agent
-from soothe.plugin.global_registry import load_plugins
 from soothe.runner.resolver import resolve_subagents
 
 pytest.importorskip("soothe_plugins.sample_echo", reason="soothe-plugins not installed")
@@ -22,7 +22,7 @@ def _reset_plugin_registry_between_tests() -> None:
     """Avoid cross-test pollution from the global plugin singleton."""
     import asyncio
 
-    from soothe.plugin.global_registry import is_plugins_loaded, shutdown_plugins
+    from soothe_nano.plugin.global_registry import is_plugins_loaded, shutdown_plugins
 
     async def _shutdown() -> None:
         if is_plugins_loaded():

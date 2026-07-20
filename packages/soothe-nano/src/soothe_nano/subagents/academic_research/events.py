@@ -8,7 +8,7 @@ from pydantic import ConfigDict
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-from soothe_nano.events import register_event
+from soothe_nano.events.catalog import register_event
 
 SUBAGENT_ACADEMIC_RESEARCH_STARTED = "soothe.subagent.academic_research.started"
 SUBAGENT_ACADEMIC_RESEARCH_PROGRESS = "soothe.subagent.academic_research.progress"

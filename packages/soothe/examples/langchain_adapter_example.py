@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import tempfile
 
-from soothe.foundation.filesystem import (
+from soothe_nano.filesystem import (
     LangChainAdapter,
     LocalFilesystem,
     create_filesystem,

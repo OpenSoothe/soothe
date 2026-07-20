@@ -7,10 +7,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
+from soothe_nano.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 from soothe.config import SootheConfig
 from soothe.logging import setup_logging
-from soothe.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 
 class TestLoggingSetup:
@@ -313,8 +313,8 @@ class TestThreadFormatter:
 
     def test_thread_tag_shows_last_four_chars_only(self) -> None:
         """Log tag uses the last four characters of the conversation thread id."""
-        from soothe.logging.context import set_thread_id
-        from soothe.logging.setup import ThreadFormatter
+        from soothe_nano.logging.context import set_thread_id
+        from soothe_nano.logging.setup import ThreadFormatter
 
         set_thread_id("abcdefghijklmnop")
         try:
@@ -336,8 +336,8 @@ class TestThreadFormatter:
 
     def test_thread_tag_uuid7_loops_differ_by_suffix(self) -> None:
         """UUID7 loop ids created in the same second get distinct suffix tags."""
-        from soothe.logging.context import set_thread_id
-        from soothe.logging.setup import ThreadFormatter, _short_thread_id_for_log
+        from soothe_nano.logging.context import set_thread_id
+        from soothe_nano.logging.setup import ThreadFormatter, _short_thread_id_for_log
 
         a = "019e3fe2-bcea-78d0-81d7-bb6656b1a56b"
         b = "019e3fe5-5a47-7443-8722-1844f8cfa4e5"
@@ -363,8 +363,8 @@ class TestThreadFormatter:
 
     def test_thread_tag_main_when_no_context(self) -> None:
         """Without set_thread_id, tag is ``[main]``."""
-        from soothe.logging.context import set_thread_id
-        from soothe.logging.setup import ThreadFormatter
+        from soothe_nano.logging.context import set_thread_id
+        from soothe_nano.logging.setup import ThreadFormatter
 
         set_thread_id(None)
         fmt = ThreadFormatter("%(thread_id)s %(message)s")

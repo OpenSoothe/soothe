@@ -1,4 +1,124 @@
-"""Shim (IG-668): re-export ``soothe_nano.config`` under ``soothe.config``."""
+"""Declarative configuration for Soothe agents.
 
-from soothe_nano.config import *  # noqa: F403
-from soothe_nano.config import __all__ as __all__
+All public names are re-exported here so that ``from soothe.config import X``
+continues to work after the module was split into a package.
+"""
+
+from soothe_nano.prompts.system_templates import (
+    _DEFAULT_SYSTEM_PROMPT,
+    _MEDIUM_SYSTEM_PROMPT,
+    _SIMPLE_SYSTEM_PROMPT,
+    _TOOL_ORCHESTRATION_GUIDE,
+)
+
+from soothe.config.constants import (
+    DEFAULT_EXECUTE_TIMEOUT,
+    DEFAULT_MAX_ITERATIONS,
+)
+from soothe.config.env import (
+    _ENV_VAR_RE,
+    SOOTHE_HOME,
+    _expand_env_in_config,
+    _resolve_env,
+    _resolve_provider_env,
+)
+from soothe.config.models import (
+    AgentConfig,
+    AutopilotConfig,
+    ComplexityThresholds,
+    ConsoleLoggingConfig,
+    DurabilityProtocolConfig,
+    EmbeddingProfile,
+    FileLoggingConfig,
+    HttpRequestsToolsConfig,
+    LLMRateLimitConfig,
+    LoopCheckpointConfig,
+    LoopConcurrencyConfig,
+    LoopToolOutputConfig,
+    MCPServerConfig,
+    MemUConfig,
+    ModelProviderConfig,
+    ModelRouter,
+    ObservabilityConfig,
+    PersistenceConfig,
+    PlannerProtocolConfig,
+    PlanPromptLedgerConfig,
+    PolicyProtocolConfig,
+    ProtocolsConfig,
+    RouterProfile,
+    SecurityConfig,
+    StrangeLoopConfig,
+    SubagentConfig,
+    ThreadLoggingConfig,
+    ToolConfig,
+    ToolsConfig,
+    VectorStoreProviderConfig,
+    VectorStoreRouter,
+    WebSearchConfig,
+)
+from soothe.config.reload import (
+    DEFAULT_CONFIG_PATH,
+    DEFAULT_DAEMON_CONFIG_PATH,
+    ConfigReloadCallback,
+    ConfigReloadEvent,
+    ConfigWatcher,
+    get_config_watcher,
+    start_config_watcher,
+    stop_config_watcher,
+)
+from soothe.config.settings import SootheConfig
+
+__all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_DAEMON_CONFIG_PATH",
+    "DEFAULT_MAX_ITERATIONS",
+    "DEFAULT_EXECUTE_TIMEOUT",
+    "SOOTHE_HOME",
+    "_DEFAULT_SYSTEM_PROMPT",
+    "_ENV_VAR_RE",
+    "_MEDIUM_SYSTEM_PROMPT",
+    "_SIMPLE_SYSTEM_PROMPT",
+    "_TOOL_ORCHESTRATION_GUIDE",
+    "AgentConfig",
+    "AutopilotConfig",
+    "ConfigReloadCallback",
+    "ConfigReloadEvent",
+    "ConfigWatcher",
+    "get_config_watcher",
+    "start_config_watcher",
+    "stop_config_watcher",
+    "StrangeLoopConfig",
+    "ComplexityThresholds",
+    "ConsoleLoggingConfig",
+    "DurabilityProtocolConfig",
+    "EmbeddingProfile",
+    "FileLoggingConfig",
+    "HttpRequestsToolsConfig",
+    "LLMRateLimitConfig",
+    "LoopCheckpointConfig",
+    "LoopConcurrencyConfig",
+    "LoopToolOutputConfig",
+    "MCPServerConfig",
+    "MemUConfig",
+    "ModelProviderConfig",
+    "ModelRouter",
+    "RouterProfile",
+    "ObservabilityConfig",
+    "PersistenceConfig",
+    "PlanPromptLedgerConfig",
+    "PlannerProtocolConfig",
+    "PolicyProtocolConfig",
+    "ProtocolsConfig",
+    "SecurityConfig",
+    "SootheConfig",
+    "SubagentConfig",
+    "ThreadLoggingConfig",
+    "ToolConfig",
+    "ToolsConfig",
+    "VectorStoreProviderConfig",
+    "VectorStoreRouter",
+    "WebSearchConfig",
+    "_resolve_env",
+    "_resolve_provider_env",
+    "_expand_env_in_config",
+]

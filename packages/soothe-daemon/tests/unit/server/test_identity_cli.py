@@ -503,7 +503,7 @@ class TestStatus:
 
     def test_status_enabled(self, monkeypatch, tmp_path: Path) -> None:
         """Status command shows service info when identity is enabled."""
-        from soothe.middleware.identity import IdentityConfig
+        from soothe_nano.middleware.identity import IdentityConfig
 
         from soothe_daemon.config import SootheDaemonConfig
 
@@ -528,7 +528,7 @@ class TestStatus:
 
     def test_status_disabled(self, monkeypatch, tmp_path: Path) -> None:
         """Status command shows disabled message when identity is off."""
-        from soothe.middleware.identity import IdentityConfig
+        from soothe_nano.middleware.identity import IdentityConfig
 
         from soothe_daemon.config import SootheDaemonConfig
 

@@ -27,6 +27,8 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from soothe_nano.protocols.planner import PlanContext
+
 import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import at import time
 from soothe.foundation.sloop.prompts import PromptBuilder
 from soothe.foundation.sloop.state.schemas import (
@@ -35,7 +37,6 @@ from soothe.foundation.sloop.state.schemas import (
     ToolCallHead,
 )
 from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.protocols.planner import PlanContext
 
 # ---------------------------------------------------------------------------
 # Fixture: realistic 2nd plan-assess input

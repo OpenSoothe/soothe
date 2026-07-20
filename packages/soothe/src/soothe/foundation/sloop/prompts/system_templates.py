@@ -209,7 +209,7 @@ EXECUTE_WORKSPACE_RULES_FRAGMENT = (
 
 def current_timestamp_iso() -> str:
     """Return current local-timezone ISO-8601 timestamp for system prompts."""
-    from soothe.utils.prompt_clock import local_timestamp_iso
+    from soothe_nano.utils.prompt_clock import local_timestamp_iso
 
     return local_timestamp_iso()
 

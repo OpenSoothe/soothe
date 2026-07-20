@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from soothe_nano.utils.llm.structured import StructuredOutputError
 
 from soothe.foundation.sloop.cognition.planner import (
     LLMPlanner,
     _parse_status_assessment_from_raw_message,
 )
 from soothe.foundation.sloop.state.schemas import StatusAssessment
-from soothe.utils.llm.structured import StructuredOutputError
 
 
 def test_parse_status_assessment_from_reasoning_content() -> None:

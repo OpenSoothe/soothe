@@ -58,8 +58,8 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
         # Try a minimal test call with timeout
         # Use asyncio.wait_for to enforce timeout
         from langchain_core.messages import HumanMessage
-        from soothe.middleware._utils import create_llm_call_metadata
-        from soothe.utils.llm.invoke_policy import (
+        from soothe_nano.middleware._utils import create_llm_call_metadata
+        from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )

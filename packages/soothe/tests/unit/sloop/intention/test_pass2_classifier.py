@@ -135,7 +135,7 @@ async def test_structured_output_error_retries_once() -> None:
     """StructuredOutputError should trigger one retry before fail-safe."""
     from unittest.mock import patch
 
-    from soothe.utils.llm.structured import StructuredOutputError
+    from soothe_nano.utils.llm.structured import StructuredOutputError
 
     mock_model = MagicMock()
     classifier = IntakePass2Classifier(model=mock_model)

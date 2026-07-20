@@ -16,7 +16,7 @@ def test_executor_langfuse_merge_run_name_with_trace_name(monkeypatch) -> None:
     cfg = SootheConfig(observability=obs)
     handler = MagicMock()
     monkeypatch.setattr(
-        "soothe.utils.observability.langfuse._merge.cached_langfuse_callback_handler",
+        "soothe_nano.utils.observability.langfuse._merge.cached_langfuse_callback_handler",
         lambda _c: handler,
     )
     ex = Executor(MagicMock(), config=cfg)
@@ -30,7 +30,7 @@ def test_executor_langfuse_merge_run_name_without_trace_name(monkeypatch) -> Non
     cfg = SootheConfig(observability=obs)
     handler = MagicMock()
     monkeypatch.setattr(
-        "soothe.utils.observability.langfuse._merge.cached_langfuse_callback_handler",
+        "soothe_nano.utils.observability.langfuse._merge.cached_langfuse_callback_handler",
         lambda _c: handler,
     )
     ex = Executor(MagicMock(), config=cfg)

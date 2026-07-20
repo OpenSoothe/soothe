@@ -9,6 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.protocols.planner import PlanContext, StepResult
+from soothe_nano.utils.text_preview import log_preview
+
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.sloop.cognition.phase import PlanPhase
@@ -29,17 +32,16 @@ from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 from soothe.foundation.sloop.state.working_memory import LoopWorkingMemory
 from soothe.foundation.sloop.utils.continue_keyword import is_continue_keyword
 from soothe.foundation.sloop.utils.reflection import _default_agent_decision
-from soothe.protocols.planner import PlanContext, StepResult
-from soothe.utils.text_preview import log_preview
 
 from .anchor_manager import CheckpointAnchorManager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+    from soothe_nano.protocols.core_agent import CoreAgentProtocol
+
     from soothe.config import SootheConfig
     from soothe.foundation.autopilot.engine.proposal_queue import ProposalQueue
-    from soothe.protocols.core_agent import CoreAgentProtocol
     from soothe.protocols.loop_planner import LoopPlannerProtocol
 
 logger = logging.getLogger(__name__)
@@ -181,14 +183,14 @@ class StrangeLoop:
         Yields:
             Tuples of (event_type, event_data) for progress updates
         """
-        from soothe.foundation.workspace.tool_path_resolution import (
-            filesystem_virtual_mode_from_soothe_config,
-        )
-        from soothe.skills.catalog import (
+        from soothe_nano.skills.catalog import (
             parse_slash_skill_user_line,
             try_expand_slash_skill_user_line,
         )
-        from soothe.skills.workspace_sync import sync_specific_skill_to_workspace
+        from soothe_nano.skills.workspace_sync import sync_specific_skill_to_workspace
+        from soothe_nano.workspace.tool_path_resolution import (
+            filesystem_virtual_mode_from_soothe_config,
+        )
 
         goal_user_submission: str | None = None
         skill_context: str | None = None

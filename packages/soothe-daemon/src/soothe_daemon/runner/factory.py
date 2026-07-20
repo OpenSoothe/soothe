@@ -9,7 +9,7 @@ from soothe.protocols.runner import LoopRunnerProtocol
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
-    from soothe.middleware.identity import IdentityRuntime
+    from soothe_nano.middleware.identity import IdentityRuntime
 
     from soothe_daemon.config import SootheDaemonConfig
 

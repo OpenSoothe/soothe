@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware, ContextT, ModelRequest, ModelResponse
 
+from soothe_nano.config.middleware_access import agent_middleware_config
+
 if TYPE_CHECKING:
     from soothe_nano.config import SootheConfig
 
@@ -77,7 +79,7 @@ class ProgressiveListingMiddleware(AgentMiddleware):
         if new_entries:
             listing_entries = [e for e in new_entries if e.name not in just_invoked]
 
-            ctx_limit = int(self._config.agent.loop.context_window_limit)
+            ctx_limit = int(agent_middleware_config(self._config).context_window_limit)
             budget_pct = float(self._config.progressive_skills.budget_pct)
             budget_chars = max(0, int(ctx_limit * budget_pct))
             per_entry_cap = int(self._config.progressive_skills.max_listing_chars_per_entry)
@@ -134,7 +136,7 @@ class ProgressiveListingMiddleware(AgentMiddleware):
         if not new_descriptors:
             return None
 
-        ctx_limit = int(self._config.agent.loop.context_window_limit)
+        ctx_limit = int(agent_middleware_config(self._config).context_window_limit)
         budget_pct = (
             float(self._config.progressive_mcp.budget_pct) if self._config.progressive_mcp else 0.02
         )
@@ -206,7 +208,7 @@ class ProgressiveListingMiddleware(AgentMiddleware):
         if not new_entries:
             return None
 
-        ctx_limit = int(self._config.agent.loop.context_window_limit)
+        ctx_limit = int(agent_middleware_config(self._config).context_window_limit)
         budget_chars = max(0, int(ctx_limit * float(pt.budget_pct)))
         text, _telemetry = format_tools_within_budget(
             new_entries,

@@ -160,8 +160,6 @@ async def search_deferred_skills(
     catalog_by_name: dict[str, SkillIndexEntry],
 ) -> list[SkillIndexEntry]:
     """Search deferred skills via substring and optional Skillify semantic backend."""
-    from soothe_nano.config import SootheConfig
-
     ps = _progressive_skills_settings(config)
     allowed_names = {entry.name for entry in deferred}
 
@@ -182,7 +180,8 @@ async def search_deferred_skills(
     try:
         from soothe_nano.skillify import start_skillify_service
 
-        if not isinstance(config, SootheConfig):
+        # Accept soothe.config.SootheConfig or soothe_nano.config.SootheConfig
+        if not hasattr(config, "progressive_skills"):
             return substring
         service = await start_skillify_service(config)
     except Exception:
@@ -232,11 +231,9 @@ async def search_deferred_skills(
 
 def latest_human_text(state: dict) -> str | None:
     """Return text from the most recent human message in agent state."""
-    from soothe_nano.utils.loop_messages import LoopHumanMessage
-
     messages = state.get("messages") or []
     for msg in reversed(messages):
-        if not isinstance(msg, (HumanMessage, LoopHumanMessage)):
+        if not isinstance(msg, HumanMessage):
             continue
         content = msg.content
         if isinstance(content, str):

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from soothe.foundation.security.policy import (
+from soothe_nano.security.policy import (
     PERMISSIVE_POLICY,
     READONLY_POLICY,
     SANDBOX_POLICY,

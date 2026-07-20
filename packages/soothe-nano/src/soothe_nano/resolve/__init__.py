@@ -103,8 +103,7 @@ def resolve_planner(
 ) -> PlannerProtocol | None:
     """Resolve planner protocol for Coding CoreAgent.
 
-    StrangeLoop's ``LLMPlanner`` lives in full ``soothe``. Inject via
-    ``AgentBuilder.build(planner=...)`` when a planner is required.
+    ``LLMPlanner`` lives in full ``soothe``. Inject via ``AgentBuilder.build(planner=...)``.
     """
     del config, model
     return None

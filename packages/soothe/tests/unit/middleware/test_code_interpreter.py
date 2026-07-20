@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
+from soothe_nano.middleware.code_interpreter import CodeInterpreterMiddleware
 
 from soothe.config import SootheConfig
-from soothe.middleware.code_interpreter import CodeInterpreterMiddleware
 
 pytest.importorskip("langchain_quickjs")
 
@@ -127,7 +127,7 @@ def test_no_config_uses_defaults() -> None:
 
 def test_middleware_stack_skips_code_interpreter_without_ptc_allowlist() -> None:
     """Enabled CI with empty allowlist must not mount middleware (IG-506)."""
-    from soothe.middleware._builder import build_soothe_middleware_stack
+    from soothe_nano.middleware._builder import build_soothe_middleware_stack
 
     config = SootheConfig(
         agent={

@@ -9,13 +9,13 @@ results) still surfaces prior tool usage to the trigger registry.
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-from soothe.config import SootheConfig
-from soothe.middleware import SystemPromptMiddleware
-from soothe.middleware.system_prompt import (
+from soothe_nano.middleware import SystemPromptMiddleware
+from soothe_nano.middleware.system_prompt import (
     RECENT_TOOL_MESSAGE_WINDOW,
     RECENT_TOOL_NAME_CAP,
 )
+
+from soothe.config import SootheConfig
 
 
 def _mw() -> SystemPromptMiddleware:

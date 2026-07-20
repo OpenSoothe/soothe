@@ -1,12 +1,8 @@
-"""Declarative configuration for Soothe agents.
-
-All public names are re-exported here so that ``from soothe_nano.config import X``
-continues to work after the module was split into a package.
-"""
+"""Declarative configuration for Soothe Nano (Coding CoreAgent)."""
 
 from soothe_nano.config.constants import (
     DEFAULT_EXECUTE_TIMEOUT,
-    DEFAULT_STRANGE_LOOP_MAX_ITERATIONS,
+    DEFAULT_MAX_ITERATIONS,
 )
 from soothe_nano.config.env import (
     _ENV_VAR_RE,
@@ -17,16 +13,13 @@ from soothe_nano.config.env import (
 )
 from soothe_nano.config.models import (
     AgentConfig,
-    AutopilotConfig,
-    ComplexityThresholds,
     ConsoleLoggingConfig,
+    CoreAgentMiddlewareConfig,
     DurabilityProtocolConfig,
     EmbeddingProfile,
     FileLoggingConfig,
     HttpRequestsToolsConfig,
     LLMRateLimitConfig,
-    LoopCheckpointConfig,
-    LoopConcurrencyConfig,
     LoopToolOutputConfig,
     MCPServerConfig,
     MemUConfig,
@@ -35,12 +28,10 @@ from soothe_nano.config.models import (
     ObservabilityConfig,
     PersistenceConfig,
     PlannerProtocolConfig,
-    PlanPromptLedgerConfig,
     PolicyProtocolConfig,
     ProtocolsConfig,
     RouterProfile,
     SecurityConfig,
-    StrangeLoopConfig,
     SubagentConfig,
     ThreadLoggingConfig,
     ToolConfig,
@@ -67,10 +58,12 @@ from soothe_nano.prompts.system_templates import (
     _TOOL_ORCHESTRATION_GUIDE,
 )
 
+NanoConfig = SootheConfig
+
 __all__ = [
     "DEFAULT_CONFIG_PATH",
     "DEFAULT_DAEMON_CONFIG_PATH",
-    "DEFAULT_STRANGE_LOOP_MAX_ITERATIONS",
+    "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_EXECUTE_TIMEOUT",
     "SOOTHE_HOME",
     "_DEFAULT_SYSTEM_PROMPT",
@@ -79,23 +72,19 @@ __all__ = [
     "_SIMPLE_SYSTEM_PROMPT",
     "_TOOL_ORCHESTRATION_GUIDE",
     "AgentConfig",
-    "AutopilotConfig",
     "ConfigReloadCallback",
     "ConfigReloadEvent",
     "ConfigWatcher",
     "get_config_watcher",
     "start_config_watcher",
     "stop_config_watcher",
-    "StrangeLoopConfig",
-    "ComplexityThresholds",
+    "CoreAgentMiddlewareConfig",
     "ConsoleLoggingConfig",
     "DurabilityProtocolConfig",
     "EmbeddingProfile",
     "FileLoggingConfig",
     "HttpRequestsToolsConfig",
     "LLMRateLimitConfig",
-    "LoopCheckpointConfig",
-    "LoopConcurrencyConfig",
     "LoopToolOutputConfig",
     "MCPServerConfig",
     "MemUConfig",
@@ -104,12 +93,12 @@ __all__ = [
     "RouterProfile",
     "ObservabilityConfig",
     "PersistenceConfig",
-    "PlanPromptLedgerConfig",
     "PlannerProtocolConfig",
     "PolicyProtocolConfig",
     "ProtocolsConfig",
     "SecurityConfig",
     "SootheConfig",
+    "NanoConfig",
     "SubagentConfig",
     "ThreadLoggingConfig",
     "ToolConfig",

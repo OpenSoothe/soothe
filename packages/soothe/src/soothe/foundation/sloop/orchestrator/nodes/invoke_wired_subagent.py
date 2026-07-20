@@ -156,7 +156,7 @@ async def _run_intake_only_runnable(
     wire bridge so ``emit_progress`` posts to a queue drained concurrently for live
     orphan-card activity. Stream ``values`` (or ``ainvoke``) for the final state.
     """
-    from soothe.utils.progress import reset_wire_bridge, set_wire_bridge
+    from soothe_nano.utils.progress import reset_wire_bridge, set_wire_bridge
 
     input_state = {"messages": [HumanMessage(content=goal_text)]}
     queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()

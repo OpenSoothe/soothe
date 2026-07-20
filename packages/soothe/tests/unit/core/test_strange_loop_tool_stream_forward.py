@@ -193,7 +193,7 @@ def test_curated_subagent_wire_custom_forwarded() -> None:
 
 def test_browser_use_step_wire_custom_forwarded() -> None:
     """browser_use steps must be foundation-registered or orphan cards stay empty."""
-    import soothe.subagents.browser_use.events  # noqa: F401
+    import soothe_nano.subagents.browser_use.events  # noqa: F401
 
     chunk = (
         (),
@@ -213,7 +213,7 @@ def test_browser_use_step_wire_custom_forwarded() -> None:
 
 def test_academic_research_step_wire_custom_forwarded() -> None:
     """academic_research wire customs must forward like deep_research for orphan cards."""
-    import soothe.subagents.academic_research.events  # noqa: F401
+    import soothe_nano.subagents.academic_research.events  # noqa: F401
 
     chunk = (
         (),

@@ -508,7 +508,7 @@ def _pool_worker_body(
                 heartbeat_thread: threading.Thread | None = None
 
                 async def _stream() -> None:
-                    from soothe.middleware._stream_turn_overrides import stream_turn_overrides
+                    from soothe_nano.middleware._stream_turn_overrides import stream_turn_overrides
 
                     with stream_turn_overrides(
                         model=req.model,

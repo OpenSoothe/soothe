@@ -27,6 +27,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from soothe_nano.protocols.planner import GoalDirective
+
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.foundation.autopilot.engine.models import (
     Finding,
@@ -36,7 +38,6 @@ from soothe.foundation.autopilot.engine.models import (
 )
 from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
 from soothe.foundation.sloop.state.schemas import PlanResult
-from soothe.protocols.planner import GoalDirective
 
 from ._runner_shared import StreamChunk, _custom
 

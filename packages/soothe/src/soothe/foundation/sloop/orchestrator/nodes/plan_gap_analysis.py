@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe_nano.utils.llm.structured import StructuredOutputError
+
 from soothe.foundation.sloop.goal_text import resolve_planning_goal
-from soothe.utils.llm.structured import StructuredOutputError
 
 from ..runtime_context import LoopRuntimeContext
 

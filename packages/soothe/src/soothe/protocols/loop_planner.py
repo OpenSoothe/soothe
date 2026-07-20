@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+from soothe_nano.protocols.planner import PlanContext
+
 from soothe.foundation.sloop.state.schemas import (
     ContinuationAssessment,
     LoopState,
     PlanResult,
     StatusAssessment,
 )
-from soothe.protocols.planner import PlanContext
 
 
 @runtime_checkable

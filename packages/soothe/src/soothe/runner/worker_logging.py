@@ -10,15 +10,16 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from soothe.config.settings import SootheConfig
-from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
-from soothe.logging.context import set_thread_id
-from soothe.logging.setup import (
+from soothe_nano.logging.context import set_thread_id
+from soothe_nano.logging.setup import (
     ThreadFormatter,
     _has_rotating_file_handler_at,
     _package_loggers,
     _suppress_noisy_third_party,
 )
+
+from soothe.config.settings import SootheConfig
+from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
 
 _LOG = logging.getLogger(__name__)
 

@@ -1,7 +1,3 @@
-"""Shim (IG-668): alias ``logging/context`` to ``soothe_nano.logging.context``."""
+"""Re-export CoreAgent logging context from soothe_nano."""
 
-import sys
-from importlib import import_module
-
-_nano = import_module("soothe_nano.logging.context")
-sys.modules[__name__] = _nano
+from soothe_nano.logging.context import *  # noqa: F403

@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 from soothe_nano.utils.text_preview import log_preview, preview_first
 from soothe_nano.utils.url_validation import validate_url
 
-logger = logging.getLogger("soothe.toolkits._internal.wizsearch")
+logger = logging.getLogger("soothe_nano.toolkits._internal.wizsearch")
 
 _LOG_QUERY_CHARS = 120
 _LOG_URL_CHARS = 160

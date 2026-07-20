@@ -7,7 +7,7 @@ import logging
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from soothe.backends.persistence.display_store import get_display_card_store
+from soothe_nano.backends.persistence.display_store import get_display_card_store
 from soothe_sdk.display.card_ledger import (
     CardMutation,
     InMemoryCardLedger,

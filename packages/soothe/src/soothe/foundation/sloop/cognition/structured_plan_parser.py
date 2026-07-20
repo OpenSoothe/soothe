@@ -6,15 +6,15 @@ import logging
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, Field
-
-from soothe.config.models import StructuredPlanConfig
-from soothe.foundation.sloop.cognition.parser import parse_plan_from_text
-from soothe.protocols.planner import Plan, PlanStep
-from soothe.utils.llm.invoke_policy import (
+from soothe_nano.protocols.planner import Plan, PlanStep
+from soothe_nano.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe.utils.llm.structured import invoke_structured_chat_typed
+from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
+
+from soothe.config.models import StructuredPlanConfig
+from soothe.foundation.sloop.cognition.parser import parse_plan_from_text
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -61,9 +61,9 @@ async def parse_plan_structured(
 ) -> Plan:
     """Use LLM structured output to extract a plan from planner markdown/text."""
     from langchain_core.messages import HumanMessage
+    from soothe_nano.utils.observability.langfuse import SootheLangfuse
 
     from soothe.foundation.sloop.prompts.fragments import STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT
-    from soothe.utils.observability.langfuse import SootheLangfuse
 
     prompt = STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT.format(
         goal=goal,

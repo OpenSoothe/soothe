@@ -8,10 +8,10 @@ from unittest.mock import MagicMock
 from langchain.agents.middleware.types import ModelRequest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from soothe_nano.middleware.progressive_listing import ProgressiveListingMiddleware
+from soothe_nano.middleware.progressive_tools import ProgressiveToolMiddleware
 
 from soothe.config import SootheConfig
-from soothe.middleware.progressive_listing import ProgressiveListingMiddleware
-from soothe.middleware.progressive_tools import ProgressiveToolMiddleware
 
 
 def test_prepares_available_tools_block_with_deferred_entries() -> None:

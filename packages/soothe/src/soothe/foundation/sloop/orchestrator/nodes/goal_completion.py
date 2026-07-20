@@ -23,9 +23,9 @@ from soothe.foundation.sloop.utils.messages import (
     LoopHumanMessage,
     last_ledger_ai_content,
 )
-from soothe.foundation.sloop.utils.stream_normalize import (
+from soothe.foundation.sloop.utils.stream_normalize import iter_messages_for_act_aggregation
+from soothe.utils.goal_completion_stream import (
     GoalCompletionAccumState,
-    iter_messages_for_act_aggregation,
     resolve_goal_completion_text,
     update_goal_completion_from_message,
 )
