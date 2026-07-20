@@ -6,7 +6,7 @@ import pytest
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import StructuredTool
 from langgraph.types import Command
-from soothe_nano.mcp.budget import MCPToolDescriptor
+from soothe_nano.mcp.mcp_utils import MCPToolDescriptor
 from soothe_nano.middleware.mcp_activation import MCPActivationMiddleware
 
 

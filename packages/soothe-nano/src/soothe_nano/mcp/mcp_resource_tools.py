@@ -1,7 +1,7 @@
-"""Synthetic tools for MCP resource listing and reading.
+"""Synthetic MCP tools for resource listing and reading.
 
-These are langchain ``StructuredTool`` instances that wrap ``MCPRegistry``
-methods, allowing the agent to discover and read MCP resources at runtime.
+These tools are injected into the model tool catalog so resource discovery
+and reads follow the same execution flow as ordinary tools.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from soothe_nano.mcp.registry import MCPRegistry
+    from soothe_nano.mcp.mcp_registry import MCPRegistry
 
 
 class _ListResourcesInput(BaseModel):
@@ -44,10 +44,10 @@ def _format_resource_list(
         if not resources:
             lines.append("  (no resources)")
             continue
-        for r in resources:
-            name = r.get("name") or r.get("uri", "?")
-            desc = r.get("description") or ""
-            mime = r.get("mime_type") or ""
+        for resource in resources:
+            name = resource.get("name") or resource.get("uri", "?")
+            desc = resource.get("description") or ""
+            mime = resource.get("mime_type") or ""
             line = f"  - {name}"
             if desc:
                 line += f": {desc}"
@@ -58,62 +58,46 @@ def _format_resource_list(
 
 
 def mcp_resources_list_tool(registry: MCPRegistry) -> StructuredTool:
-    """Create a synthetic tool that lists available MCP resources.
-
-    Args:
-        registry: ``MCPRegistry`` instance for querying resources.
-
-    Returns:
-        ``StructuredTool`` for listing MCP resources.
-    """
+    """Create a synthetic tool that lists available MCP resources."""
 
     async def _list(server: str | None = None) -> str:
         try:
             all_resources = registry.resources()
-        except Exception as e:  # noqa: BLE001
-            return f"Error listing resources: {e}"
+        except Exception as error:  # noqa: BLE001
+            return f"Error listing resources: {error}"
         return _format_resource_list(all_resources, server)
 
     return StructuredTool.from_function(
         coroutine=_list,
         name="mcp_resources_list",
-        description="List available MCP resources from connected servers. Optionally filter by server name.",
+        description=(
+            "List available MCP resources from connected servers. Optionally filter by server name."
+        ),
         args_schema=_ListResourcesInput,
     )
 
 
 def mcp_resources_read_tool(registry: MCPRegistry) -> StructuredTool:
-    """Create a synthetic tool that reads an MCP resource.
-
-    Args:
-        registry: ``MCPRegistry`` instance for reading resources.
-
-    Returns:
-        ``StructuredTool`` for reading MCP resources.
-    """
+    """Create a synthetic tool that reads an MCP resource."""
 
     async def _read(server: str, uri: str) -> str:
         try:
             content = await registry.read_resource(server, uri)
-        except Exception as e:  # noqa: BLE001
-            return f"Error reading resource: {e}"
+        except Exception as error:  # noqa: BLE001
+            return f"Error reading resource: {error}"
         return str(content)
 
     return StructuredTool.from_function(
         coroutine=_read,
         name="mcp_resources_read",
-        description="Read an MCP resource by server name and URI. Use mcp_resources_list to discover available resources.",
+        description=(
+            "Read an MCP resource by server name and URI. "
+            "Use mcp_resources_list to discover available resources."
+        ),
         args_schema=_ReadResourceInput,
     )
 
 
 def create_mcp_resource_tools(registry: MCPRegistry) -> list[StructuredTool]:
-    """Create both MCP resource tools for injection into the agent.
-
-    Args:
-        registry: ``MCPRegistry`` instance.
-
-    Returns:
-        List of ``[mcp_resources_list_tool, mcp_resources_read_tool]``.
-    """
+    """Create both MCP resource tools for injection into the agent."""
     return [mcp_resources_list_tool(registry), mcp_resources_read_tool(registry)]

@@ -2,11 +2,11 @@
 
 from langchain_core.tools import StructuredTool
 
-from soothe_nano.mcp.budget import MCPToolDescriptor
-from soothe_nano.mcp.progressive_registry import (
+from soothe_nano.mcp.mcp_progressive import (
     ProgressiveMCPRegistry,
     merge_mcp_activation,
 )
+from soothe_nano.mcp.mcp_utils import MCPToolDescriptor
 
 
 def _descriptor(name: str, *, essential: bool = False) -> MCPToolDescriptor:

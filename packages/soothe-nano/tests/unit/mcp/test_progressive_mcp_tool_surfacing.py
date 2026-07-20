@@ -14,8 +14,8 @@ from langchain_core.tools import StructuredTool
 from langgraph.types import Command
 
 from soothe_nano.config import SootheConfig
-from soothe_nano.mcp.budget import MCPToolDescriptor
-from soothe_nano.mcp.discovery_tools import create_search_mcp_tools_tool
+from soothe_nano.mcp.mcp_progressive import create_search_mcp_tools_tool
+from soothe_nano.mcp.mcp_utils import MCPToolDescriptor
 from soothe_nano.middleware import build_soothe_middleware_stack
 from soothe_nano.middleware.mcp_activation import MCPActivationMiddleware
 from soothe_nano.middleware.progressive_listing import ProgressiveListingMiddleware

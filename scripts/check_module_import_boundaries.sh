@@ -99,9 +99,20 @@ run_check "${PKG_DIR}/soothe-nano/src" \
   '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' \
   "soothe-nano must not import soothe/cli/daemon"
 
-# Rule 3c: soothe-nano must not contain L2/L3 orchestration symbols
-# (StrangeLoop, Autopilot, Context Engine, cron config, intake-only catalog,
-# goal-synthesis / step-wire hooks, agent-loop iteration constants).
+# Rule 3b.1: other packages must not import private soothe-nano middleware modules.
+run_check "${PKG_DIR}/soothe/src" \
+  '^\s*(from|import)\s+soothe_nano\.middleware\._' \
+  "soothe must not import soothe-nano private middleware modules"
+run_check "${PKG_DIR}/soothe-daemon/src" \
+  '^\s*(from|import)\s+soothe_nano\.middleware\._' \
+  "soothe-daemon must not import soothe-nano private middleware modules"
+run_check "${PKG_DIR}/soothe-plugins/src" \
+  '^\s*(from|import)\s+soothe_nano\.middleware\._' \
+  "soothe-plugins must not import soothe-nano private middleware modules"
+
+# Rule 3c: soothe-nano must not contain host-only symbols
+# (StrangeLoop/Autopilot/Sloop/ContextEngine orchestration, intake-only catalog,
+# goal-synthesis hooks, agent-loop constants, auth-identity runtime/middleware).
 # Docstrings that explicitly say "no StrangeLoop" are allowed.
 check_nano_l2_l3_ban() {
   local path="${PKG_DIR}/soothe-nano/src"
@@ -112,7 +123,7 @@ check_nano_l2_l3_ban() {
   local matches
   matches=$(
     rg --line-number --glob '*.py' \
-      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|goal_completion|INTAKE_ONLY|intake_only|intake/slash|soothe_goal_synthesis|soothe_step_subagent|DEFAULT_MAX_ITERATIONS|DEFAULT_MAX_TOOL_CALLS_PER_STEP|Agent Loop Iteration|DaemonHeartbeat|ConfigReloaded|DAEMON_HEARTBEAT|CONFIG_RELOADED|GlobalInputHistory' \
+      'StrangeLoop|STRANGE_LOOP_|AUTOPILOT_|AutopilotConfig|CronConfig|StrangeLoopConfig|ContextEngineConfig|InternalAutopilot|context_engine|sloop|goal_completion|INTAKE_ONLY|intake_only|intake/slash|soothe_goal_synthesis|soothe_step_subagent|DEFAULT_MAX_ITERATIONS|DEFAULT_MAX_TOOL_CALLS_PER_STEP|Agent Loop Iteration|DaemonHeartbeat|ConfigReloaded|DAEMON_HEARTBEAT|CONFIG_RELOADED|GlobalInputHistory|IdentityConfig|IdentityRuntime|IdentityMiddleware|ThreadContextProvider|AKSKConfig|TokenConfig|identity_runtime' \
       "$path" 2>/dev/null \
       | grep -v -E 'no StrangeLoop|without StrangeLoop|not StrangeLoop|Pure CoreAgent|batteries-included Coding CoreAgent \(no |no host intake policy' \
       || true

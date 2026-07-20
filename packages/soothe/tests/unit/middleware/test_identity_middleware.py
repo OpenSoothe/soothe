@@ -13,15 +13,15 @@ from unittest.mock import MagicMock
 import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
-from soothe_nano.middleware.identity import (
+
+from soothe.foundation.identity.middleware import IdentityMiddleware
+from soothe.foundation.identity.models import TokenClaims
+from soothe.foundation.identity.runtime import (
     AKSKConfig,
     IdentityConfig,
-    IdentityMiddleware,
     IdentityRuntime,
     TokenConfig,
 )
-
-from soothe.foundation.identity.models import TokenClaims
 
 # ---------------------------------------------------------------------------
 # Helpers

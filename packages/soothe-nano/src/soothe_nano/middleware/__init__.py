@@ -1,7 +1,6 @@
 """Soothe middleware modules.
 
 This package provides middleware implementations:
-- IdentityMiddleware: JWT token validation / external identity resolution (RFC-307)
 - SoothePolicyMiddleware: Enforce PolicyProtocol on tool/subagent calls
 - SystemPromptMiddleware: Dynamic prompt adjustment based on classification
 - LLMRateLimitMiddleware: Rate limiting at LLM level, not thread level
@@ -33,10 +32,8 @@ if TYPE_CHECKING:
     from soothe_nano.middleware._builder import (
         build_soothe_middleware_stack as build_soothe_middleware_stack,
     )
-    from soothe_nano.middleware._utils import create_llm_call_metadata as create_llm_call_metadata
     from soothe_nano.middleware.code_interpreter import CodeInterpreterMiddleware
     from soothe_nano.middleware.filesystem import SootheFilesystemMiddleware
-    from soothe_nano.middleware.identity import IdentityMiddleware
     from soothe_nano.middleware.mcp_activation import MCPActivationMiddleware
     from soothe_nano.middleware.model_call_profiler import (
         InnerModelCallProfilerMiddleware,
@@ -52,13 +49,12 @@ if TYPE_CHECKING:
     from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
     from soothe_nano.middleware.tool_optimization_middleware import ToolOptimizationMiddleware
     from soothe_nano.middleware.workspace_context import WorkspaceContextMiddleware
+    from soothe_nano.utils.llm.observability import (
+        create_llm_call_metadata as create_llm_call_metadata,
+    )
 
 __all__ = [
-    "AKSKConfig",
     "CodeInterpreterMiddleware",
-    "IdentityConfig",
-    "IdentityMiddleware",
-    "IdentityRuntime",
     "InnerModelCallProfilerMiddleware",
     "LLMCallProfilerMiddleware",
     "LLMRateLimitMiddleware",
@@ -68,8 +64,6 @@ __all__ = [
     "SoothePolicyMiddleware",
     "SystemPromptMiddleware",
     "PerTurnModelMiddleware",
-    "TokenConfig",
-    "ThreadContextProvider",
     "ToolTimeoutMiddleware",
     "ToolEnforcementMiddleware",
     "ToolOptimizationMiddleware",
@@ -82,7 +76,6 @@ __all__ = [
 ]
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
-    "AKSKConfig": ("soothe_nano.middleware.identity", "AKSKConfig"),
     "build_soothe_middleware_stack": (
         "soothe_nano.middleware._builder",
         "build_soothe_middleware_stack",
@@ -91,14 +84,14 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "soothe_nano.middleware.code_interpreter",
         "CodeInterpreterMiddleware",
     ),
-    "create_llm_call_metadata": ("soothe_nano.middleware._utils", "create_llm_call_metadata"),
+    "create_llm_call_metadata": (
+        "soothe_nano.utils.llm.observability",
+        "create_llm_call_metadata",
+    ),
     "SootheFilesystemMiddleware": (
         "soothe_nano.middleware.filesystem",
         "SootheFilesystemMiddleware",
     ),
-    "IdentityConfig": ("soothe_nano.middleware.identity", "IdentityConfig"),
-    "IdentityMiddleware": ("soothe_nano.middleware.identity", "IdentityMiddleware"),
-    "IdentityRuntime": ("soothe_nano.middleware.identity", "IdentityRuntime"),
     "LLMRateLimitMiddleware": (
         "soothe_deepagents.middleware.llm_rate_limit",
         "LLMRateLimitMiddleware",
@@ -114,8 +107,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "soothe_nano.middleware.progressive_listing",
         "ProgressiveListingMiddleware",
     ),
-    "TokenConfig": ("soothe_nano.middleware.identity", "TokenConfig"),
-    "ThreadContextProvider": ("soothe_nano.middleware.identity", "ThreadContextProvider"),
     "ToolTimeoutMiddleware": (
         "soothe_deepagents.middleware.tool_timeout",
         "ToolTimeoutMiddleware",

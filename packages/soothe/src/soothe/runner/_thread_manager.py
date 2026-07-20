@@ -18,7 +18,7 @@ from soothe.config import SOOTHE_HOME
 from soothe.logging import ThreadLogger
 
 if TYPE_CHECKING:
-    from soothe_nano.mcp.loader import MCPSessionManager
+    from soothe_nano.mcp.mcp_registry import MCPRegistry
     from soothe_sdk.protocols.durability import DurabilityProtocol, ThreadInfo
 
     from soothe.config import SootheConfig
@@ -93,7 +93,7 @@ class ThreadContextManager:
     - RunArtifactStore (artifacts)
     """
 
-    _mcp_managers: ClassVar[dict[str, MCPSessionManager]] = {}
+    _mcp_managers: ClassVar[dict[str, MCPRegistry]] = {}
 
     def __init__(
         self,
@@ -603,25 +603,26 @@ class ThreadContextManager:
             return
 
         try:
-            from soothe_nano.mcp.loader import load_mcp_tools
+            from soothe_nano.mcp.mcp_registry import MCPRegistry
 
-            _, manager = await load_mcp_tools(
-                self._config.mcp_servers,
+            registry = MCPRegistry(
+                servers=self._config.mcp_servers,
                 secret_resolver=self._config.secret_resolver,
             )
-            self._mcp_managers[thread_id] = manager
+            await registry.initialize()
+            self._mcp_managers[thread_id] = registry
             logger.info("Loaded MCP sessions for thread %s", thread_id)
         except Exception:
             logger.warning("Failed to load MCP sessions for thread %s", thread_id, exc_info=True)
 
     async def _cleanup_mcp_session(self, thread_id: str) -> None:
         """Clean up MCP sessions associated with a thread."""
-        manager = self._mcp_managers.pop(thread_id, None)
-        if manager is None:
+        registry = self._mcp_managers.pop(thread_id, None)
+        if registry is None:
             return
 
         try:
-            await manager.cleanup()
+            await registry.shutdown(deadline_seconds=5.0)
             logger.info("Cleaned up MCP sessions for thread %s", thread_id)
         except Exception:
             logger.warning(

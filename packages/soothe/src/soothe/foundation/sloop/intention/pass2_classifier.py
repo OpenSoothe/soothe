@@ -217,7 +217,7 @@ class IntakePass2Classifier:
         goal_trace: Any | None = None,
     ) -> dict[str, Any]:
         """Build RunnableConfig with Langfuse tracing."""
-        from soothe_nano.middleware._utils import create_llm_call_metadata
+        from soothe_nano.utils.llm.observability import create_llm_call_metadata
 
         if goal_trace is not None:
             return goal_trace.intake_invoke_config(

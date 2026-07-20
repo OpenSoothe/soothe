@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe_nano.mcp.tools import (
+from soothe_nano.mcp.mcp_resource_tools import (
     _format_resource_list,
     create_mcp_resource_tools,
     mcp_resources_list_tool,

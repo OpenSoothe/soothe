@@ -88,7 +88,7 @@ class RoleRoutingMiddleware(AgentMiddleware):
         self._models_by_role: dict[ModelRole, BaseChatModel] = {}
 
     def _model_for_role(self, role: ModelRole) -> BaseChatModel:
-        from soothe_nano.middleware._router_profile_override import get_stream_router_profile
+        from soothe_nano.utils.runtime import get_stream_router_profile
 
         overlay = get_stream_router_profile()
         # Overlay can change between turns on a reused runner; do not reuse

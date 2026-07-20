@@ -277,7 +277,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._identity_service is None:
             return None
 
-        from soothe_nano.middleware.identity import IdentityRuntime
+        from soothe.foundation.identity.runtime import IdentityRuntime
 
         return IdentityRuntime(
             service=self._identity_service,
@@ -752,7 +752,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # RFC-412: Initialize MCP registry (daemon-singleton)
             if self._config.mcp_servers:
                 try:
-                    from soothe_nano.mcp.registry import MCPRegistry
+                    from soothe_nano.mcp.mcp_registry import MCPRegistry
 
                     self._mcp_registry = MCPRegistry(
                         servers=self._config.mcp_servers,

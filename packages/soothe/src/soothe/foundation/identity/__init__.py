@@ -25,6 +25,7 @@ from soothe.foundation.identity.identity_service import (
     IdentityService,
     initialize_identity_tables_sync,
 )
+from soothe.foundation.identity.middleware import IdentityMiddleware
 from soothe.foundation.identity.models import (
     AKSKPair,
     AuthResult,
@@ -34,6 +35,13 @@ from soothe.foundation.identity.models import (
     TokenInfo,
     TokenRefreshResult,
     User,
+)
+from soothe.foundation.identity.runtime import (
+    AKSKConfig,
+    IdentityConfig,
+    IdentityRuntime,
+    ThreadContextProvider,
+    TokenConfig,
 )
 from soothe.foundation.identity.tokens import (
     JWTManager,
@@ -72,6 +80,13 @@ __all__ = [
     "resolve_jwt_key",
     "generate_jwt_key",
     "save_jwt_key",
+    # Runtime and middleware wiring
+    "IdentityMiddleware",
+    "IdentityRuntime",
+    "IdentityConfig",
+    "TokenConfig",
+    "AKSKConfig",
+    "ThreadContextProvider",
     # Service
     "IdentityService",
     "initialize_identity_tables_sync",

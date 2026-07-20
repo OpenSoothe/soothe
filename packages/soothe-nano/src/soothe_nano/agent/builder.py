@@ -34,8 +34,6 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.planner import PlannerProtocol
     from soothe_sdk.protocols.policy import PolicyProtocol
 
-    from soothe_nano.middleware.identity import IdentityRuntime
-
 from langchain_core.language_models import BaseChatModel  # noqa: E402
 
 _FILESYSTEM_TOOLS_NO_EXECUTE: list[FsToolName] = [
@@ -79,7 +77,6 @@ class AgentBuilder:
         planner: PlannerProtocol | None = None,
         policy: PolicyProtocol | None = None,
         mcp_registry: Any | None = None,
-        identity_runtime: IdentityRuntime | None = None,
         core_agent_kind: str | None = None,
     ) -> CodingCoreAgent:
         from soothe_deepagents import create_deep_agent
@@ -125,11 +122,11 @@ class AgentBuilder:
                 all_tools.extend(mcp_tools)
 
             if registry.deferred_tools():
-                from soothe_nano.mcp.discovery_tools import create_search_mcp_tools_tool
+                from soothe_nano.mcp.mcp_progressive import create_search_mcp_tools_tool
 
                 all_tools.append(create_search_mcp_tools_tool())
 
-            from soothe_nano.mcp.tools import create_mcp_resource_tools
+            from soothe_nano.mcp.mcp_resource_tools import create_mcp_resource_tools
 
             all_tools.extend(create_mcp_resource_tools(registry))
 
@@ -173,7 +170,6 @@ class AgentBuilder:
             self._config,
             resolved_policy,
             mcp_registry=registry,
-            identity_runtime=identity_runtime,
         )
         if all_tools:
             from soothe_nano.middleware.mcp_activation import MCPActivationMiddleware
@@ -417,7 +413,6 @@ def create_nano_agent(
     memory_store: MemoryProtocol | None = None,
     planner: PlannerProtocol | None = None,
     policy: PolicyProtocol | None = None,
-    identity_runtime: IdentityRuntime | None = None,
     core_agent_kind: str | None = None,
 ) -> CodingCoreAgent:
     return AgentBuilder(config).build(
@@ -432,6 +427,5 @@ def create_nano_agent(
         memory_store=memory_store,
         planner=planner,
         policy=policy,
-        identity_runtime=identity_runtime,
         core_agent_kind=core_agent_kind,
     )

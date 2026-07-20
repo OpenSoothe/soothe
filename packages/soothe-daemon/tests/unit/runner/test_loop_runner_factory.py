@@ -146,7 +146,7 @@ class TestLoopRunnerFactoryIdentityValidation:
     """Identity + worker_pool mode is rejected at factory construction."""
 
     def test_raises_when_identity_enabled_with_worker_pool(self) -> None:
-        from soothe_nano.middleware.identity import IdentityConfig, IdentityRuntime
+        from soothe.foundation.identity.runtime import IdentityConfig, IdentityRuntime
 
         daemon_cfg = SootheDaemonConfig()
         daemon_cfg.worker_pool = WorkerPoolConfig(enabled=True)

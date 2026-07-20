@@ -192,16 +192,16 @@ async def test_archive_thread_cleans_mcp(mock_durability, mock_config):
     """Archive cleans up MCP sessions."""
     manager = ThreadContextManager(mock_durability, mock_config)
 
-    mock_mcp_manager = MagicMock()
-    mock_mcp_manager.cleanup = AsyncMock()
-    ThreadContextManager._mcp_managers["test123"] = mock_mcp_manager
+    mock_registry = MagicMock()
+    mock_registry.shutdown = AsyncMock()
+    ThreadContextManager._mcp_managers["test123"] = mock_registry
 
     try:
         await manager.archive_thread("test123")
     finally:
         ThreadContextManager._mcp_managers.pop("test123", None)
 
-    mock_mcp_manager.cleanup.assert_called_once()
+    mock_registry.shutdown.assert_called_once_with(deadline_seconds=5.0)
     mock_durability.archive_thread.assert_called_once_with("test123")
 
 
@@ -211,16 +211,16 @@ async def test_suspend_thread_cleans_mcp(mock_durability, mock_config):
     mock_durability.suspend_thread = AsyncMock()
     manager = ThreadContextManager(mock_durability, mock_config)
 
-    mock_mcp_manager = MagicMock()
-    mock_mcp_manager.cleanup = AsyncMock()
-    ThreadContextManager._mcp_managers["test123"] = mock_mcp_manager
+    mock_registry = MagicMock()
+    mock_registry.shutdown = AsyncMock()
+    ThreadContextManager._mcp_managers["test123"] = mock_registry
 
     try:
         await manager.suspend_thread("test123")
     finally:
         ThreadContextManager._mcp_managers.pop("test123", None)
 
-    mock_mcp_manager.cleanup.assert_called_once()
+    mock_registry.shutdown.assert_called_once_with(deadline_seconds=5.0)
     mock_durability.suspend_thread.assert_called_once_with("test123")
 
 

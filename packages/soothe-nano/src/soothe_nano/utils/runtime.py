@@ -7,13 +7,29 @@ from __future__ import annotations
 
 import contextvars
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, TypeAlias
 
 # Minimum length for UUID-like suffix in directory names
 _UUID_SUFFIX_MIN_LENGTH = 8
 
 current_run_dir: contextvars.ContextVar[Path | None] = contextvars.ContextVar(
     "current_run_dir", default=None
+)
+_StreamModelToken: TypeAlias = contextvars.Token[tuple[str, dict[str, Any]] | None]
+_StreamProfileToken: TypeAlias = contextvars.Token[str | None]
+
+_stream_model_override: contextvars.ContextVar[tuple[str, dict[str, Any]] | None] = (
+    contextvars.ContextVar(
+        "soothe_stream_model_override",
+        default=None,
+    )
+)
+_stream_router_profile: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "soothe_stream_router_profile",
+    default=None,
 )
 
 
@@ -26,6 +42,60 @@ def _get_virtual_home() -> Path:
     from soothe_nano.workspace import get_virtual_home
 
     return get_virtual_home()
+
+
+def attach_stream_model_override(
+    spec: str | None,
+    params: dict[str, Any] | None,
+) -> _StreamModelToken:
+    """Attach model override for the current asyncio task."""
+    if not spec:
+        return _stream_model_override.set(None)
+    return _stream_model_override.set((spec.strip(), dict(params or {})))
+
+
+def reset_stream_model_override(token: _StreamModelToken) -> None:
+    """Restore previous model override for this task."""
+    _stream_model_override.reset(token)
+
+
+def get_stream_model_override() -> tuple[str, dict[str, Any]] | None:
+    """Return ``(spec, params)`` when a stream model override is active."""
+    return _stream_model_override.get()
+
+
+def attach_stream_router_profile(name: str | None) -> _StreamProfileToken:
+    """Attach a router profile for the current asyncio task."""
+    if not name or not str(name).strip():
+        return _stream_router_profile.set(None)
+    return _stream_router_profile.set(str(name).strip())
+
+
+def reset_stream_router_profile(token: _StreamProfileToken) -> None:
+    """Restore the previous stream router profile."""
+    _stream_router_profile.reset(token)
+
+
+def get_stream_router_profile() -> str | None:
+    """Return active stream router profile name, if any."""
+    return _stream_router_profile.get()
+
+
+@contextmanager
+def stream_turn_overrides(
+    *,
+    model: str | None = None,
+    model_params: dict[str, Any] | None = None,
+    router_profile: str | None = None,
+) -> Iterator[None]:
+    """Attach per-turn stream model/profile overrides; always reset on exit."""
+    model_token = attach_stream_model_override(model, model_params)
+    profile_token = attach_stream_router_profile(router_profile)
+    try:
+        yield
+    finally:
+        reset_stream_router_profile(profile_token)
+        reset_stream_model_override(model_token)
 
 
 def _ensure_dir_with_backend(path: Path) -> Path:

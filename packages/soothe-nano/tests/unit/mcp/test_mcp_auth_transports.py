@@ -17,9 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from soothe_nano.config.models import MCPAuthHeaders, MCPServerConfig, MCPTransport
-from soothe_nano.mcp.auth import interpolate_auth_headers
-from soothe_nano.mcp.registry import MCPRegistry
-from soothe_nano.mcp.transports import make_connection_spec
+from soothe_nano.mcp.mcp_config import interpolate_auth_headers, make_connection_spec
+from soothe_nano.mcp.mcp_registry import MCPRegistry
 
 
 def _secret_resolver(value: str) -> str:

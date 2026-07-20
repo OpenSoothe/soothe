@@ -448,7 +448,7 @@ class SootheConfig(BaseSettings):
         if not self.mcp_builtins:
             return self
 
-        from soothe_nano.mcp.builtin_servers import resolve_mcp_builtins
+        from soothe_nano.mcp.mcp_config import resolve_mcp_builtins
 
         resolved = resolve_mcp_builtins(self.mcp_builtins)
         existing_names = {s.name for s in self.mcp_servers}
@@ -858,7 +858,7 @@ class SootheConfig(BaseSettings):
             return self.embedding_model
 
         router = self.router
-        from soothe_nano.middleware._router_profile_override import get_stream_router_profile
+        from soothe_nano.utils.runtime import get_stream_router_profile
 
         overlay = get_stream_router_profile()
         if overlay:

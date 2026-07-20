@@ -49,7 +49,7 @@ class SootheLangfuse:
                 extra_metadata=extra_metadata,
             )
 
-        from soothe_nano.middleware._utils import create_llm_call_metadata
+        from soothe_nano.utils.llm.observability import create_llm_call_metadata
 
         metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
         if extra_metadata:

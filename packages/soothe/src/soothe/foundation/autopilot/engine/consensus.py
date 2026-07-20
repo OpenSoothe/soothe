@@ -58,11 +58,11 @@ async def evaluate_goal_completion(
         goal_description, response_text, evidence_summary, success_criteria
     )
     try:
-        from soothe_nano.middleware._utils import create_llm_call_metadata
         from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
             llm_rate_limit_config_from,
         )
+        from soothe_nano.utils.llm.observability import create_llm_call_metadata
 
         invoke_config = {
             "metadata": create_llm_call_metadata(

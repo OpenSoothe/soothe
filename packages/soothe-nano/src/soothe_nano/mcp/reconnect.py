@@ -66,7 +66,10 @@ async def schedule_reconnect(
     cancel_reconnect(name)
 
     async def reconnect_loop():
-        from soothe_nano.mcp.events import emit_server_connect_failed, emit_server_reconnecting
+        from soothe_nano.mcp.mcp_events import (
+            emit_server_connect_failed,
+            emit_server_reconnecting,
+        )
 
         mcp_registry = registry  # type: MCPRegistry
         conn = mcp_registry._connections.get(name)

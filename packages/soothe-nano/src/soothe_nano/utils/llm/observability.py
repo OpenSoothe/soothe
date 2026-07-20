@@ -16,6 +16,22 @@ from langchain_core.outputs import ChatGeneration, LLMResult
 logger = logging.getLogger(__name__)
 
 
+def create_llm_call_metadata(
+    purpose: str,
+    component: str,
+    phase: str = "unknown",
+    **extra: Any,
+) -> dict[str, Any]:
+    """Create standardized metadata for LLM calls."""
+    metadata = {
+        "soothe_call_purpose": purpose,
+        "soothe_call_component": component,
+        "soothe_call_phase": phase,
+    }
+    metadata.update(extra)
+    return metadata
+
+
 def _coerce_int(value: Any) -> int | None:
     if value is None:
         return None
@@ -294,6 +310,7 @@ def bind_llm_token_observability(model: BaseChatModel | None) -> BaseChatModel |
 
 
 __all__ = [
+    "create_llm_call_metadata",
     "SootheLLMTokenUsageCallbackHandler",
     "SootheTokenUsageChatModel",
     "bind_llm_token_observability",

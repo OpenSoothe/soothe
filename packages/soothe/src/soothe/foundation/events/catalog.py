@@ -1141,7 +1141,7 @@ import soothe_nano.subagents.deep_research.events as _deep_research_events  # no
 import soothe_nano.subagents.explore.events as _explore_events  # noqa: F401, E402
 
 _importlib.import_module("soothe.subagents.veritas.events")
-import soothe_nano.mcp.events as _mcp_events  # noqa: F401, E402
+import soothe_nano.mcp.mcp_events as _mcp_events  # noqa: F401, E402
 
 # Subagent/MCP modules register into soothe_nano.events.REGISTRY; merge into soothe.
 from soothe_nano.events.catalog import REGISTRY as _NANO_EVENT_REGISTRY  # noqa: E402

@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
+    from soothe.foundation.identity.runtime import IdentityRuntime
     from soothe.runner import SootheRunner
-    from soothe_nano.middleware.identity import IdentityRuntime
 
 logger = logging.getLogger(__name__)
 

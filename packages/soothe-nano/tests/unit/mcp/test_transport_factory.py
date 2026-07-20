@@ -3,7 +3,7 @@
 from datetime import timedelta
 
 from soothe_nano.config.models import MCPAuthHeaders, MCPServerConfig, MCPTransport
-from soothe_nano.mcp.transports import make_connection_spec
+from soothe_nano.mcp.mcp_config import make_connection_spec
 
 
 class TestMakeConnectionSpec:

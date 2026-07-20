@@ -49,11 +49,11 @@ __all__ = [
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from soothe_nano.middleware.identity import IdentityRuntime
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
     from soothe_sdk.protocols.memory import MemoryProtocol
 
     from soothe.foundation.coreagent.coding.lazy import LazyCoreAgent
+    from soothe.foundation.identity.runtime import IdentityRuntime
 
 logger = logging.getLogger(__name__)
 

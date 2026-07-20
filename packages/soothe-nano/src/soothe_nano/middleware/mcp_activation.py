@@ -17,20 +17,19 @@ from langchain.agents.middleware.types import (
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
-from soothe_nano.mcp.budget import MCPToolDescriptor
-from soothe_nano.mcp.name_utils import is_mcp_tool_name, parse_mcp_tool_name
-from soothe_nano.mcp.progressive_registry import (
+from soothe_nano.mcp.mcp_progressive import (
     ProgressiveMCPRegistry,
     merge_mcp_activation,
     snapshot_mcp_activation,
 )
+from soothe_nano.mcp.mcp_utils import MCPToolDescriptor, is_mcp_tool_name, parse_mcp_tool_name
 from soothe_nano.middleware.tool_name_hints import (
     extract_tool_message_content,
     is_invalid_tool_error,
 )
 
 if TYPE_CHECKING:
-    from soothe_nano.mcp.registry import MCPRegistry
+    from soothe_nano.mcp.mcp_registry import MCPRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +129,7 @@ class MCPActivationMiddleware(AgentMiddleware):
             return f"No deferred MCP tools matched query={query!r}."
         self._progressive.mark_promoted(activation, [m.name for m in matches])
         try:
-            from soothe_nano.mcp.events import emit_tool_search_queried
+            from soothe_nano.mcp.mcp_events import emit_tool_search_queried
 
             emit_tool_search_queried(query=query, match_count=len(matches))
         except Exception:  # noqa: BLE001

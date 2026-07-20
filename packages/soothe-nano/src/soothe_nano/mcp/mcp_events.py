@@ -1,8 +1,4 @@
-"""MCP event definitions (RFC-412).
-
-Self-registered via register_event() following IG-052 pattern.
-Events are defined here and registration happens at module load time.
-"""
+"""MCP event definitions and emitters."""
 
 from __future__ import annotations
 
@@ -15,7 +11,6 @@ from soothe_nano.events.catalog import register_event
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    # Event types (registered at load time)
     "MCPServerConnectedEvent",
     "MCPServerDisconnectedEvent",
     "MCPServerReconnectingEvent",
@@ -26,7 +21,6 @@ __all__ = [
     "MCPResourceReadEvent",
     "MCPPromptInvokedEvent",
     "MCPToolSearchQueriedEvent",
-    # Emit functions
     "emit_server_connected",
     "emit_server_disconnected",
     "emit_server_reconnecting",
@@ -39,8 +33,6 @@ __all__ = [
     "emit_tool_search_queried",
 ]
 
-
-# Event type constants
 EVENT_SERVER_CONNECTED = "soothe.mcp.server.connected"
 EVENT_SERVER_DISCONNECTED = "soothe.mcp.server.disconnected"
 EVENT_SERVER_RECONNECTING = "soothe.mcp.server.reconnecting"
@@ -54,8 +46,6 @@ EVENT_TOOL_SEARCH_QUERIED = "soothe.mcp.tool_search.queried"
 
 
 class MCPServerConnectedEvent(SootheEvent):
-    """Event: MCP server connected successfully."""
-
     type: str = EVENT_SERVER_CONNECTED
     server: str
     transport: str
@@ -66,8 +56,6 @@ class MCPServerConnectedEvent(SootheEvent):
 
 
 class MCPServerDisconnectedEvent(SootheEvent):
-    """Event: MCP server disconnected."""
-
     type: str = EVENT_SERVER_DISCONNECTED
     server: str
     reason: str
@@ -75,8 +63,6 @@ class MCPServerDisconnectedEvent(SootheEvent):
 
 
 class MCPServerReconnectingEvent(SootheEvent):
-    """Event: MCP server reconnecting."""
-
     type: str = EVENT_SERVER_RECONNECTING
     server: str
     attempt: int
@@ -84,8 +70,6 @@ class MCPServerReconnectingEvent(SootheEvent):
 
 
 class MCPServerConnectFailedEvent(SootheEvent):
-    """Event: MCP server connect failed."""
-
     type: str = EVENT_SERVER_CONNECT_FAILED
     server: str
     transport: str
@@ -95,18 +79,14 @@ class MCPServerConnectFailedEvent(SootheEvent):
 
 
 class MCPListChangedEvent(SootheEvent):
-    """Event: MCP server list_changed notification."""
-
     type: str = EVENT_LIST_CHANGED
     server: str
-    kind: str  # "tools" | "prompts" | "resources"
+    kind: str
     old_count: int
     new_count: int
 
 
 class MCPToolInvokedEvent(SootheEvent):
-    """Event: MCP tool invoked."""
-
     type: str = EVENT_TOOL_INVOKED
     server: str
     tool: str
@@ -116,8 +96,6 @@ class MCPToolInvokedEvent(SootheEvent):
 
 
 class MCPToolTimeoutEvent(SootheEvent):
-    """Event: MCP tool timeout."""
-
     type: str = EVENT_TOOL_TIMEOUT
     server: str
     tool: str
@@ -125,8 +103,6 @@ class MCPToolTimeoutEvent(SootheEvent):
 
 
 class MCPResourceReadEvent(SootheEvent):
-    """Event: MCP resource read."""
-
     type: str = EVENT_RESOURCE_READ
     server: str
     uri: str
@@ -135,8 +111,6 @@ class MCPResourceReadEvent(SootheEvent):
 
 
 class MCPPromptInvokedEvent(SootheEvent):
-    """Event: MCP prompt invoked."""
-
     type: str = EVENT_PROMPT_INVOKED
     server: str
     prompt: str
@@ -144,14 +118,11 @@ class MCPPromptInvokedEvent(SootheEvent):
 
 
 class MCPToolSearchQueriedEvent(SootheEvent):
-    """Event: MCP tool search queried."""
-
     type: str = EVENT_TOOL_SEARCH_QUERIED
     query: str
     match_count: int
 
 
-# Internal event bus for cross-middleware coordination
 _internal_subscribers: list = []
 
 
@@ -198,17 +169,12 @@ def _register_events() -> None:
             MCPToolSearchQueriedEvent,
             summary_template="MCP tool search '{query}' ({match_count} matches)",
         )
-
         logger.debug("[MCP] Events registered with core catalog")
     except ImportError:
         logger.warning("[MCP] Could not register events (core catalog not available)")
 
 
-# Register events at module load time
 _register_events()
-
-
-# Emit functions (for use by MCPRegistry and other modules)
 
 
 def emit_server_connected(
@@ -219,7 +185,6 @@ def emit_server_connected(
     resource_count: int,
     latency_ms: float,
 ) -> MCPServerConnectedEvent:
-    """Emit server connected event."""
     event = MCPServerConnectedEvent(
         server=server,
         transport=transport,
@@ -237,12 +202,7 @@ def emit_server_disconnected(
     reason: str,
     was_clean: bool,
 ) -> MCPServerDisconnectedEvent:
-    """Emit server disconnected event."""
-    event = MCPServerDisconnectedEvent(
-        server=server,
-        reason=reason,
-        was_clean=was_clean,
-    )
+    event = MCPServerDisconnectedEvent(server=server, reason=reason, was_clean=was_clean)
     _emit_internal(event)
     return event
 
@@ -252,12 +212,7 @@ def emit_server_reconnecting(
     attempt: int,
     backoff_s: float,
 ) -> MCPServerReconnectingEvent:
-    """Emit server reconnecting event."""
-    event = MCPServerReconnectingEvent(
-        server=server,
-        attempt=attempt,
-        backoff_s=backoff_s,
-    )
+    event = MCPServerReconnectingEvent(server=server, attempt=attempt, backoff_s=backoff_s)
     _emit_internal(event)
     return event
 
@@ -269,7 +224,6 @@ def emit_server_connect_failed(
     attempt: int,
     is_terminal: bool,
 ) -> MCPServerConnectFailedEvent:
-    """Emit server connect failed event."""
     event = MCPServerConnectFailedEvent(
         server=server,
         transport=transport,
@@ -287,13 +241,7 @@ def emit_list_changed(
     old_count: int,
     new_count: int,
 ) -> MCPListChangedEvent:
-    """Emit list changed event."""
-    event = MCPListChangedEvent(
-        server=server,
-        kind=kind,
-        old_count=old_count,
-        new_count=new_count,
-    )
+    event = MCPListChangedEvent(server=server, kind=kind, old_count=old_count, new_count=new_count)
     _emit_internal(event)
     return event
 
@@ -305,7 +253,6 @@ def emit_tool_invoked(
     success: bool,
     result_chars: int,
 ) -> MCPToolInvokedEvent:
-    """Emit tool invoked event."""
     event = MCPToolInvokedEvent(
         server=server,
         tool=tool,
@@ -322,12 +269,7 @@ def emit_tool_timeout(
     tool: str,
     timeout_s: float,
 ) -> MCPToolTimeoutEvent:
-    """Emit tool timeout event."""
-    event = MCPToolTimeoutEvent(
-        server=server,
-        tool=tool,
-        timeout_s=timeout_s,
-    )
+    event = MCPToolTimeoutEvent(server=server, tool=tool, timeout_s=timeout_s)
     _emit_internal(event)
     return event
 
@@ -338,13 +280,7 @@ def emit_resource_read(
     chars: int,
     latency_ms: float,
 ) -> MCPResourceReadEvent:
-    """Emit resource read event."""
-    event = MCPResourceReadEvent(
-        server=server,
-        uri=uri,
-        chars=chars,
-        latency_ms=latency_ms,
-    )
+    event = MCPResourceReadEvent(server=server, uri=uri, chars=chars, latency_ms=latency_ms)
     _emit_internal(event)
     return event
 
@@ -354,12 +290,7 @@ def emit_prompt_invoked(
     prompt: str,
     latency_ms: float,
 ) -> MCPPromptInvokedEvent:
-    """Emit prompt invoked event."""
-    event = MCPPromptInvokedEvent(
-        server=server,
-        prompt=prompt,
-        latency_ms=latency_ms,
-    )
+    event = MCPPromptInvokedEvent(server=server, prompt=prompt, latency_ms=latency_ms)
     _emit_internal(event)
     return event
 
@@ -368,11 +299,7 @@ def emit_tool_search_queried(
     query: str,
     match_count: int,
 ) -> MCPToolSearchQueriedEvent:
-    """Emit tool search queried event."""
-    event = MCPToolSearchQueriedEvent(
-        query=query,
-        match_count=match_count,
-    )
+    event = MCPToolSearchQueriedEvent(query=query, match_count=match_count)
     _emit_internal(event)
     return event
 
@@ -382,5 +309,5 @@ def _emit_internal(event: object) -> None:
     for subscriber in _internal_subscribers:
         try:
             subscriber(event)
-        except Exception as e:
-            logger.warning("[MCP] Event subscriber error: %s", e)
+        except Exception as error:
+            logger.warning("[MCP] Event subscriber error: %s", error)

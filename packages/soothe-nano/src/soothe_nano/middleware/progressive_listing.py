@@ -115,7 +115,7 @@ class ProgressiveListingMiddleware(AgentMiddleware):
         if not self._mcp_registry or not state:
             return None
 
-        from soothe_nano.mcp.progressive_registry import ProgressiveMCPRegistry
+        from soothe_nano.mcp.mcp_progressive import ProgressiveMCPRegistry
         from soothe_nano.middleware.mcp_activation import stash_mcp_activation_update
 
         core_names = frozenset(
@@ -152,7 +152,7 @@ class ProgressiveListingMiddleware(AgentMiddleware):
             else 20
         )
 
-        from soothe_nano.mcp.budget import format_mcp_tools_within_budget
+        from soothe_nano.mcp.mcp_utils import format_mcp_tools_within_budget
 
         text, _telemetry = format_mcp_tools_within_budget(
             new_descriptors,

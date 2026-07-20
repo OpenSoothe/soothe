@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from soothe_nano.mcp.auth import (
+from soothe_nano.mcp.mcp_config import (
     StaticHeadersProvider,
     interpolate_auth_headers,
 )

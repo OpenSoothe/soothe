@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from soothe_nano.middleware._router_profile_override import (
+from soothe_nano.utils.runtime import (
     attach_stream_router_profile,
     get_stream_router_profile,
     reset_stream_router_profile,
+    stream_turn_overrides,
 )
-from soothe_nano.middleware._stream_turn_overrides import stream_turn_overrides
 
 from soothe.config import SootheConfig
 
@@ -62,12 +62,12 @@ def test_stream_turn_overrides_sets_model_and_profile() -> None:
     cfg = _config_with_two_profiles()
     with stream_turn_overrides(model="openai:gpt-test", router_profile="local"):
         assert cfg.resolve_model("think") == "omlx:local-think"
-        from soothe_nano.middleware._model_override import get_stream_model_override
+        from soothe_nano.utils.runtime import get_stream_model_override
 
         assert get_stream_model_override() is not None
         assert get_stream_model_override()[0] == "openai:gpt-test"
     assert get_stream_router_profile() is None
-    from soothe_nano.middleware._model_override import get_stream_model_override
+    from soothe_nano.utils.runtime import get_stream_model_override
 
     assert get_stream_model_override() is None
 

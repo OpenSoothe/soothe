@@ -3,7 +3,7 @@
 import pytest
 
 from soothe_nano.config import SootheConfig
-from soothe_nano.mcp.builtin_servers import (
+from soothe_nano.mcp.mcp_config import (
     builtin_mcp_server_names,
     get_builtin_mcp_server,
     get_builtin_mcp_servers,

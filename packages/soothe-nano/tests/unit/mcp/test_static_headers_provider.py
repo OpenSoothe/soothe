@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe_nano.mcp.auth import StaticHeadersProvider
+from soothe_nano.mcp.mcp_config import StaticHeadersProvider
 
 
 class TestStaticHeadersProviderInit:

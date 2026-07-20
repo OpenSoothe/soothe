@@ -1,6 +1,6 @@
 """Unit tests for MCP budget formatter (RFC-412)."""
 
-from soothe_nano.mcp.budget import (
+from soothe_nano.mcp.mcp_utils import (
     MCPToolDescriptor,
     format_mcp_tools_within_budget,
 )

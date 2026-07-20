@@ -1,6 +1,6 @@
 """Unit tests for MCP name utilities (RFC-412)."""
 
-from soothe_nano.mcp.name_utils import (
+from soothe_nano.mcp.mcp_utils import (
     build_mcp_tool_name,
     is_mcp_tool_name,
     parse_mcp_tool_name,
