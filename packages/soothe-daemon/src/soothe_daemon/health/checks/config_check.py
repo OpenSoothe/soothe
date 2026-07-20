@@ -17,7 +17,7 @@ def _check_config_file(config: SootheConfig | None) -> CheckResult:
             message="No configuration loaded (optional for basic usage)",
             details={
                 "impact": "Cannot run config-driven checks",
-                "remediation": "Create ~/.soothe and add config/config.yml (see docs/user_guide.md)",
+                "remediation": "Create ~/.soothe and add config/nano.yml (see docs/user_guide.md)",
             },
         )
 
@@ -159,7 +159,7 @@ def _check_soothe_home() -> CheckResult:
             details={
                 "path": str(home),
                 "missing": missing,
-                "remediation": "Create ~/.soothe and add config/config.yml (see docs/user_guide.md)",
+                "remediation": "Create ~/.soothe and add config/nano.yml (see docs/user_guide.md)",
             },
         )
 

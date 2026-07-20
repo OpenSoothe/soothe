@@ -8748,6 +8748,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
+version = "0.7.24"
 source = { editable = "packages/soothe-deepagents" }
 dependencies = [
     { name = "langchain" },

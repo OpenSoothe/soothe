@@ -15,6 +15,9 @@ from soothe_nano.filesystem import (
     PathNotFoundError,
     PathTraversalError,
 )
+from soothe_deepagents.backends.protocol import (
+    GrepResult,
+)
 
 
 def example_basic_operations():
@@ -28,17 +31,16 @@ def example_basic_operations():
         # Write a file
         result = fs.write("hello.txt", "Hello, World!")
         print(f"Created: {result.path}")
-        print(f"Bytes written: {result.bytes_written}")
 
         # Read the file
         read_result = fs.read("hello.txt")
-        print(f"Content: {read_result.content}")
-        print(f"Is binary: {read_result.is_binary}")
+        print(f"Content: {read_result.file_data['content']}")
+        print(f"Encoding: {read_result.file_data['encoding']}")
 
         # Check file info
         info = fs.info("hello.txt")
-        print(f"Size: {info.size} bytes")
-        print(f"Modified: {info.modified_at}")
+        print(f"Size: {info['size']} bytes")
+        print(f"Modified: {info['modified_at']}")
 
         # List directory
         entries = fs.ls(".")
@@ -62,9 +64,8 @@ Line 5"""
 
         # Edit by string replacement
         edit_result = fs.edit("example.txt", "Line 3", "Modified Line 3")
-        print(f"Edited {edit_result.lines_changed} lines")
-        print(f"Old hash: {edit_result.old_hash}")
-        print(f"New hash: {edit_result.new_hash}")
+        print(f"Replacements: {edit_result.occurrences}")
+        print(f"Edited: {edit_result.path}")
 
         # Edit specific lines
         fs.edit_lines("example.txt", 4, 5, "New Line 4\nNew Line 5")
@@ -78,7 +79,7 @@ Line 5"""
         # Show final content
         final = fs.read("example.txt")
         print("Final content:")
-        print(final.content)
+        print(final.file_data["content"])
 
 
 def example_directories():
@@ -101,11 +102,11 @@ def example_directories():
         entries = fs.ls("project", include_info=True)
         print("Project structure:")
         for entry in entries:
-            type_str = "DIR" if entry.is_dir else "FILE"
-            print(f"  [{type_str}] {entry.path}")
+            type_str = "DIR" if entry["is_dir"] else "FILE"
+            print(f"  [{type_str}] {entry['path']}")
 
         # Copy directory
-        fs.copy("project/src", "project/src_backup", recursive=True)
+        fs.copy("project/src", "project/src_backup")
         print("Copied src to src_backup")
 
         # Move directory
@@ -152,7 +153,7 @@ def example_security():
         # Virtual mode: absolute paths become workspace-relative
         print("\nVirtual mode path resolution:")
         result = fs.read("/safe.txt")  # Resolves to workspace/safe.txt
-        print(f"Read via virtual absolute path: {result.content}")
+        print(f"Read via virtual absolute path: {result.file_data['content']}")
 
 
 def example_backup():
@@ -202,8 +203,8 @@ def example_search():
         # Glob search
         print("Python files:")
         glob_result = fs.glob("**/*.py")
-        for match in glob_result.matches:
-            print(f"  - {match}")
+        for m in glob_result.matches or []:
+            print(f"  - {m['path']}")
 
         # Grep search
         print("\nFiles containing 'def':")
@@ -214,8 +215,9 @@ def example_search():
         # Grep with content
         print("\nDetailed grep results:")
         detailed = fs.grep("def ", output_mode="content")
-        for match in detailed.matches:
-            print(f"  {match.path}:{match.line_number}: {match.line_content.strip()}")
+        assert isinstance(detailed, GrepResult)
+        for match in detailed.matches or []:
+            print(f"  {match['path']}:{match['line']}: {match['text'].strip()}")
 
 
 def example_error_handling():
@@ -266,7 +268,7 @@ def example_async():
 
             # Async read
             result = await fs.aread("async.txt")
-            print(f"Read asynchronously: {result.content}")
+            print(f"Read asynchronously: {result.file_data['content']}")
 
             # Async list
             entries = await fs.als(".")

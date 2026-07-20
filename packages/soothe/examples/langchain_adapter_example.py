@@ -34,11 +34,11 @@ def basic_usage():
 
         # Write a file
         result = fs.write("hello.txt", "Hello, World!")
-        print(f"Wrote {result.bytes_written} bytes to {result.path}")
+        print(f"Wrote to {result.path}")
 
         # Read the file
         read_result = fs.read("hello.txt")
-        print(f"Read content: {read_result.content}")
+        print(f"Read content: {read_result.file_data['content']}")
 
         # List directory
         entries = fs.ls(".")
@@ -46,8 +46,8 @@ def basic_usage():
 
         # Get file info
         info = fs.info("hello.txt")
-        print(f"File size: {info.size} bytes")
-        print(f"Is directory: {info.is_dir}")
+        print(f"File size: {info['size']} bytes")
+        print(f"Is directory: {info['is_dir']}")
 
 
 def using_factory():
@@ -67,7 +67,8 @@ def using_factory():
 
         # Search for files
         glob_result = fs.glob("*.json")
-        print(f"JSON files: {glob_result.matches}")
+        json_paths = [m["path"] for m in glob_result.matches or []]
+        print(f"JSON files: {json_paths}")
 
         # Search content
         grep_result = fs.grep("example")
@@ -85,17 +86,17 @@ def edit_operations():
         # Create initial file
         fs.write("config.txt", "database = localhost\nport = 5432")
         print("Initial content:")
-        print(fs.read("config.txt").content)
+        print(fs.read("config.txt").file_data["content"])
 
         # Edit file
         fs.edit("config.txt", "localhost", "db.example.com")
         print("\nAfter edit:")
-        print(fs.read("config.txt").content)
+        print(fs.read("config.txt").file_data["content"])
 
         # Edit specific lines
         fs.edit_lines("config.txt", 1, 2, "host = db.example.com\nport = 5432")
         print("\nAfter line edit:")
-        print(fs.read("config.txt").content)
+        print(fs.read("config.txt").file_data["content"])
 
 
 def directory_operations():
@@ -118,7 +119,7 @@ def directory_operations():
         entries = fs.ls("src", include_info=True)
         print("Source directory contents:")
         for entry in entries:
-            print(f"  {entry.path} (dir: {entry.is_dir})")
+            print(f"  {entry['path']} (dir: {entry['is_dir']})")
 
         # Copy directory
         fs.copy("src/components/Button.tsx", "src/components/Input.tsx")
@@ -143,7 +144,8 @@ def advanced_search():
 
         # Glob patterns
         py_files = fs.glob("**/*.py")
-        print(f"Python files: {py_files.matches}")
+        py_paths = [m["path"] for m in py_files.matches or []]
+        print(f"Python files: {py_paths}")
 
         # Grep for patterns
         import_files = fs.grep("^import", output_mode="content")
@@ -164,7 +166,7 @@ def context_manager():
         with LangChainAdapter(underlying) as fs:
             fs.write("temp.txt", "temporary content")
             print(f"File exists in context: {fs.exists('temp.txt')}")
-            print(f"File content: {fs.read('temp.txt').content}")
+            print(f"File content: {fs.read('temp.txt').file_data['content']}")
 
         # File still exists after context (adapter doesn't delete)
         print(f"File exists after context: {underlying.exists('temp.txt')}")

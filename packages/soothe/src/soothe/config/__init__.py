@@ -70,6 +70,8 @@ from soothe.config.ownership import (
 from soothe.config.reload import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_DAEMON_CONFIG_PATH,
+    DEFAULT_NANO_CONFIG_PATH,
+    DEFAULT_SOOTHE_CONFIG_PATH,
     ConfigReloadCallback,
     ConfigReloadEvent,
     ConfigWatcher,
@@ -81,6 +83,8 @@ from soothe.config.settings import SootheConfig
 
 __all__ = [
     "DEFAULT_CONFIG_PATH",
+    "DEFAULT_NANO_CONFIG_PATH",
+    "DEFAULT_SOOTHE_CONFIG_PATH",
     "DEFAULT_DAEMON_CONFIG_PATH",
     "DEFAULT_MAX_ITERATIONS",
     "DEFAULT_EXECUTE_TIMEOUT",

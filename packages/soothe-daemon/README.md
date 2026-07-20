@@ -25,7 +25,7 @@ soothed stop
 
 ## Configuration
 
-- `~/.soothe/config/config.yml` — Agent config (`SootheConfig`)
+- `~/.soothe/config/nano.yml` — Agent config (`SootheConfig`)
 - `~/.soothe/config/daemon.yml` — Daemon config (`SootheDaemonConfig`)
 
 ## Dependencies

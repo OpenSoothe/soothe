@@ -74,7 +74,7 @@ class SootheDaemon(DaemonHandlersMixin):
     """Background daemon that runs ``SootheRunner`` and serves TUI clients.
 
     Args:
-        config: Agent ``SootheConfig`` (in-proc agent core, ``config.yml``).
+        config: Agent ``SootheConfig`` (in-proc agent core, ``nano.yml`` [+ ``soothe.yml``]).
         daemon_config: Daemon-server ``SootheDaemonConfig`` (transports,
             worker pool, distributed runner, ``daemon.yml``).
         handle_sigint_shutdown: Whether SIGINT should trigger daemon shutdown.
@@ -98,6 +98,11 @@ class SootheDaemon(DaemonHandlersMixin):
         self._config = config or SootheConfig()
         self._daemon_config = daemon_config or SootheDaemonConfig()
         self._handle_sigint_shutdown = handle_sigint_shutdown
+
+        # Host kill_process guards (pidfile + production WS port) — nano hook
+        from soothe.security.daemon_kill_guards import ensure_daemon_kill_guards_installed
+
+        ensure_daemon_kill_guards_installed()
 
         # Shared persistence manager — PostgreSQL deferred until start() after pool pre-open
         self._persistence_manager: StrangeLoopCheckpointPersistenceManager | None = None
@@ -367,7 +372,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Enable hot-reload for agent and/or daemon config files.
 
         Args:
-            agent_config_path: Path to agent config.yml (defaults to ~/.soothe/config/config.yml).
+            agent_config_path: Path to nano.yml (defaults to ~/.soothe/config/nano.yml).
             daemon_config_path: Path to daemon.yml (defaults to ~/.soothe/config/daemon.yml).
             validate_before_reload: Whether to validate config before swapping (default True).
                 When True, the loaded config undergoes Pydantic validation before being swapped

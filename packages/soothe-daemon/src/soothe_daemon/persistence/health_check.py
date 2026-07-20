@@ -155,7 +155,7 @@ def _check_filesystem_permissions() -> CheckResult:
             status=CheckStatus.ERROR,
             message=f"SOOTHE_HOME not found: {home}",
             details={
-                "remediation": "Create ~/.soothe with config/config.yml (see docs/user_guide.md)",
+                "remediation": "Create ~/.soothe with config/nano.yml (see docs/user_guide.md)",
             },
         )
 

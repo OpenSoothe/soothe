@@ -22,9 +22,12 @@ from soothe.config.env import SOOTHE_HOME
 
 _logger = logging.getLogger(__name__)
 
-# Default paths for config files
-DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
+# Default paths for split config layout (IG-674)
+DEFAULT_NANO_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "nano.yml"
+DEFAULT_SOOTHE_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "soothe.yml"
 DEFAULT_DAEMON_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "daemon.yml"
+# Backward-compatible alias for the nano-owned agent base file
+DEFAULT_CONFIG_PATH = DEFAULT_NANO_CONFIG_PATH
 
 # Default debounce interval in seconds
 DEFAULT_DEBOUNCE_SECONDS = 1.0
@@ -227,7 +230,7 @@ class ConfigWatcher:
 
     Example:
         ```python
-        from soothe.config.reload import ConfigWatcher, DEFAULT_CONFIG_PATH
+        from soothe.config.reload import ConfigWatcher, DEFAULT_NANO_CONFIG_PATH
         from soothe.config import SootheConfig
 
 
@@ -240,11 +243,11 @@ class ConfigWatcher:
 
         watcher = ConfigWatcher()
 
-        # Watch agent config
+        # Watch nano agent config
         watcher.watch_config(
-            path=DEFAULT_CONFIG_PATH,
+            path=DEFAULT_NANO_CONFIG_PATH,
             config_type="agent",
-            loader=lambda: SootheConfig.from_yaml_file(str(DEFAULT_CONFIG_PATH)),
+            loader=lambda: SootheConfig.from_yaml_file(str(DEFAULT_NANO_CONFIG_PATH)),
             callback=on_reload,
         )
 
@@ -301,8 +304,8 @@ class ConfigWatcher:
         """Register a config file to watch.
 
         Args:
-            path: Path to the config file (e.g., config.yml or daemon.yml).
-            config_type: Type identifier for the config ('agent' or 'daemon').
+            path: Path to the config file (e.g., nano.yml, soothe.yml, or daemon.yml).
+            config_type: Type identifier for the config ('agent', 'host', or 'daemon').
             loader: Callable that loads and returns the config instance.
                 Called on initial load and subsequent reloads.
             callback: Optional callback to invoke when config is reloaded.
@@ -724,7 +727,7 @@ def start_config_watcher(
     `SootheDaemon.enable_config_reload()` instead.
 
     Args:
-        agent_config_path: Path to agent config.yml (defaults to ~/.soothe/config/config.yml).
+        agent_config_path: Path to nano.yml (defaults to ~/.soothe/config/nano.yml).
         daemon_config_path: Path to daemon.yml (defaults to ~/.soothe/config/daemon.yml).
         callback: Optional callback to invoke when either config is reloaded.
         debounce_seconds: Minimum seconds between reloads for the same file.
@@ -741,7 +744,7 @@ def start_config_watcher(
         if _global_watcher is not None and _global_watcher.is_running:
             raise RuntimeError("Config watcher already running; call stop_config_watcher() first")
 
-        agent_path = Path(agent_config_path or DEFAULT_CONFIG_PATH)
+        agent_path = Path(agent_config_path or DEFAULT_NANO_CONFIG_PATH)
         daemon_path = Path(daemon_config_path or DEFAULT_DAEMON_CONFIG_PATH)
 
         _global_watcher = ConfigWatcher(debounce_seconds=debounce_seconds)
@@ -796,9 +799,19 @@ def get_config_watcher() -> ConfigWatcher | None:
 
 
 def _load_agent_config(path: Path) -> Any:
-    """Load agent config from YAML file with env expansion."""
+    """Load agent config from YAML with env expansion.
+
+    When ``path`` is the default nano file and ``soothe.yml`` is present beside
+    it, compose via ``from_split_yaml_files``. Otherwise load the single file.
+    """
     from soothe.config.settings import SootheConfig
 
+    soothe_sibling = path.parent / "soothe.yml"
+    if path.name == "nano.yml" and soothe_sibling.exists():
+        return SootheConfig.from_split_yaml_files(
+            nano_path=str(path),
+            soothe_path=str(soothe_sibling),
+        )
     return SootheConfig.from_yaml_file(str(path))
 
 
@@ -818,6 +831,8 @@ def _load_daemon_config(path: Path) -> Any:
 
 __all__ = [
     "DEFAULT_CONFIG_PATH",
+    "DEFAULT_NANO_CONFIG_PATH",
+    "DEFAULT_SOOTHE_CONFIG_PATH",
     "DEFAULT_DAEMON_CONFIG_PATH",
     "DEFAULT_DEBOUNCE_SECONDS",
     "ConfigReloadEvent",

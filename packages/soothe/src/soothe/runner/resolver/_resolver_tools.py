@@ -386,6 +386,9 @@ def _resolve_single_tool_group_uncached(
     if name == "execution":
         from soothe_nano.toolkits.execution import build_execution_toolkit
 
+        from soothe.security.daemon_kill_guards import ensure_daemon_kill_guards_installed
+
+        ensure_daemon_kill_guards_installed()
         resolved_cwd = str(resolve_effective_tool_workspace(config))
         return build_execution_toolkit(
             config=config,
@@ -409,6 +412,9 @@ def _resolve_single_tool_group_uncached(
         # Host-execution tools do not require a sandbox backend.
         from soothe_nano.toolkits.execution import build_execution_toolkit
 
+        from soothe.security.daemon_kill_guards import ensure_daemon_kill_guards_installed
+
+        ensure_daemon_kill_guards_installed()
         resolved_cwd = str(resolve_effective_tool_workspace(config))
         all_tools = build_execution_toolkit(
             config=config,

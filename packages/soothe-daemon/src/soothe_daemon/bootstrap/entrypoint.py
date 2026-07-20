@@ -29,7 +29,7 @@ def run_daemon(
     """Start the daemon in the current process (blocking).
 
     Args:
-        config: Agent ``SootheConfig`` (in-proc agent core, ``config.yml``).
+        config: Agent ``SootheConfig`` (in-proc agent core, ``nano.yml`` [+ ``soothe.yml``]).
         daemon_config: Daemon-server ``SootheDaemonConfig`` (transports,
             worker pool, distributed runner, ``daemon.yml``).
         detached: Whether daemon is running as a detached background process.
@@ -77,7 +77,7 @@ def main() -> None:
         "--soothe-config",
         type=str,
         default=None,
-        help="Path to config.yml (SootheConfig); overrides daemon_config.soothe_config_path",
+        help="Path to nano.yml (SootheConfig); overrides daemon_config.soothe_config_path",
     )
     parser.add_argument(
         "--detached",

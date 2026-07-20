@@ -43,8 +43,12 @@ def _ensure_default_config_dir() -> Path:
 
 
 def default_soothe_config_path() -> Path:
-    """Default path of the agent ``SootheConfig`` YAML the daemon loads."""
-    return _ensure_default_config_dir() / "config.yml"
+    """Default path of the nano-owned agent config YAML the daemon loads.
+
+    Split layout (IG-674): ``~/.soothe/config/nano.yml``. Host overlay lives in
+    ``soothe.yml`` beside it and is composed when present.
+    """
+    return _ensure_default_config_dir() / "nano.yml"
 
 
 def default_daemon_config_path() -> Path:
@@ -221,7 +225,10 @@ class SootheDaemonConfig(BaseSettings):
 
     soothe_config_path: Path = Field(
         default_factory=default_soothe_config_path,
-        description="Path to the SootheConfig YAML the daemon loads for the in-proc agent.",
+        description=(
+            "Path to the nano-owned agent config YAML (default: ~/.soothe/config/nano.yml). "
+            "When this is nano.yml and soothe.yml sits beside it, both are composed."
+        ),
     )
 
     # --- Loaders ------------------------------------------------------------
@@ -247,13 +254,23 @@ class SootheDaemonConfig(BaseSettings):
         return cls()
 
     def load_soothe_config(self) -> SootheConfig:
-        """Load the agent config from ``soothe_config_path`` (or defaults)."""
+        """Load the agent config from ``soothe_config_path`` (or defaults).
+
+        When the path is ``nano.yml`` and a sibling ``soothe.yml`` exists,
+        compose via ``SootheConfig.from_split_yaml_files``.
+        """
         from soothe.config import SootheConfig
 
         path = Path(self.soothe_config_path).expanduser()
-        if path.exists():
-            return SootheConfig.from_yaml_file(str(path))
-        return SootheConfig()
+        if not path.exists():
+            return SootheConfig()
+        soothe_sibling = path.parent / "soothe.yml"
+        if path.name == "nano.yml" and soothe_sibling.exists():
+            return SootheConfig.from_split_yaml_files(
+                nano_path=str(path),
+                soothe_path=str(soothe_sibling),
+            )
+        return SootheConfig.from_yaml_file(str(path))
 
     def validate_runner_mode(self) -> str:
         """Validate exactly one runner mode is enabled.
