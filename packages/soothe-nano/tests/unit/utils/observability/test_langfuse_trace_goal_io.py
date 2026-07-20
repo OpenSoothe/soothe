@@ -10,8 +10,8 @@ def test_loop_graph_langfuse_run_display_name() -> None:
         loop_graph_langfuse_run_display_name,
     )
 
-    assert loop_graph_langfuse_run_display_name("soothe-dev") == "soothe-dev:strange-loop-graph"
-    assert loop_graph_langfuse_run_display_name(None) == "strange-loop-graph"
+    assert loop_graph_langfuse_run_display_name("soothe-dev") == "soothe-dev:coreagent-graph"
+    assert loop_graph_langfuse_run_display_name(None) == "coreagent-graph"
 
 
 def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
@@ -23,7 +23,7 @@ def test_patch_langfuse_trace_goal_io_skips_without_handler() -> None:
             {},
             goal_text="g",
             output_text="o",
-            trace_display_name="strange-loop-graph",
+            trace_display_name="coreagent-graph",
             public_key=None,
         )
     gc.assert_not_called()
@@ -44,7 +44,7 @@ def test_patch_langfuse_trace_goal_io_skips_without_trace_id() -> None:
             {"callbacks": [h]},
             goal_text="goal",
             output_text="out",
-            trace_display_name="x:strange-loop-graph",
+            trace_display_name="x:coreagent-graph",
             public_key="pk",
         )
     gc.assert_not_called()
@@ -72,7 +72,7 @@ def test_patch_langfuse_trace_goal_io_ingestion_skips_span() -> None:
                 {"callbacks": [h]},
                 goal_text="my goal",
                 output_text="final answer",
-                trace_display_name="soothe-dev:strange-loop-graph",
+                trace_display_name="soothe-dev:coreagent-graph",
                 session_id="thread-1",
                 public_key="pk-test",
             )
@@ -105,15 +105,15 @@ def test_patch_langfuse_trace_goal_io_fallback_span_updates_name() -> None:
                 {"callbacks": [h]},
                 goal_text="my goal",
                 output_text="final answer",
-                trace_display_name="soothe-dev:strange-loop-graph",
+                trace_display_name="soothe-dev:coreagent-graph",
                 public_key="pk-test",
             )
 
     mock_client.start_span.assert_called_once()
     assert mock_client.start_span.call_args[1]["trace_context"]["trace_id"] == tid
-    assert mock_client.start_span.call_args[1]["name"] == "soothe-dev:strange-loop-graph"
+    assert mock_client.start_span.call_args[1]["name"] == "soothe-dev:coreagent-graph"
     mock_span.update_trace.assert_called_once_with(
-        name="soothe-dev:strange-loop-graph",
+        name="soothe-dev:coreagent-graph",
         input="my goal",
         output="final answer",
     )
@@ -134,7 +134,7 @@ def test_merge_trace_fields_via_ingestion_enqueues() -> None:
     ok = _merge_trace_fields_via_ingestion(
         mock_client,
         trace_id=tid,
-        display_name="soothe-dev:strange-loop-graph",
+        display_name="soothe-dev:coreagent-graph",
         input_text="in",
         output_text="out",
         session_id="sid",
@@ -145,7 +145,7 @@ def test_merge_trace_fields_via_ingestion_enqueues() -> None:
     assert evt["type"] == "trace-create"
     body = evt["body"]
     assert body.id == tid
-    assert body.name == "soothe-dev:strange-loop-graph"
+    assert body.name == "soothe-dev:coreagent-graph"
     assert body.input == "in"
     assert body.output == "out"
     assert body.session_id == "sid"

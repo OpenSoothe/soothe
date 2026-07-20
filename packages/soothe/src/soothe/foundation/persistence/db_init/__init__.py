@@ -1,6 +1,6 @@
-"""Idempotent PostgreSQL init scripts and versioned migrations for Soothe databases."""
+"""Host aliases for shared SQL init/migration helpers."""
 
-from soothe.foundation.persistence.db_init.runner import (
+from soothe_nano.persistence.db_init import (
     DatabaseSchemaResult,
     MigrationScript,
     database_sql_root,

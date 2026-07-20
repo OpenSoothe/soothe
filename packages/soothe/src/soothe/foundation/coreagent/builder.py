@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
-from soothe_nano.agent.builder import AgentBuilder as _NanoAgentBuilder
+from soothe_nano.agent import builder as nano_builder
 
 from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
 from soothe.foundation.sloop.middleware.intake_task_guard import IntakeOnlyTaskGuardMiddleware
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from soothe.foundation.identity.runtime import IdentityRuntime
 
 
-class AgentBuilder(_NanoAgentBuilder):
+class AgentBuilder(nano_builder.AgentBuilder):
     """Soothe AgentBuilder: planner injection + intake-only catalog split."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:

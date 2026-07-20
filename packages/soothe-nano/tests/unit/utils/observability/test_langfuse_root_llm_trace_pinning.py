@@ -15,11 +15,11 @@ def test_langfuse_trace_pinned_parent_injects_trace_context() -> None:
     trace_context = {"trace_id": "trace-goal-1"}
 
     pinned = _LangfuseTracePinnedParent(client, trace_context)
-    pinned.start_observation(as_type="generation", name="intent-classify")
+    pinned.start_observation(as_type="generation", name="intake-classify")
 
     client.start_observation.assert_called_once_with(
         as_type="generation",
-        name="intent-classify",
+        name="intake-classify",
         trace_context=trace_context,
     )
 

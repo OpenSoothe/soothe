@@ -114,7 +114,7 @@ def create_fresh_langfuse_handler(soothe_config: SootheConfig) -> Any | None:
 
 
 def allocate_langfuse_trace_id(soothe_config: SootheConfig) -> str | None:
-    """Reserve a Langfuse trace id for one goal turn (intent-classify + strange-loop-graph)."""
+    """Reserve a Langfuse trace id for one grouped multi-stage execution."""
     try:
         from langfuse import get_client
 

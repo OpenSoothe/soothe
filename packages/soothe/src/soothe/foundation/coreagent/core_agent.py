@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from soothe_nano.agent.core_agent import CodingCoreAgent as _NanoCodingCoreAgent
-from soothe_nano.agent.core_agent import _normalize_layer1_input
+from soothe_nano.agent import core_agent as nano_core_agent
 
 from soothe.foundation.sloop.subagent_catalog import lookup_subagent_spec
 
@@ -13,7 +12,10 @@ if TYPE_CHECKING:
     from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
 
-class CodingCoreAgent(_NanoCodingCoreAgent):
+_normalize_layer1_input = nano_core_agent._normalize_layer1_input
+
+
+class CodingCoreAgent(nano_core_agent.CodingCoreAgent):
     """Soothe-hosted Coding CoreAgent with intake-only specialist registry."""
 
     def bind_intake_only_subagents(self, specs: list[SubAgent | CompiledSubAgent] | None) -> None:

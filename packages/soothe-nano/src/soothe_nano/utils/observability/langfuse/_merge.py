@@ -88,9 +88,9 @@ def merge_langfuse_runnable_config(
         loop_id: Optional loop identifier for trace correlation.
         inherit_callbacks_from: Reuse Langfuse handler from parent config (nested synthesis).
         fresh_handler: New handler instance for independent root traces.
-        pinned_trace_id: Shared trace id for goal-loop stages; each merge gets a fresh
-            handler pinned to this id so intent-classify and strange-loop-graph land on
-            one Langfuse trace without reusing stale handler state across invocations.
+        pinned_trace_id: Shared trace id for related stages; each merge gets a fresh
+            handler pinned to this id so classifier and root-graph runs land on one
+            Langfuse trace without reusing stale handler state across invocations.
     """
     if soothe_config is None or not soothe_config.observability.langfuse.enabled:
         return base

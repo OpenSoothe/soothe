@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_nano.utils.observability.langfuse import (
-    SootheLangfuse as _NanoSootheLangfuse,
-)
+from soothe_nano.utils.observability import langfuse as nano_langfuse
 from soothe_nano.utils.observability.langfuse import (
     merge_langfuse_runnable_config,
     resolve_langfuse_config_str,
@@ -20,7 +18,7 @@ from soothe.utils.observability.langfuse._names import (
 from soothe.utils.observability.langfuse._trace_io import patch_langfuse_trace_goal_io
 
 
-class SootheLangfuse(_NanoSootheLangfuse):
+class SootheLangfuse(nano_langfuse.SootheLangfuse):
     """Soothe Langfuse facade with StrangeLoop goal-loop sessions."""
 
     def begin_goal_loop(

@@ -209,7 +209,7 @@ def test_merge_reuses_inherited_handler_not_cached(monkeypatch) -> None:
         base,
         cfg,
         session_id="sess-1",
-        run_name="soothe-test:strange-loop-graph",
+        run_name="soothe-test:coreagent-graph",
         inherit_callbacks_from=parent,
     )
     assert out["callbacks"] == [inherited]
@@ -264,7 +264,7 @@ def test_merge_uses_pinned_trace_id_for_fresh_handler(monkeypatch) -> None:
         base,
         cfg,
         session_id="sess-1",
-        run_name="soothe-test:intent-classify",
+        run_name="soothe-test:intake-classify",
         pinned_trace_id="shared-trace-99",
     )
     assert out["callbacks"]

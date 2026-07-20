@@ -1,19 +1,23 @@
-"""Langfuse trace/run display names for goal-loop stages."""
+"""Shared Langfuse trace/run display-name helpers."""
+
+_ROOT_GRAPH_RUN_NAME = "coreagent-graph"
+_INTAKE_CLASSIFY_RUN_NAME = "intake-classify"
+_EXECUTE_STEP_RUN_NAME = "execute-step"
 
 
 def loop_graph_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Root run label for ``strange-loop-graph`` / LangGraph ``run_name``."""
+    """Return the root graph run display name for a trace."""
     tn = (trace_name or "").strip()
-    return f"{tn}:strange-loop-graph" if tn else "strange-loop-graph"
+    return f"{tn}:{_ROOT_GRAPH_RUN_NAME}" if tn else _ROOT_GRAPH_RUN_NAME
 
 
 def intent_classify_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Child run label for the pre-graph intake LLM under the goal loop trace."""
+    """Return the intake classifier child run display name for a trace."""
     tn = (trace_name or "").strip()
-    return f"{tn}:intent-classify" if tn else "intent-classify"
+    return f"{tn}:{_INTAKE_CLASSIFY_RUN_NAME}" if tn else _INTAKE_CLASSIFY_RUN_NAME
 
 
 def execute_step_langfuse_run_display_name(trace_name: str | None) -> str:
-    """Child run label for Execute-phase CoreAgent streams under the goal loop trace."""
+    """Return the execute-phase child run display name for a trace."""
     tn = (trace_name or "").strip()
-    return f"{tn}:execute-step" if tn else "execute-step"
+    return f"{tn}:{_EXECUTE_STEP_RUN_NAME}" if tn else _EXECUTE_STEP_RUN_NAME

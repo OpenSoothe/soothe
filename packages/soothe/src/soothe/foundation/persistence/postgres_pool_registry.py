@@ -1,4 +1,4 @@
-"""Process-wide PostgreSQL pool registry — one AsyncConnectionPool per database."""
+"""Process-wide PostgreSQL pool registry - one AsyncConnectionPool per database."""
 
 from __future__ import annotations
 

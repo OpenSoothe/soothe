@@ -7,14 +7,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from soothe_nano.agent.lazy import LazyCoreAgent as _NanoLazyCoreAgent
-from soothe_nano.agent.lazy import MaterializeHook
+from soothe_nano.agent import lazy as nano_lazy
 
 if TYPE_CHECKING:
     from soothe_deepagents.middleware.subagents import CompiledSubAgent, SubAgent
 
 
-class LazyCoreAgent(_NanoLazyCoreAgent):
+MaterializeHook = nano_lazy.MaterializeHook
+
+
+class LazyCoreAgent(nano_lazy.LazyCoreAgent):
     """Lazy wrapper that exposes host intake-only specialist lookup."""
 
     @property
