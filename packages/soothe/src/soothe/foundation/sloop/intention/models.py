@@ -102,7 +102,7 @@ class IntentClassification(BaseModel):
         default=None,
         description=(
             "Pass 2: wired specialist when primary intent is to call one "
-            "(planner, explorer, browser_use, deep_research, academic_research)"
+            "(planner, browser_use, deep_research, academic_research)"
         ),
     )
     requires_tool_use: bool = Field(
@@ -301,7 +301,7 @@ class IntakePass2LLMResult(BaseModel):
     wire_subagent: str | None = Field(
         default=None,
         description=(
-            "Wired specialist when primary intent is to call one: planner, explorer, "
+            "Wired specialist when primary intent is to call one: planner, "
             "browser_use, deep_research, academic_research, or null"
         ),
     )

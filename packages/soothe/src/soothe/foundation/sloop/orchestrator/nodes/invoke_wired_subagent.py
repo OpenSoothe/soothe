@@ -3,7 +3,7 @@
 Catalog wires (``planner``): build the 1-step terminal plan and continue to
 ``resolve_decision`` → execute → ``goal_completion``.
 
-Intake-only wires (``explorer``, ``browser_use``, ``deep_research``, ``academic_research``):
+Intake-only wires (``browser_use``, ``deep_research``, ``academic_research``):
 stream the specialist runnable from the intake-only registry (not on CoreAgent
 ``task``), forward curated wire customs for the orphan SubAgent card, record
 Human/AI execute-step ledger rows, then route to ``goal_completion``.

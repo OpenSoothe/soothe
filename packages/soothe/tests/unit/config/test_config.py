@@ -91,7 +91,7 @@ class TestSootheConfig:
     def test_default_subagents(self) -> None:
         cfg = SootheConfig()
         assert "planner" in cfg.subagents
-        assert "explorer" in cfg.subagents
+        assert "explorer" not in cfg.subagents
         assert "deep_research" in cfg.subagents
         assert "academic_research" in cfg.subagents
         assert "browser_use" in cfg.subagents
@@ -100,11 +100,8 @@ class TestSootheConfig:
         assert "scout" not in cfg.subagents
         for name in ("planner", "deep_research", "academic_research"):
             assert cfg.subagents[name].enabled is True, f"{name} should be enabled by default"
-        assert cfg.subagents["explorer"].enabled is False
         assert cfg.subagents["planner"].model_role == "think"
-        assert cfg.subagents["explorer"].model_role == "fast"
         assert cfg.subagents["planner"].endpoint is None
-        assert cfg.subagents["explorer"].config.get("recursion_limit") == 999
         assert cfg.subagents["browser_use"].enabled is True
         assert cfg.subagents["browser_use"].model_role == "default"
 
@@ -163,13 +160,13 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.agent.name == "Soothe"
 
-    def test_general_purpose_subagent_disabled_by_default(self) -> None:
+    def test_general_purpose_subagent_enabled_by_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.runtime.general_purpose_subagent is False
+        assert cfg.agent.runtime.general_purpose_subagent is True
 
     def test_general_purpose_subagent_config_override(self) -> None:
-        cfg = SootheConfig(agent={"runtime": {"general_purpose_subagent": True}})
-        assert cfg.agent.runtime.general_purpose_subagent is True
+        cfg = SootheConfig(agent={"runtime": {"general_purpose_subagent": False}})
+        assert cfg.agent.runtime.general_purpose_subagent is False
 
     def test_core_agent_recursion_limit_default(self) -> None:
         cfg = SootheConfig()

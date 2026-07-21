@@ -52,7 +52,7 @@ agent:
     enabled: false
   runtime:
     lazy_core_agent: true
-    general_purpose_subagent: false
+    general_purpose_subagent: true
     recursion_limit: 200
     role_routing:
       enabled: false
@@ -119,12 +119,6 @@ subagents:
     enabled: true
     model_role: think
     transport: local
-  explorer:
-    enabled: false
-    model_role: fast
-    transport: local
-    config:
-      recursion_limit: 999
   deep_research:
     enabled: true
     transport: local

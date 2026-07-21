@@ -290,7 +290,7 @@ async def test_wire_update_task_call_ids_keep_step_rows_and_subagent_cards_in_sy
             "tool_call_id": "XQZ_01:s:call_aaa111",
             "name": "task",
             "args": {
-                "subagent_type": "explorer",
+                "subagent_type": "deep_research",
                 "description": "Analyze repo structure",
             },
         },
@@ -305,7 +305,7 @@ async def test_wire_update_task_call_ids_keep_step_rows_and_subagent_cards_in_sy
             "tool_call_id": "XQZ_01:s:call_bbb222",
             "name": "task",
             "args": {
-                "subagent_type": "explorer",
+                "subagent_type": "deep_research",
                 "description": "Analyze package boundaries",
             },
         },

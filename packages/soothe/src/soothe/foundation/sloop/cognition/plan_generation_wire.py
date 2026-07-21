@@ -40,7 +40,7 @@ class PlanGenerateStepWire(BaseModel):
         description=(
             "Optional open task-catalog subagent (planner among built-ins) only when the "
             "step exclusively requires that capability; omit for workspace/local steps. "
-            "Never explorer, browser_use, deep_research, or academic_research (intake-only)."
+            "Never browser_use, deep_research, or academic_research (intake-only)."
         ),
     )
 

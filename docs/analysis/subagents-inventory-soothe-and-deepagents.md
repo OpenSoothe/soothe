@@ -7,7 +7,7 @@ This document describes **how subagents are exposed**, **what ships with deepage
 ## How every subagent is reached
 
 1. **Single user-facing tool**: the LangChain tool named **`task`** (built by deepagents `SubAgentMiddleware`).
-2. **Selection**: the model passes **`subagent_type`** matching one of the registered subagent **`name`** strings (e.g. `general-purpose`, `explore`, `research`).
+2. **Selection**: the model passes **`subagent_type`** matching one of the registered subagent **`name`** strings (e.g. `general-purpose`, `planner`, `deep_research`).
 3. **Soothe patch**: `soothe/core/agent/_patch.py` replaces `deepagents.middleware.subagents._build_task_tool` so nested `invoke` / `ainvoke` receives **`runtime.config`** from the parent (streaming / configurable propagation).
 
 ---
@@ -46,19 +46,20 @@ Soothe’s `AgentBuilder` passes that list here:
 
 ## Soothe first-party subagents
 
-Factories are registered in **`soothe/core/resolver/_resolver_tools.py`** → **`SUBAGENT_FACTORIES`** (lazy import). Resolution order for each configured name: **plugin registry** (if loaded), else the core **`SUBAGENT_FACTORIES`** map (explore, plan, research only).
+Factories are registered in **`soothe_nano/resolve/_resolver_tools.py`** (and the host resolver) → **`SUBAGENT_FACTORIES`** (lazy import). Resolution order for each configured name: **plugin registry** (if loaded), else the core **`SUBAGENT_FACTORIES`** map (planner, deep_research, academic_research, browser_use).
 
 | `subagent_type` | Factory | Package / entry | In default `SootheConfig.subagents` merge? | Notes |
 |-----------------|---------|-----------------|---------------------------------------------|--------|
-| **`explore`** | `create_explore_subagent` | `soothe/subagents/explore/` | **Yes** (builtin merge; IG-324) | RFC-613 readonly filesystem search; `CompiledSubAgent`. |
-| **`plan`** | `create_plan_subagent` | `soothe/subagents/plan/` | **Yes** | Planning delegate. |
-| **`research`** | `create_research_subagent` | `soothe/subagents/research/` | **Yes** (builtin merge; IG-324) | Deep research / multi-source; receives full **`SootheConfig`** and `context.work_dir`. There is **no** `tools.research` group — research is **subagent-only**. |
+| **`planner`** | `create_plan_subagent` | `soothe_nano/subagents/plan/` | **Yes** | Planning delegate. |
+| **`deep_research`** | `create_deep_research_subagent` | `soothe_nano/subagents/deep_research/` | **Yes** | Public web research; intake-only wire. |
+| **`academic_research`** | `create_academic_research_subagent` | `soothe_nano/subagents/academic_research/` | **Yes** | Literature research; intake-only wire. |
+| **`browser_use`** | `create_browser_use_subagent` | `soothe_nano/subagents/browser_use/` | **Yes** | Browser automation; intake-only wire. |
 
 Additional manifest ids (optional packages such as **`soothe-plugins`**) register through the plugin entry-point system; see that repository for names, factories, and YAML.
 
 ### Configuration defaults
 
-- **`soothe/config/settings.py`** `_merge_subagents`: starts with **`explore`**, **`plan`**, and **`research`**; merges **plugin-discovered** subagent names from the global registry when plugins are loaded, then user YAML overrides.
+- **`soothe_nano/config/settings.py`** / host **`soothe/config/settings.py`** `_merge_subagents`: starts with **`planner`**, **`deep_research`**, **`academic_research`**, and **`browser_use`**; merges **plugin-discovered** subagent names from the global registry when plugins are loaded, then user YAML overrides.
 - **`SubagentConfig.enabled`** defaults to **`true`**; set `enabled: false` under a name to drop it from `resolve_subagents()`.
 
 ### Plugin-discovered subagents
@@ -72,8 +73,9 @@ Third-party plugins can register additional names via the soothe plugin system; 
 For a typical daemon with default config:
 
 1. **`task`** is always available (deepagents).
-2. **`subagent_type`** values always include **`general-purpose`** (deepagents).
-3. Optional delegates from installed plugins (for example **`soothe-plugins`**) appear when those packages register factories; core defaults include **`explore`**, **`plan`**, and **`research`** when enabled.
+2. **`subagent_type`** values include **`general-purpose`** when enabled and open-catalog builtins such as **`planner`**.
+3. Intake-only specialists (`deep_research`, `academic_research`, `browser_use`) are wired via Pass 2 / slash routing, not the open `task` catalog.
+4. Optional delegates from installed plugins appear when those packages register factories.
 
 The main graph’s tool list still includes deepagents builtins (e.g. todos, filesystem tools, **`task`**); Soothe adds toolkit tools separately via `resolve_tools()`.
 

@@ -12,12 +12,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from soothe_nano.paths.thread_paths import (
+from soothe.config import SOOTHE_HOME
+from soothe.foundation.sloop.state.persistence.directory_manager import (
     THREADS_DATA_DIR,
     PersistenceDirectoryManager,
 )
-
-from soothe.config import SOOTHE_HOME
 
 logger = logging.getLogger(__name__)
 

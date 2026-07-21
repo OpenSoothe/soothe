@@ -1138,7 +1138,6 @@ import soothe_nano.skills.events as _skill_events  # noqa: F401, E402
 import soothe_nano.subagents.academic_research.events as _academic_research_events  # noqa: F401, E402
 import soothe_nano.subagents.browser_use.events as _browser_use_events  # noqa: F401, E402
 import soothe_nano.subagents.deep_research.events as _deep_research_events  # noqa: F401, E402
-import soothe_nano.subagents.explore.events as _explore_events  # noqa: F401, E402
 
 _importlib.import_module("soothe.subagents.veritas.events")
 import soothe_nano.mcp.mcp_events as _mcp_events  # noqa: F401, E402

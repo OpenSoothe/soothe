@@ -16,12 +16,12 @@ def test_tool_call_update_event_shape() -> None:
     ev = tool_call_update_event(
         tool_call_id="WAA_01:s:task:0",
         name="task",
-        args={"subagent_type": "explore", "description": "scan repo"},
+        args={"subagent_type": "deep_research", "description": "scan repo"},
     )
     assert ev["type"] == STREAM_TOOL_CALL_UPDATE
     assert ev["tool_call_id"] == "WAA_01:s:task:0"
     assert ev["name"] == "task"
-    assert ev["args"]["subagent_type"] == "explore"
+    assert ev["args"]["subagent_type"] == "deep_research"
 
 
 def test_extract_from_flat_wire_ai_message() -> None:
@@ -91,14 +91,14 @@ def test_extract_dedupes_tool_calls_and_chunks() -> None:
             {
                 "name": "task",
                 "id": "WAA_01:s:task:0",
-                "args": {"subagent_type": "explore"},
+                "args": {"subagent_type": "deep_research"},
             }
         ],
         "tool_call_chunks": [
             {
                 "name": "task",
                 "id": "WAA_01:s:task:0",
-                "args": {"subagent_type": "explore"},
+                "args": {"subagent_type": "deep_research"},
             }
         ],
     }

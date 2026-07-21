@@ -83,7 +83,7 @@ Move L2/L3-owned modules out of nano into soothe, then scrub nano:
 | L2/L3 events, internal bus | Client stream / tool / subagent lifecycle events |
 | Full `SootheConfig` (`agent.loop`, cron, Autopilot, CE) | `NanoConfig` / `agent.middleware` CoreAgent slice |
 | `loop_messages`, goal-completion stream helpers | Generic stream parsers |
-| Clarification / veritas | Core subagents (explore, research, plan, …) |
+| Clarification / veritas | Core subagents (research, plan, …) |
 | Loop workspace + CE persistence | Non-loop workspace / FS / security |
 | Pass1/Pass2 intention models | `RoutingClassification` / `TaskComplexity` |
 | Langfuse `_goal_loop` | CoreAgent Langfuse helpers |

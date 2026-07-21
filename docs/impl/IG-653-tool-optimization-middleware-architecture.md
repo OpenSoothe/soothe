@@ -72,7 +72,7 @@ Rationale:
 - Introduce `soothe.middleware.tool_optimization_middleware`.
 - Move optimization logic out of `tool_call_args_middleware`.
 - Rewire imports and telemetry consumer in executor.
-- Mount optimization middleware in main stack and explore subagent stack.
+- Mount optimization middleware in main stack.
 - Split tests by responsibility:
   - args-recording tests stay in `test_tool_call_args_registry.py`
   - optimization behavior tests move to `test_tool_optimization_middleware.py`

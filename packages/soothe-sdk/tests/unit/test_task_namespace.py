@@ -25,7 +25,7 @@ from soothe_sdk.ux.task_namespace import (
 
 def test_prune_bound_pending_namespaces_removes_linked() -> None:
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {
-        ("tools:a",): ("S_01:s:task:0", "explore", "S-01"),
+        ("tools:a",): ("S_01:s:task:0", "deep_research", "S-01"),
     }
     pending: deque[tuple[str, ...]] = deque(
         [("tools:a",), ("tools:b",), ("tools:a",), ("tools:c",)]
@@ -40,7 +40,7 @@ def test_register_task_spawn_for_step_records_spawn() -> None:
     queue: deque[tuple[str, str, str]] = deque()
     spawns: dict[str, tuple[str, str, str]] = {}
 
-    scope = ("YKF_02:s:task:0", "explore", "YKF-02")
+    scope = ("YKF_02:s:task:0", "deep_research", "YKF-02")
     register_task_spawn_for_step(
         bindings,
         queue,
@@ -58,7 +58,7 @@ def test_parallel_spawns_bind_via_unified_tool_call_id() -> None:
 
     # Register spawns for steps
     for step_id in ("YKF-01", "YKF-02", "YKF-03"):
-        scope = (f"{step_id.replace('-', '_')}:s:task:0", "explore", step_id)
+        scope = (f"{step_id.replace('-', '_')}:s:task:0", "deep_research", step_id)
         register_task_spawn_for_step(bindings, queue, spawns, scope)
 
     # Bind using unified tool_call_id from subgraph tools
@@ -72,9 +72,9 @@ def test_parallel_spawns_bind_via_unified_tool_call_id() -> None:
         bindings, spawns, ("tools:ccc",), "YKF_03:t0:read_file:2"
     )
 
-    assert bindings[("tools:aaa",)] == ("YKF_01:s:task:0", "explore", "YKF-01")
-    assert bindings[("tools:bbb",)] == ("YKF_02:s:task:0", "explore", "YKF-02")
-    assert bindings[("tools:ccc",)] == ("YKF_03:s:task:0", "explore", "YKF-03")
+    assert bindings[("tools:aaa",)] == ("YKF_01:s:task:0", "deep_research", "YKF-01")
+    assert bindings[("tools:bbb",)] == ("YKF_02:s:task:0", "deep_research", "YKF-02")
+    assert bindings[("tools:ccc",)] == ("YKF_03:s:task:0", "deep_research", "YKF-03")
 
 
 def test_normalize_main_task_delegation_id_remaps_task_level_opaque_prefix() -> None:
@@ -91,9 +91,9 @@ def test_normalize_main_task_delegation_id_remaps_task_level_opaque_prefix() -> 
 
 def test_resolve_task_scope_for_subgraph_tool_no_steal_from_spawns_by_step() -> None:
     """``t1`` tools must not fall back to ``spawns_by_step`` (often ``task:0``)."""
-    spawns_by_step = {"WAV-01": ("WAV_01:s:task:0", "explore", "WAV-01")}
+    spawns_by_step = {"WAV-01": ("WAV_01:s:task:0", "deep_research", "WAV-01")}
     spawns_by_task = {
-        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "deep_research", "WAV-01"),
     }
     scope = resolve_task_scope_for_subgraph_tool(
         "WAV_01:t1:grep:0",
@@ -126,7 +126,7 @@ def test_try_bind_namespace_rejects_inner_task_id() -> None:
     from soothe_sdk.ux.task_namespace import is_inner_subgraph_task_tool_id
 
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
-    spawns = {"YKF-02": ("YKF_02:s:task:0", "explore", "YKF-02")}
+    spawns = {"YKF-02": ("YKF_02:s:task:0", "deep_research", "YKF-02")}
     assert not try_bind_namespace_from_tool_call_id(
         bindings, spawns, ("tools:aaa",), "YKF_02:t0:task:0"
     )
@@ -142,29 +142,29 @@ def test_register_task_spawn_for_step_keeps_step_level_spawn() -> None:
         bindings,
         queue,
         spawns,
-        ("YKF_02:s:task:0", "explore", "YKF-02"),
+        ("YKF_02:s:task:0", "deep_research", "YKF-02"),
     )
     register_task_spawn_for_step(
         bindings,
         queue,
         spawns,
-        ("YKF_02:t0:task:0", "explore", "YKF-02"),
+        ("YKF_02:t0:task:0", "deep_research", "YKF-02"),
     )
     assert spawns["YKF-02"][0] == "YKF_02:s:task:0"
 
 
 def test_try_bind_namespace_rebinds_on_definitive_tool_id() -> None:
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {
-        ("tools:aaa",): ("YKF_02:s:task:0", "explore", "YKF-02"),
+        ("tools:aaa",): ("YKF_02:s:task:0", "deep_research", "YKF-02"),
     }
     spawns = {
-        "YKF-02": ("YKF_02:s:task:0", "explore", "YKF-02"),
-        "YKF-03": ("YKF_03:s:task:0", "explore", "YKF-03"),
+        "YKF-02": ("YKF_02:s:task:0", "deep_research", "YKF-02"),
+        "YKF-03": ("YKF_03:s:task:0", "deep_research", "YKF-03"),
     }
     assert try_bind_namespace_from_tool_call_id(
         bindings, spawns, ("tools:aaa",), "YKF_03:t0:glob:0"
     )
-    assert bindings[("tools:aaa",)] == ("YKF_03:s:task:0", "explore", "YKF-03")
+    assert bindings[("tools:aaa",)] == ("YKF_03:s:task:0", "deep_research", "YKF-03")
 
 
 def test_legacy_unified_formats_are_not_accepted() -> None:
@@ -191,13 +191,13 @@ def test_scoped_subgraph_tool_key_is_unique_per_namespace() -> None:
 
 def test_resolve_task_scope_prefix_match() -> None:
     bindings = {
-        ("tools:parent", "child"): ("tc-1", "explore", "EMD-01"),
+        ("tools:parent", "child"): ("tc-1", "deep_research", "EMD-01"),
     }
     scope = resolve_task_scope_for_namespace(
         bindings,
         ("tools:parent", "child", "grand"),
     )
-    assert scope == ("tc-1", "explore", "EMD-01")
+    assert scope == ("tc-1", "deep_research", "EMD-01")
 
 
 def test_parse_unified_tool_call_id_step_level() -> None:
@@ -283,7 +283,9 @@ def test_scoped_subgraph_tool_key_passes_through_task_level_id() -> None:
     """Already-unified task-level ids are not double-prefixed."""
     unified = "GHT_01:t0:grep:2"
     assert (
-        scoped_subgraph_tool_key(("tools:abc",), unified, task_scope=("tc", "explore", "GHT-01"))
+        scoped_subgraph_tool_key(
+            ("tools:abc",), unified, task_scope=("tc", "deep_research", "GHT-01")
+        )
         == unified
     )
 
@@ -291,7 +293,7 @@ def test_scoped_subgraph_tool_key_passes_through_task_level_id() -> None:
 def test_resolve_task_parent_lookup_prefers_task_card() -> None:
     step = object()
     task_card = object()
-    scope = ("FJS_02:s:task:0", "explore", "FJS-02")
+    scope = ("FJS_02:s:task:0", "deep_research", "FJS-02")
     parent = resolve_task_parent_lookup(
         scope,
         step_cards={"FJS-02": step},
@@ -311,7 +313,7 @@ def test_row_key_for_subgraph_tool_unified_passthrough() -> None:
     legacy = row_key_for_subgraph_tool(
         ("tools:x",),
         "grep:0",
-        task_scope=("tc", "explore", "FJS-02"),
+        task_scope=("tc", "deep_research", "FJS-02"),
     )
     assert legacy == "FJS_02:t0:grep:0"
 
@@ -320,7 +322,7 @@ def test_row_key_for_subgraph_tool_remaps_wrong_step_id() -> None:
     """Daemon sends task-level ID with wrong step_id - remap to bound task_scope."""
     # Daemon sent MFE_02:t0:grep:1 but namespace is bound to MFE-01's task
     wrong_tid = "MFE_02:t0:grep:1"
-    bound_scope = ("MFE_01:s:task:0", "explore", "MFE-01")
+    bound_scope = ("MFE_01:s:task:0", "deep_research", "MFE-01")
     remapped = row_key_for_subgraph_tool(("tools:abc",), wrong_tid, task_scope=bound_scope)
     # Should remap to MFE-01 step with correct task_idx from scope
     assert remapped == "MFE_01:t0:grep:1"
@@ -330,7 +332,7 @@ def test_row_key_for_subgraph_tool_remaps_wrong_task_idx() -> None:
     """Daemon sends task-level ID with wrong task_idx - remap to bound scope's idx."""
     # Daemon sent MFE_01:t2:read_file:0 but namespace is bound to task_idx=0
     wrong_tid = "MFE_01:t2:read_file:0"
-    bound_scope = ("MFE_01:s:task:0", "explore", "MFE-01")  # task_idx=0
+    bound_scope = ("MFE_01:s:task:0", "deep_research", "MFE-01")  # task_idx=0
     remapped = row_key_for_subgraph_tool(("tools:abc",), wrong_tid, task_scope=bound_scope)
     assert remapped == "MFE_01:t0:read_file:0"
 
@@ -338,7 +340,7 @@ def test_row_key_for_subgraph_tool_remaps_wrong_task_idx() -> None:
 def test_task_scope_task_idx_parses_from_task_tool_call_id() -> None:
     """Task index derived from TaskScope's task_tool_call_id element."""
     # Standard task delegation: ABC_01:s:task:0 → 0
-    scope = ("ABC_01:s:task:0", "explore", "ABC-01")
+    scope = ("ABC_01:s:task:0", "deep_research", "ABC-01")
     assert task_scope_task_idx(scope, "ABC-01") == 0
 
     # Task index 1: ABC_01:s:task:1 → 1
@@ -354,7 +356,7 @@ def test_resolve_task_scope_for_subgraph_tool_uses_spawns_by_task_id() -> None:
     """Second ``task:N`` on one step must not steal bindings from the first."""
     spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "deep_research", "WAV-01")}
     spawns_by_task = {
-        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "deep_research", "WAV-01"),
         "WAV_01:s:task:1": ("WAV_01:s:task:1", "deep_research", "WAV-01"),
     }
     scope0 = resolve_task_scope_for_subgraph_tool(
@@ -367,7 +369,7 @@ def test_resolve_task_scope_for_subgraph_tool_uses_spawns_by_task_id() -> None:
         spawns_by_step,
         spawns_by_task,
     )
-    assert scope0 == ("WAV_01:s:task:0", "explore", "WAV-01")
+    assert scope0 == ("WAV_01:s:task:0", "deep_research", "WAV-01")
     assert scope1 == ("WAV_01:s:task:1", "deep_research", "WAV-01")
 
 
@@ -380,7 +382,7 @@ def test_register_second_task_on_same_step_preserves_first_spawn() -> None:
         bindings,
         queue,
         spawns_by_step,
-        ("WAV_01:s:task:0", "explore", "WAV-01"),
+        ("WAV_01:s:task:0", "deep_research", "WAV-01"),
         spawns_by_task_id=spawns_by_task,
     )
     register_task_spawn_for_step(
@@ -390,8 +392,8 @@ def test_register_second_task_on_same_step_preserves_first_spawn() -> None:
         ("WAV_01:s:task:1", "deep_research", "WAV-01"),
         spawns_by_task_id=spawns_by_task,
     )
-    assert spawns_by_step["WAV-01"] == ("WAV_01:s:task:0", "explore", "WAV-01")
-    assert spawns_by_task["WAV_01:s:task:0"][1] == "explore"
+    assert spawns_by_step["WAV-01"] == ("WAV_01:s:task:0", "deep_research", "WAV-01")
+    assert spawns_by_task["WAV_01:s:task:0"][1] == "deep_research"
     assert spawns_by_task["WAV_01:s:task:1"][1] == "deep_research"
 
 
@@ -399,7 +401,7 @@ def test_try_bind_namespace_uses_spawns_by_task_id_for_parallel_tasks() -> None:
     bindings: dict[tuple[str, ...], tuple[str, str, str]] = {}
     spawns_by_step = {"WAV-01": ("WAV_01:s:task:1", "deep_research", "WAV-01")}
     spawns_by_task = {
-        "WAV_01:s:task:0": ("WAV_01:s:task:0", "explore", "WAV-01"),
+        "WAV_01:s:task:0": ("WAV_01:s:task:0", "deep_research", "WAV-01"),
         "WAV_01:s:task:1": ("WAV_01:s:task:1", "deep_research", "WAV-01"),
     }
     assert try_bind_namespace_from_tool_call_id(
@@ -409,7 +411,7 @@ def test_try_bind_namespace_uses_spawns_by_task_id_for_parallel_tasks() -> None:
         "WAV_01:t0:grep:0",
         spawns_by_task_id=spawns_by_task,
     )
-    assert bindings[("tools:first",)] == ("WAV_01:s:task:0", "explore", "WAV-01")
+    assert bindings[("tools:first",)] == ("WAV_01:s:task:0", "deep_research", "WAV-01")
 
 
 def test_task_scope_task_idx_returns_zero_for_invalid_scope() -> None:
@@ -419,13 +421,13 @@ def test_task_scope_task_idx_returns_zero_for_invalid_scope() -> None:
     assert task_scope_task_idx(("", "", ""), "ABC-01") == 0
 
     # Non-task tool_call_id (step-level tool, not task)
-    scope = ("ABC_01:s:grep:0", "explore", "ABC-01")
+    scope = ("ABC_01:s:grep:0", "deep_research", "ABC-01")
     assert task_scope_task_idx(scope, "ABC-01") == 0
 
     # Non-unified tool_call_id
-    scope = ("call_abc123", "explore", "ABC-01")
+    scope = ("call_abc123", "deep_research", "ABC-01")
     assert task_scope_task_idx(scope, "ABC-01") == 0
 
     # Task-level ID (should be step-level)
-    scope = ("ABC_01:t0:grep:0", "explore", "ABC-01")
+    scope = ("ABC_01:t0:grep:0", "deep_research", "ABC-01")
     assert task_scope_task_idx(scope, "ABC-01") == 0

@@ -31,8 +31,8 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
     return None
 
 
-def test_allowlist_includes_explorer_academic_research_and_planner() -> None:
-    assert resolve_wire_subagent(wire_subagent="explorer") == "explorer"
+def test_allowlist_includes_academic_research_and_planner() -> None:
+    assert resolve_wire_subagent(wire_subagent="explorer") is None
     assert resolve_wire_subagent(wire_subagent="academic_research") == "academic_research"
     assert resolve_wire_subagent(wire_subagent="planner") == "planner"
     assert resolve_wire_subagent(wire_subagent="plan") is None
@@ -130,7 +130,7 @@ async def test_init_or_resume_sets_wired_subagent_route() -> None:
 async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
-        wire_subagent="explorer",
+        wire_subagent="deep_research",
         requires_tool_use=True,
         task_complexity=TaskComplexity.SIMPLE,
     )

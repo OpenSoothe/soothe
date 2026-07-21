@@ -50,7 +50,7 @@ def test_messages_from_wire_dicts_coerces_dict_tool_call_chunk_args() -> None:
                 "id": "WAA_01:s:task:0",
                 "args": {
                     "description": "Explore repository structure",
-                    "subagent_type": "explore",
+                    "subagent_type": "deep_research",
                 },
             }
         ],
@@ -60,7 +60,7 @@ def test_messages_from_wire_dicts_coerces_dict_tool_call_chunk_args() -> None:
                 "id": "WAA_01:s:task:0",
                 "args": {
                     "description": "Explore repository structure",
-                    "subagent_type": "explore",
+                    "subagent_type": "deep_research",
                 },
             }
         ],

@@ -19,10 +19,6 @@ _BUILTIN_DESCRIPTIONS: dict[str, str] = {
         "returning one report. Use when the main thread needs structured recon-plus-plan "
         "without doing every recon and rewrite itself."
     ),
-    "explorer": (
-        "Deep code explorer subagent: iterative readonly repository reconnaissance via "
-        "glob/grep/read_file/ls and structured synthesis."
-    ),
     "deep_research": ("Public-domain research subagent for web, academic, and URL sources."),
 }
 

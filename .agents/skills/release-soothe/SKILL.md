@@ -219,7 +219,7 @@ git push origin main
 ### Compatibility pitfalls
 
 - **`soothe-sdk` pin**: If core bumps `soothe-sdk` major (e.g. `>=1.0.0`) but a published client still requires `soothe-sdk<1.0.0`, Docker / install resolution can fail. Release a matching client patch **before** or **with** the Docker image rebuild.
-- **Event / subagent renames**: Keep wire constants aligned across all four clients (`explorer`, `deep_research`, …) and release each language that still ships legacy names.
+- **Event / subagent renames**: Keep wire constants aligned across all four clients (`deep_research`, …) and release each language that still ships legacy names.
 - **Go**: `ClientVersion` in `protocol.go` **must** equal the release tag (CI enforces this).
 
 ### Quick version checks

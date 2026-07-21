@@ -444,6 +444,6 @@ def task_to_plan_context(task: BenchmarkTask) -> dict:
         "iteration": task.iteration,
         "prior_progress": task.prior_progress,
         "workspace": "/workspace/example",  # Mock workspace
-        "available_capabilities": ["explorer", "web_search"],
+        "available_capabilities": ["planner", "web_search"],
         "completed_steps": [],
     }

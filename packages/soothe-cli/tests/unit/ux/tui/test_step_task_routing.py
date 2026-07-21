@@ -33,9 +33,18 @@ def test_register_task_spawn_normalizes_unified_task_id() -> None:
 
 def test_register_task_spawn_assigns_stable_indices_for_step_level_call_ids() -> None:
     router = StepTaskRouter()
-    assert router.register_task_spawn("XQZ_01:s:call_aaa111", "explorer", step_id="XQZ-01") is True
-    assert router.register_task_spawn("XQZ_01:s:call_bbb222", "explorer", step_id="XQZ-01") is True
-    assert router.register_task_spawn("XQZ_01:s:call_aaa111", "explorer", step_id="XQZ-01") is False
+    assert (
+        router.register_task_spawn("XQZ_01:s:call_aaa111", "deep_research", step_id="XQZ-01")
+        is True
+    )
+    assert (
+        router.register_task_spawn("XQZ_01:s:call_bbb222", "deep_research", step_id="XQZ-01")
+        is True
+    )
+    assert (
+        router.register_task_spawn("XQZ_01:s:call_aaa111", "deep_research", step_id="XQZ-01")
+        is False
+    )
     assert "XQZ_01:s:task:0" in router._spawns_by_task_id
     assert "XQZ_01:s:task:1" in router._spawns_by_task_id
 

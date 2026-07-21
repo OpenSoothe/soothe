@@ -86,7 +86,6 @@ The same **collection** loop pattern can later bind other readonly tools (e.g. b
 ## 5. Security and Policy
 
 - Plan subagent inherits workspace boundaries like other `task` children.
-- Explore obeys `ExploreSubagentConfig` and global security flags.
 
 ## 6. Observability
 

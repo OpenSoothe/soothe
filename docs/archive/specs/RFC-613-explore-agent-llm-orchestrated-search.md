@@ -1,3 +1,5 @@
+> **Archived:** Explorer/explore subagent removed; CoreAgent file tools cover readonly recon.
+
 # RFC-613: Explore Agent — LLM-Orchestrated Iterative Search
 
 **RFC**: 613

@@ -23,7 +23,7 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
 - ``delegate``: Optional open-catalog subagent when this step must **exclusively** delegate
   via ``task`` (``planner`` among built-ins). **Default: omit / null** on every step —
   execute CoreAgent already has ``task`` and local tools and chooses per hop.
-  Do **not** set ``delegate`` to ``explorer``, ``browser_use``, ``deep_research``, or
+  Do **not** set ``delegate`` to ``browser_use``, ``deep_research``, or
   ``academic_research``
   (intake/slash routed; never plan-wave delegates).
 

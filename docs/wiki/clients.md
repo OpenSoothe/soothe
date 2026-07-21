@@ -29,7 +29,7 @@ Default endpoint: `ws://127.0.0.1:8765`.
 | Raw protocol / custom RPCs | `Client` |
 | Multi-user HTTP backend | `ConnectionPool` + `TurnRunner` |
 
-Route specialists with `preferred_subagent` (`explorer`, `deep_research`, `academic_research`, `browser_use`, `planner`).
+Route specialists with `preferred_subagent` (`deep_research`, `academic_research`, `browser_use`, `planner`).
 
 ## Repositories
 

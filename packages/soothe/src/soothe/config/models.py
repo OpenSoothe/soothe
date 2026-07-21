@@ -2486,10 +2486,10 @@ class AgentRuntimeConfig(BaseModel):
         description="Defer CoreAgent graph compile until first execute access",
     )
     general_purpose_subagent: bool = Field(
-        default=False,
+        default=True,
         description=(
-            "When true, register soothe_deepagents general-purpose subagent on the task tool. "
-            "When false (default), general-purpose is hidden and blocked."
+            "When true (default), register soothe_deepagents general-purpose subagent on the task tool. "
+            "When false, general-purpose is hidden and blocked."
         ),
     )
     recursion_limit: int = Field(
