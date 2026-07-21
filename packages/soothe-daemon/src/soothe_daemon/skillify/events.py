@@ -9,11 +9,13 @@ from soothe.foundation.events.catalog import register_event
 from soothe_sdk.core.events import SubagentEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
-SKILLIFY_RETRIEVE_COMPLETED = "soothe.skillify.retrieve_completed"
-SKILLIFY_INDEX_STARTED = "soothe.skillify.index_started"
-SKILLIFY_INDEX_UPDATED = "soothe.skillify.index_updated"
-SKILLIFY_INDEX_UNCHANGED = "soothe.skillify.index_unchanged"
-SKILLIFY_INDEX_FAILED = "soothe.skillify.index_failed"
+from soothe_daemon.events.constants import (
+    SKILLIFY_INDEX_FAILED,
+    SKILLIFY_INDEX_STARTED,
+    SKILLIFY_INDEX_UNCHANGED,
+    SKILLIFY_INDEX_UPDATED,
+    SKILLIFY_RETRIEVE_COMPLETED,
+)
 
 
 class SkillifyRetrieveCompletedEvent(SubagentEvent):

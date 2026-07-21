@@ -13,6 +13,16 @@ from typing import Any
 from pydantic import Field
 from soothe_sdk.core.events import OutputEvent, ProtocolEvent
 
+from soothe_daemon.events.constants import (
+    CHANNEL_MESSAGE_RECEIVED,
+    OUTPUT_PROGRESS,
+    OUTPUT_REASONING,
+    OUTPUT_TEXT_COMPLETE,
+    OUTPUT_TEXT_DELTA,
+    OUTPUT_TEXT_END,
+    OUTPUT_UI_RENDER,
+)
+
 
 class ChannelMessageReceived(ProtocolEvent):
     """User message received from any channel.
@@ -30,7 +40,7 @@ class ChannelMessageReceived(ProtocolEvent):
         metadata: Channel-specific extras (e.g., platform features).
     """
 
-    type: str = "soothe.channel.message.received"
+    type: str = CHANNEL_MESSAGE_RECEIVED
     channel: str
     chat_id: str
     sender_id: str
@@ -57,7 +67,7 @@ class TextEvent(OutputEvent):
         content: Complete text content (markdown formatted).
     """
 
-    type: str = "soothe.output.text.complete"
+    type: str = OUTPUT_TEXT_COMPLETE
     content: str
 
 
@@ -72,7 +82,7 @@ class TextDeltaEvent(OutputEvent):
         stream_id: Unique identifier for this stream (for stateful channels).
     """
 
-    type: str = "soothe.output.text.delta"
+    type: str = OUTPUT_TEXT_DELTA
     content: str
     stream_id: str
 
@@ -87,7 +97,7 @@ class TextEndEvent(OutputEvent):
         stream_id: Unique identifier matching the TextDeltaEvent stream.
     """
 
-    type: str = "soothe.output.text.end"
+    type: str = OUTPUT_TEXT_END
     stream_id: str
 
 
@@ -102,7 +112,7 @@ class AgentUIEvent(OutputEvent):
         payload: JSON-serializable UI specification.
     """
 
-    type: str = "soothe.output.ui.render"
+    type: str = OUTPUT_UI_RENDER
     payload: dict[str, Any]
 
 
@@ -117,7 +127,7 @@ class ProgressEvent(OutputEvent):
         tool_name: Optional tool name being executed.
     """
 
-    type: str = "soothe.output.progress"
+    type: str = OUTPUT_PROGRESS
     message: str
     tool_name: str | None = None
 
@@ -133,7 +143,7 @@ class ReasoningEvent(OutputEvent):
         stream_id: Optional stream identifier for streaming reasoning.
     """
 
-    type: str = "soothe.output.reasoning"
+    type: str = OUTPUT_REASONING
     content: str
     stream_id: str | None = None
 

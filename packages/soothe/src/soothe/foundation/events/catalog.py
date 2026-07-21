@@ -33,6 +33,18 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+# The six protocol-primitive event models (stream-end, llm-retry, memory,
+# policy) are owned by nano (it constructs the policy events and hosts the
+# shared primitives). The host imports them here so its ``_reg()`` overrides
+# and ``__init__`` re-exports resolve to the single canonical class, avoiding
+# a dead-duplicate class that silently clobbers the registry on import order.
+from soothe_nano.events.catalog import (  # noqa: E402
+    MemoryRecalledEvent,
+    MemoryStoredEvent,
+    PolicyCheckedEvent,
+    PolicyDeniedEvent,
+    StreamEndEvent,
+)
 from soothe_sdk.core.events import (
     LifecycleEvent,
     ProtocolEvent,
@@ -269,15 +281,6 @@ class StrangeLoopCompletedEvent(LifecycleEvent):
     total_steps: int = 0
 
 
-class StreamEndEvent(LifecycleEvent):
-    """Marks the end of an assistant stream scope (generation, phase, or turn)."""
-
-    type: Literal["soothe.stream.end"] = "soothe.stream.end"
-    scope: Literal["generation", "phase", "turn"]
-    phase: str | None = None
-    reason: str | None = None
-
-
 class StrangeLoopPlanDecisionEvent(LifecycleEvent):
     """Planned act steps for this iteration (includes not-yet-ready steps).
 
@@ -397,20 +400,6 @@ class StrangeLoopStepCompletedEvent(LifecycleEvent):
     total_tokens_used: int = 0
 
 
-class LLMRetryAttemptEvent(LifecycleEvent):
-    """LLM retry attempt event for step status display (IG-504).
-
-    Emitted when LLM call fails due to timeout or 429 rate limit and middleware
-    initiates a retry. Provides visibility for TUI to display retry count.
-    """
-
-    type: Literal["soothe.cognition.llm.retry.attempt"] = "soothe.cognition.llm.retry.attempt"
-    attempt: int
-    max_attempts: int
-    error_type: str  # "timeout" or "rate_limit"
-    thread_id: str | None = None
-
-
 class StrangeLoopContextCompactionEvent(LifecycleEvent):
     """Context window compaction event (RFC-224).
 
@@ -432,18 +421,6 @@ class StrangeLoopContextCompactionEvent(LifecycleEvent):
 # ---------------------------------------------------------------------------
 # Protocol events
 # ---------------------------------------------------------------------------
-
-
-class MemoryRecalledEvent(ProtocolEvent):
-    type: Literal["soothe.internal.memory.recalled"] = "soothe.internal.memory.recalled"
-    count: int = 0
-    query: str = ""
-
-
-class MemoryStoredEvent(ProtocolEvent):
-    type: Literal["soothe.internal.memory.stored"] = "soothe.internal.memory.stored"
-    id: str = ""
-    source_thread: str = ""
 
 
 class PlanCreatedEvent(ProtocolEvent):
@@ -471,20 +448,6 @@ class PlanReflectedEvent(ProtocolEvent):
 class PlanDagSnapshotEvent(ProtocolEvent):
     type: Literal["soothe.internal.plan.dag_snapshot"] = "soothe.internal.plan.dag_snapshot"
     steps: list[dict[str, Any]] = []  # noqa: RUF012
-
-
-class PolicyCheckedEvent(ProtocolEvent):
-    type: Literal["soothe.internal.policy.checked"] = "soothe.internal.policy.checked"
-    action: str = ""
-    verdict: str = ""
-    profile: str | None = None
-
-
-class PolicyDeniedEvent(ProtocolEvent):
-    type: Literal["soothe.internal.policy.denied"] = "soothe.internal.policy.denied"
-    action: str = ""
-    reason: str = ""
-    profile: str | None = None
 
 
 class IntentClassifiedEvent(ProtocolEvent):
@@ -928,7 +891,6 @@ _reg(AUTOPILOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORM
 # These modules call register_event() at import time
 # Must be at the end after all core events are registered
 # ---------------------------------------------------------------------------
-import importlib as _importlib  # noqa: E402
 
 # nano modules register directly into the shared soothe_sdk.core.registry REGISTRY
 # at import time, so importing them here is sufficient — no host-side merge needed.
@@ -938,5 +900,3 @@ import soothe_nano.skills.events as _skill_events  # noqa: F401, E402
 import soothe_nano.subagents.academic_research.events as _academic_research_events  # noqa: F401, E402
 import soothe_nano.subagents.browser_use.events as _browser_use_events  # noqa: F401, E402
 import soothe_nano.subagents.deep_research.events as _deep_research_events  # noqa: F401, E402
-
-_importlib.import_module("soothe.subagents.veritas.events")

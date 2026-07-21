@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-StreamChunk = tuple[tuple[str, ...], str, Any]
-"""Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
+from soothe.foundation.events import StreamChunk
 
 _MIN_MEMORY_STORAGE_LENGTH = 50
 

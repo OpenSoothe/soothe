@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
 
-StreamChunk = tuple[tuple[str, ...], str, Any]
+from soothe.foundation.events import StreamChunk
+
 """Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
 
 

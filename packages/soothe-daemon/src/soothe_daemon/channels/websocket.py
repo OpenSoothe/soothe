@@ -23,6 +23,7 @@ from websockets.frames import Close
 from soothe_daemon.channels.base import Channel
 from soothe_daemon.channels.message import ChannelMessage
 from soothe_daemon.config.models import WebSocketConfig
+from soothe_daemon.events.constants import OUTPUT_TEXT_COMPLETE, OUTPUT_TEXT_DELTA
 from soothe_daemon.protocol import ErrorCode, build_error_response, validate_message
 
 logger = logging.getLogger(__name__)
@@ -256,7 +257,7 @@ class WebSocketChannel(Channel):
             "namespace": [],
             "mode": "custom",
             "data": {
-                "type": "soothe.output.text.delta",
+                "type": OUTPUT_TEXT_DELTA,
                 "content": delta,
                 "_stream_delta": True,
             },
@@ -339,7 +340,7 @@ class WebSocketChannel(Channel):
             "namespace": [],
             "mode": "custom",
             "data": {
-                "type": "soothe.output.text.complete",
+                "type": OUTPUT_TEXT_COMPLETE,
                 "content": message.content,
             },
         }

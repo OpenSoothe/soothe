@@ -7,6 +7,19 @@ Internal (daemon/worker only, never WebSocket broadcast):
 
 from __future__ import annotations
 
+# Protocol-primitive constants are owned by the SDK (the protocol-contracts
+# layer shared with the CLI and daemon, which cannot import the host). Re-export
+# them here so host consumers keep a single import surface.
+from soothe_sdk.core.events import (
+    ERROR,
+    LLM_RETRY_ATTEMPT,
+    MEMORY_RECALLED,
+    MEMORY_STORED,
+    POLICY_CHECKED,
+    POLICY_DENIED,
+    STREAM_END,
+)
+
 # ============================================================================
 # INTERNAL NAMESPACE (soothe.internal.*) — never broadcast to clients
 # ============================================================================
@@ -32,13 +45,8 @@ LOOP_COMPLETED = "soothe.internal.loop.completed"
 # Control-plane replay marker (prefer wire ``replay_complete`` envelope to clients)
 REPLAY_COMPLETE = "replay_complete"
 
-# Memory protocol
-MEMORY_RECALLED = "soothe.internal.memory.recalled"
-MEMORY_STORED = "soothe.internal.memory.stored"
-
-# Policy protocol
-POLICY_CHECKED = "soothe.internal.policy.checked"
-POLICY_DENIED = "soothe.internal.policy.denied"
+# Memory protocol — re-exported from soothe_sdk.core.events (see top of file)
+# Policy protocol — re-exported from soothe_sdk.core.events (see top of file)
 
 # Daemon
 DAEMON_HEARTBEAT = "soothe.internal.daemon.heartbeat"
@@ -114,18 +122,6 @@ WIRED_SUBAGENT_COMPLETED = "soothe.cognition.wired_subagent.completed"
 WIRED_SUBAGENT_FAILED = "soothe.cognition.wired_subagent.failed"
 WIRED_SUBAGENT_CANCELLED = "soothe.cognition.wired_subagent.cancelled"
 
-STRANGE_LOOP_STEP_STARTED = STRANGE_LOOP_STEP_STARTED
-STRANGE_LOOP_STEP_QUEUED = STRANGE_LOOP_STEP_QUEUED
-STRANGE_LOOP_STEP_COMPLETED = STRANGE_LOOP_STEP_COMPLETED
-STRANGE_LOOP_PLAN_DECISION = STRANGE_LOOP_PLAN_DECISION
-STRANGE_LOOP_PLAN_PHASE = STRANGE_LOOP_PLAN_PHASE
-STRANGE_LOOP_REASONED = STRANGE_LOOP_REASONED
-STRANGE_LOOP_CONTEXT_COMPACTED = STRANGE_LOOP_CONTEXT_COMPACTED
-WIRED_SUBAGENT_STARTED = WIRED_SUBAGENT_STARTED
-WIRED_SUBAGENT_COMPLETED = WIRED_SUBAGENT_COMPLETED
-WIRED_SUBAGENT_FAILED = WIRED_SUBAGENT_FAILED
-WIRED_SUBAGENT_CANCELLED = WIRED_SUBAGENT_CANCELLED
-
 # Branch cognition (client UX)
 BRANCH_CREATED = "soothe.cognition.branch.created"
 BRANCH_RETRY_STARTED = "soothe.cognition.branch.retry.started"
@@ -140,14 +136,8 @@ AUTOPILOT_DREAMING_COMPLETED = "soothe.system.autopilot.dreaming.completed"
 AUTOPILOT_GOAL_SUSPENDED = "soothe.system.autopilot.goal.suspended"
 AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 
-# Error
-ERROR = "soothe.error.general.failed"
-
-# Stream termination (IG-556)
-STREAM_END = "soothe.stream.end"
-
-# LLM retry events (IG-504)
-LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
+# Error / Stream termination / LLM retry — re-exported from
+# soothe_sdk.core.events (see top of file)
 
 __all__ = [
     "STRANGE_LOOP_COMPLETED",
