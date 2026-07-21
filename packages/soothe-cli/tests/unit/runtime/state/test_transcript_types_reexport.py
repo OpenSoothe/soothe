@@ -9,9 +9,9 @@ copy (which would break ``isinstance`` checks in the TUI).
 
 from __future__ import annotations
 
-from soothe_cli.runtime.state import transcript as cli_transcript
-
 from soothe_sdk.display import transcript_types as sdk_transcript_types
+
+from soothe_cli.runtime.state import transcript as cli_transcript
 
 
 def test_message_data_class_identity_preserved() -> None:
