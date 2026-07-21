@@ -25,7 +25,7 @@ def test_status_reports_stopped(monkeypatch) -> None:
 
 def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
     # Redirect PID path so the test doesn't pick up a real daemon's PID file
-    monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", tmp_path)
     monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (True, False))
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 12345)
 
@@ -39,7 +39,7 @@ def test_status_reports_running_with_pid(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_status_reports_orphan(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", tmp_path)
     monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (True, True))
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 47263)
 
@@ -52,7 +52,7 @@ def test_status_reports_orphan(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", tmp_path)
     monkeypatch.setattr("soothe_daemon.cli._fast_is_running", lambda: (True, False))
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 99)
     # Mock daemon config to not load any file
@@ -70,7 +70,7 @@ def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr("soothe_daemon.cli._SOOTHE_HOME", tmp_path)
+    monkeypatch.setattr("soothe_daemon.cli.SOOTHE_HOME", tmp_path)
 
     state = {"calls": 0}
 

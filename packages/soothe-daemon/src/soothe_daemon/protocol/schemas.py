@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+from soothe_sdk.wire.codec import ConnectionInitParams as _SdkConnectionInitParams
 
 __all__ = [
     # Base
@@ -465,8 +466,15 @@ class AutopilotGetJobParams(ParamsBase):
     job_id: str = Field(..., min_length=1)
 
 
-class ConnectionInitParams(ParamsBase):
-    """Params for type=connection_init (protocol-1 handshake)."""
+class ConnectionInitParams(_SdkConnectionInitParams):
+    """Server-side params for type=connection_init (protocol-1 handshake).
+
+    Subclasses the SDK wire model (the canonical field-definition source) and
+    loosens all fields to optional: the daemon must tolerate clients that omit
+    ``client_version`` / ``client_name`` / ``accept_proto`` / ``capabilities``
+    rather than reject the handshake. Field *names and types* stay in sync with
+    the SDK model via inheritance; only optionality is overridden here.
+    """
 
     client_version: str | None = None
     client_name: str | None = None

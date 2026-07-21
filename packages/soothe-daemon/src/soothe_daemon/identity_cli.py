@@ -36,8 +36,9 @@ def _get_jwt_key() -> str:
     if key:
         return key
 
-    soothe_home = Path(os.environ.get("SOOTHE_HOME", "~/.soothe")).expanduser()
-    key_file = soothe_home / ".jwt_key"
+    from soothe_sdk.paths import SOOTHE_HOME
+
+    key_file = SOOTHE_HOME / ".jwt_key"
 
     if key_file.exists():
         return key_file.read_text().strip()

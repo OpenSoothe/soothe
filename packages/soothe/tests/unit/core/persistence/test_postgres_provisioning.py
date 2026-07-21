@@ -65,7 +65,7 @@ def test_uses_postgresql_when_pgvector_configured() -> None:
     assert uses_postgresql_persistence(cfg) is True
 
 
-@patch("soothe.foundation.persistence.postgres_provisioning._initialize_postgres_schemas")
+@patch("soothe_nano.persistence.postgres_provisioning._initialize_postgres_schemas")
 @patch("psycopg.connect")
 def test_ensure_postgres_databases_creates_missing(
     mock_connect: MagicMock, mock_init_schemas: MagicMock
@@ -112,7 +112,7 @@ def test_ensure_postgres_databases_creates_missing(
     mock_init_schemas.assert_called_once()
 
 
-@patch("soothe.foundation.persistence.postgres_provisioning._initialize_postgres_schemas")
+@patch("soothe_nano.persistence.postgres_provisioning._initialize_postgres_schemas")
 @patch("psycopg.connect")
 def test_ensure_postgres_databases_is_idempotent_per_process(
     mock_connect: MagicMock,

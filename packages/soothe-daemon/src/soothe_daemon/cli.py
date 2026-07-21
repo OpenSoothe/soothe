@@ -12,15 +12,15 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from soothe_sdk.paths import SOOTHE_HOME
 
 # Lightweight helpers - avoid heavy imports (soothe.config takes 4.4s, SootheDaemon takes 5+ seconds)
-_SOOTHE_HOME = Path(os.environ.get("SOOTHE_HOME", "~/.soothe")).expanduser()
 _PID_FILENAME = "soothed.pid"
 
 
 def _fast_pid_path() -> Path:
     """Fast PID file path without importing soothe.config."""
-    return _SOOTHE_HOME / _PID_FILENAME
+    return SOOTHE_HOME / _PID_FILENAME
 
 
 def _load_dotenv_if_needed() -> None:
@@ -225,7 +225,7 @@ def daemon_start(
             start_new_session=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            cwd=str(_SOOTHE_HOME),
+            cwd=str(SOOTHE_HOME),
             env=daemon_env,
         )
     except Exception as exc:

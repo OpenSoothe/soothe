@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from pydantic import ValidationError
+from soothe_sdk.wire.codec import MessageType
 
 from soothe_daemon.protocol.schemas import PARAMS_REGISTRY
 
@@ -27,45 +28,16 @@ __all__ = [
 ]
 
 
-# All valid ``type`` field values per RFC-450 §9.1.
-VALID_TYPES: frozenset[str] = frozenset(
-    {
-        # Protocol-1 envelope message classes (RFC-450 §9.1).
-        "connection_init",
-        "connection_ack",
-        "request",
-        "response",
-        "notification",
-        "subscribe",
-        "next",
-        "error",
-        "complete",
-        "unsubscribe",
-        "ping",
-        "pong",
-        "receipt_response",
-        "disconnect",
-    }
-)
+# All valid ``type`` field values per RFC-450 §9.1. Derived from the canonical
+# ``MessageType`` enum in ``soothe_sdk.wire.codec`` so adding a message class
+# there updates daemon validation automatically.
+VALID_TYPES: frozenset[str] = frozenset(m.value for m in MessageType)
 
 # Envelope message classes that require ``proto == "1"`` (RFC-450 §8.1).
-# Legacy flat types are exempt during the migration window.
-_ENVELOPE_TYPES: frozenset[str] = frozenset(
-    {
-        "connection_init",
-        "connection_ack",
-        "request",
-        "response",
-        "notification",
-        "subscribe",
-        "next",
-        "error",
-        "complete",
-        "unsubscribe",
-        "receipt_response",
-        "disconnect",
-    }
-)
+# ``ping`` and ``pong`` carry ``proto`` but are validated leniently, so they
+# are exempt. Legacy flat types are also exempt during the migration window.
+_CONTROL_TYPES: frozenset[str] = frozenset({MessageType.PING.value, MessageType.PONG.value})
+_ENVELOPE_TYPES: frozenset[str] = VALID_TYPES - _CONTROL_TYPES
 
 
 def validate_message(msg: dict[str, Any]) -> list[str]:

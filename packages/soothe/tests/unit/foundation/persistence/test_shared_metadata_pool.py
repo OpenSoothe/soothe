@@ -37,7 +37,7 @@ def test_get_or_create_pool_uses_metadata_pool_size(monkeypatch) -> None:
         FakePool,
     )
     monkeypatch.setattr(
-        "soothe.foundation.persistence.postgres_provisioning.ensure_postgres_databases",
+        "soothe_nano.persistence.postgres_provisioning.ensure_postgres_databases",
         lambda _config: None,
     )
     monkeypatch.setattr(SharedMetadataPool, "_shared_metadata_pool", None, raising=False)
