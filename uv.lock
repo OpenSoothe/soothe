@@ -8882,7 +8882,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-sdk"
-version = "1.0.2"
+version = "1.0.3"
 source = { editable = "packages/soothe-sdk" }
 dependencies = [
     { name = "langchain-core" },

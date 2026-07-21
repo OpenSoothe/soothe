@@ -68,7 +68,7 @@ BRANCH_PRUNED = "soothe.internal.branch.pruned"
 
 # Autopilot internals (DETAILED)
 AUTOPILOT_GOAL_VALIDATED = "soothe.internal.autopilot.goal.validated"
-AUTOPILOT_SEND_BACK = "soothe.internal.autopilot.feedback.sent"
+AUTOPILOT_FEEDBACK_SENT = "soothe.internal.autopilot.feedback.sent"
 AUTOPILOT_RELATIONSHIP_DETECTED = "soothe.internal.autopilot.relationship.detected"
 AUTOPILOT_CHECKPOINT_SAVED = "soothe.internal.autopilot.checkpoint.saved"
 
@@ -133,10 +133,10 @@ BRANCH_RETRY_STARTED = "soothe.cognition.branch.retry.started"
 # Autopilot system (client UX)
 AUTOPILOT_STATUS_CHANGED = "soothe.system.autopilot.status.changed"
 AUTOPILOT_GOAL_CREATED = "soothe.system.autopilot.goal.created"
-AUTOPILOT_GOAL_PROGRESS = "soothe.system.autopilot.goal.reported"
+AUTOPILOT_GOAL_REPORTED = "soothe.system.autopilot.goal.reported"
 AUTOPILOT_GOAL_COMPLETED = "soothe.system.autopilot.goal.completed"
-AUTOPILOT_DREAMING_ENTERED = "soothe.system.autopilot.dreaming.started"
-AUTOPILOT_DREAMING_EXITED = "soothe.system.autopilot.dreaming.completed"
+AUTOPILOT_DREAMING_STARTED = "soothe.system.autopilot.dreaming.started"
+AUTOPILOT_DREAMING_COMPLETED = "soothe.system.autopilot.dreaming.completed"
 AUTOPILOT_GOAL_SUSPENDED = "soothe.system.autopilot.goal.suspended"
 AUTOPILOT_GOAL_BLOCKED = "soothe.system.autopilot.goal.blocked"
 
@@ -164,16 +164,16 @@ __all__ = [
     "WIRED_SUBAGENT_FAILED",
     "WIRED_SUBAGENT_STARTED",
     "AUTOPILOT_CHECKPOINT_SAVED",
-    "AUTOPILOT_DREAMING_ENTERED",
-    "AUTOPILOT_DREAMING_EXITED",
+    "AUTOPILOT_DREAMING_COMPLETED",
+    "AUTOPILOT_DREAMING_STARTED",
+    "AUTOPILOT_FEEDBACK_SENT",
     "AUTOPILOT_GOAL_BLOCKED",
     "AUTOPILOT_GOAL_COMPLETED",
     "AUTOPILOT_GOAL_CREATED",
-    "AUTOPILOT_GOAL_PROGRESS",
+    "AUTOPILOT_GOAL_REPORTED",
     "AUTOPILOT_GOAL_SUSPENDED",
     "AUTOPILOT_GOAL_VALIDATED",
     "AUTOPILOT_RELATIONSHIP_DETECTED",
-    "AUTOPILOT_SEND_BACK",
     "AUTOPILOT_STATUS_CHANGED",
     "BRANCH_ANALYZED",
     "BRANCH_CREATED",

@@ -31,8 +31,6 @@ RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Literal
 
 from soothe_sdk.core.events import (
@@ -46,18 +44,17 @@ from soothe_sdk.core.verbosity import VerbosityTier
 from .constants import (
     # Cognition - StrangeLoop
     AUTOPILOT_CHECKPOINT_SAVED,
-    AUTOPILOT_DREAMING_ENTERED,
-    AUTOPILOT_DREAMING_EXITED,
+    AUTOPILOT_DREAMING_COMPLETED,
+    AUTOPILOT_DREAMING_STARTED,
+    AUTOPILOT_FEEDBACK_SENT,
     AUTOPILOT_GOAL_BLOCKED,
     AUTOPILOT_GOAL_COMPLETED,
     AUTOPILOT_GOAL_CREATED,
-    AUTOPILOT_GOAL_PROGRESS,
+    AUTOPILOT_GOAL_REPORTED,
     AUTOPILOT_GOAL_SUSPENDED,
     AUTOPILOT_GOAL_VALIDATED,
-    # ... more imports below
     AUTOPILOT_MODE_SWITCHED,
     AUTOPILOT_RELATIONSHIP_DETECTED,
-    AUTOPILOT_SEND_BACK,
     # System - Autopilot
     AUTOPILOT_STATUS_CHANGED,
     BRANCH_ANALYZED,
@@ -592,223 +589,22 @@ class AutopilotModeSwitchedEvent(ProtocolEvent):
 
 
 # ---------------------------------------------------------------------------
-# Registry
+# Registry — re-exported from soothe_sdk.core.registry (canonical owner)
 # ---------------------------------------------------------------------------
-
-EventHandler = Any  # Callable[[dict[str, Any]], None]
-
-
-class EventPriority(Enum):
-    """Event priority levels for queue overflow management (IG-258).
-
-    Higher priority events are processed first and less likely to be dropped
-    when queues are near capacity.
-
-    Priority levels:
-    - CRITICAL: Never dropped, block if queue full (errors, cancellation)
-    - HIGH: Rarely dropped (tool results, subagent output)
-    - NORMAL: Standard priority (heartbeat, status updates)
-    - LOW: First to drop under pressure (debug, trace events)
-    """
-
-    CRITICAL = 0  # Never drop, block if necessary
-    HIGH = 1  # Rarely drop (tool/subagent results)
-    NORMAL = 2  # Standard priority (heartbeat, status)
-    LOW = 3  # First to drop (debug/trace)
-
-
-@dataclass(frozen=True)
-class EventMeta:
-    """Metadata for a registered event type."""
-
-    type_string: str
-    model: type[SootheEvent]
-    domain: str
-    component: str
-    action: str
-    verbosity: VerbosityTier
-    summary_template: str = ""
-    priority: EventPriority = EventPriority.NORMAL  # IG-258
-
-
-_DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
-    "internal": VerbosityTier.INTERNAL,
-    "lifecycle": VerbosityTier.INTERNAL,
-    "protocol": VerbosityTier.INTERNAL,
-    "cognition": VerbosityTier.NORMAL,
-    "loop": VerbosityTier.NORMAL,  # Loop relay events (clarification, RFC-622)
-    "tool": VerbosityTier.INTERNAL,  # RFC-0020: tool display via LangChain on_tool_call
-    "subagent": VerbosityTier.INTERNAL,  # IG-089: subagent internals hidden from clients
-    "output": VerbosityTier.NORMAL,
-    "error": VerbosityTier.NORMAL,
-    "agentic": VerbosityTier.NORMAL,
-}
-
-
-@dataclass
-class EventRegistry:
-    """Central registry for all Soothe event types.
-
-    Provides O(1) lookup by event type string, structural domain
-    classification, verbosity resolution, and handler dispatch.
-    """
-
-    _by_type: dict[str, EventMeta] = field(default_factory=dict)
-    _handlers: dict[str, list[EventHandler]] = field(default_factory=dict)
-
-    def register(self, meta: EventMeta) -> None:
-        """Register an event type with its metadata."""
-        self._by_type[meta.type_string] = meta
-
-    def get_meta(self, event_type: str) -> EventMeta | None:
-        """Look up metadata for an event type string."""
-        return self._by_type.get(event_type)
-
-    def classify(self, event_type: str) -> str:
-        """Return the domain from an event type string via ``split('.')[1]``."""
-        segments = event_type.split(".")
-        _min_segments = 2
-        if len(segments) >= _min_segments and segments[1] == "internal":
-            return "internal"
-        return segments[1] if len(segments) >= _min_segments else "unknown"
-
-    def get_verbosity(self, event_type: str) -> VerbosityTier:
-        """Return the VerbosityTier for an event type."""
-        meta = self._by_type.get(event_type)
-        if meta:
-            return meta.verbosity
-        domain = self.classify(event_type)
-        return _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.INTERNAL)
-
-    def on(self, event_type: str, handler: EventHandler) -> None:
-        """Register a handler for an event type (or ``*`` for fallback)."""
-        self._handlers.setdefault(event_type, []).append(handler)
-
-    def dispatch(self, event: dict[str, Any]) -> None:
-        """Dispatch an event dict to registered handlers."""
-        etype = event.get("type", "")
-        handlers = self._handlers.get(etype)
-        if handlers:
-            for h in handlers:
-                h(event)
-        elif "*" in self._handlers:
-            for h in self._handlers["*"]:
-                h(event)
-
-
-REGISTRY = EventRegistry()
-
-
-def _reg(
-    type_string: str,
-    model: type[SootheEvent],
-    verbosity: VerbosityTier | None = None,
-    summary_template: str = "",
-    priority: EventPriority = EventPriority.NORMAL,
-) -> None:
-    """Internal helper for registering core events.
-
-    Args:
-        type_string: Event type string (e.g., "soothe.internal.loop.started").
-        model: Event model class.
-        verbosity: Optional VerbosityTier override.
-        summary_template: Optional template for event summaries.
-        priority: Event priority for queue overflow management (IG-258).
-    """
-    parts = type_string.split(".")
-    if len(parts) >= 2 and parts[1] == "internal":
-        domain = "internal"
-        component = parts[2] if len(parts) >= 3 else ""
-        action = ".".join(parts[3:]) if len(parts) >= 4 else ""
-        default_tier = VerbosityTier.INTERNAL
-    else:
-        domain = parts[1] if len(parts) >= 2 else "unknown"
-        component = parts[2] if len(parts) >= 3 else ""
-        action = parts[3] if len(parts) >= 4 else ""
-        default_tier = _DOMAIN_DEFAULT_TIER.get(domain, VerbosityTier.INTERNAL)
-    v = verbosity if verbosity is not None else default_tier
-    REGISTRY.register(
-        EventMeta(
-            type_string=type_string,
-            model=model,
-            domain=domain,
-            component=component,
-            action=action,
-            verbosity=v,
-            summary_template=summary_template,
-            priority=priority,
-        )
-    )
-
-
-def register_event(
-    event_class: type[SootheEvent],
-    verbosity: VerbosityTier | None = None,
-    summary_template: str = "",
-    priority: EventPriority = EventPriority.NORMAL,
-) -> None:
-    """Register an event class with the global event registry.
-
-    This is the public API for registering events from modules and plugins.
-    It auto-extracts the type string from the event class's Pydantic model
-    and sets appropriate defaults based on the event's domain.
-
-    **Usage**:
-
-    ```python
-    from soothe.foundation.events import register_event, EventPriority
-    from soothe_sdk.events import SootheEvent
-
-
-    class MyCustomEvent(SootheEvent):
-        type: str = "soothe_nano.plugin.custom.event"
-        data: str
-
-
-    # Register the event with custom priority (IG-258)
-    register_event(
-        MyCustomEvent,
-        verbosity="tool_activity",
-        summary_template="Custom event: {data}",
-        priority=EventPriority.HIGH,  # Less likely to be dropped
-    )
-    ```
-
-    Args:
-        event_class: Event class to register (must have 'type' field with default value).
-        verbosity: Optional verbosity category. If not provided, inferred from domain.
-        summary_template: Optional template for event summaries (supports field interpolation).
-        priority: Event priority for queue overflow management (IG-258). Default: NORMAL.
-
-    Raises:
-        KeyError: If event class doesn't have 'type' field with default value.
-    """
-    # Extract type string from Pydantic model field
-    if "type" not in event_class.model_fields:
-        msg = f"Event class {event_class.__name__} must have a 'type' field with a default value"
-        raise KeyError(msg)
-
-    type_field = event_class.model_fields["type"]
-    type_string = type_field.default
-
-    if not isinstance(type_string, str):
-        msg = f"Event class {event_class.__name__} 'type' field must have a string default value"
-        raise KeyError(msg)
-
-    # Use internal _reg helper for actual registration
-    _reg(
-        type_string,
-        event_class,
-        verbosity=verbosity,
-        summary_template=summary_template,
-        priority=priority,
-    )
-
-    if type_string.startswith("soothe.subagent."):
-        from soothe_sdk.core.subagent_wire import register_subagent_wire_event_types
-
-        register_subagent_wire_event_types(type_string)
-
+# The EventPriority / EventMeta / EventRegistry trio, the REGISTRY singleton,
+# and register_event/_reg live in soothe_sdk.core.registry so that nano, the
+# host, and the daemon share one authoritative event-type index. nano modules
+# register directly into that shared REGISTRY at import time (see the module
+# imports below), so no host-side merge loop is required.
+from soothe_sdk.core.registry import (  # noqa: E402,F401
+    REGISTRY,
+    EventHandler,
+    EventMeta,
+    EventPriority,
+    EventRegistry,
+    _reg,
+    register_event,
+)
 
 # -- Lifecycle ---------------------------------------------------------------
 _reg(
@@ -1048,7 +844,7 @@ class _AutopilotGoalCreated(SootheEvent):
     description: str = ""
 
 
-class _AutopilotGoalProgress(SootheEvent):
+class _AutopilotGoalReported(SootheEvent):
     type: str = "soothe.system.autopilot.goal.reported"
     goal_id: str
     status: str = ""
@@ -1059,12 +855,12 @@ class _AutopilotGoalCompleted(SootheEvent):
     goal_id: str
 
 
-class _AutopilotDreamingEntered(SootheEvent):
+class _AutopilotDreamingStarted(SootheEvent):
     type: str = "soothe.system.autopilot.dreaming.started"
     timestamp: str = ""
 
 
-class _AutopilotDreamingExited(SootheEvent):
+class _AutopilotDreamingCompleted(SootheEvent):
     type: str = "soothe.system.autopilot.dreaming.completed"
     timestamp: str = ""
     trigger: str = ""
@@ -1082,7 +878,7 @@ class _AutopilotGoalSuspended(SootheEvent):
     reason: str = ""
 
 
-class _AutopilotSendBack(SootheEvent):
+class _AutopilotFeedbackSent(SootheEvent):
     type: str = "soothe.internal.autopilot.feedback.sent"
     goal_id: str
     remaining_budget: int = 0
@@ -1111,13 +907,13 @@ class _AutopilotGoalBlocked(SootheEvent):
 
 _reg(AUTOPILOT_STATUS_CHANGED, _AutopilotStatusChanged, verbosity=VerbosityTier.NORMAL)
 _reg(AUTOPILOT_GOAL_CREATED, _AutopilotGoalCreated, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILOT_GOAL_PROGRESS, _AutopilotGoalProgress, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_GOAL_REPORTED, _AutopilotGoalReported, verbosity=VerbosityTier.NORMAL)
 _reg(AUTOPILOT_GOAL_COMPLETED, _AutopilotGoalCompleted, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILOT_DREAMING_ENTERED, _AutopilotDreamingEntered, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILOT_DREAMING_EXITED, _AutopilotDreamingExited, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_DREAMING_STARTED, _AutopilotDreamingStarted, verbosity=VerbosityTier.NORMAL)
+_reg(AUTOPILOT_DREAMING_COMPLETED, _AutopilotDreamingCompleted, verbosity=VerbosityTier.NORMAL)
 _reg(AUTOPILOT_GOAL_VALIDATED, _AutopilotGoalValidated, verbosity=VerbosityTier.INTERNAL)
 _reg(AUTOPILOT_GOAL_SUSPENDED, _AutopilotGoalSuspended, verbosity=VerbosityTier.NORMAL)
-_reg(AUTOPILOT_SEND_BACK, _AutopilotSendBack, verbosity=VerbosityTier.INTERNAL)
+_reg(AUTOPILOT_FEEDBACK_SENT, _AutopilotFeedbackSent, verbosity=VerbosityTier.INTERNAL)
 _reg(
     AUTOPILOT_RELATIONSHIP_DETECTED,
     _AutopilotRelationshipDetected,
@@ -1134,17 +930,13 @@ _reg(AUTOPILOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORM
 # ---------------------------------------------------------------------------
 import importlib as _importlib  # noqa: E402
 
+# nano modules register directly into the shared soothe_sdk.core.registry REGISTRY
+# at import time, so importing them here is sufficient — no host-side merge needed.
+import soothe_nano.mcp.mcp_events as _mcp_events  # noqa: F401, E402
+import soothe_nano.plugin.events as _plugin_events  # noqa: F401, E402
 import soothe_nano.skills.events as _skill_events  # noqa: F401, E402
 import soothe_nano.subagents.academic_research.events as _academic_research_events  # noqa: F401, E402
 import soothe_nano.subagents.browser_use.events as _browser_use_events  # noqa: F401, E402
 import soothe_nano.subagents.deep_research.events as _deep_research_events  # noqa: F401, E402
 
 _importlib.import_module("soothe.subagents.veritas.events")
-import soothe_nano.mcp.mcp_events as _mcp_events  # noqa: F401, E402
-
-# Subagent/MCP modules register into soothe_nano.events.REGISTRY; merge into soothe.
-from soothe_nano.events.catalog import REGISTRY as _NANO_EVENT_REGISTRY  # noqa: E402
-
-for _meta in list(_NANO_EVENT_REGISTRY._by_type.values()):
-    if REGISTRY.get_meta(_meta.type_string) is None:
-        REGISTRY.register(_meta)
