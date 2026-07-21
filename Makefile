@@ -1,8 +1,8 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
 # This Makefile manages packages:
-# 1. soothe-sdk        - Shared SDK (events/display/wire/protocols)
-# 2. soothe-nano       - Batteries-included Coding CoreAgent
+# 1. soothe-sdk        - Shared SDK submodule (mirasoth/soothe-sdk)
+# 2. soothe-nano       - Coding CoreAgent submodule (mirasoth/soothe-nano)
 # 3. soothe-cli        - CLI client (Typer CLI + Textual TUI)
 # 4. soothe            - StrangeLoop / Autopilot / host composition
 # 5. soothe-daemon     - Daemon server (WebSocket/HTTP transports)

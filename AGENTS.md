@@ -108,8 +108,8 @@ See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLo
 
 ```
 packages/
-├── soothe-sdk/      # Shared contracts: events/display/wire + soothe_sdk.protocols
-├── soothe-nano/     # Batteries-included Coding CoreAgent (deepagents); no StrangeLoop/Autopilot
+├── soothe-sdk/      # Shared contracts submodule (mirasoth/soothe-sdk)
+├── soothe-nano/     # Coding CoreAgent submodule (mirasoth/soothe-nano); no StrangeLoop/Autopilot
 ├── soothe/          # Host composition: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
 ├── soothe-daemon/   # Daemon server (soothed); depends on soothe + soothe-nano directly
 ├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)

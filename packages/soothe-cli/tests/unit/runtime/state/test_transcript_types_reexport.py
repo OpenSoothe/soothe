@@ -1,11 +1,10 @@
 """Verify the CLI re-export shim wires through to the SDK types unchanged.
 
 The CLI module ``soothe_cli.runtime.state.transcript`` used to *define*
-``MessageData``/``MessageType``/``ToolStatus``. RFC-413 moved the
-definitions into ``soothe_sdk.display.transcript_types`` and left a
-re-export shim behind. This test guards against the shim being broken
-into a duplicate-class copy (which would break ``isinstance`` checks in
-the TUI).
+``MessageData``/``MessageType``/``ToolStatus``. Those definitions live in
+``soothe_sdk.display.transcript_types`` with a re-export shim behind.
+This test guards against the shim being broken into a duplicate-class
+copy (which would break ``isinstance`` checks in the TUI).
 """
 
 from __future__ import annotations

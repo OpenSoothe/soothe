@@ -19,3 +19,6 @@
 [submodule "packages/soothe-nano"]
 	path = packages/soothe-nano
 	url = git@github.com:mirasoth/soothe-nano.git
+[submodule "packages/soothe-sdk"]
+	path = packages/soothe-sdk
+	url = git@github.com:mirasoth/soothe-sdk.git
