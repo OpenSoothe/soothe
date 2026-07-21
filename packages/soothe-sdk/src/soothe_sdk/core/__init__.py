@@ -12,6 +12,13 @@ __all__ = [
     "SubagentEvent",
     "OutputEvent",
     "ErrorEvent",
+    # Event registry (canonical, shared across the stack)
+    "EventMeta",
+    "EventPriority",
+    "EventRegistry",
+    "REGISTRY",
+    "EventHandler",
+    "register_event",
     # Event type constants - plan
     "PLAN_CREATED",
     # Tool (DEBUG/DETAILED)
@@ -88,6 +95,14 @@ from soothe_sdk.core.exceptions import (
     SubagentCreationError,
     ToolCreationError,
     ValidationError,
+)
+from soothe_sdk.core.registry import (
+    REGISTRY,
+    EventHandler,
+    EventMeta,
+    EventPriority,
+    EventRegistry,
+    register_event,
 )
 from soothe_sdk.core.types import VerbosityLevel
 from soothe_sdk.core.verbosity import VerbosityTier, should_show

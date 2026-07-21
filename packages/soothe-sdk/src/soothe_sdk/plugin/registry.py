@@ -1,140 +1,14 @@
-"""Plugin-side event registration (community plugin SDK decoupling).
+"""Plugin-side event registration.
 
-Provides a lightweight event registration mechanism for plugin authors
-without requiring the full host runtime. Events registered here are
-stored in a module-level dict that the host reads during plugin loading.
+Event registration now lives in :mod:`soothe_sdk.core.registry`, which owns
+the canonical ``EventRegistry`` / ``EventMeta`` / ``EventPriority`` trio and
+the shared ``REGISTRY`` singleton. This module re-exports ``register_event``
+so plugin authors can keep the ``from soothe_sdk.plugin import register_event``
+import path.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from soothe_sdk.core.registry import register_event
 
-from pydantic_core import PydanticUndefined
-
-from soothe_sdk.core.events import SootheEvent
-from soothe_sdk.core.verbosity import VerbosityTier
-
-
-@dataclass(frozen=True)
-class PluginEventMeta:
-    """Metadata for a plugin-registered event type.
-
-    This is a simplified version of the host's EventMeta, containing
-    only what plugin authors need to provide.
-
-    Args:
-        type_string: The event type identifier (e.g., "soothe_nano.plugin.myevent").
-        model: The Pydantic event class (must inherit from SootheEvent).
-        verbosity: Default verbosity tier for this event.
-        summary_template: Template string for event summaries.
-    """
-
-    type_string: str
-    model: type[SootheEvent]
-    verbosity: VerbosityTier
-    summary_template: str = ""
-
-
-# Module-level registry for plugin events
-_PLUGIN_EVENTS: dict[str, PluginEventMeta] = {}
-
-
-def register_event(
-    event_class: type[SootheEvent],
-    verbosity: VerbosityTier | str | None = None,
-    summary_template: str = "",
-) -> None:
-    """Register a custom event type for a plugin.
-
-    This function stores event metadata in a module-level dict that
-    the host's plugin loader reads during initialization. The host
-    then merges these events into its own global EventRegistry.
-
-    Plugin authors call this at module import time to register their
-    custom events:
-
-    ```python
-    from soothe_sdk.core.events import SubagentEvent
-    from soothe_sdk.core.verbosity import VerbosityTier
-    from soothe_sdk.plugin import register_event
-
-
-    class MyCustomEvent(SubagentEvent):
-        type: str = "soothe_nano.plugin.myplugin.custom"
-        data: str
-
-
-    register_event(MyCustomEvent, verbosity=VerbosityTier.NORMAL, summary_template="Custom: {data}")
-    ```
-
-    Args:
-        event_class: The Pydantic event model class (must have a `type` field with default).
-        verbosity: Verbosity tier for this event (VerbosityTier or string like "normal").
-        summary_template: Template for event summaries (use {field} placeholders).
-
-    Raises:
-        ValueError: If event_class doesn't have a `type` field with default value.
-    """
-    # Pydantic v2 does not mirror fields as class attributes; use model_fields only.
-    model_fields = getattr(event_class, "model_fields", None)
-    if model_fields is None:
-        raise ValueError(
-            f"Event class {event_class.__name__} must be a Pydantic v2 model with a 'type' field"
-        )
-
-    type_field = model_fields.get("type")
-    if type_field is None:
-        raise ValueError(f"Event class {event_class.__name__} must have a 'type' field")
-
-    type_default = type_field.default
-    if type_default is PydanticUndefined or type_default is None:
-        raise ValueError(
-            f"Event class {event_class.__name__} must have a 'type' field with a default value"
-        )
-
-    type_string = type_default
-
-    # Normalize verbosity to VerbosityTier. Only two tiers exist: NORMAL
-    # (client-visible) and INTERNAL (host-only). Legacy string aliases
-    # `quiet`/`detailed`/`debug` collapse to the nearest survivor.
-    if verbosity is None:
-        verbosity_tier = VerbosityTier.NORMAL
-    elif isinstance(verbosity, str):
-        verbosity_map = {
-            "quiet": VerbosityTier.NORMAL,
-            "normal": VerbosityTier.NORMAL,
-            "detailed": VerbosityTier.INTERNAL,
-            "debug": VerbosityTier.INTERNAL,
-            "internal": VerbosityTier.INTERNAL,
-        }
-        verbosity_tier = verbosity_map.get(verbosity.lower(), VerbosityTier.NORMAL)
-    else:
-        verbosity_tier = verbosity
-
-    # Store in module-level dict
-    _PLUGIN_EVENTS[type_string] = PluginEventMeta(
-        type_string=type_string,
-        model=event_class,
-        verbosity=verbosity_tier,
-        summary_template=summary_template,
-    )
-
-
-def get_plugin_events() -> dict[str, PluginEventMeta]:
-    """Get all plugin-registered events.
-
-    Called by the host's plugin loader to retrieve event metadata
-    and merge into the host's EventRegistry.
-
-    Returns:
-        Dict mapping event type strings to PluginEventMeta instances.
-    """
-    return _PLUGIN_EVENTS.copy()
-
-
-def clear_plugin_events() -> None:
-    """Clear all plugin-registered events.
-
-    Used during testing or when unloading plugins.
-    """
-    _PLUGIN_EVENTS.clear()
+__all__ = ["register_event"]
