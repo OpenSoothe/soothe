@@ -161,8 +161,8 @@ def tool(
         name: Tool name in snake_case (used to invoke the tool).
         description: Tool description for the LLM (shown in tool selection).
         group: Optional tool group name for organization.
-        system_context: Optional XML fragment for system message when tool is active (RFC-210).
-        triggers: Optional list of system section names this tool triggers (RFC-210).
+        system_context: Optional XML fragment for system message when tool is active.
+        triggers: Optional list of system section names this tool triggers.
 
     Returns:
         Decorated method with tool metadata.
@@ -187,8 +187,8 @@ def tool(
         func._tool_name = name
         func._tool_description = description
         func._tool_group = group
-        func._tool_system_context = system_context  # RFC-210
-        func._tool_triggers = triggers or []  # RFC-210
+        func._tool_system_context = system_context
+        func._tool_triggers = triggers or []
         func._tool_metadata = {"name": name, "description": description}
 
         @wraps(func)
@@ -214,8 +214,8 @@ def tool(
         wrapper._tool_name = name
         wrapper._tool_description = description
         wrapper._tool_group = group
-        wrapper._tool_system_context = system_context  # RFC-210
-        wrapper._tool_triggers = triggers or []  # RFC-210
+        wrapper._tool_system_context = system_context
+        wrapper._tool_triggers = triggers or []
         wrapper._tool_metadata = {"name": name, "description": description}
 
         return wrapper
@@ -305,8 +305,8 @@ def subagent(
         name: Subagent name in snake_case (used in task tool to invoke subagent).
         description: Subagent description for the task tool.
         model: Optional default model string (e.g., "openai:gpt-4o-mini").
-        system_context: Optional XML fragment for system message when subagent is active (RFC-210).
-        triggers: Optional list of system section names this subagent triggers (RFC-210).
+        system_context: Optional XML fragment for system message when subagent is active.
+        triggers: Optional list of system section names this subagent triggers.
         display_name: Optional user-facing label (legacy plugins). When omitted,
             derived from ``name`` (snake_case to PascalCase).
 
@@ -352,8 +352,8 @@ def subagent(
         func._subagent_name = name
         func._subagent_description = description
         func._subagent_model = model
-        func._subagent_system_context = system_context  # RFC-210
-        func._subagent_triggers = triggers or []  # RFC-210
+        func._subagent_system_context = system_context
+        func._subagent_triggers = triggers or []
         func._subagent_display_name = display_name
         func._subagent_metadata = {
             "name": name,
@@ -372,8 +372,8 @@ def subagent(
         wrapper._subagent_name = name
         wrapper._subagent_description = description
         wrapper._subagent_model = model
-        wrapper._subagent_system_context = system_context  # RFC-210
-        wrapper._subagent_triggers = triggers or []  # RFC-210
+        wrapper._subagent_system_context = system_context
+        wrapper._subagent_triggers = triggers or []
         wrapper._subagent_display_name = display_name
         wrapper._subagent_metadata = {
             "name": name,

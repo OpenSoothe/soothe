@@ -497,7 +497,7 @@ class LoopCardManager:
         """Fold the live ledger into an immutable goal snapshot (RFC-631)."""
         from datetime import UTC, datetime
 
-        from soothe_nano.backends.persistence.display_store import get_display_card_store
+        from soothe_daemon.display.display_store import get_display_card_store
 
         try:
             state = self._buffers.get(loop_id)
@@ -546,7 +546,7 @@ class LoopCardManager:
 
     async def ensure_snapshots_migrated(self, loop_id: str) -> None:
         """Lazy migration: synthesize goal snapshots from legacy card ledger."""
-        from soothe_nano.backends.persistence.display_store import get_display_card_store
+        from soothe_daemon.display.display_store import get_display_card_store
 
         store = get_display_card_store()
         if store.goal_snapshot_count(loop_id) > 0:
@@ -612,8 +612,9 @@ class LoopCardManager:
         loop_status: str | None = None,
     ) -> dict[str, Any]:
         """Return frozen goal snapshots plus the live card tail."""
-        from soothe_nano.backends.persistence.display_store import get_display_card_store
         from soothe_sdk.display.card_ledger import card_to_wire_dict
+
+        from soothe_daemon.display.display_store import get_display_card_store
 
         await self.ensure_snapshots_migrated(loop_id)
         store = get_display_card_store()

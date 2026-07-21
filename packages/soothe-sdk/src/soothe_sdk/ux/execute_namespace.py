@@ -1,4 +1,4 @@
-"""LangGraph execute stream namespace helpers (IG-514 / RFC-628).
+"""LangGraph execute stream namespace helpers.
 
 Namespace classification for tool stamping and TUI routing:
 
@@ -9,7 +9,7 @@ Namespace classification for tool stamping and TUI routing:
 | ('execute:run_id', 'tools:')| Subgraph       | t{n}:       | SubAgent card     |
 | ('tools:...',)              | Subgraph       | t{n}:       | SubAgent card     |
 
-IG-514: Parallel steps use two-element namespaces where the second element
+Parallel steps use two-element namespaces where the second element
 is an integer branch index, NOT a subgraph namespace like 'tools:*'.
 These must be classified as step-level (s: prefix) to display on step cards.
 """
@@ -75,7 +75,7 @@ def is_root_execute_namespace_key(ns_key: tuple[str, ...]) -> bool:
 def is_step_level_execute_namespace_key(ns_key: tuple[str, ...]) -> bool:
     """True when tools belong to the plan-step graph, not ``tools:`` subagent subgraphs.
 
-    IG-514: This includes BOTH:
+    This includes BOTH:
     - Root execute namespaces ('execute:{run_id}',)
     - Parallel branch namespaces ('execute:{run_id}', 'N')
 

@@ -364,7 +364,7 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
-# LangChain Community Requests toolkit (IG-339)
+# LangChain Community Requests toolkit
 # ---------------------------------------------------------------------------
 
 _register(
@@ -682,7 +682,7 @@ _register(
 )
 
 # ---------------------------------------------------------------------------
-# Policy / security helpers (IG-300)
+# Policy / security helpers
 # ---------------------------------------------------------------------------
 
 _FALLBACK_PATH_ARG_KEYS: tuple[str, ...] = (
@@ -719,7 +719,7 @@ def extract_filesystem_path_for_policy(tool_name: str, tool_args: dict[str, Any]
         A non-empty path string, or ``None`` when no candidate is present.
     """
     meta = get_tool_meta(tool_name)
-    # Glob defaults to virtual search root when `path` is omitted (IG-366).
+    # Glob defaults to virtual search root when `path` is omitted.
     if meta and meta.name == "glob":
         raw_path = tool_args.get("path")
         if raw_path is None or (isinstance(raw_path, str) and not raw_path.strip()):

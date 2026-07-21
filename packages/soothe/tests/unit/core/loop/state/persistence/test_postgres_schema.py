@@ -17,7 +17,13 @@ from soothe.foundation.sloop.state.persistence.postgres_schema import (
 
 @pytest.mark.asyncio
 async def test_initialize_schema_runs_checkpoints_init_and_migrations() -> None:
-    """Pool open delegates to soothe_checkpoints init + versioned migrations."""
+    """Pool open delegates to soothe_checkpoints init + versioned migrations.
+
+    IG-678 PR-3: the host pins ``sql_root`` to its own sql dir so the
+    StrangeLoop/CE schema no longer lives in ``soothe_nano``.
+    """
+    from soothe.foundation.sloop.state.persistence.postgres_schema import _HOST_SQL_ROOT
+
     pool = object()
     with patch(
         "soothe.foundation.sloop.state.persistence.postgres_schema.initialize_database",
@@ -26,4 +32,4 @@ async def test_initialize_schema_runs_checkpoints_init_and_migrations() -> None:
     ) as run_init:
         await initialize_agentloop_postgres_schema(pool)  # type: ignore[arg-type]
 
-    run_init.assert_awaited_once_with(pool, AGENTLOOP_POSTGRES_DATABASE)
+    run_init.assert_awaited_once_with(pool, AGENTLOOP_POSTGRES_DATABASE, sql_root=_HOST_SQL_ROOT)

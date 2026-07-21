@@ -1,9 +1,7 @@
 """Parsing utilities for goal and plan text processing.
 
 Utility functions for parsing goals, plans, and other text-based structures
-used by both daemon and CLI.
-
-Part of RFC-610 SDK module structure refactoring (IG-185).
+used by both the SDK and CLI.
 """
 
 import logging
@@ -16,9 +14,9 @@ _ENV_VAR_RE = re.compile(r"^\$\{(\w+)\}$")
 
 
 def parse_autopilot_goals(text: str) -> list[str]:
-    """Parse autopilot goals from text.
+    """Parse goal statements from text.
 
-    Extracts goal statements from autopilot input text.
+    Extracts goal statements from input text.
 
     Args:
         text: Text containing goal definitions.
@@ -90,7 +88,7 @@ def resolve_provider_env(value: str, *, provider_name: str, field_name: str) -> 
 PATH_ARG_PATTERN = re.compile(r"^(file_path|path|directory|dir|folder|cwd)\b", re.IGNORECASE)
 """Regex pattern for detecting path-like argument names in tool calls.
 
-Renamed from is_path_argument in IG-461 (SDK refactoring).
+Renamed from is_path_argument (SDK refactoring).
 The original name was misleading - this is a pattern, not a function.
 """
 

@@ -1,8 +1,8 @@
-"""Plugin-side event registration (IG-175: Community plugin SDK decoupling).
+"""Plugin-side event registration (community plugin SDK decoupling).
 
 Provides a lightweight event registration mechanism for plugin authors
-without requiring the full daemon runtime. Events registered here are
-stored in a module-level dict that the daemon reads during plugin loading.
+without requiring the full host runtime. Events registered here are
+stored in a module-level dict that the host reads during plugin loading.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from soothe_sdk.core.verbosity import VerbosityTier
 class PluginEventMeta:
     """Metadata for a plugin-registered event type.
 
-    This is a simplified version of the daemon's EventMeta, containing
+    This is a simplified version of the host's EventMeta, containing
     only what plugin authors need to provide.
 
     Args:
@@ -47,7 +47,7 @@ def register_event(
     """Register a custom event type for a plugin.
 
     This function stores event metadata in a module-level dict that
-    the daemon's plugin loader reads during initialization. The daemon
+    the host's plugin loader reads during initialization. The host
     then merges these events into its own global EventRegistry.
 
     Plugin authors call this at module import time to register their
@@ -95,7 +95,7 @@ def register_event(
     type_string = type_default
 
     # Normalize verbosity to VerbosityTier. Only two tiers exist: NORMAL
-    # (client-visible) and INTERNAL (daemon-only). Legacy string aliases
+    # (client-visible) and INTERNAL (host-only). Legacy string aliases
     # `quiet`/`detailed`/`debug` collapse to the nearest survivor.
     if verbosity is None:
         verbosity_tier = VerbosityTier.NORMAL
@@ -123,8 +123,8 @@ def register_event(
 def get_plugin_events() -> dict[str, PluginEventMeta]:
     """Get all plugin-registered events.
 
-    Called by the daemon's plugin loader to retrieve event metadata
-    and merge into the daemon's EventRegistry.
+    Called by the host's plugin loader to retrieve event metadata
+    and merge into the host's EventRegistry.
 
     Returns:
         Dict mapping event type strings to PluginEventMeta instances.

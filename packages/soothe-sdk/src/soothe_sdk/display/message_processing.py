@@ -2,7 +2,7 @@
 
 This module provides helper functions for message handling logic to ensure
 consistent behavior between headless CLI mode and the TUI interface. Lives
-in the SDK (RFC-413) so the daemon-resident ``CardBinder`` can reuse it
+in the SDK so the host-resident ``CardBinder`` can reuse it
 without importing client code.
 """
 
@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from typing import Any, NamedTuple
 
 # ============================================================================
-# Shared Tool Call Streaming Helpers (IG-053)
+# Shared Tool Call Streaming Helpers
 # ============================================================================
 
 
@@ -243,7 +243,7 @@ def ingest_tool_call_stream_state(
 ) -> str:
     """Accumulate ``tool_call_chunks`` and seed ``tool_calls`` from one stream message.
 
-    Works for LangChain message objects and wire dicts (daemon WebSocket path).
+    Works for LangChain message objects and wire dicts (host WebSocket path).
 
     Args:
         pending_tool_calls: Dict to store pending tool calls.

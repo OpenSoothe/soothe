@@ -1,7 +1,7 @@
 """Shared message-display filtering for live and recovered TUI rendering.
 
-Lives in the SDK (RFC-413) so the daemon-resident ``CardBinder`` can reuse
-it without importing client code.
+Lives in the SDK so server-side card-binding code can reuse it without
+importing client code.
 """
 
 from __future__ import annotations

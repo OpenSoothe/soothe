@@ -7,6 +7,7 @@ IG-055: Backend-agnostic delegation pattern supporting PostgreSQL and SQLite
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -31,12 +32,22 @@ class StrangeLoopCheckpointPersistenceManager:
     Respects persistence.default_backend configuration (PostgreSQL or SQLite).
     """
 
-    def __init__(self, config: SootheConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: SootheConfig | None = None,
+        *,
+        display_loop_purger: Callable[[str], None] | None = None,
+    ) -> None:
         """Initialize persistence manager with backend selection.
 
         Args:
             config: SootheConfig for backend selection. If None, uses SQLite.
+            display_loop_purger: Optional callable that purges a loop's display
+                card data (``delete_loop(loop_id)``). Injected by the daemon,
+                which owns the display card store (IG-678 PR-2). No-op when None
+                (keeps the host free of daemon imports).
         """
+        self._display_loop_purger = display_loop_purger
         # Determine backend type
         backend_type = "sqlite"
         if config and config.persistence.default_backend == "postgresql":
@@ -76,6 +87,8 @@ class StrangeLoopCheckpointPersistenceManager:
     async def for_shared_checkpoint_pool(
         cls,
         config: SootheConfig,
+        *,
+        display_loop_purger: Callable[[str], None] | None = None,
     ) -> StrangeLoopCheckpointPersistenceManager:
         """Build a manager backed by the process-wide checkpoint pool.
 
@@ -84,7 +97,7 @@ class StrangeLoopCheckpointPersistenceManager:
         per call.
         """
         if config.persistence.default_backend != "postgresql":
-            return cls(config=config)
+            return cls(config=config, display_loop_purger=display_loop_purger)
 
         from soothe.foundation.sloop.state.persistence.postgres_backend import (
             PostgreSQLPersistenceBackend,
@@ -106,6 +119,7 @@ class StrangeLoopCheckpointPersistenceManager:
         manager = cls.__new__(cls)
         manager._uses_shared_sqlite = False
         manager._uses_shared_postgres = True
+        manager._display_loop_purger = display_loop_purger
         manager._backend = PostgreSQLPersistenceBackend(
             dsn=dsn,
             pool_size=0,
@@ -237,14 +251,13 @@ class StrangeLoopCheckpointPersistenceManager:
         """Delete loop row and related execution tables (keeps workspace dirs)."""
         import asyncio
 
-        from soothe_nano.backends.persistence.display_store import get_display_card_store
-
         from soothe.foundation.context.persistence.sqlite_backend import (
             purge_loop_context_engine_state,
         )
 
         await self._backend.purge_loop_execution_data(loop_id)
-        await asyncio.to_thread(get_display_card_store().delete_loop, loop_id)
+        if self._display_loop_purger is not None:
+            await asyncio.to_thread(self._display_loop_purger, loop_id)
         await asyncio.to_thread(purge_loop_context_engine_state, loop_id)
         logger.info("Purged loop execution data: loop=%s", loop_id)
 

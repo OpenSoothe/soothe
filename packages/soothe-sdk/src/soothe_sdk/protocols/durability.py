@@ -1,4 +1,4 @@
-"""DurabilityProtocol -- thread lifecycle management (RFC-0002 Module 5)."""
+"""DurabilityProtocol -- thread lifecycle management."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ class ThreadMetadata(BaseModel):
         tags: Categorical tags for filtering.
         plan_summary: Brief summary of the thread's plan (if any).
         policy_profile: Name of the active policy profile.
-        labels: User-defined labels for organization (RFC-452).
-        priority: Thread priority level (RFC-452).
-        category: User-defined category (RFC-452).
+        labels: User-defined labels for organization.
+        priority: Thread priority level.
+        category: User-defined category.
     """
 
     @model_validator(mode="before")
@@ -30,7 +30,7 @@ class ThreadMetadata(BaseModel):
     tags: list[str] = Field(default_factory=list)
     plan_summary: str | None = None
     policy_profile: str = "standard"
-    # RFC-452: Enhanced metadata
+    # Enhanced metadata
     labels: list[str] = Field(default_factory=list)
     priority: Literal["low", "normal", "high"] = "normal"
     category: str | None = None
@@ -94,7 +94,7 @@ class DurabilityProtocol(Protocol):
     """Protocol for thread lifecycle management.
 
     State persistence (checkpoints, artifacts) is handled by
-    ``RunArtifactStore`` (RFC-0010).
+    ``RunArtifactStore``.
     """
 
     async def create_thread(

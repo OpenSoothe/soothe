@@ -7,7 +7,6 @@ import logging
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
-from soothe_nano.backends.persistence.display_store import get_display_card_store
 from soothe_sdk.display.card_ledger import (
     CardMutation,
     InMemoryCardLedger,
@@ -15,6 +14,8 @@ from soothe_sdk.display.card_ledger import (
     card_to_wire_dict,
     utc_now_iso,
 )
+
+from soothe_daemon.display.display_store import get_display_card_store
 
 if TYPE_CHECKING:
     from soothe_sdk.display.transcript_types import MessageData

@@ -1,13 +1,13 @@
-"""Pure event → ``MessageData`` binding logic (RFC-413).
+"""Pure event → ``MessageData`` binding logic.
 
 The functions here have **no Textual / widget / rendering dependencies** so
-the same logic can run from the TUI and from the daemon-resident card
+the same logic can run from the TUI and from the host-resident card
 ledger without source changes.
 
 Inputs are LangChain checkpoint messages or persisted activity-event rows
-from the daemon conversation log. Outputs are lightweight ``MessageData``
+from the host conversation log. Outputs are lightweight ``MessageData``
 objects suitable for ``MessageStore.bulk_load`` (TUI) or ``card.*`` frame
-emission (daemon).
+emission (host).
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def merge_consecutive_assistant_cards(cards: list[MessageData]) -> list[MessageD
     """Collapse legacy streaming assistant fragments into one card per reply.
 
     Live TUI streaming appends deltas to a single ``AssistantMessage`` widget.
-    The daemon card binder historically emitted one ``MessageData`` per chunk,
+    The host card binder historically emitted one ``MessageData`` per chunk,
     each with a fresh id — resume then paints dozens of one-line cards.
 
     Only merges runs that look like stream debris (many tiny fragments), not
@@ -328,7 +328,7 @@ def convert_event_to_message_data(event: dict[str, Any]) -> MessageData | None:
 
     if kind == "conversation":
         role = str(event.get("role") or metadata.get("role") or "").strip().lower()
-        # ThreadLogger writes the body as ``text``; the daemon's normalization
+        # ThreadLogger writes the body as ``text``; the host's normalization
         # step copies it into ``content`` on ``ThreadMessage``. Accept both
         # spellings so raw JSONL rows and normalized rows produce the same card.
         content = str(
@@ -557,7 +557,7 @@ def collect_cognition_card_replay(events: list[dict[str, Any]]) -> list[MessageD
                 # Mirror live in-place mutation of CognitionStepMessage:
                 # transition phase/duration/tools to the later event but
                 # preserve the description (the schema for
-                # StrangeLoopStepCompletedEvent omits ``description`` — only
+                # the step-completed event omits ``description`` — only
                 # ``step.started`` carries it).
                 cards[existing] = merge_step_progress(cards[existing], msg_data)
                 continue
@@ -705,7 +705,7 @@ def merge_history_sources(
 
     Args:
         checkpoint_messages: LangChain message objects from checkpoint.
-        activity_events: Event rows from the daemon conversation log.
+        activity_events: Event rows from the host conversation log.
 
     Returns:
         List of ``(source_type, data)`` tuples sorted by timestamp:

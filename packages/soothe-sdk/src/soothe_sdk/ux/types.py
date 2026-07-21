@@ -3,9 +3,9 @@
 from typing import Final
 
 # Milestone custom event types that clients typically always surface in progress UI
-# (RFC-501 pipeline framing).
+# (pipeline framing).
 #
-# IG-317 / RFC-614: User-visible **assistant answer text** for the main agent loop is not
+# User-visible **assistant answer text** for the main agent loop is not
 # modeled as `soothe.output.*` types. It arrives on the LangGraph ``mode="messages"`` stream
 # as loop-tagged AI payloads with a ``phase`` field (see ``soothe_sdk.ux.loop_stream``:
 # ``goal_completion``, ``chitchat``, ``autonomous_goal``, intent-hint phases). Optional ancillary

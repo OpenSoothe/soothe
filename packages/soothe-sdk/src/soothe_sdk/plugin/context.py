@@ -46,7 +46,7 @@ class SootheConfigProtocol(Protocol):
 
 
 class PluginContext:
-    """Context provided to plugin lifecycle hooks (IG-175: Expanded with services).
+    """Context provided to plugin lifecycle hooks, with runtime services.
 
     This class provides plugins with access to Soothe configuration,
     logging, event emission, and runtime service injection.
@@ -55,7 +55,7 @@ class PluginContext:
         config: Plugin-specific configuration dictionary.
         soothe_config: Soothe configuration (via protocol).
         logger: Python logger instance for this plugin.
-        services: Runtime services dict (populated by daemon during plugin loading).
+        services: Runtime services dict (populated by the host during plugin loading).
             Keys include: "policy", "persistence", "emit_progress", "vector_store".
     """
 

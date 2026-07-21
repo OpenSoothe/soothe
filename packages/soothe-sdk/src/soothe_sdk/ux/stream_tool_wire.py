@@ -1,4 +1,4 @@
-"""Typed WebSocket stream events for tool-call UI (RFC-450 JSON transport).
+"""Typed WebSocket stream events for tool-call UI.
 
 Supplements LangGraph ``messages`` chunks with explicit tool kwargs so clients
 do not depend on fragile LangChain message shape drift across ``model_dump`` /

@@ -1,7 +1,7 @@
-"""Plugin-side progress emission (IG-175: Community plugin SDK decoupling).
+"""Plugin-side progress emission (community plugin SDK decoupling).
 
 Provides a lightweight emit_progress function for plugin authors that works
-both standalone (logging only) and when running inside the daemon's LangGraph
+both standalone (logging only) and when running inside a host LangGraph
 context (with stream writer callback).
 """
 
@@ -11,14 +11,14 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-# Optional stream writer callback - set by the daemon at runtime
+# Optional stream writer callback - set by the host at runtime
 _STREAM_WRITER: Callable[[dict[str, Any]], None] | None = None
 
 
 def set_stream_writer(writer: Callable[[dict[str, Any]], None] | None) -> None:
-    """Set the stream writer callback (called by daemon at runtime).
+    """Set the stream writer callback (called by the host at runtime).
 
-    When running inside a LangGraph graph node, the daemon patches this
+    When running inside a LangGraph graph node, the host patches this
     callback with LangGraph's get_stream_writer() to emit custom events
     to the TUI.
 
@@ -35,10 +35,10 @@ def emit_progress(event: dict[str, Any] | Any, logger: logging.Logger | None = N
     This function provides a stable API for plugin authors to emit
     custom events. It works in two modes:
 
-    1. **Standalone mode** (when running outside the daemon): Only logs
+    1. **Standalone mode** (when running outside a host runtime): Only logs
        the event if a logger is provided.
 
-    2. **Daemon mode** (when running inside a LangGraph context): Both
+    2. **Host mode** (when running inside a LangGraph context): Both
        logs and calls the stream writer callback to send the event to
        the TUI/CLI.
 
@@ -82,7 +82,7 @@ def emit_progress(event: dict[str, Any] | Any, logger: logging.Logger | None = N
     if logger is not None:
         logger.info(f"[emit_progress] {event_dict.get('type', 'unknown')}: {event_dict}")
 
-    # Call stream writer if available (set by daemon at runtime)
+    # Call stream writer if available (set by host at runtime)
     if _STREAM_WRITER is not None:
         try:
             _STREAM_WRITER(event_dict)

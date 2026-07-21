@@ -1,9 +1,7 @@
 """Shared logging utilities for SDK and CLI packages.
 
-Logging utilities used by both daemon and CLI are provided in SDK to avoid
-CLI importing daemon runtime.
-
-This module is part of Phase 1 of IG-174: CLI import violations fix.
+Logging utilities used by both the SDK and CLI are provided in the SDK to
+avoid the CLI importing host runtime.
 """
 
 import json
@@ -16,7 +14,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
-# Shared rotation policy for ``~/.soothe/logs/{soothe,cli,daemon}.log``.
+# Shared rotation policy for ``~/.soothe/logs/{soothe,cli}.log``.
 DEFAULT_LOG_MAX_BYTES = 5_242_880  # 5 MB
 DEFAULT_LOG_BACKUP_COUNT = 3
 
@@ -153,8 +151,8 @@ class GlobalInputHistory:
 
     Manages persistent history of user inputs across sessions.
 
-    This is a minimal implementation for CLI use. Full implementation
-    is in ``soothe.logging.global_history`` (daemon / host).
+    This is a minimal implementation for CLI use. The full implementation
+    lives in the host package.
     """
 
     def __init__(self, history_file: Path | str):

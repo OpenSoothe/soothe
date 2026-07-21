@@ -1,6 +1,6 @@
 """Event classification logic for UX display filtering.
 
-Extracted from verbosity.py per RFC-610 (IG-185).
+Extracted from verbosity.py.
 """
 
 from soothe_sdk.core.verbosity import VerbosityTier
@@ -8,7 +8,7 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UP
 
 
 def _subagent_wire_tier(event_type: str) -> VerbosityTier | None:
-    """Tier for curated ``soothe.subagent.*`` wire events (IG-339).
+    """Tier for curated ``soothe.subagent.*`` wire events.
 
     All curated subagent wire signals (lifecycle and activity) are visible at NORMAL;
     verbosity only filters coarser domains — these are already sparse and metadata-only.
@@ -21,7 +21,7 @@ def _subagent_wire_tier(event_type: str) -> VerbosityTier | None:
 def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> VerbosityTier:
     """Classify an event directly to a VerbosityTier.
 
-    Uses the same domain-based defaults as the daemon's EventRegistry,
+    Uses the same domain-based defaults as the server's EventRegistry,
     matching the `_DOMAIN_DEFAULT_TIER` mapping from `event_catalog.py`.
 
     Args:
@@ -39,7 +39,7 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
         >>> classify_event_to_tier("soothe.internal.iteration.started")
         <VerbosityTier.INTERNAL: 99>
     """
-    # Stream tool wire (IG-416/427) — client-visible progress for TUI tool/task rows.
+    # Stream tool wire — client-visible progress for TUI tool/task rows.
     if event_type in (TOOL_CALL_UPDATES_BATCH, STREAM_TOOL_CALL_UPDATE):
         return VerbosityTier.NORMAL
 
@@ -59,13 +59,13 @@ def classify_event_to_tier(event_type: str, namespace: tuple[str, ...] = ()) -> 
     return VerbosityTier.INTERNAL
 
 
-# Domain-based default verbosity tiers, matching daemon's EventRegistry.
-# Kept in sync with soothe.foundation.events.catalog._DOMAIN_DEFAULT_TIER.
+# Domain-based default verbosity tiers, matching server's EventRegistry.
+# Kept in sync with the server's event catalog domain default tiers.
 _DOMAIN_DEFAULT_TIER: dict[str, VerbosityTier] = {
     "lifecycle": VerbosityTier.INTERNAL,
     "protocol": VerbosityTier.INTERNAL,
     "cognition": VerbosityTier.NORMAL,
-    "loop": VerbosityTier.NORMAL,  # Loop relay events (clarification, RFC-622)
+    "loop": VerbosityTier.NORMAL,  # Loop relay events (clarification)
     "tool": VerbosityTier.INTERNAL,  # Tool display via LangChain on_tool_call
     "subagent": VerbosityTier.INTERNAL,
     "output": VerbosityTier.NORMAL,

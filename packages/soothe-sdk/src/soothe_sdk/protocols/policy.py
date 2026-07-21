@@ -1,4 +1,4 @@
-"""PolicyProtocol -- permission-based access control (RFC-0002 Module 4)."""
+"""PolicyProtocol -- permission-based access control."""
 
 from __future__ import annotations
 
@@ -117,7 +117,7 @@ class PolicyContext(BaseModel):
 
     Args:
         active_permissions: The currently granted permissions.
-        scope_id: Opaque execution scope for audit (e.g. StrangeLoop id).
+        scope_id: Opaque execution scope for audit (e.g. loop id).
         workspace: Absolute workspace root for stream-scoped filesystem policy
             (from LangGraph ``configurable["workspace"]``), when available.
     """

@@ -37,7 +37,7 @@ _LOOP_AI_RESPONSE_PREVIEW_MAX = 160
 def _peek_loop_prompt(loop_id: str) -> str | None:
     """Return the loop's initial user prompt from ``display.db``, if available."""
     try:
-        from soothe_nano.backends.persistence.display_store import get_display_card_store
+        from soothe_daemon.display.display_store import get_display_card_store
 
         return get_display_card_store().peek_user_prompt(
             loop_id, max_chars=_LOOP_PROMPT_PREVIEW_MAX
@@ -50,7 +50,7 @@ def _peek_loop_prompt(loop_id: str) -> str | None:
 def _peek_latest_assistant_response(loop_id: str) -> str | None:
     """Return latest assistant response preview from ``display.db``."""
     try:
-        from soothe_nano.backends.persistence.display_store import get_display_card_store
+        from soothe_daemon.display.display_store import get_display_card_store
 
         return get_display_card_store().peek_latest_assistant_response(
             loop_id,

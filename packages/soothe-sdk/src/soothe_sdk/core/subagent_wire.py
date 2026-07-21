@@ -1,4 +1,4 @@
-"""Curated ``soothe.subagent.*`` wire protocol (metadata-only, IG-338).
+"""Curated ``soothe.subagent.*`` wire protocol (metadata-only).
 
 Provides registration, structural validation, payload clipping, and stream emission.
 Event type strings live in each subagent (or plugin) ``events`` module — not in this SDK.
@@ -23,8 +23,8 @@ _TASK_DESCRIPTION_LEN = 8000
 def register_subagent_wire_event_types(*event_types: str) -> None:
     """Register ``soothe.subagent.*`` wire types for emission allowlisting.
 
-    Subagents call this from their ``events`` module (or rely on
-    ``soothe.foundation.events.register_event`` to register automatically).
+    Subagents call this from their ``events`` module (or rely on the host
+    event registry to register automatically).
     """
     for et in event_types:
         if isinstance(et, str) and et.startswith("soothe.subagent."):
@@ -105,7 +105,7 @@ def clip_wire_event_payload(data: dict[str, Any]) -> dict[str, Any]:
 def emit_subagent_wire_event(event: dict[str, Any], logger: logging.Logger) -> None:
     """Emit allowlisted subagent progress to the LangGraph ``custom`` stream.
 
-    Community subagents use this helper so they do not depend on the ``soothe`` package.
+    Community subagents use this helper so they do not depend on the host package.
     Unknown event types are dropped unless registered via :func:`register_subagent_wire_event_types`.
 
     Args:

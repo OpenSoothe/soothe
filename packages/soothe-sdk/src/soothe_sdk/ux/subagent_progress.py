@@ -1,7 +1,7 @@
 """Helper functions for subagent event processing.
 
 This module provides utilities for CLI/TUI to extract subagent information
-from curated ``soothe.subagent.*`` wire types (IG-339).
+from curated ``soothe.subagent.*`` wire types.
 """
 
 from __future__ import annotations
@@ -19,12 +19,12 @@ def get_subagent_name_from_event(event_type: str) -> str | None:
         event_type: Full event type string.
 
     Returns:
-        Subagent segment (e.g., ``explore``, ``deep_research``) for ``soothe.subagent.<id>.…``,
+        Subagent segment (e.g., ``deep_research``, ``browser_use``) for ``soothe.subagent.<id>.…``,
         else None.
 
     Example:
-        >>> get_subagent_name_from_event("soothe.subagent.explore.started")
-        'explore'
+        >>> get_subagent_name_from_event("soothe.subagent.deep_research.started")
+        'deep_research'
         >>> get_subagent_name_from_event("soothe.cognition.plan.created")
         None
     """

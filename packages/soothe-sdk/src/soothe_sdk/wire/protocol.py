@@ -1,4 +1,4 @@
-"""IPC protocol for Soothe daemon communication."""
+"""IPC protocol for Soothe server communication."""
 
 from __future__ import annotations
 
@@ -124,9 +124,9 @@ __all__ = [
 
 @dataclass
 class WorkspaceMapping:
-    """Bidirectional path mapping for container deployments (RFC-621).
+    """Bidirectional path mapping for container deployments.
 
-    When the daemon runs in a container, client paths differ from container paths.
+    When the server runs in a container, client paths differ from container paths.
     This mapping enables transparent translation: the SDK converts container paths
     back to client paths for display, and client paths to container paths for
     outgoing messages.

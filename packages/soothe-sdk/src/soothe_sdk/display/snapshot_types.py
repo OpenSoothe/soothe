@@ -1,4 +1,4 @@
-"""Goal-bound display snapshot types (RFC-631)."""
+"""Goal-bound display snapshot types."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class GoalDisplaySnapshot:
     schema_version: int = GOAL_DISPLAY_SNAPSHOT_SCHEMA_VERSION
 
     def to_wire_dict(self) -> dict[str, Any]:
-        """Serialize for SQLite storage and daemon RPC."""
+        """Serialize for SQLite storage and RPC transport."""
         return {
             "goal_id": self.goal_id,
             "goal_index": self.goal_index,
@@ -51,7 +51,7 @@ class GoalDisplaySnapshot:
 
     @classmethod
     def from_wire_dict(cls, data: dict[str, Any]) -> GoalDisplaySnapshot:
-        """Deserialize from RPC or SQLite JSON."""
+        """Deserialize from RPC transport or SQLite JSON."""
         raw_cards = data.get("display_cards")
         cards: list[MessageData] = []
         if isinstance(raw_cards, list):

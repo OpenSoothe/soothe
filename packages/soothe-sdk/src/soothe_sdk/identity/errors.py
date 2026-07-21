@@ -1,14 +1,10 @@
-"""Identity service error classes. RFC-307 §Error Handling."""
+"""Identity service error classes."""
 
 from typing import ClassVar
 
 
 class IdentityError(Exception):
-    """
-    Base error for identity service.
-
-    RFC-307 §Error Handling.
-    """
+    """Base error for identity service."""
 
     error_code: ClassVar[str] = "identity_error"
     """Error code for WebSocket/API responses."""
@@ -36,7 +32,7 @@ class InvalidCredentialsError(IdentityError):
     AKSK credentials are invalid.
 
     Generic error - does not reveal whether access_key exists or
-    secret_key is wrong (security principle from RFC-307).
+    secret_key is wrong (security principle).
     """
 
     error_code = "invalid_credentials"
@@ -66,11 +62,7 @@ class AKSKRevokedError(IdentityError):
 
 
 class TokenError(IdentityError):
-    """
-    Base error for token-related issues.
-
-    RFC-307 §Error Handling.
-    """
+    """Base error for token-related issues."""
 
     error_code = "token_invalid"
     message = "Token is invalid"

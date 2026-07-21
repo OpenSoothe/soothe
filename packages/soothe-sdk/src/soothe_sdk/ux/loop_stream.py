@@ -1,14 +1,14 @@
-"""Loop-tagged assistant output on the LangGraph ``messages`` stream (IG-317 / RFC-614).
+"""Loop-tagged assistant output on the LangGraph ``messages`` stream.
 
 Public UX surface for user-visible assistant text from the main loop: stream
 ``mode="messages"`` chunks whose payload carries a recognized ``phase`` (see
-``LOOP_ASSISTANT_OUTPUT_PHASES``). Custom daemon events are not used for this
+``LOOP_ASSISTANT_OUTPUT_PHASES``). Custom events are not used for this
 text path.
 
-Headless CLI relies on these phases for stdout (IG-343). Delegate-only answers may appear
-as an extra ``phase=goal_completion`` replay after Act when sourced from ``task`` returns (IG-355).
+Headless CLI relies on these phases for stdout. Delegate-only answers may appear
+as an extra ``phase=goal_completion`` replay after Act when sourced from ``task`` returns.
 
-Daemon ``intent_hint`` turns emit a single assistant chunk tagged
+``intent_hint`` turns emit a single assistant chunk tagged
 ``phase=<hint>`` (``text_completion``, ``image_to_text``, ``ocr``, ``embed``) so
 clients apply the same preview/stream rules as other user-visible loop output.
 """

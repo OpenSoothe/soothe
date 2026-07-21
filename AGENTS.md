@@ -41,6 +41,44 @@ After implementing (or changing) code—and before marking work done (commit, PR
 - Archived content in `docs/archive/` (drafts, completed analysis) is for historical reference only.
 - When writing log messages, error text, CLI output, config field descriptions, or any user-visible string, omit all IG-/RFC- identifiers.
 
+### 7b. Package-boundary docstring rules (MUST)
+
+`soothe-nano` and `soothe-sdk` are **standalone packages** — they ship
+independently (soothe-nano is a separate repo/submodule) and must not reference
+parent-workspace documentation or host/daemon concepts. Their docstrings,
+comments, and `__init__` package summaries must read as self-contained.
+
+**Rules for `packages/soothe-nano/` and `packages/soothe-sdk/`:**
+
+1. **No IG-XXX / RFC-XXX references** in source (`*.py`), including docstrings
+   and comments. These identifiers index into the monorepo's `docs/specs/` and
+   `docs/impl/`, which a standalone nano/sdk consumer does not have. Replace
+   `(RFC-105)` / `(IG-258 Phase 2)` / `RFC-612 multi-database` style parentheticals
+   with a plain-English description of the concept. The only exception is the
+   single `__init__.py` package docstring may say "no StrangeLoop/Autopilot" to
+   mark the package's scope — but never an IG/RFC number.
+2. **No host/daemon concept names** in docstrings or comments: `StrangeLoop`,
+   `Autopilot`, `ContextEngine`, `cron`, `intake-only`, `daemon`, `soothed`,
+   `routing_classification`, `goal_completion`, `sloop`. Nano does not know
+   these concepts. (Mentioning them to say "no StrangeLoop" in the package
+   docstring is allowed; using them to describe behavior is not.)
+3. **No `soothe.` / `soothe_daemon.` import paths** in docstrings, comments,
+   or docstring examples — nano must not reference host/daemon module paths.
+   (`TYPE_CHECKING` or runtime `import` of host code is also banned — see §3b.)
+4. **Describe behavior, not provenance.** Instead of `IG-517: Batched edit for
+   coalescing middleware`, write `Batched edit for coalescing middleware`.
+   Instead of `RFC-612 multi-database layout`, write `multi-database PostgreSQL
+   layout`. Keep the technical content; drop the tracker identifier.
+
+This rule is enforced structurally: `scripts/check_module_import_boundaries.sh`
+rule 3c bans L2/L3 symbol names in nano, and `scripts/check_nano_duplicate_symbols.py`
+bans dead-duplicate host symbols in nano. A docstring scanner for IG/RFC refs
+is a TODO (PR-10 follow-on); for now, reviewers must enforce by eye.
+
+Host packages (`soothe`, `soothe-daemon`, `soothe-cli`, `soothe-plugins`) MAY
+reference IG-XXX/RFC-XXX in docstrings and comments (they live in the monorepo
+alongside `docs/`).
+
 ### 8. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
 

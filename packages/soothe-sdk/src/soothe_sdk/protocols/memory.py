@@ -1,4 +1,4 @@
-"""MemoryProtocol -- cross-thread long-term memory (RFC-0002 Module 2)."""
+"""MemoryProtocol -- cross-thread long-term memory."""
 
 from __future__ import annotations
 

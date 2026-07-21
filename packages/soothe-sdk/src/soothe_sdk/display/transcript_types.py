@@ -1,11 +1,11 @@
-"""Transcript message models shared between TUI rendering and the daemon-resident CardBinder.
+"""Transcript message models shared between TUI rendering and server-side card binding.
 
-Lightweight dataclasses for chat history (RFC-413). The previous home was
-``soothe_cli.runtime.state.transcript``; that path is now a re-export shim
-so existing CLI imports continue to work.
+Lightweight dataclasses for chat history. The previous home was a CLI-side
+transcript module; that path is now a re-export shim so existing CLI
+imports continue to work.
 
 These types intentionally have **no Textual / widget / rendering
-dependencies** so the binder module can run inside the daemon.
+dependencies** so the binder module can run inside the server runtime.
 """
 
 from __future__ import annotations
@@ -104,7 +104,7 @@ class MessageData:
     """Whether the tool output section is expanded in the UI."""
 
     tool_rows_json: str | None = None
-    """JSON list of tool rows from ``ToolCallMessage.snapshot_tool_rows()`` (IG-403)."""
+    """JSON list of tool rows from ``ToolCallMessage.snapshot_tool_rows()``."""
 
     # ---
 
@@ -152,7 +152,7 @@ class MessageData:
     """Result or error summary text (STEP_PROGRESS only)."""
 
     step_tool_calls_json: str | None = None
-    """JSON list of tool rows from ``CognitionStepMessage.snapshot_tool_rows()`` (IG-402)."""
+    """JSON list of tool rows from ``CognitionStepMessage.snapshot_tool_rows()``."""
 
     cognition_plan_status: str | None = None
     """Plan status: continue, replan, done (COGNITION_REASON only)."""
@@ -173,7 +173,7 @@ class MessageData:
     """JSON blob from ``CognitionGoalTreeMessage.snapshot_dict()`` (COGNITION_GOAL_TREE only)."""
 
     loop_output_phase: str | None = None
-    """RFC-614 assistant output phase (``goal_completion``, ``plan_direct``, etc.)."""
+    """Assistant output phase (``goal_completion``, ``plan_direct``, etc.)."""
 
     is_streaming: bool = False
     """Whether the message is still being streamed.

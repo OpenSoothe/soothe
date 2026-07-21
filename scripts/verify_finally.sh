@@ -531,6 +531,32 @@ validate_package_dependencies() {
     fi
   fi
 
+  if [ -f "$WORKSPACE_ROOT/scripts/check_nano_duplicate_symbols.py" ]; then
+    local dup_output
+    if dup_output=$("$VENV_PYTHON" "$WORKSPACE_ROOT/scripts/check_nano_duplicate_symbols.py" 2>&1); then
+      print_ok "nano dead-duplicate symbols"
+      record_check_outcome "dependencies" "nano dead-duplicate symbols" "pass"
+    else
+      print_fail "nano dead-duplicate symbols"
+      record_failure_log "Nano dead-duplicate symbols" "$dup_output"
+      record_check_outcome "dependencies" "nano dead-duplicate symbols" "fail"
+      return 1
+    fi
+  fi
+
+  if [ -f "$WORKSPACE_ROOT/scripts/check_nano_docstring_refs.py" ]; then
+    local docref_output
+    if docref_output=$("$VENV_PYTHON" "$WORKSPACE_ROOT/scripts/check_nano_docstring_refs.py" 2>&1); then
+      print_ok "nano/sdk docstring refs"
+      record_check_outcome "dependencies" "nano/sdk docstring refs" "pass"
+    else
+      print_fail "nano/sdk docstring refs"
+      record_failure_log "Nano/sdk docstring refs" "$docref_output"
+      record_check_outcome "dependencies" "nano/sdk docstring refs" "fail"
+      return 1
+    fi
+  fi
+
   return 0
 }
 

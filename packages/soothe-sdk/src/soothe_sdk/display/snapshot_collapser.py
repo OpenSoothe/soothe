@@ -1,4 +1,4 @@
-"""Collapse live card lists into goal-bound display snapshots (RFC-631)."""
+"""Collapse live card lists into goal-bound display snapshots."""
 
 from __future__ import annotations
 

@@ -15,7 +15,7 @@ from soothe_sdk.ux.subagent_wire_display import (
 from soothe_sdk.ux.types import ESSENTIAL_EVENT_TYPES
 
 __all__ = [
-    # Loop assistant output (``mode="messages"`` + ``phase``; RFC-614 / IG-317)
+    # Loop assistant output (``mode="messages"`` + ``phase``)
     "LOOP_ASSISTANT_OUTPUT_PHASES",
     "assistant_output_phase",
     # Classification

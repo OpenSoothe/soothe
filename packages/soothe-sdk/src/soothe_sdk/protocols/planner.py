@@ -1,4 +1,4 @@
-"""PlannerProtocol -- goal decomposition and plan lifecycle (RFC-0002 Module 3)."""
+"""PlannerProtocol -- goal decomposition and plan lifecycle."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
 
 
 def planner_outcome_text_preview(outcome: dict[str, Any]) -> str | None:
-    """Resolve bounded planner-facing text from an RFC-211 outcome dict."""
+    """Resolve bounded planner-facing text from an outcome dict."""
     for key in ("wave_join_preview", "task_return_preview", "output_summary"):
         val = outcome.get(key)
         if isinstance(val, str) and val.strip():
@@ -25,7 +25,7 @@ class PlanStep(BaseModel):
         id: Unique step identifier.
         description: What this step should accomplish.
         execution_hint: Preferred execution method.
-        subagent: Delegate name when routing through a subagent (legacy ``LLMPlanner`` Plan path).
+        subagent: Delegate name when routing through a subagent (legacy planner Plan path).
         status: Current step status.
         result: Output from execution (set after completion).
         depends_on: IDs of steps that must complete before this one.
@@ -71,7 +71,7 @@ class Plan(BaseModel):
 
 
 class StepResult(BaseModel):
-    """Result of executing a plan step (RFC-211).
+    """Result of executing a plan step.
 
     Args:
         step_id: The step that was executed.
@@ -84,13 +84,13 @@ class StepResult(BaseModel):
 
     step_id: str
     success: bool
-    outcome: dict = Field(default_factory=dict)  # RFC-211: outcome metadata
+    outcome: dict = Field(default_factory=dict)  # outcome metadata
     error: str | None = None
     duration_ms: int | None = None
     thread_id: str | None = None
 
     def to_evidence_string(self, *, truncate: bool = True) -> str:
-        """Convert to evidence string for reflection and planning (RFC-211).
+        """Convert to evidence string for reflection and planning.
 
         Args:
             truncate: If True, generate concise summary.
@@ -145,10 +145,10 @@ class PlanContext(BaseModel):
         recent_messages: Recent conversation messages for context.
         available_capabilities: Names of available tools and subagents.
         completed_steps: Results from already-completed steps.
-        routing_classification: Pre-computed routing classification.
+        routing_classification: Pre-computed intent routing classification.
         workspace: Current workspace directory path.
         working_memory_excerpt: Reserved; not embedded in Plan-phase human text.
-        thread_id: Daemon thread id for observability (Langfuse session on plan LLM calls).
+        thread_id: Thread id for observability (Langfuse session on plan LLM calls).
     """
 
     recent_messages: list[str] = Field(default_factory=list)
@@ -159,12 +159,12 @@ class PlanContext(BaseModel):
     working_memory_excerpt: str | None = None
     thread_id: str | None = Field(
         default=None,
-        description="Daemon thread id for observability (e.g. Langfuse session_id on plan LLM calls).",
+        description="Thread id for observability (e.g. Langfuse session_id on plan LLM calls).",
     )
 
 
 class StepReport(BaseModel):
-    """Report from a single executed step (RFC-0009).
+    """Report from a single executed step.
 
     Args:
         step_id: The step that was executed.
@@ -184,7 +184,7 @@ class StepReport(BaseModel):
 
 
 class GoalReport(BaseModel):
-    """Aggregate report from a completed goal (RFC-0009, RFC-0010).
+    """Aggregate report from a completed goal.
 
     Args:
         goal_id: Goal identifier.
@@ -208,7 +208,7 @@ class GoalReport(BaseModel):
 
 
 class GoalDirective(BaseModel):
-    """A single goal management directive from reflection (RFC-0007 §5.4).
+    """A single goal management directive from reflection.
 
     Args:
         action: 'create' | 'decompose' | 'adjust_priority' | 'add_dependency' | 'fail' | 'complete'
@@ -230,7 +230,7 @@ class GoalDirective(BaseModel):
 
 
 class Reflection(BaseModel):
-    """Planner's assessment of plan progress (RFC-0010 enhanced, RFC-0007 §5.4).
+    """Planner's assessment of plan progress.
 
     Args:
         assessment: Description of current progress.

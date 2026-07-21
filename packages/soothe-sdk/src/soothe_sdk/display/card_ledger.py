@@ -1,17 +1,15 @@
-"""Pure-Python card-ledger primitives shared by daemon and clients.
+"""Pure-Python card-ledger primitives shared by host and clients.
 
 This module defines the on-disk and on-wire record shape (``CardMutation``)
 and an in-memory projection (``InMemoryCardLedger``) used by both:
 
-* the daemon-side file-backed ledger (writer) that persists
+* the host-side file-backed ledger (writer) that persists
   ``~/.soothe/data/loops/<loop_id>/cards.jsonl``, and
 * any consumer that needs to reconstruct the current card set from a
   mutation stream (replay-to-client, future desktop client, debug tooling).
 
-No I/O lives here — file paths and async locks belong to the daemon-side
-wrapper at ``soothe_daemon.display.loop_card_ledger``.
-
-RFC-413.
+No I/O lives here — file paths and async locks belong to the host-side
+ledger wrapper.
 """
 
 from __future__ import annotations
@@ -85,7 +83,7 @@ class CardMutation:
         return cls(
             seq=int(raw["seq"]),
             ts=str(raw["ts"]),
-            op=str(raw["op"]),  # type: ignore[arg-type]  # validated by LoopCardLedger
+            op=str(raw["op"]),  # type: ignore[arg-type]  # validated by the host ledger
             card_id=str(raw["card_id"]),
             kind=str(raw["kind"]),
             data=dict(raw.get("data") or {}),
@@ -272,7 +270,7 @@ def cards_to_mutations(
 
     Used by backfill: ``CardBinder.convert_messages_to_data`` returns a
     ``list[MessageData]``; this helper turns each into a ``create`` mutation
-    ready for ``LoopCardLedger.append_many(...)``.
+    ready for the host ledger's append path.
     """
     out: list[CardMutation] = []
     for offset, card in enumerate(cards):

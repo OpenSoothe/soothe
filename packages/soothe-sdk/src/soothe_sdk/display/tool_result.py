@@ -2,8 +2,8 @@
 
 Used by the TUI to update step-card tool state (stats only; no tool-row UI).
 
-Error detection matches :class:`soothe_cli.runtime.headless.processor.EventProcessor`
-tool-result handling (content heuristics) with explicit ``status`` override.
+Error detection matches the headless runtime event-processor tool-result
+handling (content heuristics) with explicit ``status`` override.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ def extract_tool_result_payload(message: Any) -> ToolResultPayload | None:
     tool_call_id = str(data.get("tool_call_id") or "").strip()
     tool_name = str(data.get("name") or "").strip()
     if tool_call_id and (not tool_name or tool_name == "tool"):
-        # IG-418: Extract tool name from unified format
+        # Extract tool name from the unified tool-call id format
         _, _, _, tool_info = parse_unified_tool_call_id(tool_call_id)
         if tool_info:
             head = tool_info.split(":")[0].split(".")[0].strip()

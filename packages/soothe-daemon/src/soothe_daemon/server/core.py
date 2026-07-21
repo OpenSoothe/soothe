@@ -8,6 +8,7 @@ import logging
 import os
 import signal
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from soothe.config import SootheConfig
@@ -107,7 +108,10 @@ class SootheDaemon(DaemonHandlersMixin):
         # Shared persistence manager — PostgreSQL deferred until start() after pool pre-open
         self._persistence_manager: StrangeLoopCheckpointPersistenceManager | None = None
         if self._config.persistence.default_backend != "postgresql":
-            self._persistence_manager = StrangeLoopCheckpointPersistenceManager(config=self._config)
+            self._persistence_manager = StrangeLoopCheckpointPersistenceManager(
+                config=self._config,
+                display_loop_purger=self._make_display_loop_purger(),
+            )
 
         # Resolve daemon workspace (ephemeral TEMP unless SOOTHE_WORKSPACE set)
         self._daemon_workspace = resolve_daemon_workspace()
@@ -288,6 +292,19 @@ class SootheDaemon(DaemonHandlersMixin):
             config=self._daemon_config.identity,
             thread_context=self._thread_registry,
         )
+
+    def _make_display_loop_purger(self) -> Callable[[str], None]:
+        """Build a purge callable backed by the daemon display card store.
+
+        Injected into ``StrangeLoopCheckpointPersistenceManager`` so the host can
+        purge a loop's display rows without importing the daemon (IG-678 PR-2).
+        """
+        from soothe_daemon.display.display_store import get_display_card_store
+
+        def _purge_display_loop(loop_id: str) -> None:
+            get_display_card_store().delete_loop(loop_id)
+
+        return _purge_display_loop
 
     def _on_sighup_reload(self) -> None:
         """Handle SIGHUP signal for config reload."""
@@ -503,7 +520,8 @@ class SootheDaemon(DaemonHandlersMixin):
                     logger.exception("PostgreSQL database provisioning failed at daemon startup")
                     raise
 
-            # Unified persistence: display cards, cron, identity follow default_backend.
+            # Unified persistence: cron/identity follow default_backend via host
+            # stores; the display card store is daemon-owned (IG-678 PR-2).
             try:
                 from soothe.foundation.persistence.unified import configure_unified_persistence
 
@@ -511,6 +529,15 @@ class SootheDaemon(DaemonHandlersMixin):
             except Exception:
                 logger.warning(
                     "Failed to configure unified persistence; falling back to per-store defaults",
+                    exc_info=True,
+                )
+            try:
+                from soothe_daemon.display.display_store import configure_display_card_store
+
+                configure_display_card_store(self._config)
+            except Exception:
+                logger.warning(
+                    "Failed to configure display card store; falling back to SQLite default",
                     exc_info=True,
                 )
 
@@ -736,12 +763,14 @@ class SootheDaemon(DaemonHandlersMixin):
                 if self._config.persistence.default_backend == "postgresql":
                     self._persistence_manager = (
                         await StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool(
-                            self._config
+                            self._config,
+                            display_loop_purger=self._make_display_loop_purger(),
                         )
                     )
                 else:
                     self._persistence_manager = StrangeLoopCheckpointPersistenceManager(
-                        config=self._config
+                        config=self._config,
+                        display_loop_purger=self._make_display_loop_purger(),
                     )
 
             # RFC-221: pre-warm runner pool (worker_pool or thread_pool).

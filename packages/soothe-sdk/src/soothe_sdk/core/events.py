@@ -4,7 +4,7 @@ This module provides the base event classes that all specific events inherit fro
 Module-specific events are defined in their respective modules and registered via
 ``register_event()``.
 
-RFC-0015: All progress events use 4-segment type strings
+All progress events use 4-segment type strings
 ``soothe.<domain>.<component>.<action>`` with six domains:
 lifecycle, protocol, tool, subagent, output, error.
 """
@@ -31,11 +31,11 @@ class SootheEvent(BaseModel):
     def emit(self, logger: logging.Logger) -> None:
         """Emit this event via the LangGraph stream writer.
 
-        Note: This method requires daemon-side implementation.
+        Note: This method requires host-side implementation.
         For SDK use, events are typically sent via WebSocket.
 
         SDK-side event base class: provides type definition and serialization.
-        Daemon-side implementation in soothe.utils.progress provides actual emit.
+        Host-side implementation provides actual emit.
         """
         pass
 
@@ -62,7 +62,7 @@ class ErrorEvent(SootheEvent):
     error: str
 
 
-# Event type constants (IG-174 Phase 2)
+# Event type constants
 # Wire-safe event type strings for CLI/TUI event processing
 # Exposed at DEBUG and DETAILED level for fine-grained (per-turn) event display
 
@@ -83,19 +83,19 @@ STRANGE_LOOP_STEP_QUEUED = "soothe.cognition.strange_loop.step.queued"
 STRANGE_LOOP_STEP_COMPLETED = "soothe.cognition.strange_loop.step.completed"
 STRANGE_LOOP_PLAN_DECISION = "soothe.cognition.strange_loop.plan.decision"
 STRANGE_LOOP_PLAN_PHASE = "soothe.cognition.strange_loop.plan.phase"
-# Intake-only wired specialist lifecycle (orphan SubAgent card; RFC-630 §6.3.3)
+# Wired specialist lifecycle (orphan SubAgent card)
 WIRED_SUBAGENT_STARTED = "soothe.cognition.wired_subagent.started"
 WIRED_SUBAGENT_COMPLETED = "soothe.cognition.wired_subagent.completed"
 WIRED_SUBAGENT_FAILED = "soothe.cognition.wired_subagent.failed"
 WIRED_SUBAGENT_CANCELLED = "soothe.cognition.wired_subagent.cancelled"
 INTENT_CLASSIFIED = "soothe.cognition.intent.classified"
 
-# Clarification relay events (RFC-622 / RFC-623)
+# Clarification relay events
 LOOP_CLARIFICATION_REQUESTED = "soothe.loop.clarification.requested"
 LOOP_CLARIFICATION_ANSWERED = "soothe.loop.clarification.answered"
 LOOP_CLARIFICATION_DEFERRED = "soothe.loop.clarification.deferred"
 
-# Stream termination (IG-556)
+# Stream termination
 STREAM_END = "soothe.stream.end"
 
 # Message events (DETAILED level)
@@ -133,7 +133,7 @@ __all__ = [
     "WIRED_SUBAGENT_FAILED",
     "WIRED_SUBAGENT_CANCELLED",
     "INTENT_CLASSIFIED",
-    # Clarification relay (RFC-622 / RFC-623)
+    # Clarification relay
     "LOOP_CLARIFICATION_REQUESTED",
     "LOOP_CLARIFICATION_ANSWERED",
     "LOOP_CLARIFICATION_DEFERRED",

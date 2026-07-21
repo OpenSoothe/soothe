@@ -31,7 +31,10 @@ def test_split_sql_statements_splits_multiline_ddl() -> None:
 
 
 def test_checkpoints_init_script_contains_core_tables() -> None:
-    sql = load_init_script("soothe_checkpoints")
+    """IG-678 PR-3: checkpoints init is host-owned; load from the host sql root."""
+    from soothe.foundation.persistence.postgres_schema import _HOST_SQL_ROOT
+
+    sql = load_init_script("soothe_checkpoints", sql_root=_HOST_SQL_ROOT)
     assert sql is not None
     statements = split_sql_statements(sql)
     assert len(statements) >= 10
@@ -181,6 +184,15 @@ async def test_initialize_database_runs_init_then_migrations(tmp_path: Path) -> 
     assert result.migrations_applied == ["001"]
 
 
-def test_database_sql_root_contains_checkpoints_init() -> None:
-    path = database_sql_root() / "soothe_checkpoints" / "init.sql"
-    assert path.is_file()
+def test_checkpoints_init_lives_in_host_sql_root() -> None:
+    """IG-678 PR-3: the StrangeLoop/CE checkpoints schema is host-owned.
+
+    Nano no longer ships ``soothe_checkpoints/init.sql``; the host pins
+    ``sql_root`` to its own ``foundation/persistence/sql`` dir in
+    ``postgres_schema.py``.
+    """
+    from soothe.foundation.persistence.postgres_schema import _HOST_SQL_ROOT
+
+    assert (_HOST_SQL_ROOT / "soothe_checkpoints" / "init.sql").is_file()
+    # Nano's shared database_sql_root() must NOT carry the checkpoints init.
+    assert not (database_sql_root() / "soothe_checkpoints" / "init.sql").is_file()

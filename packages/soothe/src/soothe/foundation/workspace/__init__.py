@@ -11,7 +11,6 @@ from soothe_nano.workspace.workspace_filesystem import (
     WorkspaceAwareBackend,
     get_workspace_backend,
 )
-from soothe_nano.workspace.workspace_policy import user_id_for_hash
 from soothe_nano.workspace.workspace_runtime import (
     WorkspaceContext,
     clear_virtual_mode_context,
@@ -38,6 +37,7 @@ from soothe.foundation.workspace.resolution import (
     translate_container_path_to_client,
     validate_client_workspace,
 )
+from soothe.foundation.workspace.scoped import user_id_for_hash
 
 __all__ = [
     "FrameworkFilesystem",

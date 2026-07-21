@@ -1,4 +1,4 @@
-"""VectorStoreProtocol -- async vector database abstraction (RFC-0002 Module 8)."""
+"""VectorStoreProtocol -- async vector database abstraction."""
 
 from __future__ import annotations
 

@@ -1,9 +1,9 @@
-"""Formatting utilities for CLI and daemon display.
+"""Formatting utilities for CLI display.
 
 Utility functions for formatting paths, errors, and other display-related
-operations used by both daemon and CLI.
+operations used by both the SDK and CLI.
 
-Module renamed from display.py to formatting.py in IG-461 (SDK refactoring)
+Module renamed from display.py to formatting.py (SDK refactoring)
 for clearer purpose indication.
 """
 

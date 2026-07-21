@@ -1,4 +1,4 @@
-"""ConcurrencyPolicy -- parallel execution control (RFC-0002 Module 7)."""
+"""ConcurrencyPolicy -- parallel execution control."""
 
 from __future__ import annotations
 

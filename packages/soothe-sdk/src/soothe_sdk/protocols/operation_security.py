@@ -1,4 +1,4 @@
-"""Operation security protocol for tool-level security checks (RFC-617)."""
+"""Operation security protocol for tool-level security checks."""
 
 from __future__ import annotations
 

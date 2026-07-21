@@ -1,4 +1,4 @@
-"""IdentityProtocol -- AKSK authentication and JWT token management (RFC-307)."""
+"""IdentityProtocol -- AKSK authentication and JWT token management."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from typing import Literal, Protocol, runtime_checkable
 from pydantic import BaseModel, Field
 
 # ============================================================================
-# Data Models (RFC-307 §Data Models)
+# Data Models
 # ============================================================================
 
 
 class User(BaseModel):
-    """Soothe user identity. RFC-307 §User.
+    """Soothe user identity.
 
     Args:
         user_id: Unique identifier.
@@ -27,7 +27,7 @@ class User(BaseModel):
 
 
 class AKSKPair(BaseModel):
-    """Access Key / Secret Key credential pair. RFC-307 §AKSKPair.
+    """Access Key / Secret Key credential pair.
 
     Args:
         aksk_id: UUID, internal reference for revocation.
@@ -51,7 +51,7 @@ class AKSKPair(BaseModel):
 
 
 class TokenClaims(BaseModel):
-    """JWT token claims. RFC-307 §TokenClaims.
+    """JWT token claims.
 
     Args:
         jti: JWT ID (UUID) for revocation.
@@ -71,7 +71,7 @@ class TokenClaims(BaseModel):
 
 
 class ExternalIdentityMapping(BaseModel):
-    """External channel identity mapping. RFC-307 §ExternalIdentityMapping.
+    """External channel identity mapping.
 
     Args:
         mapping_id: Mapping UUID.
@@ -89,7 +89,7 @@ class ExternalIdentityMapping(BaseModel):
 
 
 class AuthResult(BaseModel):
-    """Authentication result. RFC-307 §Result Types.
+    """Authentication result.
 
     Args:
         access_token: JWT access token.
@@ -105,7 +105,7 @@ class AuthResult(BaseModel):
 
 
 class TokenRefreshResult(BaseModel):
-    """Token refresh result. RFC-307 §Result Types.
+    """Token refresh result.
 
     Args:
         access_token: New JWT access token.
@@ -119,7 +119,7 @@ class TokenRefreshResult(BaseModel):
 
 
 class TokenInfo(BaseModel):
-    """Token info for listing. RFC-307 §Result Types.
+    """Token info for listing.
 
     Args:
         jti: JWT ID.
@@ -141,7 +141,7 @@ class TokenInfo(BaseModel):
 
 
 class IdentityStatus(BaseModel):
-    """Service status. RFC-307 §Result Types.
+    """Service status.
 
     Args:
         enabled: Service enabled status.
@@ -161,7 +161,7 @@ class IdentityStatus(BaseModel):
 
 
 # ============================================================================
-# Protocol Definition (RFC-307 §Protocol Interface)
+# Protocol Definition
 # ============================================================================
 
 
@@ -174,8 +174,6 @@ class IdentityProtocol(Protocol):
 
     When enabled, IdentityMiddleware validates tokens before PolicyMiddleware,
     ensuring workspace isolation is tied to authenticated user identity.
-
-    RFC-307 §Protocol Interface.
     """
 
     # -----------------------------------------------------------------------
@@ -195,8 +193,6 @@ class IdentityProtocol(Protocol):
 
         Returns:
             Created User instance.
-
-        RFC-307 §User.
         """
         ...
 
@@ -248,8 +244,6 @@ class IdentityProtocol(Protocol):
             AKSKPair with plaintext secret_key (one-time only!).
 
         Warning: Save secret_key securely - it cannot be retrieved later.
-
-        RFC-307 §AKSKPair.
         """
         ...
 
@@ -271,7 +265,6 @@ class IdentityProtocol(Protocol):
             aksk_id: AKSK ID to revoke.
 
         Note: All tokens from this AKSK are also revoked.
-        RFC-307 §Authentication Flow.
         """
         ...
 
@@ -292,8 +285,6 @@ class IdentityProtocol(Protocol):
 
         Returns:
             AuthResult with tokens if valid, None if invalid/expired/revoked.
-
-        RFC-307 §Authentication Flow.
         """
         ...
 
@@ -306,8 +297,6 @@ class IdentityProtocol(Protocol):
         Returns:
             TokenClaims if valid (signature, expiry, not revoked).
             None if invalid, expired, or revoked.
-
-        RFC-307 §Authentication Flow.
         """
         ...
 
@@ -325,7 +314,6 @@ class IdentityProtocol(Protocol):
             None if invalid, expired, or revoked.
 
         Note: Old tokens are revoked after refresh (rotation).
-        RFC-307 §Token Refresh Flow.
         """
         ...
 
@@ -384,8 +372,6 @@ class IdentityProtocol(Protocol):
 
         Returns:
             Created ExternalIdentityMapping.
-
-        RFC-307 §ExternalIdentityMapping.
         """
         ...
 
@@ -402,8 +388,6 @@ class IdentityProtocol(Protocol):
 
         Returns:
             user_id if mapped, None otherwise.
-
-        RFC-307 §External Channel Resolution.
         """
         ...
 

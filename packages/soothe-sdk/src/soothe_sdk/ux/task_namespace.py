@@ -5,7 +5,7 @@ Subgraph namespaces bind to spawns using unified tool_call_id format:
 for task-level. The step_id embedded in tool_call_ids provides the correlation key
 between LangGraph ``tools:…`` namespaces and main-graph ``task`` spawns.
 
-IG-416: Unified tool call ID format for step-level and task-level tool calls.
+Unified tool call ID format for step-level and task-level tool calls.
 """
 
 from __future__ import annotations
@@ -257,7 +257,7 @@ def normalize_step_task_tool_call_id(step_id: str, tool_call_id: str) -> str:
     """Return step-scoped unified id for a main-graph ``task`` delegation.
 
     Args:
-        step_id: StrangeLoop execute step id.
+        step_id: Execute step id.
         tool_call_id: Unified or provider tool call id from the stream.
 
     Returns:
@@ -286,7 +286,7 @@ def step_level_parent_task_call_id(step_id: str, task_idx: int | None = None) ->
 
 
 def task_scope_step_id(scope: TaskScope | None) -> str:
-    """Return the StrangeLoop step id from a task scope tuple, if present."""
+    """Return the step id from a task scope tuple, if present."""
     if not scope:
         return ""
     return str(scope[2] or "").strip()
@@ -329,7 +329,7 @@ def row_key_for_subgraph_tool(
         bound_step_id = task_scope_step_id(task_scope)
         bound_task_idx = task_scope_task_idx(task_scope, bound_step_id)
         if bound_step_id and (parsed_sid != bound_step_id or parsed_idx != bound_task_idx):
-            # Daemon sent wrong step_id/task_idx - remap to correct ones from binding
+            # Server sent wrong step_id/task_idx - remap to correct ones from binding
             return _format_unified_tool_call_id(bound_step_id, f"t{bound_task_idx}", tool_info)
     if type_code == "t":
         return tid

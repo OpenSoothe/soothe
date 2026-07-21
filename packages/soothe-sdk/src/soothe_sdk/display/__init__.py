@@ -1,12 +1,12 @@
-"""Display-layer SDK package (RFC-413).
+"""Display-layer SDK package.
 
 This package hosts:
 
 * ``transcript_types`` — ``MessageData`` / ``MessageType`` / ``ToolStatus``
-  dataclasses shared between TUI rendering and the daemon-resident
+  dataclasses shared between TUI rendering and the host-resident
   ``CardBinder``.
 * ``card_binder`` — pure event → ``MessageData`` binding logic, callable
-  from either the TUI or the daemon.
+  from either the TUI or the host.
 * ``card_ledger`` — pure-Python ``CardMutation`` + ``InMemoryCardLedger``
   primitives backing the per-loop ``cards.jsonl`` on disk and the
   ``card.*`` wire schema.
@@ -89,7 +89,7 @@ __all__ = [
     "merge_visible_messages_with_cognition_cards",
     "parse_loop_event_timestamp",
     "sanitize_resume_display_cards",
-    # Ledger (RFC-413)
+    # Ledger
     "CARD_SCHEMA_VERSION",
     "CardMutation",
     "CardOp",
@@ -99,7 +99,7 @@ __all__ = [
     "card_to_wire_dict",
     "cards_to_mutations",
     "utc_now_iso",
-    # Goal display snapshots (RFC-631)
+    # Goal display snapshots
     "GOAL_DISPLAY_SNAPSHOT_SCHEMA_VERSION",
     "GoalDisplaySnapshot",
     "build_goal_snapshot",

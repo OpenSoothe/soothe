@@ -1,7 +1,7 @@
 """Protocol definitions for Soothe plugin authors.
 
 These runtime-agnostic protocols define the stable interfaces that
-community plugins can depend on without requiring the full daemon runtime.
+community plugins can depend on without requiring the full host runtime.
 """
 
 from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
@@ -69,7 +69,7 @@ __all__ = [
     "PolicyDecision",
     "PolicyProfile",
     "PolicyProtocol",
-    # Identity (RFC-307)
+    # Identity
     "User",
     "AKSKPair",
     "TokenClaims",
