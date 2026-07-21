@@ -282,7 +282,7 @@ cd ~/soothe && soothe
 
 Path translation: CLI sends `/Users/chenxm/Workspace/soothe` → daemon uses `/var/lib/soothe/workspaces/soothe`.
 
-**With YAML** (Compose / `deploy/`): same mapping under `workspace_mount:` in agent config; docker-compose mounts `$HOME` by default (`${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces`) — see `deploy/config.prod.yml` and root `docker-compose.yml`. Override `SOOTHE_WORKSPACE_HOST_ROOT` when projects live outside `$HOME`.
+**With YAML** (Compose / `deploy/`): same mapping under `workspace_mount:` in agent config; docker-compose mounts `$HOME` by default (`${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces`) — see `deploy/config.prod.yml` and `deploy/docker-compose.yml`. Override `SOOTHE_WORKSPACE_HOST_ROOT` when projects live outside `$HOME`.
 
 **Rules:**
 

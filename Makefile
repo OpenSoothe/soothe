@@ -110,10 +110,6 @@ sync-verify:
 # Profiles in docker-compose.yml:
 #   - default:    Dev dependencies (soothe-pgvector)
 #   - langfuse:   Langfuse v3 observability stack
-#   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
-#
-# Config files:
-#   - Dev:        config/develop/config.docker.yml (default)
 #
 # Quick reference:
 #   Dev stack (deps + Langfuse): make docker-dev-up
@@ -166,7 +162,7 @@ docker-prod-ps:
 
 reset-the-world:
 	@echo "Resetting all Docker state and local data..."
-	docker compose $(DOCKER_ENV_FILE) --profile daemon --profile langfuse down -v 2>/dev/null || true
+	docker compose $(DOCKER_ENV_FILE) --profile langfuse down -v 2>/dev/null || true
 	@if [ -d ~/.soothe ]; then \
 		find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; \
 	fi

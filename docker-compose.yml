@@ -4,7 +4,6 @@
 # Profiles:
 #   - default:    Dev dependencies (soothe-pgvector)
 #   - langfuse:   Langfuse v3 observability stack (optional)
-#   - daemon:     Local soothed daemon (dev image from SOOTHE_IMAGE)
 #
 # Usage:
 #   # Dev dependencies only (default):
@@ -14,17 +13,10 @@
 #   # Dev deps + Langfuse UI/API:
 #   docker compose --profile langfuse up -d
 #
-#   # Dev deps + local daemon (after building image):
-#   docker compose --profile daemon up -d
-#
-#   # Build local daemon image first:
-#   docker build -f packages/soothe-daemon/Dockerfile.local \
-#     --build-arg INCLUDE_BROWSER=false -t soothed:local-slim .
-#
-# Production deployment: See deploy/docker-compose.yml and deploy/README.md
+# Production daemon stack: See deploy/docker-compose.yml and deploy/README.md
 #
 # Local Langfuse v3 (LLM observability UI + API, IG-367, IG-369) requires --profile langfuse.
-# UI (browser): http://localhost:3300 — config/develop/config.docker.yml uses http://langfuse-web:3000 for the daemon container.
+# UI (browser): http://localhost:3300
 # Stack: langfuse-web + langfuse-worker + ClickHouse + Redis + MinIO; PostgreSQL DB `langfuse` on soothe-pgvector
 # (created on first PG boot via config/develop/init-langfuse-db.sql).
 # Internal Langfuse backends use langfuse-internal (no host routes). langfuse-web also joins
@@ -34,16 +26,9 @@
 # Default sign-in: dev@soothe.local / SootheLangfuseLocalDev1 (override via LANGFUSE_INIT_*; mirror keys in config YAML).
 # Fresh Langfuse DB/volumes: docker compose --profile langfuse down -v
 #
-# Environment variables (set in deploy/.env for daemon profile):
+# Environment variables:
 #   POSTGRES_PASSWORD=...            # PostgreSQL password (dev default: postgres)
-#   OPENAI_API_KEY=...               # OpenAI or OpenAI-compatible provider key
-#   OPENAI_CP_API_KEY=...            # Coding-Plan provider key (optional)
-#   OPENAI_BASE_URL=...              # OpenAI-compatible API base URL (optional)
-#   OPENAI_CP_BASE_URL=...           # Coding-Plan API base URL (optional)
-#   TAVILY_API_KEY=...               # Tavily web search (deep_research / wizsearch)
-#   SOOTHE_MEMORY_PROFILING_ENABLED  # Enable tracemalloc (true/false, default: false)
-#   SOOTHE_CONFIG_PATH=./config/develop/config.docker.yml   # Dev daemon config (default)
-#   SOOTHE_WORKSPACE_HOST_ROOT=${HOME}       # Host workspace bind mount (default: $HOME)
+#   LANGFUSE_INIT_*                  # Optional Langfuse headless-init overrides
 
 services:
   # ===========================================================================
@@ -276,86 +261,8 @@ services:
       LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-Soothe Dev}
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-SootheLangfuseLocalDev1}
 
-  # ===========================================================================
-  # Soothe Daemon (dev only - daemon profile)
-  # ===========================================================================
-
-  soothed:
-    profiles:
-      - daemon
-    image: ${SOOTHE_IMAGE:-soothed:local-slim}
-    restart: unless-stopped
-    depends_on:
-      soothe-pgvector:
-        condition: service_healthy
-      langfuse-web:
-        condition: service_started
-        required: false
-    networks:
-      - soothe-db
-      - soothe-app
-      - langfuse-internal
-      # langfuse-web listens on langfuse-edge only; daemon must join edge to reach :3000
-      - langfuse-edge
-    environment:
-      # Provider credentials
-      DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
-      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
-      DASHSCOPE_CP_BASE_URL: ${DASHSCOPE_CP_BASE_URL:-https://coding.dashscope.aliyuncs.com/v1}
-      DASHSCOPE_CP_API_KEY: ${DASHSCOPE_CP_API_KEY:-}
-      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
-      # Config path - mounted at /app/config.yml
-      SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
-      # PostgreSQL connection strings (RFC-612 multi-database)
-      SOOTHE_POSTGRES_BASE_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432
-      SOOTHE_POSTGRES_VECTORS_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@soothe-pgvector:5432/soothe_vectors
-      SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
-      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__ENABLED: true
-      SOOTHE_DAEMON_TRANSPORTS__HTTP_REST__HOST: 0.0.0.0
-      # IG-475: Memory profiling (tracemalloc) for leak detection
-      SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED: ${SOOTHE_MEMORY_PROFILING_ENABLED:-false}
-      SOOTHE_DAEMON_MEMORY_PROFILING__TRACE_DEPTH: ${SOOTHE_MEMORY_PROFILING_TRACE_DEPTH:-25}
-      SOOTHE_DAEMON_MEMORY_PROFILING__LOG_GROWTH_THRESHOLD_MB: ${SOOTHE_MEMORY_PROFILING_LOG_GROWTH_THRESHOLD_MB:-100}
-      # IG-475: glibc malloc tuning to reduce RSS fragmentation
-      MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-2}
-      MALLOC_TRIM_THRESHOLD_: "131072"
-      MALLOC_TOP_PAD_: "131072"
-      MALLOC_MMAP_THRESHOLD_: "131072"
-      # IG-477: emergency rollback for ephemeral execute graph (default on)
-      SOOTHE_EPHEMERAL_EXECUTE_STREAM: ${SOOTHE_EPHEMERAL_EXECUTE_STREAM:-1}
-      # IG-477: jemalloc lowers sampled RSS vs glibc
-      LD_PRELOAD: ${LD_PRELOAD:-}
-    ports:
-      - "127.0.0.1:8765:8765"
-    volumes:
-      - soothe_daemon_data:/var/lib/soothe
-      - ${SOOTHE_CONFIG_PATH:-./config/develop/config.docker.yml}:/app/config.yml:ro
-      - ./deploy/logs:/var/lib/soothe/logs
-      - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces
-    deploy:
-      resources:
-        limits:
-          memory: ${DOCKER_MEM_LIMIT:-4g}
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/healthz', timeout=5)" || exit 1
-      interval: 60s
-      timeout: 15s
-      retries: 5
-      start_period: 60s
-    logging:
-      driver: json-file
-      options:
-        max-size: "200m"
-        max-file: "5"
-    security_opt:
-      - no-new-privileges:true
-
 networks:
   soothe-db:
-    driver: bridge
-  soothe-app:
     driver: bridge
   langfuse-internal:
     driver: bridge
@@ -366,8 +273,6 @@ networks:
 volumes:
   soothe_postgres_data:
     name: soothe_postgres_data
-  soothe_daemon_data:
-    name: soothe_daemon_data
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
   langfuse_minio_data:
