@@ -22,6 +22,3 @@
 [submodule "packages/soothe-sdk"]
 	path = packages/soothe-sdk
 	url = git@github.com:mirasoth/soothe-sdk.git
-[submodule "packages/soothe-plugins"]
-	path = packages/soothe-plugins
-	url = git@github.com:mirasoth/soothe-plugins.git
