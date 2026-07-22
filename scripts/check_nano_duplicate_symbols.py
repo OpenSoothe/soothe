@@ -117,9 +117,6 @@ _ALLOWED_DUPLICATES: dict[str, str] = {
     "SKILL_BODY_LOADED": "shared event constant — nano namespace; host re-declares for catalog",
     # --- Shared execution constants (nano-owned limits; host re-declares).
     "MAX_EXECUTE_TIMEOUT": "shared execution constant — nano-owned limit; host re-declares",
-    # --- nano-owned runnables the host subclass-injects (host references by
-    #     name only at the subclass boundary, not by import — appears unused in nano text).
-    "LazySubagentRunnable": "nano-owned runnable; host subclasses — not a duplicate",
     # --- Split-config default factories (nano-owned config defaults; host
     #     mirrors so host consumers can import from either side).
     "default_embedding_profile": "split-config default — embedding_profile is nano-owned; host mirrors",
@@ -127,7 +124,7 @@ _ALLOWED_DUPLICATES: dict[str, str] = {
     "default_vector_store_router": "split-config default — vector_store_router is nano-owned; host mirrors",
     "default_vector_stores": "split-config default — vector_stores is nano-owned; host mirrors",
     # --- Postgres-provisioning helpers (nano-owned; host re-declares in its
-    #     own foundation/persistence for host-internal callers). PR-3 territory.
+    #     own persistence for host-internal callers). PR-3 territory.
     "postgres_admin_dsn": "nano-owned provisioning helper; host re-declares for host callers",
     "postgres_target_dsn": "nano-owned provisioning helper; host re-declares for host callers",
     "required_postgres_database_keys": "nano-owned provisioning helper; host re-declares for host callers",
@@ -138,12 +135,6 @@ _ALLOWED_DUPLICATES: dict[str, str] = {
     "build_shared_environment_workspace_prefix": "nano-owned prompt helper; host mirrors",
     "current_timestamp_iso": "nano-owned prompt helper; host mirrors",
     "uses_builtin_agent_system_prompt": "nano-owned prompt helper; host mirrors",
-    # --- subagent lazy-runnable helpers (nano-owned; host re-declares at the
-    #     subclass boundary).
-    "subagent_description": "nano-owned subagent helper; host re-declares for host subclass",
-    # --- error event (PR-5 deferred — daemon-only caller but moving requires
-    #     rewiring daemon error paths; left as shared for now).
-    "emit_error_event": "nano-owned error-event builder; daemon re-declares (PR-5 deferred)",
 }
 
 

@@ -170,7 +170,7 @@ class TestSootheConfig:
 
     def test_core_agent_recursion_limit_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.runtime.recursion_limit == 200
+        assert cfg.agent.runtime.recursion_limit == 9999
 
     def test_core_agent_recursion_limit_config_override(self) -> None:
         cfg = SootheConfig(agent={"runtime": {"recursion_limit": 300}})

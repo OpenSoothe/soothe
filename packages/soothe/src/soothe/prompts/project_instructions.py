@@ -43,7 +43,7 @@ def load_workspace_project_instructions(
     max_lines: int = DEFAULT_PROJECT_INSTRUCTION_MAX_LINES,
     headline_max_chars: int = PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
 ) -> str | None:
-    """Compat alias for workspace project instruction loading."""
+    """Compat alias — routes through host ``load_agent_instructions`` (test hooks)."""
     return load_agent_instructions(
         workspace,
         max_lines=max_lines,

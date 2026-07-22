@@ -2493,7 +2493,7 @@ class AgentRuntimeConfig(BaseModel):
         ),
     )
     recursion_limit: int = Field(
-        default=200,
+        default=9_999,
         ge=1,
         le=10_000,
         description=(

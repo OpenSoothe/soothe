@@ -47,7 +47,7 @@ def test_resolve_subagents_browser_use_passes_soothe_config_not_model() -> None:
             "soothe_nano.plugin.global_registry.get_plugin_registry",
         ) as registry_mock,
         patch(
-            "soothe.runner.resolver._resolver_tools._call_subagent_factory",
+            "soothe_nano.resolve._resolver_tools._call_subagent_factory",
             side_effect=_fake_call,
         ) as factory_mock,
     ):
@@ -88,7 +88,7 @@ def test_resolve_subagents_browser_use_fallback_passes_soothe_config_not_model()
             return_value=False,
         ),
         patch(
-            "soothe.runner.resolver._resolver_tools._call_subagent_factory",
+            "soothe_nano.resolve._resolver_tools._call_subagent_factory",
             side_effect=_fake_call,
         ) as factory_mock,
     ):

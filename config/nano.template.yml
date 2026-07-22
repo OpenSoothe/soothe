@@ -53,7 +53,7 @@ agent:
   runtime:
     lazy_core_agent: true
     general_purpose_subagent: true
-    recursion_limit: 200
+    recursion_limit: 9999
     role_routing:
       enabled: false
       orchestration_model_role: fast

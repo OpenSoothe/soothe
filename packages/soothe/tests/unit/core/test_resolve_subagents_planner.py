@@ -50,7 +50,7 @@ def test_resolve_subagents_planner_uses_model_role() -> None:
             return_value=False,
         ),
         patch(
-            "soothe.runner.resolver._resolver_tools._call_subagent_factory",
+            "soothe_nano.resolve._resolver_tools._call_subagent_factory",
             side_effect=_fake_call,
         ) as factory_mock,
     ):
