@@ -70,7 +70,6 @@ paths = [
     "packages/soothe-daemon/src",
     "packages/soothe-cli/src",
     "packages/soothe-sdk/src",
-    "packages/soothe-plugins/src",
     "client/python/src",
     "scripts/vulture_whitelist.py",
 ]

@@ -2,9 +2,9 @@
 name: release-soothe
 description: >-
   Release Soothe packages (soothe, soothe-cli, soothe-daemon) and language
-  clients (Python, TypeScript, Go, Rust). soothe-sdk, soothe-nano, and
-  soothe-plugins publish from their own repos (mirasoth/soothe-sdk,
-  mirasoth/soothe-nano, mirasoth/soothe-plugins), not this monorepo. Handles
+  clients (Python, TypeScript, Go, Rust). soothe-sdk and soothe-nano
+  publish from their own repos (mirasoth/soothe-sdk,
+  mirasoth/soothe-nano), not this monorepo. Handles
   version bumping, changelog maintenance, git tagging, publishing (PyPI / npm /
   crates.io / Go modules), and monorepo submodule bumps.
   Use when preparing a new release, hotfix, client SDK release, or when the
@@ -85,7 +85,6 @@ cat VERSION
 # Standalone package versions (independent of root VERSION; publish from own repos)
 rg '^version = ' packages/soothe-sdk/pyproject.toml
 rg '^version = ' packages/soothe-nano/pyproject.toml
-rg '^version = ' packages/soothe-plugins/pyproject.toml
 ```
 
 ### 2. Update CHANGELOG.md
@@ -109,11 +108,10 @@ Insert new version block at top (below header, above existing entries):
 
 ### 3. Update Version Files
 
-Synchronize the monorepo `VERSION` for core packages. **soothe-sdk**,
-**soothe-nano**, and **soothe-plugins** version bumps and PyPI publishes happen
-in their own repos ([mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk),
-[mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano),
-[mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins)); this
+Synchronize the monorepo `VERSION` for core packages. **soothe-sdk** and
+**soothe-nano** version bumps and PyPI publishes happen in their own repos
+([mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk),
+[mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano)); this
 monorepo only pins those submodules and waits for the versions on PyPI when
 needed.
 
@@ -121,7 +119,7 @@ needed.
 # Update monorepo VERSION (soothe / soothe-cli / soothe-daemon)
 echo "X.Y.Z" > VERSION
 
-# For soothe-sdk / soothe-nano / soothe-plugins: release in the package repo,
+# For soothe-sdk / soothe-nano: release in the package repo,
 # then bump the submodule pin here.
 ```
 
@@ -147,7 +145,6 @@ Or use the release workflow in `.github/workflows/`.
 | soothe-daemon | `packages/soothe-daemon/` | Root `VERSION` | PyPI: `soothe-daemon` |
 | soothe-sdk | `packages/soothe-sdk/` (submodule) | Own repo `pyproject.toml` | **Independent** — [mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk) |
 | soothe-nano | `packages/soothe-nano/` (submodule) | Own repo `pyproject.toml` | **Independent** — [mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano) |
-| soothe-plugins | `packages/soothe-plugins/` (submodule) | Own repo `pyproject.toml` | **Independent** — [mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins) |
 
 ---
 
@@ -235,8 +232,8 @@ rg '^version = ' client/rust/Cargo.toml
 
 ## Troubleshooting
 
-- **Version mismatch**: Root `VERSION` drives soothe/cli/daemon only; do not expect soothe-sdk, soothe-nano, soothe-plugins, or clients to match unless you bump them
-- **soothe-sdk / soothe-nano / soothe-plugins publish fails in monorepo CI**: Expected — they are not published from this repo. Release from [mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk) / [mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano) / [mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins), then ensure the submodule pins are on PyPI before monorepo `deploy-cli` / `deploy-core` / `deploy-daemon`
+- **Version mismatch**: Root `VERSION` drives soothe/cli/daemon only; do not expect soothe-sdk, soothe-nano, or clients to match unless you bump them
+- **soothe-sdk / soothe-nano publish fails in monorepo CI**: Expected — they are not published from this repo. Release from [mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk) / [mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano), then ensure the submodule pins are on PyPI before monorepo `deploy-cli` / `deploy-core` / `deploy-daemon`
 - **Changelog merge conflicts**: Preserve existing entries; add new version at top
 - **PyPI / npm upload fails**: Verify OIDC trusted publishing env and that the version is not already published
 - **crates.io publish fails**: Check `CARGO_REGISTRY_TOKEN` and that `Cargo.toml` version is unique
@@ -251,7 +248,6 @@ rg '^version = ' client/rust/Cargo.toml
 | Check monorepo version | `cat VERSION` |
 | Check soothe-sdk version | `rg '^version = ' packages/soothe-sdk/pyproject.toml` |
 | Check soothe-nano version | `rg '^version = ' packages/soothe-nano/pyproject.toml` |
-| Check soothe-plugins version | `rg '^version = ' packages/soothe-plugins/pyproject.toml` |
 | Check client versions | See “Quick version checks” above |
 | List recent tags | `git tag -l 'v0.8.*' \| tail -5` |
 | View tag details | `git show v0.8.3` |

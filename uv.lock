@@ -8591,7 +8591,7 @@ test = [
 
 [[package]]
 name = "soothe-nano"
-version = "0.9.10"
+version = "1.0.0"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },
@@ -8691,7 +8691,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-sdk"
-version = "1.0.4"
+version = "1.0.5"
 source = { editable = "packages/soothe-sdk" }
 dependencies = [
     { name = "langchain-core" },

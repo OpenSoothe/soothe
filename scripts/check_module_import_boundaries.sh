@@ -112,9 +112,6 @@ run_check "${PKG_DIR}/soothe/src" \
 run_check "${PKG_DIR}/soothe-daemon/src" \
   '^\s*(from|import)\s+soothe_nano\.middleware\._' \
   "soothe-daemon must not import soothe-nano private middleware modules"
-run_check "${PKG_DIR}/soothe-plugins/src" \
-  '^\s*(from|import)\s+soothe_nano\.middleware\._' \
-  "soothe-plugins must not import soothe-nano private middleware modules"
 
 # Rule 3c: soothe-nano must not contain host-only symbols
 # (StrangeLoop/Autopilot/Sloop/ContextEngine orchestration, intake-only catalog,

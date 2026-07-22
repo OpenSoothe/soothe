@@ -65,8 +65,6 @@ soothe-client-python  ← WebSocket transport (sdk only among workspace pkgs)
 soothe-cli            ← Typer + Textual TUI (sdk + client; talks over wire)
 ```
 
-`soothe-plugins` depends on **nano + sdk**, not full `soothe`.
-
 #### Placement (where new code goes)
 
 | Concern | Package |
@@ -89,7 +87,6 @@ soothe-cli            ← Typer + Textual TUI (sdk + client; talks over wire)
 | `soothe-daemon` | `soothe`, `soothe-nano`, `soothe-sdk`, `soothe-client-python` | `soothe_cli` |
 | `soothe-client-python` | `soothe-sdk` | `soothe`, `soothe_daemon`, `soothe_cli` |
 | `soothe-cli` | `soothe-sdk`, `soothe-client-python` | `soothe`, `soothe_daemon` (use WebSocket, not Python imports) |
-| `soothe-plugins` | `soothe-sdk`, `soothe-nano` | full `soothe` / daemon / cli |
 
 Additional hard bans:
 
@@ -98,7 +95,7 @@ Additional hard bans:
 3. **Private nano middleware is closed** — other packages must not import `soothe_nano.middleware._*`.
 4. **No dead duplicates** — do not redefine in nano a public symbol the host/daemon already owns; host is canonical (`check_nano_duplicate_symbols.py`).
 
-#### Standalone docstring / comment rules (`soothe-sdk`, `soothe-nano`, `soothe-plugins`)
+#### Standalone docstring / comment rules (`soothe-sdk`, `soothe-nano`)
 
 These packages ship independently and must not reference monorepo docs or
 host/daemon concepts. Docstrings, comments, and `__init__` summaries must
@@ -122,7 +119,7 @@ read as self-contained.
 
 Host packages (`soothe`, `soothe-daemon`, `soothe-cli`) MAY reference
 IG-XXX/RFC-XXX in docstrings and comments (they live beside `docs/`).
-Standalone packages (`soothe-sdk`, `soothe-nano`, `soothe-plugins`) must not.
+Standalone packages (`soothe-sdk`, `soothe-nano`) must not.
 
 ### 8. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
@@ -156,12 +153,11 @@ Import/placement rules: **§7b Package Boundaries (MUST)**. Do not reverse the D
 ```
 packages/
 ├── soothe-sdk/         # Shared contracts submodule (mirasoth/soothe-sdk) — leaf
-├── soothe-deepagents/  # deepagents fork — leaf
+├── soothe-deepagents/  # deepagents fork submodule (mirasoth/soothe-deepagents) — leaf
 ├── soothe-nano/        # Coding CoreAgent submodule (mirasoth/soothe-nano); no StrangeLoop/Autopilot
 ├── soothe/             # Host: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
 ├── soothe-daemon/      # Daemon server (soothed); depends on soothe + soothe-nano (+ client)
-├── soothe-cli/         # Typer CLI + Textual TUI (sdk + client over WebSocket; not soothe/daemon)
-└── soothe-plugins/     # Community plugins (mirasoth/soothe-plugins); nano + sdk, not full soothe
+└── soothe-cli/         # Typer CLI + Textual TUI (sdk + client over WebSocket; not soothe/daemon)
 
 client/
 ├── go/                 # soothe-client-go

@@ -6,7 +6,6 @@
 # 3. soothe-cli        - CLI client (Typer CLI + Textual TUI)
 # 4. soothe            - StrangeLoop / Autopilot / host composition
 # 5. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
-# 6. soothe-plugins    - Official plugins (depends on soothe-nano)
 #
 # Uses .venv managed by uv for development.
 
@@ -28,7 +27,7 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml $(DOCKER_ENV_
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-sdk soothe-nano soothe-cli soothe soothe-daemon soothe-plugins
+PACKAGES = soothe-sdk soothe-nano soothe-cli soothe soothe-daemon
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
