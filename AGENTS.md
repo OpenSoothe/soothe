@@ -41,44 +41,88 @@ After implementing (or changing) code—and before marking work done (commit, PR
 - Archived content in `docs/archive/` (drafts, completed analysis) is for historical reference only.
 - When writing log messages, error text, CLI output, config field descriptions, or any user-visible string, omit all IG-/RFC- identifiers.
 
-### 7b. Package-boundary docstring rules (MUST)
+### 7b. Package Boundaries (MUST)
 
-`soothe-nano` and `soothe-sdk` are **standalone packages** — they ship
-independently (soothe-nano is a separate repo/submodule) and must not reference
-parent-workspace documentation or host/daemon concepts. Their docstrings,
-comments, and `__init__` package summaries must read as self-contained.
+Soothe is a **one-way dependency DAG**. Before adding code, imports, or types,
+place them in the correct package. **Never reverse an arrow.** Enforcement:
+`scripts/check_module_import_boundaries.sh` and
+`scripts/check_nano_duplicate_symbols.py` (wired into `./scripts/verify_finally.sh`).
 
-**Rules for `packages/soothe-nano/` and `packages/soothe-sdk/`:**
+#### Dependency DAG (allowed direction only)
 
-1. **No IG-XXX / RFC-XXX references** in source (`*.py`), including docstrings
-   and comments. These identifiers index into the monorepo's `docs/specs/` and
-   `docs/impl/`, which a standalone nano/sdk consumer does not have. Replace
-   `(RFC-105)` / `(IG-258 Phase 2)` / `RFC-612 multi-database` style parentheticals
-   with a plain-English description of the concept. The only exception is the
-   single `__init__.py` package docstring may say "no StrangeLoop/Autopilot" to
-   mark the package's scope — but never an IG/RFC number.
+```text
+soothe-sdk            ← shared contracts (leaf; no upward imports)
+soothe-deepagents     ← deepagents fork (leaf)
+        ↓
+soothe-nano           ← Coding CoreAgent (standalone; mirasoth/soothe-nano)
+        ↓
+soothe                ← host: StrangeLoop, Autopilot, CE, cron, runner
+        ↓
+soothe-daemon         ← soothed process (may also depend on nano + client)
+        ↑
+soothe-client-python  ← WebSocket transport (sdk only among workspace pkgs)
+        ↑
+soothe-cli            ← Typer + Textual TUI (sdk + client; talks over wire)
+```
+
+`soothe-plugins` depends on **nano + sdk**, not full `soothe`.
+
+#### Placement (where new code goes)
+
+| Concern | Package |
+|---------|---------|
+| Shared events, wire, display, plugin contracts, protocols | `soothe-sdk` |
+| Coding CoreAgent, skills/MCP/backends used in-proc | `soothe-nano` |
+| StrangeLoop, Autopilot, Context Engine, cron, identity, host runner | `soothe` |
+| Process lifecycle, channels, HTTP/WS server, admin IO | `soothe-daemon` |
+| Human CLI / TUI | `soothe-cli` |
+| Language WS clients | `client/*` (`soothe-client-python`, etc.) |
+
+#### Import allow / deny (MUST)
+
+| Package | May import (workspace) | Must NOT import |
+|---------|------------------------|-----------------|
+| `soothe-sdk` | — | any other workspace package |
+| `soothe-deepagents` | — | any `soothe*` package |
+| `soothe-nano` | `soothe-sdk`, `soothe-deepagents` | `soothe`, `soothe_daemon`, `soothe_cli` |
+| `soothe` | `soothe-sdk`, `soothe-nano`, `soothe-deepagents` | `soothe_daemon`, `soothe_cli` |
+| `soothe-daemon` | `soothe`, `soothe-nano`, `soothe-sdk`, `soothe-client-python` | `soothe_cli` |
+| `soothe-client-python` | `soothe-sdk` | `soothe`, `soothe_daemon`, `soothe_cli` |
+| `soothe-cli` | `soothe-sdk`, `soothe-client-python` | `soothe`, `soothe_daemon` (use WebSocket, not Python imports) |
+| `soothe-plugins` | `soothe-sdk`, `soothe-nano` | full `soothe` / daemon / cli |
+
+Additional hard bans:
+
+1. **CLI sits above the daemon** — `soothe_cli` must not import daemon/host; communicate via wire contracts in sdk + `soothe-client-python`.
+2. **Nano is standalone** — no host/daemon imports (`TYPE_CHECKING` included). No host-only symbols in nano source: `StrangeLoop`, `Autopilot`, `ContextEngine`, `cron`, intake-only, `sloop`, goal-completion hooks, identity runtime/middleware, daemon heartbeat events, etc. (literal ban in `check_module_import_boundaries.sh` rule 3c).
+3. **Private nano middleware is closed** — other packages must not import `soothe_nano.middleware._*`.
+4. **No dead duplicates** — do not redefine in nano a public symbol the host/daemon already owns; host is canonical (`check_nano_duplicate_symbols.py`).
+
+#### Standalone docstring / comment rules (`soothe-sdk`, `soothe-nano`, `soothe-plugins`)
+
+These packages ship independently and must not reference monorepo docs or
+host/daemon concepts. Docstrings, comments, and `__init__` summaries must
+read as self-contained.
+
+1. **No IG-XXX / RFC-XXX** in source (`*.py`), including docstrings and
+   comments. Replace `(RFC-105)` / `(IG-258 Phase 2)` style parentheticals
+   with a plain-English description. Exception: the single nano `__init__.py`
+   package docstring may say "no StrangeLoop/Autopilot" to mark scope — never
+   an IG/RFC number.
 2. **No host/daemon concept names** in docstrings or comments: `StrangeLoop`,
    `Autopilot`, `ContextEngine`, `cron`, `intake-only`, `daemon`, `soothed`,
-   `routing_classification`, `goal_completion`, `sloop`. Nano does not know
-   these concepts. (Mentioning them to say "no StrangeLoop" in the package
-   docstring is allowed; using them to describe behavior is not.)
-3. **No `soothe.` / `soothe_daemon.` import paths** in docstrings, comments,
-   or docstring examples — nano must not reference host/daemon module paths.
-   (`TYPE_CHECKING` or runtime `import` of host code is also banned — see §3b.)
-4. **Describe behavior, not provenance.** Instead of `IG-517: Batched edit for
-   coalescing middleware`, write `Batched edit for coalescing middleware`.
-   Instead of `RFC-612 multi-database layout`, write `multi-database PostgreSQL
-   layout`. Keep the technical content; drop the tracker identifier.
+   `routing_classification`, `goal_completion`, `sloop`. (Saying "no
+   StrangeLoop" in the package docstring is allowed; using them to describe
+   behavior is not.)
+3. **No `soothe.` / `soothe_daemon.` paths** in docstrings, comments, or
+   docstring examples.
+4. **Describe behavior, not provenance.** Write `Batched edit for coalescing
+   middleware`, not `IG-517: Batched edit…`. Write `multi-database PostgreSQL
+   layout`, not `RFC-612 multi-database layout`.
 
-This rule is enforced structurally: `scripts/check_module_import_boundaries.sh`
-rule 3c bans L2/L3 symbol names in nano, and `scripts/check_nano_duplicate_symbols.py`
-bans dead-duplicate host symbols in nano. A docstring scanner for IG/RFC refs
-is a TODO (PR-10 follow-on); for now, reviewers must enforce by eye.
-
-Host packages (`soothe`, `soothe-daemon`, `soothe-cli`) MAY
-reference IG-XXX/RFC-XXX in docstrings and comments (they live in the monorepo
-alongside `docs/`). Standalone packages (`soothe-sdk`, `soothe-nano`,
-`soothe-plugins`) must not.
+Host packages (`soothe`, `soothe-daemon`, `soothe-cli`) MAY reference
+IG-XXX/RFC-XXX in docstrings and comments (they live beside `docs/`).
+Standalone packages (`soothe-sdk`, `soothe-nano`, `soothe-plugins`) must not.
 
 ### 8. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
@@ -107,19 +151,23 @@ See [IG-567](docs/impl/IG-567-heuristic-to-rules-migration.md) for the StrangeLo
 
 ## 📁 Structure
 
+Import/placement rules: **§7b Package Boundaries (MUST)**. Do not reverse the DAG.
+
 ```
 packages/
-├── soothe-sdk/      # Shared contracts submodule (mirasoth/soothe-sdk)
-├── soothe-nano/     # Coding CoreAgent submodule (mirasoth/soothe-nano); no StrangeLoop/Autopilot
-├── soothe/          # Host composition: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
-├── soothe-daemon/   # Daemon server (soothed); depends on soothe + soothe-nano directly
-├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)
-└── soothe-plugins/  # Community plugins submodule (mirasoth/soothe-plugins); depends on nano, not full soothe
+├── soothe-sdk/         # Shared contracts submodule (mirasoth/soothe-sdk) — leaf
+├── soothe-deepagents/  # deepagents fork — leaf
+├── soothe-nano/        # Coding CoreAgent submodule (mirasoth/soothe-nano); no StrangeLoop/Autopilot
+├── soothe/             # Host: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
+├── soothe-daemon/      # Daemon server (soothed); depends on soothe + soothe-nano (+ client)
+├── soothe-cli/         # Typer CLI + Textual TUI (sdk + client over WebSocket; not soothe/daemon)
+└── soothe-plugins/     # Community plugins (mirasoth/soothe-plugins); nano + sdk, not full soothe
 
 client/
-├── go/              # soothe-client-go
-├── typescript/      # @mirasoth/soothe-client
-└── python/          # soothe-client-python (WebSocket transport client)
+├── go/                 # soothe-client-go
+├── typescript/         # @mirasoth/soothe-client
+├── rust/               # soothe-client-rust (if present)
+└── python/             # soothe-client-python (WebSocket transport; sdk only)
 ```
 
 **Key docs**: [RFC-000](docs/specs/RFC-000-system-conceptual-design.md) for architecture, [RFC-600](docs/specs/RFC-600-plugin-extension-system.md) for plugins.
@@ -183,7 +231,7 @@ langchain provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, G
 ## 🚦 Workflow
 
 1. **Plan**: Explore codebase → ask when alternatives exist → ExitPlanMode for approval
-2. **Implement**: Read existing → check ecosystem → follow patterns → run `make lint`
+2. **Implement**: Place code per §7b Package Boundaries → check ecosystem → follow patterns → run `make lint`
 3. **Cleanse → Verify → Fix** (Critical Rule 6 — MUST after every code impl): remove related legacy/dead code **without changing existing functionality**, then `./scripts/verify_finally.sh`, then fix until green
 4. **GitHub Actions**: Use `GITHUB_PAT` env var; `export GH_TOKEN="$GITHUB_PAT"` for `gh` CLI
 
