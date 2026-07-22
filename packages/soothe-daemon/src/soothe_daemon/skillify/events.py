@@ -62,3 +62,23 @@ register_event(
     verbosity=VerbosityTier.NORMAL,
     summary_template="Skillify found {result_count} skills",
 )
+register_event(
+    SkillifyIndexStartedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Skillify index started ({collection})",
+)
+register_event(
+    SkillifyIndexUpdatedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Skillify index updated (+{new}/~{changed}/-{deleted}, total={total})",
+)
+register_event(
+    SkillifyIndexUnchangedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Skillify index unchanged (total={total})",
+)
+register_event(
+    SkillifyIndexFailedEvent,
+    verbosity=VerbosityTier.NORMAL,
+    summary_template="Skillify index failed",
+)

@@ -28,7 +28,15 @@ RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
 from __future__ import annotations
 
 # Import VerbosityTier from SDK for backward compatibility
-from soothe_sdk.core.events import ERROR, LLM_RETRY_ATTEMPT, STREAM_END
+from soothe_sdk.core.events import (
+    ERROR,
+    LLM_RETRY_ATTEMPT,
+    MEMORY_RECALLED,
+    MEMORY_STORED,
+    POLICY_CHECKED,
+    POLICY_DENIED,
+    STREAM_END,
+)
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from .catalog import (
@@ -49,7 +57,6 @@ from .catalog import (
     BRANCH_CREATED,
     BRANCH_PRUNED,
     BRANCH_RETRY_STARTED,
-    CHECKPOINT_ANCHOR_CREATED,
     CHECKPOINT_SAVED,
     CONFIG_RELOADED,
     DAEMON_HEARTBEAT,
@@ -67,11 +74,7 @@ from .catalog import (
     ITERATION_STARTED,
     LOOP_COMPLETED,
     LOOP_CREATED,
-    LOOP_DETACHED,
-    LOOP_REATTACHED,
     LOOP_STARTED,
-    MEMORY_RECALLED,
-    MEMORY_STORED,
     PLAN_BATCH_STARTED,
     PLAN_CREATED,
     PLAN_DAG_SNAPSHOT,
@@ -79,8 +82,6 @@ from .catalog import (
     PLUGIN_FAILED,
     PLUGIN_LOADED,
     PLUGIN_UNLOADED,
-    POLICY_CHECKED,
-    POLICY_DENIED,
     RECOVERY_RESUMED,
     REGISTRY,
     REPLAY_COMPLETE,
@@ -165,12 +166,9 @@ __all__ = [
     "ITERATION_COMPLETED",
     "LLM_RETRY_ATTEMPT",
     "CHECKPOINT_SAVED",
-    "CHECKPOINT_ANCHOR_CREATED",
     "RECOVERY_RESUMED",
     "LOOP_CREATED",
     "LOOP_STARTED",
-    "LOOP_DETACHED",
-    "LOOP_REATTACHED",
     "LOOP_COMPLETED",
     "GOAL_CREATED",
     "GOAL_COMPLETED",

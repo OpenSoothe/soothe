@@ -27,12 +27,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-# The six protocol-primitive event models (stream-end, llm-retry, memory,
-# policy) are owned by nano (it constructs the policy events and hosts the
-# shared primitives). The host imports them here so its ``_reg()`` overrides
-# and ``__init__`` re-exports resolve to the single canonical class, avoiding
-# a dead-duplicate class that silently clobbers the registry on import order.
-from soothe_nano.events.catalog import (  # noqa: E402
+# Protocol-primitive event models (stream-end, memory, policy) are owned by
+# nano. Re-exported here for ``soothe.events`` consumers. Nano registers them;
+# host must not re-_reg them.
+from soothe_nano.events.catalog import (  # noqa: F401
     MemoryRecalledEvent,
     MemoryStoredEvent,
     PolicyCheckedEvent,
@@ -40,11 +38,6 @@ from soothe_nano.events.catalog import (  # noqa: E402
     StreamEndEvent,
 )
 from soothe_sdk.core.events import (
-    MEMORY_RECALLED,
-    MEMORY_STORED,
-    POLICY_CHECKED,
-    POLICY_DENIED,
-    STREAM_END,
     LifecycleEvent,
     ProtocolEvent,
     SootheEvent,
@@ -61,7 +54,6 @@ ITERATION_COMPLETED = "soothe.internal.iteration.completed"
 
 # Checkpoint
 CHECKPOINT_SAVED = "soothe.internal.checkpoint.saved"
-CHECKPOINT_ANCHOR_CREATED = "soothe.internal.checkpoint.anchor.created"
 
 # Recovery
 RECOVERY_RESUMED = "soothe.internal.recovery.resumed"
@@ -69,8 +61,6 @@ RECOVERY_RESUMED = "soothe.internal.recovery.resumed"
 # Loop lifecycle
 LOOP_CREATED = "soothe.internal.loop.created"
 LOOP_STARTED = "soothe.internal.loop.started"
-LOOP_DETACHED = "soothe.internal.loop.detached"
-LOOP_REATTACHED = "soothe.internal.loop.reattached"
 LOOP_COMPLETED = "soothe.internal.loop.completed"
 
 # Control-plane replay marker (prefer wire ``replay_complete`` envelope to clients)
@@ -661,13 +651,6 @@ _reg(
     priority=EventPriority.HIGH,
 )
 _reg(
-    STREAM_END,
-    StreamEndEvent,
-    verbosity=VerbosityTier.NORMAL,
-    summary_template="Stream end ({scope})",
-    priority=EventPriority.HIGH,
-)
-_reg(
     STRANGE_LOOP_PLAN_DECISION,
     StrangeLoopPlanDecisionEvent,
     verbosity=VerbosityTier.NORMAL,
@@ -738,10 +721,6 @@ _reg(
     priority=EventPriority.NORMAL,
 )
 
-# -- Protocol: memory --------------------------------------------------------
-_reg(MEMORY_RECALLED, MemoryRecalledEvent, summary_template="{count} items recalled")
-_reg(MEMORY_STORED, MemoryStoredEvent, summary_template="Stored memory: {id}")
-
 # -- Protocol: plan ----------------------------------------------------------
 # Plan display is handled by on_plan_created() renderer, not summary template
 _reg(PLAN_CREATED, PlanCreatedEvent)
@@ -753,11 +732,7 @@ _reg(
 _reg(PLAN_REFLECTED, PlanReflectedEvent, summary_template="Reflected: {assessment}")
 _reg(PLAN_DAG_SNAPSHOT, PlanDagSnapshotEvent, verbosity=VerbosityTier.INTERNAL)
 
-# -- Protocol: policy --------------------------------------------------------
-_reg(POLICY_CHECKED, PolicyCheckedEvent, summary_template="Policy: {verdict}")
-_reg(POLICY_DENIED, PolicyDeniedEvent, summary_template="Denied: {reason}")
-
-# -- Protocol: intent (IG-518) ------------------------------------------------
+# -- Protocol: intent --------------------------------------------------------
 _reg(
     INTENT_CLASSIFIED,
     IntentClassifiedEvent,
@@ -932,6 +907,8 @@ _reg(AUTOPILOT_GOAL_BLOCKED, _AutopilotGoalBlocked, verbosity=VerbosityTier.NORM
 
 # nano modules register directly into the shared soothe_sdk.core.registry REGISTRY
 # at import time, so importing them here is sufficient — no host-side merge needed.
+# Ensure nano protocol primitives (stream/memory/policy/ERROR) are registered.
+import soothe_nano.events.catalog as _nano_events_catalog  # noqa: F401, E402
 import soothe_nano.mcp.mcp_events as _mcp_events  # noqa: F401, E402
 import soothe_nano.plugin.events as _plugin_events  # noqa: F401, E402
 import soothe_nano.skills.events as _skill_events  # noqa: F401, E402
