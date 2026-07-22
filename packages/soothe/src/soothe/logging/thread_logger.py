@@ -8,7 +8,7 @@ import logging
 import os
 import shutil
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +47,7 @@ class ThreadLogger:
         self,
         thread_dir: str | None = None,
         thread_id: str | int | None = None,
-        retention_days: int = 100,
+        retention_days: int = 30,
         max_size_mb: int = 100,
     ) -> None:
         """Initialize the thread logger.
@@ -59,41 +59,20 @@ class ThreadLogger:
             max_size_mb: Maximum total size for all thread logs under ``data/threads/``.
         """
         tid = str(thread_id or "default")
-        # Use new isolated directory structure (RFC-215)
         default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
         self._thread_dir = Path(thread_dir or default_dir).expanduser()
         self._thread_id = tid
         self._retention_days = retention_days
         self._max_size_mb = max_size_mb
         self._initialized = False
-        # Buffer for batched writes (performance optimization)
         self._buffer: list[str] = []
         self._last_flush_time: float = time.time()
         self._goal_completion_chunk_accum: list[str] = []
 
     @property
-    def thread_dir(self) -> Path:
-        """Root directory for thread JSONL files."""
-        return self._thread_dir
-
-    @property
     def log_path(self) -> Path:
         """Path to the current thread's JSONL file."""
         return self._thread_dir / "conversation.jsonl"
-
-    def set_thread_id(self, thread_id: str | int) -> None:
-        """Update the thread ID (and thus the log file).
-
-        Args:
-            thread_id: New thread ID.
-        """
-        tid = str(thread_id)
-        self._thread_id = tid
-        # Use new isolated directory structure (RFC-215)
-        default_dir = PersistenceDirectoryManager.get_thread_directory(tid) / "logs"
-        self._thread_dir = default_dir.expanduser()
-        self._initialized = False
-        logger.debug("ThreadLogger dir changed to %s", self._thread_dir)
 
     def log(
         self,
@@ -269,25 +248,11 @@ class ThreadLogger:
                 records.append(parsed)
         return records
 
-    def recent_conversation(self, limit: int = 6) -> list[dict[str, Any]]:
-        """Return recent conversation turns from the current thread log."""
-        records = self.read_recent_records(limit=max(limit * 4, limit))
-        items = [record for record in records if record.get("kind") == "conversation"]
-        return items[-limit:]
-
-    def recent_actions(self, limit: int = 12) -> list[dict[str, Any]]:
-        """Return recent action/event records from the current thread log."""
-        records = self.read_recent_records(limit=max(limit * 4, limit))
-        items = [record for record in records if record.get("kind") == "event"]
-        return items[-limit:]
-
     def _write_record(self, record: dict[str, Any]) -> None:
         """Append a single JSONL record to the thread log (buffered)."""
         try:
             self._ensure_dir()
-            # Buffer the record
             self._buffer.append(json.dumps(record, default=str))
-            # Flush if threshold reached or time interval elapsed
             current_time = time.time()
             if (
                 len(self._buffer) >= _BUFFER_FLUSH_THRESHOLD
@@ -324,17 +289,6 @@ class ThreadLogger:
             except OSError:
                 pass
 
-    def cleanup_old_threads(self) -> int:
-        """Delete stale thread logs under ``data/threads/`` (global sweep).
-
-        Returns:
-            Number of log files deleted.
-        """
-        return cleanup_stale_thread_logs(
-            retention_days=self._retention_days,
-            max_size_mb=self._max_size_mb,
-        )
-
 
 def cleanup_stale_thread_logs(
     *,
@@ -344,6 +298,8 @@ def cleanup_stale_thread_logs(
 ) -> int:
     """Delete old ``conversation.jsonl`` files across all thread directories.
 
+    Expects the layout ``threads/{id}/logs/conversation.jsonl``.
+
     Args:
         retention_days: Remove logs older than this many days.
         max_size_mb: When total size exceeds this budget, delete oldest logs first.
@@ -352,8 +308,6 @@ def cleanup_stale_thread_logs(
     Returns:
         Number of log files deleted.
     """
-    from datetime import timedelta
-
     root = Path(threads_root or Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR)
     if not root.is_dir():
         return 0
@@ -361,11 +315,12 @@ def cleanup_stale_thread_logs(
     cutoff = datetime.now(UTC) - timedelta(days=retention_days)
     max_bytes = max(0, max_size_mb) * 1024 * 1024
 
-    log_files: list[tuple[Path, float, int]] = []
+    deleted = 0
+    log_files: list[tuple[Path, Path, float, int]] = []
     for thread_dir in root.iterdir():
         if not thread_dir.is_dir():
             continue
-        log_path = thread_dir / "conversation.jsonl"
+        log_path = thread_dir / "logs" / "conversation.jsonl"
         if not log_path.is_file():
             continue
         try:
@@ -374,24 +329,24 @@ def cleanup_stale_thread_logs(
             if mtime < cutoff:
                 log_path.unlink(missing_ok=True)
                 _remove_thread_dir_if_empty(thread_dir)
+                deleted += 1
                 continue
-            log_files.append((log_path, stat.st_mtime, stat.st_size))
+            log_files.append((log_path, thread_dir, stat.st_mtime, stat.st_size))
         except OSError:
             logger.debug("Failed to stat thread log %s", log_path, exc_info=True)
 
     if max_bytes <= 0:
-        return 0
+        return deleted
 
-    total_size = sum(size for _, _, size in log_files)
-    deleted = 0
+    total_size = sum(size for _, _, _, size in log_files)
     if total_size > max_bytes:
-        log_files.sort(key=lambda item: item[1])
-        for log_path, _, size in log_files:
+        log_files.sort(key=lambda item: item[2])
+        for log_path, thread_dir, _, size in log_files:
             if total_size <= max_bytes:
                 break
             try:
                 log_path.unlink(missing_ok=True)
-                _remove_thread_dir_if_empty(log_path.parent.parent)
+                _remove_thread_dir_if_empty(thread_dir)
                 total_size -= size
                 deleted += 1
             except OSError:
