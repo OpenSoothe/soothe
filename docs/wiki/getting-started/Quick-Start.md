@@ -105,7 +105,7 @@ SOOTHE_DEBUG=false                 # Optional (default: false)
 **Persistence configuration** (production):
 
 ```yaml
-# config/config.yml (production)
+# config/nano.yml (production)
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@soothe-pgvector:5432"
@@ -175,7 +175,7 @@ SOOTHE_PERSISTENCE_POSTGRES_BASE_DSN="postgresql://user:password@localhost:5432"
 soothed start
 ```
 
-Or with config file (`~/.soothe/config/config.yml`):
+Or with config file (`~/.soothe/config/nano.yml`):
 
 ```yaml
 persistence:
@@ -292,10 +292,10 @@ Copy the template config for multi-provider routing:
 
 ```bash
 mkdir -p ~/.soothe/config
-cp config/config.template.yml ~/.soothe/config/config.yml
+cp config/nano.template.yml ~/.soothe/config/nano.yml
 ```
 
-Edit `~/.soothe/config/config.yml` to add providers, models, and router profiles. The daemon loads config from `SOOTHE_CONFIG_PATH` or `~/.soothe/config/config.yml`.
+Edit `~/.soothe/config/nano.yml` to add providers, models, and router profiles. The daemon loads config from `SOOTHE_CONFIG_PATH` or `~/.soothe/config/nano.yml`.
 
 ---
 

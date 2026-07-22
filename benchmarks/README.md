@@ -50,7 +50,7 @@ uv run soothe --no-tui -p "<query from test case>"
 
 ```bash
 # Ensure daemon is running
-uv run soothed start --config config/develop/config.yml
+uv run soothed start --config config/develop/nano.yml
 
 # Test endpoints
 curl -s http://127.0.0.1:8766/api/v1/health

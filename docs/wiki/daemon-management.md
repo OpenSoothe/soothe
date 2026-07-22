@@ -206,7 +206,7 @@ thread_pool:
 max_concurrent_threads: 100
 thread_max_age_hours: 24
 
-# Logging (agent config in config.yml → observability)
+# Logging (agent config in nano.yml → observability)
 # log_file_level: INFO  # DEBUG, INFO, WARNING, ERROR
 ```
 

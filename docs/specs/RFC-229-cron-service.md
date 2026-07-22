@@ -658,7 +658,7 @@ def _ensure_schema_sync(self):
 
 ### 7. Configuration
 
-**Location**: `config/config.template.yml` and `config/develop/config.yml`
+**Location**: `config/config.template.yml` and `config/develop/nano.yml`
 
 ```yaml
 agent:
@@ -1131,7 +1131,7 @@ Track per-component completion. All items must be checked before the RFC moves f
 - [ ] `CronJob.__post_init__` validates priority range (1-100), non-negative run_count and consecutive_failures
 - [ ] `ExtractionResult` dataclass includes `confidence` field
 - [ ] Config template (`config/config.template.yml`) updated with all new cron fields
-- [ ] Develop config (`config/develop/config.yml`) synced with template
+- [ ] Develop config (`config/develop/nano.yml`) synced with template
 
 ### CronExtractionService
 

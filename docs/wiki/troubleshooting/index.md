@@ -242,7 +242,7 @@ soothed start
 
 3. Verify configuration file syntax:
 ```bash
-python -c "import yaml; yaml.safe_load(open('~/.soothe/config/config.yml'.replace('~', '$HOME')))"
+python -c "import yaml; yaml.safe_load(open('~/.soothe/config/nano.yml'.replace('~', '$HOME')))"
 ```
 
 ### Error: Daemon not responding
@@ -282,7 +282,7 @@ kill -9 <pid>  # If needed
    thread_pool:
      request_timeout_seconds: 0  # no timeout
    ```
-3. For autopilot-only workloads, adjust `agent.autopilot.goal_deadline_seconds` in `config.yml` (`null` disables).
+3. For autopilot-only workloads, adjust `agent.autopilot.goal_deadline_seconds` in `nano.yml` (`null` disables).
 4. Restart daemon after config changes: `soothed stop && soothed start`
 
 See [Production Setup — Request timeouts](../deployment/production-setup.md#request-timeouts).
@@ -392,7 +392,7 @@ router:
 
 3. Stabilize the cacheable prefix (RFC-214): keep workspace blocks and tool schemas
    stable across hops; enable `progressive_tools` and cap `workspace_instructions_max_chars`
-   in `config.yml`. Provider-specific cache APIs are not configured via a single YAML flag.
+   in `nano.yml`. Provider-specific cache APIs are not configured via a single YAML flag.
 
 ### High Memory Usage
 
@@ -452,7 +452,7 @@ The debug guide covers:
 1. Use `/help` in the TUI to see available commands
 2. Check the [Debug Guide](../howto_debug.md) for comprehensive debugging instructions
 3. Check logs: `~/.soothe/logs/soothed.log`, `~/.soothe/logs/soothe.log`, `~/.soothe/logs/soothe-cli.log`
-4. Review configuration: check `~/.soothe/config/config.yml`
+4. Review configuration: check `~/.soothe/config/nano.yml`
 5. Check the [documentation](../) for detailed guides
 6. Review RFCs and implementation guides in `docs/specs/` and `docs/impl/`
 

@@ -27,13 +27,13 @@ daemon.enable_config_reload()
 
 # Or specify custom paths
 daemon.enable_config_reload(
-    agent_config_path="/path/to/custom/config.yml",
+    agent_config_path="/path/to/custom/nano.yml",
     daemon_config_path="/path/to/custom/daemon.yml",
 )
 ```
 
 Default paths:
-- Agent config: `~/.soothe/config/config.yml`
+- Agent config: `~/.soothe/config/nano.yml`
 - Daemon config: `~/.soothe/config/daemon.yml`
 
 ### Disabling Hot-Reload
@@ -50,7 +50,7 @@ When hot-reload is enabled, modifying watched config files triggers automatic re
 
 ```bash
 # Edit agent config
-vim ~/.soothe/config/config.yml
+vim ~/.soothe/config/nano.yml
 
 # Edit daemon config
 vim ~/.soothe/config/daemon.yml
@@ -78,7 +78,7 @@ The daemon logs confirm reload:
 
 ```
 INFO: Received SIGHUP, triggering config reload
-INFO: Agent config reloaded from ~/.soothe/config/config.yml
+INFO: Agent config reloaded from ~/.soothe/config/nano.yml
 ```
 
 ### CLI Trigger
@@ -169,7 +169,7 @@ Clients connected via WebSocket receive config reload events:
   "type": "event",
   "event_type": "config_reload",
   "config_type": "agent",
-  "config_path": "~/.soothe/config/config.yml",
+  "config_path": "~/.soothe/config/nano.yml",
   "success": true,
   "error": null
 }
@@ -245,9 +245,9 @@ def my_validator(config: Any) -> bool:
     return True
 
 watcher.watch_config(
-    path="/path/to/config.yml",
+    path="/path/to/nano.yml",
     config_type="agent",
-    loader=lambda: SootheConfig.from_yaml_file("/path/to/config.yml"),
+    loader=lambda: SootheConfig.from_yaml_file("/path/to/nano.yml"),
     validator=my_validator,  # Custom validation before swap
 )
 ```
@@ -259,13 +259,13 @@ watcher.watch_config(
 The `ConfigWatcher` class handles file watching:
 
 ```python
-from soothe.config.reload import ConfigWatcher, DEFAULT_CONFIG_PATH
+from soothe.config.reload import ConfigWatcher, DEFAULT_NANO_CONFIG_PATH
 
 watcher = ConfigWatcher(debounce_seconds=1.0)
 watcher.watch_config(
-    path=DEFAULT_CONFIG_PATH,
+    path=DEFAULT_NANO_CONFIG_PATH,
     config_type="agent",
-    loader=lambda: SootheConfig.from_yaml_file(str(DEFAULT_CONFIG_PATH)),
+    loader=lambda: SootheConfig.from_yaml_file(str(DEFAULT_NANO_CONFIG_PATH)),
     callback=on_reload,
 )
 watcher.start()
@@ -369,7 +369,7 @@ And in `ConfigReloadedEvent` for event bus:
 {
     "type": "soothe.system.config.reloaded",
     "config_type": "agent",
-    "config_path": "~/.soothe/config/config.yml",
+    "config_path": "~/.soothe/config/nano.yml",
     "old_config_hash": "a1b2c3d4",
     "new_config_hash": "e5f6g7h8",
     "timestamp": "2025-07-05T14:00:00Z",

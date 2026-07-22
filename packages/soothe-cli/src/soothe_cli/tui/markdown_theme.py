@@ -2,8 +2,8 @@
 
 Display labels and stable IDs follow the same pattern as ``theme.ThemeEntry``.
 Users configure via ``--markdown-theme`` or ``ui.markdown_theme`` in the
-**CLI client** preferences file ``~/SOOTHE_HOME/config/config.yml`` (TUI only —
-not the daemon ``config/config.yml`` in the repo).
+**CLI client** preferences file ``~/SOOTHE_HOME/config/cli.yml`` (TUI only —
+not the daemon ``nano.yml`` / ``soothe.yml``).
 """
 
 from __future__ import annotations
@@ -134,12 +134,13 @@ def load_markdown_theme_preference() -> str:
     """Load saved markdown theme from the CLI TUI preferences file."""
     import yaml
 
-    from soothe_cli.tui.model_config import DEFAULT_CONFIG_PATH
+    from soothe_cli.tui.model_config import resolve_cli_config_path
 
     try:
-        if not DEFAULT_CONFIG_PATH.exists():
+        config_path = resolve_cli_config_path()
+        if not config_path.exists():
             return DEFAULT_MARKDOWN_THEME
-        with DEFAULT_CONFIG_PATH.open("rb") as f:
+        with config_path.open("rb") as f:
             data = yaml.safe_load(f)
     except (yaml.YAMLError, PermissionError, OSError) as exc:
         logger.warning("Could not read config for markdown theme preference: %s", exc)

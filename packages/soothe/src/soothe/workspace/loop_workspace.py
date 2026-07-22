@@ -75,9 +75,9 @@ def resolve_persisted_loop_workspace(
 def _workspace_mount_from_config() -> tuple[str | None, str | None]:
     """Return configured ``workspace_mount`` host/container roots when set."""
     try:
-        from soothe.config import DEFAULT_CONFIG_PATH, SootheConfig
+        from soothe.config import DEFAULT_NANO_CONFIG_PATH, SootheConfig
 
-        cfg_path = Path(DEFAULT_CONFIG_PATH).expanduser()
+        cfg_path = Path(DEFAULT_NANO_CONFIG_PATH).expanduser()
         if not cfg_path.exists():
             return None, None
         mount = SootheConfig.from_yaml_file(str(cfg_path)).workspace_mount

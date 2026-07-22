@@ -55,7 +55,7 @@ Enable debug logging permanently in configuration files:
 
 #### 1. Enable Daemon Backend Debug Logs
 
-Edit `~/.soothe/config/config.yml`:
+Edit `~/.soothe/config/nano.yml`:
 
 ```yaml
 # Global debug flag (enables verbose agent behavior logging)
@@ -245,7 +245,7 @@ tail -f ~/.soothe/logs/soothed.log
 
 **Steps**:
 
-1. Enable Langfuse in `~/.soothe/config/config.yml` under `observability.langfuse` (`enabled`, keys, optional `host`). Install `langfuse` if needed (`pip install langfuse`).
+1. Enable Langfuse in `~/.soothe/config/nano.yml` under `observability.langfuse` (`enabled`, keys, optional `host`). Install `langfuse` if needed (`pip install langfuse`).
 
 2. Restart daemon:
 ```bash
@@ -280,7 +280,7 @@ rg 'request timeout|Request exceeded|cancelled after' ~/.soothe/logs/daemon.log 
 2. Check active settings:
 ```bash
 grep -A2 'request_timeout_seconds' ~/.soothe/config/daemon.yml
-grep -A2 'goal_deadline_seconds' ~/.soothe/config/config.yml
+grep -A2 'goal_deadline_seconds' ~/.soothe/config/nano.yml
 ```
 
 Defaults (template): **1209600s (14 days)** for both daemon request timeout and autopilot goal deadline. Prior default was **7200s (2 hours)**.
@@ -333,7 +333,7 @@ soothe --help | grep daemon
 
 1. Enable debug logging:
 ```yaml
-# ~/.soothe/config/config.yml
+# ~/.soothe/config/nano.yml
 debug: true
 logging:
   file:
@@ -394,7 +394,7 @@ tail -f ~/.soothe/logs/soothed.log | grep -i "durability.*protocol\|checkpoint"
 
 3. Inspect backend configuration:
 ```bash
-cat ~/.soothe/config/config.yml | grep -A 20 "protocols:"
+cat ~/.soothe/config/nano.yml | grep -A 20 "protocols:"
 ```
 
 ---
@@ -449,7 +449,7 @@ grep -i "iteration" ~/.soothe/logs/soothed.log | grep -i "max\|count"
 
 Complete checklist for maximum debug visibility:
 
-### In `~/.soothe/config/config.yml`:
+### In `~/.soothe/config/nano.yml`:
 
 ```yaml
 # Global debug flag

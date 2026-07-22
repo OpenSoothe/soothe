@@ -37,7 +37,7 @@ export SOOTHE_ROUTER_PROFILES='[{"name":"default","router":{"default":"openai:gp
 export SOOTHE_EMBEDDING_PROFILE='[{"model_role":"openai:text-embedding-3-small","embedding_dims":1536}]'
 ```
 
-(`SOOTHE_ROUTER_DEFAULT` does not work — `router` is derived from profiles.) Copy `config/config.template.yml` when you need multi-provider routing, Postgres, Langfuse, or other overrides.
+(`SOOTHE_ROUTER_DEFAULT` does not work — `router` is derived from profiles.) Copy `config/nano.template.yml` when you need multi-provider routing, Postgres, Langfuse, or other overrides.
 
 ## Minimal to Development
 

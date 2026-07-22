@@ -115,12 +115,20 @@ Synchronize the monorepo `VERSION` for core packages. **soothe-sdk** and
 monorepo only pins those submodules and waits for the versions on PyPI when
 needed.
 
+When bumping `soothe-nano` / `soothe-sdk` floors in `packages/soothe/pyproject.toml`,
+**also update the matching pins in `packages/soothe-daemon/pyproject.toml`**.
+The Docker image co-installs `soothe==V` and `soothe-daemon==V`; disjoint
+ranges (caught by `scripts/check_first_party_pin_alignment.py`) make the
+image build unsatisfiable.
+
 ```bash
 # Update monorepo VERSION (soothe / soothe-cli / soothe-daemon)
 echo "X.Y.Z" > VERSION
 
 # For soothe-sdk / soothe-nano: release in the package repo,
 # then bump the submodule pin here.
+# Keep soothe + soothe-daemon first-party pins aligned (nano/sdk).
+uv run python scripts/check_first_party_pin_alignment.py
 ```
 
 ### 4. Commit, Tag, Publish

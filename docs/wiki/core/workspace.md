@@ -125,7 +125,7 @@ Security validation (`validate_workspace_security`) checks the path against the 
 from soothe.workspace import resolve_daemon_workspace, FrameworkFilesystem
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_yaml_file("config.yml")
+config = SootheConfig.from_yaml_file("nano.yml")
 workspace = resolve_daemon_workspace()  # SOOTHE_WORKSPACE or TEMP fallback
 FrameworkFilesystem.initialize(config, policy=resolve_policy(config))
 # Singleton is now ready; tools use it via middleware

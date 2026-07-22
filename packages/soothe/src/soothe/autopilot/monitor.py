@@ -17,8 +17,6 @@ from typing import TYPE_CHECKING, Any
 from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
 from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
 from soothe.autopilot.monitor_models import (
-    DreamingMode,
-    DreamingScope,
     GoalIntakeResult,
     GoalPlacement,
 )
@@ -38,7 +36,7 @@ class AutopilotMonitor:
       - Goal intake: receive new goals, call CE APIs with placement analysis
       - DAG verification: background loop + event triggers
       - Backoff reasoning: on goal_failed events
-      - Dreaming coordination: multi-mode memory distillation
+      - Dreaming lifecycle: emit dreaming/awake events for downstream consumers
 
     All mutations go through ContextEngine public APIs.
     """
@@ -247,11 +245,7 @@ class AutopilotMonitor:
 
     # ── Dreaming ────────────────────────────────────────────────────────────────
 
-    async def _trigger_dreaming(
-        self,
-        modes: list[DreamingMode] | None = None,
-        scope: DreamingScope = "loop",
-    ) -> None:
+    async def _trigger_dreaming(self) -> None:
         """Trigger dreaming distillation.
 
         Emits dreaming/awake lifecycle events. Per-mode LLM distillation is

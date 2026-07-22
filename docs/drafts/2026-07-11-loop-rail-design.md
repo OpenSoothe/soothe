@@ -439,7 +439,7 @@ packages/soothe/src/soothe/rails/builtin_rails/   ← shipped (lowest precedence
 2. `config.yml` → `agent.autopilot.default_rail` (see §8.3)
 3. Built-in `default`
 
-Config field (operator-level, sync to `config/config.template.yml` + `config/develop/config.yml` on implementation):
+Config field (operator-level, sync to `config/config.template.yml` + `config/develop/nano.yml` on implementation):
 
 ```yaml
 agent:

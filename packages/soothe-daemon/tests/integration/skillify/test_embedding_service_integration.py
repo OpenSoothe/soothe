@@ -20,7 +20,7 @@ async def test_local_config_wires_skillify_embedding_role_and_retries(
     test_config: SootheConfig,
 ) -> None:
     """Skillify should use local embedding role wiring and recover from transient failures."""
-    # tests/conftest.py loads config/develop/config.yml as test_config by default.
+    # tests/conftest.py loads config/develop/nano.yml as test_config by default.
     assert test_config.active_router_profile == "production"
     assert test_config.skillify.model_role == "embedding"
     # Embedding model resolves from the active embedding_profile[0].model_role

@@ -67,7 +67,6 @@ from soothe.config.ownership import (
     validate_nano_file_ownership,
 )
 from soothe.config.reload import (
-    DEFAULT_CONFIG_PATH,
     DEFAULT_DAEMON_CONFIG_PATH,
     DEFAULT_NANO_CONFIG_PATH,
     DEFAULT_SOOTHE_CONFIG_PATH,
@@ -81,7 +80,6 @@ from soothe.config.reload import (
 from soothe.config.settings import SootheConfig
 
 __all__ = [
-    "DEFAULT_CONFIG_PATH",
     "DEFAULT_NANO_CONFIG_PATH",
     "DEFAULT_SOOTHE_CONFIG_PATH",
     "DEFAULT_DAEMON_CONFIG_PATH",

@@ -61,7 +61,7 @@ Soothe discovers plugins through three mechanisms, resolved in priority order:
 |----------|-----------|----------|
 | 100 | **Built-in** (always wins, cannot be overridden) | Core capabilities |
 | 50 | **Entry points** (`[project.entry-points."soothe.plugins"]` in pyproject.toml) | Distributable packages |
-| 30 | **Config-declared** (`plugins:` in config.yml with `module: "path:Class"`) | Runtime/environment-specific plugins |
+| 30 | **Config-declared** (`plugins:` in nano.yml with `module: "path:Class"`) | Runtime/environment-specific plugins |
 | 10 | **Filesystem** (`~/.soothe/plugins/<name>/plugin.py`) | User-specific, quick experimentation |
 
 Entry points are recommended for distributable plugins — they use standard Python packaging and are discovered via `importlib.metadata`. Config-declared plugins need no installation, making them ideal for environment-specific or development setups. Filesystem plugins are lowest priority but require zero setup.

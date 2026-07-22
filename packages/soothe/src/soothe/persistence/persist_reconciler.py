@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from psycopg_pool import AsyncConnectionPool
@@ -72,26 +72,3 @@ async def reconcile_degraded_checkpoints(
             )
 
     return reconciled
-
-
-async def find_stale_running_goals(
-    pool: AsyncConnectionPool,
-    *,
-    limit: int = 50,
-) -> list[dict[str, Any]]:
-    """Find loops whose last goal_history entry is running but CE may show completed.
-
-    Returns lightweight rows for daemon maintenance logging (no auto-fix).
-    """
-    query = """
-    SELECT loop_id, checkpoint_data->'goal_history' AS goal_history
-    FROM agentloop_checkpoints
-    WHERE jsonb_array_length(COALESCE(checkpoint_data->'goal_history', '[]'::jsonb)) > 0
-      AND (checkpoint_data->'goal_history'->-1->>'status') = 'running'
-    LIMIT %s
-    """
-    async with pool.connection() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(query, (limit,))
-            rows = await cur.fetchall()
-    return [dict(r) for r in rows]

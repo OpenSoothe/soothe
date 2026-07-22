@@ -47,8 +47,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config",
-        default="config/develop/config.yml",
-        help="Path to Soothe config file (default: config/develop/config.yml).",
+        default="config/develop/nano.yml",
+        help="Path to Soothe config file (default: config/develop/nano.yml).",
     )
     parser.add_argument(
         "--provider",

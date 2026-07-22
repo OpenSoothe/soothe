@@ -1147,9 +1147,9 @@ Translation scenario (contamination risk):
 ### Configuration Files
 
 **System Configuration**:
-- `config/config.yml`: Template configuration
-- `config/develop/config.yml`: Development defaults
-- `config/config.template.yml` and `config/develop/config.yml`: configuration and `${ENV}` placeholders
+- `config/nano.template.yml`: Template configuration
+- `config/develop/nano.yml`: Development defaults
+- `config/nano.template.yml` and `config/develop/nano.yml`: configuration and `${ENV}` placeholders
 
 **Protocol Settings**:
 - `protocols.context.enabled`: Context protocol activation

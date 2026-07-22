@@ -27,15 +27,23 @@ This layering means you should keep *structure* in YAML and *secrets/ephemeral v
 
 ## File Discovery Order
 
-Soothe resolves the active config file by searching in this order:
+Agent config uses a **split layout**:
 
-1. `--config PATH` — explicit CLI flag
-2. `SOOTHE_CONFIG_FILE` — environment variable
-3. `~/.soothe/config/config.yml` — user directory
-4. `config/develop/config.yml` — repository development default
+| File | Role |
+|------|------|
+| `nano.yml` | Providers, router, tools, persistence, security (nano-owned) |
+| `soothe.yml` | Optional host overlay (`agent.loop`, autopilot, cron, skillify) |
+| `daemon.yml` | Daemon transports / pools (separate model) |
+
+Soothe resolves the agent base file in this order:
+
+1. `--config PATH` / daemon `--soothe-config` — explicit path (typically `nano.yml`)
+2. `SOOTHE_DAEMON_SOOTHE_CONFIG_PATH` — daemon env override
+3. `~/.soothe/config/nano.yml` — default user directory (compose sibling `soothe.yml` when present)
+4. `config/develop/nano.yml` — repository development default
 5. Built-in `SootheConfig` Pydantic defaults
 
-The first match wins. This lets CI pin a config via env var while letting local dev fall back to the user directory.
+When the path basename is `nano.yml` and `soothe.yml` sits beside it, both are composed. A single-file load accepts **nano-owned keys only**; host keys must live in `soothe.yml`.
 
 ## Minimal Working Config
 
@@ -46,7 +54,7 @@ export OPENAI_API_KEY=sk-...
 soothed start && soothe "Analyze this codebase"
 ```
 
-**Minimal YAML** (multi-model routing or non-env secrets):
+**Minimal `nano.yml`** (multi-model routing or non-env secrets):
 
 ```yaml
 providers:
@@ -68,7 +76,7 @@ embedding_profile:
 
 Top-level `router:` was removed — use `router_profiles` + `active_router_profile`. Env-only model changes: `SOOTHE_ROUTER_PROFILES` (JSON) or `SOOTHE_ACTIVE_ROUTER_PROFILE`; see [Environment Variables](environment-variables.md).
 
-A template with every option documented ships at `config/config.template.yml` — copy it rather than writing from scratch.
+Templates ship as `config/nano.template.yml` (nano-owned) and `config/soothe.template.yml` (host overlay) — copy them rather than writing from scratch.
 
 ## Documentation Map
 

@@ -61,19 +61,3 @@ class DagHealthReport:
     suggest_priority_adjust: dict[str, int] = field(default_factory=dict)
     reasoning: str = ""
     errors: list[str] = field(default_factory=list)
-
-
-# ── Dreaming ───────────────────────────────────────────────────────────────────
-
-
-DreamingMode = Literal["episodic", "procedure", "semantic", "profile"]
-DreamingScope = Literal["loop", "workspace", "topic"]
-
-
-@dataclass
-class DreamingContext:
-    """Context gathered for dreaming distillation."""
-
-    goals: list[Any]  # list[GoalNode]
-    ledger: list[tuple[Any, str | None]]  # list[(BaseMessage, phase)]
-    scope_id: str  # loop_id, workspace path, or topic name

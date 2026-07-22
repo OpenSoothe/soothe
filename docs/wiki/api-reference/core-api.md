@@ -117,7 +117,7 @@ The middleware stack (assembled in `build_soothe_middleware_stack`) is ordered:
 from soothe.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
 
-agent = create_soothe_agent(SootheConfig.from_yaml_file("config.yml"))
+agent = create_soothe_agent(SootheConfig.from_yaml_file("nano.yml"))
 ```
 
 For custom protocol injection (e.g., a test-memory backend), use `AgentBuilder` directly with `.with_memory()`, `.with_policy()`, etc.

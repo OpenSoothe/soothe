@@ -134,7 +134,7 @@ Daemon transport, concurrency, and paths use prefix `SOOTHE_DAEMON_` and nested 
 | `soothe_config_path` | `SOOTHE_DAEMON_SOOTHE_CONFIG_PATH` |
 | `memory_profiling.enabled` | `SOOTHE_DAEMON_MEMORY_PROFILING__ENABLED` |
 
-Agent config (`config.yml`) nested autopilot deadline:
+Agent config (`nano.yml`) nested autopilot deadline:
 
 | YAML path | Env var |
 |-----------|---------|
@@ -282,7 +282,7 @@ cd ~/soothe && soothe
 
 Path translation: CLI sends `/Users/chenxm/Workspace/soothe` → daemon uses `/var/lib/soothe/workspaces/soothe`.
 
-**With YAML** (Compose / `deploy/`): same mapping under `workspace_mount:` in agent config; docker-compose mounts `$HOME` by default (`${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces`) — see `deploy/config.prod.yml` and `deploy/docker-compose.yml`. Override `SOOTHE_WORKSPACE_HOST_ROOT` when projects live outside `$HOME`.
+**With YAML** (Compose / `deploy/`): same mapping under `workspace_mount:` in agent config; docker-compose mounts `$HOME` by default (`${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces`) — see `deploy/nano.yml` and `deploy/docker-compose.yml`. Override `SOOTHE_WORKSPACE_HOST_ROOT` when projects live outside `$HOME`.
 
 **Rules:**
 

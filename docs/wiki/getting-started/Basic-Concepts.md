@@ -240,7 +240,7 @@ Soothe defines **protocols** (interfaces) for all core functions, with pluggable
 ### Configuring Backends
 
 ```yaml
-# ~/.soothe/config/config.yml
+# ~/.soothe/config/nano.yml
 
 # Context backend
 context:
@@ -281,7 +281,7 @@ Soothe operates with **least privilege** by default:
 Configure what actions Soothe can perform:
 
 ```yaml
-# ~/.soothe/config/config.yml
+# ~/.soothe/config/nano.yml
 
 policy:
   # Filesystem access
@@ -468,13 +468,13 @@ Soothe loads configuration from multiple sources (in priority order):
 
 1. **CLI Arguments**: `--config`, `--debug`, etc.
 2. **Environment Variables**: `SOOTHE_*` prefixed
-3. **Config File**: `~/.soothe/config/config.yml` (default)
+3. **Config File**: `~/.soothe/config/nano.yml` (default)
 4. **Built-in Defaults**: Hardcoded sensible defaults
 
 ### Example Configuration
 
 ```yaml
-# ~/.soothe/config/config.yml
+# ~/.soothe/config/nano.yml
 
 # Providers (LLM backends)
 providers:

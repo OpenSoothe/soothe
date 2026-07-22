@@ -103,7 +103,7 @@ Profiles also carry `approvable` (permissions that can be interactively approved
 
 The current implementation, driven by YAML configuration. Features:
 
-- YAML-based profile definitions (see `config/config.template.yml`)
+- YAML-based profile definitions (see `config/nano.template.yml`)
 - Permission inheritance and narrowing for subagents
 - Approval workflow support
 - Delegation depth tracking

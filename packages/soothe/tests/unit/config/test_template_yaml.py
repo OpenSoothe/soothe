@@ -1,8 +1,7 @@
-"""Regression: full ``config.template.yml`` matches Pydantic defaults (except documented examples)."""
+"""Regression: split templates compose and nano template loads alone."""
 
 from __future__ import annotations
 
-import copy
 from pathlib import Path
 
 import pytest
@@ -10,33 +9,46 @@ import pytest
 from soothe.config import SootheConfig
 
 
-def _repo_config_template_path() -> Path:
+def _repo_root() -> Path:
     # packages/soothe/tests/unit/config/test_template_yaml.py → repo root
-    return Path(__file__).resolve().parents[5] / "config" / "config.template.yml"
+    return Path(__file__).resolve().parents[5]
 
 
-def _normalize_for_default_compare(data: dict) -> dict:
-    """Strip example-only keys that differ from bare ``SootheConfig()`` defaults."""
-    out = copy.deepcopy(data)
-    out.pop("providers", None)
-    return out
+def _nano_template_path() -> Path:
+    return _repo_root() / "config" / "nano.template.yml"
 
 
-@pytest.mark.skipif(not _repo_config_template_path().is_file(), reason="template not in checkout")
-def test_config_template_matches_pydantic_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Template mirrors ``SootheConfig`` defaults; only providers / vector examples differ."""
-    # Keep this regression deterministic even when developer machines export provider keys.
+def _soothe_template_path() -> Path:
+    return _repo_root() / "config" / "soothe.template.yml"
+
+
+@pytest.mark.skipif(not _nano_template_path().is_file(), reason="nano template not in checkout")
+def test_nano_template_loads_as_single_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nano template is nano-owned and loads via ``from_yaml_file``."""
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
 
-    path = _repo_config_template_path()
-    loaded = SootheConfig.from_yaml_file(str(path))
-    baseline = SootheConfig()
-
-    ld = loaded.model_dump(mode="python")
-    bd = baseline.model_dump(mode="python")
-    assert _normalize_for_default_compare(ld) == _normalize_for_default_compare(bd)
-
+    loaded = SootheConfig.from_yaml_file(str(_nano_template_path()))
     assert len(loaded.providers) >= 1
+    assert loaded.vector_store_router.default == "sqlite_vec_default:soothe_default"
+
+
+@pytest.mark.skipif(
+    not (_nano_template_path().is_file() and _soothe_template_path().is_file()),
+    reason="split templates not in checkout",
+)
+def test_split_templates_compose(monkeypatch: pytest.MonkeyPatch) -> None:
+    """nano.template.yml + soothe.template.yml compose into a full host config."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+
+    loaded = SootheConfig.from_split_yaml_files(
+        nano_path=str(_nano_template_path()),
+        soothe_path=str(_soothe_template_path()),
+    )
+    assert loaded.providers
+    assert loaded.agent.loop.enabled is True
+    assert loaded.cron.max_jobs == 100
     assert loaded.vector_store_router.default == "sqlite_vec_default:soothe_default"

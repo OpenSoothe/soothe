@@ -1,10 +1,12 @@
-# Soothe Production Configuration
-# PostgreSQL persistence + pgvector + OpenAI-compatible custom provider.
+# Soothe nano.yml — production agent config
+# PostgreSQL persistence + pgvector + OpenAI-compatible provider.
+# Aligned with config/develop/nano.yml production router roles
+# (single OpenAI-compatible provider; no local omlx / agnes).
 #
-# This config uses environment variable substitution (${ENV_VAR}).
-# Copy this file to config.yml - no edits needed if .env is configured.
+# Mounted at /var/lib/soothe/config/nano.yml (default agent path).
+# Uses environment variable substitution (${ENV_VAR}).
 #
-# Required env vars (set in .env):
+# Required env vars (set in deploy/.env):
 #   OPENAI_API_KEY        - OpenAI-compatible provider credential
 #   OPENAI_BASE_URL       - OpenAI-compatible API base URL
 
@@ -12,17 +14,18 @@
 # LLM Providers
 # =============================================================================
 providers:
-  # OpenAI-compatible custom provider
-  # Models: GLM, Kimi, MiniMax, multimodal embedding
   - name: openai-custom
     provider_type: openai
     api_base_url: "${OPENAI_BASE_URL}"
     api_key: "${OPENAI_API_KEY}"
     models:
-      - glm-5.2                  # Zhipu AI GLM model
-      - kimi-k2.5                # Moonshot AI model
-      - MiniMax-M2.5             # Alternative reasoning
-      - text-embedding-v4  # Text embedding model (OpenAI-compat endpoint)
+      - glm-5.2                  # Default / think
+      - qwen3.6-flash            # Fast role
+      - qwen3.7-plus             # Image / multimodal
+      - kimi-k2.5
+      - kimi-k2.7-code
+      - MiniMax-M3
+      - text-embedding-v4
 
 # =============================================================================
 # Model Router
@@ -31,15 +34,32 @@ router_profiles:
   - name: production
     router:
       default: "openai-custom:glm-5.2"
-      fast: "openai-custom:kimi-k2.5"
+      fast: "openai-custom:qwen3.6-flash"
       think: "openai-custom:glm-5.2"
-      image: "openai-custom:kimi-k2.5"
+      image: "openai-custom:qwen3.7-plus"
+      ocr: null
+
+  - name: production-minimax
+    router:
+      default: "openai-custom:MiniMax-M3"
+      fast: "openai-custom:qwen3.6-flash"
+      think: "openai-custom:MiniMax-M3"
+      image: "openai-custom:MiniMax-M3"
+      ocr: null
 
 active_router_profile: production
 
 embedding_profile:
-  - model_role: openai:text-embedding-3-small
+  - model_role: openai-custom:text-embedding-v4
     embedding_dims: 1536
+
+# =============================================================================
+# Agent runtime (nano-owned)
+# =============================================================================
+agent:
+  runtime:
+    role_routing:
+      enabled: true
 
 # =============================================================================
 # Persistence Backend
@@ -47,6 +67,8 @@ embedding_profile:
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@soothe-pgvector:5432"
+  postgres_pool_max_idle_seconds: 90
+  postgres_pool_max_lifetime_seconds: 900
 
 # =============================================================================
 # Vector Stores
@@ -55,7 +77,7 @@ vector_stores:
   - name: pgvector
     provider_type: pgvector
     dsn: "postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors"
-    pool_size: 8  # Raised 5→8 (RQD-8c67efb2): 3 concurrent skillify retrievers + checkpointer/sloop contention caused E3c PoolTimeout under burst. 8 gives 5-conn headroom over observed 3-worker peak.
+    pool_size: 8  # Headroom for concurrent skillify retrievers + checkpointer/sloop.
 
 vector_store_router:
   default: "pgvector:soothe_default"

@@ -140,7 +140,8 @@ layer.
 
 - `packages/soothe/src/soothe/config/ownership.py`
 - `packages/soothe/src/soothe/config/composition.py`
-- `packages/soothe/src/soothe/config/compat.py`
+- ~~`packages/soothe/src/soothe/config/compat.py`~~ **CANCELLED** — no monolithic
+  `config.yml` compatibility layer; clean-cut to `nano.yml` + optional `soothe.yml`
 
 ### Edit (nano)
 
@@ -159,9 +160,10 @@ layer.
 
 ### Config templates / docs
 
-- `config/config.template.yml`
-- `config/develop/config.yml`
-- docs/wiki and examples that reference monolithic `config.yml`
+- `config/nano.template.yml` + `config/soothe.template.yml` (split; monolithic
+  `config.template.yml` removed)
+- `config/develop/nano.yml`
+- docs/wiki and examples reference split `nano.yml` / `soothe.yml` (no monolith)
 
 ---
 
@@ -182,7 +184,7 @@ layer.
 - host config loading tests with:
   - split files valid
   - wrong-file keys rejected
-  - legacy monolithic path warning behavior
+  - single-file (`from_yaml_file`) rejects host-owned keys (no monolith path)
 
 ### Gate D (dedupe and regression)
 
@@ -193,20 +195,21 @@ layer.
 
 ## Rollout plan
 
-1. **PR-1**: Add host ownership/composition/compat modules + tests (no behavior flip).
-2. **PR-2**: Switch host settings to composition path behind feature flag.
-3. **PR-3**: Remove nano host-key stripping and host fallback; keep temporary host adapters.
+1. **PR-1**: Add host ownership/composition modules + tests (no monolith compat).
+2. **PR-2**: Switch host settings to composition path.
+3. **PR-3**: Remove nano host-key stripping and host fallback.
 4. **PR-4**: Dedupe shared utility modules (`reload.py`, `models_catalog.py`, optionally `env.py`).
 5. **PR-5**: Enable split-by-default templates/docs.
-6. **PR-6**: Remove compatibility adapters and enforce strict ownership.
+6. **PR-6**: Enforce strict ownership — **no** `compat.py` / monolithic `config.yml`
+   adapter was ever shipped; single-file load is nano-owned keys only.
 
 ---
 
 ## Exit criteria
 
 - Nano config package contains no host ownership knowledge.
-- Host config package is the only place where cross-file composition/compat occurs.
-- Split-file config is default and documented.
+- Host config package is the only place where cross-file composition occurs.
+- Split-file config is default and documented; monolithic `config.yml` is abandoned.
 - Full verification passes with zero lint/test regressions.
 
 ---
@@ -217,31 +220,31 @@ layer.
 |----|------------|-------|---------------|--------------|------|-------------|---------------|
 | T1 | Host ownership rules | Add `soothe/config/ownership.py` with allow/deny key-path validators | Config core | none | Medium | New unit tests in `packages/soothe/tests/unit/config` | Misplaced keys produce actionable relocation errors |
 | T2 | Host composition engine | Add `soothe/config/composition.py` merge logic | Config core | T1 | High | New composition tests + conflict tests | `nano.yml + soothe.yml` merge is deterministic and conflict-safe |
-| T3 | Host compat layer | Add `soothe/config/compat.py` for legacy monolith adaptation | Config core | T1,T2 | Medium | Legacy config tests | Monolithic config still loads with deprecation warnings |
-| T4 | Host settings entrypoint | Refactor `soothe/config/settings.py` to call ownership/composition/compat | Runner/host config | T2,T3 | High | Existing config-loading tests + new split-file tests | Host config load path uses split composition end-to-end |
+| T3 | Host compat layer | **CANCELLED** — do not add `compat.py`; abandon monolithic `config.yml` | — | — | — | — | N/A (clean cut) |
+| T4 | Host settings entrypoint | Refactor `soothe/config/settings.py` to call ownership/composition | Runner/host config | T2 | High | Existing config-loading tests + new split-file tests | Host config load path uses split composition end-to-end |
 | T5 | Nano validator cleanup | Remove host-key stripping from `soothe_nano/config/settings.py` | Nano config | T4 (or feature-flag) | High | Nano config validation tests | Nano loader rejects/ignores only nano schema concerns |
 | T6 | Middleware fallback cleanup | Remove `agent.loop` fallback in `soothe_nano/config/middleware_access.py` | Nano config | T4,T5 | High | Middleware tests in nano/soothe | Nano middleware reads only `agent.middleware` |
-| T7 | Host adapter for old loop fields | Keep old `agent.loop` compatibility in host-only adapters | Runner/host config | T6 | Medium | Host compat tests | Legacy host configs continue working during migration window |
+| T7 | Host adapter for old loop fields | **CANCELLED** — no legacy host-field adapters for monolith migration | — | — | — | — | N/A (clean cut) |
 | T8 | Models ownership split | Ensure host-only models remain in `soothe/config/models.py`, shared stay nano | Config core | T4 | Medium | Model validation tests both packages | No duplicated ownership ambiguity for major sections |
 | T9 | Public API cleanup | Normalize exports in both `config/__init__.py` files | Config core | T8 | Low | Import-surface tests | Imports are stable and non-leaky |
 | T10 | Reload dedupe | Host `reload.py` becomes thin wrapper over nano/shared implementation | Infra config | T4 | Medium | Reload watcher tests in soothe + nano | No behavior drift; duplicate logic removed |
 | T11 | Models catalog dedupe | Host `models_catalog.py` wraps/shared implementation | Infra config | T4 | Low | `models_list` payload tests | Payload unchanged; less duplicate code |
 | T12 | Env dedupe decision | Keep mirrored `env.py` or centralize to nano | Config core | T9 | Low | Minimal | Decision documented + implemented consistently |
-| T13 | Template split | Update `config/config.template.yml` and `config/develop/config.yml` for split layout | Docs/config DX | T4 | Medium | Config bootstrap smoke tests | Templates emit `nano.yml` + `soothe.yml` correctly |
+| T13 | Template split | Ship `nano.template.yml` + `soothe.template.yml`; drop monolithic template | Docs/config DX | T4 | Medium | Config bootstrap smoke tests | Templates emit `nano.yml` + `soothe.yml` correctly |
 | T14 | Daemon linkage | Ensure `daemon.yml` points to split files and logs load order | Daemon | T13 | Medium | Daemon startup/integration tests | Startup logs show composition source order |
 | T15 | Docs migration | Update docs/wiki/examples to split config references | Docs | T13 | Low | Doc lint/checks | No monolithic-first guidance remains |
-| T16 | Strict mode flip | Remove compat adapters after migration window | Config core + daemon | T3,T7,T15 | High | Full regression suite | Wrong-file keys hard-fail; no hidden folding paths |
+| T16 | Strict mode flip | Enforce nano ownership on single-file load; host keys only via `soothe.yml` | Config core + daemon | T15 | High | Full regression suite | Wrong-file keys hard-fail; no monolith path |
 
 ---
 
 ## Suggested PR slices
 
 1. **PR-1 (Foundation):** T1, T2, tests.
-2. **PR-2 (Host integration):** T3, T4, tests.
-3. **PR-3 (Nano purity):** T5, T6, T7.
+2. **PR-2 (Host integration):** T4, tests (no T3 compat).
+3. **PR-3 (Nano purity):** T5, T6 (no T7 legacy adapters).
 4. **PR-4 (Dedupes):** T10, T11, optional T12.
 5. **PR-5 (Config UX):** T13, T14, T15.
-6. **PR-6 (Enforcement):** T16 + cleanup.
+6. **PR-6 (Enforcement):** T16 — strict ownership; never ship monolith compat.
 
 ---
 

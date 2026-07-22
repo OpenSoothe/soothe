@@ -57,7 +57,7 @@ def test_start_fails_if_already_running(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 99)
     # Mock daemon config to not load any file
     daemon_cfg = SootheDaemonConfig()
-    daemon_cfg.soothe_config_path = tmp_path / "config.yml"
+    daemon_cfg.soothe_config_path = tmp_path / "nano.yml"
     monkeypatch.setattr(
         "soothe_daemon.cli._load_daemon_config",
         lambda *_args: daemon_cfg,
@@ -82,7 +82,7 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: 4242)
     # Mock daemon config to not load any file
     daemon_cfg = SootheDaemonConfig()
-    daemon_cfg.soothe_config_path = tmp_path / "config.yml"
+    daemon_cfg.soothe_config_path = tmp_path / "nano.yml"
     monkeypatch.setattr(
         "soothe_daemon.cli._load_daemon_config",
         lambda *_args: daemon_cfg,

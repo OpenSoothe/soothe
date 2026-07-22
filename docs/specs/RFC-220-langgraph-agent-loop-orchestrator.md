@@ -144,7 +144,7 @@ Intent classification executed in the graph entry node **must** attach Langfuse 
 
 ## Configuration
 
-New configuration keys are introduced for evidence caps, allowlists, repair bounds, and gather skip policies. **`config/config.template.yml` and `config/develop/config.yml` must be updated together** when defaults are added.
+New configuration keys are introduced for evidence caps, allowlists, repair bounds, and gather skip policies. **`config/config.template.yml` and `config/develop/nano.yml` must be updated together** when defaults are added.
 
 ---
 

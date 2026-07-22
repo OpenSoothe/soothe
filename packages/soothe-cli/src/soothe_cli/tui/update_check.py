@@ -24,6 +24,7 @@ from packaging.version import InvalidVersion, Version
 from soothe_sdk.paths import SOOTHE_HOME
 
 from soothe_cli.tui._version import PYPI_URL, USER_AGENT, __version__
+from soothe_cli.tui.model_config import resolve_cli_config_path
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +322,7 @@ def is_update_check_enabled() -> bool:
     Disabled when `SOOTHE_CLI_NO_UPDATE_CHECK` or legacy `SOOTHE_NO_UPDATE_CHECK`
     is set. When `SOOTHE_CLI_UPDATE_CHECK` is ``1``/``true``/``yes``, checks are
     enabled (including when ``[update].check: false`` would otherwise turn them
-    off). Otherwise, respects ``[update].check`` in ``config.yml`` when
+    off). Otherwise, respects ``[update].check`` in ``cli.yml`` when
     present; defaults to on. Use ``/update`` to check manually any time.
     """
     from soothe_cli.tui._env_vars import NO_UPDATE_CHECK, UPDATE_CHECK
@@ -363,7 +364,7 @@ def is_auto_update_enabled() -> bool:
 
     Otherwise, ``SOOTHE_CLI_AUTO_UPDATE`` (or legacy ``SOOTHE_AUTO_UPDATE``)
     forces on or off when set. When unset, ``[update].auto_update`` in
-    ``config.yml`` is used if present; defaults to on.
+    ``cli.yml`` is used if present; defaults to on.
     """
     from soothe_cli.tui.config import _is_editable_install
 
@@ -379,7 +380,7 @@ def is_auto_update_enabled() -> bool:
 
 
 def set_auto_update(enabled: bool) -> None:
-    """Persist the auto-update preference to `config.yml`.
+    """Persist the auto-update preference to `cli.yml`.
 
     Writes `[update].auto_update` so the setting survives across sessions.
 
@@ -391,7 +392,7 @@ def set_auto_update(enabled: bool) -> None:
 
     import yaml
 
-    config_path = Path(SOOTHE_HOME) / "config" / "config.yml"
+    config_path = resolve_cli_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     if config_path.exists():
@@ -416,7 +417,7 @@ def set_auto_update(enabled: bool) -> None:
 
 
 def _read_update_config() -> dict[str, bool]:
-    """Read `[update]` section from `config.yml`.
+    """Read `[update]` section from `cli.yml`.
 
     Returns:
         A dict of boolean config values, empty on missing/unreadable file.
@@ -424,7 +425,7 @@ def _read_update_config() -> dict[str, bool]:
     import yaml
 
     try:
-        config_path = Path(SOOTHE_HOME) / "config" / "config.yml"
+        config_path = resolve_cli_config_path()
         if not config_path.exists():
             return {}
         with config_path.open("r") as f:

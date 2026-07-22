@@ -17,9 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Package-boundary excision (IG-678): remove host/daemon-only concepts that leaked into `soothe-nano` — dead-duplicate `ThreadLogger`/`ConfigWatcher`/`PersistenceDirectoryManager`/workspace-policy functions (host already owns canonical copies), dead `soothe_checkpoints` DDL (host-owned), `cron_jobs`+`identity_*` DDL from nano's metadata bootstrap (host applies at runtime), `DisplayCardStore` moved to the daemon, dead `set_step_context`/`log_exception_simplified` helpers. Standalone nano unaffected (the moved symbols were never called by nano).
+- Align `soothe-daemon` first-party pins with `soothe`: `soothe-nano>=1.0.0,<2.0.0`, `soothe-sdk>=1.0.5,<2.0.0`, and `soothe>=0.9.2,<1.0.0`
 
 ### Added
 - `scripts/check_nano_duplicate_symbols.py` — CI gate (run by `verify_finally.sh`) that detects dead-duplicate public symbols defined in both `soothe-nano` and `soothe`/`soothe-daemon`, catching the renamed-leak pattern the literal-name boundary ban misses.
+- `scripts/check_first_party_pin_alignment.py` — CI gate that fails when `soothe` and `soothe-daemon` declare disjoint ranges for shared deps (`soothe-nano`, `soothe-sdk`)
+- Release Docker workflow dry-runs `uv pip install soothe==V soothe-daemon==V` before the multi-arch image build
+
+### Fixed
+- Docker image install of `soothe` + `soothe-daemon` failed on 0.9.2 because daemon still required `soothe-nano<1.0.0` while soothe required `soothe-nano>=1.0.0`
 
 ## [v0.9.0] - 2026-07-20
 

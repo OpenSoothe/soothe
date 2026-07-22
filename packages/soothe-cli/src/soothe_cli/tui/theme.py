@@ -12,7 +12,7 @@ Code that needs custom CSS variable values should call
 `get_css_variable_defaults(dark=...)`. For the full semantic color palette, look
 up the `ThemeColors` instance via `ThemeEntry.REGISTRY`.
 
-Users can define custom themes in `~/SOOTHE_HOME/config/config.yml` under
+Users can define custom themes in `~/SOOTHE_HOME/config/cli.yml` under
 `[themes.<name>]` sections. Each new theme section must include `label` (str);
 `dark` (bool) defaults to `False` if omitted (set to `True` for dark themes).
 Color fields are optional and fall back to the built-in dark/light palette based
@@ -29,7 +29,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from soothe_sdk.paths import SOOTHE_HOME
+from soothe_cli.tui.model_config import resolve_cli_config_path
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -585,7 +585,7 @@ def _load_user_themes(
     *,
     config_path: Path | None = None,
 ) -> None:
-    """Load user-defined themes from `config.yml` into `builtins` (mutated).
+    """Load user-defined themes from `cli.yml` into `builtins` (mutated).
 
     **New themes** — each `[themes.<name>]` section (where `<name>` is not a
     built-in) must have:
@@ -606,7 +606,7 @@ def _load_user_themes(
     Invalid themes (bad hex, missing required keys) are logged as warnings
     and skipped — they never crash startup.
 
-    Example `config.yml` snippet:
+    Example `cli.yml` snippet:
 
     ```yaml
     # New custom theme
@@ -628,7 +628,7 @@ def _load_user_themes(
     """
     if config_path is None:
         try:
-            config_path = Path(SOOTHE_HOME) / "config" / "config.yml"
+            config_path = resolve_cli_config_path()
         except RuntimeError:
             logger.debug("Cannot determine home directory; skipping user theme loading")
             return
@@ -778,7 +778,7 @@ DEFAULT_THEME = "textual-dark"
 def reload_registry() -> MappingProxyType[str, ThemeEntry]:
     """Rebuild the theme registry from disk and update `ThemeEntry.REGISTRY`.
 
-    Re-reads `~/SOOTHE_HOME/config/config.yml` for user-defined themes so that
+    Re-reads `~/SOOTHE_HOME/config/cli.yml` for user-defined themes so that
     `/reload` can pick up config changes without restarting the app.
 
     Returns:

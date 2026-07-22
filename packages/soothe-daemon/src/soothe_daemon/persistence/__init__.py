@@ -1,7 +1,6 @@
 """Daemon-side persistence helpers (PostgreSQL pools, worker cleanup, health checks)."""
 
 from soothe_daemon.persistence.health_check import check_persistence
-from soothe_daemon.persistence.pool_sizing import recommended_checkpoints_pool_size
 from soothe_daemon.persistence.pools import (
     POSTGRES_POOL_MAINTENANCE_INTERVAL_S,
     close_shared_postgres_pools,
@@ -23,7 +22,6 @@ __all__ = [
     "periodic_postgres_pool_maintenance",
     "periodic_stale_worker_reap",
     "preopen_shared_postgres_pools",
-    "recommended_checkpoints_pool_size",
     "reap_from_cli",
     "reap_stale_soothe_worker_processes",
     "release_idle_shared_postgres_pools",

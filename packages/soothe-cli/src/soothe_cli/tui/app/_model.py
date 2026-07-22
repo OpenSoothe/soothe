@@ -106,7 +106,7 @@ class _ModelMixin:
                 if not all_models:
                     await self._mount_message(
                         ErrorMessage(
-                            "Daemon returned no models. Check providers and `models:` lists in the daemon host config.yml."
+                            "Daemon returned no models. Check providers and `models:` lists in the daemon host nano.yml."
                         ),
                     )
                     return
@@ -665,7 +665,7 @@ class _ModelMixin:
         *,
         extra_kwargs: dict[str, Any] | None = None,
     ) -> None:
-        """Switch model for the current loop without changing `config.yml`.
+        """Switch model for the current loop without changing `nano.yml`.
 
         The override is sent on each websocket ``input`` (resolved on the daemon
         host). Global ``settings`` and on-disk defaults are not updated; use
@@ -736,7 +736,7 @@ class _ModelMixin:
             await self._mount_message(
                 AppMessage(
                     f"Switched this loop to {display} for daemon turns "
-                    f"(session only; daemon host default in config.yml unchanged).",
+                    f"(session only; daemon host default in nano.yml unchanged).",
                 ),
             )
             logger.info("Model override set to %s for daemon-backed TUI session", display)
@@ -750,7 +750,7 @@ class _ModelMixin:
     async def _set_default_model(self, model_spec: str) -> None:
         """Set the default model in config without switching the current session.
 
-        Updates `[models].default` in `~/SOOTHE_HOME/config.yml` so that
+        Updates `[models].default` in daemon `nano.yml` so that
         future CLI launches use this model. Does not affect the running session.
 
         Args:

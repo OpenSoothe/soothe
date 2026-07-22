@@ -227,7 +227,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
             current_provider: The provider of the current model.
             cli_profile_override: Extra profile fields from `--profile-override`.
 
-                Merged on top of upstream + config.yml profiles so that CLI
+                Merged on top of upstream + nano.yml profiles so that CLI
                 overrides appear with `*` markers in the detail footer.
             preloaded: When set, skip local config discovery and use this
                 ``(models, default_spec, profiles)`` tuple (e.g. from daemon ``models_list``).
@@ -386,7 +386,7 @@ class ModelSelectorScreen(ModalScreen[tuple[str, str] | None]):
             self._loaded = True
             if self.is_running:
                 self.notify(
-                    "Could not load model list. Check provider packages and config.yml.",
+                    "Could not load model list. Check provider packages and nano.yml.",
                     severity="error",
                     timeout=10,
                     markup=False,

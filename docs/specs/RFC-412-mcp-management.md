@@ -774,7 +774,7 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | `soothe_daemon/health/checks/mcp_check.py` | Rewrite: validate `server.name`, check command/path, use `MCPRegistry.connection_status()` |
 | `soothe_cli/tui/widgets/mcp_viewer.py` | Wire `mcp_server_info` from `GET /mcp/status` |
 | `soothe_cli/cli/main.py` | Implement `--mcp-config <path>` daemon-startup flag |
-| `config/config.template.yml`, `config/develop/config.yml` | Mirror extended `mcp_servers` schema + `progressive_mcp` section |
+| `config/config.template.yml`, `config/develop/nano.yml` | Mirror extended `mcp_servers` schema + `progressive_mcp` section |
 | `core/governance/config_policy.py` | Add `action_type="mcp_call"` → `Permission("mcp","call",...)`, `action_type="mcp_read_resource"` → `Permission("mcp","read_resource",...)`, `action_type="mcp_invoke_prompt"` → `Permission("mcp","invoke_prompt",...)` to `_extract_required_permission`; add these permissions to `standard` and `privileged` profiles |
 
 ## Reused Primitives

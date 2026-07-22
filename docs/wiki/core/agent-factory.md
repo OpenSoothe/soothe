@@ -112,7 +112,7 @@ agent.checkpointer  # BaseCheckpointSaver | None
 from soothe.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_yaml_file("config.yml")
+config = SootheConfig.from_yaml_file("nano.yml")
 agent = create_soothe_agent(config)
 
 async for chunk in agent.astream("Analyze the codebase",

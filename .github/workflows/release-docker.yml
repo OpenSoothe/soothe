@@ -158,6 +158,21 @@ jobs:
           check_pypi_package "soothe" "${SOOTHE_VERSION}"
           check_pypi_package "soothe-daemon" "${SOOTHE_VERSION}"
 
+      - name: Verify soothe + soothe-daemon resolve together
+        env:
+          SOOTHE_VERSION: ${{ steps.extract_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Catch disjoint first-party pins (e.g. soothe-nano) before the
+          # multi-arch Docker build burns CI minutes on an unsatisfiable set.
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv venv /tmp/soothe-resolve
+          uv pip install --python /tmp/soothe-resolve/bin/python \
+            "soothe==${SOOTHE_VERSION}" \
+            "soothe-daemon==${SOOTHE_VERSION}"
+          echo "✓ soothe==${SOOTHE_VERSION} and soothe-daemon==${SOOTHE_VERSION} resolve"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

@@ -664,7 +664,7 @@ class _ExecutionMixin:
                 )
                 return
 
-            # Reload user themes from config.yml and re-register with Textual
+            # Reload user themes from cli.yml and re-register with Textual
             theme_reload_ok = True
             try:
                 theme.reload_registry()
@@ -683,7 +683,7 @@ class _ExecutionMixin:
             if theme_reload_ok:
                 report += "\nTheme registry reloaded."
             else:
-                report += "\nTheme registry reload failed. Check config.yml for errors."
+                report += "\nTheme registry reload failed. Check cli.yml for errors."
             await self._mount_message(AppMessage(report))
 
             if self._daemon_session is not None:

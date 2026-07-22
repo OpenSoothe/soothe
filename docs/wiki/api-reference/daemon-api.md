@@ -25,7 +25,7 @@ The `soothe_daemon` package is the SootheDaemon tier of the Soothe architecture 
 
 The daemon follows a strict startup sequence:
 
-1. **Config load** — `SootheConfig` (agent core, `config.yml`) + `SootheDaemonConfig` (transports, worker pool, `daemon.yml`) are loaded separately. The `.env` file is loaded *before* any langchain imports so provider keys are available at import time.
+1. **Config load** — `SootheConfig` (agent core, `nano.yml`) + `SootheDaemonConfig` (transports, worker pool, `daemon.yml`) are loaded separately. The `.env` file is loaded *before* any langchain imports so provider keys are available at import time.
 2. **PID lock** — `acquire_pid_lock()` writes `${SOOTHE_HOME}/soothe.pid` to enforce single-instance. This is a file-based lock, not just a PID file — concurrent daemons on the same home directory will fail to start.
 3. **Channel init** — `ChannelManager` initializes all enabled channels from the registry.
 4. **Ready state** — The daemon transitions through `starting` → `warming` → `ready`. Clients connecting during `starting`/`warming` are held with a bounded wait (RFC-450); the daemon does not re-push `daemon_ready` on transition, so clients must re-request status.
@@ -35,7 +35,7 @@ The daemon follows a strict startup sequence:
 ```python
 from soothe_daemon.bootstrap import run_daemon
 
-run_daemon(config_path="config/config.yml")
+run_daemon(config_path="config/nano.yml")
 ```
 
 ### Key Lifecycle Gotchas
@@ -60,7 +60,7 @@ A common confusion: the daemon uses **two separate config files**:
 
 | File | Config Class | Controls |
 |------|-------------|----------|
-| `config.yml` | `SootheConfig` | Agent core — providers, models, protocols, tools, `agent.autopilot.goal_deadline_seconds` (default 14d) |
+| `nano.yml` | `SootheConfig` | Agent core — providers, models, protocols, tools, `agent.autopilot.goal_deadline_seconds` (default 14d) |
 | `daemon.yml` | `SootheDaemonConfig` | Server — transports, thread/worker pools, `request_timeout_seconds` (default 14d), channels, TLS |
 
 The agent config can be shared across daemon and non-daemon (embedded) deployments. The daemon config is server-specific.

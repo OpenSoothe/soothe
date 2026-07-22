@@ -116,7 +116,6 @@ class TestSootheConfig:
             }
         )
         assert cfg.subagents["custom_remote"].endpoint == "https://example.invalid/subagent"
-        assert cfg.subagents["custom_remote"].url == "https://example.invalid/subagent"
 
     def test_default_skillify_config(self) -> None:
         cfg = SootheConfig()

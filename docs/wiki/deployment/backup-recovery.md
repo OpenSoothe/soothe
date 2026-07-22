@@ -15,7 +15,7 @@ Comprehensive disaster recovery strategy for Soothe production deployments.
 
 Soothe's data consists of:
 1. **PostgreSQL databases**: Thread checkpoints, metadata, vectors, memory
-2. **Configuration files**: config.yml, .env, secrets
+2. **Configuration files**: nano.yml, soothe.yml, daemon.yml, .env, secrets
 3. **Workspace data**: User project files (managed separately)
 4. **Log files**: Daemon logs, thread logs (optional backup)
 
@@ -28,7 +28,7 @@ Soothe's data consists of:
 | Full | Weekly | 4 weeks | All PostgreSQL databases + config |
 | Incremental | Daily | 7 days | Thread checkpoints + metadata |
 | Continuous | Real-time | 24 hours | WAL streaming (PostgreSQL) |
-| Configuration | On change | Indefinite | config.yml, secrets |
+| Configuration | On change | Indefinite | nano.yml / soothe.yml / daemon.yml, secrets |
 
 ### Backup Locations
 
@@ -62,7 +62,7 @@ for db in soothe_checkpoints soothe_metadata soothe_vectors soothe_memory; do
 done
 
 # Backup config files
-cp /var/lib/soothe/config/config.yml ${BACKUP_DIR}/${DATE}/
+cp /var/lib/soothe/config/nano.yml ${BACKUP_DIR}/${DATE}/
 cp /var/lib/soothe/.env ${BACKUP_DIR}/${DATE}/
 
 # Compress backup
@@ -193,8 +193,8 @@ DATE=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p ${BACKUP_DIR}
 
-# Backup config.yml
-cp ${CONFIG_DIR}/config.yml ${BACKUP_DIR}/config_${DATE}.yml
+# Backup agent config
+cp ${CONFIG_DIR}/nano.yml ${BACKUP_DIR}/nano_${DATE}.yml
 
 # Backup .env (if exists)
 if [ -f "/var/lib/soothe/.env" ]; then
@@ -348,7 +348,7 @@ for db in soothe_checkpoints soothe_metadata soothe_vectors soothe_memory; do
 done
 
 # Restore config
-cp ${RESTORE_DIR}/config.yml /var/lib/soothe/config/config.yml
+cp ${RESTORE_DIR}/nano.yml /var/lib/soothe/config/nano.yml
 cp ${RESTORE_DIR}/.env /var/lib/soothe/.env
 
 # Start daemon

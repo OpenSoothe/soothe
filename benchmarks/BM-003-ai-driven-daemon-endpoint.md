@@ -155,7 +155,7 @@ This benchmark evaluates daemon endpoint behavior for:
 
 ```bash
 # Ensure daemon is running with HTTP REST enabled
-uv run soothed start --config config/develop/config.yml
+uv run soothed start --config config/develop/nano.yml
 
 # Verify endpoint is reachable
 curl http://127.0.0.1:8766/api/v1/health

@@ -85,7 +85,7 @@ Capabilities emit domain-specific wire events (RFC-403) following namespaced con
 
 ### Configuration
 
-All capabilities are configured via `config.yml`. Subagents and MCP servers have their own top-level config sections; plugins are declared with module paths and plugin-specific config dicts. Environment variable interpolation (`${ENV_VAR}`) is supported throughout for secrets.
+All capabilities are configured via `nano.yml`. Subagents and MCP servers have their own top-level config sections; plugins are declared with module paths and plugin-specific config dicts. Environment variable interpolation (`${ENV_VAR}`) is supported throughout for secrets.
 
 ## Key RFCs
 

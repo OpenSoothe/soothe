@@ -67,7 +67,6 @@ pool sizing aligned with `thread_pool`, and `check_persistence` for doctor).
 daemon/persistence/
 ├── __init__.py           # Public exports
 ├── pools.py              # Pre-open, idle release, periodic maintenance, shutdown
-├── pool_sizing.py        # recommended_*_pool_size helpers
 ├── process_cleanup.py    # reap + periodic_stale_worker_reap (asyncio + to_thread)
 └── health_check.py       # Persistence category for HealthChecker
 ```

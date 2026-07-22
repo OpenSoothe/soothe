@@ -148,7 +148,7 @@ This creates:
 ```
 ~/.soothe/                    # SOOTHE_HOME (default location)
 ├── config/
-│   ├── config.yml            # Default agent configuration
+│   ├── nano.yml              # Nano-owned agent configuration
 │   └── daemon.yml            # Default daemon configuration
 ├── runs/                     # Thread execution data
 └── logs/                     # Daemon and thread logs
@@ -161,7 +161,7 @@ This creates:
 soothe --version
 
 # Verify configuration exists
-ls ~/.soothe/config/config.yml
+ls ~/.soothe/config/nano.yml
 
 # Test with simple query
 soothe -p "Hello, are you working?"
@@ -277,7 +277,7 @@ pip install -U soothe soothe-cli soothe-daemon
 
 **Problem**: `Config file not found`
 
-**Solution**: The daemon auto-creates a default configuration on first start. Simply launch `soothed` and it will bootstrap `~/.soothe/config/config.yml` automatically:
+**Solution**: The daemon auto-creates a default configuration on first start. Simply launch `soothed` and it will bootstrap `~/.soothe/config/nano.yml` automatically:
 ```bash
 soothed  # Auto-creates config on first run
 ```
@@ -287,7 +287,7 @@ soothed  # Auto-creates config on first run
 **Solution**: Set the environment variable:
 ```bash
 export OPENAI_API_KEY=sk-your-key-here
-# Or add to config.yml:
+# Or add to nano.yml:
 # providers:
 #   - name: openai
 #     api_key: "sk-your-key-here"

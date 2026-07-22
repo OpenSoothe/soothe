@@ -51,7 +51,7 @@ def config_reload(
     """Trigger config hot-reload on the running daemon.
 
     Sends a config_reload RPC request to the daemon, which triggers immediate
-    reload of watched config files (config.yml and daemon.yml). Requires the
+    reload of watched config files (nano.yml and daemon.yml). Requires the
     daemon to have hot-reload enabled via daemon.enable_config_reload().
 
     Examples:

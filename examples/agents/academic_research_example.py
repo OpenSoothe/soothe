@@ -20,7 +20,7 @@ NOT for:
 - General web research or news (use deep_research instead)
 
 Prerequisites:
-    - Set OPENAI_API_KEY (or configure providers in config/develop/config.yml)
+    - Set OPENAI_API_KEY (or configure providers in config/develop/nano.yml)
     - Optional: Set SEMANTIC_SCHOLAR_API_KEY for higher rate limits (https://www.semanticscholar.org/product/api)
 
 Run:

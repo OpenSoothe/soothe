@@ -162,7 +162,7 @@ A list of `VectorStoreProviderConfig` entries (`name`, `provider_type`: pgvector
 
 ## Daemon (`daemon.yml`)
 
-Separate from `config.yml` — loaded as `SootheDaemonConfig`. Controls transports, pools, and server lifecycle.
+Separate from `nano.yml` — loaded as `SootheDaemonConfig`. Controls transports, pools, and server lifecycle.
 
 | Field | Purpose | Default |
 |-------|---------|---------|

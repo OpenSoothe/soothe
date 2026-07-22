@@ -9,7 +9,7 @@
 #
 # Uses .venv managed by uv for development.
 
-.PHONY: help setup sync sync-verify
+.PHONY: help setup sync sync-no-cache sync-verify
 .PHONY: docker-dev-up docker-dev-down docker-dev-ps
 .PHONY: docker-prod-pull docker-prod-up docker-prod-down docker-prod-ps
 
@@ -46,6 +46,7 @@ help:
 	@echo "Setup:"
 	@echo "  make setup            - Sync workspace dependencies"
 	@echo "  make sync             - Sync all packages + extras + dev deps"
+	@echo "  make sync-no-cache   - Sync with --no-cache --refresh (clean cache)"
 	@echo ""
 	@echo "Docker (Dev):"
 	@echo "  make docker-dev-up    - Start dev dependencies (pgvector + Langfuse)"
@@ -95,6 +96,13 @@ sync:
 	$(UV_SYNC)
 	@$(MAKE) sync-verify
 	@echo "All packages synced"
+
+sync-no-cache:
+	@echo "Syncing all workspace packages (no cache, refresh install)..."
+	uv cache clean
+	$(UV_SYNC) --no-cache --refresh
+	@$(MAKE) sync-verify
+	@echo "All packages synced (cache bypassed)"
 
 sync-verify:
 	@.venv/bin/python -c "import importlib.util; pkgs=('psycopg_pool','jsonschema','langfuse','jinja2'); missing=[p for p in pkgs if importlib.util.find_spec(p) is None]; assert not missing, f'Missing: {missing}'"

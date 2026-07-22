@@ -33,7 +33,7 @@ The relay works identically in solo StrangeLoop and autopilot runs **without** f
 - Detection of structured `ask_user` LangGraph interrupts. Plain-text questions in assistant messages are intentionally **not** detected; callers that want to ask the user must emit a structured interrupt.
 - New goal status `awaiting_clarification` and a CLI/API to answer deferred clarifications out-of-band.
 - New event types `soothe.loop.clarification_*` and `soothe.subagent.veritas.*`.
-- `agent.clarification.*` and `agent.veritas.*` configuration additions in both `config/config.template.yml` and `config/develop/config.yml`.
+- `agent.clarification.*` and `agent.veritas.*` configuration additions in both `config/config.template.yml` and `config/develop/nano.yml`.
 
 ### 2.2 Non-goals
 
@@ -131,7 +131,7 @@ The bug is reproducible in trace `trace-2626ed6b65d86c80845248e42f383bff.json`: 
 | `core/goal_engine/*` | Add `awaiting_clarification` status + `answer_clarification(goal_id, ...)` API |
 | `cli/tui/app/_messages_mixin.py` | `ctrl+m` action; mode status badge |
 | `cli/main.py` | `--mode {manual,auto}` flag plumbed to runtime |
-| `config/config.template.yml`, `config/develop/config.yml` | New `agent.clarification.*` and `agent.veritas.*` sections |
+| `config/config.template.yml`, `config/develop/nano.yml` | New `agent.clarification.*` and `agent.veritas.*` sections |
 
 ---
 
@@ -342,7 +342,7 @@ agent:
     max_context_steps: 8
 ```
 
-Per project rule, both `config/config.template.yml` and `config/develop/config.yml` are updated in the same change.
+Per project rule, both `config/config.template.yml` and `config/develop/nano.yml` are updated in the same change.
 
 ---
 

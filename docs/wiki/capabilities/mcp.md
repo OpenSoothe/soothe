@@ -72,7 +72,7 @@ This means policy can restrict individual tools within a server — e.g., allow 
 
 ## Server Configuration
 
-MCP servers are configured in `config.yml`. Key concepts:
+MCP servers are configured in `nano.yml`. Key concepts:
 
 - **Transports**: `stdio` (local subprocess, most common), `sse` (HTTP Server-Sent Events), `streamable_http`, `websocket`.
 - **`defer`**: defaults to `true` — most servers should be deferred to avoid context bloat. Set `false` only for servers with a small, always-needed tool set.
@@ -96,7 +96,7 @@ MCP servers are configured in `config.yml`. Key concepts:
 
 MCP servers are external processes — you don't write them *in* Soothe; you configure Soothe to connect to them. See the [MCP specification](https://modelcontextprotocol.io) for building servers.
 
-To add a custom MCP server, add it to `config.yml`:
+To add a custom MCP server, add it to `nano.yml`:
 
 ```yaml
 mcp_servers:

@@ -126,7 +126,7 @@ Set `rpm_limit` *below* your tier's ceiling. On 429, Soothe retries with exponen
 
 ## Verifying Your Setup
 
-Run `soothed doctor` to validate config and connectivity, `soothe --debug "test"` to print the resolved config and model routing, and `soothe --model openai:gpt-4o "test"` to override a role for one run. Validate YAML syntax before debugging Soothe: `python -c "import yaml; yaml.safe_load(open('config.yml'))"`.
+Run `soothed doctor` to validate config and connectivity, `soothe --debug "test"` to print the resolved config and model routing, and `soothe --model openai:gpt-4o "test"` to override a role for one run. Validate YAML syntax before debugging Soothe: `python -c "import yaml; yaml.safe_load(open('nano.yml'))"`.
 
 ## Troubleshooting Guide
 

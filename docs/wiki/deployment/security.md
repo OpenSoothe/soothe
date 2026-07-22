@@ -277,7 +277,7 @@ sudo certbot --nginx -d soothe.your-domain.com
 
 ### Provider API Keys
 
-**Never store API keys in config.yml!**
+**Never store API keys in nano.yml!**
 
 **Best practices**:
 
@@ -335,12 +335,12 @@ sudo certbot --nginx -d soothe.your-domain.com
 
 ```bash
 # Config file permissions
-chmod 600 ~/.soothe/config/config.yml  # User-only
-chown $USER ~/.soothe/config/config.yml
+chmod 600 ~/.soothe/config/nano.yml  # User-only
+chown $USER ~/.soothe/config/nano.yml
 
 # Production deployment
-sudo chmod 600 /var/lib/soothe/config/config.yml
-sudo chown soothe:soothe /var/lib/soothe/config/config.yml
+sudo chmod 600 /var/lib/soothe/config/nano.yml
+sudo chown soothe:soothe /var/lib/soothe/config/nano.yml
 ```
 
 ### Database Credentials
@@ -447,7 +447,7 @@ sudo ufw allow from 192.168.0.0/16
 
 ## Workspace Security Policies
 
-Soothe provides workspace-level security policies in `config.yml`:
+Soothe provides workspace-level security policies in `nano.yml`:
 
 ### Security Configuration
 
@@ -740,7 +740,7 @@ MemoryMax=4G
 - [ ] Config file permissions set (600)
 - [ ] PostgreSQL TLS enabled
 - [ ] PostgreSQL user permissions restricted
-- [ ] Security policy configured in config.yml
+- [ ] Security policy configured in nano.yml
 - [ ] Docker security options set (user, capabilities, read-only)
 - [ ] Image vulnerabilities scanned
 

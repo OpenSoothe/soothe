@@ -136,7 +136,7 @@ Each model is created in a try/except — if a role isn't configured, the runner
 from soothe.runner import SootheRunner
 from soothe.config import SootheConfig
 
-config = SootheConfig.from_yaml_file("config.yml")
+config = SootheConfig.from_yaml_file("nano.yml")
 runner = SootheRunner(config)
 
 async for event in runner.run("Analyze the codebase"):

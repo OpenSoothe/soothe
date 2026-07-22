@@ -121,7 +121,7 @@ Before deploying to production, verify:
 - [ ] TLS enabled on reverse proxy
 - [ ] Authentication configured on reverse proxy
 - [ ] Firewall rules set (database port, daemon ports)
-- [ ] Security policy configured in `config.yml`
+- [ ] Security policy configured in `nano.yml`
 
 ### Monitoring
 
@@ -149,8 +149,8 @@ cd soothe/deploy
 cp env-example .env
 vim .env  # Set API keys, passwords
 
-# 3. Create config.yml
-cp config.prod.yml config.yml
+# 3. Create nano.yml
+cp nano.yml ~/.soothe/config/nano.yml
 
 # 4. Deploy stack
 docker compose up -d
@@ -210,9 +210,9 @@ See: [Production Setup](production-setup.md#systemd-deployment)
 - WebSocket transport (localhost)
 - SQLite fallback for testing
 
-**Config** (`config.yml` + `daemon.yml`):
+**Config** (`nano.yml` + `daemon.yml`):
 ```yaml
-# config.yml
+# nano.yml
 persistence:
   default_backend: postgresql
   postgres_base_dsn: postgresql://user:pass@postgres-host:5432
@@ -236,9 +236,9 @@ thread_pool:
 - WebSocket transport
 - Langfuse observability
 
-**Config** (`config.yml` + `daemon.yml`):
+**Config** (`nano.yml` + `daemon.yml`):
 ```yaml
-# config.yml
+# nano.yml
 persistence:
   default_backend: postgresql
   
@@ -339,7 +339,7 @@ See [Security Hardening](security.md)
 | Issue | Solution | Reference |
 |-------|----------|-----------|
 | PostgreSQL connection fails | Check DSN, credentials, firewall | [Production Setup](production-setup.md) |
-| Daemon won't start | Check config.yml syntax, logs | [Troubleshooting](../troubleshooting.md) |
+| Daemon won't start | Check nano.yml syntax, logs | [Troubleshooting](../troubleshooting.md) |
 | WebSocket connection refused | Enable transport, check port | [Daemon Management](../daemon-management.md) |
 | pgvector extension missing | Install extension, restart PostgreSQL | [Production Setup](production-setup.md) |
 

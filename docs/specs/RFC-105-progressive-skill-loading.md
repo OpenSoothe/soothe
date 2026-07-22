@@ -500,7 +500,7 @@ Naming follows the four-segment convention (`soothe.<domain>.<component>.<action
 | `core/agent/_builder.py:199-211` | Pass `skills=None` to `create_deep_agent` |
 | `core/events/catalog.py:567` | Register `SkillActivatedEvent` and `SkillBodyLoadedEvent` |
 | `config/models.py` | Add `ProgressiveSkillsConfig`; expose as `SootheConfig.progressive_skills` |
-| `config/config.template.yml`, `config/develop/config.yml` | Mirror new `progressive_skills` section |
+| `config/config.template.yml`, `config/develop/nano.yml` | Mirror new `progressive_skills` section |
 | `packages/soothe/pyproject.toml` | Add `pathspec` runtime dependency |
 
 ### Removed behavior

@@ -104,12 +104,13 @@ def _load_theme_preference() -> str:
     import yaml
 
     try:
-        from soothe_cli.tui.model_config import DEFAULT_CONFIG_PATH
+        from soothe_cli.tui.model_config import resolve_cli_config_path
 
-        if not DEFAULT_CONFIG_PATH.exists():
+        config_path = resolve_cli_config_path()
+        if not config_path.exists():
             return theme.DEFAULT_THEME
 
-        with DEFAULT_CONFIG_PATH.open("rb") as f:
+        with config_path.open("rb") as f:
             data = yaml.safe_load(f)
     except (yaml.YAMLError, PermissionError, OSError) as exc:
         logger.warning("Could not read config for theme preference: %s", exc)
@@ -127,7 +128,7 @@ def _load_theme_preference() -> str:
 
 
 def save_theme_preference(name: str) -> bool:
-    """Persist theme preference to `~/SOOTHE_HOME/config/config.yml`.
+    """Persist theme preference to `~/SOOTHE_HOME/config/cli.yml`.
 
     Args:
         name: Textual theme name to save.
@@ -145,11 +146,12 @@ def save_theme_preference(name: str) -> bool:
     try:
         import yaml
 
-        from soothe_cli.tui.model_config import DEFAULT_CONFIG_PATH
+        from soothe_cli.tui.model_config import resolve_cli_config_path
 
-        DEFAULT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        if DEFAULT_CONFIG_PATH.exists():
-            with DEFAULT_CONFIG_PATH.open("r") as f:
+        config_path = resolve_cli_config_path()
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        if config_path.exists():
+            with config_path.open("r") as f:
                 data = yaml.safe_load(f)
         else:
             data = {}
@@ -158,11 +160,11 @@ def save_theme_preference(name: str) -> bool:
             data["ui"] = {}
         data["ui"]["theme"] = name
 
-        fd, tmp_path = tempfile.mkstemp(dir=DEFAULT_CONFIG_PATH.parent, suffix=".tmp")
+        fd, tmp_path = tempfile.mkstemp(dir=config_path.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "w") as f:
                 yaml.safe_dump(data, f)
-            Path(tmp_path).replace(DEFAULT_CONFIG_PATH)
+            Path(tmp_path).replace(config_path)
         except BaseException:
             with contextlib.suppress(OSError):
                 Path(tmp_path).unlink()

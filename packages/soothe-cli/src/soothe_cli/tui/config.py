@@ -642,7 +642,7 @@ def parse_shell_allow_list(allow_list_str: str | None) -> list[str] | None:
 
 
 def _read_config_yaml_skills_dirs() -> list[str] | None:
-    """Read `[skills].extra_allowed_dirs` from `SOOTHE_HOME/config/config.yml`.
+    """Read `[skills].extra_allowed_dirs` from `SOOTHE_HOME/config/cli.yml`.
 
     Returns:
         List of path strings, or `None` if the key is absent or the file
@@ -650,17 +650,18 @@ def _read_config_yaml_skills_dirs() -> list[str] | None:
     """
     import yaml
 
-    from soothe_cli.tui.model_config import DEFAULT_CONFIG_PATH
+    from soothe_cli.tui.model_config import resolve_cli_config_path
 
     try:
-        with DEFAULT_CONFIG_PATH.open("r") as f:
+        config_path = resolve_cli_config_path()
+        with config_path.open("r") as f:
             data = yaml.safe_load(f)
     except FileNotFoundError:
         return None
     except (PermissionError, OSError, yaml.YAMLError):
         logger.warning(
             "Could not read skills config from %s",
-            DEFAULT_CONFIG_PATH,
+            resolve_cli_config_path(),
             exc_info=True,
         )
         return None
@@ -676,7 +677,7 @@ def _parse_extra_skills_dirs(
     env_raw: str | None,
     config_yaml_dirs: list[str] | None = None,
 ) -> list[Path] | None:
-    """Merge extra skill directories from env var and config.yml.
+    """Merge extra skill directories from env var and cli.yml.
 
     Extra skills directories extend the containment allowlist used by
     `load_skill_content` to validate that a resolved skill path lives inside a
@@ -687,13 +688,13 @@ def _parse_extra_skills_dirs(
     containment check.
 
     The env var (`SOOTHE_EXTRA_SKILLS_DIRS`, colon-separated) takes
-    precedence: when set, `config.yml` values are ignored.
+    precedence: when set, `cli.yml` values are ignored.
 
     Args:
         env_raw: Value of `SOOTHE_EXTRA_SKILLS_DIRS` (colon-separated), or
             `None` if unset.
         config_yaml_dirs: List of path strings from
-            `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/config.yml`.
+            `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/cli.yml`.
 
     Returns:
         List of resolved `Path` objects, or `None` if not configured.
@@ -771,7 +772,7 @@ class Settings:
     in `load_skill_content`.
 
     Set via `SOOTHE_EXTRA_SKILLS_DIRS` env var (colon-separated) or
-    `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/config.yml`.
+    `[skills].extra_allowed_dirs` in `SOOTHE_HOME/config/cli.yml`.
     """
 
     @classmethod
@@ -810,7 +811,7 @@ class Settings:
         shell_allow_list_str = os.environ.get(SHELL_ALLOW_LIST)
         shell_allow_list = parse_shell_allow_list(shell_allow_list_str)
 
-        # Parse extra skill containment roots from env var or config.yml.
+        # Parse extra skill containment roots from env var or cli.yml.
         # These extend the path allowlist for load_skill_content but do not
         # add new skill discovery locations.
         extra_skills_dirs = _parse_extra_skills_dirs(
@@ -1396,7 +1397,7 @@ def _apply_openrouter_defaults(kwargs: dict[str, Any]) -> None:
     (see https://openrouter.ai/docs/app-attribution).
 
     Users can override either value provider-wide or per-model in
-    `SOOTHE_HOME/config/config.yml`:
+    `SOOTHE_HOME/config/cli.yml`:
 
     ```yaml
     # Provider-wide
@@ -1421,7 +1422,7 @@ def _get_provider_kwargs(provider: str, *, model_name: str | None = None) -> dic
     """Get provider-specific kwargs from the config file.
 
     Reads `base_url`, `api_key_env`, and the `params` table from the user's
-    `config.yml` for the given provider.
+    `cli.yml` for the given provider.
 
     When `model_name` is provided, per-model overrides from the `params`
     sub-table are shallow-merged on top.
@@ -1447,7 +1448,7 @@ def _get_provider_kwargs(provider: str, *, model_name: str | None = None) -> dic
         api_key_env = PROVIDER_API_KEY_ENV.get(provider)
         if api_key_env:
             logger.debug(
-                "No api_key_env in config.yml for '%s'; using hardcoded provider env var",
+                "No api_key_env in nano.yml for '%s'; using hardcoded provider env var",
                 provider,
             )
     if api_key_env:
@@ -1625,7 +1626,7 @@ def _apply_profile_overrides(
         overrides: Key/value pairs to merge into the profile.
         model_name: Model name used in log/error messages.
         label: Human-readable source label for messages
-            (e.g., `"config.yml"`, `"CLI --profile-override"`).
+            (e.g., `"cli.yml"`, `"CLI --profile-override"`).
         raise_on_failure: When `True`, raise `ModelConfigError` instead
             of logging a warning if assignment fails.
 
@@ -1759,7 +1760,7 @@ def create_model(
 
     resolved_provider = provider or getattr(model, "_model_provider", provider)
 
-    # Apply profile overrides from config.yml (e.g., max_input_tokens)
+    # Apply profile overrides from cli.yml (e.g., max_input_tokens)
     if provider:
         config_profile_overrides = config.get_profile_overrides(provider, model_name=model_name)
         if config_profile_overrides:
@@ -1767,10 +1768,10 @@ def create_model(
                 model,
                 config_profile_overrides,
                 model_name,
-                label=f"config.yml (provider '{provider}')",
+                label=f"cli.yml (provider '{provider}')",
             )
 
-    # CLI --profile-override takes highest priority (on top of config.yml)
+    # CLI --profile-override takes highest priority (on top of cli.yml)
     if profile_overrides:
         _apply_profile_overrides(
             model,

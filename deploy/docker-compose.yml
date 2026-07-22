@@ -69,7 +69,7 @@ services:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       SOOTHE_WORKSPACE_HOST_ROOT: ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}
-      SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /app/config.yml
+      SOOTHE_DAEMON_SOOTHE_CONFIG_PATH: /var/lib/soothe/config/nano.yml
       SOOTHE_POSTGRES_BASE_DSN: postgresql://postgres:postgres@soothe-pgvector:5432
       SOOTHE_POSTGRES_VECTORS_DSN: postgresql://postgres:postgres@soothe-pgvector:5432/soothe_vectors
       SOOTHE_DAEMON_TRANSPORTS__WEBSOCKET__HOST: 0.0.0.0
@@ -79,7 +79,7 @@ services:
       - "127.0.0.1:8765:8765"
     volumes:
       - soothe_daemon_data:/var/lib/soothe
-      - ./config.prod.yml:/app/config.yml:ro
+      - ./nano.yml:/var/lib/soothe/config/nano.yml:ro
       - ${HOME}/.soothe/data:/var/lib/soothe/data
       - ${HOME}/.soothe/logs:/var/lib/soothe/logs
       - ${SOOTHE_WORKSPACE_HOST_ROOT:-${HOME}}:/var/lib/soothe/workspaces

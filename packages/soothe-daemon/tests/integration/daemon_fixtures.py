@@ -154,7 +154,7 @@ def get_base_config() -> SootheConfig:
 
     Resolution order:
         1. ``SOOTHE_INTEGRATION_BASE_CONFIG`` — explicit path to a custom YAML file.
-        2. Repo ``config/develop/config.yml`` (monorepo root = parents[4] of this file).
+        2. Repo ``config/develop/nano.yml`` (monorepo root = parents[4] of this file).
         3. Empty :class:`SootheConfig` if no file exists.
     """
     global _CACHED_BASE_CONFIG
@@ -167,7 +167,7 @@ def get_base_config() -> SootheConfig:
             )
         else:
             repo_root = Path(__file__).resolve().parents[4]
-            config_path = repo_root / "config" / "develop" / "config.yml"
+            config_path = repo_root / "config" / "develop" / "nano.yml"
             _CACHED_BASE_CONFIG = (
                 SootheConfig.from_yaml_file(str(config_path))
                 if config_path.is_file()
@@ -525,7 +525,7 @@ def integration_config(test_config: SootheConfig) -> SootheConfig:
     """Default config for integration tests with reduced limits.
 
     Args:
-        test_config: Base config loaded from config/develop/config.yml
+        test_config: Base config loaded from config/develop/nano.yml
 
     Returns:
         SootheConfig with test-specific overrides
@@ -580,7 +580,7 @@ def web_enabled_config(test_config: SootheConfig) -> SootheConfig:
     """Config with web tools enabled.
 
     Args:
-        test_config: Base config loaded from config/develop/config.yml
+        test_config: Base config loaded from config/develop/nano.yml
 
     Returns:
         SootheConfig with web tools enabled

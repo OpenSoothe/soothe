@@ -83,8 +83,8 @@ SOOTHE_POSTGRES_VECTORS_DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@s
 ### Step 2: Create Agent Configuration
 
 ```bash
-cp config.prod.yml config.yml
-vim config.yml  # Optional customization
+cp nano.yml ~/.soothe/config/nano.yml
+vim ~/.soothe/config/nano.yml  # Optional customization
 ```
 
 **Default configuration** (uses environment variables):
@@ -230,7 +230,7 @@ For environments without Docker or requiring direct hardware access.
 2. **Install Python 3.11+**: `sudo apt install python3.11 python3.11-venv`
 3. **Create user**: `sudo useradd -r -s /bin/false soothe`
 4. **Install Soothe**: `sudo /opt/soothe/venv/bin/pip install soothe-daemon soothe`
-5. **Configure**: Create `/var/lib/soothe/config/config.yml` and `/etc/default/soothe` with environment variables
+5. **Configure**: Create `/var/lib/soothe/config/nano.yml` and `/etc/default/soothe` with environment variables
 6. **Create systemd service**: See `deploy/soothed.service` template
 
 ### systemd Service Template
@@ -372,14 +372,14 @@ transports:
 
 ### Request timeouts
 
-Long agent turns (multi-hour builds, large refactors) are bounded by `thread_pool.request_timeout_seconds` in `daemon.yml` (default **1209600** = 14 days). Autopilot goals use the parallel wall-clock knob `agent.autopilot.goal_deadline_seconds` in `config.yml` (same default). Set either to `0` / `null` only when you accept unbounded runs.
+Long agent turns (multi-hour builds, large refactors) are bounded by `thread_pool.request_timeout_seconds` in `daemon.yml` (default **1209600** = 14 days). Autopilot goals use the parallel wall-clock knob `agent.autopilot.goal_deadline_seconds` in `nano.yml` (same default). Set either to `0` / `null` only when you accept unbounded runs.
 
 ```yaml
 # daemon.yml
 thread_pool:
   request_timeout_seconds: 1209600  # 14d; 0 = no timeout
 
-# config.yml
+# nano.yml
 agent:
   autopilot:
     goal_deadline_seconds: 1209600  # 14d; null disables
@@ -421,7 +421,7 @@ services:
 
 ### Configuration Mapping
 
-`deploy/config.prod.yml` resolves `host_root` from the same env var Compose injects (default `$HOME`):
+`deploy/nano.yml` resolves `host_root` from the same env var Compose injects (default `$HOME`):
 
 ```yaml
 workspace_mount:
@@ -538,7 +538,7 @@ docker compose exec soothe-pgvector psql -U postgres -d soothe_vectors \
 
 **Solution**:
 1. Check logs: `docker compose logs soothed`
-2. Verify config.yml syntax: `python -c "import yaml; yaml.safe_load(open('config.yml'))"`
+2. Verify nano.yml syntax: `python -c "import yaml; yaml.safe_load(open('nano.yml'))"`
 3. Check environment variables: `docker compose config`
 4. Verify workspace mount exists
 

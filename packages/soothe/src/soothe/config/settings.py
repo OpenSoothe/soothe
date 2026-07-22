@@ -43,6 +43,7 @@ from soothe.config.models import (
     VectorStoreRouter,
     WorkspaceMountConfig,
 )
+from soothe.config.ownership import validate_nano_file_ownership
 
 # Lazy import to avoid circular dependency - _DEFAULT_SYSTEM_PROMPT imported in methods that use it
 
@@ -173,7 +174,11 @@ class SootheConfig(BaseSettings):
 
     @classmethod
     def from_yaml_file(cls, path: str) -> SootheConfig:
-        """Load configuration from a YAML file.
+        """Load nano-owned agent configuration from a single YAML file.
+
+        Host-owned keys (``agent.loop``, ``agent.autopilot``, ``cron``,
+        ``skillify``, …) are rejected — put them in ``soothe.yml`` and load
+        via ``from_split_yaml_files``.
 
         Environment variable placeholders (``${ENV_VAR}``) are recursively
         expanded throughout the entire config tree before Pydantic validation.
@@ -187,17 +192,16 @@ class SootheConfig(BaseSettings):
         typically fail Pydantic validation or produce warnings at runtime.
 
         Args:
-            path: Path to the YAML configuration file.
+            path: Path to the nano-owned YAML configuration file.
 
         Returns:
             A configured SootheConfig instance.
-        """
-        import yaml
 
-        with Path(path).open() as f:
-            config_data = yaml.safe_load(f) or {}
-        # Recursively expand ${ENV_VAR} placeholders throughout the config tree
-        config_data = _expand_env_in_config(config_data)
+        Raises:
+            OwnershipViolationError: When the file contains host-owned keys.
+        """
+        config_data = cls._load_yaml_config_data(path)
+        validate_nano_file_ownership(config_data, source_file=Path(path).name)
         return cls(**config_data)
 
     @classmethod

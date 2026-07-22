@@ -17,8 +17,42 @@ from soothe_sdk.paths import SOOTHE_HOME
 
 logger = logging.getLogger(__name__)
 
-# Default config path for Soothe
-DEFAULT_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
+# CLI / TUI client preferences (themes, update prefs, skills dirs).
+# Not the daemon agent config (nano.yml / soothe.yml).
+_DEFAULT_CLI_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "cli.yml"
+_LEGACY_CLI_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "config.yml"
+
+
+def resolve_cli_config_path() -> Path:
+    """Return the CLI prefs path, migrating legacy ``config.yml`` once if needed.
+
+    Returns:
+        Path to ``~/.soothe/config/cli.yml`` (created/migrated lazily).
+    """
+    if _DEFAULT_CLI_CONFIG_PATH.exists():
+        return _DEFAULT_CLI_CONFIG_PATH
+    if _LEGACY_CLI_CONFIG_PATH.exists():
+        try:
+            _DEFAULT_CLI_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _LEGACY_CLI_CONFIG_PATH.rename(_DEFAULT_CLI_CONFIG_PATH)
+            logger.info(
+                "Migrated CLI prefs from %s to %s",
+                _LEGACY_CLI_CONFIG_PATH,
+                _DEFAULT_CLI_CONFIG_PATH,
+            )
+        except OSError as exc:
+            logger.warning(
+                "Could not migrate legacy CLI prefs %s → %s: %s; using legacy path",
+                _LEGACY_CLI_CONFIG_PATH,
+                _DEFAULT_CLI_CONFIG_PATH,
+                exc,
+            )
+            return _LEGACY_CLI_CONFIG_PATH
+    return _DEFAULT_CLI_CONFIG_PATH
+
+
+# Public path constant (prefer ``resolve_cli_config_path()`` when reading/writing).
+DEFAULT_CONFIG_PATH = _DEFAULT_CLI_CONFIG_PATH
 
 # Environment variable prefix (Soothe uses SOOTHE_ instead of DEEPAGENTS_)
 _ENV_PREFIX = "SOOTHE_"
@@ -518,7 +552,7 @@ def get_available_models() -> list[ModelProfileEntry]:
                             p_name,
                             "",
                             display_name=f"{p_name} ({provider_type})",
-                            description="Configure models: list under this provider in config.yml",
+                            description="Configure models: list under this provider in nano.yml",
                         )
                     )
         else:
@@ -535,7 +569,7 @@ def get_available_models() -> list[ModelProfileEntry]:
                             p_name,
                             "",
                             display_name=f"{p_name} ({provider_type})",
-                            description="Configure models: list under this provider in config.yml",
+                            description="Configure models: list under this provider in nano.yml",
                         )
                     )
         return out

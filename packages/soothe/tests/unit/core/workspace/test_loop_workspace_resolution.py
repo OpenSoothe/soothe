@@ -130,8 +130,8 @@ def test_workspace_mount_from_config_returns_none_when_config_absent(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    missing_config = tmp_path / "missing-config.yml"
-    monkeypatch.setattr("soothe.config.DEFAULT_CONFIG_PATH", missing_config)
+    missing_config = tmp_path / "missing-nano.yml"
+    monkeypatch.setattr("soothe.config.DEFAULT_NANO_CONFIG_PATH", missing_config)
     assert _workspace_mount_from_config() == (None, None)
 
 
@@ -139,10 +139,10 @@ def test_workspace_mount_from_config_reads_config_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    config_path = tmp_path / "config.yml"
+    config_path = tmp_path / "nano.yml"
     config_path.write_text(
         "workspace_mount:\n  host_root: /host/work\n  container_root: /container/work\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr("soothe.config.DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setattr("soothe.config.DEFAULT_NANO_CONFIG_PATH", config_path)
     assert _workspace_mount_from_config() == ("/host/work", "/container/work")

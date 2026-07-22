@@ -114,7 +114,7 @@ soothe -p "What is the capital of France?"
 
 Three methods:
 1. **Environment variables**: `export SOOTHE_<FIELD>=<value>`
-2. **YAML config file**: `~/.soothe/config/config.yml` or `--config path/to/config.yml`
+2. **YAML config file**: `~/.soothe/config/nano.yml` or `--config path/to/nano.yml`
 3. **CLI arguments**: `soothe --debug --config my.yml`
 
 See [Configuration Guide](configuration-guide/index.md) for complete reference.

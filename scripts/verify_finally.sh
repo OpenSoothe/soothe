@@ -557,6 +557,19 @@ validate_package_dependencies() {
     fi
   fi
 
+  if [ -f "$WORKSPACE_ROOT/scripts/check_first_party_pin_alignment.py" ]; then
+    local pin_output
+    if pin_output=$("$VENV_PYTHON" "$WORKSPACE_ROOT/scripts/check_first_party_pin_alignment.py" 2>&1); then
+      print_ok "first-party pin alignment"
+      record_check_outcome "dependencies" "first-party pin alignment" "pass"
+    else
+      print_fail "first-party pin alignment"
+      record_failure_log "First-party pin alignment" "$pin_output"
+      record_check_outcome "dependencies" "first-party pin alignment" "fail"
+      return 1
+    fi
+  fi
+
   return 0
 }
 

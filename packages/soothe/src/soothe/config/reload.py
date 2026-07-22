@@ -22,12 +22,10 @@ from soothe.config.env import SOOTHE_HOME
 
 _logger = logging.getLogger(__name__)
 
-# Default paths for split config layout (IG-674)
+# Default paths for split config layout
 DEFAULT_NANO_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "nano.yml"
 DEFAULT_SOOTHE_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "soothe.yml"
 DEFAULT_DAEMON_CONFIG_PATH = Path(SOOTHE_HOME) / "config" / "daemon.yml"
-# Backward-compatible alias for the nano-owned agent base file
-DEFAULT_CONFIG_PATH = DEFAULT_NANO_CONFIG_PATH
 
 # Default debounce interval in seconds
 DEFAULT_DEBOUNCE_SECONDS = 1.0
@@ -830,7 +828,6 @@ def _load_daemon_config(path: Path) -> Any:
 # ---------------------------------------------------------------------------
 
 __all__ = [
-    "DEFAULT_CONFIG_PATH",
     "DEFAULT_NANO_CONFIG_PATH",
     "DEFAULT_SOOTHE_CONFIG_PATH",
     "DEFAULT_DAEMON_CONFIG_PATH",

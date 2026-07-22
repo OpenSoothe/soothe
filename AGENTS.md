@@ -11,7 +11,7 @@
 - **Minor changes**: No verbose IG—use commit/PR context, or minimal stub only
 
 ### 2. Config Sync
-When editing `config/config.template.yml`, MUST also update `config/develop/config.yml` with matching structure.
+When editing `config/nano.template.yml`, MUST also update `config/develop/nano.yml` with matching structure.
 
 ### 3. Ecosystem First
 Check `langchain-core`, `langchain-community`, `deepagents` before implementing anything:
@@ -239,4 +239,4 @@ langchain provides: web search (Tavily, DuckDuckGo), ArXiv, Wikipedia, GitHub, G
 - Patterns → `docs/impl/IG-*.md`
 - APIs → `thirdparty/` (reference only, don't import)
 - Debug → `docs/wiki/howto_debug.md`
-- Config → `config/config.template.yml`
+- Config → `config/nano.template.yml` (+ `config/soothe.template.yml` host overlay)

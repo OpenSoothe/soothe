@@ -399,13 +399,17 @@ class SootheDaemon(DaemonHandlersMixin):
         from pathlib import Path
 
         from pydantic import BaseModel, ValidationError
-        from soothe.config.reload import DEFAULT_CONFIG_PATH, DEFAULT_DAEMON_CONFIG_PATH
+        from soothe.config.reload import (
+            DEFAULT_DAEMON_CONFIG_PATH,
+            DEFAULT_NANO_CONFIG_PATH,
+            _load_agent_config,
+        )
 
         if self._config_watcher is not None:
             logger.warning("Config reload already enabled")
             return
 
-        agent_path = Path(agent_config_path or DEFAULT_CONFIG_PATH)
+        agent_path = Path(agent_config_path or DEFAULT_NANO_CONFIG_PATH)
         daemon_path = Path(daemon_config_path or DEFAULT_DAEMON_CONFIG_PATH)
 
         self._config_watcher = ConfigWatcher(debounce_seconds=1.0)
@@ -425,10 +429,19 @@ class SootheDaemon(DaemonHandlersMixin):
             self._config_watcher.watch_config(
                 path=agent_path,
                 config_type="agent",
-                loader=lambda: SootheConfig.from_yaml_file(str(agent_path)),
+                loader=lambda: _load_agent_config(agent_path),
                 callback=self._on_config_reload,
                 validator=_validate_pydantic_config if validate_before_reload else None,
             )
+            soothe_sibling = agent_path.parent / "soothe.yml"
+            if agent_path.name == "nano.yml" and soothe_sibling.exists():
+                self._config_watcher.watch_config(
+                    path=soothe_sibling,
+                    config_type="agent",
+                    loader=lambda: _load_agent_config(agent_path),
+                    callback=self._on_config_reload,
+                    validator=_validate_pydantic_config if validate_before_reload else None,
+                )
         else:
             logger.debug("Agent config path does not exist, skipping watch: %s", agent_path)
 
