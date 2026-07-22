@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "soothe>=0.9.2,<1.0.0",         # in-proc agent core (PyPI; nano 1.x requires soothe >=0.9.2)
+    "soothe>=0.9.4,<1.0.0",         # in-proc agent core (PyPI; nano 1.x requires soothe >=0.9.2)
     "soothe-nano>=1.0.0,<2.0.0",   # Coding CoreAgent runtime (skills/MCP/backends; direct, not only via soothe)
     "soothe-sdk>=1.0.5,<2.0.0",    # Subagent wire helpers (types owned by soothe subagents)
     "soothe-client-python>=0.10.0,<1.0.0",  # admin CLI + tests WebSocket client

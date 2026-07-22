@@ -5,19 +5,11 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [v0.9.2] - 2026-07-22
+## [v0.9.4] - 2026-07-23
 
 ### Changed
-- Bump `soothe-nano` pin to `>=1.0.0,<2.0.0` (nano 1.0.0 is now on PyPI) and `soothe-sdk` pin to `>=1.0.5,<2.0.0`
-- Remove stale `soothe-plugins` path from the dead-code scan config (plugins now ship from their own repo)
-
-[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.0...v0.9.2
-
-## [Unreleased]
-
-### Changed
-- Package-boundary excision (IG-678): remove host/daemon-only concepts that leaked into `soothe-nano` — dead-duplicate `ThreadLogger`/`ConfigWatcher`/`PersistenceDirectoryManager`/workspace-policy functions (host already owns canonical copies), dead `soothe_checkpoints` DDL (host-owned), `cron_jobs`+`identity_*` DDL from nano's metadata bootstrap (host applies at runtime), `DisplayCardStore` moved to the daemon, dead `set_step_context`/`log_exception_simplified` helpers. Standalone nano unaffected (the moved symbols were never called by nano).
-- Align `soothe-daemon` first-party pins with `soothe`: `soothe-nano>=1.0.0,<2.0.0`, `soothe-sdk>=1.0.5,<2.0.0`, and `soothe>=0.9.2,<1.0.0`
+- Package-boundary excision: remove host/daemon-only concepts that leaked into `soothe-nano` — dead-duplicate `ThreadLogger`/`ConfigWatcher`/`PersistenceDirectoryManager`/workspace-policy functions (host already owns canonical copies), dead `soothe_checkpoints` DDL (host-owned), `cron_jobs`+`identity_*` DDL from nano's metadata bootstrap (host applies at runtime), `DisplayCardStore` moved to the daemon, dead `set_step_context`/`log_exception_simplified` helpers. Standalone nano unaffected (the moved symbols were never called by nano).
+- Align `soothe-daemon` first-party pins with `soothe`: `soothe-nano>=1.0.0,<2.0.0`, `soothe-sdk>=1.0.5,<2.0.0`, and `soothe>=0.9.4,<1.0.0`
 
 ### Added
 - `scripts/check_nano_duplicate_symbols.py` — CI gate (run by `verify_finally.sh`) that detects dead-duplicate public symbols defined in both `soothe-nano` and `soothe`/`soothe-daemon`, catching the renamed-leak pattern the literal-name boundary ban misses.
@@ -26,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Docker image install of `soothe` + `soothe-daemon` failed on 0.9.2 because daemon still required `soothe-nano<1.0.0` while soothe required `soothe-nano>=1.0.0`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.2...v0.9.4
+
+## [v0.9.2] - 2026-07-22
+
+### Changed
+- Bump `soothe-nano` pin to `>=1.0.0,<2.0.0` (nano 1.0.0 is now on PyPI) and `soothe-sdk` pin to `>=1.0.5,<2.0.0`
+- Remove stale `soothe-plugins` path from the dead-code scan config (plugins now ship from their own repo)
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.0...v0.9.2
 
 ## [v0.9.0] - 2026-07-20
 
