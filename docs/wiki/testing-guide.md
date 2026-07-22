@@ -21,9 +21,11 @@ packages/
 ├── soothe-sdk/        # Shared SDK (protocol types, decorators)
 ├── soothe-cli/        # CLI + TUI
 ├── soothe/            # Agent core (library)
-├── soothe-daemon/     # Daemon server
-└── soothe-plugins/    # Optional plugins and subagents
+└── soothe-daemon/     # Daemon server
 ```
+
+Community plugins ship from the external `mirasoth/soothe-plugins` repository;
+install that package separately to run its test suite.
 
 Each package has its own test suite:
 - Unit tests: `packages/<name>/tests/unit/`

@@ -63,7 +63,7 @@ ContextEngine manages the goal DAG (priorities, dependencies, decomposition). St
 
 ## Module Map
 
-**Packages**: `soothe` (core library), `soothe-daemon` (server), `soothe-cli` (CLI/TUI), `soothe-sdk` (plugin SDK), `soothe-plugins` (community plugins).
+**Packages**: `soothe` (core library), `soothe-daemon` (server), `soothe-cli` (CLI/TUI), `soothe-sdk` (plugin SDK). Community plugins ship from the external `mirasoth/soothe-plugins` repository.
 
 | Package | Purpose | Key Modules |
 |---------|---------|-------------|

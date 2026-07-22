@@ -82,19 +82,18 @@ packages/
 │   ├── src/soothe/
 │   ├── tests/
 │   └── pyproject.toml
-├── soothe-daemon/     # Daemon server
-│   ├── src/soothe_daemon/
-│   ├── tests/
-│   └── pyproject.toml
-└── soothe-plugins/    # Optional plugins and subagents
-    ├── src/soothe_plugins/
+└── soothe-daemon/     # Daemon server
+    ├── src/soothe_daemon/
     ├── tests/
     └── pyproject.toml
 ```
 
+Community plugins and optional subagents ship from the external
+[mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins) repository.
+
 **Dependency order** (important for imports):
 ```
-soothe-sdk → soothe-cli → soothe → soothe-daemon → soothe-plugins
+soothe-sdk → soothe-cli → soothe → soothe-daemon
 ```
 
 **Rules**:
@@ -102,7 +101,7 @@ soothe-sdk → soothe-cli → soothe → soothe-daemon → soothe-plugins
 - **CLI**: Can import SDK, **NOT** soothe/daemon
 - **soothe**: Can import SDK, **NOT** daemon
 - **daemon**: Can import all packages (SDK, CLI, soothe)
-- **plugins**: Can import SDK, soothe; optional subagents for the daemon
+- **plugins**: External; install separately, register via entry points
 
 ---
 
