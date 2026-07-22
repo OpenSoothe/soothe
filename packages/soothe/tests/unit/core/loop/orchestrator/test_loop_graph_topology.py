@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
+from soothe.sloop.orchestrator.builder import build_strange_loop_graph
 
 
 def test_strange_loop_graph_exposes_rfc220_named_nodes() -> None:

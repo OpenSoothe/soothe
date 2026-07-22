@@ -9,17 +9,17 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
-from soothe.foundation.sloop.orchestrator.nodes.goal_completion import node_goal_completion
-from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.state.schemas import LoopState, PlanResult
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.context import StepPlanManagerAdapter
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.planning_models import CompletionStrategy
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.engine.synthesis import SynthesisGenerator
+from soothe.sloop.nodes.goal_completion import node_goal_completion
+from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.state.schemas import LoopState, PlanResult
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _make_ce() -> ContextEngine:
@@ -117,7 +117,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """When the unified DAG has nodes, goal completion logs it (not user output)."""
-    from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction, StepResult
+    from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
 
     caplog.set_level(logging.INFO)
     ce = _make_ce()
@@ -360,7 +360,7 @@ async def test_trivial_intake_ledger_direct_uses_user_submission_as_human() -> N
     """Trivial goals record the original user line as goal_completion human ledger."""
     from types import SimpleNamespace
 
-    from soothe.foundation.sloop.intention.models import IntakeLabel
+    from soothe.sloop.intention.models import IntakeLabel
 
     ce = _make_ce()
     loop_state = LoopState(goal="what time is it", thread_id="loop-1")
@@ -462,7 +462,7 @@ async def test_synthesis_fallback_sets_skip_replay_false() -> None:
 
     with (
         patch(
-            "soothe.foundation.sloop.orchestrator.nodes.goal_completion.generate_user_fallback_summary",
+            "soothe.sloop.nodes.goal_completion.generate_user_fallback_summary",
             return_value="fallback summary body",
         ),
         patch.object(SynthesisGenerator, "generate_synthesis", empty_gen),

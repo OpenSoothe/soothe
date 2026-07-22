@@ -75,7 +75,7 @@ sequenceDiagram
 | `foundation/sloop/prompts/user_message.py` | Envelope section injection |
 | `foundation/sloop/prompts/builder.py` | Wires registry into plan-generate |
 | `foundation/sloop/cognition/planner.py` | Pre-renumber normalize hook |
-| `foundation/sloop/orchestrator/nodes/resolve_decision.py` | Post-scope normalize hook |
+| `foundation/sloop/nodes/resolve_decision.py` | Post-scope normalize hook |
 | `foundation/sloop/state/schemas.py` | `continues_from` schema + merge helper |
 | `foundation/sloop/prompts/fragments/instructions/plan_generate_instructions.xml` | LLM rules |
 

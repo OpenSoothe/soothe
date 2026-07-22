@@ -7,17 +7,17 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, PlanResult, StepAction
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.state.schemas import AgentDecision, LoopState, PlanResult, StepAction
 
 
 @pytest.mark.asyncio
 async def test_record_iteration_increments_ce_iteration_count() -> None:
-    from soothe.foundation.sloop.orchestrator.nodes.record_iteration import node_record_iteration
-    from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-    from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+    from soothe.sloop.nodes.record_iteration import node_record_iteration
+    from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+    from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 
     ce = ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -67,7 +67,7 @@ async def test_record_iteration_increments_ce_iteration_count() -> None:
 
 @pytest.mark.asyncio
 async def test_tail_persistence_surfaces_ce_save_failure(caplog: pytest.LogCaptureFixture) -> None:
-    from soothe.foundation.sloop.orchestrator.nodes.goal_completion import (
+    from soothe.sloop.nodes.goal_completion import (
         _goal_completion_tail_persistence,
     )
 

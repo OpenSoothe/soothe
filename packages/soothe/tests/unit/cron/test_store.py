@@ -11,8 +11,8 @@ import os
 import tempfile
 from datetime import UTC, datetime, timedelta
 
-from soothe.foundation.cron.models import CronJob, JobStatus, ScheduleKind
-from soothe.foundation.cron.store import CronJobStore
+from soothe.cron.models import CronJob, JobStatus, ScheduleKind
+from soothe.cron.store import CronJobStore
 
 
 def run_async(coro):

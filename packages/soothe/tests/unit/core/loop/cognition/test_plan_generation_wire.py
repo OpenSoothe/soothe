@@ -5,13 +5,13 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from soothe.foundation.sloop.cognition.plan_generation_wire import (
+from soothe.sloop.cognition.plan_generation_wire import (
     PlanGenerationWire,
     capped_plan_generation_wire_model,
     coerce_plan_generation_wire_dict,
     plan_generation_wire_to_model,
 )
-from soothe.foundation.sloop.state.schemas import DEFAULT_MAX_PLAN_STEPS_PER_WAVE, PlanGeneration
+from soothe.sloop.state.schemas import DEFAULT_MAX_PLAN_STEPS_PER_WAVE, PlanGeneration
 
 
 def test_wire_schema_requires_dependencies_on_steps() -> None:

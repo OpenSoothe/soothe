@@ -68,8 +68,8 @@ Default **50**. Loop 2281 (171 tools) would synthesize.
 
 | Area | File |
 |------|------|
-| Strategy logic | `packages/soothe/src/soothe/foundation/context/planning/completion.py` |
-| Adapter wiring | `packages/soothe/src/soothe/foundation/context/planning/step_planner.py` |
+| Strategy logic | `packages/soothe/src/soothe/context/completion.py` |
+| Adapter wiring | `packages/soothe/src/soothe/context/step_planner.py` |
 | Config models | `packages/soothe/src/soothe/config/models.py` |
 | Template + develop config | `config/config.template.yml`, `config/develop/config.yml` |
 | RFC | `docs/specs/RFC-219-goal-completion-module.md` |

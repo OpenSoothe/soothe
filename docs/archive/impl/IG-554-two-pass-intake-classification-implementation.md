@@ -45,9 +45,9 @@ Implement RFC-630's two-pass intake architecture that separates social/task clas
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/intention/pass1_classifier.py` | Create |
-| `packages/soothe/src/soothe/foundation/sloop/intention/models.py` | Add `IntakePass1Result` schema |
-| `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/classifiers/intake_pass1_system.xml` | Create prompt file |
+| `packages/soothe/src/soothe/sloop/intention/pass1_classifier.py` | Create |
+| `packages/soothe/src/soothe/sloop/intention/models.py` | Add `IntakePass1Result` schema |
+| `packages/soothe/src/soothe/sloop/prompts/fragments/classifiers/intake_pass1_system.xml` | Create prompt file |
 
 **`IntakePass1Result` schema:**
 
@@ -116,9 +116,9 @@ async def test_pass1_pivot_patterns(query, expected_is_task):
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/intention/pass2_classifier.py` | Create |
-| `packages/soothe/src/soothe/foundation/sloop/intention/models.py` | Add `IntakePass2Result` schema |
-| `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/classifiers/intake_pass2_system.xml` | Create prompt file |
+| `packages/soothe/src/soothe/sloop/intention/pass2_classifier.py` | Create |
+| `packages/soothe/src/soothe/sloop/intention/models.py` | Add `IntakePass2Result` schema |
+| `packages/soothe/src/soothe/sloop/prompts/fragments/classifiers/intake_pass2_system.xml` | Create prompt file |
 
 **`IntakePass2Result` schema:**
 
@@ -193,8 +193,8 @@ async def test_pass2_scope_classification(query, expected_scope):
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py` | Add `new_goal_created` to loop state |
-| `packages/soothe/src/soothe/foundation/sloop/runner/_runner_strange_loop.py` | Two-stage gather with Pass 1/2 |
+| `packages/soothe/src/soothe/sloop/engine/strange_loop.py` | Add `new_goal_created` to loop state |
+| `packages/soothe/src/soothe/sloop/runner/_runner_strange_loop.py` | Two-stage gather with Pass 1/2 |
 
 **Stage 1 gather:**
 
@@ -253,7 +253,7 @@ async def _run_strange_loop(...):
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/engine/routing.py` | Add guard to `route_by_intent` |
+| `packages/soothe/src/soothe/sloop/engine/routing.py` | Add guard to `route_by_intent` |
 
 **Routing guard implementation:**
 
@@ -319,9 +319,9 @@ def test_routing_guard_allows_chitchat_on_idle_loop():
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/intention/classifier.py` | Remove `_is_likely_agentic` and `classify_intent` |
-| `packages/soothe/src/soothe/foundation/sloop/planning/simple_bypass.py` | Delete file (prefix detector removed) |
-| `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/classifiers/intake_classification_system.xml` | Update or replace |
+| `packages/soothe/src/soothe/sloop/intention/classifier.py` | Remove `_is_likely_agentic` and `classify_intent` |
+| `packages/soothe/src/soothe/sloop/planning/simple_bypass.py` | Delete file (prefix detector removed) |
+| `packages/soothe/src/soothe/sloop/prompts/fragments/classifiers/intake_classification_system.xml` | Update or replace |
 
 **Schema changes:**
 
@@ -416,5 +416,5 @@ Target: <200ms added on task queries (median).
 
 - [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md)
 - [IG-540](IG-540-intent-classify-prompt-ledger-optimization.md) — prior projection
-- `packages/soothe/src/soothe/foundation/sloop/intention/classifier.py` (legacy, to be replaced)
-- `packages/soothe/src/soothe/foundation/sloop/prompts/plan_ledger_projection.py`
+- `packages/soothe/src/soothe/sloop/intention/classifier.py` (legacy, to be replaced)
+- `packages/soothe/src/soothe/sloop/prompts/plan_ledger_projection.py`

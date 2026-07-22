@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.utils.loop_reason_display import (
+from soothe.sloop.utils.loop_reason_display import (
     is_displayable_assessment_reasoning,
     is_displayable_plan_reasoning,
     should_emit_loop_reason_event,

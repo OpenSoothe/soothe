@@ -12,19 +12,19 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.graph import END
 
-from soothe.foundation.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
     build_loop_routing_classification,
 )
-from soothe.foundation.sloop.orchestrator.nodes.init_or_resume import node_init_or_resume
-from soothe.foundation.sloop.orchestrator.nodes.invoke_wired_subagent import (
+from soothe.sloop.nodes.init_or_resume import node_init_or_resume
+from soothe.sloop.nodes.invoke_wired_subagent import (
     node_invoke_wired_subagent,
 )
-from soothe.foundation.sloop.orchestrator.routing import route_after_wired_subagent, route_by_intent
-from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
+from soothe.sloop.orchestrator.routing import route_after_wired_subagent, route_by_intent
+from soothe.sloop.state.schemas import resolve_wire_subagent
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -195,7 +195,7 @@ async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
 
 def test_extract_subagent_report_prefers_answer_field() -> None:
     """deep_research / academic_research put the report in state ``answer``."""
-    from soothe.foundation.sloop.orchestrator.nodes.invoke_wired_subagent import (
+    from soothe.sloop.nodes.invoke_wired_subagent import (
         _extract_subagent_report,
     )
 

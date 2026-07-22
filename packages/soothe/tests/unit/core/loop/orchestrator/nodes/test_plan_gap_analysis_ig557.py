@@ -8,24 +8,24 @@ import pytest
 from soothe_nano.utils.llm.structured import StructuredOutputError
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.plan_step_safety import assess_respects_gap_analysis
-from soothe.foundation.sloop.orchestrator.nodes.bounded_evidence_gather import (
+from soothe.prompts import PromptBuilder
+from soothe.prompts.user_message import UserMessageBuilder
+from soothe.sloop.cognition.plan_step_safety import assess_respects_gap_analysis
+from soothe.sloop.nodes.bounded_evidence_gather import (
     _should_run_gap_analysis,
 )
-from soothe.foundation.sloop.orchestrator.nodes.plan_gap_analysis import (
+from soothe.sloop.nodes.plan_gap_analysis import (
     node_plan_gap_analysis,
 )
-from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.state.schemas import (
     GoalComponentStatus,
     LoopState,
     PlanGapAnalysis,
     StatusAssessment,
     StepResult,
 )
-from soothe.prompts import PromptBuilder
-from soothe.prompts.user_message import UserMessageBuilder
 
 
 def test_should_skip_gap_at_iter0_without_execution() -> None:

@@ -7,7 +7,7 @@ Cleanse safe legacy/dead code across the wired-subagent pipeline without changin
 ## Scope
 
 - Wired-subagent stream and completion path touched in:
-  - `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/invoke_wired_subagent.py`
+  - `packages/soothe/src/soothe/sloop/nodes/invoke_wired_subagent.py`
   - `packages/soothe/src/soothe/runner/_runner_strange_loop.py`
   - `packages/soothe-cli/src/soothe_cli/tui/textual_adapter.py`
   - `packages/soothe-cli/src/soothe_cli/tui/app/_execution.py`

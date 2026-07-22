@@ -124,7 +124,7 @@ Environment variable interpolation (`${ENV_VAR}`) is handled by SootheConfig bef
 Events follow RFC-403 namespacing: `soothe.plugin.<name>.*` for plugin lifecycle, `soothe.tool.<component>.*` for tool operations, `soothe.subagent.<name>.*` for subagent lifecycle. Register at module load:
 
 ```python
-from soothe.foundation.events import register_event
+from soothe.events import register_event
 
 class MyToolEvent(SootheEvent):
     type: str = "soothe.tool.my_plugin.operation"

@@ -118,7 +118,7 @@ class ChannelMessage:
 ```python
 """Channel event types (RFC-620 §2.2)."""
 
-from soothe.foundation.base_events import ProtocolEvent, OutputEvent
+from soothe.base_events import ProtocolEvent, OutputEvent
 
 class ChannelMessageReceived(ProtocolEvent):
     """User message from any channel."""
@@ -331,7 +331,7 @@ In ChannelManager, implement `_coalesce_stream_deltas()` per nanobot pattern:
 
 ## Dependencies
 
-- soothe.foundation.base_events (ProtocolEvent, OutputEvent)
+- soothe.base_events (ProtocolEvent, OutputEvent)
 - soothe_daemon.event.bus (EventBus)
 - soothe_daemon.session.manager (ClientSessionManager - unchanged)
 

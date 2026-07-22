@@ -111,7 +111,7 @@ Each `_execute_step_collecting_events` invocation runs its own `_stream_and_coll
 
 ### 5.1 `ExecuteStepProgressReporter`
 
-**Location**: `packages/soothe/src/soothe/foundation/sloop/engine/execute_step_progress.py` (new)
+**Location**: `packages/soothe/src/soothe/sloop/engine/execute_step_progress.py` (new)
 
 **Responsibilities**:
 
@@ -197,7 +197,7 @@ Emitted inside `_stream_and_collect` as a custom stream chunk (same path as `ste
 
 ### 5.5 Catalog event
 
-**Location**: `packages/soothe/src/soothe/foundation/events/catalog.py`
+**Location**: `packages/soothe/src/soothe/events/catalog.py`
 
 ```python
 class StrangeLoopStepProgressEvent(LifecycleEvent):

@@ -68,10 +68,10 @@ User message
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/intention/models.py` | Add `ResponseLanguage`; extend `IntakePass1LLMResult`, `IntentClassification` |
-| `packages/soothe/src/soothe/foundation/sloop/intention/pass1_social_response.py` | Add `response_language` to JSON schema |
-| `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/classifiers/intake_pass1_system.xml` | Detection rules, examples with `response_language` |
-| `packages/soothe/src/soothe/foundation/sloop/intention/pass1_classifier.py` | Validate enum; accept `prior_response_language`; pass language to social-reply path |
+| `packages/soothe/src/soothe/sloop/intention/models.py` | Add `ResponseLanguage`; extend `IntakePass1LLMResult`, `IntentClassification` |
+| `packages/soothe/src/soothe/sloop/intention/pass1_social_response.py` | Add `response_language` to JSON schema |
+| `packages/soothe/src/soothe/sloop/prompts/fragments/classifiers/intake_pass1_system.xml` | Detection rules, examples with `response_language` |
+| `packages/soothe/src/soothe/sloop/intention/pass1_classifier.py` | Validate enum; accept `prior_response_language`; pass language to social-reply path |
 
 **`ResponseLanguage`:**
 
@@ -117,11 +117,11 @@ When `prior_response_language` is set, inject a one-line structural hint into th
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/intention/classifier.py` | Copy `response_language` in `pass1_to_intent`, `_pass2_to_intent`, `_patch_missing_fields` |
-| `packages/soothe/src/soothe/foundation/sloop/intention/two_pass_coordinator.py` | Pass `prior_response_language` into Pass 1 |
-| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/intent_classify.py` | Set `loop_state.response_language` from intent |
-| `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py` | Set language on pre-graph social fast-path; pass prior language into `classify_pass1` |
-| `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` | Add `LoopState.response_language` |
+| `packages/soothe/src/soothe/sloop/intention/classifier.py` | Copy `response_language` in `pass1_to_intent`, `_pass2_to_intent`, `_patch_missing_fields` |
+| `packages/soothe/src/soothe/sloop/intention/two_pass_coordinator.py` | Pass `prior_response_language` into Pass 1 |
+| `packages/soothe/src/soothe/sloop/nodes/intent_classify.py` | Set `loop_state.response_language` from intent |
+| `packages/soothe/src/soothe/sloop/engine/strange_loop.py` | Set language on pre-graph social fast-path; pass prior language into `classify_pass1` |
+| `packages/soothe/src/soothe/sloop/state/schemas.py` | Add `LoopState.response_language` |
 
 **Clarification resume:** When Pass 1 is skipped, inherit existing `LoopState.response_language` (no re-detection).
 
@@ -135,12 +135,12 @@ When `prior_response_language` is set, inject a one-line structural hint into th
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/prompts/system_templates.py` | Add `build_response_language_hint()`; rename static fragment to `RESPONSE_LANGUAGE_HINT_FALLBACK` |
-| `packages/soothe/src/soothe/foundation/sloop/prompts/builder.py` | Use builder with `state.response_language` |
+| `packages/soothe/src/soothe/sloop/prompts/system_templates.py` | Add `build_response_language_hint()`; rename static fragment to `RESPONSE_LANGUAGE_HINT_FALLBACK` |
+| `packages/soothe/src/soothe/sloop/prompts/builder.py` | Use builder with `state.response_language` |
 | `packages/soothe/src/soothe/middleware/system_prompt.py` | Use builder with loop state language |
-| `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` | Language-aware ledger human line |
-| `packages/soothe/src/soothe/foundation/sloop/prompts/user_message.py` | Synthesis message uses explicit language when set |
-| `packages/soothe/src/soothe/foundation/sloop/state/resume_topic.py` | Use explicit language when available |
+| `packages/soothe/src/soothe/sloop/nodes/goal_completion.py` | Language-aware ledger human line |
+| `packages/soothe/src/soothe/sloop/prompts/user_message.py` | Synthesis message uses explicit language when set |
+| `packages/soothe/src/soothe/sloop/state/resume_topic.py` | Use explicit language when available |
 
 **Builder contract:**
 
@@ -168,9 +168,9 @@ Keep `RESPONSE_LANGUAGE_HINT` XML tag name for cache-slot stability (RFC-214).
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/sloop/chitchat_fallbacks.py` | Delete `query_prefers_chinese`; change `pick_generic_chitchat_fallback(language=...)` |
-| `packages/soothe/src/soothe/foundation/sloop/intention/pass1_classifier.py` | Pass `result.response_language` to fallback |
-| `packages/soothe/src/soothe/foundation/sloop/intention/classifier.py` | Same |
+| `packages/soothe/src/soothe/sloop/chitchat_fallbacks.py` | Delete `query_prefers_chinese`; change `pick_generic_chitchat_fallback(language=...)` |
+| `packages/soothe/src/soothe/sloop/intention/pass1_classifier.py` | Pass `result.response_language` to fallback |
+| `packages/soothe/src/soothe/sloop/intention/classifier.py` | Same |
 
 **Fallback pools:**
 

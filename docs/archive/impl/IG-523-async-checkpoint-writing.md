@@ -77,7 +77,7 @@ Update config template: `config/config.template.yml`
 
 ### Phase 2: StrangeLoopStateManager Async Queue
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/state/sloop_manager.py`
+**File**: `packages/soothe/src/soothe/sloop/state/sloop_manager.py`
 
 #### Changes to `StrangeLoopStateManager.__init__`:
 

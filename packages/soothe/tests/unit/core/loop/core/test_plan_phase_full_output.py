@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.phase import PlanPhase
-from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
+from soothe.sloop.cognition.phase import PlanPhase
+from soothe.sloop.state.schemas import LoopState, PlanResult, StepResult
 
 
 @pytest.mark.asyncio

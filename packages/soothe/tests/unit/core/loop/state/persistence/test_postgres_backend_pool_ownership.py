@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("psycopg_pool")
 
-from soothe.foundation.sloop.state.persistence.postgres_backend import (
+from soothe.sloop.checkpoints.postgres_backend import (
     PostgreSQLPersistenceBackend,
 )
 
@@ -60,7 +60,7 @@ async def test_ensure_pool_accepts_small_max_size(monkeypatch: pytest.MonkeyPatc
 
     backend._initialize_schema = _noop_schema  # type: ignore[method-assign]
     monkeypatch.setattr(
-        "soothe.foundation.sloop.state.persistence.postgres_backend.AsyncConnectionPool",
+        "soothe.sloop.checkpoints.postgres_backend.AsyncConnectionPool",
         _FakePool,
     )
 

@@ -29,7 +29,7 @@ Expected behavior:
 
 ## Root Cause Analysis
 
-### Location: `packages/soothe/src/soothe/foundation/loop/engine/tool_call_args.py:141-157`
+### Location: `packages/soothe/src/soothe/loop/engine/tool_call_args.py:141-157`
 
 ```python
 def filter_redundant_stream_tool_updates(

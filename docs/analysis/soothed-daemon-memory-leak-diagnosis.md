@@ -109,7 +109,7 @@ Bounded by IG-475 for multi-goal loops, but large single-step outputs still matt
 | `QueryEngine` `full_response` list | No | Per-query only |
 | LangGraph checkpoint messages | Effectively per-wave | Persistence + in-memory graph |
 
-**Location:** `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` — `clear_goal_state()`
+**Location:** `packages/soothe/src/soothe/sloop/state/schemas.py` — `clear_goal_state()`
 
 ---
 

@@ -152,7 +152,7 @@ Keep executor-emitted `soothe.stream.tool_call.update` for late-arg streaming (K
 - `packages/soothe-cli/src/soothe_cli/runtime/turn/prepare.py` — `skip=True` for noop chunks
 - `packages/soothe-cli/src/soothe_cli/runtime/state/session_stats.py` — `filtered_early` counter
 
-**Package boundary**: `soothe-cli` depends only on `soothe-sdk` (+ langchain messages for typing). Text helpers live under `soothe_cli.runtime.wire.message_text`; must not import `soothe.foundation` or `soothe.core`.
+**Package boundary**: `soothe-cli` depends only on `soothe-sdk` (+ langchain messages for typing). Text helpers live under `soothe_cli.runtime.wire.message_text`; must not import `soothe` or `soothe.core`.
 
 **Tests**: `packages/soothe-cli/tests/unit/runtime/wire/test_chunk_filter.py`.
 

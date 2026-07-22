@@ -94,7 +94,7 @@ Add a cron service to Soothe's autopilot mode that allows users to submit schedu
 ### Module Location
 
 ```
-packages/soothe/src/soothe/foundation/cron/
+packages/soothe/src/soothe/cron/
 ├── __init__.py           # Public exports
 ├── service.py            # CronService orchestrator
 ├── extraction.py         # CronExtractionService (LLM-based)
@@ -110,7 +110,7 @@ packages/soothe/src/soothe/foundation/cron/
 
 Orchestrating service that coordinates NL extraction, persistence, and job monitoring.
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/service.py`
+**Location**: `packages/soothe/src/soothe/cron/service.py`
 
 **Responsibilities**:
 - Accept natural language job submissions
@@ -157,7 +157,7 @@ class CronService:
 
 LLM-based natural language to structured schedule extraction.
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/extraction.py`
+**Location**: `packages/soothe/src/soothe/cron/extraction.py`
 
 **Supported Patterns** (Moderate Complexity):
 - Relative times: "tomorrow morning", "in 2 hours", "next Monday"
@@ -220,7 +220,7 @@ Minimal changes to existing SchedulerService to support database persistence.
 
 Database persistence adapter for cron jobs.
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/store.py`
+**Location**: `packages/soothe/src/soothe/cron/store.py`
 
 **Implementation**:
 - Uses existing metadata database connection pool

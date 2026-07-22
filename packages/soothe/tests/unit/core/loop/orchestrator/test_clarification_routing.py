@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 from langgraph.graph import END
 
-from soothe.foundation.sloop.orchestrator.builder import build_strange_loop_graph
-from soothe.foundation.sloop.orchestrator.routing import (
+from soothe.sloop.orchestrator.builder import build_strange_loop_graph
+from soothe.sloop.orchestrator.routing import (
     route_after_assess,
     route_after_clarification,
     route_after_execute,
@@ -47,7 +47,7 @@ def test_route_after_plan_fatal_exits_before_undersized_replan() -> None:
 
 
 def test_route_after_plan_prefers_goal_done_over_replan() -> None:
-    from soothe.foundation.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
+    from soothe.sloop.orchestrator.state import PLAN_ROUTE_GOAL_DONE
 
     assert (
         route_after_plan({"plan_route": PLAN_ROUTE_GOAL_DONE, "assess_route": "continue_generate"})

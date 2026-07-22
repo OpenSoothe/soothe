@@ -14,14 +14,14 @@ Autonomous goal management via goal DAGs, ledger, and bounded projection.
 
 ## What This Module Is
 
-ContextEngine (`soothe.foundation.context`) is the **top tier** of Soothe's execution model — the autonomous goal engine. It manages goal execution for long-running, complex workflows. Where StrangeLoop executes a single goal iteratively, ContextEngine orchestrates *which* goals to pursue, in what order, and how they relate to each other.
+ContextEngine (`soothe.context`) is the **top tier** of Soothe's execution model — the autonomous goal engine. It manages goal execution for long-running, complex workflows. Where StrangeLoop executes a single goal iteratively, ContextEngine orchestrates *which* goals to pursue, in what order, and how they relate to each other.
 
 > **Note**: The legacy `GoalEngine` class was deleted (RFC-625). ContextEngine is now the sole source of truth for goal management. The old goal-engine naming persists in file paths and some config keys for backward compatibility.
 
 ContextEngine composes five subsystems into a single interface: `GoalStepDAG` (goal/step graph), `LedgerManager` (message history), `SemanticLoader` (file/context loading), `ProjectionEngine` (bounded context for prompts), and a pluggable persistence backend (SQLite or PostgreSQL).
 
 **RFC**: [RFC-624](../../specs/RFC-624-context-engine.md), [RFC-625](../../specs/RFC-625-autopilot-monitor-context-engine-unification.md)
-**Source**: `packages/soothe/src/soothe/foundation/context/engine.py`, `models.py`
+**Source**: `packages/soothe/src/soothe/context/engine.py`, `models.py`
 
 ---
 

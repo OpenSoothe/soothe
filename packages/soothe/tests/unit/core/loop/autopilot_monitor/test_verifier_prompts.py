@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.autopilot.monitor.verifier_prompts import (
+from soothe.autopilot.verifier_prompts import (
     DAG_HEALTH_VERIFICATION_PROMPT,
     GOAL_PLACEMENT_PROMPT,
     POST_COMPLETION_VERIFICATION_PROMPT,

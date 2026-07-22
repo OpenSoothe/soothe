@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.sloop.orchestrator.runner import _langfuse_goal_output_text
-from soothe.foundation.sloop.utils.messages import LoopAIMessage
+from soothe.sloop.orchestrator.runner import _langfuse_goal_output_text
+from soothe.sloop.utils.messages import LoopAIMessage
 
 
 def test_langfuse_goal_output_text_prefers_goal_completion_ledger() -> None:
@@ -43,7 +43,7 @@ def test_langfuse_goal_output_text_ignores_execute_ledger_without_goal_completio
 
 
 def test_langfuse_goal_output_text_uses_chitchat_intent_response() -> None:
-    from soothe.foundation.sloop.intention.models import (
+    from soothe.sloop.intention.models import (
         IntakeLabel,
         IntentClassification,
         TaskComplexity,

@@ -2,12 +2,12 @@
 
 ## Goal
 
-Cleanse legacy compatibility shims in `packages/soothe/src/soothe/foundation` now that host code imports canonical `soothe.prompts` and `soothe_nano.workspace` APIs directly.
+Cleanse legacy compatibility shims in `packages/soothe/src/soothe` now that host code imports canonical `soothe.prompts` and `soothe_nano.workspace` APIs directly.
 
 ## Scope
 
-- Remove `soothe.foundation.sloop.prompts` shim modules that only wildcard re-export from `soothe.prompts`.
-- Replace broad lazy fallback in `soothe.foundation.workspace.__getattr__` with explicit re-exports from `soothe_nano.workspace` modules.
+- Remove `soothe.sloop.prompts` shim modules that only wildcard re-export from `soothe.prompts`.
+- Replace broad lazy fallback in `soothe.workspace.__getattr__` with explicit re-exports from `soothe_nano.workspace` modules.
 - Preserve currently used workspace APIs by keeping explicit exports for filesystem/runtime helpers and stream/tool resolution types.
 
 ## Non-goals
@@ -19,8 +19,8 @@ Cleanse legacy compatibility shims in `packages/soothe/src/soothe/foundation` no
 ## Implementation
 
 1. Delete shim-only prompt modules under:
-   - `packages/soothe/src/soothe/foundation/sloop/prompts/`
-2. Update `packages/soothe/src/soothe/foundation/workspace/__init__.py`:
+   - `packages/soothe/src/soothe/sloop/prompts/`
+2. Update `packages/soothe/src/soothe/workspace/__init__.py`:
    - import explicit symbols from `soothe_nano.workspace.workspace_api`
    - import explicit symbols from `soothe_nano.workspace.workspace_filesystem`
    - import explicit symbols from `soothe_nano.workspace.workspace_runtime`

@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage
 
-from soothe.foundation.sloop.cognition.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.step_wave_types import _StreamCollectChunk
-from soothe.foundation.sloop.state.schemas import StepAction
+from soothe.sloop.cognition.step_deliverable import TRIVIAL_DIRECT_EXPECTED_OUTPUT
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.step_wave_types import _StreamCollectChunk
+from soothe.sloop.state.schemas import StepAction
 
 
 async def _empty_async_gen(*_args: Any, **_kwargs: Any) -> AsyncIterator[Any]:

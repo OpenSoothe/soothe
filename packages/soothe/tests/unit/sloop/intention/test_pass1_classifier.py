@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.foundation.sloop.intention.models import IntakePass1Confidence, IntakePass1LLMResult
-from soothe.foundation.sloop.intention.pass1_classifier import (
+from soothe.sloop.intention.models import IntakePass1Confidence, IntakePass1LLMResult
+from soothe.sloop.intention.pass1_classifier import (
     IntakePass1Classifier,
     _log_pass1_result,
 )
@@ -170,7 +170,7 @@ async def test_structured_output_error_retries_once() -> None:
     mock_model = MagicMock()
     classifier = IntakePass1Classifier(model=mock_model)
     with patch(
-        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
         new=AsyncMock(
             side_effect=[
                 StructuredOutputError(
@@ -210,7 +210,7 @@ async def test_missing_social_response_generates_dedicated_reply() -> None:
     mock_model = MagicMock()
     classifier = IntakePass1Classifier(model=mock_model)
     with patch(
-        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
         new=AsyncMock(
             return_value={
                 "is_task": False,
@@ -235,7 +235,7 @@ async def test_empty_social_response_uses_dedicated_reply() -> None:
     mock_model = MagicMock()
     classifier = IntakePass1Classifier(model=mock_model)
     with patch(
-        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
         new=AsyncMock(
             return_value={
                 "is_task": False,
@@ -259,7 +259,7 @@ async def test_generate_social_response_after_empty_first_call() -> None:
     mock_model = MagicMock()
     classifier = IntakePass1Classifier(model=mock_model)
     with patch(
-        "soothe.foundation.sloop.intention.pass1_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.pass1_classifier.invoke_structured_chat",
         new=AsyncMock(
             return_value={
                 "is_task": False,
@@ -292,7 +292,7 @@ async def test_invalid_confidence_defaults_to_medium() -> None:
 
 
 def test_log_pass1_result_emits_reasoning_at_info(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level(logging.INFO, logger="soothe.foundation.sloop.intention.pass1_classifier")
+    caplog.set_level(logging.INFO, logger="soothe.sloop.intention.pass1_classifier")
     _log_pass1_result(
         IntakePass1LLMResult(
             is_task=True,

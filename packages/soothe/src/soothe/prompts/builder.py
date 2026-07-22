@@ -25,8 +25,8 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.planner import PlanContext
 
     from soothe.config import SootheConfig
-    from soothe.foundation.context.projection import ContextBundle
-    from soothe.foundation.sloop.state.schemas import LoopState
+    from soothe.context.projection import ContextBundle
+    from soothe.sloop.state.schemas import LoopState
 
 PlanPromptPhase = Literal["assess", "generate"]
 
@@ -52,7 +52,7 @@ def _prior_goals_from_checkpoint(
     exclude_goal_id: str | None,
 ) -> list[Any]:
     """Build ``PriorGoalSummary`` rows from checkpoint goal index (metadata only)."""
-    from soothe.foundation.context.projection import PriorGoalSummary
+    from soothe.context.projection import PriorGoalSummary
 
     if checkpoint is None:
         return []
@@ -131,7 +131,7 @@ class PromptBuilder:
         plan_gap: Any | None = None,
     ) -> list[BaseMessage]:
         """Build SystemMessage + projected ledger + task envelope (RFC-214 §4, IG-538)."""
-        from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+        from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
         projection_mode = resolve_planner_projection_mode(state)
@@ -175,7 +175,7 @@ class PromptBuilder:
         )
         plan_coverage = None
         if kind in ("assess", "gap"):
-            from soothe.foundation.sloop.cognition.plan_step_safety import render_plan_coverage
+            from soothe.sloop.cognition.plan_step_safety import render_plan_coverage
 
             include_coverage = (
                 assess_prompt_cfg.include_plan_coverage if assess_prompt_cfg is not None else True
@@ -373,8 +373,8 @@ class PromptBuilder:
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
-        from soothe.foundation.sloop.state.schemas import next_goal_local_step_id_start
         from soothe.prompts.user_message import UserMessageBuilder
+        from soothe.sloop.state.schemas import next_goal_local_step_id_start
 
         builder = UserMessageBuilder()
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
@@ -392,7 +392,7 @@ class PromptBuilder:
         step_id_hint = None
         step_anchor_registry = None
         if kind == "generate":
-            from soothe.foundation.sloop.cognition.step_anchor_registry import (
+            from soothe.sloop.cognition.step_anchor_registry import (
                 build_step_anchor_registry,
             )
 
@@ -457,7 +457,7 @@ class PromptBuilder:
             )
         if plan_gap is not None:
             generate_kwargs["plan_gap"] = plan_gap
-        from soothe.foundation.sloop.engine.thread_selection import (
+        from soothe.sloop.engine.thread_selection import (
             resolve_user_requested_wire_subagent,
         )
 

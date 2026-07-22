@@ -8,7 +8,7 @@ import pytest
 from langchain_core.tools import tool
 from support_config import config_with_router_profile
 
-from soothe.foundation.coreagent import create_soothe_agent
+from soothe.coreagent import create_soothe_agent
 
 
 def _get_router_config_for_available_credentials() -> dict:

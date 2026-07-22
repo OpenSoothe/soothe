@@ -5,10 +5,10 @@ from __future__ import annotations
 from langchain_core.messages import SystemMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.prompts import PromptBuilder
 from soothe.prompts.user_message import UserMessageBuilder
+from soothe.sloop.state.schemas import LoopState, StatusAssessment
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_generate_message_includes_assessment_section_when_inline() -> None:

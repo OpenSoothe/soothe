@@ -19,7 +19,7 @@ from soothe_nano.logging.setup import (
 )
 
 from soothe.config.settings import SootheConfig
-from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.sloop.checkpoints.directory_manager import PersistenceDirectoryManager
 
 _LOG = logging.getLogger(__name__)
 

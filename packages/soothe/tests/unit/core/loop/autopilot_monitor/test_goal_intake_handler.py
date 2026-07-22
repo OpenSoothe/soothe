@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.autopilot.monitor.goal_dag_verifier import GoalDAGVerifier
-from soothe.foundation.autopilot.monitor.goal_intake_handler import GoalIntakeHandler
-from soothe.foundation.autopilot.monitor.models import GoalIntakeResult, GoalPlacement
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
+from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
+from soothe.autopilot.goal_intake_handler import GoalIntakeHandler
+from soothe.autopilot.monitor_models import GoalIntakeResult, GoalPlacement
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 """Tests for failure intent classifier (IG-433)."""
 
-from soothe.foundation.sloop.utils.failure_intent_classifier import (
+from soothe.sloop.utils.failure_intent_classifier import (
     classify_failure_intent_keyword,
     is_missing_prerequisite_intent,
 )

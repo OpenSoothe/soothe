@@ -38,7 +38,7 @@ def resolve_durability(config: SootheConfig) -> DurabilityProtocol:
             from soothe_nano.backends.durability.postgresql import PostgreSQLDurability
             from soothe_nano.backends.persistence import create_persist_store
 
-            from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
+            from soothe.persistence.shared_metadata_pool import SharedMetadataPool
 
             # RFC-612: Use dedicated metadata database
             dsn = config.resolve_postgres_dsn_for_database("metadata")
@@ -145,7 +145,7 @@ def _resolve_sqlite_checkpointer(config: SootheConfig) -> tuple[Checkpointer | N
         The runner will create AsyncSqliteSaver from the path in async context.
     """
     try:
-        from soothe.foundation.sloop.state.persistence.directory_manager import (
+        from soothe.sloop.checkpoints.directory_manager import (
             PersistenceDirectoryManager,
         )
 

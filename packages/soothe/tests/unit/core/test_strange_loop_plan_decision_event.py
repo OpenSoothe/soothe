@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.events import StrangeLoopPlanDecisionEvent
+from soothe.events import StrangeLoopPlanDecisionEvent
 
 
 def test_strange_loop_plan_decision_event_to_dict() -> None:

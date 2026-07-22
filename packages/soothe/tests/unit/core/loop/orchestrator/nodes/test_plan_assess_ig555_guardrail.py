@@ -9,18 +9,18 @@ import pytest
 from soothe_sdk.intention.models import TaskComplexity
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.intention import IntentClassification
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.orchestrator.nodes.plan_assess import node_plan_assess
-from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.state.checkpoint import (
+from soothe.sloop.intention import IntentClassification
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.nodes.plan_assess import node_plan_assess
+from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
     WorkingMemoryState,
 )
-from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
+from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     StatusAssessment,

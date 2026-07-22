@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.cron.extraction import AutopilotDisabledError
-from soothe.foundation.cron.models import (
+from soothe.cron.extraction import AutopilotDisabledError
+from soothe.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
     DuplicateCronJobError,
@@ -16,8 +16,8 @@ from soothe.foundation.cron.models import (
     JobStatus,
     ScheduleKind,
 )
-from soothe.foundation.cron.service import CronService
-from soothe.foundation.cron.store import CronJobStore
+from soothe.cron.service import CronService
+from soothe.cron.store import CronJobStore
 
 
 def _mock_config(*, max_jobs: int = 100, poll_interval: int = 60) -> MagicMock:

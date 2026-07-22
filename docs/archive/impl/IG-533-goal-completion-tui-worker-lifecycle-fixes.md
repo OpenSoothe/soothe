@@ -164,7 +164,7 @@ Daemon may still log: Goal completed: action=synthesize, chars=5182
 
 #### 2.3 Grep ag/rg-only (implemented)
 
-**Files**: `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py`, `local.py`
+**Files**: `packages/soothe/src/soothe/core/filesystem/grep_search.py`, `local.py`
 
 **Status**: Builtin grep uses `ag`/`rg` subprocesses only; no Python directory walk. See IG-509 Resolution.
 
@@ -281,7 +281,7 @@ packages/soothe-cli/src/soothe_cli/
 │   └── widgets/messages/cognition_step.py  # P1 preview UX
 └── cli/execution/daemon_errors.py  # P0 friendly thread worker copy
 
-packages/soothe/src/soothe/foundation/core/filesystem/
+packages/soothe/src/soothe/core/filesystem/
 └── grep_search.py, local.py    # ag/rg-only grep (IG-509 Resolution)
 
 mizar-airway/internal/agent/

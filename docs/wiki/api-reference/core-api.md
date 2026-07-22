@@ -92,7 +92,7 @@ The protocols use `typing.Protocol` (structural subtyping) rather than `abc.ABC`
 
 ## Agent Construction
 
-> **Source**: `packages/soothe/src/soothe/foundation/core/agent/`
+> **Source**: `packages/soothe/src/soothe/coreagent/`
 
 ### CoreAgent
 
@@ -114,7 +114,7 @@ The middleware stack (assembled in `build_soothe_middleware_stack`) is ordered:
 ### Minimal Agent Creation
 
 ```python
-from soothe.foundation.core.agent import create_soothe_agent
+from soothe.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
 
 agent = create_soothe_agent(SootheConfig.from_yaml_file("config.yml"))

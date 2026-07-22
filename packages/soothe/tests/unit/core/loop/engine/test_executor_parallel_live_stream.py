@@ -9,10 +9,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.engine.executor import Executor, StreamEvent, _ExecuteStepResult
-from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
+from soothe.context.engine import ContextEngine
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.engine.executor import Executor, StreamEvent, _ExecuteStepResult
+from soothe.sloop.state.schemas import LoopState, StepAction, StepResult
 
 
 def _make_ce() -> ContextEngine:
@@ -120,7 +120,7 @@ async def test_execute_parallel_ledger_uses_step_id_when_completion_order_differ
     executor._execute_step_collecting_events = fake_collect  # type: ignore[method-assign]
 
     ce = _make_ce()
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)

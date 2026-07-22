@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.intention.prompts import (
+from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
     build_intake_pass1_system_prompt,

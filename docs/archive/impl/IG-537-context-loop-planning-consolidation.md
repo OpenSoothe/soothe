@@ -8,7 +8,7 @@
 
 ## Problem
 
-Planning logic is split across `foundation/context/planning/` (CE state + heuristics)
+Planning logic is split across `foundation/context/` (CE state + heuristics)
 and `foundation/sloop/cognition/` (StrangeLoop LLM cognition). Legacy `PlanManager` /
 `PlanDAG` removed. Goal decomposition wired through `GoalPlanningSubengine` and
 `GoalDAGVerifier`. Scheduling unified via `GoalScheduler` delegation on CE.
@@ -31,7 +31,7 @@ and `foundation/sloop/cognition/` (StrangeLoop LLM cognition). Legacy `PlanManag
 ## Phase A — Legacy step-plan state removal
 
 - Delete `manager.py`, `dag.py`
-- Tests import `CompletionStrategy` from `context/planning/models.py` only
+- Tests import `CompletionStrategy` from `context/models.py` only
 - Equivalence tests target `StepPlanningSubengine` / `StepPlanManagerAdapter` only
 
 ## Phase B — Goal planning unification
@@ -49,7 +49,7 @@ and `foundation/sloop/cognition/` (StrangeLoop LLM cognition). Legacy `PlanManag
 
 ```
 foundation/context/dag_utils.py          # expand_dependency_satisfaction_ids (canonical)
-foundation/context/planning/             # CE planning submodule
+foundation/context/             # CE planning submodule
 foundation/sloop/cognition/             # LLMPlanner, PlanPhase, parsers, bypasses
 ```
 

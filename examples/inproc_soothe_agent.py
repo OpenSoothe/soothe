@@ -26,11 +26,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_core.tools import tool
 
-# For installed package: from soothe.core import create_soothe_agent; from soothe.config.settings import SootheConfig
+# For installed package: from soothe.coreagent import create_soothe_agent; from soothe.config.settings import SootheConfig
 # For local dev: add path and import
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from soothe.config import SootheConfig
-from soothe.core import create_soothe_agent
+from soothe.coreagent import create_soothe_agent
 
 load_dotenv()
 

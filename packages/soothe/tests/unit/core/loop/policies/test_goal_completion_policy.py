@@ -4,22 +4,22 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.context.planning.completion import (
+from soothe.context import StepPlanManagerAdapter
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.planning_completion import (
     determine_goal_completion_needs,
     heuristic_requires_goal_completion,
 )
-from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.sloop.state.schemas import (
+from soothe.context.planning_models import CompletionStrategy
+from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,
     StepAction,
     StepResult,
 )
-from soothe.foundation.sloop.utils.messages import LoopAIMessage
+from soothe.sloop.utils.messages import LoopAIMessage
 
 
 def mock_loop_state(**kwargs) -> LoopState:

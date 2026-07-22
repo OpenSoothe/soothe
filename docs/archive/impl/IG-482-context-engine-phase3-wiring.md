@@ -12,7 +12,7 @@ Additionally, the adapters have behavioral gaps vs. PlanManager: hardcoded const
 
 ### Step 1: Add `_record_ledger_message()` helper
 
-Add to `soothe/foundation/loop/utils/messages.py`:
+Add to `soothe/loop/utils/messages.py`:
 
 ```python
 def _record_ledger_message(

@@ -40,7 +40,7 @@ RFC-225 and RFC-630 already state that continuation is structural (checkpoint-de
 
 ### 1. `structural_continuation.py`
 
-New module: `packages/soothe/src/soothe/foundation/sloop/utils/structural_continuation.py`
+New module: `packages/soothe/src/soothe/sloop/utils/structural_continuation.py`
 
 | Function | Purpose |
 |----------|---------|
@@ -80,8 +80,8 @@ After Pass 1 returns `is_task=false`, call `should_bypass_pass1_social_fast_path
 
 ## Files changed
 
-- `packages/soothe/src/soothe/foundation/sloop/utils/structural_continuation.py` (new)
-- `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py`
+- `packages/soothe/src/soothe/sloop/utils/structural_continuation.py` (new)
+- `packages/soothe/src/soothe/sloop/engine/strange_loop.py`
 - `packages/soothe/src/soothe/runner/_runner_phases.py`
 - `docs/specs/RFC-225-loop-continuity-and-goal-record-enrichment.md` §5.5
 - `docs/specs/RFC-630-start-phase-llm-intake-and-branch-routing.md` §6.6, §7.1, §9

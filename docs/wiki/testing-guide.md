@@ -164,7 +164,7 @@ python scripts/benchmark_e2e_concurrent_queries.py
 Tests are placed **close to the code they test**:
 
 ```
-packages/soothe/src/soothe/foundation/sloop/engine/
+packages/soothe/src/soothe/sloop/engine/
 ├── __init__.py
 ├── strange_loop.py      # StrangeLoop engine
 
@@ -329,7 +329,7 @@ def test_config():
 @pytest.fixture
 def test_agent(test_config):
     """Create a test agent instance."""
-    from soothe.foundation.core.agent import create_soothe_agent
+    from soothe.core.agent import create_soothe_agent
     return create_soothe_agent(test_config)
 
 @pytest.fixture
@@ -351,7 +351,7 @@ import pytest
 
 def test_with_mock_llm(mock_llm_response):
     """Test with mocked LLM."""
-    with patch('soothe.foundation.core.agent.ChatOpenAI') as mock_chat:
+    with patch('soothe.core.agent.ChatOpenAI') as mock_chat:
         mock_chat.return_value.invoke.return_value = mock_llm_response
         
         # Test code here
@@ -439,7 +439,7 @@ exclude_lines = [
 
 ```bash
 # 1. Make code changes
-vim packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py
+vim packages/soothe/src/soothe/sloop/engine/strange_loop.py
 
 # 2. Run relevant unit tests
 cd packages/soothe

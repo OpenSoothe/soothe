@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from soothe.config import SOOTHE_HOME
-from soothe.foundation.sloop.state.persistence.directory_manager import (
+from soothe.sloop.checkpoints.directory_manager import (
     THREADS_DATA_DIR,
     PersistenceDirectoryManager,
 )

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.plan_dag_normalizer import normalize_plan_dag
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanGenerateStep,
     StepAction,

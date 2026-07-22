@@ -51,7 +51,7 @@ Eliminate all CLI import violations (40 files, 48+ statements) to achieve comple
    - `SUBAGENT_RESEARCH_INTERNAL_LLM` (from `soothe.subagents.research.events`)
    
 4. **utils.py** - Shared utilities
-   - `strip_internal_tags()` (from `soothe.foundation`)
+   - `strip_internal_tags()` (from `soothe`)
    - `format_cli_error()` (from `soothe.utils.error_format`)
    - `log_preview()` (from `soothe.utils.text_preview`)
    - `convert_and_abbreviate_path()` (from `soothe.utils.path_display`)

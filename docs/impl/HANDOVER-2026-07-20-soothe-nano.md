@@ -62,24 +62,24 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 | Skillify service (index/retrieve) | `soothe_daemon.skillify` |
 | Skillify DTOs | `soothe_sdk.skillify` |
 | Shared protocols (planner, memory, core_agent, …) | `soothe_sdk.protocols` |
-| Identity error hierarchy (RFC-307) | `soothe_sdk.identity.errors` (service remains `soothe.foundation.identity`) |
+| Identity error hierarchy (RFC-307) | `soothe_sdk.identity.errors` (service remains `soothe.identity`) |
 | Base event classes / wire constants | `soothe_sdk.core.events` |
-| `extract_text_from_ai_message` | `soothe_sdk.display.text_extract` (`soothe.foundation` re-exports) |
+| `extract_text_from_ai_message` | `soothe_sdk.display.text_extract` (`soothe` re-exports) |
 | CoreAgent system prompts / identity / context XML | `soothe_nano.prompts` (slim fragments: default/simple/medium + assistant_identity) |
 | Host loop / intake / plan / synthesis prompts | `soothe.prompts` (`foundation.sloop.prompts` is a shim) |
-| Intake-only subagent catalog + partition | `soothe.foundation.sloop.subagent_catalog` |
-| Intake-only ``task`` guard middleware | `soothe.foundation.sloop.middleware.intake_task_guard` (prefix) |
-| Goal synthesis / step-subagent CoreAgent guards | `soothe.foundation.sloop.middleware.goal_step_guard` (suffix) + `config_keys` |
+| Intake-only subagent catalog + partition | `soothe.sloop.subagent_catalog` |
+| Intake-only ``task`` guard middleware | `soothe.sloop.intake_task_guard` (prefix) |
+| Goal synthesis / step-subagent CoreAgent guards | `soothe.sloop.goal_step_guard` (suffix) + `config_keys` |
 | Agent-loop max iterations / tool-calls-per-step | `soothe.config.constants` (`DEFAULT_MAX_ITERATIONS`, …) — not in nano |
 | Nano ToolEnforcement | preferred_subagent first-hop only (`soothe_nano.middleware.tool_enforcement`) |
 | CoreAgent `TaskComplexity` / `RoutingClassification` | `soothe_sdk.intention.models` (host and nano consume shared canonical models) |
-| Host intake / Pass1 / Pass2 models | `soothe.foundation.sloop.intention.models` |
+| Host intake / Pass1 / Pass2 models | `soothe.sloop.intention.models` |
 | Full `GlobalInputHistory` | `soothe.logging.global_history` (daemon uses this; CLI uses sdk thin helper) |
 | CoreAgent events registry | `soothe_nano.events` (policy/memory/stream/LLM retry; no daemon heartbeat) |
-| Daemon / sloop / wire visibility events | `soothe.foundation.events` |
+| Daemon / sloop / wire visibility events | `soothe.events` |
 | Nano subagent helper (name only) | `soothe_nano.agent.subagent_catalog.spec_subagent_name` |
 | Loop-only protocols | `soothe.protocols` (thin) |
-| Host `create_soothe_agent` + planner + intake bind | `soothe.foundation.coreagent.coding` |
+| Host `create_soothe_agent` + planner + intake bind | `soothe.coreagent.coding` |
 | Host config (`skillify:`, loop, autopilot, …) | `soothe.config` |
 | Nano config slice | `soothe_nano.config` (`extra="ignore"` for host-only YAML keys) |
 
@@ -109,7 +109,7 @@ From IG-668 follow-ups and leftover polish:
 
 **Done in boundary polish (2026-07-20):** identity errors → `soothe_sdk.identity`; deleted nano/soothe duplicate `base_events.py` (canonical `soothe_sdk.core.events`); `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`; nano prompts purified to CoreAgent-only; host loop prompts moved to `soothe.prompts`.
 
-**Done in intake-catalog extract (2026-07-20):** `INTAKE_ONLY_*` / partition helpers moved to `soothe.foundation.sloop.subagent_catalog`; nano builder keeps all specialists on open `task` unless host overrides `_filter_subagents_for_graph`; host `CodingCoreAgent.bind_intake_only_subagents` + `IntakeOnlyTaskGuardMiddleware` (via `_host_middleware_prefix`); Rule 3c bans `INTAKE_ONLY` / `intake_only` / `intake/slash` in nano src.
+**Done in intake-catalog extract (2026-07-20):** `INTAKE_ONLY_*` / partition helpers moved to `soothe.sloop.subagent_catalog`; nano builder keeps all specialists on open `task` unless host overrides `_filter_subagents_for_graph`; host `CodingCoreAgent.bind_intake_only_subagents` + `IntakeOnlyTaskGuardMiddleware` (via `_host_middleware_prefix`); Rule 3c bans `INTAKE_ONLY` / `intake_only` / `intake/slash` in nano src.
 
 **Done in loop-limits scrub (2026-07-20):** dropped nano `DEFAULT_MAX_ITERATIONS` / `DEFAULT_MAX_TOOL_CALLS_PER_STEP`; host `GoalStepGuardMiddleware` owns `soothe_goal_synthesis` + `soothe_step_subagent` (suffix after ToolEnforcement); nano ToolEnforcement / RoleRouting no longer read those configurables; Rule 3c extended.
 
@@ -124,7 +124,7 @@ packages/soothe-nano/src/soothe_nano/agent/     # CoreAgent surface
 packages/soothe-sdk/src/soothe_sdk/protocols/   # Shared contracts
 packages/soothe-sdk/src/soothe_sdk/skillify/    # SkillBundle DTOs
 packages/soothe-daemon/src/soothe_daemon/skillify/
-packages/soothe/src/soothe/foundation/coreagent/coding/  # Host wrappers
+packages/soothe/src/soothe/coreagent/coding/  # Host wrappers
 docs/impl/IG-668-soothe-nano-package-extract.md
 scripts/check_module_import_boundaries.sh
 ./scripts/verify_finally.sh

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.autopilot.engine.consensus import (
+from soothe.autopilot.consensus import (
     ConsensusEvaluationError,
     _build_consensus_prompt,
     _extract_reasoning,

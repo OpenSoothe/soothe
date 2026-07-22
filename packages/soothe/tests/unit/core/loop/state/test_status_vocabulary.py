@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.state.status_vocabulary import (
+from soothe.sloop.state.status_vocabulary import (
     ce_goal_status_to_goal_index,
     goal_index_status_to_ce,
     is_ce_goal_in_flight,

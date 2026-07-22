@@ -10,7 +10,7 @@ description: >-
 
 This document describes how a user query flows through Soothe from CLI entry to final response.
 
-**Repository layout:** The runner lives under `packages/soothe/src/soothe/runner/` and the StrangeLoop engine under `packages/soothe/src/soothe/foundation/sloop/`. The CLI Typer app lives under `packages/soothe-cli/src/soothe_cli/`.
+**Repository layout:** The runner lives under `packages/soothe/src/soothe/runner/` and the StrangeLoop engine under `packages/soothe/src/soothe/sloop/`. The CLI Typer app lives under `packages/soothe-cli/src/soothe_cli/`.
 
 ## Overview
 
@@ -173,9 +173,9 @@ The default execution mode follows an iterative observe-act-verify cycle:
 
 ```python
 # _agentic_act()
-- Delegate to `StrangeLoop` (`packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py`)
-- Plan via `LLMPlanner` (`packages/soothe/src/soothe/foundation/sloop/cognition/planner.py`, RFC-604 two-phase assess + generate)
-- Execute plan (single step or multi-step DAG via `packages/soothe/src/soothe/foundation/sloop/engine/executor.py`)
+- Delegate to `StrangeLoop` (`packages/soothe/src/soothe/sloop/engine/strange_loop.py`)
+- Plan via `LLMPlanner` (`packages/soothe/src/soothe/sloop/cognition/planner.py`, RFC-604 two-phase assess + generate)
+- Execute plan (single step or multi-step DAG via `packages/soothe/src/soothe/sloop/engine/executor.py`)
 ```
 
 ### Verify Phase
@@ -192,7 +192,7 @@ The default execution mode follows an iterative observe-act-verify cycle:
 
 ## 5. Planning (StrangeLoop + LLMPlanner)
 
-Planning is implemented inside **StrangeLoop**, not a separate `cognition/planning` package. **`LLMPlanner`** (`packages/soothe/src/soothe/foundation/sloop/cognition/planner.py`, RFC-604) performs:
+Planning is implemented inside **StrangeLoop**, not a separate `cognition/planning` package. **`LLMPlanner`** (`packages/soothe/src/soothe/sloop/cognition/planner.py`, RFC-604) performs:
 
 1. **StatusAssessment** — structured `status`, `goal_progress`, `confidence`, `require_goal_completion`
 2. **PlanGeneration** (when not `done`) — `plan_action`, `AgentDecision` steps, `next_action`
@@ -215,9 +215,9 @@ class PlanStep(BaseModel):
 ```
 
 **Key files:**
-- `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py` — `LLMPlanner`
-- `packages/soothe/src/soothe/foundation/sloop/cognition/phase.py` — Plan phase wiring
-- `packages/soothe/src/soothe/foundation/sloop/prompts/builder.py` — `PromptBuilder` for assess/generate prompts
+- `packages/soothe/src/soothe/sloop/cognition/planner.py` — `LLMPlanner`
+- `packages/soothe/src/soothe/sloop/cognition/phase.py` — Plan phase wiring
+- `packages/soothe/src/soothe/sloop/prompts/builder.py` — `PromptBuilder` for assess/generate prompts
 
 ## 6. Step Execution (DAG-based)
 
@@ -253,9 +253,9 @@ Execution: A + B parallel, then C
 
 **Key files:**
 
-- `packages/soothe/src/soothe/foundation/sloop/engine/executor.py` — execute waves, DAG batches, CoreAgent streaming
-- `packages/soothe/src/soothe/foundation/sloop/cognition/plan_dag_normalizer.py` — DAG normalization
-- `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` — `LoopState`, step ledger metadata
+- `packages/soothe/src/soothe/sloop/engine/executor.py` — execute waves, DAG batches, CoreAgent streaming
+- `packages/soothe/src/soothe/sloop/cognition/plan_dag_normalizer.py` — DAG normalization
+- `packages/soothe/src/soothe/sloop/state/schemas.py` — `LoopState`, step ledger metadata
 
 ## 7. Agent Execution
 
@@ -295,8 +295,8 @@ async for chunk in core_agent.astream(
 | `custom` | Protocol events |
 
 **Key files:**
-- `packages/soothe/src/soothe/foundation/sloop/engine/executor.py` — CoreAgent streaming for execute waves
-- `packages/soothe/src/soothe/foundation/core/agent/_builder.py` — CoreAgent factory
+- `packages/soothe/src/soothe/sloop/engine/executor.py` — CoreAgent streaming for execute waves
+- `packages/soothe/src/soothe/coreagent/_builder.py` — CoreAgent factory
 
 ## 8. Response Streaming
 
@@ -368,7 +368,7 @@ FinalReportEvent
 
 **Key files:**
 - `packages/soothe/src/soothe/runner/_runner_autonomous.py`
-- `packages/soothe/src/soothe/foundation/context/engine.py`
+- `packages/soothe/src/soothe/context/engine.py`
 
 ## 10. Event Flow Summary
 
@@ -430,8 +430,8 @@ User Query
 | Runner | `packages/soothe/src/soothe/runner/__init__.py` | Runner package |
 | Runner | `packages/soothe/src/soothe/runner/_runner_strange_loop.py` | Agentic loop |
 | Runner | `packages/soothe/src/soothe/runner/_runner_phases.py` | Pre-stream (thread, policy, memory, plan bootstrap) |
-| Planning | `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py` | `LLMPlanner` (RFC-604) |
-| Agent | `packages/soothe/src/soothe/foundation/core/agent/_builder.py` | CoreAgent factory |
+| Planning | `packages/soothe/src/soothe/sloop/cognition/planner.py` | `LLMPlanner` (RFC-604) |
+| Agent | `packages/soothe/src/soothe/coreagent/_builder.py` | CoreAgent factory |
 
 ### RFC References
 

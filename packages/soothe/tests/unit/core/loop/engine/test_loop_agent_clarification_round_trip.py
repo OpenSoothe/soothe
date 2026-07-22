@@ -19,12 +19,12 @@ from soothe.config.models import (
     ExecutePromptLedgerConfig,
     PlanPromptLedgerConfig,
 )
-from soothe.foundation.sloop import StrangeLoop
-from soothe.foundation.sloop.clarification import (
+from soothe.sloop import StrangeLoop
+from soothe.sloop.clarification import (
     ClarificationAnswer,
     ClarificationRequest,
 )
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StatusAssessment,

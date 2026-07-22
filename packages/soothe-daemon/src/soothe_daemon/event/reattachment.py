@@ -6,7 +6,7 @@ new wire (TUI, soothe-desktop) render directly from those frames.
 
 RFC-411's ``history_replay`` / ``loop_reattached`` / ``replay_complete``
 frames were removed when this RFC superseded it, along with the
-reconstructor / enricher modules under ``soothe.foundation.events.replay``.
+reconstructor / enricher modules under ``soothe.events.replay``.
 Clients that still expect those frames should upgrade to consume
 ``card.*``.
 """

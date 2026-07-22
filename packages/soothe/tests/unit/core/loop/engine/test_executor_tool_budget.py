@@ -11,16 +11,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.engine.executor import (
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.engine.executor import (
     _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
     Executor,
     _ActStreamBudget,
 )
-from soothe.foundation.sloop.engine.graph_interrupt import DispatchTimeoutError
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.sloop.engine.graph_interrupt import DispatchTimeoutError
+from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
 
 
 def _make_ce() -> ContextEngine:

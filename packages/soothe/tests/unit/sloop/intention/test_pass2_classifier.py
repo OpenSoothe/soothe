@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.intention.models import IntakePass2LLMResult, IntakeScope
-from soothe.foundation.sloop.intention.pass2_classifier import IntakePass2Classifier
+from soothe.sloop.intention.models import IntakePass2LLMResult, IntakeScope
+from soothe.sloop.intention.pass2_classifier import IntakePass2Classifier
 
 # -- Helpers ---------------------------------------------------------------
 
@@ -140,7 +140,7 @@ async def test_structured_output_error_retries_once() -> None:
     mock_model = MagicMock()
     classifier = IntakePass2Classifier(model=mock_model)
     with patch(
-        "soothe.foundation.sloop.intention.pass2_classifier.invoke_structured_chat",
+        "soothe.sloop.intention.pass2_classifier.invoke_structured_chat",
         new=AsyncMock(
             side_effect=[
                 StructuredOutputError(

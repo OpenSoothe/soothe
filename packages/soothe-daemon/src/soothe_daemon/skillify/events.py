@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import ConfigDict
-from soothe.foundation.events.catalog import register_event
+from soothe.events.catalog import register_event
 from soothe_sdk.core.events import SubagentEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 

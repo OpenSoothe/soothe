@@ -14,12 +14,12 @@ Plan-Execute loop for single-goal agentic execution — the middle tier of the e
 
 ## What This Module Is
 
-StrangeLoop (`soothe.foundation.sloop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine decides *which* goals to pursue, StrangeLoop executes a *single* goal through iterative Plan → Execute refinement. It delegates actual tool execution to CoreAgent.
+StrangeLoop (`soothe.sloop`) is the **middle tier** of Soothe's three-level execution architecture. Where ContextEngine decides *which* goals to pursue, StrangeLoop executes a *single* goal through iterative Plan → Execute refinement. It delegates actual tool execution to CoreAgent.
 
 The name comes from the core insight: the LLM plans, executes, assesses progress, and re-plans in a loop — a "strange loop" of self-referential refinement. The loop is bounded (default max 8 iterations) and converges based on progress assessment.
 
 **RFC**: [RFC-201](../../specs/RFC-201-strangeloop-plan-execute-loop.md)
-**Source**: `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py`, `state/schemas.py`, `orchestrator/`
+**Source**: `packages/soothe/src/soothe/sloop/engine/strange_loop.py`, `state/schemas.py`, `orchestrator/`
 
 ---
 
@@ -138,7 +138,7 @@ A non-obvious behavior: StrangeLoop parses slash-skill invocations from the goal
 ## Minimal Usage
 
 ```python
-from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+from soothe.sloop.engine.strange_loop import StrangeLoop
 
 loop = StrangeLoop(core_agent=agent, loop_planner=planner, config=config)
 async for event_type, event_data in loop.run_with_progress(

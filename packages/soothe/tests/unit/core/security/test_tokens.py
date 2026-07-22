@@ -11,8 +11,8 @@ from pathlib import Path
 import jwt
 import pytest
 
-from soothe.foundation.identity.models import TokenClaims
-from soothe.foundation.identity.tokens import (
+from soothe.identity.models import TokenClaims
+from soothe.identity.tokens import (
     JWTManager,
     generate_jwt_key,
     resolve_jwt_key,

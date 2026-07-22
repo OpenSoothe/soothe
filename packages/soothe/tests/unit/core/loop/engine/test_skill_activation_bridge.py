@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.state.schemas import LoopState
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.state.schemas import LoopState
 
 
 class TestSeedSkillActivation:

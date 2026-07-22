@@ -61,9 +61,9 @@ Config (daemon):
 
 | File | Change |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/core/agent/_lazy.py` | New `LazyCoreAgent` wrapper |
-| `packages/soothe/src/soothe/foundation/core/agent/_builder.py` | Lazy execute graph compile callback |
-| `packages/soothe/src/soothe/foundation/core/agent/_core.py` | Lazy `execution_graph` materialization |
+| `packages/soothe/src/soothe/core/agent/_lazy.py` | New `LazyCoreAgent` wrapper |
+| `packages/soothe/src/soothe/core/agent/_builder.py` | Lazy execute graph compile callback |
+| `packages/soothe/src/soothe/core/agent/_core.py` | Lazy `execution_graph` materialization |
 | `packages/soothe/src/soothe/runner/__init__.py` | Lazy agent, protocol resolution, `prepare_for_request()` |
 | `packages/soothe/src/soothe/runner/_runner_strange_loop.py` | Defer checkpointer until quiz / materialize |
 | `packages/soothe/src/soothe/middleware/_builder.py` | Skip CI when allowlist empty |

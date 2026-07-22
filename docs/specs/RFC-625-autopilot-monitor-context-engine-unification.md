@@ -54,12 +54,12 @@ This RFC unifies goal management under ContextEngine, deletes GoalEngine entirel
 
 ## Solution
 
-### §1 Module Relocation: soothe.context → soothe.foundation.context
+### §1 Module Relocation: soothe.context → soothe.context
 
 Positions ContextEngine as foundational infrastructure alongside other foundation modules.
 
 ```
-packages/soothe/src/soothe/foundation/context/
+packages/soothe/src/soothe/context/
 ├── __init__.py              # Public API exports
 ├── models.py                # GoalNode, StepNode, StepExecution, StepDAG, GoalStepDAG
 ├── engine.py                # ContextEngine
@@ -86,7 +86,7 @@ packages/soothe/src/soothe/foundation/context/
 ```
 
 Import path changes:
-- `from soothe.context import ContextEngine` → `from soothe.foundation.context import ContextEngine`
+- `from soothe.context import ContextEngine` → `from soothe.context import ContextEngine`
 - All existing imports updated via search/replace
 - `soothe.context` namespace deprecated with warning
 
@@ -98,14 +98,14 @@ Import path changes:
 
 | File | Action |
 |------|--------|
-| `foundation/autopilot/engine/engine.py` | Delete |
-| `foundation/autopilot/engine/models.py` | Keep `Goal` temporarily → migrate fields to `GoalNode` |
-| `foundation/autopilot/engine/backoff_reasoner.py` | Move to `foundation/autopilot/monitor/backoff_reasoner.py` |
-| `foundation/autopilot/engine/file_lock_registry.py` | Delete (WorkspaceReservation suffices per RFC-222) |
+| `foundation/autopilot/engine.py` | Delete |
+| `foundation/autopilot/models.py` | Keep `Goal` temporarily → migrate fields to `GoalNode` |
+| `foundation/autopilot/backoff_reasoner.py` | Move to `foundation/autopilot/backoff_reasoner.py` |
+| `foundation/autopilot/file_lock_registry.py` | Delete (WorkspaceReservation suffices per RFC-222) |
 
 **WorkerPool disposition**: Not affected by GoalEngine deletion. `WorkerPool` remains in `AutopilotService` (unchanged per RFC-222) — manages subprocess workers independently of goal state management. AutopilotMonitor does not own WorkerPool; it only monitors DAG state and triggers events. Worker dispatch continues via `AutopilotService.dispatch_loop()`.
 
-**GoalNode enhancement (absorbs Goal fields from `autopilot/engine/models.py`):**
+**GoalNode enhancement (absorbs Goal fields from `autopilot/models.py`):**
 
 Existing GoalNode fields (RFC-624, `context/models.py`):
 
@@ -119,7 +119,7 @@ Existing GoalNode fields (RFC-624, `context/models.py`):
 - `previous_plan`, `action_history`
 - `created_at`, `updated_at`
 
-Fields migrated from Goal model (`autopilot/engine/models.py:Goal`):
+Fields migrated from Goal model (`autopilot/models.py:Goal`):
 
 | Field | Default | Notes |
 |-------|---------|-------|
@@ -202,7 +202,7 @@ class GoalNode(BaseModel):
 ```
 
 **BackoffReasoner migration:**
-- Move to `foundation/autopilot/monitor/backoff_reasoner.py`
+- Move to `foundation/autopilot/backoff_reasoner.py`
 - Input: `GoalNode` from CE DAG (instead of `Goal`)
 - Output: `BackoffDecision` unchanged
 - Called by AutopilotMonitor `on_goal_failed` event handler
@@ -231,7 +231,7 @@ class AutopilotService:
 **AutopilotMonitor internal structure:**
 
 ```
-foundation/autopilot/monitor/
+foundation/autopilot/
 ├── __init__.py
 ├── monitor.py               # AutopilotMonitor class (~400 lines)
 ├── goal_dag_verifier.py     # LLM-driven DAG verification coordinator
@@ -323,7 +323,7 @@ class AutopilotMonitor:
 **Architecture:**
 
 ```
-foundation/autopilot/monitor/
+foundation/autopilot/
 ├── goal_dag_verifier.py      # GoalDAGVerifier coordinator
 ├── verifier_prompts.py       # LLM prompt templates for verification
 └── verifier_reasoner.py      # DagVerificationReasoner (LLM caller)
@@ -863,7 +863,7 @@ AutopilotService.dispatch_loop()
 
 | Phase | Scope | Estimated Effort |
 |-------|-------|------------------|
-| 1 | Relocate `soothe.context` → `soothe.foundation.context` | 2 days |
+| 1 | Relocate `soothe.context` → `soothe.context` | 2 days |
 | 2 | Enhance GoalNode with Goal fields, add CE API methods | 2 days |
 | 3 | Delete GoalEngine, migrate BackoffReasoner | 3 days |
 | 4 | Implement AutopilotMonitor (Verifier, Intake, Dreaming) | 5 days |
@@ -962,7 +962,7 @@ This RFC modifies RFC-222 by replacing GoalEngine with ContextEngine + Autopilot
 | `GoalEngine.peek_ready_goals()` | `GoalScheduler.ready_goals()` |
 | `GoalEngine.claim_goal()` | `GoalScheduler.claim_goal()` |
 | `GoalEngine.fail_goal()` + BackoffReasoner | `AutopilotMonitor.on_goal_failed()` + `_backoff_reasoner` |
-| `BackoffReasoner` (in GoalEngine) | Migrated to `autopilot/monitor/backoff_reasoner.py` |
+| `BackoffReasoner` (in GoalEngine) | Migrated to `autopilot/backoff_reasoner.py` |
 | `GoalDispatchContextBundle` | Unchanged — still built by `ContextProjector` from CE DAG |
 | `GoalDispatchContextStore` | Unchanged — durability backed by CE persistence |
 | `WorkspaceReservation` | Unchanged — still used by AutopilotService at dispatch |
@@ -1004,7 +1004,7 @@ class AutopilotService:
 
 | Section | Status | Notes |
 |---------|--------|-------|
-| §1 Module relocation | ✅ Complete | `soothe.context` → `soothe.foundation.context` |
+| §1 Module relocation | ✅ Complete | `soothe.context` → `soothe.context` |
 | §2 GoalNode enhancement | ✅ Complete | All Goal fields migrated, dreaming fields added |
 | §3 GoalEngine deletion | ✅ Complete | `soothe.core.goal_engine/` empty, BackoffReasoner migrated |
 | §4 LLM Verification Reasoner | ✅ Complete | `verifier_reasoner.py`, `verifier_prompts.py` implemented |

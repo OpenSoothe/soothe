@@ -6,9 +6,9 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.sloop.state.schemas import LoopState
-from soothe.foundation.sloop.utils.messages import (
+from soothe.context.engine import ContextEngine
+from soothe.sloop.state.schemas import LoopState
+from soothe.sloop.utils.messages import (
     LoopAIMessage,
     LoopHumanMessage,
     _record_ledger_message,
@@ -17,8 +17,8 @@ from soothe.foundation.sloop.utils.messages import (
 
 def _make_state_with_ce() -> tuple[LoopState, ContextEngine]:
     """Create a LoopState bound to a real ContextEngine instance."""
-    from soothe.foundation.context.models import GoalNode
-    from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+    from soothe.context.models import GoalNode
+    from soothe.context.store_sqlite import SqliteContextPersistence
 
     ce = ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -32,7 +32,7 @@ def _make_state_with_ce() -> tuple[LoopState, ContextEngine]:
 
 def _make_ce() -> ContextEngine:
     """Create a ContextEngine with sqlite :memory: backend."""
-    from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+    from soothe.context.store_sqlite import SqliteContextPersistence
 
     return ContextEngine(
         persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -140,7 +140,7 @@ class TestLoopMessagesProperty:
 
     def test_ce_bound_loop_messages_returns_full_ledger(self) -> None:
         """When CE is bound, loop_messages returns full ledger (no local cache cap)."""
-        from soothe.foundation.sloop.state.schemas import MAX_LOOP_MESSAGES_PER_GOAL
+        from soothe.sloop.state.schemas import MAX_LOOP_MESSAGES_PER_GOAL
 
         state, ce = _make_state_with_ce()
         # Add more messages than the bound
@@ -174,7 +174,7 @@ class TestBindCE:
         assert state._ce is None
         assert state._ce_goal_id is None
 
-        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.context.store_sqlite import SqliteContextPersistence
 
         ce = ContextEngine(
             persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
@@ -189,13 +189,13 @@ class TestBindCE:
         state = LoopState(goal="test", thread_id="thread-1")
         state._loop_messages_cache.append(LoopHumanMessage(content="stale", phase="execute_step"))
         state._step_results_cache.append(
-            __import__("soothe.foundation.sloop.state.schemas", fromlist=["StepResult"]).StepResult(
+            __import__("soothe.sloop.state.schemas", fromlist=["StepResult"]).StepResult(
                 step_id="s1", success=True, duration_ms=100, thread_id="t1"
             )
         )
         state._completed_step_ids_cache.add("s1")
 
-        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.context.store_sqlite import SqliteContextPersistence
 
         ce = ContextEngine(
             persistence=SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))

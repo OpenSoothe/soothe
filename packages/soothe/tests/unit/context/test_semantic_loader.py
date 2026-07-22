@@ -1,6 +1,6 @@
 """Tests for SemanticLoader (soothe.context.semantic)."""
 
-from soothe.foundation.context.semantic import SemanticLoader
+from soothe.context.semantic import SemanticLoader
 
 
 class TestSemanticLoaderMissingFiles:

@@ -6,7 +6,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.state.schemas import (
     ContinuationAssessment,
     LoopState,
     PlanResult,

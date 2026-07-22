@@ -38,7 +38,7 @@ Key client-side fixes during migration:
 ## Pre-existing daemon note (not protocol, not fixed here)
 
 Under sustained stress (hundreds of loop creations/worker respawns on a
-long-running daemon), `packages/soothe/src/soothe/foundation/sloop/state/sloop_manager.py`
+long-running daemon), `packages/soothe/src/soothe/sloop/state/sloop_manager.py`
 `_flush_worker_loop` raises `RuntimeError: Queue is bound to a different event
 loop` / `Event loop is closed` — an asyncio Queue created on one loop is reused
 after the worker thread respawns on a new loop. This is a core-package

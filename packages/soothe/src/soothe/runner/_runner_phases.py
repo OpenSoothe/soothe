@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.core.exceptions import ConfigurationError
 
-from soothe.foundation.sloop.utils.messages import loop_assistant_messages_chunk
+from soothe.sloop.utils.messages import loop_assistant_messages_chunk
 
 from ._runner_shared import StreamChunk
 
@@ -116,11 +116,11 @@ class PhasesMixin:
     ) -> None:
         """Persist chitchat Human+AI pair to the loop ContextEngine ledger."""
         from soothe.config import SOOTHE_HOME
-        from soothe.foundation.context.engine import ContextEngine
-        from soothe.foundation.context.persistence.factory import (
+        from soothe.context.engine import ContextEngine
+        from soothe.context.store_factory import (
             resolve_context_engine_persistence,
         )
-        from soothe.foundation.sloop.utils.messages import (
+        from soothe.sloop.utils.messages import (
             LoopAIMessage,
             LoopHumanMessage,
             _record_ledger_message,
@@ -190,8 +190,8 @@ class PhasesMixin:
             return
 
         try:
-            from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
-            from soothe.foundation.sloop.utils.structural_continuation import (
+            from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
+            from soothe.sloop.utils.structural_continuation import (
                 chitchat_may_finalize_checkpoint,
             )
 
@@ -245,7 +245,7 @@ class PhasesMixin:
 
         Raises ConfigurationError if checkpointer initialization fails.
         """
-        from soothe.foundation.coreagent.lazy import LazyCoreAgent
+        from soothe.coreagent.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent) and not self._core_agent.is_materialized:
             return
@@ -328,10 +328,10 @@ class PhasesMixin:
         Raises:
             ConfigurationError if all retries exhausted.
         """
-        from soothe.foundation.sloop.state.persistence.retry_utils import (
+        from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+        from soothe.sloop.checkpoints.retry_utils import (
             is_recoverable_connection_error,
         )
-        from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
         delay = base_delay
         for attempt in range(1, max_attempts + 1):

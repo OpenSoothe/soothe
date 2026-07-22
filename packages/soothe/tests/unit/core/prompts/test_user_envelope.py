@@ -106,8 +106,8 @@ def test_execute_message_execution_metadata() -> None:
 
 def test_execute_message_prior_steps_section() -> None:
     """Dependent steps include PRIOR STEPS between EXECUTION TASK and INSTRUCTIONS."""
-    from soothe.foundation.sloop.engine.step_predecessor_context import PriorStepSummary
     from soothe.prompts.user_message import render_prior_steps_tree
+    from soothe.sloop.engine.step_predecessor_context import PriorStepSummary
 
     builder = UserMessageBuilder()
     prior_steps = render_prior_steps_tree(
@@ -167,7 +167,7 @@ def test_plan_generate_message_omits_intent_section() -> None:
 
 
 def test_plan_assess_message_omits_goal_progress_even_with_bundle() -> None:
-    from soothe.foundation.context.projection import ContextBundle
+    from soothe.context.projection import ContextBundle
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_assess_message(
@@ -179,7 +179,7 @@ def test_plan_assess_message_omits_goal_progress_even_with_bundle() -> None:
 
 
 def test_plan_generate_message_omits_goal_progress_even_with_bundle() -> None:
-    from soothe.foundation.context.projection import ContextBundle
+    from soothe.context.projection import ContextBundle
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
@@ -289,7 +289,7 @@ def test_flatten_user_message_content_legacy_xml_passthrough() -> None:
 
 
 def test_plan_generate_omits_redundant_goal_lineage() -> None:
-    from soothe.foundation.context.projection import ContextBundle
+    from soothe.context.projection import ContextBundle
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
@@ -300,7 +300,7 @@ def test_plan_generate_omits_redundant_goal_lineage() -> None:
 
 
 def test_plan_generate_keeps_hierarchical_goal_lineage() -> None:
-    from soothe.foundation.context.projection import ContextBundle
+    from soothe.context.projection import ContextBundle
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
@@ -312,7 +312,7 @@ def test_plan_generate_keeps_hierarchical_goal_lineage() -> None:
 
 
 def test_plan_generate_skips_goal_lineage_when_completion_in_ledger() -> None:
-    from soothe.foundation.context.projection import ContextBundle
+    from soothe.context.projection import ContextBundle
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
@@ -324,7 +324,7 @@ def test_plan_generate_skips_goal_lineage_when_completion_in_ledger() -> None:
 
 
 def test_plan_generate_includes_prior_goals_from_bundle() -> None:
-    from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
+    from soothe.context.projection import ContextBundle, PriorGoalSummary
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(
@@ -349,8 +349,8 @@ def test_plan_generate_includes_prior_goals_from_bundle() -> None:
 
 
 def test_plan_generate_context_section_order() -> None:
-    from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
-    from soothe.foundation.sloop.state.schemas import PriorProgressDigest, ToolCallHead
+    from soothe.context.projection import ContextBundle, PriorGoalSummary
+    from soothe.sloop.state.schemas import PriorProgressDigest, ToolCallHead
 
     builder = UserMessageBuilder()
     msg = builder.build_plan_generate_message(

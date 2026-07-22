@@ -137,7 +137,7 @@ def build_execute_step_message(
 | `foundation/sloop/engine/executor.py` | Use full_description, merge TASK into hints |
 | `foundation/sloop/prompts/user_message.py` | Remove INTENT/TASK, simplify signature |
 | `foundation/sloop/planning/dag.py` | Handle full_description in DAG assembly |
-| `foundation/sloop/orchestrator/nodes/execute_steps.py` | Pass full_description |
+| `foundation/sloop/nodes/execute_steps.py` | Pass full_description |
 | `tests/unit/core/prompts/test_user_envelope.py` | Update tests |
 
 ### 6. Backward Compatibility

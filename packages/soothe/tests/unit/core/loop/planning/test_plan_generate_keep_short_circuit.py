@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     StatusAssessment,

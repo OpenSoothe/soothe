@@ -55,7 +55,7 @@ Introduce **CronService**, a standalone module that:
 ### Module Location
 
 ```
-packages/soothe/src/soothe/foundation/cron/
+packages/soothe/src/soothe/cron/
 ├── __init__.py           # Public exports
 ├── service.py            # CronService orchestrator
 ├── extraction.py         # CronExtractionService (LLM-based)
@@ -145,7 +145,7 @@ Continue monitoring
 
 Orchestrating service that coordinates NL extraction, persistence, and job monitoring.
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/service.py`
+**Location**: `packages/soothe/src/soothe/cron/service.py`
 
 **Responsibilities**:
 - Accept natural language job submissions from TUI/CLI
@@ -300,7 +300,7 @@ async def _handle_goal_completion(self, cron_job_id: str, success: bool, error: 
 
 LLM-based natural language to structured schedule extraction.
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/extraction.py`
+**Location**: `packages/soothe/src/soothe/cron/extraction.py`
 
 **Supported Patterns**:
 
@@ -412,7 +412,7 @@ class ScheduledTask:
 
 Database persistence adapter for cron jobs.
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/store.py`
+**Location**: `packages/soothe/src/soothe/cron/store.py`
 
 **Implementation**:
 - Uses existing metadata database connection pool (RFC-802)
@@ -469,7 +469,7 @@ class CronJobStore:
 
 ### 5. CronJob Model
 
-**Location**: `packages/soothe/src/soothe/foundation/cron/models.py`
+**Location**: `packages/soothe/src/soothe/cron/models.py`
 
 ```python
 @dataclass

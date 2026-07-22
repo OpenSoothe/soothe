@@ -643,10 +643,10 @@ Jobs **without** `rail_id` (solo / legacy autopilot) keep current monitor behavi
 |--------|-----------------|
 | `LoopRailCatalog` | `soothe/rails/catalog.py` |
 | `get_rails_paths` | `soothe/rails/builtins.py` |
-| `LoopRailInterpreter` | `soothe/foundation/autopilot/rail/interpreter.py` |
-| `RailSelector` | `soothe/foundation/autopilot/rail/selector.py` |
-| CE branch builtins | `soothe/foundation/context/branch_manager.py` |
-| Guard schemas | `soothe/foundation/autopilot/rail/guards/` |
+| `LoopRailInterpreter` | `soothe/autopilot/rail/interpreter.py` |
+| `RailSelector` | `soothe/autopilot/rail/selector.py` |
+| CE branch builtins | `soothe/context/branch_manager.py` |
+| Guard schemas | `soothe/autopilot/rail/guards/` |
 | `rail-distiller` subagent | `soothe/subagents/rail_distiller/` |
 | Built-in rails | `soothe/rails/builtin_rails/*.yml` |
 

@@ -14,9 +14,9 @@ import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.identity.middleware import IdentityMiddleware
-from soothe.foundation.identity.models import TokenClaims
-from soothe.foundation.identity.runtime import (
+from soothe.identity.middleware import IdentityMiddleware
+from soothe.identity.models import TokenClaims
+from soothe.identity.runtime import (
     AKSKConfig,
     IdentityConfig,
     IdentityRuntime,

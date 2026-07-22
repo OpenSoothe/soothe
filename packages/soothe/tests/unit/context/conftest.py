@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.context.store_sqlite import SqliteContextPersistence
 
 
 def make_test_persistence(loop_id: str = "test-loop") -> SqliteContextPersistence:

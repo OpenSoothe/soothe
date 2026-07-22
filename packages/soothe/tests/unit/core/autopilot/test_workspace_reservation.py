@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.foundation.autopilot.service.workspace_reservation import WorkspaceReservation
+from soothe.autopilot.workspace_reservation import WorkspaceReservation
 
 
 class TestBasicAcquireRelease:
@@ -117,7 +117,7 @@ class TestPathNormalization:
     def test_absolute_path_ok_when_cwd_missing(self, monkeypatch) -> None:
         """Scheduling must not crash if the process cwd was deleted."""
         monkeypatch.setattr(
-            "soothe.foundation.autopilot.service.workspace_reservation.os.getcwd",
+            "soothe.autopilot.workspace_reservation.os.getcwd",
             lambda: (_ for _ in ()).throw(FileNotFoundError(2, "No such file or directory")),
         )
         r = WorkspaceReservation()
@@ -127,7 +127,7 @@ class TestPathNormalization:
     def test_relative_sentinel_ok_when_cwd_missing(self, monkeypatch) -> None:
         """Autopilot fallback workspaces are relative (``$autopilot/goal/...``)."""
         monkeypatch.setattr(
-            "soothe.foundation.autopilot.service.workspace_reservation.os.getcwd",
+            "soothe.autopilot.workspace_reservation.os.getcwd",
             lambda: (_ for _ in ()).throw(FileNotFoundError(2, "No such file or directory")),
         )
         r = WorkspaceReservation()

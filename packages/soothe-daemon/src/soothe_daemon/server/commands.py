@@ -520,9 +520,9 @@ async def _cmd_cron_add(
     Returns:
         Dict with created job details: id, description, next_run, status.
     """
-    from soothe.foundation.cron import CronService, ExtractionError
-    from soothe.foundation.cron.extraction import AutopilotDisabledError
-    from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
+    from soothe.cron import CronService, ExtractionError
+    from soothe.cron.extraction import AutopilotDisabledError
+    from soothe.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
 
     text = params.get("text", "")
     priority = params.get("priority")

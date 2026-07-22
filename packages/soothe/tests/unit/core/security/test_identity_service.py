@@ -21,7 +21,7 @@ from soothe_sdk.identity.errors import (
     UserNotFoundError,
 )
 
-from soothe.foundation.identity.identity_service import (
+from soothe.identity.identity_service import (
     IdentityService,
     initialize_identity_tables_sync,
 )
@@ -75,11 +75,11 @@ def _create_user_with_aksk(
     svc.create_user(user_id)
     with (
         patch(
-            "soothe.foundation.identity.identity_service.generate_access_key",
+            "soothe.identity.identity_service.generate_access_key",
             return_value=KNOWN_ACCESS_KEY,
         ),
         patch(
-            "soothe.foundation.identity.identity_service.generate_secret_key",
+            "soothe.identity.identity_service.generate_secret_key",
             return_value=KNOWN_SECRET_KEY,
         ),
     ):
@@ -218,11 +218,11 @@ class TestAKSKManagement:
         identity_service.create_user("alice")
         with (
             patch(
-                "soothe.foundation.identity.identity_service.generate_access_key",
+                "soothe.identity.identity_service.generate_access_key",
                 return_value=KNOWN_ACCESS_KEY,
             ),
             patch(
-                "soothe.foundation.identity.identity_service.generate_secret_key",
+                "soothe.identity.identity_service.generate_secret_key",
                 return_value=KNOWN_SECRET_KEY,
             ),
         ):

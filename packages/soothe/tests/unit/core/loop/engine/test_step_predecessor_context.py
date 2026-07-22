@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.step_predecessor_context import (
+from soothe.sloop.engine.step_predecessor_context import (
     build_dependent_execution_hints,
     build_prior_step_evidence,
     step_needs_brief_hydration,
     template_hydrate_step_brief,
 )
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_step_needs_brief_hydration_for_generic_dependent_step() -> None:
@@ -78,7 +78,7 @@ def test_build_prior_step_evidence_from_ledger() -> None:
 
 
 def test_build_prior_steps_summaries_from_ledger_and_results() -> None:
-    from soothe.foundation.sloop.engine.step_predecessor_context import (
+    from soothe.sloop.engine.step_predecessor_context import (
         build_prior_steps_summaries,
     )
 

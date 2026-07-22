@@ -15,7 +15,7 @@ Fix the GoalContextAdapter gap (reads from old state_manager instead of CE DAG),
 
 ### Step 1: Refactor ContextEnginePlanAdapter to use public API
 
-**File**: `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py`
+**File**: `packages/soothe/src/soothe/loop/engine/context_adapters.py`
 
 Replace private field access in `ContextEnginePlanAdapter`:
 
@@ -48,7 +48,7 @@ But `record_message()` is async while the adapter's `record_message()` is sync. 
 
 ### Step 3: Fix GoalContextAdapter to read from CE DAG
 
-**File**: `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py`
+**File**: `packages/soothe/src/soothe/loop/engine/context_adapters.py`
 
 **`get_plan_context()`**: Replace `self._state_manager.load()` with reading from CE DAG:
 
@@ -138,7 +138,7 @@ def get_goal_sync(self, goal_id: str) -> GoalNode | None:
 
 ### Step 5: Wire ContextBundle into PromptBuilder
 
-**File**: `packages/soothe/src/soothe/foundation/loop/prompts/builder.py`
+**File**: `packages/soothe/src/soothe/loop/prompts/builder.py`
 
 1. Add `context_bundle: ContextBundle | None = None` parameter to `build_plan_messages()`.
 
@@ -156,7 +156,7 @@ All supplements are additive and guarded by `context_bundle is not None`.
 
 ### Step 6: Pass ContextBundle from planner
 
-**File**: `packages/soothe/src/soothe/foundation/loop/planning/planner.py`
+**File**: `packages/soothe/src/soothe/loop/planning/planner.py`
 
 In `LLMPlanner.generate_from_assessment()` and `LLMPlanner.plan()`:
 - When `context_engine` is available on the plan_manager (or passed separately), call `await context_engine.project()` to get a `ContextBundle`

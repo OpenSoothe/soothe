@@ -235,7 +235,7 @@ def _check_postgres_pool_registry(config: SootheConfig | None) -> CheckResult:
         )
 
     try:
-        from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
+        from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
 
         registry = PostgresPoolRegistry.try_get_instance()
         if registry is None:

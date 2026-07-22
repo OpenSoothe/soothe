@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
+from soothe.sloop.checkpoints.daemon_loop_metadata import (
     extract_daemon_loop_metadata,
     merge_daemon_loop_metadata,
 )
@@ -62,7 +62,7 @@ def test_merge_daemon_loop_metadata_noop_when_empty() -> None:
 async def test_merge_checkpoint_with_preserved_metadata_overlays_existing_row() -> None:
     from unittest.mock import AsyncMock
 
-    from soothe.foundation.sloop.state.persistence.daemon_loop_metadata import (
+    from soothe.sloop.checkpoints.daemon_loop_metadata import (
         merge_checkpoint_with_preserved_metadata,
     )
 

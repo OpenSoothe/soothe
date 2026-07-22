@@ -11,7 +11,7 @@ from langchain_core.messages import (
     messages_to_dict,
 )
 
-from soothe.foundation.sloop.utils.messages import (
+from soothe.sloop.utils.messages import (
     LoopAIMessage,
     LoopAIMessageChunk,
     LoopHumanMessage,
@@ -270,7 +270,7 @@ class TestLoopAIMessageWithExecutor:
 
     def test_token_extraction_logic(self) -> None:
         """Test ``extract_token_usage_from_messages`` sums all AI turns."""
-        from soothe.foundation.sloop.utils.token_usage import extract_token_usage_from_messages
+        from soothe.sloop.utils.token_usage import extract_token_usage_from_messages
 
         messages = [
             LoopAIMessage(

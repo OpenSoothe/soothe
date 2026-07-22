@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.cognition.plan_step_safety import MAX_UNDERSIZED_PLAN_REPLANS
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.orchestrator.nodes.plan_generate import node_plan_generate
-from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.sloop.orchestrator.routing import route_after_plan
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.plan_step_safety import MAX_UNDERSIZED_PLAN_REPLANS
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.nodes.plan_generate import node_plan_generate
+from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.sloop.orchestrator.routing import route_after_plan
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.state import PLAN_ROUTE_EXECUTE
+from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanResult,

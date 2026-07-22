@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.executor import (
+from soothe.sloop.engine.executor import (
     compute_act_wave_finalize,
     provenance_is_task_delegate,
 )

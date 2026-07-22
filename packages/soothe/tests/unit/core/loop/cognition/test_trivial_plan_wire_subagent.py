@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
-from soothe.foundation.sloop.state.schemas import resolve_wire_subagent
+from soothe.sloop.cognition.trivial_plan import build_trivial_plan
+from soothe.sloop.state.schemas import resolve_wire_subagent
 
 
 def test_resolve_wire_subagent_accepts_pass2_hint() -> None:

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from soothe_sdk.intention.models import TaskComplexity
 
-from soothe.foundation.sloop.intention import IntentClassification, IntentClassifier
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.intention import IntentClassification, IntentClassifier
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntakePass1Confidence,
     IntakePass1LLMResult,
@@ -15,13 +15,13 @@ from soothe.foundation.sloop.intention.models import (
     ResponseLanguage,
     derive_task_complexity_from_intake,
 )
-from soothe.foundation.sloop.intention.prompts import (
+from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_HUMAN_TASK,
     INTAKE_PASS1_SYSTEM_PROMPT,
     INTAKE_PASS2_HUMAN_TASK,
     INTAKE_PASS2_SYSTEM_PROMPT,
 )
-from soothe.foundation.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
+from soothe.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
 
 
 class TestIntentClassificationModel:

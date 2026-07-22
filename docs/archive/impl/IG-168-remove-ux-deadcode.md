@@ -38,7 +38,7 @@ Remove all dead code from the `soothe.ux` module to improve maintainability and 
 
 - `is_multi_step_plan`, `resolve_namespace_label` (dead functions)
 - `extract_text_from_ai_message`, `render_plan_tree` (redundant - consumers use original modules)
-- `VerbosityTier`, `should_show`, `classify_event_to_tier` (redundant - consumers use `soothe.foundation`)
+- `VerbosityTier`, `should_show`, `classify_event_to_tier` (redundant - consumers use `soothe`)
 
 ### 5. Kept (per user request)
 

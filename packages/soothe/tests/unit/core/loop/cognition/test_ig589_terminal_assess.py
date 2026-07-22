@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from soothe.foundation.context.planning.completion import _dag_requires_synthesis
-from soothe.foundation.sloop.cognition.plan_step_safety import (
+from soothe.context.planning_completion import _dag_requires_synthesis
+from soothe.sloop.cognition.plan_step_safety import (
     assess_respects_gap_analysis,
     derive_goal_progress_from_status,
     normalize_status_assessment,
     terminal_assess_may_complete,
 )
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
 )
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.state.schemas import (
     GoalComponentStatus,
     LoopState,
     PlanGapAnalysis,

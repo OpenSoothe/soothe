@@ -7,17 +7,17 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from soothe.foundation.sloop.cognition.plan_generation_wire import (
+from soothe.sloop.cognition.plan_generation_wire import (
     capped_plan_generation_wire_model,
 )
-from soothe.foundation.sloop.cognition.plan_step_safety import (
+from soothe.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
     plan_has_minimum_steps_for_intake,
     simple_intake_should_force_done,
 )
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     LoopState,
     PriorProgressDigest,

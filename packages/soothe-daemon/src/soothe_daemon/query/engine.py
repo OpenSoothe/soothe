@@ -15,7 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from soothe.foundation.events import ERROR
+from soothe.events import ERROR
 from soothe.logging import ThreadLogger, set_thread_id
 from soothe_sdk.display.text_extract import extract_text_from_ai_message
 from soothe_sdk.ux.stream_tool_wire import (
@@ -781,7 +781,7 @@ class QueryEngine:
             return 0
 
         try:
-            from soothe.foundation.context.persistence.factory import (
+            from soothe.context.store_factory import (
                 resolve_context_engine_persistence,
             )
 
@@ -1364,7 +1364,7 @@ class QueryEngine:
                     effective_loop_id or "?",
                     thread_id[:16] if thread_id else "?",
                 )
-                from soothe.foundation.workspace import FrameworkFilesystem
+                from soothe.workspace import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
 
@@ -1389,7 +1389,7 @@ class QueryEngine:
             except asyncio.CancelledError:
                 logger.info("Query cancelled by user")
                 turn_cancelled = True
-                from soothe.foundation.workspace import FrameworkFilesystem
+                from soothe.workspace import FrameworkFilesystem
 
                 FrameworkFilesystem.clear_current_workspace()
                 raise
@@ -1725,7 +1725,7 @@ class QueryEngine:
                 response_schema_strict=response_schema_strict,
             )
 
-            from soothe.foundation.sloop.utils.messages import LoopAIMessage
+            from soothe.sloop.utils.messages import LoopAIMessage
 
             phase = intent_hint_value
             ai_flat = _serialize_for_json(

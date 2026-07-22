@@ -7,10 +7,10 @@ from unittest.mock import MagicMock
 from langchain_core.messages import SystemMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.intention.models import ResponseLanguage
-from soothe.foundation.sloop.state.schemas import LoopState, PlanResult, StepResult
-from soothe.foundation.sloop.utils.messages import LoopHumanMessage
 from soothe.prompts import PromptBuilder
+from soothe.sloop.intention.models import ResponseLanguage
+from soothe.sloop.state.schemas import LoopState, PlanResult, StepResult
+from soothe.sloop.utils.messages import LoopHumanMessage
 
 
 def test_assess_system_uses_plan_assess_not_full_execute_loop() -> None:

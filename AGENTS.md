@@ -130,7 +130,7 @@ client/
 | What | Where |
 |------|-------|
 | Nano agent factory | `packages/soothe-nano/src/soothe_nano/agent/factory.py` (`create_nano_agent`) |
-| Host agent factory | `packages/soothe/src/soothe/foundation/coreagent/coding/factory.py` (`create_soothe_agent`) |
+| Host agent factory | `packages/soothe/src/soothe/coreagent/factory.py` (`create_soothe_agent`) |
 | Nano config | `packages/soothe-nano/src/soothe_nano/config/settings.py` |
 | Host config | `packages/soothe/src/soothe/config/settings.py` |
 | Shared protocols | `packages/soothe-sdk/src/soothe_sdk/protocols/` |
@@ -146,7 +146,7 @@ client/
 
 ```python
 from soothe_sdk.plugin import plugin, tool, subagent
-from soothe.core.event_catalog import register_event
+from soothe.events.catalog import register_event
 
 @plugin(name="my-plugin", version="1.0.0")
 class MyPlugin:

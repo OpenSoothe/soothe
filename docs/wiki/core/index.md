@@ -16,7 +16,7 @@ Soothe's core framework provides the foundational runtime for autonomous agent e
 
 ## Where Core Fits
 
-The foundation package (`soothe.foundation`) implements a protocol-orchestrated agent runtime with **no transport or UI dependencies**. It sits between the CLI/daemon transport and the protocol/backend infrastructure:
+The foundation package (`soothe`) implements a protocol-orchestrated agent runtime with **no transport or UI dependencies**. It sits between the CLI/daemon transport and the protocol/backend infrastructure:
 
 ```
 CLI / Daemon  →  Core Framework (foundation)  →  Protocols / Backends / LangGraph
@@ -34,9 +34,9 @@ Soothe organizes execution into three hierarchical tiers. See the [Architecture 
 
 | Tier | Module | Scope | Key File |
 |------|--------|-------|----------|
-| **ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | `foundation/context/` |
-| **StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | `foundation/sloop/` |
-| **CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | `foundation/core/agent/` |
+| **ContextEngine** | [goal-engine.md](goal-engine.md) | Long-running multi-goal DAGs | `context/` |
+| **StrangeLoop** | [strangeloop.md](strangeloop.md) | Single-goal iterative refinement | `sloop/` |
+| **CoreAgent** | [agent-factory.md](agent-factory.md) | Model → Tools → Model turn loop | `coreagent/` |
 
 Each tier delegates downward via **advisory hints** (passed through `config.configurable`) — CoreAgent never knows about goals, it only executes prompts with optional execution hints.
 
@@ -67,7 +67,7 @@ Each tier delegates downward via **advisory hints** (passed through `config.conf
 These modules don't have dedicated knowledge articles but are referenced throughout:
 
 - **Middleware Stack** (`soothe.middleware`) — Soothe-specific middlewares assembled by `build_soothe_middleware_stack()`: `IdentityMiddleware` (JWT/identity), `SoothePolicyMiddleware` (policy enforcement), `SystemPromptMiddleware` (dynamic prompt), `LLMRateLimitMiddleware` (LLM-level rate limiting), `WorkspaceContextMiddleware` (thread-aware workspace), `PerTurnModelMiddleware` (per-stream model override), `SootheFilesystemMiddleware` (extended filesystem tools), `CodeInterpreterMiddleware` (embedded QuickJS), `MCPActivationMiddleware` (MCP progressive disclosure), `ToolTimeoutMiddleware` (tool call timeout), plus profiler and tool-context helpers.
-- **Persistence** (`soothe.foundation.persistence`) — Artifact store and configuration-driven policy for run outputs.
+- **Persistence** (`soothe.persistence`) — Artifact store and configuration-driven policy for run outputs.
 - **Prompts** (`soothe.prompts`) — Host loop prompt building via `PromptBuilder`, context XML generation, and template loading (CoreAgent templates: `soothe_nano.prompts`).
 
 ---
@@ -91,7 +91,7 @@ The two entry points for using the core framework:
 
 ```python
 # Direct agent execution (CoreAgent only)
-from soothe.foundation.core.agent import create_soothe_agent
+from soothe.core.agent import create_soothe_agent
 agent = create_soothe_agent(config)
 async for chunk in agent.astream("query", config={"thread_id": "t1"}):
     process(chunk)

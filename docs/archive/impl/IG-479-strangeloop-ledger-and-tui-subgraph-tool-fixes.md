@@ -67,7 +67,7 @@ Also improve local Docker build performance to avoid reinstalling unchanged depe
 ## 1) Ledger: normalize `output_summary` and avoid empty dict artifacts
 
 ### File
-- `packages/soothe/src/soothe/foundation/loop/engine/executor.py`
+- `packages/soothe/src/soothe/loop/engine/executor.py`
 
 ### Changes
 - Added `_outcome_summary_text()` to normalize `output_summary` payloads:
@@ -81,7 +81,7 @@ Result: plan-assess evidence no longer receives `"{'first': '', 'last': ''}"` ar
 ## 2) Execute aggregation: include namespaced subgraph tool output
 
 ### File
-- `packages/soothe/src/soothe/foundation/loop/engine/executor.py`
+- `packages/soothe/src/soothe/loop/engine/executor.py`
 
 ### Changes
 - In namespaced tool-message iteration path, append non-task subgraph tool text into execute output chunks (with existing tool/code output caps).

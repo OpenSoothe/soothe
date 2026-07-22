@@ -14,10 +14,10 @@ import pytest
 from langgraph.graph import END
 from soothe_sdk.intention.models import TaskComplexity
 
-from soothe.foundation.sloop.cognition.trivial_plan import build_trivial_plan
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.orchestrator.nodes.init_or_resume import node_init_or_resume
-from soothe.foundation.sloop.orchestrator.routing import route_by_intent
+from soothe.sloop.cognition.trivial_plan import build_trivial_plan
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.nodes.init_or_resume import node_init_or_resume
+from soothe.sloop.orchestrator.routing import route_by_intent
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -95,7 +95,7 @@ def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> None:
     """Chitchat must bypass StrangeLoop even when the loop has prior goals."""
-    from soothe.foundation.sloop.intention import IntentClassification
+    from soothe.sloop.intention import IntentClassification
 
     emitted: list[tuple[str, object]] = []
 
@@ -142,7 +142,7 @@ async def test_init_or_resume_chitchat_fast_path_with_continue_loop_mode() -> No
 @pytest.mark.asyncio
 async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
     """The trivial label injects a 1-step plan and continues through execute."""
-    from soothe.foundation.sloop.intention import IntentClassification
+    from soothe.sloop.intention import IntentClassification
 
     emitted: list[tuple[str, object]] = []
 
@@ -184,7 +184,7 @@ async def test_init_or_resume_trivial_injects_pseudo_plan() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
     """Trivial intake must not bypass plan_assess when loop continuation is active."""
-    from soothe.foundation.sloop.intention import IntentClassification
+    from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.TRIVIAL,
@@ -219,7 +219,7 @@ async def test_init_or_resume_trivial_skipped_when_continue_loop() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuation() -> None:
     """Simple intake on continuation turns defers to continuation plan_assess."""
-    from soothe.foundation.sloop.intention import IntentClassification
+    from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -253,7 +253,7 @@ async def test_init_or_resume_simple_does_not_synthesize_assessment_on_continuat
 @pytest.mark.asyncio
 async def test_init_or_resume_simple_synthesizes_assessment() -> None:
     """The simple label synthesizes a plan_assessment so plan_generate can run."""
-    from soothe.foundation.sloop.intention import IntentClassification
+    from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -279,7 +279,7 @@ async def test_init_or_resume_simple_synthesizes_assessment() -> None:
 @pytest.mark.asyncio
 async def test_init_or_resume_complex_does_not_inject_synth_plan() -> None:
     """The complex label leaves scratch empty — the full spine runs plan_assess/generate."""
-    from soothe.foundation.sloop.intention import IntentClassification
+    from soothe.sloop.intention import IntentClassification
 
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,

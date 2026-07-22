@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from soothe.foundation.context.persistence.sqlite_backend import (
+from soothe.context.store_sqlite import (
     SqliteContextPersistence,
 )
 
@@ -100,7 +100,7 @@ async def test_mark_cancelled_writes_pair_to_persistence(tmp_path: Path) -> None
     # The helper uses resolve_context_engine_persistence(config, loop_id) which
     # for the sqlite branch builds its own backend at the runtime DB path. To
     # keep this test hermetic we patch the factory to return our tmp-path backend.
-    import soothe.foundation.context.persistence.factory as factory
+    import soothe.context.store_factory as factory
 
     import soothe_daemon.query.goal_interrupt_persistence as mod
 
@@ -135,7 +135,7 @@ async def test_mark_cancelled_writes_pair_to_persistence(tmp_path: Path) -> None
 
 @pytest.mark.asyncio
 async def test_mark_cancelled_noop_without_evidence(tmp_path: Path) -> None:
-    import soothe.foundation.context.persistence.factory as factory
+    import soothe.context.store_factory as factory
 
     import soothe_daemon.query.goal_interrupt_persistence as mod
 

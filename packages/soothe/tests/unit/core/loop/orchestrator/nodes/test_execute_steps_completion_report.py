@@ -7,11 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.engine.executor import StepWaveStart
-from soothe.foundation.sloop.engine.step_wave_types import StepCompletionReport
-from soothe.foundation.sloop.orchestrator.nodes.execute_steps import node_execute
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.sloop.engine.executor import StepWaveStart
+from soothe.sloop.engine.step_wave_types import StepCompletionReport
+from soothe.sloop.nodes.execute_steps import node_execute
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
 
 
 async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
@@ -71,7 +71,7 @@ async def test_execute_emits_step_completion_report_before_completed() -> None:
         scratch=scratch,
     )
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     mock_executor = MagicMock()
     mock_executor.execute = _fake_execute_stream

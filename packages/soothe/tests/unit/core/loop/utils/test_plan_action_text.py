@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.state.schemas import (
     PlanGenerateStep,
     PlanGeneration,
     PlanResult,
 )
-from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
+from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
 
 
 def test_resolve_prefers_plan_result_next_action() -> None:

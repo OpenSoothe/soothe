@@ -1,17 +1,17 @@
 ## Goal
 
-Polish `soothe.foundation.coreagent` by promoting canonical runtime modules to
+Polish `soothe.coreagent` by promoting canonical runtime modules to
 file-based submodules at the package root while keeping backward-compatible
 legacy import paths.
 
 ## Scope
 
 - Add canonical root modules:
-  - `soothe.foundation.coreagent.builder`
-  - `soothe.foundation.coreagent.core_agent`
-  - `soothe.foundation.coreagent.lazy`
-  - `soothe.foundation.coreagent.factory`
-- Convert legacy `soothe.foundation.coreagent.coding.*` modules into
+  - `soothe.coreagent.builder`
+  - `soothe.coreagent.core_agent`
+  - `soothe.coreagent.lazy`
+  - `soothe.coreagent.factory`
+- Convert legacy `soothe.coreagent.coding.*` modules into
   compatibility shims.
 - Repoint internal runtime and tests to canonical root module paths.
 

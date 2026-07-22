@@ -190,7 +190,7 @@ if TYPE_CHECKING:
 
 ```bash
 # 1. Make code changes
-vim packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py
+vim packages/soothe/src/soothe/sloop/engine/strange_loop.py
 
 # 2. Write/update tests
 vim packages/soothe/tests/unit/core/loop/engine/test_strange_loop_model_roles.py
@@ -346,7 +346,7 @@ PR will be merged after:
 Place tests **close to the code they test**:
 
 ```
-packages/soothe/src/soothe/foundation/sloop/engine/
+packages/soothe/src/soothe/sloop/engine/
 ├── __init__.py
 ├── strange_loop.py
 
@@ -359,7 +359,7 @@ packages/soothe/tests/unit/core/loop/engine/
 Each module registers its own events:
 
 ```python
-from soothe.foundation.events import register_event
+from soothe.events import register_event
 from soothe_sdk.core.events import SootheEvent
 
 class MyCustomEvent(SootheEvent):

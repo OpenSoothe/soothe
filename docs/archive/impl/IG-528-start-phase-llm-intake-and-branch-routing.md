@@ -12,7 +12,7 @@ Implement RFC-630: replace the binary `IntentClassifier` LLM + its `_is_likely_a
 
 ## Background
 
-Today's start-phase pipeline (`packages/soothe/src/soothe/foundation/sloop/orchestrator/builder.py:56`) runs sequentially:
+Today's start-phase pipeline (`packages/soothe/src/soothe/sloop/orchestrator/builder.py:56`) runs sequentially:
 
 ```
 _run_strange_loop (intent LLM @ _runner_strange_loop.py:447)
@@ -36,7 +36,7 @@ The fresh-loop skip (IG-476) already removed the StatusAssessment LLM from the f
 
 Add `IntakeLabel` and replace `IntentClassificationLLMResult` with a 4-class intake schema. Reuse the existing `TaskComplexity` enum (`minimal | simple | medium | complex`) — no new complexity vocabulary.
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/intention/models.py`
+**File**: `packages/soothe/src/soothe/sloop/intention/models.py`
 
 ```python
 class IntakeLabel(StrEnum):
@@ -88,7 +88,7 @@ Extend `IntentClassification` with an `intake_label: IntakeLabel` field (require
 
 Replace `classify_intent` with `classify_intake`. Delete `_is_likely_agentic`. Keep the `intent_hint == QUIZ` bypass (structural caller assertion, not content) and the single-retry loop. **Fallback label is `complex`** (fail-safe = run the full pipeline).
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/intention/classifier.py`
+**File**: `packages/soothe/src/soothe/sloop/intention/classifier.py`
 
 ```python
 async def classify_intake(
@@ -147,9 +147,9 @@ def _fallback_intent(self, query, *, error_context=None) -> IntentClassification
 Replace the binary quiz/agentic prompt with a 4-class intake prompt. Lock the `trivial`/`simple`/`complex` boundary definitions (RFC-630 §15.3).
 
 **Files**:
-- `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/classifiers/intake_classification.xml` (new, replaces `intent_classification.xml`)
+- `packages/soothe/src/soothe/sloop/prompts/fragments/classifiers/intake_classification.xml` (new, replaces `intent_classification.xml`)
 - `.../intake_classification_retry.xml` (new, replaces `intent_classification_retry.xml`)
-- `packages/soothe/src/soothe/foundation/sloop/intention/prompts.py` — load the new fragments (`INTAKE_CLASSIFICATION_PROMPT`, `INTAKE_CLASSIFICATION_RETRY_PROMPT`)
+- `packages/soothe/src/soothe/sloop/intention/prompts.py` — load the new fragments (`INTAKE_CLASSIFICATION_PROMPT`, `INTAKE_CLASSIFICATION_RETRY_PROMPT`)
 
 Boundary definitions (from RFC-630 §8.1, to be locked with the §14 golden set):
 
@@ -189,7 +189,7 @@ intake_classification, checkpoint, git_status = await asyncio.gather(
 await _hydrate_ce_and_state(checkpoint, intake_classification, git_status, ...)
 ```
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/engine/strange_loop.py`
+**File**: `packages/soothe/src/soothe/sloop/engine/strange_loop.py`
 
 - Wrap `load_project_instructions()`, `load_agent_instructions()`, `load_memory()` (lines 510-513) in `asyncio.to_thread(...)` and gather them with `await ce_instance.load()` (line 488).
 - Refactor `run_with_progress` so checkpoint load is awaitable from the runner's gather (currently it's internal to `run_with_progress` at line 234). Either expose a `load_checkpoint()` coroutine or split `run_with_progress` so the runner orchestrates stages 1-2 and passes the hydrated state in. **Implementation choice**: expose `load_checkpoint()` and `hydrate_from_checkpoint(checkpoint, ...)` as separable methods on `StrangeLoop`; `run_with_progress` becomes the composer using the new split methods.
@@ -198,7 +198,7 @@ await _hydrate_ce_and_state(checkpoint, intake_classification, git_status, ...)
 
 Add the `intake_label` state key and the `route_by_intent` conditional edge. Replace `route_after_init` (two-valued) with `route_by_intent` (multi-way). Continuation is checked first as a structural overlay.
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/orchestrator/state.py`
+**File**: `packages/soothe/src/soothe/sloop/orchestrator/state.py`
 
 ```python
 class LoopGraphState(TypedDict):
@@ -206,7 +206,7 @@ class LoopGraphState(TypedDict):
     intake_label: IntakeLabel  # set by init_or_resume, read by route_by_intent
 ```
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/orchestrator/routing.py`
+**File**: `packages/soothe/src/soothe/sloop/orchestrator/routing.py`
 
 ```python
 def route_by_intent(state: dict[str, Any], ctx: LoopRuntimeContext) -> str:
@@ -229,7 +229,7 @@ def route_by_intent(state: dict[str, Any], ctx: LoopRuntimeContext) -> str:
     return "bounded_evidence_gather"  # complex: full existing spine
 ```
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/orchestrator/builder.py` (line 117-122)
+**File**: `packages/soothe/src/soothe/sloop/orchestrator/builder.py` (line 117-122)
 
 ```python
 graph.add_edge(START, "init_or_resume")
@@ -252,7 +252,7 @@ All downstream conditional edges (`route_after_assess`, `route_after_plan`, `rou
 
 For the `trivial` label, inject a minimal 1-step `PlanResult` into `ctx.scratch` so `resolve_decision` can ingest it. No synthetic reasoning prose; goal-as-step-action; `## Result` evidence contract retained.
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/init_or_resume.py`
+**File**: `packages/soothe/src/soothe/sloop/nodes/init_or_resume.py`
 
 ```python
 async def node_init_or_resume(ctx, state):
@@ -273,7 +273,7 @@ async def node_init_or_resume(ctx, state):
     return {"intake_label": intake_label}
 ```
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/planning/trivial_plan.py` (new — extracts the `## Result` contract from `simple_bypass.py`)
+**File**: `packages/soothe/src/soothe/sloop/planning/trivial_plan.py` (new — extracts the `## Result` contract from `simple_bypass.py`)
 
 ```python
 """Trivial-branch plan builder (RFC-630 §11).
@@ -281,7 +281,7 @@ async def node_init_or_resume(ctx, state):
 Goal-as-step-action, no synthetic reasoning prefix. The ## Result evidence
 contract is retained from simple_bypass (functional, not cosmetic).
 """
-from soothe.foundation.sloop.planning.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
+from soothe.sloop.planning.simple_bypass import SIMPLE_QUERY_DIRECT_EXPECTED_OUTPUT
 
 def build_trivial_plan(goal: str) -> PlanResult:
     """Build a minimal 1-step plan: goal as the step action, no reasoning prose."""
@@ -298,7 +298,7 @@ def build_trivial_plan(goal: str) -> PlanResult:
 
 Add `plan_phase.generate_lightweight(...)` for the `simple` branch — reuses `generate_from_assessment`'s structured-output path with a reduced context window.
 
-**File**: `packages/soothe/src/soothe/foundation/sloop/planning/phase.py`
+**File**: `packages/soothe/src/soothe/sloop/planning/phase.py`
 
 ```python
 async def generate_lightweight(self, *, goal, state, context, plan_manager, context_engine):

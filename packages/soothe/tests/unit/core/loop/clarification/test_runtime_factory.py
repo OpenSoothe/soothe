@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from soothe.foundation.sloop.clarification.auto import AutoClarificationPolicy
-from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
-from soothe.foundation.sloop.clarification.runtime_factory import (
+from soothe.sloop.clarification.auto import AutoClarificationPolicy
+from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
+from soothe.sloop.clarification.runtime_factory import (
     bind_clarification_emit,
     build_clarification_policy_for_runner,
     resolve_clarification_mode,
@@ -106,9 +106,7 @@ class TestBuildClarificationPolicyForRunner:
         config = _make_config()
         config.agent.veritas.max_context_steps = 3
 
-        with patch(
-            "soothe.foundation.sloop.clarification.runtime_factory.veritas_answer"
-        ) as mock_answer:
+        with patch("soothe.sloop.clarification.runtime_factory.veritas_answer") as mock_answer:
             mock_answer.return_value = VeritasAnswerSchema(
                 answers=["ok"], confidence=0.9, defer=False
             )
@@ -128,9 +126,7 @@ class TestBuildClarificationPolicyForRunner:
 
         config = _make_config()
 
-        with patch(
-            "soothe.foundation.sloop.clarification.runtime_factory.veritas_answer"
-        ) as mock_answer:
+        with patch("soothe.sloop.clarification.runtime_factory.veritas_answer") as mock_answer:
             mock_answer.return_value = VeritasAnswerSchema(
                 answers=["ok"], confidence=0.9, defer=False
             )

@@ -33,7 +33,7 @@ The coalescing middleware contained three optimization/correctness issues:
 Add private `_get_context_backend()`:
 
 - Reads workspace + virtual mode from unified workspace context.
-- Uses `soothe.foundation.workspace.normalized_backend.get_workspace_backend(...)`.
+- Uses `soothe.workspace.normalized_backend.get_workspace_backend(...)`.
 - Returns `None` when no workspace context exists.
 
 ### 2) Single in-lock read for string replacements

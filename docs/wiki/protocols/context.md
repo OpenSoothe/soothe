@@ -12,7 +12,7 @@ description: Within-thread context and working memory — planned protocol desig
 **Status**: **Not implemented** — `ContextProtocol` class does not exist in the codebase
 **Supersedes**: [RFC-300](../../specs/archive/RFC-300-context-memory-protocols.md) (archived)
 
-> ⚠️ `ContextProtocol` is defined in RFC-302 (draft) but was **never implemented**. The `ContextProtocol` class does not exist in `packages/soothe/src/soothe/protocols/`. Context management is handled by `ContextEngine` (`soothe.foundation.context`), a concrete engine class — not a protocol abstraction. This article describes the *planned* protocol design and explains how context works today.
+> ⚠️ `ContextProtocol` is defined in RFC-302 (draft) but was **never implemented**. The `ContextProtocol` class does not exist in `packages/soothe/src/soothe/protocols/`. Context management is handled by `ContextEngine` (`soothe.context`), a concrete engine class — not a protocol abstraction. This article describes the *planned* protocol design and explains how context works today.
 
 ## What ContextProtocol Is
 
@@ -72,7 +72,7 @@ Subagents receive projections, not ledger access. They get a bounded, goal-scope
 
 ## Current Context Management
 
-`ContextProtocol` was never implemented. Context management is handled by **`ContextEngine`** (`packages/soothe/src/soothe/foundation/context/`), a concrete engine class that manages within-thread knowledge. It is not a protocol abstraction — it's a direct implementation with its own ledger, projection, and persistence logic.
+`ContextProtocol` was never implemented. Context management is handled by **`ContextEngine`** (`packages/soothe/src/soothe/context/`), a concrete engine class that manages within-thread knowledge. It is not a protocol abstraction — it's a direct implementation with its own ledger, projection, and persistence logic.
 
 `ContextEngine` uses these mechanisms:
 

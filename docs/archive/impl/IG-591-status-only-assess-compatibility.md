@@ -26,7 +26,7 @@ terminal readiness from structural state.
 ### Planner assess flow
 
 - Removed status-only underspecification helper from
-  `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py`.
+  `packages/soothe/src/soothe/sloop/cognition/planner.py`.
 - Removed retry prompt that required all `StatusAssessment` fields.
 - Removed coercion fallback that injected synthetic reasoning/progress when
   assess remained status-only.

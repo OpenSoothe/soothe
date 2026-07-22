@@ -2,7 +2,7 @@
 
 import asyncio
 
-from soothe.foundation.context import ContextEngine, EvidenceEntry, GoalNode
+from soothe.context import ContextEngine, EvidenceEntry, GoalNode
 
 
 class TestGoalNodeIterationTracking:

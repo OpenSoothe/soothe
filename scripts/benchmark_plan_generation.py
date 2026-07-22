@@ -261,8 +261,8 @@ async def run_online_benchmark(
     sys.path.insert(0, str(_ROOT / "packages" / "soothe-sdk" / "src"))
     sys.path.insert(0, str(_ROOT / "packages" / "soothe-daemon" / "src"))
 
-    from soothe.foundation.sloop.cognition.planner import LLMPlanner
-    from soothe.foundation.sloop.state.schemas import LoopState
+    from soothe.sloop.cognition.planner import LLMPlanner
+    from soothe.sloop.state.schemas import LoopState
 
     results: list[PlanBenchmarkResult] = []
 

@@ -13,13 +13,13 @@ import threading
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.persistence.postgres_pool_lifecycle import (
+from soothe.persistence.postgres_pool_lifecycle import (
     apply_row_factory,
     close_async_pool,
     postgres_pool_timing_from_config,
     release_idle_pool_connections,
 )
-from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
+from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
 
 if TYPE_CHECKING:
     from psycopg_pool import AsyncConnectionPool
@@ -88,7 +88,7 @@ class SharedCheckpointerPool:
                 )
                 return None
 
-            from soothe.foundation.persistence.postgres_provisioning import (
+            from soothe.persistence.postgres_provisioning import (
                 ensure_postgres_databases,
             )
 
@@ -125,7 +125,7 @@ class SharedCheckpointerPool:
             pool: Open checkpointer connection pool.
             setup: Async callable that runs ``AsyncPostgresSaver.setup()``.
         """
-        from soothe.foundation.sloop.state.persistence.retry_utils import (
+        from soothe.sloop.checkpoints.retry_utils import (
             is_duplicate_schema_error,
         )
 

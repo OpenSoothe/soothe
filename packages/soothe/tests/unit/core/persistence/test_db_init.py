@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.persistence.db_init.runner import (
+from soothe.persistence.db_init import (
     database_sql_root,
     discover_versioned_scripts,
     initialize_database,
@@ -32,7 +32,7 @@ def test_split_sql_statements_splits_multiline_ddl() -> None:
 
 def test_checkpoints_init_script_contains_core_tables() -> None:
     """IG-678 PR-3: checkpoints init is host-owned; load from the host sql root."""
-    from soothe.foundation.persistence.postgres_schema import _HOST_SQL_ROOT
+    from soothe.persistence.postgres_schema import _HOST_SQL_ROOT
 
     sql = load_init_script("soothe_checkpoints", sql_root=_HOST_SQL_ROOT)
     assert sql is not None
@@ -188,10 +188,10 @@ def test_checkpoints_init_lives_in_host_sql_root() -> None:
     """IG-678 PR-3: the StrangeLoop/CE checkpoints schema is host-owned.
 
     Nano no longer ships ``soothe_checkpoints/init.sql``; the host pins
-    ``sql_root`` to its own ``foundation/persistence/sql`` dir in
+    ``sql_root`` to its own ``persistence/sql`` dir in
     ``postgres_schema.py``.
     """
-    from soothe.foundation.persistence.postgres_schema import _HOST_SQL_ROOT
+    from soothe.persistence.postgres_schema import _HOST_SQL_ROOT
 
     assert (_HOST_SQL_ROOT / "soothe_checkpoints" / "init.sql").is_file()
     # Nano's shared database_sql_root() must NOT carry the checkpoints init.

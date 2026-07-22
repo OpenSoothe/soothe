@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.ledger import LedgerManager
-from soothe.foundation.context.models import GoalNode, StepExecution, StepNode
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.context.planning.models import DagPlanningContext
-from soothe.foundation.context.projection import ContextBundle
-from soothe.foundation.sloop.engine.context_adapters import (
+from soothe.context import StepPlanManagerAdapter
+from soothe.context.engine import ContextEngine
+from soothe.context.ledger import LedgerManager
+from soothe.context.models import GoalNode, StepExecution, StepNode
+from soothe.context.planning_models import DagPlanningContext
+from soothe.context.projection import ContextBundle
+from soothe.sloop.engine.context_adapters import (
     ContextEngineGoalContextAdapter,
     _format_execute_briefing_from_ce_goals,
 )
@@ -25,7 +25,7 @@ class TestPlanAdapterPublicAPI:
         ce._dag.add_goal(goal)
 
         adapter = StepPlanManagerAdapter(subengine=ce.planning.step, goal_id=goal.id)
-        from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction
+        from soothe.sloop.state.schemas import AgentDecision, StepAction
 
         decision = AgentDecision(
             type="execute_steps",
@@ -36,7 +36,7 @@ class TestPlanAdapterPublicAPI:
                 StepAction(id="S02", description="Step 2", dependencies=["S01"]),
             ],
         )
-        from soothe.foundation.sloop.state.schemas import PlanResult
+        from soothe.sloop.state.schemas import PlanResult
 
         plan_result = PlanResult(
             status="replan",
@@ -261,8 +261,8 @@ class TestPromptBuilderContextBundle:
         """When context_bundle is None, behavior is unchanged."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.state.schemas import LoopState
         from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -279,8 +279,8 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects memory instructions into system (not agent/project rules)."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.state.schemas import LoopState
         from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -310,8 +310,8 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects goal/step lineage into generate human (not assess)."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.state.schemas import LoopState
         from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -331,7 +331,7 @@ class TestPromptBuilderContextBundle:
             context_bundle=bundle,
         )
         # Find the human message (LoopHumanMessage, not SystemMessage)
-        from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+        from soothe.sloop.utils.messages import LoopHumanMessage
 
         human_msgs = [m for m in messages if isinstance(m, LoopHumanMessage)]
         assert len(human_msgs) >= 1
@@ -349,8 +349,8 @@ class TestPromptBuilderContextBundle:
         """GOAL LINEAGE matching GOAL alone is not injected."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.state.schemas import LoopState
         from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -364,7 +364,7 @@ class TestPromptBuilderContextBundle:
             plan_phase="generate",
             context_bundle=bundle,
         )
-        from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+        from soothe.sloop.utils.messages import LoopHumanMessage
 
         human_content = str([m for m in messages if isinstance(m, LoopHumanMessage)][-1].content)
         assert "GOAL LINEAGE:" not in human_content
@@ -373,8 +373,8 @@ class TestPromptBuilderContextBundle:
         """Empty ContextBundle fields are not injected."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.foundation.sloop.state.schemas import LoopState
         from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
         state = LoopState(goal="Test goal", thread_id="t1")
@@ -392,7 +392,7 @@ class TestPromptBuilderContextBundle:
         assert "<AGENT_INSTRUCTIONS>" not in system_content
         assert "<MEMORY_INSTRUCTIONS>" not in system_content
 
-        from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+        from soothe.sloop.utils.messages import LoopHumanMessage
 
         human_msgs = [m for m in messages if isinstance(m, LoopHumanMessage)]
         if human_msgs:

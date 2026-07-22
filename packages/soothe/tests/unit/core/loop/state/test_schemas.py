@@ -8,9 +8,9 @@ from unittest.mock import patch
 import pytest
 from pydantic import ValidationError
 
-from soothe.foundation.sloop.engine.thread_selection import resolve_wire_subagent_for_step
-from soothe.foundation.sloop.state import schemas as schemas_mod
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.engine.thread_selection import resolve_wire_subagent_for_step
+from soothe.sloop.state import schemas as schemas_mod
+from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     PlanGenerateStep,
@@ -219,7 +219,7 @@ class TestAgentDecision:
         """Two digit-only ids with the same int value: do not guess; leave dep unchanged."""
         import logging
 
-        from soothe.foundation.sloop.state import schemas as schemas_mod
+        from soothe.sloop.state import schemas as schemas_mod
 
         d0 = StepAction(id="01", description="a", expected_output="o")
         d1 = StepAction(id="001", description="b", expected_output="o")
@@ -622,7 +622,7 @@ class TestPlanGeneration:
         assert "next_action" not in props
 
     def test_derive_plan_action(self) -> None:
-        from soothe.foundation.sloop.state.schemas import derive_plan_action
+        from soothe.sloop.state.schemas import derive_plan_action
 
         assert derive_plan_action(assessment_status="continue", has_remaining_steps=True) == "keep"
         assert derive_plan_action(assessment_status="continue", has_remaining_steps=False) == "new"

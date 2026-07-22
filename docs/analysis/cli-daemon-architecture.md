@@ -225,7 +225,7 @@ tui:
 ```python
 from soothe_daemon.websocket_client import WebSocketClient
 from soothe_daemon.protocol import encode, decode
-from soothe.foundation import SootheEvent, VerbosityTier
+from soothe import SootheEvent, VerbosityTier
 ```
 
 **New**:

@@ -52,7 +52,7 @@ event-registry-collapse memory (`soothe_sdk.core.registry` canonical owner)
 
 ### PR-1 — 6 models → nano sole ownership + custom_event/StreamChunk consolidation (DONE, 2026-07-21)
 - Deleted the 6 dead-duplicate event model classes from host
-  `soothe/foundation/events/catalog.py` (`StreamEndEvent`, `LLMRetryAttemptEvent`,
+  `soothe/events/catalog.py` (`StreamEndEvent`, `LLMRetryAttemptEvent`,
   `MemoryRecalledEvent`, `MemoryStoredEvent`, `PolicyCheckedEvent`,
   `PolicyDeniedEvent`). Host now imports them from
   `soothe_nano.events.catalog` — single canonical class, no more
@@ -63,7 +63,7 @@ event-registry-collapse memory (`soothe_sdk.core.registry` canonical owner)
   `_reg()` calls (templates/priority match nano's exactly, so idempotent).
 - `StreamChunk` consolidation: removed host-internal duplicates in
   `soothe/protocols/runner.py` and `soothe/runner/_runner_shared.py`; both now
-  `from soothe.foundation.events import StreamChunk`. Canonical definition
+  `from soothe.events import StreamChunk`. Canonical definition
   remains in host `foundation/events/catalog.py`. nano keeps its own copy
   (nano cannot import host; its copy is in `__all__` but never called by nano).
 - `custom_event()` canonical definition stays in host `foundation.events.catalog`
@@ -85,9 +85,9 @@ event-registry-collapse memory (`soothe_sdk.core.registry` canonical owner)
   Added all 7 to SDK `core/__init__.py` re-export + `__all__`.
 - `soothe_nano/events/constants.py`: replaced 7 literal assignments with
   `from soothe_sdk.core.events import (...)` re-export; fixed docstring that
-  wrongly pointed at host `soothe.foundation.events.constants` (§7b rule 3:
+  wrongly pointed at host `soothe.events.constants` (§7b rule 3:
   no host module paths in nano).
-- `soothe/foundation/events/constants.py`: re-export the 7 from SDK at top of
+- `soothe/events/constants.py`: re-export the 7 from SDK at top of
   file; deleted duplicate literal defs (MEMORY_*, POLICY_*, ERROR, STREAM_END,
   LLM_RETRY_ATTEMPT); deleted dead self-assignment no-op block
   (`STRANGE_LOOP_STEP_STARTED = STRANGE_LOOP_STARTED` etc.).
@@ -289,7 +289,7 @@ re-introducing a duplicate class.
 Files:
 - `packages/soothe-nano/src/soothe_nano/events/catalog.py` — **keep** the 6
   class definitions (no change to the classes themselves).
-- `packages/soothe/src/soothe/foundation/events/catalog.py` — **delete** the
+- `packages/soothe/src/soothe/events/catalog.py` — **delete** the
   6 class definitions (`StreamEndEvent` L272, `LLMRetryAttemptEvent` L400,
   `MemoryRecalledEvent` L437, `MemoryStoredEvent` L443, `PolicyCheckedEvent`
   L476, `PolicyDeniedEvent` L483). **Add** import:
@@ -307,7 +307,7 @@ Files:
   boundary-legal (host→nano allowed). Keep the existing `_reg(...)` calls —
   they now reference the imported nano class, preserving host verbosity/
   summary/priority overrides.
-- `packages/soothe/src/soothe/foundation/events/__init__.py` — the re-export
+- `packages/soothe/src/soothe/events/__init__.py` — the re-export
   `from .catalog import (… MemoryRecalledEvent …)` still resolves (now via the
   nano import re-exported through host catalog). No change needed unless the
   import list needs the 6 names added explicitly; verify `__all__` already
@@ -329,8 +329,8 @@ canonical event-infrastructure module; nano cannot import host). Resolution:
   it needs one). The 4→2 reduction removes the host-internal dupes.
 - `packages/soothe/src/soothe/runner/_runner_shared.py:8` (`StreamChunk`) and
   `packages/soothe/src/soothe/protocols/runner.py:12` (`StreamChunk`) —
-  **delete**; import from `soothe.foundation.events` (or
-  `soothe.foundation.events.catalog`). These are host-internal duplicates of
+  **delete**; import from `soothe.events` (or
+  `soothe.events.catalog`). These are host-internal duplicates of
   the host canonical definition.
 
 **Pre-check before A2**: run
@@ -344,8 +344,8 @@ to enumerate every caller and confirm no behavior change from the consolidation.
   copies are deleted, so no nano/host symbol collision).
 - `python scripts/check_nano_docstring_refs.py` — green (no docstrings touched
   beyond plain-English).
-- Spot-check: `python -c "from soothe.foundation.events import MemoryRecalledEvent, StreamEndEvent; print(MemoryRecalledEvent, StreamEndEvent)"` resolves to nano classes.
-- Import-order check: `python -c "import soothe.foundation.events.catalog"` does
+- Spot-check: `python -c "from soothe.events import MemoryRecalledEvent, StreamEndEvent; print(MemoryRecalledEvent, StreamEndEvent)"` resolves to nano classes.
+- Import-order check: `python -c "import soothe.events.catalog"` does
   not raise (no circular import introduced by host→nano catalog import — host
   already imports nano modules at the bottom of catalog.py).
 
@@ -394,7 +394,7 @@ Files:
   )
   ```
   Keep `__all__` unchanged. nano→sdk is boundary-legal.
-- `packages/soothe/src/soothe/foundation/events/constants.py` — **replace** the
+- `packages/soothe/src/soothe/events/constants.py` — **replace** the
   duplicate literal assignments for these 7 with re-exports from
   `soothe_sdk.core.events`. Keep `__all__` unchanged. Also remove the now-redundant
   self-assignment block (`STRANGE_LOOP_STEP_STARTED = STRANGE_LOOP_STEP_STARTED`
@@ -457,7 +457,7 @@ centralizes; it does not rename.
 - `./scripts/verify_finally.sh` green.
 - `python scripts/check_nano_duplicate_symbols.py` — 0 (nano constants now
   re-export, not redefine; no collision with host).
-- `python -c "from soothe_nano.events import STREAM_END, ERROR; from soothe.foundation.events import STREAM_END, ERROR; assert soothe_nano.events.STREAM_END is soothe_sdk.core.events.STREAM_END"` — same object identity (re-export, not redefinition).
+- `python -c "from soothe_nano.events import STREAM_END, ERROR; from soothe.events import STREAM_END, ERROR; assert soothe_nano.events.STREAM_END is soothe_sdk.core.events.STREAM_END"` — same object identity (re-export, not redefinition).
 - Daemon: `python -c "from soothe_daemon.channels.events import ChannelMessageReceived; print(ChannelMessageReceived.type)"` resolves via the new constant.
 
 ---
@@ -540,7 +540,7 @@ checkers after each PR.
   the file's bottom. Mitigate: place the import at the top of catalog.py with
   the other `from soothe_sdk...` imports; nano's catalog imports only from
   `soothe_sdk`, not from host, so no cycle. Verify with
-  `python -c "import soothe.foundation.events.catalog"`.
+  `python -c "import soothe.events.catalog"`.
 - **Regression in `isinstance` checks** (PR-1): any code doing
   `isinstance(e, host.MemoryRecalledEvent)` before the move will now check
   against the nano class. Since host's class was a dead duplicate never

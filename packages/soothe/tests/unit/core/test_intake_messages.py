@@ -7,15 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.foundation.sloop.intention import IntentClassifier
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.intention import IntentClassifier
+from soothe.sloop.intention.models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
     IntakePass2LLMResult,
     IntakeScope,
 )
-from soothe.foundation.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.sloop.intention.two_pass_coordinator import TwoPassIntakeResult
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 @pytest.mark.asyncio

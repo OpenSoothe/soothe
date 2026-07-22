@@ -72,7 +72,7 @@ Key logic:
 
 ### Step 5: Persistence (`persistence/`)
 
-Create `packages/soothe/src/soothe/context/persistence/`:
+Create `packages/soothe/src/soothe/context/`:
 
 - `base.py` — `ContextPersistenceProtocol(Protocol)`
 - `in_memory.py` — `InMemoryContextPersistence` (dict-backed, testing/ephemeral)
@@ -124,10 +124,10 @@ NEW: packages/soothe/src/soothe/context/engine.py
 NEW: packages/soothe/src/soothe/context/projection.py
 NEW: packages/soothe/src/soothe/context/ledger.py
 NEW: packages/soothe/src/soothe/context/semantic.py
-NEW: packages/soothe/src/soothe/context/persistence/__init__.py
-NEW: packages/soothe/src/soothe/context/persistence/base.py
-NEW: packages/soothe/src/soothe/context/persistence/in_memory.py
-NEW: packages/soothe/src/soothe/context/persistence/file_backend.py
+NEW: packages/soothe/src/soothe/context/__init__.py
+NEW: packages/soothe/src/soothe/context/base.py
+NEW: packages/soothe/src/soothe/context/in_memory.py
+NEW: packages/soothe/src/soothe/context/file_backend.py
 NEW: packages/soothe/tests/unit/context/__init__.py
 NEW: packages/soothe/tests/unit/context/test_goal_step_dag.py
 NEW: packages/soothe/tests/unit/context/test_step_dag.py
@@ -145,6 +145,6 @@ NEW: packages/soothe/tests/integration/context/test_ledger_recovery_from_dag.py
 
 - Python ≥3.11, type hints on all public functions
 - Pydantic v2 BaseModel for all data models
-- No imports from `soothe.foundation.autopilot`, `soothe.foundation.loop`, or `soothe.foundation.core` — standalone module
+- No imports from `soothe.autopilot`, `soothe.loop`, or `soothe.core` — standalone module
 - Ruff-compliant (lint + format)
 - Google-style docstrings

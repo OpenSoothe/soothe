@@ -77,7 +77,7 @@ finalize_goal()     → checkpoint UPSERT + force_flush
 
 Connection contention and pool exhaustion (`PoolTimeout` after `DiskFull` in `0b37`) are predictable under load.
 
-**Files**: `shared_pool.py`, `context/persistence/factory.py`, `context/persistence/pgsql_backend.py`
+**Files**: `shared_pool.py`, `context/factory.py`, `context/pgsql_backend.py`
 
 ### 4. Per-request flush worker churn
 
@@ -165,7 +165,7 @@ Goal tail persist ────────┘         │
 - One coalescing queue keyed by `loop_id`: intermediate checkpoints replace pending entry; only latest snapshot is written per flush tick.
 - Goal-boundary writes tagged **`durability=required`**: bypass coalesce delay, flush immediately, but still one combined transaction where possible.
 
-**New module (proposed)**: `packages/soothe/src/soothe/foundation/persistence/loop_writer.py`
+**New module (proposed)**: `packages/soothe/src/soothe/persistence/loop_writer.py`
 
 ### B. Split hot index from cold blob
 

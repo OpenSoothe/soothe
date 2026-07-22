@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.prompts.plan_ledger_projection import (
     collect_cross_goal_completion_units,
     project_cross_goal_completion_tail,
     project_execute_step_graph_input,
     resolve_execute_projection_mode,
 )
+from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_resolve_execute_projection_mode_goal_boundary() -> None:
@@ -18,7 +18,7 @@ def test_resolve_execute_projection_mode_goal_boundary() -> None:
 
 
 def test_resolve_execute_projection_mode_mid_goal() -> None:
-    from soothe.foundation.sloop.state.schemas import StepResult
+    from soothe.sloop.state.schemas import StepResult
 
     state = LoopState(
         goal="g",
@@ -173,7 +173,7 @@ def test_project_execute_step_graph_input_slice_a_on_continue() -> None:
 
 
 def test_project_execute_step_graph_input_mid_goal_no_slice_a() -> None:
-    from soothe.foundation.sloop.state.schemas import StepResult
+    from soothe.sloop.state.schemas import StepResult
 
     step = StepAction(id="02", description="Fix", dependencies=["01"])
     step_a = StepAction(id="01", description="Verify")

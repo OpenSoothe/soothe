@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+from soothe.sloop.engine.strange_loop import StrangeLoop
 
 
 def test_strange_loop_resolves_goal_synthesis_model_role() -> None:

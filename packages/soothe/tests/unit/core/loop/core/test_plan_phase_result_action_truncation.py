@@ -6,8 +6,8 @@ Verifies that PlanResult.next_action is derived from plan-generate output
 
 import pytest
 
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanGenerateStep,
     PlanGeneration,

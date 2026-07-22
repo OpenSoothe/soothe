@@ -70,10 +70,10 @@ async def pg_agent_config() -> SootheConfig:
 
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_singletons() -> None:
-    import soothe.foundation.persistence.loop_writer as lw_mod
+    import soothe.persistence.loop_writer as lw_mod
     import soothe.runner.resolver.shared_checkpointer_pool as cp_mod
-    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
-    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.persistence.loop_writer import LoopPersistenceWriter
+    from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 
     await LoopPersistenceWriter.close_shared_instance()
     LoopPersistenceWriter._bound_loop = None
@@ -117,7 +117,7 @@ async def test_concurrent_thread_workers_share_checkpointer_pool(
     pg_agent_config: SootheConfig, requires_llm_api
 ) -> None:
     """Regression: parallel workers must not each create max_size=8 pools."""
-    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 
     await SharedPostgreSQLPool.get_shared_instance(pg_agent_config)
     cp = SharedCheckpointerPool.get_or_create_pool(pg_agent_config)
@@ -142,12 +142,12 @@ def _thread_worker_enqueue_checkpoint(config: SootheConfig) -> None:
     """Simulate thread_pool worker enqueueing via submit bridge."""
     from datetime import UTC, datetime
 
-    from soothe.foundation.persistence.loop_writer import (
+    from soothe.persistence.loop_writer import (
         LoopPersistenceWriter,
         PersistWriteMode,
     )
-    from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
-    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
+    from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint, ThreadHealthMetrics
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -186,8 +186,8 @@ async def test_concurrent_thread_workers_submit_to_bound_writer(
     pg_agent_config: SootheConfig,
 ) -> None:
     """Regression: loop writer submit bridge must work from worker event loops."""
-    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
-    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.persistence.loop_writer import LoopPersistenceWriter
+    from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 
     LoopPersistenceWriter.bind_main_loop(asyncio.get_running_loop())
     await SharedPostgreSQLPool.get_shared_instance(pg_agent_config)

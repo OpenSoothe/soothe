@@ -480,15 +480,15 @@ Executed on daemon startup:
 
 | Component | Location |
 |-----------|----------|
-| ContextEngine | `packages/soothe/src/soothe/foundation/context/engine.py` |
-| GoalStepDAG | `packages/soothe/src/soothe/foundation/context/models.py` |
-| AutopilotService | `packages/soothe/src/soothe/foundation/autopilot/service/service.py` |
-| AutopilotMonitor | `packages/soothe/src/soothe/foundation/autopilot/monitor/monitor.py` |
-| GoalIntakeHandler | `packages/soothe/src/soothe/foundation/autopilot/monitor/goal_intake_handler.py` |
-| GoalDAGVerifier | `packages/soothe/src/soothe/foundation/autopilot/monitor/goal_dag_verifier.py` |
-| GoalBackoffReasoner | `packages/soothe/src/soothe/foundation/autopilot/monitor/backoff_reasoner.py` |
-| GoalScheduler | `packages/soothe/src/soothe/foundation/context/planning/scheduling.py` |
-| GoalCompletionNode | `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` |
+| ContextEngine | `packages/soothe/src/soothe/context/engine.py` |
+| GoalStepDAG | `packages/soothe/src/soothe/context/models.py` |
+| AutopilotService | `packages/soothe/src/soothe/autopilot/service.py` |
+| AutopilotMonitor | `packages/soothe/src/soothe/autopilot/monitor.py` |
+| GoalIntakeHandler | `packages/soothe/src/soothe/autopilot/goal_intake_handler.py` |
+| GoalDAGVerifier | `packages/soothe/src/soothe/autopilot/goal_dag_verifier.py` |
+| GoalBackoffReasoner | `packages/soothe/src/soothe/autopilot/backoff_reasoner.py` |
+| GoalScheduler | `packages/soothe/src/soothe/context/scheduling.py` |
+| GoalCompletionNode | `packages/soothe/src/soothe/sloop/nodes/goal_completion.py` |
 
 ---
 

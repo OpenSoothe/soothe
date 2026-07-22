@@ -24,7 +24,7 @@ This RFC consolidates all entity models under ContextEngine, eliminates the `Loo
 
 1. **LoopState persists as execution-only container**: StrangeLoop still maintains `LoopState` (RFC-203) with wave metrics, iteration tracking, and plan history. These fields duplicate ContextEngine properties (`total_tokens_used`, `iteration`, `previous_plan`) and create two sources of truth.
 
-2. **Job abstraction uses intermediate Goal model**: RFC-228 defines Job as "root Goal" but autopilot engine still has a `Goal` model (`autopilot/engine/models.py`) that wraps GoalNode. The wrapper adds retry/backoff fields that RFC-625 already migrated to GoalNode.
+2. **Job abstraction uses intermediate Goal model**: RFC-228 defines Job as "root Goal" but autopilot engine still has a `Goal` model (`autopilot/models.py`) that wraps GoalNode. The wrapper adds retry/backoff fields that RFC-625 already migrated to GoalNode.
 
 3. **Ledger split between LedgerManager and loop_messages**: StrangeLoop writes to both `LoopState.loop_messages` (prompt pipeline) and `LedgerManager` (persistence). The dual-write is fragile and the adapter pattern (RFC-624 §9) adds complexity.
 
@@ -188,7 +188,7 @@ def goal_subtree(self, root_goal_id: str) -> dict[str, Any]:
     """
 ```
 
-**No Goal wrapper model**: The `Goal` class in `autopilot/engine/models.py` is deleted. All fields already migrated to GoalNode per RFC-625 §2.
+**No Goal wrapper model**: The `Goal` class in `autopilot/models.py` is deleted. All fields already migrated to GoalNode per RFC-625 §2.
 
 **Job-to-Worker mapping**: Job (root goal) → assigned worker via GoalNode.assigned_loop_id. Worker executes goal and all descendants via StrangeLoop iteration.
 
@@ -304,7 +304,7 @@ class ExecutionCheckpoint(BaseModel):
 
 | Path | Reason |
 |------|--------|
-| `autopilot/engine/models.py:Goal` | Fields migrated to GoalNode (RFC-625) |
+| `autopilot/models.py:Goal` | Fields migrated to GoalNode (RFC-625) |
 | `loop/state/schemas.py:LoopState` | Replaced by ExecutionState facade |
 | `loop/state/adapters/*` | Adapter pattern eliminated (RFC-624 §9) |
 
@@ -322,7 +322,7 @@ class ExecutionCheckpoint(BaseModel):
 | `foundation/context/models.py:GoalNode` | Add `max_iterations` field (from LoopState) |
 | `foundation/sloop/orchestrator/state.py` | Replace LoopState → ExecutionState |
 | `foundation/sloop/orchestrator/strange_loop.py` | Remove loop_messages list, use LedgerManager |
-| `foundation/autopilot/monitor/monitor.py` | Job operations → CE goal APIs |
+| `foundation/autopilot/monitor.py` | Job operations → CE goal APIs |
 
 ---
 
@@ -432,7 +432,7 @@ class ExecutionCheckpoint(BaseModel):
 **Scope**: Delete Goal wrapper, direct CE operations
 
 **Changes**:
-- Delete `autopilot/engine/models.py:Goal` (already migrated fields)
+- Delete `autopilot/models.py:Goal` (already migrated fields)
 - AutopilotService.submit_task → ce.create_goal()
 - IPC handlers → ce.get_goal(), ce.goal_subtree()
 - CLI/Desktop → ce.list_goals(parent_id=None)

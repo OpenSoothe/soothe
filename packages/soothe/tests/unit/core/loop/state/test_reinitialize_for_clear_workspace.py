@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
+from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
 
 @pytest.mark.asyncio

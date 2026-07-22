@@ -225,7 +225,7 @@ observability:
 {
   "timestamp": "2026-06-06T02:40:15Z",
   "level": "DEBUG",
-  "logger": "soothe.foundation.sloop.engine.strange_loop",
+  "logger": "soothe.sloop.engine.strange_loop",
   "message": "Tool invocation completed",
   "tool_name": "read_file",
   "execution_time_ms": 150,

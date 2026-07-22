@@ -14,7 +14,7 @@ Replace the Skillify **subagent** with a daemon-shared `SkillifyService` in `fou
 
 | Area | Change |
 |------|--------|
-| Package | New `packages/soothe/src/soothe/foundation/skillify/` (`SkillifyService`, indexer, retriever, warehouse) |
+| Package | New `packages/soothe/src/soothe/skillify/` (`SkillifyService`, indexer, retriever, warehouse) |
 | Config | Top-level `skillify:` section in config YAML |
 | Daemon | `SootheDaemon.start()` starts service after `preopen_shared_postgres_pools`; worker warmup starts per subprocess |
 | Removed | `subagents/skillify/` subagent (LangGraph, plugin, wire routing) |

@@ -306,5 +306,5 @@ Same branch destinations as RFC-630. Only the intake mechanism changes.
 
 - RFC-630: Start-Phase LLM Intake and Branch Routing
 - IG-540: Intent Classify Prompt Ledger Optimization
-- `packages/soothe/src/soothe/foundation/sloop/intention/classifier.py`
+- `packages/soothe/src/soothe/sloop/intention/classifier.py`
 - Rejected one-pass draft: `docs/drafts/2026-07-06-one-pass-intent-classify-optimization.md`

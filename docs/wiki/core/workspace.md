@@ -14,11 +14,11 @@ Unified workspace resolution, path validation, and sandbox boundaries.
 
 ## What This Module Is
 
-The workspace module (`soothe.foundation.workspace`) resolves, validates, and isolates the directories where Soothe agents operate. It's the security boundary between agent file operations and the host filesystem. Every tool that reads, writes, or lists files goes through workspace-aware resolution.
+The workspace module (`soothe.workspace`) resolves, validates, and isolates the directories where Soothe agents operate. It's the security boundary between agent file operations and the host filesystem. Every tool that reads, writes, or lists files goes through workspace-aware resolution.
 
 The module provides: daemon workspace resolution (ephemeral fallback), client workspace validation, stream-scoped workspace resolution (RFC-103), the `FrameworkFilesystem` singleton, and a workspace-aware backend wrapper.
 
-**Source**: `packages/soothe/src/soothe/foundation/workspace/` — modules: `resolution.py` (daemon/client resolution), `core_resolution.py` (shared precedence), `stream_resolution.py` (runner stream), `runtime_resolution.py` (tool execution), `loop_workspace.py` (loop-scoped), `framework_filesystem.py` (singleton), `normalized_backend.py` (workspace-aware backend), `virtual_home.py` (sandbox mode), `context.py` (workspace ContextVar), `tool_path_resolution.py` (virtual_mode decision), `migration.py` (layout migration)
+**Source**: `packages/soothe/src/soothe/workspace/` — modules: `resolution.py` (daemon/client resolution), `core_resolution.py` (shared precedence), `stream_resolution.py` (runner stream), `runtime_resolution.py` (tool execution), `loop_workspace.py` (loop-scoped), `framework_filesystem.py` (singleton), `normalized_backend.py` (workspace-aware backend), `virtual_home.py` (sandbox mode), `context.py` (workspace ContextVar), `tool_path_resolution.py` (virtual_mode decision), `migration.py` (layout migration)
 
 ---
 
@@ -122,7 +122,7 @@ Security validation (`validate_workspace_security`) checks the path against the 
 ## Minimal Usage
 
 ```python
-from soothe.foundation.workspace import resolve_daemon_workspace, FrameworkFilesystem
+from soothe.workspace import resolve_daemon_workspace, FrameworkFilesystem
 from soothe.config import SootheConfig
 
 config = SootheConfig.from_yaml_file("config.yml")

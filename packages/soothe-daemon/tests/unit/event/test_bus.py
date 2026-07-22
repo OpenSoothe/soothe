@@ -5,7 +5,7 @@ import logging
 from types import SimpleNamespace
 
 import pytest
-from soothe.foundation.events import EventPriority
+from soothe.events import EventPriority
 
 from soothe_daemon.event import EventBus
 

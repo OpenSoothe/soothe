@@ -28,7 +28,7 @@ Retry nudges are **failure-mode-specific**; retry passes **replace** prior pass 
 
 | Area | File |
 |------|------|
-| Gate logic | `packages/soothe/src/soothe/foundation/sloop/cognition/step_deliverable.py` |
+| Gate logic | `packages/soothe/src/soothe/sloop/cognition/step_deliverable.py` |
 | Remove legacy | Delete `simple_bypass.py` |
 | Pass 2 field | `IntakePass2LLMResult.requires_tool_use` + prompt |
 | Step metadata | `StepAction.requires_tool_use` |

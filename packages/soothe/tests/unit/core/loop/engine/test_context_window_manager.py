@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.engine.context_window_manager import (
+from soothe.sloop.engine.context_window_manager import (
     ContextCompactionResult,
     ContextWindowManager,
 )
-from soothe.foundation.sloop.state.schemas import LoopState
+from soothe.sloop.state.schemas import LoopState
 
 
 class MockCheckpoint:

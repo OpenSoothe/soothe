@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
+from soothe.autopilot.dreaming_reasoner import DreamingDistillationReasoner
+from soothe.autopilot.verifier_reasoner import DagVerificationReasoner
 from soothe.config import SootheConfig
-from soothe.foundation.autopilot.monitor.backoff_reasoner import GoalBackoffReasoner
-from soothe.foundation.autopilot.monitor.dreaming_reasoner import DreamingDistillationReasoner
-from soothe.foundation.autopilot.monitor.verifier_reasoner import DagVerificationReasoner
 
 
 def test_autopilot_model_role_defaults() -> None:

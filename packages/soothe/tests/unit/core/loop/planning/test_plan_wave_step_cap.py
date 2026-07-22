@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     AgentDecision,
     LoopState,

@@ -9,9 +9,9 @@ import pytest
 from langchain_core.messages import HumanMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     StatusAssessment,

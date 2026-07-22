@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-from soothe.foundation.sloop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.sloop.checkpoints.sqlite_backend import SQLitePersistenceBackend
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from soothe.foundation.sloop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.sloop.checkpoints.sqlite_backend import SQLitePersistenceBackend
 
 
 def _legacy_goal_records_columns(db_path: Path) -> set[str]:

@@ -71,12 +71,12 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Pattern 4: Stale paths 'core/strange_loop/' (should be 'foundation/sloop/engine/')
+# Pattern 4: Stale paths 'core/strange_loop/' (should be 'sloop/engine/')
 # ---------------------------------------------------------------------------
 echo "[4/7] Checking for stale 'core/strange_loop/' paths..."
 OUTPUT=$(grep -rn --include="*.md" "core/strange_loop/" "$WIKI_DIR" 2>/dev/null | grep -v "$EXCLUDE_FILTER" || true)
 if [ -n "$OUTPUT" ]; then
-    echo "  ERROR: Found stale path 'core/strange_loop/' - use 'foundation/sloop/engine/' instead"
+    echo "  ERROR: Found stale path 'core/strange_loop/' - use 'sloop/engine/' instead"
     echo "$OUTPUT" | sed 's/^/    /'
     ERRORS=$((ERRORS + 1))
 else

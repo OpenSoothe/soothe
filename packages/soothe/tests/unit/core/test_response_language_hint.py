@@ -1,10 +1,10 @@
 """Tests for dynamic response-language hint builder."""
 
-from soothe.foundation.sloop.intention.models import ResponseLanguage
 from soothe.prompts.system_templates import (
     RESPONSE_LANGUAGE_HINT_FALLBACK,
     build_response_language_hint,
 )
+from soothe.sloop.intention.models import ResponseLanguage
 
 
 def test_build_response_language_hint_zh() -> None:
@@ -19,7 +19,7 @@ def test_build_response_language_hint_fallback_for_other() -> None:
 
 
 def test_pick_generic_chitchat_fallback_uses_structured_language() -> None:
-    from soothe.foundation.sloop.chitchat_fallbacks import (
+    from soothe.sloop.chitchat_fallbacks import (
         GENERIC_CHITCHAT_FALLBACKS_ZH,
         pick_generic_chitchat_fallback,
     )

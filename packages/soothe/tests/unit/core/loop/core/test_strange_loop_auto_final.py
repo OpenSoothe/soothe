@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.sloop import StrangeLoop
-from soothe.foundation.sloop.state.schemas import PlanResult
+from soothe.context.planning_models import CompletionStrategy
+from soothe.sloop import StrangeLoop
+from soothe.sloop.state.schemas import PlanResult
 
 
 def _make_mock_core_with_checkpointer() -> Mock:
@@ -117,15 +117,15 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 
     with (
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.context.engine.ContextEngine",
+            "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)
@@ -148,7 +148,7 @@ async def test_done_skips_second_core_astream_when_policy_reuses_execute() -> No
 @pytest.mark.asyncio
 async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected() -> None:
     """Ledger-direct goal completion should bypass synthesis when planner recommends it."""
-    from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
+    from soothe.sloop.engine.synthesis import SynthesisGenerator
 
     calls = 0
 
@@ -172,7 +172,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
     # Add ledger content so LEDGER_DIRECT has content and doesn't fall back to synthesis
-    from soothe.foundation.sloop.utils.messages import LoopAIMessage
+    from soothe.sloop.utils.messages import LoopAIMessage
 
     mock_ce.ledger.record_message = Mock()
     mock_ce.ledger.entries = Mock(
@@ -181,15 +181,15 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 
     with (
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.context.engine.ContextEngine",
+            "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch.object(
             SynthesisGenerator,
@@ -220,7 +220,7 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
 @pytest.mark.asyncio
 async def test_completed_payload_for_summary_path() -> None:
     """Summary path is used when ledger is empty and synthesis produces no text."""
-    from soothe.foundation.sloop.engine.synthesis import SynthesisGenerator
+    from soothe.sloop.engine.synthesis import SynthesisGenerator
 
     async def empty_gen(*args, **kwargs):  # noqa: ARG002
         if False:
@@ -237,15 +237,15 @@ async def test_completed_payload_for_summary_path() -> None:
 
     with (
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.context.engine.ContextEngine",
+            "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch.object(
             SynthesisGenerator,
@@ -289,15 +289,15 @@ async def test_main_thread_id_normalizes_to_loop_id_on_initialize() -> None:
 
     with (
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.context.engine.ContextEngine",
+            "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
     ):
         am_cls.create = AsyncMock(return_value=mock_anchor_mgr)

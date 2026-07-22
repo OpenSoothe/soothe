@@ -11,10 +11,10 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.events import EventPriority
+from soothe.events import EventPriority
 
 if TYPE_CHECKING:
-    from soothe.foundation.events import EventMeta
+    from soothe.events import EventMeta
 
     from soothe_daemon.event.size_stats import EventSizeDistributionCollector
 
@@ -128,7 +128,7 @@ def _is_user_visible_for_backpressure(
     event_meta: EventMeta | None,
 ) -> bool:
     """Return True for wire frames that must not be silently dropped under pressure."""
-    from soothe.foundation.events.visibility import (
+    from soothe.events.visibility import (
         WireEnvelopeKind,
         classify_wire_envelope,
         event_type_from_wire_message,

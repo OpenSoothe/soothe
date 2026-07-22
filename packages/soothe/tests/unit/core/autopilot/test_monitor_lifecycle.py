@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from soothe.autopilot import AutopilotService
+from soothe.autopilot.monitor_models import GoalIntakeResult
 from soothe.config.models import AutopilotConfig
-from soothe.foundation.autopilot.monitor.models import GoalIntakeResult
-from soothe.foundation.autopilot.service import AutopilotService
-from soothe.foundation.context import ContextEngine
-from soothe.foundation.events.internal_bus import InternalEventBus
+from soothe.context import ContextEngine
+from soothe.events.internal_bus import InternalEventBus
 
 from .fakes import IdleFakeFactory
 

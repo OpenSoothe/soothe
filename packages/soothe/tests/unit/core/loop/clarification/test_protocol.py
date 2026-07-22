@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from soothe.foundation.sloop.clarification.protocol import (
+from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
     ClarificationRequest,

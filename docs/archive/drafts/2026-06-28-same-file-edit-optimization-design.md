@@ -602,7 +602,7 @@ The recommended action: install `FileLockMiddleware` in autopilot mode (as origi
 
 ### Layer 1: Atomic Write + Version Stamp
 
-**Location**: `packages/soothe/src/soothe/foundation/core/filesystem/local.py`
+**Location**: `packages/soothe/src/soothe/core/filesystem/local.py`
 
 | Component | Responsibility |
 |-----------|---------------|
@@ -614,7 +614,7 @@ The recommended action: install `FileLockMiddleware` in autopilot mode (as origi
 
 ### Layer 2: Per-File Async Mutex
 
-**Location**: `packages/soothe/src/soothe/foundation/core/filesystem/local.py`
+**Location**: `packages/soothe/src/soothe/core/filesystem/local.py`
 
 | Component | Responsibility |
 |-----------|---------------|
@@ -791,7 +791,7 @@ Result mapping → resolve futures for edit_A, edit_B, edit_C
 | Step | File | Change |
 |------|------|--------|
 | 12 | `middleware/file_lock.py` | Install in autopilot middleware chain (currently not wired) |
-| 13 | `autopilot/engine/file_lock_registry.py` | Ensure `FileLockRegistry` is in main workspace (currently only in worktree) |
+| 13 | `autopilot/file_lock_registry.py` | Ensure `FileLockRegistry` is in main workspace (currently only in worktree) |
 | 14 | Integration test | Two StrangeLoops edit same file → second gets conflict error |
 
 **Estimated LOC**: ~20 wiring + test code. Implementation already exists.
@@ -892,7 +892,7 @@ Result mapping → resolve futures for edit_A, edit_B, edit_C
 | `middleware/rate_limit.py` | 2 | Fast-path check |
 | `middleware/tool_concurrency.py` | 2 | Fast-path check |
 | `middleware/file_lock.py` | 3 | Wire into autopilot middleware chain |
-| `foundation/autopilot/engine/file_lock_registry.py` | 3 | Ensure present in main workspace |
+| `foundation/autopilot/file_lock_registry.py` | 3 | Ensure present in main workspace |
 | `tests/integration/test_parallel_edits.py` | 1-3 | Race, crash, external-modification tests |
 | `tests/unit/middleware/test_edit_coalescing.py` | 2 | Coalescing unit tests |
 | `packages/soothe/pyproject.toml` | 2 | Add `aiofiles>=24.1.0` (if not already present) |
@@ -905,5 +905,5 @@ Result mapping → resolve futures for edit_A, edit_B, edit_C
 - RFC-101: Tool interface (middleware chain structure)
 - RFC-102: Security filesystem policy (path validation, permissions)
 - RFC-222: Autopilot goal engine architecture (`FileLockRegistry`, cross-loop locking)
-- Existing implementation: `packages/soothe/src/soothe/foundation/core/filesystem/local.py` (`aedit`, `aedit_batched`, `apply_diff`)
+- Existing implementation: `packages/soothe/src/soothe/core/filesystem/local.py` (`aedit`, `aedit_batched`, `apply_diff`)
 - Existing middleware: `packages/soothe/src/soothe/middleware/file_lock.py` (uninstalled cross-loop lock)

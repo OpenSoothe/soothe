@@ -16,7 +16,7 @@ async def test_increment_loop_ai_message_count_uses_shared_pool() -> None:
     pm.close = AsyncMock()
 
     with patch(
-        "soothe.foundation.sloop.state.persistence.manager.StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool",
+        "soothe.sloop.checkpoints.manager.StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool",
         new=AsyncMock(return_value=pm),
     ) as factory:
         await _increment_loop_ai_message_count(MagicMock(), "loop-1")

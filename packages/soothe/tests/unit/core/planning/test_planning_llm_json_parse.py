@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from soothe.foundation.sloop.utils.json_parsing import _load_llm_json_dict
+from soothe.sloop.utils.json_parsing import _load_llm_json_dict
 
 
 def test_load_plain_object() -> None:

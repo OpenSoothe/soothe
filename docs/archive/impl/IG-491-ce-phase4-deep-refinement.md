@@ -30,7 +30,7 @@ Replace remaining `checkpoint.goal_history` reads in graph nodes with CE queries
 Add `_has_prior_completed_goal()` helper function that queries CE DAG.
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py`
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/plan_assess.py`
 
 **Verification:**
 - Helper returns correct boolean from CE DAG
@@ -41,7 +41,7 @@ Add `_has_prior_completed_goal()` helper function that queries CE DAG.
 Replace `len(ctx.checkpoint.goal_history) >= 2` with `_has_prior_completed_goal(ctx)`.
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py`
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/plan_assess.py`
 
 **Verification:**
 - Continuation discriminator uses CE query
@@ -52,7 +52,7 @@ Replace `len(ctx.checkpoint.goal_history) >= 2` with `_has_prior_completed_goal(
 Remove the `else` branch that reads `checkpoint.goal_history`.
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/bounded_evidence_gather.py`
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/bounded_evidence_gather.py`
 
 **Verification:**
 - `_is_fresh_loop()` has no checkpoint read
@@ -63,7 +63,7 @@ Remove the `else` branch that reads `checkpoint.goal_history`.
 Remove reference to deleted `seed_loop_ledger_from_prior_goal` function.
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_assess.py`
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/plan_assess.py`
 
 **Verification:**
 - No references to deleted function in docstrings/comments

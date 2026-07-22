@@ -36,11 +36,11 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 ### Step 1: CE Persistence + ce.load() on Startup
 
 **Files to create:**
-- `packages/soothe/src/soothe/context/persistence/sqlite_backend.py` — `SqliteContextPersistence`
+- `packages/soothe/src/soothe/context/sqlite_backend.py` — `SqliteContextPersistence`
 
 **Files to modify:**
-- `packages/soothe/src/soothe/context/persistence/__init__.py` — export SqliteContextPersistence
-- `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` — call `await ce.load()` after creating CE, before `create_goal()`
+- `packages/soothe/src/soothe/context/__init__.py` — export SqliteContextPersistence
+- `packages/soothe/src/soothe/loop/engine/strange_loop.py` — call `await ce.load()` after creating CE, before `create_goal()`
 - `packages/soothe/src/soothe/config/models.py` — add `"sqlite"` option, change default
 - `config/config.template.yml` — `persistence_backend: "sqlite"`
 - `config/develop/config.yml` — matching change
@@ -54,7 +54,7 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 
 **Files to modify:**
 - `packages/soothe/src/soothe/context/models.py` — add 6 fields to StepExecution
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/record_iteration.py` — pass enriched StepExecution to ce.complete_step()
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/record_iteration.py` — pass enriched StepExecution to ce.complete_step()
 
 **Verification:**
 - StepExecution round-trips through save/load with all new fields
@@ -63,8 +63,8 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 ### Step 3: Migrate loop_messages → CE Sole Source
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/schemas.py` — `loop_messages` becomes property
-- `packages/soothe/src/soothe/foundation/loop/utils/messages.py` — delete `_record_ledger_message()` dual-write; delete `seed_loop_ledger_from_prior_goal()`
+- `packages/soothe/src/soothe/loop/state/schemas.py` — `loop_messages` becomes property
+- `packages/soothe/src/soothe/loop/utils/messages.py` — delete `_record_ledger_message()` dual-write; delete `seed_loop_ledger_from_prior_goal()`
 - All graph nodes that call `_record_ledger_message()` — change to `ce.ledger.record_message()`
 
 **Verification:**
@@ -74,8 +74,8 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 ### Step 4: Migrate step_results / completed_step_ids → CE Properties
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/schemas.py` — `step_results` and `completed_step_ids` become properties; delete `add_step_result()`
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/record_iteration.py` — remove `state.add_step_result()` calls
+- `packages/soothe/src/soothe/loop/state/schemas.py` — `step_results` and `completed_step_ids` become properties; delete `add_step_result()`
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/record_iteration.py` — remove `state.add_step_result()` calls
 
 **Verification:**
 - `dependency_completion_ids()` returns same results
@@ -86,8 +86,8 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 **Files to modify:**
 - `packages/soothe/src/soothe/context/models.py` — add `GoalNode.active_plan` field
 - `packages/soothe/src/soothe/context/engine.py` — add `ingest_plan()`, `active_plan()` methods
-- `packages/soothe/src/soothe/foundation/loop/state/schemas.py` — `current_decision` and `plan_id` become properties
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/resolve_decision.py` — call `ce.ingest_plan()` instead of setting `state.current_decision`
+- `packages/soothe/src/soothe/loop/state/schemas.py` — `current_decision` and `plan_id` become properties
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/resolve_decision.py` — call `ce.ingest_plan()` instead of setting `state.current_decision`
 
 **Verification:**
 - Plan ingestion and step ID scoping work identically
@@ -97,7 +97,7 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 **Files to modify:**
 - `packages/soothe/src/soothe/context/models.py` — add `GoalNode.max_iterations`, `GoalNode.total_duration_ms`, `GoalNode.previous_plan`, `GoalNode.evidence_ledger`, `GoalNode.action_history`
 - `packages/soothe/src/soothe/context/engine.py` — add `record_evidence()`, `record_action()`, `finalize_goal()`
-- `packages/soothe/src/soothe/foundation/loop/state/schemas.py` — properties for all remaining CE fields; delete `working_memory`, `prior_progress`, `evidence_summary`
+- `packages/soothe/src/soothe/loop/state/schemas.py` — properties for all remaining CE fields; delete `working_memory`, `prior_progress`, `evidence_summary`
 
 **Verification:**
 - All properties read correct values from CE
@@ -105,14 +105,14 @@ Make ContextEngine the sole data source for goal/step/ledger state. LoopState's 
 ### Step 7: Delete Adapters + Simplify Checkpoint
 
 **Files to delete:**
-- `packages/soothe/src/soothe/foundation/loop/engine/context_adapters.py` (ContextEngineGoalContextAdapter)
-- `packages/soothe/src/soothe/foundation/loop/engine/context_lifecycle.py` (ContextEngineLifecycle)
-- `packages/soothe/src/soothe/context/planning/step_planner.py` → remove `StepPlanManagerAdapter` class
+- `packages/soothe/src/soothe/loop/engine/context_adapters.py` (ContextEngineGoalContextAdapter)
+- `packages/soothe/src/soothe/loop/engine/context_lifecycle.py` (ContextEngineLifecycle)
+- `packages/soothe/src/soothe/context/step_planner.py` → remove `StepPlanManagerAdapter` class
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/checkpoint.py` — trim GoalExecutionRecord to 7 fields; trim StrangeLoopCheckpoint; schema 4.0
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/runtime_context.py` — remove `goal_context_manager`, `plan_manager`, `ce_lifecycle`
-- `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` — wire nodes to call ctx.ce directly
+- `packages/soothe/src/soothe/loop/state/checkpoint.py` — trim GoalExecutionRecord to 7 fields; trim StrangeLoopCheckpoint; schema 4.0
+- `packages/soothe/src/soothe/loop/orchestrator/runtime_context.py` — remove `goal_context_manager`, `plan_manager`, `ce_lifecycle`
+- `packages/soothe/src/soothe/loop/engine/strange_loop.py` — wire nodes to call ctx.ce directly
 - All graph node files — replace adapter calls with direct CE calls
 - `packages/soothe/src/soothe/context/projection.py` — add PriorGoalSummary, cross_goal_ledger
 

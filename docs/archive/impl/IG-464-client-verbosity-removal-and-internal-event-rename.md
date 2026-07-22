@@ -37,7 +37,7 @@ through the existing `is_client_broadcast_event_type` prefix gate.
 - `display_policy.is_internal_event` switched from `"internal" in event_type`
   (substring) to `event_type.startswith("soothe.internal.")` (prefix), avoiding
   false positives.
-- Deleted `packages/soothe/src/soothe/foundation/verbosity_tier.py` — a verbatim
+- Deleted `packages/soothe/src/soothe/verbosity_tier.py` — a verbatim
   duplicate of `soothe_sdk.core.verbosity` that nothing imported (the foundation
   `__init__` already re-exports from the SDK).
 
@@ -58,7 +58,7 @@ binary and cannot replace its granularity.
 - `packages/soothe/src/soothe/core/events/catalog.py`
 - `packages/soothe/src/soothe/mcp/events.py`
 - `packages/soothe/src/soothe/skills/events.py`
-- `packages/soothe/src/soothe/foundation/verbosity_tier.py` (deleted)
+- `packages/soothe/src/soothe/verbosity_tier.py` (deleted)
 - Tests: `test_session_bootstrap.py`, `test_session_bootstrap_reconnect.py`,
   daemon `test_session.py`, integration `daemon_fixtures.py`,
   `test_daemon_multi_client.py`, `test_daemon_loop_isolation.py`

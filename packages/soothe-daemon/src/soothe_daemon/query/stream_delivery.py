@@ -37,7 +37,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
+from soothe.events.visibility import is_custom_stream_payload_client_visible
 from soothe_sdk.core.events import STRANGE_LOOP_COMPLETED, STREAM_END
 from soothe_sdk.display.text_extract import extract_text_from_ai_message
 from soothe_sdk.ux.loop_stream import (

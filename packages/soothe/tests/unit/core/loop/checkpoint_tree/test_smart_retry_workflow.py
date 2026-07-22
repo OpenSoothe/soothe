@@ -17,22 +17,22 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 try:
-    from soothe.foundation.sloop.engine.branch_manager import FailedBranchManager
-    from soothe.foundation.sloop.engine.failure_analyzer import FailureAnalyzer
+    from soothe.sloop.engine.branch_manager import FailedBranchManager
+    from soothe.sloop.engine.failure_analyzer import FailureAnalyzer
 except ModuleNotFoundError:  # pragma: no cover
     pytest.skip(
-        "Checkpoint tree branch_manager/failure_analyzer were removed from soothe.foundation.sloop; "
+        "Checkpoint tree branch_manager/failure_analyzer were removed from soothe.sloop; "
         "this suite is pending an RFC-218-aligned rewrite.",
         allow_module_level=True,
     )
 
-from soothe.foundation.sloop.engine.anchor_manager import CheckpointAnchorManager
-from soothe.foundation.sloop.state.persistence.directory_manager import (
+from soothe.sloop.checkpoints.directory_manager import (
     PersistenceDirectoryManager,
 )
-from soothe.foundation.sloop.state.persistence.manager import (
+from soothe.sloop.checkpoints.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
+from soothe.sloop.engine.anchor_manager import CheckpointAnchorManager
 
 
 @contextmanager

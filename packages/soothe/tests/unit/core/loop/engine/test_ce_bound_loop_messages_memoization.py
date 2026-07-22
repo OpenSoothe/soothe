@@ -27,13 +27,13 @@ from typing import Any
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.engine.goal_interrupt_record import (
+from soothe.context.engine import ContextEngine
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.engine.goal_interrupt_record import (
     append_goal_interrupted_ledger_pair,
 )
-from soothe.foundation.sloop.state.schemas import LoopState
-from soothe.foundation.sloop.utils.messages import (
+from soothe.sloop.state.schemas import LoopState
+from soothe.sloop.utils.messages import (
     LoopAIMessage,
     LoopHumanMessage,
     _record_ledger_message,

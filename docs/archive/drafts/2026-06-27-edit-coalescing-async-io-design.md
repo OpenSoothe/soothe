@@ -227,7 +227,7 @@ async def awrap_tool_call(self, call: ToolCall, next_handler):
 
 ### 4. Async File I/O (aiofiles)
 
-**Location:** `packages/soothe/src/soothe/foundation/core/filesystem/local.py`
+**Location:** `packages/soothe/src/soothe/core/filesystem/local.py`
 
 **Change Summary:**
 

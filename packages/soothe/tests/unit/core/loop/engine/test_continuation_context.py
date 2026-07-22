@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.continuation_context import (
+from soothe.sloop.engine.continuation_context import (
     build_continuation_execution_hints,
     build_continue_bootstrap_step_briefs,
     ledger_goal_completion_text,
 )
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_ledger_goal_completion_text_returns_latest_ai_body() -> None:

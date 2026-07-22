@@ -5,9 +5,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.cognition import structured_plan_parser as spm
-from soothe.foundation.sloop.cognition.parser import parse_plan_from_text
-from soothe.foundation.sloop.cognition.structured_plan_parser import (
+from soothe.sloop.cognition import structured_plan_parser as spm
+from soothe.sloop.cognition.parser import parse_plan_from_text
+from soothe.sloop.cognition.structured_plan_parser import (
     PlanExtracted,
     PlanStepExtracted,
     parse_plan_with_config,

@@ -10,7 +10,7 @@ permalink: /wiki/protocols/
 
 # Protocol Layer: Core Abstractions
 
-**Status**: All listed protocols implemented. ContextProtocol is **not implemented** — context management uses `ContextEngine` (`soothe.foundation.context`), not a protocol.
+**Status**: All listed protocols implemented. ContextProtocol is **not implemented** — context management uses `ContextEngine` (`soothe.context`), not a protocol.
 **Philosophy**: Protocol-first, runtime-second (RFC-000 Principle 1)
 
 ## What the Protocol Layer Is
@@ -63,7 +63,7 @@ Soothe's protocols organize into four categories:
 
 | Protocol | Status | Note |
 |----------|--------|------|
-| ~~ContextProtocol~~ | **Not implemented** (RFC-302 draft) | Context management is handled by `ContextEngine` (`soothe.foundation.context`), not a protocol. See [context.md](context.md). |
+| ~~ContextProtocol~~ | **Not implemented** (RFC-302 draft) | Context management is handled by `ContextEngine` (`soothe.context`), not a protocol. See [context.md](context.md). |
 
 ## Protocol Relationships
 

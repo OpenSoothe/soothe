@@ -6,7 +6,7 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe.foundation.events import EventMeta
+from soothe.events import EventMeta
 from soothe_sdk.core.events import SootheEvent
 from soothe_sdk.core.verbosity import VerbosityTier
 
@@ -474,7 +474,7 @@ def test_get_batch_timeout_reads_strange_loop_output_streaming() -> None:
 
 def test_queue_has_high_priority_detects_high_event() -> None:
     """IG-436: _queue_has_high_priority returns True for HIGH priority events."""
-    from soothe.foundation.events import EventPriority
+    from soothe.events import EventPriority
 
     from soothe_daemon.server.session import _queue_has_high_priority
 
@@ -536,7 +536,7 @@ def test_queue_has_high_priority_handles_tuple_and_non_tuple() -> None:
 @pytest.mark.asyncio
 async def test_sender_loop_flushes_high_priority_immediately() -> None:
     """IG-436: HIGH priority events bypass batch fill loop."""
-    from soothe.foundation.events import EventPriority
+    from soothe.events import EventPriority
 
     bus = EventBus()
     manager = ClientSessionManager(bus)
@@ -629,7 +629,7 @@ async def test_sender_loop_batches_normal_priority() -> None:
 @pytest.mark.asyncio
 async def test_await_loop_delivery_drained_with_high_priority() -> None:
     """IG-436: Drain adds extra settle margin for HIGH priority events."""
-    from soothe.foundation.events import EventPriority
+    from soothe.events import EventPriority
 
     bus = EventBus()
     manager = ClientSessionManager(bus)

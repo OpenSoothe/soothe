@@ -27,7 +27,7 @@ soothe-daemon  → soothe-nano (direct) + soothe
 
 1. Scaffold `packages/soothe-nano` (layout + `pyproject.toml` + workspace wiring).
 2. Move CoreAgent runtime wrappers into `soothe_nano.agent` (`CodingCoreAgent`, `LazyCoreAgent`).
-3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled` now lives on `soothe_nano.agent.core_agent`; intake-only partition helpers live on `soothe.foundation.sloop.subagent_catalog`).
+3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled` now lives on `soothe_nano.agent.core_agent`; intake-only partition helpers live on `soothe.sloop.subagent_catalog`).
 4. Soothe re-exports / shims keep existing import paths working.
 5. Verify scripts know about `soothe-nano` and enforce `nano ↛ soothe`.
 
@@ -38,7 +38,7 @@ soothe-daemon  → soothe-nano (direct) + soothe
 1. Move `AgentBuilder`, `create_soothe_agent` / `create_nano_agent`, middleware stack builder into `soothe_nano`.
 2. `NanoConfig` alias → slim CoreAgent config; full `SootheConfig` stays in soothe (composition).
 3. Soothe `AgentBuilder` subclass injects StrangeLoop `resolve_planner` when omitted.
-4. Soothe `create_soothe_agent` promotes returned agent to `soothe.foundation.coreagent.coding.CodingCoreAgent`.
+4. Soothe `create_soothe_agent` promotes returned agent to `soothe.coreagent.coding.CodingCoreAgent`.
 
 ---
 
@@ -110,7 +110,7 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 **Kept permanently (or until RFC-100):**
 
 - `soothe.config` — host composition (`SootheConfig` wrapping nano slice)
-- `soothe.foundation.coreagent.coding.*` — planner injection + class promotion
+- `soothe.coreagent.coding.*` — planner injection + class promotion
 - Soothe-native L2/L3 modules (events, sloop, loop_workspace, veritas, …)
 - Mixed package surfaces: `soothe.logging` (ThreadLogger + nano setup), `soothe.utils` (loop_messages / goal_completion), `soothe.utils.observability.langfuse` (goal-loop facade)
 
@@ -120,7 +120,7 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 
 | Canonical in `soothe_nano` | Compat / host in `soothe` |
 |----------------------------|---------------------------|
-| `soothe_nano.agent.*` | `soothe.foundation.coreagent.coding.*` (subclass + planner injection) |
+| `soothe_nano.agent.*` | `soothe.coreagent.coding.*` (subclass + planner injection) |
 | `soothe_nano.config.*` (slim) | `soothe.config.*` (full composition) |
 | `soothe_nano.toolkits.*` etc. | Direct `soothe_nano` imports (no leaf shims) |
 | `resolve_planner` → `None` in nano | soothe builder injects StrangeLoop planner |
@@ -162,7 +162,7 @@ Production code imports `soothe_nano.*` directly. Leaf `sys.modules` shims under
 - Done: Skillify service moved to `soothe_daemon.skillify`; DTOs in `soothe_sdk.skillify`; nano progressive search is substring-only
 - Done: identity errors → `soothe_sdk.identity.errors`; base events consolidated on `soothe_sdk.core.events`; `extract_text_from_ai_message` → `soothe_sdk.display.text_extract`
 - Done: nano `prompts/` CoreAgent-only; host loop/intake/plan prompts live under `soothe.prompts`
-- Done: intake-only catalog / partition / task guard moved to `soothe.foundation.sloop`; nano retains `spec_subagent_name` only; Rule 3c bans intake-only tokens in nano src
+- Done: intake-only catalog / partition / task guard moved to `soothe.sloop`; nano retains `spec_subagent_name` only; Rule 3c bans intake-only tokens in nano src
 - Done: agent-loop iteration constants + `soothe_goal_synthesis` / `soothe_step_subagent` hooks moved to host (`GoalStepGuardMiddleware`); nano ToolEnforcement is preferred_subagent-only
 - Done: nano events CoreAgent-only; `GlobalInputHistory` → `soothe.logging`; host intention re-exports nano routing types
 - Optional later: move `IdentityMiddleware` / runtime out of nano into soothe

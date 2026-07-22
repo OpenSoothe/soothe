@@ -286,7 +286,7 @@ subscription `complete`. Turn boundary is `stream.end` + `idle` with `turn_id` /
 |------|--------|
 | `packages/soothe-daemon/src/soothe_daemon/query/stream_delivery.py` | Emit `soothe.stream.end` tuples from coalescer after terminal content flush |
 | `packages/soothe-daemon/src/soothe_daemon/query/engine.py` | Emit `scope=turn` `stream.end` after `consume_turn_complete_pending` + final flush |
-| `packages/soothe/src/soothe/foundation/events/catalog.py` | Register `StreamEndEvent` with summary template |
+| `packages/soothe/src/soothe/events/catalog.py` | Register `StreamEndEvent` with summary template |
 | `packages/soothe-sdk/src/soothe_sdk/core/events.py` | Constant + wire shape |
 
 #### P2.2 Unified client handlers
@@ -424,7 +424,7 @@ packages/soothe-cli/src/soothe_cli/
 ├── tui/app/_history.py          # P2.2
 └── runtime/transport/session.py # P1.4 drain constant
 
-packages/soothe/src/soothe/foundation/events/catalog.py  # P2.1
+packages/soothe/src/soothe/events/catalog.py  # P2.1
 
 docs/specs/RFC-614-unified-streaming-messaging.md  # P2.4
 docs/wiki/api-reference/daemon-api.md                # P2.4

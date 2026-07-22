@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.cognition.plan_step_briefs import (
+from soothe.sloop.cognition.plan_step_briefs import (
     populate_plan_generate_full_descriptions,
     synthesize_full_description,
 )
-from soothe.foundation.sloop.state.schemas import PlanGenerateStep, PlanGeneration
+from soothe.sloop.state.schemas import PlanGenerateStep, PlanGeneration
 
 
 def test_synthesize_full_description_is_step_local_without_goal() -> None:

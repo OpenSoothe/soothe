@@ -6,7 +6,7 @@ Completed — Phase 1 and Phase 2 implemented.
 
 ## Goal
 
-Remove unreferenced modules and dead code paths from `soothe.foundation`, rename stale GoalEngine references to ContextEngine (RFC-625), and consolidate runtime backward-compatibility into normalize-on-read upgrades.
+Remove unreferenced modules and dead code paths from `soothe`, rename stale GoalEngine references to ContextEngine (RFC-625), and consolidate runtime backward-compatibility into normalize-on-read upgrades.
 
 ## Phase 1 (completed)
 
@@ -16,7 +16,7 @@ Remove unreferenced modules and dead code paths from `soothe.foundation`, rename
 |--------|--------|
 | `foundation/core/entities.py` | `Job`/`JobState` exported but never consumed; daemon Job IPC uses `GoalNode` via ContextEngine |
 | `foundation/core/filesystem/audit_logger.py` | No production or test imports |
-| `foundation/context/persistence/file_backend.py` | Not wired in CE factory; test-only |
+| `foundation/context/file_backend.py` | Not wired in CE factory; test-only |
 
 ### Removed dead code paths
 
@@ -55,7 +55,7 @@ GoalEngine → ContextEngine in comments, docstrings, and local variable names a
 
 | Location | Reason |
 |----------|--------|
-| `sloop/state/persistence/sqlite_backend.py` `_migrate_goal_records_slim` | Required one-time upgrade for existing SQLite files |
+| `sloop/checkpoints/sqlite_backend.py` `_migrate_goal_records_slim` | Required one-time upgrade for existing SQLite files |
 | `sloop/prompts/user_message.py` `_GOAL_ITERATION_SUFFIX_RE` | Strips stale suffixes from persisted goal text |
 | `workspace/resolution.py` `anon_*` cleanup | Removes pre-migration anonymous workspace dirs on shutdown |
 

@@ -79,8 +79,8 @@ The solution follows RFC-216's thread switching pattern but with explicit archiv
 **Goal**: Add archive storage for loop checkpoints.
 
 **Files**:
-- `packages/soothe/src/soothe/foundation/loop/state/persistence/archive_backend.py` (NEW)
-- `packages/soothe/src/soothe/foundation/loop/state/persistence/base_backend.py` (MODIFY)
+- `packages/soothe/src/soothe/loop/state/persistence/archive_backend.py` (NEW)
+- `packages/soothe/src/soothe/loop/state/persistence/base_backend.py` (MODIFY)
 
 **Archive Backend Design**:
 
@@ -154,7 +154,7 @@ class ArchiveMetadata(BaseModel):
 **Goal**: Add archive and reinitialize methods to StrangeLoopStateManager.
 
 **Files**:
-- `packages/soothe/src/soothe/foundation/loop/state/sloop_manager.py` (MODIFY)
+- `packages/soothe/src/soothe/loop/state/sloop_manager.py` (MODIFY)
 
 **New Methods**:
 
@@ -380,7 +380,7 @@ async def clear_thread(self, thread_id: str) -> None:
 **Goal**: Enable /recall to query archived loops.
 
 **Files**:
-- `packages/soothe/src/soothe/foundation/loop/state/persistence/archive_backend.py` (extend)
+- `packages/soothe/src/soothe/loop/state/persistence/archive_backend.py` (extend)
 - `packages/soothe/src/soothe/protocols/memory/recall.py` (MODIFY - optional)
 
 **Archive Search Method**:

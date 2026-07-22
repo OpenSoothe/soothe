@@ -9,11 +9,11 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from soothe_nano.utils.llm.structured import StructuredOutputError
 
-from soothe.foundation.sloop.cognition.planner import (
+from soothe.sloop.cognition.planner import (
     LLMPlanner,
     _parse_status_assessment_from_raw_message,
 )
-from soothe.foundation.sloop.state.schemas import StatusAssessment
+from soothe.sloop.state.schemas import StatusAssessment
 
 
 def test_parse_status_assessment_from_reasoning_content() -> None:
@@ -52,7 +52,7 @@ async def test_assess_status_recovers_done_when_structured_invoke_fails() -> Non
     )
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._invoke_plan_structured_output",
+        "soothe.sloop.cognition.planner._invoke_plan_structured_output",
         new_callable=AsyncMock,
         side_effect=StructuredOutputError("structured tool json was null"),
     ):

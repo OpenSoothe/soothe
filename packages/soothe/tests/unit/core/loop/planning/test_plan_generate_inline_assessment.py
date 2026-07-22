@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.state.schemas import (
     LoopState,
     PlanGenerateStep,
     PlanGeneration,
@@ -46,7 +46,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_ski
     )
 
     with patch(
-        "soothe.foundation.sloop.cognition.plan_step_briefs.populate_plan_generate_full_descriptions",
+        "soothe.sloop.cognition.plan_step_briefs.populate_plan_generate_full_descriptions",
         side_effect=lambda p: p,
     ):
         await planner.generate_from_assessment(
@@ -61,7 +61,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_ski
 
 @pytest.mark.asyncio
 async def test_generate_from_assessment_passes_inline_assessment_when_assess_in_ledger() -> None:
-    from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+    from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
     planner = LLMPlanner(MagicMock())
     assessment = StatusAssessment(
@@ -104,7 +104,7 @@ async def test_generate_from_assessment_passes_inline_assessment_when_assess_in_
     )
 
     with patch(
-        "soothe.foundation.sloop.cognition.plan_step_briefs.populate_plan_generate_full_descriptions",
+        "soothe.sloop.cognition.plan_step_briefs.populate_plan_generate_full_descriptions",
         side_effect=lambda p: p,
     ):
         await planner.generate_from_assessment(

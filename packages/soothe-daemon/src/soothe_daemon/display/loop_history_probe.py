@@ -7,7 +7,7 @@ import logging
 import sqlite3
 from typing import Any
 
-from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.sloop.checkpoints.directory_manager import PersistenceDirectoryManager
 
 logger = logging.getLogger(__name__)
 

@@ -6,13 +6,13 @@ from pathlib import Path
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.context.projection import ContextBundle
-from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.projection import ContextBundle
+from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.prompts import PromptBuilder
 from soothe.prompts.user_message import UserMessageBuilder
+from soothe.sloop.state.schemas import LoopState, StatusAssessment
 
 
 def test_previous_assessment_rendered_from_ce_goal() -> None:

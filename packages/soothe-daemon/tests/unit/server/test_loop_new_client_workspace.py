@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from soothe.foundation.sloop.state.persistence.manager import (
+from soothe.sloop.checkpoints.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
 
@@ -429,7 +429,7 @@ async def test_bind_execution_thread_falls_back_when_client_workspace_missing(
     monkeypatch.setattr("soothe.config.SOOTHE_HOME", str(soothe_home))
 
     from soothe.config import SootheConfig
-    from soothe.foundation.workspace.loop_workspace import (
+    from soothe.workspace.loop_workspace import (
         compute_scoped_workspace_dir_name,
         normalize_user_id,
     )

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from soothe.foundation.sloop.state.resume_topic import (
+from soothe.sloop.state.resume_topic import (
     derive_resume_topic,
     enforce_topic_word_limit,
     persist_resume_topic_if_needed,
@@ -62,7 +62,7 @@ async def test_persist_resume_topic_if_needed_skips_empty_topic(
 ) -> None:
     manager_factory = AsyncMock()
     monkeypatch.setattr(
-        "soothe.foundation.sloop.state.persistence.manager.StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool",
+        "soothe.sloop.checkpoints.manager.StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool",
         manager_factory,
     )
 
@@ -85,7 +85,7 @@ async def test_persist_resume_topic_if_needed_stores_derived_topic(
     manager = SimpleNamespace(set_resume_topic_once=set_once_mock, close=close_mock)
     manager_factory = AsyncMock(return_value=manager)
     monkeypatch.setattr(
-        "soothe.foundation.sloop.state.persistence.manager.StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool",
+        "soothe.sloop.checkpoints.manager.StrangeLoopCheckpointPersistenceManager.for_shared_checkpoint_pool",
         manager_factory,
     )
 

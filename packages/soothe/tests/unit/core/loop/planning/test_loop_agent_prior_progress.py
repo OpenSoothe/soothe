@@ -14,14 +14,14 @@ from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.step_wave_types import _ExecuteStepResult
-from soothe.foundation.sloop.state.schemas import (
+from soothe.prompts import PromptBuilder
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.step_wave_types import _ExecuteStepResult
+from soothe.sloop.state.schemas import (
     LoopState,
     StepAction,
     StepResult,
 )
-from soothe.prompts import PromptBuilder
 
 
 def _mock_context_engine() -> MagicMock:

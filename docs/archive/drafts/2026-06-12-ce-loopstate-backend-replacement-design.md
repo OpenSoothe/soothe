@@ -147,7 +147,7 @@ The `StepDAG.completed_step_ids` method returns all step IDs in `completed` stat
 Add `DatabasePersistenceBackend` implementing `ContextPersistenceProtocol`.
 
 ```python
-# soothe/context/persistence/db_backend.py
+# soothe/context/db_backend.py
 class DatabasePersistenceBackend:
     """PostgreSQL/SQLite persistence for ContextEngine state."""
 
@@ -186,7 +186,7 @@ Uses the same connection pool as `StrangeLoopStateManager` (via `persistence.soo
 | `GoalContextManager` | ~200 | `foundation/sloop/planning/goal_context.py` | `ContextEngineGoalContextAdapter` logic moves into CE |
 | `ContextEngineLedgerAdapter` | ~35 | `foundation/sloop/engine/context_adapters.py` | Direct `LedgerManager` calls |
 | `ContextEngineGoalContextAdapter` | ~190 | `foundation/sloop/engine/context_adapters.py` | CE queries (already in `ContextEngineGoalContextAdapter.get_plan_context()`) |
-| `StepPlanManagerAdapter` | ~60 | `context/planning/step_planner.py` | Direct `StepPlanningSubengine` calls |
+| `StepPlanManagerAdapter` | ~60 | `context/step_planner.py` | Direct `StepPlanningSubengine` calls |
 | `ContextEngineLifecycle` | ~144 | `foundation/sloop/engine/context_lifecycle.py` | CE operations inline in nodes (simpler with single path) |
 | `if ce_config.enabled` branches | ~50 | `strange_loop.py` | Removed — CE is always active |
 | `PlanManager` heuristic methods | ~80 | `foundation/sloop/planning/manager.py` | Already in `completion.py` |

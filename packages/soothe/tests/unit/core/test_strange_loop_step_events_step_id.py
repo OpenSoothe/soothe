@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.events import (
+from soothe.events import (
     StrangeLoopStepCompletedEvent,
     StrangeLoopStepQueuedEvent,
     StrangeLoopStepStartedEvent,

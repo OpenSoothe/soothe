@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from soothe.foundation.sloop.utils.ledger_message_dedup import (
+from soothe.sloop.utils.ledger_message_dedup import (
     collect_core_agent_message_ids,
     extract_execute_turn_core_agent_message_ids,
     filter_messages_not_in_checkpoint,
     message_reference_id,
 )
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_message_reference_id_prefers_core_agent_message_id() -> None:

@@ -8,8 +8,8 @@ import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.prompts import PromptBuilder
+from soothe.sloop.state.schemas import LoopState
 
 
 @pytest.fixture

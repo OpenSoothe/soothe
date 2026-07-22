@@ -16,7 +16,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from soothe.foundation.sloop.state.persistence.directory_manager import (
+from soothe.sloop.checkpoints.directory_manager import (
     PersistenceDirectoryManager,
 )
 

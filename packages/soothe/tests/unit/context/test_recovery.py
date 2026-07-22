@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
+from soothe.context.engine import ContextEngine
 
 
 class TestRecovery:

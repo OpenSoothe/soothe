@@ -2,7 +2,7 @@
 
 import pytest
 
-from soothe.foundation.context.models import MAX_GOAL_DEPTH, GoalNode, GoalStepDAG, StepNode
+from soothe.context.models import MAX_GOAL_DEPTH, GoalNode, GoalStepDAG, StepNode
 
 
 class TestGoalStepDAGAddGoal:

@@ -15,8 +15,8 @@ All changes are backward compatible and require no configuration updates.
 
 ## Files Modified
 
-- `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py` - FD limit handling
-- `packages/soothe/src/soothe/foundation/sloop/planning/planner.py` - Network retry for planner LLM calls
+- `packages/soothe/src/soothe/core/filesystem/grep_search.py` - FD limit handling
+- `packages/soothe/src/soothe/sloop/planning/planner.py` - Network retry for planner LLM calls
 - `packages/soothe/src/soothe/middleware/llm_rate_limit.py` - Connection error retry in middleware
 
 ## Problem Statement
@@ -69,7 +69,7 @@ All changes are backward compatible and require no configuration updates.
 
 ### Phase 1: File Descriptor Handling (grep_search.py)
 
-**File:** `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py`
+**File:** `packages/soothe/src/soothe/core/filesystem/grep_search.py`
 
 Grep uses **`ag` or `rg` subprocesses only** (see IG-509 Resolution). There is no Python directory walk fallback.
 
@@ -95,7 +95,7 @@ The original plan proposed skipping `ag` on large directories and falling back t
 
 ### Phase 2: Network Resilience for Planner LLM Calls
 
-**File:** `packages/soothe/src/soothe/foundation/sloop/planning/planner.py`
+**File:** `packages/soothe/src/soothe/sloop/planning/planner.py`
 
 #### Change 2.1: Add connection error detection helper
 

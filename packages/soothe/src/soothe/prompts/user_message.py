@@ -14,12 +14,12 @@ import re
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.context.projection import PriorGoalSummary
-from soothe.foundation.sloop.state.schemas import PlanGapAnalysis
+from soothe.context.projection import PriorGoalSummary
+from soothe.sloop.state.schemas import PlanGapAnalysis
 
 if TYPE_CHECKING:
-    from soothe.foundation.context.projection import ContextBundle
-    from soothe.foundation.sloop.state.schemas import PriorProgressDigest
+    from soothe.context.projection import ContextBundle
+    from soothe.sloop.state.schemas import PriorProgressDigest
 
 # Strip legacy StrangeLoop suffix accidentally baked into goal text or stored checkpoints.
 _GOAL_ITERATION_SUFFIX_RE = re.compile(
@@ -700,7 +700,7 @@ class UserMessageBuilder:
             if open_gaps.strip():
                 sections.append(("OPEN GAPS", open_gaps))
 
-        from soothe.foundation.sloop.state.schemas import is_intake_only_wire_subagent
+        from soothe.sloop.state.schemas import is_intake_only_wire_subagent
 
         # Intake-only specialists never reach plan-generate (wired route). Prefer
         # catalog names (e.g. planner) when a non-intake wire hint is present.

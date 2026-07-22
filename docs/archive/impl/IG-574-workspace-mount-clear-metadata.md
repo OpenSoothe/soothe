@@ -52,7 +52,7 @@ Mount configuration (`SOOTHE_WORKSPACE_HOST_ROOT`, `workspace_mount` in `deploy/
 
 ### 1. Preserve daemon metadata on checkpoint save
 
-New module: `packages/soothe/src/soothe/foundation/sloop/state/persistence/daemon_loop_metadata.py`
+New module: `packages/soothe/src/soothe/sloop/checkpoints/daemon_loop_metadata.py`
 
 Fields preserved across StrangeLoop writes:
 

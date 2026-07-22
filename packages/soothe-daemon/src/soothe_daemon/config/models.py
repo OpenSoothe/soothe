@@ -7,13 +7,13 @@ plus ``ChannelsConfig`` (RFC-620) for unified channel architecture.
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
-from soothe.foundation.identity.runtime import (
+from soothe.identity.runtime import (
     AKSKConfig as AKSKConfig,
 )
-from soothe.foundation.identity.runtime import (
+from soothe.identity.runtime import (
     IdentityConfig as IdentityConfig,
 )
-from soothe.foundation.identity.runtime import (
+from soothe.identity.runtime import (
     TokenConfig as TokenConfig,
 )
 
@@ -523,7 +523,7 @@ class MemoryProfilingConfig(BaseModel):
     )
 
 
-# IdentityConfig, TokenConfig, AKSKConfig are imported from soothe.foundation.identity.runtime
+# IdentityConfig, TokenConfig, AKSKConfig are imported from soothe.identity.runtime
 # at the top of this file to avoid duplicate definitions.
 
 

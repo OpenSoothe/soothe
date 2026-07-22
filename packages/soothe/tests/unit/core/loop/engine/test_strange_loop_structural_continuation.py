@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from soothe_sdk.intention.models import TaskComplexity
 
-from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
+from soothe.sloop.engine.strange_loop import StrangeLoop
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 
 
 def _make_strange_loop() -> StrangeLoop:
@@ -91,18 +91,18 @@ async def test_continue_keyword_bypasses_pass1_social_fast_path() -> None:
     with (
         patch.object(sl, "_ce", ce_instance),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as anchor_cls,
         patch(
-            "soothe.foundation.sloop.orchestrator.runner.invoke_strange_loop_graph",
+            "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
@@ -180,18 +180,18 @@ async def test_embedded_continue_the_loop_bypasses_pass1_social_fast_path() -> N
     with (
         patch.object(sl, "_ce", ce_instance),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as anchor_cls,
         patch(
-            "soothe.foundation.sloop.orchestrator.runner.invoke_strange_loop_graph",
+            "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

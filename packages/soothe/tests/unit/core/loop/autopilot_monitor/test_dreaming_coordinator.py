@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.autopilot.monitor.dreaming_coordinator import DreamingCoordinator
-from soothe.foundation.autopilot.monitor.models import DreamingContext, EpisodeSpec
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
+from soothe.autopilot.dreaming_coordinator import DreamingCoordinator
+from soothe.autopilot.monitor_models import DreamingContext, EpisodeSpec
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
 
 
 @pytest.fixture
@@ -178,7 +178,7 @@ class TestDreamingCoordinator:
         self, coordinator: DreamingCoordinator
     ) -> None:
         """_apply_distillation_result stores episodic memory from EpisodicDistillationResponse."""
-        from soothe.foundation.autopilot.monitor.dreaming_reasoner import (
+        from soothe.autopilot.dreaming_reasoner import (
             EpisodeDistillationItem,
             EpisodicDistillationResponse,
         )

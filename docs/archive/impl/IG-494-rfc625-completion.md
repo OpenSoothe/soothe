@@ -23,7 +23,7 @@ Complete remaining RFC-625 implementation work:
 
 - RFC-625 §4 (LLM verification/dreaming spec) — design complete
 - RFC-625 §13 (config additions) — schema defined
-- `BackoffReasoner` pattern (`autopilot/monitor/backoff_reasoner.py`) — reference for LLM integration
+- `BackoffReasoner` pattern (`autopilot/backoff_reasoner.py`) — reference for LLM integration
 - `InternalEventBus` — event routing for GoalDAGCard
 
 ---
@@ -102,7 +102,7 @@ agent:
 
 ### Files to Create
 
-**`packages/soothe/src/soothe/foundation/autopilot/monitor/verifier_reasoner.py`** (~150 lines)
+**`packages/soothe/src/soothe/autopilot/verifier_reasoner.py`** (~150 lines)
 
 ```python
 class DagVerificationReasoner:
@@ -130,7 +130,7 @@ class DagVerificationReasoner:
         return GoalPlacementResponse.model_validate_json(response.content)
 ```
 
-**`packages/soothe/src/soothe/foundation/autopilot/monitor/verifier_prompts.py`** (~80 lines)
+**`packages/soothe/src/soothe/autopilot/verifier_prompts.py`** (~80 lines)
 
 ```python
 DAG_HEALTH_VERIFICATION_PROMPT = """Analyze the goal DAG for health issues.
@@ -183,7 +183,7 @@ class GoalDAGVerifier:
 
 ### Tests
 
-- `tests/unit/autopilot/monitor/test_verifier_reasoner.py`:
+- `tests/unit/autopilot/test_verifier_reasoner.py`:
   - Mock LLM responses, verify structured parsing
   - Test error handling (invalid JSON, timeout)
 
@@ -195,7 +195,7 @@ class GoalDAGVerifier:
 
 ### Files to Create
 
-**`packages/soothe/src/soothe/foundation/autopilot/monitor/dreaming_reasoner.py`** (~150 lines)
+**`packages/soothe/src/soothe/autopilot/dreaming_reasoner.py`** (~150 lines)
 
 ```python
 class DreamingDistillationReasoner:
@@ -225,7 +225,7 @@ class DreamingDistillationReasoner:
         return ProfileDistillationResponse.model_validate_json(response.content)
 ```
 
-**`packages/soothe/src/soothe/foundation/autopilot/monitor/dreaming_prompts.py`** (~80 lines)
+**`packages/soothe/src/soothe/autopilot/dreaming_prompts.py`** (~80 lines)
 
 Prompts for each mode as defined in RFC-625 §6.
 
@@ -253,7 +253,7 @@ class DreamingCoordinator:
 
 ### Tests
 
-- `tests/unit/autopilot/monitor/test_dreaming_reasoner.py`:
+- `tests/unit/autopilot/test_dreaming_reasoner.py`:
   - Mock LLM responses for each mode
   - Verify structured output parsing
   - Test handler application (episodic → CE store, procedure → skill)

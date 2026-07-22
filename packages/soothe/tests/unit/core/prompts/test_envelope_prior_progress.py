@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.state.schemas import (
-    PriorProgressDigest,
-    ToolCallHead,
-    WaveStepProgress,
-)
 from soothe.prompts.user_message import (
     PRIOR_PROGRESS_MAX_CHARS,
     UserMessageBuilder,
+)
+from soothe.sloop.state.schemas import (
+    PriorProgressDigest,
+    ToolCallHead,
+    WaveStepProgress,
 )
 
 

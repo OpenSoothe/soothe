@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from soothe.foundation.sloop.clarification import interactive as interactive_mod
-from soothe.foundation.sloop.clarification.interactive import InteractiveClarificationPolicy
-from soothe.foundation.sloop.clarification.protocol import (
+from soothe.sloop.clarification import interactive as interactive_mod
+from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
+from soothe.sloop.clarification.protocol import (
     ClarificationDeferredError,
     ClarificationRequest,
     LoopStateView,

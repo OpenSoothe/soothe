@@ -21,12 +21,12 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
+from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from soothe.config.models import ExecutePromptLedgerConfig, PlanPromptLedgerConfig
-    from soothe.foundation.sloop.state.checkpoint import StrangeLoopCheckpoint
-    from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
+    from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint
+    from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +203,7 @@ def _compact_intent_classify_human_for_projection(msg: BaseMessage) -> BaseMessa
     """Rewrite ``GOAL:`` to ``GOAL RECAP:`` on projected intent-classify humans (D1)."""
     if getattr(msg, "phase", None) != "intent_classify" or not _is_loop_human_message(msg):
         return msg
-    from soothe.foundation.sloop.cognition.ledger_compaction import compact_planning_human_content
+    from soothe.sloop.cognition.ledger_compaction import compact_planning_human_content
 
     text = extract_text_from_message_content(getattr(msg, "content", ""))
     compacted = compact_planning_human_content(text)
@@ -1017,7 +1017,7 @@ def project_prior_wave_execute_ledger(
     Used when a replan wave step has no in-plan dependencies but prior waves already
     recorded execute evidence for this goal.
     """
-    from soothe.foundation.sloop.engine.predecessor_branch_context import (
+    from soothe.sloop.engine.predecessor_branch_context import (
         DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
         predecessor_execute_messages_for_branch,
     )
@@ -1102,7 +1102,7 @@ def project_execute_step_graph_input(
             predecessor_projected = True
 
     if checkpoint_message_ids:
-        from soothe.foundation.sloop.utils.ledger_message_dedup import (
+        from soothe.sloop.utils.ledger_message_dedup import (
             filter_messages_not_in_checkpoint,
         )
 
@@ -1160,10 +1160,10 @@ def project_predecessor_execute_ledger_for_step(
     Returns:
         Deep-copied predecessor execute_step messages in ledger order.
     """
-    from soothe.foundation.sloop.engine.predecessor_branch_context import (
+    from soothe.sloop.engine.predecessor_branch_context import (
         DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
     )
-    from soothe.foundation.sloop.engine.step_predecessor_context import (
+    from soothe.sloop.engine.step_predecessor_context import (
         predecessor_messages_for_step,
     )
 
@@ -1199,7 +1199,7 @@ def project_loop_messages_for_core_agent(
     Returns:
         Filtered list with only execute_step Human/AI message pairs.
     """
-    from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+    from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
     out: list[BaseMessage] = []
     for msg in loop_messages:

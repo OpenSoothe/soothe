@@ -172,8 +172,8 @@ Builtin grep is **ag/rg-only**:
 
 | Component | Path |
 |-----------|------|
-| Subprocess backend | `packages/soothe/src/soothe/foundation/core/filesystem/grep_search.py` — `run_grep()`, `is_grep_available()` |
-| Filesystem entry | `packages/soothe/src/soothe/foundation/core/filesystem/local.py` — `grep()` / `agrep()` |
+| Subprocess backend | `packages/soothe/src/soothe/core/filesystem/grep_search.py` — `run_grep()`, `is_grep_available()` |
+| Filesystem entry | `packages/soothe/src/soothe/core/filesystem/local.py` — `grep()` / `agrep()` |
 | Tests | `packages/soothe/tests/core/filesystem/test_grep_search.py` |
 
 Removed: `_grep_python_walk()`, incremental batching, `continuation_token`, `is_partial`, per-file 1 MB cap, `_GREP_*` batch constants.

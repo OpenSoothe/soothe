@@ -59,8 +59,8 @@ This plan details the migration from GoalEngine to ContextEngine as the sole sou
 
 ### Files to Modify
 
-- `packages/soothe/src/soothe/foundation/context/engine.py`
-- `packages/soothe/src/soothe/foundation/context/models.py`
+- `packages/soothe/src/soothe/context/engine.py`
+- `packages/soothe/src/soothe/context/models.py`
 
 ### New Methods to Add to ContextEngine
 
@@ -127,7 +127,7 @@ class GoalStepDAG:
 
 ### File to Modify
 
-- `packages/soothe/src/soothe/foundation/autopilot/service/service.py`
+- `packages/soothe/src/soothe/autopilot/service.py`
 
 ### Changes
 
@@ -180,12 +180,12 @@ class GoalStepDAG:
 
 ```python
 # Before
-from soothe.foundation.autopilot.engine import GoalEngine
+from soothe.autopilot import GoalEngine
 daemon_goal_engine = GoalEngine(...)
 
 # After
-from soothe.foundation.context import ContextEngine
-from soothe.foundation.autopilot.monitor import AutopilotMonitor
+from soothe.context import ContextEngine
+from soothe.autopilot import AutopilotMonitor
 
 daemon_ce = ContextEngine(...)
 daemon_monitor = AutopilotMonitor(ce=daemon_ce, bus=daemon_autopilot_bus, config=self._config)
@@ -222,21 +222,21 @@ self._autopilot_service = AutopilotService(
 
 | File | Lines | Action |
 |------|-------|--------|
-| `foundation/autopilot/engine/engine.py` | 1821 | DELETE |
-| `foundation/autopilot/engine/file_lock_registry.py` | 270 | DELETE |
-| `foundation/autopilot/engine/backoff_reasoner.py` | 232 | DELETE (migrated to monitor/) |
+| `foundation/autopilot/engine.py` | 1821 | DELETE |
+| `foundation/autopilot/file_lock_registry.py` | 270 | DELETE |
+| `foundation/autopilot/backoff_reasoner.py` | 232 | DELETE (migrated to monitor/) |
 
 ### Files to Modify (Remove exports)
 
 | File | Changes |
 |------|---------|
-| `foundation/autopilot/engine/__init__.py` | Remove `GoalEngine`, `FileLockRegistry`, `GoalBackoffReasoner` exports; Keep `GoalDispatchContextBundle`, `EvidenceBundle`, `BackoffDecision`, `GoalStatus` |
+| `foundation/autopilot/__init__.py` | Remove `GoalEngine`, `FileLockRegistry`, `GoalBackoffReasoner` exports; Keep `GoalDispatchContextBundle`, `EvidenceBundle`, `BackoffDecision`, `GoalStatus` |
 | `foundation/autopilot/__init__.py` | Remove `GoalEngine` export |
 | `foundation/__init__.py` | Remove `GoalEngine` export |
 
 ### Files to Keep (models.py cleanup)
 
-- `foundation/autopilot/engine/models.py` — Keep but **remove `Goal` class**:
+- `foundation/autopilot/models.py` — Keep but **remove `Goal` class**:
   - Keep: `GoalStatus`, `TERMINAL_STATES`, `BLOCKED_STATES`
   - Keep: `EvidenceBundle`, `BackoffDecision`, `GoalSubDAGStatus`
   - Keep: `GoalDispatchContextBundle`, `GoalDispatchContextContribution`

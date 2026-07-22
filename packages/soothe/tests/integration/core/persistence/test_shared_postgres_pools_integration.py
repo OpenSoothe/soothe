@@ -17,10 +17,10 @@ import pytest_asyncio
 from support_config import config_with_router_profile
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
-from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
 from soothe.runner import SootheRunner
 from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
+from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires_postgresql]
 
@@ -120,8 +120,8 @@ async def pg_config() -> SootheConfig:
 @pytest_asyncio.fixture(autouse=True)
 async def _reset_pool_singletons() -> None:
     """Isolate singleton state between integration tests."""
-    import soothe.foundation.sloop.state.persistence.shared_pool as agent_mod
     import soothe.runner.resolver.shared_checkpointer_pool as cp_mod
+    import soothe.sloop.checkpoints.shared_pool as agent_mod
 
     await SharedPostgreSQLPool.close_shared_instance()
     await SharedCheckpointerPool.close_shared_instance()

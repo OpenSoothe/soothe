@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from soothe.foundation.cron.models import (
+from soothe.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
     ExtractionResult,

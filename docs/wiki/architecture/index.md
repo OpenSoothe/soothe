@@ -98,7 +98,7 @@ Soothe follows a **protocol-first, runtime-second** design. Every module is defi
 | **CoreAgentProtocol** | CoreAgent runtime contract | RFC-100 |
 | **OperationSecurityProtocol** | Operation-level security | RFC-901 |
 
-> **Note**: `ContextProtocol` (RFC-302 draft) was never implemented. Context management is handled by `ContextEngine` (`soothe.foundation.context`) directly, not via a protocol abstraction.
+> **Note**: `ContextProtocol` (RFC-302 draft) was never implemented. Context management is handled by `ContextEngine` (`soothe.context`) directly, not via a protocol abstraction.
 
 ### Protocol Hierarchy
 

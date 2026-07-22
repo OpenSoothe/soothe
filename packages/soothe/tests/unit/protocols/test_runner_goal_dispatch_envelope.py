@@ -6,7 +6,7 @@ import pickle
 
 import pytest
 
-from soothe.foundation.autopilot.engine.models import (
+from soothe.autopilot.engine_models import (
     GoalDispatchContextBundle,
     ParentFinding,
 )

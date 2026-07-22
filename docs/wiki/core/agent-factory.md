@@ -15,12 +15,12 @@ CoreAgent construction and the runtime foundation.
 
 ## What This Module Is
 
-The agent factory (`soothe.foundation.core.agent`) builds Soothe's CoreAgent — a thin wrapper around a LangGraph `CompiledStateGraph` with typed protocol properties and a streaming execution interface. CoreAgent is the **execution tier** of the three-level model: a pure execution runtime for tools, subagents, and middlewares with **no goal infrastructure** (that's StrangeLoop/ContextEngine's job).
+The agent factory (`soothe.core.agent`) builds Soothe's CoreAgent — a thin wrapper around a LangGraph `CompiledStateGraph` with typed protocol properties and a streaming execution interface. CoreAgent is the **execution tier** of the three-level model: a pure execution runtime for tools, subagents, and middlewares with **no goal infrastructure** (that's StrangeLoop/ContextEngine's job).
 
 The central entry point is `create_soothe_agent(config)`, which delegates to an `AgentBuilder` that resolves protocols, assembles tools/subagents, wires middlewares, compiles the LangGraph, and attaches protocol instances as typed properties.
 
 **RFC**: [RFC-100](../../specs/RFC-100-coreagent-runtime.md)
-**Source**: `packages/soothe/src/soothe/foundation/core/agent/_builder.py`, `_core.py`
+**Source**: `packages/soothe/src/soothe/coreagent/_builder.py`, `_core.py`
 
 ---
 
@@ -109,7 +109,7 @@ agent.checkpointer  # BaseCheckpointSaver | None
 ## Minimal Usage
 
 ```python
-from soothe.foundation.core.agent import create_soothe_agent
+from soothe.core.agent import create_soothe_agent
 from soothe.config import SootheConfig
 
 config = SootheConfig.from_yaml_file("config.yml")

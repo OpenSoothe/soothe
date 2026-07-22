@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.step_wave_types import all_tool_outcomes_failed
-from soothe.foundation.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.step_wave_types import all_tool_outcomes_failed
+from soothe.sloop.state.schemas import LoopState, StepResult
 
 
 @pytest.fixture

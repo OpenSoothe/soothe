@@ -30,9 +30,9 @@ This report identifies **5 high-priority consolidation opportunities** in the So
 
 | Container | Location | Responsibility | Duplicated Fields |
 |-----------|----------|---------------|-------------------|
-| `LoopState` | `soothe/foundation/sloop/state/schemas.py` | StrangeLoop execution state | iteration, tokens, plan history, thread_id |
+| `LoopState` | `soothe/sloop/state/schemas.py` | StrangeLoop execution state | iteration, tokens, plan history, thread_id |
 | `ThreadState` | `soothe_daemon/runtime/thread_state.py` | Per-checkpoint daemon isolation | thread_id, workspace, last_activity |
-| `Checkpoint` models | `soothe/foundation/sloop/state/checkpoint.py` | StrangeLoop checkpoint persistence | thread_id, goal_history, working_memory |
+| `Checkpoint` models | `soothe/sloop/state/checkpoint.py` | StrangeLoop checkpoint persistence | thread_id, goal_history, working_memory |
 
 **Evidence from RFC-626**:
 > "LoopState persists as execution-only container: StrangeLoop still maintains LoopState (RFC-203) with wave metrics, iteration tracking, and plan history. These fields duplicate ContextEngine properties (total_tokens_used, iteration, previous_plan) and create two sources of truth."
@@ -90,7 +90,7 @@ This report identifies **5 high-priority consolidation opportunities** in the So
 | `ChannelMessage` | `soothe_daemon/channels/message.py` | Platform routing | content, metadata, streaming flags |
 | `ChannelEvent` | `soothe_daemon/channels/events.py` | Channel events | content, metadata, routing |
 | `MessageData` | `soothe_sdk/display/transcript_types.py` | TUI transcript | content, metadata, tool status |
-| `LoopMessage` utils | `soothe/foundation/sloop/utils/messages.py` | StrangeLoop messages | content, phase, ledger recording |
+| `LoopMessage` utils | `soothe/sloop/utils/messages.py` | StrangeLoop messages | content, phase, ledger recording |
 | Wire messages | `soothe_cli/runtime/wire/messages.py` | LangChain normalization | content, role, metadata |
 
 **Architecture Issue**: Message types fragmented across three layers:

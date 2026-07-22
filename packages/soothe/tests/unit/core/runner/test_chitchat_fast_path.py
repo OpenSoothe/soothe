@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.context.engine import ContextEngine
+from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.runner._runner_phases import PhasesMixin
 
 
@@ -33,7 +33,7 @@ async def test_save_chitchat_to_ledger_records_human_ai_pair(tmp_path: Path) -> 
     runner = _ChitchatRunner(config=config, loop_id=loop_id)
 
     with patch(
-        "soothe.foundation.context.persistence.factory.resolve_context_engine_persistence",
+        "soothe.context.store_factory.resolve_context_engine_persistence",
         return_value=SqliteContextPersistence(loop_id=loop_id, db_path=db_path),
     ):
         await runner._save_chitchat_to_ledger(
@@ -156,7 +156,7 @@ async def test_run_chitchat_defer_persistence_skips_save_in_generator() -> None:
 
 @pytest.mark.asyncio
 async def test_finalize_chitchat_skips_running_checkpoint() -> None:
-    from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
+    from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
 
     config = MagicMock()
     runner = _ChitchatRunner(config=config, loop_id="loop-running")
@@ -183,7 +183,7 @@ async def test_finalize_chitchat_skips_running_checkpoint() -> None:
     runner.get_sloop_shared_pool = AsyncMock(return_value=None)
 
     with patch(
-        "soothe.foundation.sloop.state.sloop_manager.StrangeLoopStateManager",
+        "soothe.sloop.state.sloop_manager.StrangeLoopStateManager",
         return_value=mock_sm,
     ):
         await runner._finalize_chitchat_loop("loop-running", response="Hi!")

@@ -302,7 +302,7 @@ The recommended action: install `FileLockMiddleware` in autopilot mode (as origi
 
 ### Layer 1: Atomic Write + Version Stamp
 
-**Location**: `packages/soothe/src/soothe/foundation/core/filesystem/local.py`
+**Location**: `packages/soothe/src/soothe/core/filesystem/local.py`
 
 #### Interface: `awrite_atomic`
 
@@ -362,7 +362,7 @@ async def awrite_atomic(
 
 #### Interface: `EditConflictError`
 
-**Location**: `packages/soothe/src/soothe/foundation/core/filesystem/exceptions.py`
+**Location**: `packages/soothe/src/soothe/core/filesystem/exceptions.py`
 
 ```python
 class EditConflictError(Exception):
@@ -404,7 +404,7 @@ After `patch` applies, re-read the file and verify the hash matches the expected
 
 ### Layer 2: Per-File Async Mutex
 
-**Location**: `packages/soothe/src/soothe/foundation/core/filesystem/local.py`
+**Location**: `packages/soothe/src/soothe/core/filesystem/local.py`
 
 #### Interface: `FileEditLockRegistry`
 
@@ -850,7 +850,7 @@ When `backend_type == "network"`: re-read and re-hash immediately before every w
 | Step | File | Change |
 |------|------|--------|
 | 13 | `middleware/file_lock.py` | Install in autopilot middleware chain (currently not wired) |
-| 14 | `foundation/autopilot/engine/file_lock_registry.py` | Ensure `FileLockRegistry` is in main workspace |
+| 14 | `foundation/autopilot/file_lock_registry.py` | Ensure `FileLockRegistry` is in main workspace |
 | 15 | Integration test | Two StrangeLoops edit same file |
 
 **Estimated LOC**: ~20 wiring + test code. Implementation already exists.
@@ -1003,7 +1003,7 @@ Two edit calls use different paths that resolve to the same file (e.g., `./confi
 | `middleware/rate_limit.py` | 2 | Fast-path check |
 | `middleware/tool_concurrency.py` | 2 | Fast-path check |
 | `middleware/file_lock.py` | 3 | Wire into autopilot middleware chain |
-| `foundation/autopilot/engine/file_lock_registry.py` | 3 | Ensure present in main workspace |
+| `foundation/autopilot/file_lock_registry.py` | 3 | Ensure present in main workspace |
 | `tests/integration/test_parallel_edits.py` | 1-3 | Race, crash, external-modification tests |
 | `tests/unit/middleware/test_edit_coalescing.py` | 2 | Coalescing unit tests |
 | `config/models.py` | 1-2 | Add `FilesystemConfig` and `EditCoalescingConfig` fields |

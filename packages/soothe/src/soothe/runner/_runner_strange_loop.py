@@ -15,7 +15,7 @@ from soothe_sdk.core.subagent_wire import is_curated_subagent_wire_event_type
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-from soothe.foundation.events import (
+from soothe.events import (
     IntentClassifiedEvent,  # IG-518
     StrangeLoopCompletedEvent,
     StrangeLoopPlanDecisionEvent,
@@ -29,30 +29,30 @@ from soothe.foundation.events import (
     WiredSubagentFailedEvent,
     WiredSubagentStartedEvent,
 )
-from soothe.foundation.events.visibility import is_custom_stream_payload_client_visible
-from soothe.foundation.sloop.clarification.events import (
+from soothe.events.visibility import is_custom_stream_payload_client_visible
+from soothe.runner._runner_shared import StreamChunk, _custom
+from soothe.sloop.clarification.events import (
     ClarificationAnsweredEvent,
     ClarificationDeferredEvent,
     ClarificationRequestedEvent,
 )
-from soothe.foundation.sloop.intention import build_loop_routing_classification
-from soothe.foundation.sloop.utils.events import LoopAgentReasonEvent
-from soothe.foundation.sloop.utils.loop_reason_display import (
+from soothe.sloop.intention import build_loop_routing_classification
+from soothe.sloop.utils.events import LoopAgentReasonEvent
+from soothe.sloop.utils.loop_reason_display import (
     is_displayable_assessment_reasoning as _is_displayable_assessment_reasoning,
 )
-from soothe.foundation.sloop.utils.loop_reason_display import (
+from soothe.sloop.utils.loop_reason_display import (
     is_displayable_plan_reasoning as _is_displayable_plan_reasoning,
 )
-from soothe.foundation.sloop.utils.loop_reason_display import (
+from soothe.sloop.utils.loop_reason_display import (
     should_emit_loop_reason_event as _should_emit_loop_reason_event,
 )
-from soothe.foundation.sloop.utils.messages import (
+from soothe.sloop.utils.messages import (
     loop_assistant_messages_chunk,
     loop_message_assistant_output_phase,
 )
-from soothe.foundation.sloop.utils.plan_action_text import resolve_plan_action_text
-from soothe.foundation.sloop.utils.stream_normalize import extract_text_from_message_content
-from soothe.runner._runner_shared import StreamChunk, _custom
+from soothe.sloop.utils.plan_action_text import resolve_plan_action_text
+from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -101,7 +101,7 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
     async def _tick() -> None:
         pm = None
         try:
-            from soothe.foundation.sloop.state.persistence.manager import (
+            from soothe.sloop.checkpoints.manager import (
                 StrangeLoopCheckpointPersistenceManager,
             )
 
@@ -140,7 +140,7 @@ def _start_loop_heartbeat(config: Any, loop_id: str) -> _LoopHeartbeatHandle:
 async def _touch_loop_after_interrupt(config: Any, loop_id: str) -> None:
     """Bump loop freshness after user cancel so /resume keeps the row discoverable."""
     try:
-        from soothe.foundation.sloop.state.persistence.manager import (
+        from soothe.sloop.checkpoints.manager import (
             StrangeLoopCheckpointPersistenceManager,
         )
 
@@ -161,7 +161,7 @@ async def _mark_interrupted_goal_ledger(config: Any, loop_id: str) -> None:
     partial work. Swallows all errors.
     """
     try:
-        from soothe.foundation.context.goal_interrupt_persistence import (
+        from soothe.context.goal_interrupt_persistence import (
             mark_cancelled_goal_interrupted,
         )
 
@@ -287,7 +287,7 @@ def _ai_chunk_has_actionable_payload(msg: object) -> bool:
             return True
         if _message_has_tool_invocation_metadata(msg):
             return True
-        from soothe.foundation import extract_text_from_ai_message
+        from soothe.ai_message import extract_text_from_ai_message
 
         return bool("".join(extract_text_from_ai_message(msg)).strip())
     return False
@@ -480,7 +480,7 @@ class StrangeLoopMixin:
             )
             return
 
-        from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+        from soothe.sloop.engine.strange_loop import StrangeLoop
 
         loop_agent = StrangeLoop(
             core_agent=self._agent,
@@ -494,7 +494,7 @@ class StrangeLoopMixin:
         # RFC-622: build the clarification policy from per-request mode + config defaults.
         # Constructed once per goal so the closed-over veritas chat model is reused
         # across all clarifications inside this run.
-        from soothe.foundation.sloop.clarification import build_clarification_policy_for_runner
+        from soothe.sloop.clarification import build_clarification_policy_for_runner
 
         try:
             clarification_policy = build_clarification_policy_for_runner(
@@ -656,7 +656,7 @@ class StrangeLoopMixin:
                         summary = f"Error: {event_data['error'][:50]}"
 
                     clarification = event_data.get("clarification")
-                    from soothe.foundation.sloop.utils.token_usage import coerce_total_tokens_used
+                    from soothe.sloop.utils.token_usage import coerce_total_tokens_used
 
                     total_tokens_used = coerce_total_tokens_used(
                         event_data.get("total_tokens_used")
@@ -723,7 +723,7 @@ class StrangeLoopMixin:
                 elif event_type == "plan_phase_status":
                     label = str(event_data.get("label", "")).strip()
                     if label:
-                        from soothe.foundation.sloop.utils.token_usage import (
+                        from soothe.sloop.utils.token_usage import (
                             coerce_total_tokens_used,
                         )
 
@@ -935,7 +935,7 @@ class StrangeLoopMixin:
 async def _increment_loop_ai_message_count(config: Any, loop_id: str) -> None:
     """Bump loop AI message counter before the worker request finishes."""
     try:
-        from soothe.foundation.sloop.state.persistence.manager import (
+        from soothe.sloop.checkpoints.manager import (
             StrangeLoopCheckpointPersistenceManager,
         )
 

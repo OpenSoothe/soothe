@@ -96,7 +96,7 @@ For PostgreSQL, `dag_json` and `msg_json` use JSONB type instead of TEXT.
 
 ### SqliteContextPersistence
 
-File: `packages/soothe/src/soothe/context/persistence/sqlite_backend.py`
+File: `packages/soothe/src/soothe/context/sqlite_backend.py`
 
 Implements `ContextPersistenceProtocol` (5 async methods):
 
@@ -129,7 +129,7 @@ The `db_path` is resolved in `strange_loop.py` from the Soothe default persisten
 
 ### PostgresContextPersistence
 
-File: `packages/soothe/src/soothe/context/persistence/postgres_backend.py`
+File: `packages/soothe/src/soothe/context/postgres_backend.py`
 
 Implements `ContextPersistenceProtocol` (5 async methods). Same method signatures as SQLite variant.
 
@@ -167,7 +167,7 @@ In `strange_loop.py:run_with_progress()`, replace the current persistence select
 ```python
 persistence: ContextPersistenceProtocol
 if ce_config.persistence_backend == "sqlite":
-    from soothe.context.persistence.sqlite_backend import SqliteContextPersistence
+    from soothe.context.store_sqlite import SqliteContextPersistence
     # Use the same DB path as the Soothe default persistence subsystem
     db_path = getattr(self.config.persistence, 'metadata_sqlite_path', None)
     persistence = SqliteContextPersistence(
@@ -175,7 +175,7 @@ if ce_config.persistence_backend == "sqlite":
         db_path=db_path,
     )
 elif ce_config.persistence_backend == "postgresql":
-    from soothe.context.persistence.postgres_backend import PostgresContextPersistence
+    from soothe.context.postgres_backend import PostgresContextPersistence
     # Use the same DSN resolution as StrangeLoopStateManager
     dsn = self.config.resolve_postgres_dsn_for_database("checkpoints")
     persistence = PostgresContextPersistence(
@@ -183,13 +183,13 @@ elif ce_config.persistence_backend == "postgresql":
         dsn=dsn,
     )
 elif ce_config.persistence_backend == "file":
-    from soothe.context.persistence.file_backend import FileContextPersistence
+    from soothe.context.file_backend import FileContextPersistence
     persistence = FileContextPersistence(
         loop_id=state_manager.loop_id,
         soothe_home=soothe_home,
     )
 else:
-    from soothe.context.persistence.in_memory import InMemoryContextPersistence
+    from soothe.context.in_memory import InMemoryContextPersistence
     persistence = InMemoryContextPersistence()
 ```
 
@@ -218,14 +218,14 @@ No `db_path` or `dsn` fields. SQLite and PostgreSQL backends derive their connec
 | File | Change |
 |------|--------|
 | `soothe/context/engine.py` | Make step methods sync (G2); add `load_semantic_context()` (G4) |
-| `soothe/context/persistence/sqlite_backend.py` | **New**: SqliteContextPersistence |
-| `soothe/context/persistence/postgres_backend.py` | **New**: PostgresContextPersistence |
-| `soothe/context/persistence/__init__.py` | Update exports |
+| `soothe/context/sqlite_backend.py` | **New**: SqliteContextPersistence |
+| `soothe/context/postgres_backend.py` | **New**: PostgresContextPersistence |
+| `soothe/context/__init__.py` | Update exports |
 | `soothe/config/models.py` | Update ContextEngineConfig (G5) |
-| `soothe/foundation/sloop/engine/strange_loop.py` | 4-way persistence switch; use `load_semantic_context()` (G4) |
-| `soothe/foundation/sloop/orchestrator/nodes/goal_completion.py` | Add `fail_goal` call (G1) |
-| `soothe/foundation/sloop/orchestrator/nodes/execute_steps.py` | Add `ce.save()` after step execution (G3) |
-| `soothe/foundation/sloop/orchestrator/nodes/record_iteration.py` | Drop `await` from step method calls (G2) |
+| `soothe/sloop/engine/strange_loop.py` | 4-way persistence switch; use `load_semantic_context()` (G4) |
+| `soothe/sloop/nodes/goal_completion.py` | Add `fail_goal` call (G1) |
+| `soothe/sloop/nodes/execute_steps.py` | Add `ce.save()` after step execution (G3) |
+| `soothe/sloop/nodes/record_iteration.py` | Drop `await` from step method calls (G2) |
 | `config/config.template.yml` | Update context_engine section |
 | `config/develop/config.yml` | Update context_engine section |
 | `packages/soothe/tests/unit/context/` | New test files for DB persistence |

@@ -227,12 +227,12 @@ if assessment.goal_progress == "complete":
 ## Files Changed
 
 ```
-packages/soothe/src/soothe/foundation/sloop/prompts/plan_ledger_projection.py
-packages/soothe/src/soothe/foundation/sloop/cognition/plan_step_safety.py
-packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_assess.py
-packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_generate.py
-packages/soothe/src/soothe/foundation/sloop/orchestrator/routing.py
-packages/soothe/src/soothe/foundation/sloop/orchestrator/builder.py
+packages/soothe/src/soothe/sloop/prompts/plan_ledger_projection.py
+packages/soothe/src/soothe/sloop/cognition/plan_step_safety.py
+packages/soothe/src/soothe/sloop/nodes/plan_assess.py
+packages/soothe/src/soothe/sloop/nodes/plan_generate.py
+packages/soothe/src/soothe/sloop/orchestrator/routing.py
+packages/soothe/src/soothe/sloop/orchestrator/builder.py
 packages/soothe/tests/unit/core/prompts/test_plan_ledger_projection_ig380.py
 packages/soothe/tests/unit/core/loop/orchestrator/nodes/test_plan_assess_ig555_guardrail.py
 packages/soothe/tests/unit/core/loop/orchestrator/nodes/test_plan_generate_ig555_guardrail.py

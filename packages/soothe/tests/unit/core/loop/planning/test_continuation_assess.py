@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.state.schemas import ContinuationAssessment, LoopState
 from soothe.prompts import PromptBuilder
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.state.schemas import ContinuationAssessment, LoopState
 
 
 def _make_planner() -> LLMPlanner:
@@ -41,7 +41,7 @@ async def test_continuation_assess_bootstrap() -> None:
     )
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        "soothe.sloop.cognition.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -67,7 +67,7 @@ async def test_continuation_assess_plan_generate() -> None:
     )
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        "soothe.sloop.cognition.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -87,7 +87,7 @@ async def test_continuation_assess_llm_exception_falls_back_to_plan_generate() -
     planner = _make_planner()
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        "soothe.sloop.cognition.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -112,7 +112,7 @@ async def test_continuation_assess_invalid_action_falls_back() -> None:
         goal_progress = "none"
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        "soothe.sloop.cognition.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         structured = planner._model.with_structured_output.return_value
@@ -142,7 +142,7 @@ async def test_continuation_assess_uses_unified_message_list() -> None:
         )
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        "soothe.sloop.cognition.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         planner._invoke_structured = AsyncMock(side_effect=_capture_invoke)
@@ -161,8 +161,8 @@ async def test_continuation_assess_uses_unified_message_list() -> None:
 async def test_continuation_assess_guardrail_overrides_bootstrap_for_complex_intake() -> None:
     from soothe_sdk.intention.models import TaskComplexity
 
-    from soothe.foundation.sloop.intention import IntentClassification
-    from soothe.foundation.sloop.intention.models import IntakeLabel
+    from soothe.sloop.intention import IntentClassification
+    from soothe.sloop.intention.models import IntakeLabel
 
     planner = _make_planner()
     state = _state(goal="run make docker-build then start docker and run e2e")
@@ -177,7 +177,7 @@ async def test_continuation_assess_guardrail_overrides_bootstrap_for_complex_int
     )
 
     with patch(
-        "soothe.foundation.sloop.cognition.planner._plan_phase_chat_model",
+        "soothe.sloop.cognition.planner._plan_phase_chat_model",
         return_value=planner._model,
     ):
         planner._invoke_structured = AsyncMock(return_value=expected)

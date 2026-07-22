@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.step_wave_types import (
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.step_wave_types import (
     StreamEvent,
     _append_parallel_stream_event,
 )
@@ -62,7 +62,7 @@ async def test_interrupt_resume_emits_raw_tuple_on_heartbeat(
 ) -> None:
     """IG-549: heartbeat must be a LangGraph tuple for ``_stream_and_collect`` to wrap it."""
     monkeypatch.setattr(
-        "soothe.foundation.sloop.engine.graph_interrupt._STREAM_HEARTBEAT_INTERVAL_S",
+        "soothe.sloop.engine.graph_interrupt._STREAM_HEARTBEAT_INTERVAL_S",
         0.15,
     )
 
@@ -123,7 +123,7 @@ async def test_interrupt_resume_dispatch_timeout_disabled_by_default(
         return reader
 
     monkeypatch.setattr(
-        "soothe.foundation.sloop.engine.executor.GraphStreamChunkReader",
+        "soothe.sloop.engine.executor.GraphStreamChunkReader",
         _reader_factory,
     )
 
@@ -179,7 +179,7 @@ async def test_interrupt_resume_uses_config_dispatch_timeout(
         return reader
 
     monkeypatch.setattr(
-        "soothe.foundation.sloop.engine.executor.GraphStreamChunkReader",
+        "soothe.sloop.engine.executor.GraphStreamChunkReader",
         _reader_factory,
     )
 

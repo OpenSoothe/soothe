@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.foundation.events import StreamChunk
+from soothe.events import StreamChunk
 
 _MIN_MEMORY_STORAGE_LENGTH = 50
 

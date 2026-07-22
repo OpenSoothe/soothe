@@ -361,7 +361,7 @@ All integration tests passed!
 - ✅ Removed src/soothe/subagents/ (moved to packages/soothe-daemon/)
 - ✅ Removed src/soothe/protocols/ (moved to packages/soothe-daemon/)
 - ✅ Removed src/soothe/config/ (moved to packages/soothe-daemon/)
-- ✅ Removed src/soothe/foundation/ (moved to SDK + daemon)
+- ✅ Removed src/soothe/ (moved to SDK + daemon)
 - ✅ Removed src/soothe/cognition/ (moved to packages/soothe-daemon/)
 - ✅ Removed src/soothe/plan/ (moved to packages/soothe-daemon/)
 - ✅ Removed src/soothe/backends/ (moved to packages/soothe-daemon/)
@@ -411,7 +411,7 @@ CLI still imports from old soothe.* modules (violations of WebSocket-only princi
 - `from soothe.utils.goal_parsing import ...` (autopilot_dashboard.py) - Daemon utility
 
 **Foundation Violations** (should use SDK):
-- `from soothe.foundation import strip_internal_tags` (textual_adapter.py) - Use `soothe_sdk.internal`
+- `from soothe import strip_internal_tags` (textual_adapter.py) - Use `soothe_sdk.internal`
 
 **Uncertain**:
 - `from soothe.skills import get_built_in_skills_paths` (skills/invocation.py) - Skills functionality moved to packages/soothe-cli/src/soothe_cli/tui/skills/
@@ -487,10 +487,10 @@ src/                         ❌ Completely removed
 | `src/soothe/daemon/websocket_client.py` | `packages/soothe-sdk/src/soothe_sdk/client/websocket.py` | ⏳ Pending |
 | `src/soothe/daemon/protocol.py` | `packages/soothe-sdk/src/soothe_sdk/protocol.py` | ⏳ Pending |
 | `src/soothe/ux/client/session.py` | `packages/soothe-sdk/src/soothe_sdk/client/session.py` | ⏳ Pending |
-| `src/soothe/foundation/base_events.py` | `packages/soothe-sdk/src/soothe_sdk/events.py` | ⏳ Pending |
-| `src/soothe/foundation/verbosity_tier.py` | `packages/soothe-sdk/src/soothe_sdk/verbosity.py` | ⏳ Pending |
-| `src/soothe/foundation/internal_assistant.py` | `packages/soothe-sdk/src/soothe_sdk/internal.py` | ⏳ Pending |
-| `src/soothe/foundation/types.py` | `packages/soothe-sdk/src/soothe_sdk/types.py` | ⏳ Pending |
+| `src/soothe/base_events.py` | `packages/soothe-sdk/src/soothe_sdk/events.py` | ⏳ Pending |
+| `src/soothe/verbosity_tier.py` | `packages/soothe-sdk/src/soothe_sdk/verbosity.py` | ⏳ Pending |
+| `src/soothe/internal_assistant.py` | `packages/soothe-sdk/src/soothe_sdk/internal.py` | ⏳ Pending |
+| `src/soothe/types.py` | `packages/soothe-sdk/src/soothe_sdk/types.py` | ⏳ Pending |
 
 ### Moving to soothe-cli
 

@@ -10,20 +10,20 @@ from pathlib import Path
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.engine.act_wave_finalize import (
+from soothe.context.engine import ContextEngine
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.engine.act_wave_finalize import (
     LAST_TOOL_RESULT_HEAD_CHARS,
     _last_tool_result_block,
     _outcome_summary_text,
 )
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.engine.step_wave_types import (
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.engine.step_wave_types import (
     _ExecuteStepResult,
     wave_gather_failed,
     wave_gather_slot,
 )
-from soothe.foundation.sloop.state.schemas import LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import LoopState, StepAction, StepResult
 
 
 def _make_ce() -> ContextEngine:
@@ -48,7 +48,7 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -98,7 +98,7 @@ def test_append_parallel_wave_ledger_delegate_fallback() -> None:
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="g", thread_id="t1", iteration=0, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -191,7 +191,7 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -229,7 +229,7 @@ def test_append_parallel_wave_ledger_assistant_response_is_full_not_truncated_ig
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="list files", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -276,7 +276,7 @@ def test_append_parallel_wave_ledger_prioritizes_assistant_response_over_raw_too
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -317,7 +317,7 @@ def test_append_parallel_wave_ledger_task_tool_uses_output_fallback_ig493() -> N
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count file types", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -356,7 +356,7 @@ def test_append_parallel_wave_ledger_mixed_task_and_tool_uses_core_assistant_tex
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -398,7 +398,7 @@ def test_append_parallel_wave_ledger_none_gather_result_records_error_pair() -> 
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -420,7 +420,7 @@ def test_append_parallel_wave_ledger_none_messages_uses_output_fallback() -> Non
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count readmes", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)
@@ -452,7 +452,7 @@ def test_append_parallel_wave_ledger_empty_final_records_empty_ai() -> None:
     ce = _make_ce()
     ex = Executor(mock_agent, max_parallel_steps=4, context_engine=ce)
     state = LoopState(goal="count files", thread_id="t1", iteration=1, max_iterations=8)
-    from soothe.foundation.context.models import GoalNode
+    from soothe.context.models import GoalNode
 
     goal = GoalNode(description="test")
     ce._dag.add_goal(goal)

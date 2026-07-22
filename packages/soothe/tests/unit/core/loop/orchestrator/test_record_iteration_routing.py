@@ -2,7 +2,7 @@
 
 from langgraph.graph import END
 
-from soothe.foundation.sloop.orchestrator.routing import route_after_record_iteration
+from soothe.sloop.orchestrator.routing import route_after_record_iteration
 
 
 def test_terminal_bootstrap_routes_to_goal_completion() -> None:

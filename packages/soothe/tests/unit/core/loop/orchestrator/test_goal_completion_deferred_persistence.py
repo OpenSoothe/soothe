@@ -8,16 +8,16 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.sloop.orchestrator.nodes.goal_completion import node_goal_completion
-from soothe.foundation.sloop.orchestrator.phase_scratch import LoopPhaseScratch
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.state.schemas import LoopState, PlanResult
-from soothe.foundation.sloop.utils.messages import LoopAIMessage
+from soothe.context import StepPlanManagerAdapter
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.planning_models import CompletionStrategy
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.nodes.goal_completion import node_goal_completion
+from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.state.schemas import LoopState, PlanResult
+from soothe.sloop.utils.messages import LoopAIMessage
 
 
 def _ctx(

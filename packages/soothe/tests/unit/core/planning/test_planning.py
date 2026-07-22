@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.sloop.cognition.parser import parse_plan_from_text
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.cognition.parser import parse_plan_from_text
+from soothe.sloop.cognition.planner import LLMPlanner
 
 
 class TestLLMPlanner:

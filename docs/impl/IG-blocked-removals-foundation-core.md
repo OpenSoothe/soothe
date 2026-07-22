@@ -1,4 +1,4 @@
-# Blocked Removals: soothe.foundation.core
+# Blocked Removals: soothe.core
 
 > Document ID: DOS-08  
 > Created: 2025-01-XX  

@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.intention import (
+from soothe.sloop.intention import (
     IntakeLabel,
     IntakePass1Confidence,
     IntakePass1LLMResult,
@@ -21,7 +21,7 @@ from soothe.foundation.sloop.intention import (
     TaskComplexity,
     TwoPassIntakeCoordinator,
 )
-from soothe.foundation.sloop.orchestrator.routing import route_by_intent
+from soothe.sloop.orchestrator.routing import route_by_intent
 
 # -- Test fixtures ----------------------------------------------------------
 

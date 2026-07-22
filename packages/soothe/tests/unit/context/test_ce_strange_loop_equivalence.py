@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.sloop.state.schemas import (
+from soothe.context import StepPlanManagerAdapter
+from soothe.context.engine import ContextEngine
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
@@ -167,7 +167,7 @@ class TestLedgerAdapterCEOnly:
         """All phase-tagged messages go to the CE LedgerManager (CE is sole source)."""
         from langchain_core.messages import AIMessage, HumanMessage
 
-        from soothe.foundation.sloop.utils.messages import _record_ledger_message
+        from soothe.sloop.utils.messages import _record_ledger_message
 
         ce = ContextEngine()
 
@@ -195,7 +195,7 @@ class TestLedgerAdapterCEOnly:
         """Stage 2: _record_ledger_message requires a CE instance."""
         from langchain_core.messages import HumanMessage
 
-        from soothe.foundation.sloop.utils.messages import _record_ledger_message
+        from soothe.sloop.utils.messages import _record_ledger_message
 
         msg = HumanMessage(content="test")
         try:
@@ -210,7 +210,7 @@ class TestNamedConstantsEquivalence:
     """Verify constants are defined once in completion.py (single source of truth)."""
 
     def test_threshold_values_defined(self) -> None:
-        from soothe.foundation.context.planning.completion import (
+        from soothe.context.planning_completion import (
             _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
             DAG_DEPENDENCY_THRESHOLD,
             LOW_SUCCESS_RATE_THRESHOLD,

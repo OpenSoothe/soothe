@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
 )
-from soothe.foundation.sloop.orchestrator.nodes.intent_classify import (
+from soothe.sloop.nodes.intent_classify import (
     INTENT_CLASSIFY_STATUS_LABEL,
     intent_classified_reasoning_event,
 )

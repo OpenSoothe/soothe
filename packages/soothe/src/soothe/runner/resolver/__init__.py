@@ -131,7 +131,7 @@ def resolve_planner(
         phase="plan-generate",
     )
 
-    from soothe.foundation.sloop.cognition.planner import LLMPlanner
+    from soothe.sloop.cognition.planner import LLMPlanner
 
     return LLMPlanner(
         model=planner_model,

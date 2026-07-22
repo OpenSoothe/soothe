@@ -33,7 +33,7 @@ Implement the Cron Service as defined in RFC-229, enabling natural language sche
 ## Architecture (from RFC-229)
 
 ```
-packages/soothe/src/soothe/foundation/cron/
+packages/soothe/src/soothe/cron/
 ├── __init__.py           # Public exports
 ├── service.py            # CronService orchestrator
 ├── extraction.py         # CronExtractionService (LLM-based)
@@ -64,19 +64,19 @@ packages/soothe/src/soothe/foundation/cron/
    - Update `config/config.template.yml` and `config/develop/config.yml`
 
 2. **Create models.py**
-   - Location: `packages/soothe/src/soothe/foundation/cron/models.py`
+   - Location: `packages/soothe/src/soothe/cron/models.py`
    - Implement `CronJob` dataclass with all fields
    - Implement `ExtractionResult` dataclass
    - Implement `ScheduleKind` enum
 
 3. **Create store.py**
-   - Location: `packages/soothe/src/soothe/foundation/cron/store.py`
+   - Location: `packages/soothe/src/soothe/cron/store.py`
    - Implement `CronJobStore` with async CRUD methods
    - Use existing metadata database connection pool
    - Map `CronJob` to/from `cron_jobs` table
 
 4. **Create database schema**
-   - Location: `packages/soothe/src/soothe/foundation/persistence/schema.py` (or equivalent)
+   - Location: `packages/soothe/src/soothe/persistence/schema.py` (or equivalent)
    - Add `cron_jobs` table creation SQL
    - Add indexes for `user_id, status` and `next_run`
 
@@ -102,7 +102,7 @@ packages/soothe/src/soothe/foundation/cron/
 #### Tasks
 
 1. **Create extraction.py**
-   - Location: `packages/soothe/src/soothe/foundation/cron/extraction.py`
+   - Location: `packages/soothe/src/soothe/cron/extraction.py`
    - Implement `CronExtractionService` class
    - Build LLM prompt template per RFC-229 spec
    - Use `init_chat_model()` with configurable role (`fast` default)
@@ -141,7 +141,7 @@ packages/soothe/src/soothe/foundation/cron/
 #### Tasks
 
 1. **Create service.py**
-   - Location: `packages/soothe/src/soothe/foundation/cron/service.py`
+   - Location: `packages/soothe/src/soothe/cron/service.py`
    - Implement `CronService` class with:
      - `add_job(natural_language, user_id, priority)` → `CronJob`
      - `list_jobs(user_id, status)` → `list[CronJob]`
@@ -292,11 +292,11 @@ packages/soothe/src/soothe/foundation/cron/
 
 | File | Action |
 |------|--------|
-| `packages/soothe/src/soothe/foundation/cron/__init__.py` | Create |
-| `packages/soothe/src/soothe/foundation/cron/service.py` | Create |
-| `packages/soothe/src/soothe/foundation/cron/extraction.py` | Create |
-| `packages/soothe/src/soothe/foundation/cron/models.py` | Create |
-| `packages/soothe/src/soothe/foundation/cron/store.py` | Create |
+| `packages/soothe/src/soothe/cron/__init__.py` | Create |
+| `packages/soothe/src/soothe/cron/service.py` | Create |
+| `packages/soothe/src/soothe/cron/extraction.py` | Create |
+| `packages/soothe/src/soothe/cron/models.py` | Create |
+| `packages/soothe/src/soothe/cron/store.py` | Create |
 | `packages/soothe/src/soothe/config/settings.py` | Modify (add CronConfig) |
 | `packages/soothe/src/soothe/config/models.py` | Modify (add CronConfig model) |
 | `packages/soothe/src/soothe/core/goal_engine/scheduled_tasks.py` | Modify (enhance) |

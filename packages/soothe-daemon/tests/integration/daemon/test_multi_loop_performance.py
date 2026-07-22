@@ -22,7 +22,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from soothe.foundation.events import EventPriority
+from soothe.events import EventPriority
 
 from soothe_daemon.event.bus import EventBus, get_event_bus_drop_counts
 

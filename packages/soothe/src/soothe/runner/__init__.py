@@ -32,7 +32,7 @@ from soothe_sdk.protocols.planner import Plan, PlannerProtocol
 from soothe_sdk.protocols.policy import PolicyProtocol
 
 from soothe.config import SootheConfig
-from soothe.foundation.workspace import resolve_workspace_for_stream
+from soothe.workspace import resolve_workspace_for_stream
 
 from ._runner_autopilot_worker import AutopilotWorkerMixin
 from ._runner_phases import PhasesMixin
@@ -52,8 +52,8 @@ if TYPE_CHECKING:
     from soothe_sdk.protocols.core_agent import CoreAgentProtocol
     from soothe_sdk.protocols.memory import MemoryProtocol
 
-    from soothe.foundation.coreagent.lazy import LazyCoreAgent
-    from soothe.foundation.identity.runtime import IdentityRuntime
+    from soothe.coreagent.lazy import LazyCoreAgent
+    from soothe.identity.runtime import IdentityRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -95,15 +95,15 @@ class SootheRunner(
 
         from soothe_sdk.protocols.concurrency import ConcurrencyPolicy
 
-        from soothe.foundation.coreagent import create_soothe_agent
-        from soothe.foundation.coreagent.lazy import LazyCoreAgent
-        from soothe.foundation.sloop.intention import IntentClassifier
+        from soothe.coreagent import create_soothe_agent
+        from soothe.coreagent.lazy import LazyCoreAgent
         from soothe.runner.resolver import (
             resolve_checkpointer,
             resolve_durability,
             resolve_planner,
             resolve_policy,
         )
+        from soothe.sloop.intention import IntentClassifier
 
         from ._concurrency import ConcurrencyController
 
@@ -227,7 +227,7 @@ class SootheRunner(
 
     async def _materialize_core_agent(self) -> CoreAgentProtocol:
         """Ensure CoreAgent graph is compiled and checkpointer is attached."""
-        from soothe.foundation.coreagent.lazy import LazyCoreAgent
+        from soothe.coreagent.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent):
             return await self._core_agent.amaterialize()
@@ -236,7 +236,7 @@ class SootheRunner(
 
     def _materialized_core_agent(self) -> CoreAgentProtocol:
         """Return a compiled CoreAgent, materializing lazily when needed."""
-        from soothe.foundation.coreagent.lazy import LazyCoreAgent
+        from soothe.coreagent.lazy import LazyCoreAgent
 
         if isinstance(self._core_agent, LazyCoreAgent):
             return self._core_agent.materialize()
@@ -324,10 +324,10 @@ class SootheRunner(
         if self._config.persistence.default_backend != "postgresql":
             return None
 
-        from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+        from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 
         self._sloop_shared_pool = await SharedPostgreSQLPool.get_shared_instance(self._config)
-        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
+        from soothe.persistence.loop_writer import LoopPersistenceWriter
 
         await LoopPersistenceWriter.get_shared_instance(
             self._config,
@@ -614,8 +614,8 @@ class SootheRunner(
                 questions if there are several).
         """
         # Update thread_id for logging if one is provided
-        from soothe.foundation.workspace import resolve_daemon_workspace
         from soothe.logging import set_thread_id
+        from soothe.workspace import resolve_daemon_workspace
 
         cl_scope = (client_loop_id or "").strip()
         # Prefer client loop scope for log tags so worker runner.log matches daemon loop_id.

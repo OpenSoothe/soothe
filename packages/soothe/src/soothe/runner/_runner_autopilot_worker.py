@@ -29,15 +29,15 @@ from typing import TYPE_CHECKING, Any
 
 from soothe_sdk.protocols.planner import GoalDirective
 
-from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
-from soothe.foundation.autopilot.engine.models import (
+from soothe.autopilot.engine_models import (
     Finding,
     GoalDispatchContextContribution,
     StepSummary,
     ToolCallStats,
 )
-from soothe.foundation.autopilot.engine.proposal_queue import Proposal, ProposalQueue
-from soothe.foundation.sloop.state.schemas import PlanResult
+from soothe.autopilot.proposal_queue import Proposal, ProposalQueue
+from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
+from soothe.sloop.state.schemas import PlanResult
 
 from ._runner_shared import StreamChunk, _custom
 
@@ -102,7 +102,7 @@ class AutopilotWorkerMixin:
 
         # Build a fresh StrangeLoop for this dispatch. The CoreAgent / planner
         # are shared (workers serve many jobs over their lifetime).
-        from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+        from soothe.sloop.engine.strange_loop import StrangeLoop
 
         strange_loop = StrangeLoop(
             core_agent=self._agent,  # type: ignore[attr-defined]
@@ -113,7 +113,7 @@ class AutopilotWorkerMixin:
         # RFC-622: autopilot is headless — always answer clarifications via veritas.
         # RFC-623: human_attached=False keeps the hard-defer path on veritas failure;
         # there is no operator at the other end to consume an interactive interrupt.
-        from soothe.foundation.sloop.clarification import build_clarification_policy_for_runner
+        from soothe.sloop.clarification import build_clarification_policy_for_runner
 
         try:
             clarification_policy = build_clarification_policy_for_runner(

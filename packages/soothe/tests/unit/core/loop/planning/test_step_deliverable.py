@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.cognition.step_deliverable import (
+from soothe.sloop.cognition.step_deliverable import (
     TRIVIAL_DIRECT_EXPECTED_OUTPUT,
     StepDeliverableSpec,
     evaluate_step_deliverable_structural,
     resolve_step_deliverable_spec,
     step_has_deliverable_gate,
 )
-from soothe.foundation.sloop.state.schemas import StepAction
+from soothe.sloop.state.schemas import StepAction
 
 
 def test_trivial_expected_output_is_soft_direct_answer() -> None:

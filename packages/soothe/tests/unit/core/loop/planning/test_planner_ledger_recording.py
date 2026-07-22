@@ -12,18 +12,18 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
-import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.cognition.planner import LLMPlanner
-from soothe.foundation.sloop.state.schemas import (
+import soothe.sloop.state.schemas  # noqa: F401 — break circular import
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.state.schemas import (
     LoopState,
     PlanGenerateStep,
     PlanGeneration,
     StatusAssessment,
 )
-from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+from soothe.sloop.utils.messages import LoopHumanMessage
 
 GOAL = "translate the README into French"
 

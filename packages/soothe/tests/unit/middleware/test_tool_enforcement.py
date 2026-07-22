@@ -11,12 +11,12 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from soothe_nano.middleware.tool_enforcement import ToolEnforcementMiddleware
 from soothe_sdk.intention.models import RoutingClassification
 
-from soothe.foundation.sloop.middleware.config_keys import (
+from soothe.sloop.config_keys import (
     SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY,
     SOOTHE_STEP_SUBAGENT_CONFIG_KEY,
 )
-from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
-from soothe.foundation.sloop.middleware.intake_task_guard import IntakeOnlyTaskGuardMiddleware
+from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
+from soothe.sloop.intake_task_guard import IntakeOnlyTaskGuardMiddleware
 
 
 def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:

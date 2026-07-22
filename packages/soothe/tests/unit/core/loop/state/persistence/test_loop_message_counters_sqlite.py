@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.sloop.state.persistence.sqlite_backend import SQLitePersistenceBackend
+from soothe.sloop.checkpoints.sqlite_backend import SQLitePersistenceBackend
 
 
 @pytest.fixture

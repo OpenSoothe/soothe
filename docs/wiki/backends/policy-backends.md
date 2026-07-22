@@ -75,7 +75,7 @@ agent:
       profile: standard    # readonly, standard, or privileged
 ```
 
-Source: `packages/soothe/src/soothe/foundation/core/security/config_policy.py`
+Source: `packages/soothe/src/soothe/core/security/config_policy.py`
 
 ---
 

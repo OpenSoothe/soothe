@@ -346,8 +346,8 @@ def test_explicit_subagent_routing_after_assistant_message_full_tools() -> None:
 
 def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
     """Host ``soothe_step_subagent`` narrows root tools to ``task`` on first hop."""
-    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
 
     config = SootheConfig()
     guard = GoalStepGuardMiddleware()
@@ -377,8 +377,8 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
 
 def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
     """Wired catalog step subagents stay task-only after the first model hop."""
-    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
 
     config = SootheConfig()
     guard = GoalStepGuardMiddleware()
@@ -411,8 +411,8 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     """Host step wire wins over preferred_subagent when GoalStep runs after ToolEnforcement."""
-    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
 
     config = SootheConfig()
     enforcement = ToolEnforcementMiddleware()
@@ -443,9 +443,9 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
 
 def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
     """Host step resolver drops intake-only names before CoreAgent runs."""
-    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
-    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
-    from soothe.foundation.sloop.state.schemas import resolve_step_wire_subagent
+    from soothe.sloop.config_keys import SOOTHE_STEP_SUBAGENT_CONFIG_KEY
+    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
+    from soothe.sloop.state.schemas import resolve_step_wire_subagent
 
     assert resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
 
@@ -469,8 +469,8 @@ def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
 
 def test_goal_synthesis_disables_all_tools() -> None:
     """Goal-completion synthesis must not expose tools (read-only ledger synthesis)."""
-    from soothe.foundation.sloop.middleware.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
-    from soothe.foundation.sloop.middleware.goal_step_guard import GoalStepGuardMiddleware
+    from soothe.sloop.config_keys import SOOTHE_GOAL_SYNTHESIS_CONFIG_KEY
+    from soothe.sloop.goal_step_guard import GoalStepGuardMiddleware
 
     config = SootheConfig()
     guard = GoalStepGuardMiddleware()
@@ -723,7 +723,7 @@ class TestWorkspaceInjection:
         assert prompt.find("<RESPONSE_LANGUAGE_HINT>") < prompt.find("<ENVIRONMENT")
 
     def test_response_language_hint_uses_explicit_language_from_state(self, tmp_path) -> None:
-        from soothe.foundation.sloop.intention.models import ResponseLanguage
+        from soothe.sloop.intention.models import ResponseLanguage
 
         mw = self._middleware()
         classification = RoutingClassification(task_complexity="simple")
@@ -859,7 +859,7 @@ def test_modify_request_resolves_workspace_from_langgraph_config(tmp_path) -> No
 
 def test_modify_request_resolves_workspace_from_human_message(tmp_path) -> None:
     """Workspace on LoopHumanMessage must reach execute-step system prompt."""
-    from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+    from soothe.sloop.utils.messages import LoopHumanMessage
 
     (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
     mw = SystemPromptMiddleware(config=SootheConfig())
@@ -880,7 +880,7 @@ def test_modify_request_resolves_workspace_from_human_message(tmp_path) -> None:
 
 def test_modify_request_resolves_workspace_from_request_messages_first_hop(tmp_path) -> None:
     """First execute-step hop: workspace on request.messages before state merge."""
-    from soothe.foundation.sloop.utils.messages import LoopHumanMessage
+    from soothe.sloop.utils.messages import LoopHumanMessage
 
     (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
     mw = SystemPromptMiddleware(config=SootheConfig())
@@ -907,9 +907,9 @@ def test_execute_step_has_workspace_tail_plan_generate_does_not(tmp_path) -> Non
     """Workspace blocks are execute-step only; plan-generate stays lean."""
     from soothe_sdk.protocols.planner import PlanContext
 
-    from soothe.foundation.sloop.state.schemas import LoopState
-    from soothe.foundation.sloop.utils.messages import LoopHumanMessage
     from soothe.prompts import PromptBuilder
+    from soothe.sloop.state.schemas import LoopState
+    from soothe.sloop.utils.messages import LoopHumanMessage
 
     (tmp_path / "CLAUDE.md").write_text("# Dev rules\n\nUse ruff.\n", encoding="utf-8")
     ws = str(tmp_path)

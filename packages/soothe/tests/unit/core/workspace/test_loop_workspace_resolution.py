@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.workspace.loop_workspace import (
+from soothe.protocols.runner import LoopRunRequest
+from soothe.workspace.loop_workspace import (
     _workspace_mount_from_config,
     compute_scoped_workspace_dir_name,
     normalize_user_id,
@@ -14,7 +15,6 @@ from soothe.foundation.workspace.loop_workspace import (
     resolve_persisted_loop_workspace,
     user_id_for_hash,
 )
-from soothe.protocols.runner import LoopRunRequest
 
 
 def test_normalize_user_id_anonymous() -> None:

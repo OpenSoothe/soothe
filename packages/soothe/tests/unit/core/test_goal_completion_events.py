@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.events import StrangeLoopCompletedEvent
+from soothe.events import StrangeLoopCompletedEvent
 
 
 def test_strange_loop_completed_event_has_no_goal_completion_message_field() -> None:

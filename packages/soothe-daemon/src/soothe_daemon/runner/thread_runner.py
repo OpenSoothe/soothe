@@ -30,7 +30,7 @@ from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.runner.response_bridge import ResponsePusher
 
 if TYPE_CHECKING:
-    from soothe.foundation.identity.runtime import IdentityRuntime
+    from soothe.identity.runtime import IdentityRuntime
     from soothe.runner._runner_shared import StreamChunk
 
 logger = logging.getLogger(__name__)

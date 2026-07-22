@@ -128,7 +128,7 @@ sequenceDiagram
 | P0.2 | Forward `ready` through `ResponsePusher` (fixes 21s spinner) | **Done** | `soothe_daemon/runner/response_bridge.py` |
 | P0.3 | Pool waits for `ready` before releasing worker | **Done** | `thread_runner.py` (`_await_worker_ready`) |
 | P0.4 | Wire cancel → shared execution pool | **Done** | `query/engine.py`, `runner/factory.py` |
-| P0.5 | SQLite RFC-225 status guard (no external status clobber) | **Done** | `sloop/state/persistence/sqlite_backend.py` |
+| P0.5 | SQLite RFC-225 status guard (no external status clobber) | **Done** | `sloop/checkpoints/sqlite_backend.py` |
 | P0.6 | `force_flush()` at goal boundary | **Done** | `sloop/state/sloop_manager.py` |
 | P0.7 | Await tail persistence drain before `close()` | **Done** | `strange_loop.py`, `runtime_context.py`, `goal_completion.py` |
 

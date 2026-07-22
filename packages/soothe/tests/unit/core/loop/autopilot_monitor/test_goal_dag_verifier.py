@@ -6,10 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.autopilot.monitor.goal_dag_verifier import GoalDAGVerifier
-from soothe.foundation.autopilot.monitor.models import DagHealthReport, GoalPlacement
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
+from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
+from soothe.autopilot.monitor_models import DagHealthReport, GoalPlacement
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
 
 
 @pytest.fixture

@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import ValidationError
 from soothe import __version__ as core_version
-from soothe.foundation.sloop.state.persistence.directory_manager import PersistenceDirectoryManager
+from soothe.sloop.checkpoints.directory_manager import PersistenceDirectoryManager
 from soothe_nano.utils.text_preview import preview_first
 from soothe_sdk.wire.protocol import _serialize_for_json
 
@@ -1899,14 +1899,14 @@ class MessageRouter:
             client_id: Client connection identifier.
             msg: Request message; may contain optional ``workspace`` and ``user`` fields.
         """
-        from soothe.foundation.workspace import resolve_loop_workspace, validate_client_workspace
+        from soothe.workspace import resolve_loop_workspace, validate_client_workspace
         from uuid_utils import uuid7
 
         d = self._daemon
         request_id = msg.get("request_id")
         is_ephemeral = bool(msg.get("is_ephemeral", False))
 
-        from soothe.foundation.workspace import translate_client_path_to_container
+        from soothe.workspace import translate_client_path_to_container
 
         mount = d._config.workspace_mount
         host_root = mount.host_root if mount and mount.is_configured else None
@@ -2014,7 +2014,7 @@ class MessageRouter:
                 loop_id,
                 e,
             )
-            from soothe.foundation.workspace import resolve_daemon_workspace
+            from soothe.workspace import resolve_daemon_workspace
 
             effective_workspace = resolve_daemon_workspace()
 
@@ -2621,7 +2621,7 @@ class MessageRouter:
         raw_workspace = msg.get("workspace")
         if raw_workspace and isinstance(raw_workspace, str) and raw_workspace.strip():
             try:
-                from soothe.foundation.workspace import validate_client_workspace
+                from soothe.workspace import validate_client_workspace
 
                 resolved = validate_client_workspace(raw_workspace.strip())
                 workspace = str(resolved)
@@ -3341,8 +3341,8 @@ class MessageRouter:
             return
 
         # Default user for daemon (single-user mode)
-        from soothe.foundation.cron.extraction import AutopilotDisabledError
-        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
+        from soothe.cron.extraction import AutopilotDisabledError
+        from soothe.cron.models import DEFAULT_CRON_USER_ID, DuplicateCronJobError
 
         user_id = DEFAULT_CRON_USER_ID
 
@@ -3421,7 +3421,7 @@ class MessageRouter:
         if service is None:
             return
 
-        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+        from soothe.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
 
@@ -3470,7 +3470,7 @@ class MessageRouter:
         if service is None:
             return
 
-        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+        from soothe.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
 
@@ -3531,7 +3531,7 @@ class MessageRouter:
         if service is None:
             return
 
-        from soothe.foundation.cron.models import DEFAULT_CRON_USER_ID
+        from soothe.cron.models import DEFAULT_CRON_USER_ID
 
         user_id = DEFAULT_CRON_USER_ID
 

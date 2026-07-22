@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode, StepExecution, StepNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode, StepExecution, StepNode
+from soothe.context.store_sqlite import SqliteContextPersistence
 
 
 def _ce(**kwargs) -> ContextEngine:
@@ -332,7 +332,7 @@ class TestLosslessPersistence:
     @pytest.mark.asyncio
     async def test_pre_rfc624_ledger_format_loads_via_normalize(self) -> None:
         """Pre-RFC-624 ledger rows (type + content + phase) upgrade on read."""
-        from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+        from soothe.context.store_sqlite import SqliteContextPersistence
 
         persistence = SqliteContextPersistence(loop_id="test", db_path=Path(":memory:"))
         # Simulate old-format ledger data

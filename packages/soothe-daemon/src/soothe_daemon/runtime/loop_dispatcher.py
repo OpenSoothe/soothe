@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from soothe.foundation.workspace import resolve_daemon_workspace, resolve_loop_workspace
+from soothe.workspace import resolve_daemon_workspace, resolve_loop_workspace
 
 from soothe_daemon.bootstrap.logging import set_loop_id
 
@@ -27,7 +27,7 @@ async def bind_execution_thread_for_loop(daemon: Any, loop_id: str) -> str:
     """Bind the loop's checkpoint thread and return its id.
 
     Per RFC-223, the main StrangeLoop checkpoint thread id is the ``loop_id``
-    itself — the runtime in ``soothe.foundation.sloop.engine.strange_loop`` normalizes
+    itself — the runtime in ``soothe.sloop.engine.strange_loop`` normalizes
     any caller-supplied id back to ``loop_id`` before saving. Returning a
     distinct UUID here causes read RPCs (``loop_state_get``, ``loop_messages``)
     to query the wrong LangGraph checkpoint and surface an empty conversation

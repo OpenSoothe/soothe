@@ -29,14 +29,14 @@ from dataclasses import dataclass
 
 from soothe_sdk.protocols.planner import PlanContext
 
-import soothe.foundation.sloop.state.schemas  # noqa: F401 — break circular import at import time
-from soothe.foundation.sloop.state.schemas import (
+import soothe.sloop.state.schemas  # noqa: F401 — break circular import at import time
+from soothe.prompts import PromptBuilder
+from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     ToolCallHead,
 )
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.prompts import PromptBuilder
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 # ---------------------------------------------------------------------------
 # Fixture: realistic 2nd plan-assess input

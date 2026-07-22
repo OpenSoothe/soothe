@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     RoutingClassification,
     TaskComplexity,
 )
-from soothe.foundation.sloop.state.schemas import StepAction, strip_unrequested_step_delegates
+from soothe.sloop.state.schemas import StepAction, strip_unrequested_step_delegates
 
 
 def test_strip_unrequested_step_delegates_clears_planner_wiring() -> None:

@@ -9,7 +9,7 @@ When subagent task delegations are displayed in the TUI, the tool call args (des
 
 ## Root Cause
 
-**Location**: `packages/soothe/src/soothe/foundation/sloop/engine/tool_call_args.py:141-157`
+**Location**: `packages/soothe/src/soothe/sloop/engine/tool_call_args.py:141-157`
 
 The `filter_redundant_stream_tool_updates()` function drops ALL tool call updates when every entry has complete args. This incorrectly filters out enriched `task` tool call updates that carry delegation metadata.
 

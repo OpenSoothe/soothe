@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.persistence.postgres_provisioning import (
+from soothe.persistence.postgres_provisioning import (
     ensure_postgres_databases,
     postgres_admin_dsn,
     postgres_target_dsn,

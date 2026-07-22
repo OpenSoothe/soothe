@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.predecessor_branch_context import (
+from soothe.sloop.engine.predecessor_branch_context import (
     DEFAULT_BRANCH_PREDECESSOR_MAX_MESSAGES,
     predecessor_execute_messages_for_branch,
     transitive_dependency_step_ids,
 )
-from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.sloop.state.schemas import AgentDecision, StepAction
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_transitive_dependency_step_ids_diamond() -> None:

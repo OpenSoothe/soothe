@@ -34,7 +34,7 @@ Trim `StrangeLoopCheckpoint` to execution-only fields. Goal/step state is recove
 ### Step 1: Create ExecutionCheckpoint Model (schema 5.0)
 
 **Files to create:**
-- `packages/soothe/src/soothe/foundation/loop/state/execution_checkpoint.py`
+- `packages/soothe/src/soothe/loop/state/execution_checkpoint.py`
 
 **ExecutionCheckpoint fields (execution-only, no goal state):**
 
@@ -109,7 +109,7 @@ class WaveMetrics(BaseModel):
 ### Step 2: Update StrangeLoopCheckpoint Schema
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/checkpoint.py`
+- `packages/soothe/src/soothe/loop/state/checkpoint.py`
 
 **Changes:**
 - Replace `GoalExecutionRecord` with minimal `GoalIndexEntry` (goal_id, status only)
@@ -144,7 +144,7 @@ class GoalIndexEntry(BaseModel):
 ### Step 3: Update StrangeLoopStateManager
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/sloop_manager.py`
+- `packages/soothe/src/soothe/loop/state/sloop_manager.py`
 
 **Changes:**
 - Add `save_execution_checkpoint()` method
@@ -157,7 +157,7 @@ class GoalIndexEntry(BaseModel):
 ### Step 4: Update Recovery Flow
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py`
+- `packages/soothe/src/soothe/loop/engine/strange_loop.py`
 
 **Changes:**
 - Recovery path: `load_execution_checkpoint()` → `ce.load()` → rebuild LoopState
@@ -179,7 +179,7 @@ class GoalIndexEntry(BaseModel):
 ### Step 5: Update StrangeLoop LoopState Integration
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/schemas.py` — LoopState
+- `packages/soothe/src/soothe/loop/state/schemas.py` — LoopState
 
 **Changes:**
 - Add `sync_wave_metrics()` method to LoopState
@@ -190,7 +190,7 @@ class GoalIndexEntry(BaseModel):
 ### Step 6: Update Checkpoint Normalization
 
 **Files to modify:**
-- `packages/soothe/src/soothe/foundation/loop/state/checkpoint.py` — `normalize_checkpoint_data()`
+- `packages/soothe/src/soothe/loop/state/checkpoint.py` — `normalize_checkpoint_data()`
 
 **Changes:**
 - Add schema 5.0 normalization path

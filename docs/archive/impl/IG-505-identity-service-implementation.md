@@ -615,7 +615,7 @@ Key implementation responsibilities:
 **Database Operations**:
 - Use existing `PersistenceProtocol` backend
 - Tables: users, aksk_pairs, issued_tokens, external_identity_mappings, revoked_jtis
-- Follow SQLite backend pattern from `packages/soothe/src/soothe/foundation/sloop/state/persistence/sqlite_backend.py`
+- Follow SQLite backend pattern from `packages/soothe/src/soothe/sloop/checkpoints/sqlite_backend.py`
 
 ---
 

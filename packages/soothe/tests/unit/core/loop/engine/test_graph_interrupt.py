@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from soothe.foundation.sloop.engine.graph_interrupt import (
+from soothe.sloop.engine.graph_interrupt import (
     _STREAM_HEARTBEAT_SENTINEL,
     DispatchTimeoutError,
     GraphStreamChunkReader,

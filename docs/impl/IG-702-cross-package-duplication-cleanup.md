@@ -40,7 +40,7 @@ to a follow-up RFC and listed under "Out of scope".
   point `tokens.py` + `__init__.py` at the SDK.
 - **P2 — Persistence Postgres trio drift.** Host
   `foundation/persistence/{shared_metadata_pool,postgres_provisioning}.py` are
-  byte-identical to nano's except for `soothe_nano.*` → `soothe.foundation.*`
+  byte-identical to nano's except for `soothe_nano.*` → `soothe.*`
   import paths and "process"/"daemon" docstring wording. Fix: convert the two
   pure-drift files to delegate to nano (`shared_metadata_pool` via a
   `_REGISTRY_CLS`-overriding subclass so the host singleton binding is intact;
@@ -60,7 +60,7 @@ to a follow-up RFC and listed under "Out of scope".
     `medium_system`, `simple_system`) are byte-identical to nano's and never
     read by host code (host imports the constants from nano). Fix: delete the
     4 orphaned host XML copies.
-  - `soothe/src/soothe/foundation/persistence/sql/soothe_vectors/init.sql` is
+  - `soothe/src/soothe/persistence/sql/soothe_vectors/init.sql` is
     a byte-identical copy of nano's. Host loads it from its own tree; fix:
     remove the host copy and load from nano.
   - `SOOTHE_HOME` literal re-declared in `soothe_nano/config/env.py` and
@@ -117,7 +117,7 @@ to a follow-up RFC and listed under "Out of scope".
   is gone; `TokenClaims` is now a single class object across the process.
 - The stale local `IdentityStatus` (missing `active_aksk_count` /
   `active_tokens_count`) is gone; host now uses the SDK's 6-field version.
-- 2 tests importing `from soothe.foundation.identity.models import TokenClaims`
+- 2 tests importing `from soothe.identity.models import TokenClaims`
   still work via the shim. 60 identity tests green.
 
 ### PR-2 — Persistence trio drift (PARTIAL — see note)

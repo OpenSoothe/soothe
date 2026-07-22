@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
+    from soothe.autopilot.engine_models import GoalDispatchContextBundle
 
-from soothe.foundation.events import StreamChunk
+from soothe.events import StreamChunk
 
 """Deepagents-canonical stream chunk: ``(namespace, mode, data)``."""
 
@@ -105,7 +105,7 @@ class LoopRunRequest:
 
     def resolve_workspace_path(self) -> str:
         """Absolute workspace path for ``SootheRunner.astream(workspace=...)``."""
-        from soothe.foundation.workspace.loop_workspace import resolve_loop_workspace
+        from soothe.workspace.loop_workspace import resolve_loop_workspace
 
         return str(
             resolve_loop_workspace(

@@ -234,9 +234,9 @@ Sync config template + `config/develop/config.yml` if a feature flag is added.
 ## File Map
 
 ```text
-packages/soothe/src/soothe/foundation/persistence/loop_writer.py   # bridge + threading locks
-packages/soothe/src/soothe/foundation/sloop/state/sloop_manager.py # submit_* client; no PG fallback
-packages/soothe/src/soothe/foundation/context/persistence/pgsql_backend.py
+packages/soothe/src/soothe/persistence/loop_writer.py   # bridge + threading locks
+packages/soothe/src/soothe/sloop/state/sloop_manager.py # submit_* client; no PG fallback
+packages/soothe/src/soothe/context/pgsql_backend.py
 packages/soothe-daemon/src/soothe_daemon/persistence/pools.py      # bind_main_loop at preopen
 packages/soothe-daemon/src/soothe_daemon/runner/thread_runner.py   # optional: pass main_loop ref
 packages/soothe-daemon/tests/integration/runner/test_thread_pool_postgres_pools.py

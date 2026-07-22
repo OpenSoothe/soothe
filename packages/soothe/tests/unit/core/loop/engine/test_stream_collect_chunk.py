@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.sloop.engine.step_wave_types import _StreamCollectChunk
+from soothe.sloop.engine.step_wave_types import _StreamCollectChunk
 
 
 def test_wire_event_sets_event_only() -> None:

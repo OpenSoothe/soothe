@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop.orchestrator.runner import build_loop_graph_invoke_config
+from soothe.sloop.orchestrator.runner import build_loop_graph_invoke_config
 from soothe.utils.observability.langfuse import (
     GoalLoopTrace,
     SootheLangfuse,
@@ -65,7 +65,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
     ctx.proposal_queue = None
 
     with patch(
-        "soothe.foundation.sloop.orchestrator.runner.merge_langfuse_runnable_config",
+        "soothe.sloop.orchestrator.runner.merge_langfuse_runnable_config",
         return_value={
             "configurable": {"thread_id": "loop-1"},
             "metadata": {"langfuse_session_id": "conv-thread-9"},

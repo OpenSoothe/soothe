@@ -105,7 +105,7 @@ def build_response_language_hint(language: object | None) -> str:
     Returns:
         XML fragment instructing the model which language to use for user-facing prose.
     """
-    from soothe.foundation.sloop.intention.models import (
+    from soothe.sloop.intention.models import (
         ResponseLanguage,
         normalize_response_language,
     )

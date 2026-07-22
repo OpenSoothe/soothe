@@ -46,7 +46,7 @@ Each tier has a strict contract: CoreAgent knows nothing about goals; SootheRunn
 
 | Package | Primary Imports |
 |---------|----------------|
-| `soothe` | `from soothe.config import SootheConfig` · `from soothe.foundation.core.agent import CoreAgent, create_soothe_agent` · `from soothe.runner import SootheRunner` · `from soothe.protocols import MemoryProtocol, DurabilityProtocol` |
+| `soothe` | `from soothe.config import SootheConfig` · `from soothe.core.agent import CoreAgent, create_soothe_agent` · `from soothe.runner import SootheRunner` · `from soothe.protocols import MemoryProtocol, DurabilityProtocol` |
 | `soothe_daemon` | `from soothe_daemon import SootheDaemon, run_daemon` · `from soothe_daemon.bootstrap import pid_path` |
 | `soothe_sdk` | `from soothe_sdk.plugin import plugin, tool, subagent` · `from soothe_sdk.core.events import SootheEvent` · `from soothe_sdk.wire import ProtocolError` · `from soothe_sdk.protocols import AsyncPersistStore, VectorStoreProtocol` · transport: `from soothe_client import WebSocketClient` |
 

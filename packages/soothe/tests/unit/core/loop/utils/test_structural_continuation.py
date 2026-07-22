@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from soothe.foundation.sloop.state.execution_checkpoint import GoalIndexEntry
-from soothe.foundation.sloop.utils.structural_continuation import (
+from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
+from soothe.sloop.utils.structural_continuation import (
     chitchat_may_finalize_checkpoint,
     has_active_running_goal,
     is_loop_continuation_phrase,

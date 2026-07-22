@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.foundation.sloop.chitchat_fallbacks import GENERIC_CHITCHAT_FALLBACKS_EN
-from soothe.foundation.sloop.intention.classifier import IntentClassifier
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.chitchat_fallbacks import GENERIC_CHITCHAT_FALLBACKS_EN
+from soothe.sloop.intention.classifier import IntentClassifier
+from soothe.sloop.intention.models import (
     IntakePass1Confidence,
     IntakePass1LLMResult,
     IntakePass1SocialKind,

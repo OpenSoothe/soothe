@@ -15,7 +15,7 @@ Successfully moved all Rich-dependent rendering modules from daemon package to C
 **Files Removed from Daemon**: 3 files (214 lines total)
 - `soothe.plan.rich_tree.py` (56 lines)
 - `soothe.plan/__init__.py` (5 lines)
-- `soothe.foundation.slash_commands.py` (153 lines)
+- `soothe.slash_commands.py` (153 lines)
 
 **Files Added to CLI**: 3 files
 - `soothe_cli.plan.rich_tree.py` (56 lines)
@@ -40,7 +40,7 @@ Move all Rich-dependent rendering modules from daemon package to CLI package to 
 IG-113 states "Daemon must not depend on UX", but current implementation violates this:
 
 1. `daemon/_handlers.py:169` imports `rich.console.Console`
-2. `soothe.foundation.slash_commands` uses Rich directly (Table, Panel)
+2. `soothe.slash_commands` uses Rich directly (Table, Panel)
 3. `soothe.plan.rich_tree` uses Rich directly (Tree, Text)
 
 **Correct architecture**:
@@ -59,7 +59,7 @@ IG-113 states "Daemon must not depend on UX", but current implementation violate
    - Move `rich_tree.py` from daemon to CLI
    - Update imports in CLI consumers
 
-2. **Move `soothe.foundation.slash_commands` to CLI**
+2. **Move `soothe.slash_commands` to CLI**
    - Create `packages/soothe-cli/src/soothe_cli/shared/slash_commands.py`
    - Move all slash command handlers from daemon foundation
    - Keep daemon version minimal (data-only)
@@ -106,7 +106,7 @@ Replace Rich rendering with structured data responses:
 | File | From | To |
 |------|------|-----|
 | `rich_tree.py` | `soothe.plan.rich_tree` | `soothe_cli.plan.rich_tree` |
-| `slash_commands.py` | `soothe.foundation.slash_commands` | `soothe_cli.shared.slash_commands` |
+| `slash_commands.py` | `soothe.slash_commands` | `soothe_cli.shared.slash_commands` |
 
 ### Files to Update
 

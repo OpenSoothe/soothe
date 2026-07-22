@@ -5,11 +5,11 @@ from __future__ import annotations
 import jsonschema
 import pytest
 
-from soothe.foundation.sloop.cognition.plan_gap_wire import (
+from soothe.sloop.cognition.plan_gap_wire import (
     coerce_goal_component_status_dict,
     coerce_plan_gap_analysis_wire_dict,
 )
-from soothe.foundation.sloop.state.schemas import PlanGapAnalysis
+from soothe.sloop.state.schemas import PlanGapAnalysis
 
 
 def test_coerce_name_alias_to_component() -> None:

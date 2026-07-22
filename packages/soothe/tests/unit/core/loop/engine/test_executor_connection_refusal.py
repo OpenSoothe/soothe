@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.sloop.engine.executor import Executor
-from soothe.foundation.sloop.utils.network_errors import (
+from soothe.sloop.engine.executor import Executor
+from soothe.sloop.utils.network_errors import (
     format_connection_refusal_message,
     format_ssl_certificate_message,
     format_tool_network_error,

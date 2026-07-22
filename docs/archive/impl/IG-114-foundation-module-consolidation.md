@@ -1,9 +1,9 @@
-# IG-114: Consolidate `soothe.foundation`
+# IG-114: Consolidate `soothe`
 
 ## Goal
 
-- Move `soothe.core.foundation` → `soothe.foundation`.
-- Merge `soothe.text` and `soothe.slash_commands` into `soothe.foundation`.
+- Move `soothe.core.foundation` → `soothe`.
+- Merge `soothe.text` and `soothe.slash_commands` into `soothe`.
 - Remove `core/foundation`, `text/`, and `slash_commands/` package roots.
 
 ## Verification

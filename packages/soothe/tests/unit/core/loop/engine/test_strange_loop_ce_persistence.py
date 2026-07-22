@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
+from soothe.sloop.engine.strange_loop import StrangeLoop
 
 
 def _make_strange_loop(*, backend: str) -> StrangeLoop:
@@ -32,18 +32,14 @@ async def test_postgresql_backend_selects_pgsql_persistence() -> None:
     sl = _make_strange_loop(backend="postgresql")
 
     with (
-        patch(
-            "soothe.foundation.context.persistence.pgsql_backend.PgsqlContextPersistence"
-        ) as pgsql_cls,
-        patch(
-            "soothe.foundation.context.persistence.sqlite_backend.SqliteContextPersistence"
-        ) as sqlite_cls,
-        patch("soothe.foundation.context.engine.ContextEngine") as ce_cls,
-        patch("soothe.foundation.context.planning.StepPlanManagerAdapter"),
-        patch("soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager") as sm_cls,
-        patch("soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
-        patch("soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext"),
-        patch("soothe.foundation.sloop.engine.strange_loop.asyncio.Queue"),
+        patch("soothe.context.store_pgsql.PgsqlContextPersistence") as pgsql_cls,
+        patch("soothe.context.store_sqlite.SqliteContextPersistence") as sqlite_cls,
+        patch("soothe.context.engine.ContextEngine") as ce_cls,
+        patch("soothe.context.StepPlanManagerAdapter"),
+        patch("soothe.sloop.engine.strange_loop.StrangeLoopStateManager") as sm_cls,
+        patch("soothe.sloop.engine.strange_loop.CheckpointAnchorManager") as am_cls,
+        patch("soothe.sloop.engine.strange_loop.LoopRuntimeContext"),
+        patch("soothe.sloop.engine.strange_loop.asyncio.Queue"),
         patch.object(sl, "plan_phase"),
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

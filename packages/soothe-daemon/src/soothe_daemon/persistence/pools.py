@@ -33,11 +33,11 @@ async def preopen_shared_postgres_pools(
     if not daemon_config.thread_pool.enabled:
         return
 
-    from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
-    from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
-    from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
-    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.persistence.loop_writer import LoopPersistenceWriter
+    from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
+    from soothe.persistence.shared_metadata_pool import SharedMetadataPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+    from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 
     registry = PostgresPoolRegistry.get_instance(config)
     await registry.open_all()
@@ -57,10 +57,10 @@ async def preopen_shared_postgres_pools(
 
 async def release_idle_shared_postgres_pools() -> None:
     """Release idle connections on process-wide shared PostgreSQL pools."""
-    from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
-    from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
-    from soothe.foundation.sloop.state.persistence.shared_pool import SharedPostgreSQLPool
+    from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
+    from soothe.persistence.shared_metadata_pool import SharedMetadataPool
     from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+    from soothe.sloop.checkpoints.shared_pool import SharedPostgreSQLPool
 
     registry = PostgresPoolRegistry.try_get_instance()
     if registry is not None:
@@ -75,14 +75,14 @@ async def release_idle_shared_postgres_pools() -> None:
 async def close_shared_postgres_pools() -> None:
     """Close shared PostgreSQL pools at daemon shutdown."""
     try:
-        from soothe.foundation.persistence.loop_writer import LoopPersistenceWriter
-        from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
-        from soothe.foundation.persistence.shared_metadata_pool import SharedMetadataPool
-        from soothe.foundation.sloop.state.persistence.shared_pool import (
+        from soothe.persistence.loop_writer import LoopPersistenceWriter
+        from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
+        from soothe.persistence.shared_metadata_pool import SharedMetadataPool
+        from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
+        from soothe.sloop.checkpoints.shared_pool import (
             SharedPostgreSQLPool,
             close_shared_sqlite_backend_instance,
         )
-        from soothe.runner.resolver.shared_checkpointer_pool import SharedCheckpointerPool
 
         try:
             await LoopPersistenceWriter.close_shared_instance()
@@ -128,7 +128,7 @@ async def periodic_postgres_pool_maintenance(
 def _log_pool_stats(config: SootheConfig) -> None:
     """Log pool utilization from the registry when available."""
     try:
-        from soothe.foundation.persistence.postgres_pool_registry import PostgresPoolRegistry
+        from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
 
         registry = PostgresPoolRegistry.try_get_instance()
         if registry is None:
@@ -147,10 +147,10 @@ async def _reconcile_degraded_checkpoints_if_configured(
     if config is None or config.persistence.default_backend != "postgresql":
         return
     try:
-        from soothe.foundation.persistence.persist_reconciler import (
+        from soothe.persistence.persist_reconciler import (
             reconcile_degraded_checkpoints,
         )
-        from soothe.foundation.sloop.state.persistence.shared_pool import (
+        from soothe.sloop.checkpoints.shared_pool import (
             SharedPostgreSQLPool,
         )
 

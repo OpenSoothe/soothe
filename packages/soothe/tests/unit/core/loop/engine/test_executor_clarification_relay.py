@@ -8,12 +8,12 @@ from typing import Any
 import pytest
 from langgraph.types import Command, Interrupt
 
-from soothe.foundation.sloop.clarification import (
+from soothe.sloop.clarification import (
     ClarificationCapture,
     ClarificationDetector,
     LoopStateView,
 )
-from soothe.foundation.sloop.engine.executor import Executor
+from soothe.sloop.engine.executor import Executor
 
 
 def _view() -> LoopStateView:

@@ -38,8 +38,8 @@ The following changes were implemented in the initial Phase 4 PR.
 
 ### Persistence backend polish
 
-- **Removed `InMemoryContextPersistence`** — deleted `context/persistence/in_memory.py`, removed from `__init__.py` exports
-- **Added `PgsqlContextPersistence`** — `context/persistence/pgsql_backend.py` with JSONB schema, asyncpg connection pool
+- **Removed `InMemoryContextPersistence`** — deleted `context/in_memory.py`, removed from `__init__.py` exports
+- **Added `PgsqlContextPersistence`** — `context/pgsql_backend.py` with JSONB schema, asyncpg connection pool
 - **Added projection limit config** — `ContextEngineConfig` has 6 projection fields mapping 1:1 to `ProjectionConfig`, plus `to_projection_config()` bridge method
 - **Removed separate persistence config** — CE follows `persistence.default_backend` instead of its own `persistence_backend` field
 - **CE defaults to sqlite :memory:** when no persistence provided — `ContextEngine.__init__()` creates an in-memory SQLite backend as default

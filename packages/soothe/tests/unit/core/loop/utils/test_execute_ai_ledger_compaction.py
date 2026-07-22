@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.utils.messages import (
+from soothe.context.engine import ContextEngine
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.utils.messages import (
     LoopAIMessage,
     LoopHumanMessage,
     _record_ledger_message,

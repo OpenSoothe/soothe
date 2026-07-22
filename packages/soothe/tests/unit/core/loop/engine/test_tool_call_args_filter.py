@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from soothe.foundation.sloop.engine.tool_call_args import (
+from soothe.sloop.engine.tool_call_args import (
     filter_redundant_stream_tool_updates,
     wire_updates_from_ai_message,
 )

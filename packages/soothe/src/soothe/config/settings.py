@@ -722,10 +722,10 @@ class SootheConfig(BaseSettings):
 
             if self.persistence.default_backend == "postgresql":
                 try:
-                    from soothe.foundation.persistence.postgres_pool_lifecycle import (
+                    from soothe.persistence.postgres_pool_lifecycle import (
                         postgres_pool_timing_from_config,
                     )
-                    from soothe.foundation.persistence.postgres_pool_registry import (
+                    from soothe.persistence.postgres_pool_registry import (
                         PostgresPoolRegistry,
                     )
 

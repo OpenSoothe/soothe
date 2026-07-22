@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
+from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
 from ._sync_persist_helper import bind_sync_persist_writes
 
@@ -26,7 +26,7 @@ def temp_state_manager():
         db_path = workspace / "test_loop_checkpoints.db"
 
         with patch(
-            "soothe.foundation.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
+            "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
             state_manager = StrangeLoopStateManager(

@@ -51,9 +51,9 @@ bounded_evidence_gather → [fresh?] → plan_generate (skip assess)
 
 ## Files
 
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/routing.py`
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/builder.py`
-- `packages/soothe/src/soothe/foundation/loop/orchestrator/nodes/plan_generate.py`
+- `packages/soothe/src/soothe/loop/orchestrator/routing.py`
+- `packages/soothe/src/soothe/loop/orchestrator/builder.py`
+- `packages/soothe/src/soothe/loop/orchestrator/nodes/plan_generate.py`
 
 ## Expected Impact
 

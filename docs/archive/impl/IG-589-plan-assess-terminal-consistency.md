@@ -35,12 +35,12 @@ No config toggles — behavior is framework default.
 
 | Area | File |
 |------|------|
-| Schema | `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` |
-| Terminal gates | `packages/soothe/src/soothe/foundation/sloop/cognition/plan_step_safety.py` |
-| Routing | `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_assess.py` |
-| Assess normalize | `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py` |
-| Step flag | `packages/soothe/src/soothe/foundation/sloop/engine/executor.py` |
-| Completion | `packages/soothe/src/soothe/foundation/context/planning/completion.py` |
+| Schema | `packages/soothe/src/soothe/sloop/state/schemas.py` |
+| Terminal gates | `packages/soothe/src/soothe/sloop/cognition/plan_step_safety.py` |
+| Routing | `packages/soothe/src/soothe/sloop/nodes/plan_assess.py` |
+| Assess normalize | `packages/soothe/src/soothe/sloop/cognition/planner.py` |
+| Step flag | `packages/soothe/src/soothe/sloop/engine/executor.py` |
+| Completion | `packages/soothe/src/soothe/context/completion.py` |
 | Prompt | `plan_assess_instructions.xml` |
 | Tests | `packages/soothe/tests/unit/core/loop/cognition/test_ig640_terminal_assess.py` |
 

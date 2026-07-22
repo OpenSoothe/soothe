@@ -124,7 +124,7 @@ When a configuration is reloaded, the daemon emits a `ConfigReloadedEvent` on th
 ### Event Structure
 
 ```python
-from soothe.foundation.events import ConfigReloadedEvent, CONFIG_RELOADED
+from soothe.events import ConfigReloadedEvent, CONFIG_RELOADED
 
 class ConfigReloadedEvent:
     type: str = "soothe.system.config.reloaded"  # CONFIG_RELOADED constant
@@ -140,7 +140,7 @@ class ConfigReloadedEvent:
 Subscribe to config reload events for reactive behavior:
 
 ```python
-from soothe.foundation.events import REGISTRY, CONFIG_RELOADED
+from soothe.events import REGISTRY, CONFIG_RELOADED
 
 def on_config_reloaded(event: dict) -> None:
     if event.get("error"):
@@ -388,5 +388,5 @@ And in `ConfigReloadedEvent` for event bus:
 ## Related
 
 - `soothe.config.reload` module: `ConfigWatcher`, `ConfigReloadEvent`
-- `soothe.foundation.events`: `ConfigReloadedEvent`, `CONFIG_RELOADED`
+- `soothe.events`: `ConfigReloadedEvent`, `CONFIG_RELOADED`
 - `soothe_daemon.server.core`: `SootheDaemon.enable_config_reload()`

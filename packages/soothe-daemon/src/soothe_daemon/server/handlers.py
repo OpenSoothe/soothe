@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 import websockets.exceptions
-from soothe.foundation.events import ERROR
+from soothe.events import ERROR
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.protocol import ErrorCode, build_error_response, validate_message

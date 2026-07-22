@@ -18,7 +18,7 @@ This IG tracks implementation of RFC-625: unifying goal management under Context
 
 | Phase | Scope | Status | Estimated |
 |-------|-------|--------|-----------|
-| 1 | Relocate `soothe.context` → `soothe.foundation.context` | Done | 2 days |
+| 1 | Relocate `soothe.context` → `soothe.context` | Done | 2 days |
 | 2 | Enhance GoalNode with Goal fields, add CE API methods | Done | 2 days |
 | 3 | Delete GoalEngine, migrate BackoffReasoner | Done | 3 days |
 | 4 | Implement AutopilotMonitor (Verifier, Intake, Dreaming) | Pending | 5 days |
@@ -31,8 +31,8 @@ This IG tracks implementation of RFC-625: unifying goal management under Context
 
 **Files created:**
 - `foundation/context/__init__.py`, `models.py`, `engine.py`, `ledger.py`, `projection.py`, `semantic.py`
-- `foundation/context/persistence/__init__.py`, `base.py`, `file_backend.py`, `sqlite_backend.py`, `pgsql_backend.py`
-- `foundation/context/planning/__init__.py`, `models.py`, `completion.py`, `step_planner.py`, `goal_planner.py`, `scheduling.py`
+- `foundation/context/__init__.py`, `base.py`, `file_backend.py`, `sqlite_backend.py`, `pgsql_backend.py`
+- `foundation/context/__init__.py`, `models.py`, `completion.py`, `step_planner.py`, `goal_planner.py`, `scheduling.py`
 
 **Import updates:**
 - All internal imports in foundation/context updated to self-referential paths
@@ -49,7 +49,7 @@ This IG tracks implementation of RFC-625: unifying goal management under Context
 
 **GoalNode enhancement (RFC-625):**
 
-Added fields migrated from Goal model (`autopilot/engine/models.py`):
+Added fields migrated from Goal model (`autopilot/models.py`):
 - `retry_count`, `max_retries`, `send_back_count`, `max_send_backs` (RFC-204)
 - `attempts_after_crash` (RFC-222 H4)
 - `source_file`, `workspace` (RFC-222)
@@ -86,9 +86,9 @@ Added `BLOCKED_STATES` constant.
 **Completed:** 2026-06-15
 
 **Files deleted:**
-- `foundation/autopilot/engine/engine.py` (1821 lines) — GoalEngine deleted
-- `foundation/autopilot/engine/file_lock_registry.py` (270 lines) — FileLockRegistry deleted
-- `foundation/autopilot/engine/backoff_reasoner.py` (232 lines) — Migrated to monitor/
+- `foundation/autopilot/engine.py` (1821 lines) — GoalEngine deleted
+- `foundation/autopilot/file_lock_registry.py` (270 lines) — FileLockRegistry deleted
+- `foundation/autopilot/backoff_reasoner.py` (232 lines) — Migrated to monitor/
 
 **Goal class deleted from models.py:**
 - Removed Goal class entirely
@@ -144,7 +144,7 @@ Added `BLOCKED_STATES` constant.
 **Export updates:**
 - `foundation/autopilot/__init__.py` — Removed GoalEngine, Goal exports; added AutopilotMonitor
 - `foundation/__init__.py` — Removed GoalEngine export; added AutopilotMonitor (lazy)
-- `foundation/autopilot/engine/__init__.py` — Removed GoalEngine, FileLockRegistry, Goal exports
+- `foundation/autopilot/__init__.py` — Removed GoalEngine, FileLockRegistry, Goal exports
 
 **Status:** Core migration complete. Tests require additional fixes:
 - `test_goal_step_dag.py`, `test_ig624_3_planning_submodule.py` — `ready_goals` → `peek_ready_goals` renaming
@@ -158,7 +158,7 @@ Added `BLOCKED_STATES` constant.
 ### Files to move
 
 Source: `packages/soothe/src/soothe/context/`
-Destination: `packages/soothe/src/soothe/foundation/context/`
+Destination: `packages/soothe/src/soothe/context/`
 
 | File | Action |
 |------|--------|
@@ -182,19 +182,19 @@ Destination: `packages/soothe/src/soothe/foundation/context/`
 
 ### External import updates
 
-Files with `from soothe.context import` (move to `soothe.foundation.context`):
+Files with `from soothe.context import` (move to `soothe.context`):
 
 | File | Current import | New import |
 |------|---------------|------------|
-| `config/models.py` | `from soothe.context.projection import ProjectionConfig` | `from soothe.foundation.context.projection import ProjectionConfig` |
-| `foundation/loop/planning/planner.py` | `from soothe.context.planning.completion import` | `from soothe.foundation.context.planning.completion import` |
-| `foundation/loop/planning/manager.py` | `from soothe.context.planning.completion import` | `from soothe.foundation.context.planning.completion import` |
-| `foundation/loop/prompts/user_message.py` | `from soothe.context.projection import ContextBundle` | `from soothe.foundation.context.projection import ContextBundle` |
-| `foundation/loop/prompts/builder.py` | `from soothe.context.projection import ContextBundle` | `from soothe.foundation.context.projection import ContextBundle` |
-| `foundation/loop/engine/strange_loop.py` | `from soothe.context.engine import ContextEngine` | `from soothe.foundation.context.engine import ContextEngine` |
-| `foundation/loop/engine/context_adapters.py` | `from soothe.context.engine import ContextEngine` | `from soothe.foundation.context.engine import ContextEngine` |
-| `foundation/loop/orchestrator/nodes/record_iteration.py` | `from soothe.context.models import StepExecution` | `from soothe.foundation.context.models import StepExecution` |
-| `foundation/loop/orchestrator/nodes/goal_completion.py` | `from soothe.context.planning.models import` | `from soothe.foundation.context.planning.models import` |
+| `config/models.py` | `from soothe.context.projection import ProjectionConfig` | `from soothe.context.projection import ProjectionConfig` |
+| `foundation/loop/planning/planner.py` | `from soothe.context.planning_completion import` | `from soothe.context.planning_completion import` |
+| `foundation/loop/planning/manager.py` | `from soothe.context.planning_completion import` | `from soothe.context.planning_completion import` |
+| `foundation/loop/prompts/user_message.py` | `from soothe.context.projection import ContextBundle` | `from soothe.context.projection import ContextBundle` |
+| `foundation/loop/prompts/builder.py` | `from soothe.context.projection import ContextBundle` | `from soothe.context.projection import ContextBundle` |
+| `foundation/loop/engine/strange_loop.py` | `from soothe.context.engine import ContextEngine` | `from soothe.context.engine import ContextEngine` |
+| `foundation/loop/engine/context_adapters.py` | `from soothe.context.engine import ContextEngine` | `from soothe.context.engine import ContextEngine` |
+| `foundation/loop/orchestrator/nodes/record_iteration.py` | `from soothe.context.models import StepExecution` | `from soothe.context.models import StepExecution` |
+| `foundation/loop/orchestrator/nodes/goal_completion.py` | `from soothe.context.planning_models import` | `from soothe.context.planning_models import` |
 
 ### Test imports
 
@@ -205,14 +205,14 @@ Update all test files in `packages/soothe/tests/unit/context/` and `packages/soo
 Create `packages/soothe/src/soothe/context/__init__.py` with deprecation warning:
 
 ```python
-"""Deprecated: use soothe.foundation.context instead."""
+"""Deprecated: use soothe.context instead."""
 import warnings
 warnings.warn(
-    "soothe.context is deprecated. Use soothe.foundation.context instead.",
+    "soothe.context is deprecated. Use soothe.context instead.",
     DeprecationWarning,
     stacklevel=2,
 )
-from soothe.foundation.context import *  # noqa: F401, F403
+from soothe.context import *  # noqa: F401, F403
 ```
 
 ---
@@ -263,21 +263,21 @@ In `foundation/context/engine.py`:
 
 ### Files to delete
 
-- `foundation/autopilot/engine/engine.py` (~1821 lines)
-- `foundation/autopilot/engine/file_lock_registry.py`
+- `foundation/autopilot/engine.py` (~1821 lines)
+- `foundation/autopilot/file_lock_registry.py`
 
 ### Files to migrate
 
-- `foundation/autopilot/engine/backoff_reasoner.py` → `foundation/autopilot/monitor/backoff_reasoner.py`
+- `foundation/autopilot/backoff_reasoner.py` → `foundation/autopilot/backoff_reasoner.py`
 
 ### Files to keep (other components)
 
-- `foundation/autopilot/engine/models.py` — Keep `Goal` temporarily for migration reference
-- `foundation/autopilot/engine/discovery.py`
-- `foundation/autopilot/engine/scheduled_tasks.py`
-- `foundation/autopilot/engine/proposal_queue.py`
-- `foundation/autopilot/engine/dreaming.py` — Will be superseded by DreamingCoordinator
-- `foundation/autopilot/engine/webhooks.py`
+- `foundation/autopilot/models.py` — Keep `Goal` temporarily for migration reference
+- `foundation/autopilot/discovery.py`
+- `foundation/autopilot/scheduled_tasks.py`
+- `foundation/autopilot/proposal_queue.py`
+- `foundation/autopilot/dreaming.py` — Will be superseded by DreamingCoordinator
+- `foundation/autopilot/webhooks.py`
 
 ---
 
@@ -287,22 +287,22 @@ In `foundation/context/engine.py`:
 
 | File | Purpose |
 |------|---------|
-| `foundation/autopilot/monitor/__init__.py` | Public API |
-| `foundation/autopilot/monitor/monitor.py` | AutopilotMonitor class |
-| `foundation/autopilot/monitor/goal_dag_verifier.py` | GoalDAGVerifier coordinator |
-| `foundation/autopilot/monitor/verifier_reasoner.py` | DagVerificationReasoner (LLM) |
-| `foundation/autopilot/monitor/verifier_prompts.py` | LLM prompt templates |
-| `foundation/autopilot/monitor/goal_intake_handler.py` | GoalIntakeHandler |
-| `foundation/autopilot/monitor/dreaming_coordinator.py` | DreamingCoordinator |
-| `foundation/autopilot/monitor/dreaming_reasoner.py` | DreamingDistillationReasoner (LLM) |
-| `foundation/autopilot/monitor/dreaming_prompts.py` | LLM prompt templates |
-| `foundation/autopilot/monitor/dreaming_handlers/__init__.py` | Handler exports |
-| `foundation/autopilot/monitor/dreaming_handlers/episodic_handler.py` | Episodic mode |
-| `foundation/autopilot/monitor/dreaming_handlers/procedure_handler.py` | Procedure mode |
-| `foundation/autopilot/monitor/dreaming_handlers/semantic_handler.py` | Semantic mode |
-| `foundation/autopilot/monitor/dreaming_handlers/profile_handler.py` | Profile mode |
-| `foundation/autopilot/monitor/backoff_reasoner.py` | Migrated from GoalEngine |
-| `foundation/autopilot/monitor/models.py` | Monitor-specific models |
+| `foundation/autopilot/__init__.py` | Public API |
+| `foundation/autopilot/monitor.py` | AutopilotMonitor class |
+| `foundation/autopilot/goal_dag_verifier.py` | GoalDAGVerifier coordinator |
+| `foundation/autopilot/verifier_reasoner.py` | DagVerificationReasoner (LLM) |
+| `foundation/autopilot/verifier_prompts.py` | LLM prompt templates |
+| `foundation/autopilot/goal_intake_handler.py` | GoalIntakeHandler |
+| `foundation/autopilot/dreaming_coordinator.py` | DreamingCoordinator |
+| `foundation/autopilot/dreaming_reasoner.py` | DreamingDistillationReasoner (LLM) |
+| `foundation/autopilot/dreaming_prompts.py` | LLM prompt templates |
+| `foundation/autopilot/dreaming_handlers/__init__.py` | Handler exports |
+| `foundation/autopilot/dreaming_handlers/episodic_handler.py` | Episodic mode |
+| `foundation/autopilot/dreaming_handlers/procedure_handler.py` | Procedure mode |
+| `foundation/autopilot/dreaming_handlers/semantic_handler.py` | Semantic mode |
+| `foundation/autopilot/dreaming_handlers/profile_handler.py` | Profile mode |
+| `foundation/autopilot/backoff_reasoner.py` | Migrated from GoalEngine |
+| `foundation/autopilot/models.py` | Monitor-specific models |
 
 ---
 

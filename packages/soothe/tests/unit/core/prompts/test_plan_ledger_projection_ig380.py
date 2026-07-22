@@ -6,9 +6,6 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
-from soothe.foundation.sloop.intention.models import IntakeLabel
-from soothe.foundation.sloop.state.schemas import AgentDecision, LoopState, StepAction
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.prompts.plan_ledger_projection import (
     _GOAL_COMPLETION_CONTEXT_BOUNDARY,
     _compact_goal_completion_unit_for_projection,
@@ -19,6 +16,9 @@ from soothe.prompts.plan_ledger_projection import (
     project_planner_ledger,
     resolve_planner_projection_mode,
 )
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def _msgs(n: int) -> list:
@@ -235,7 +235,7 @@ def test_ig555_plan_has_minimum_steps_for_intake(
     intake_label: str | None, iteration: int, step_count: int, expected: bool
 ) -> None:
     """Guardrail enforces minimum 2 steps for complex intake at iter=0."""
-    from soothe.foundation.sloop.cognition.plan_step_safety import (
+    from soothe.sloop.cognition.plan_step_safety import (
         plan_has_minimum_steps_for_intake,
     )
 
@@ -249,7 +249,7 @@ def test_ig555_plan_has_minimum_steps_for_intake(
 
 def test_ig555_plan_has_minimum_steps_none_decision_returns_false() -> None:
     """None decision at iter=0 with complex intake returns False (undersized)."""
-    from soothe.foundation.sloop.cognition.plan_step_safety import (
+    from soothe.sloop.cognition.plan_step_safety import (
         plan_has_minimum_steps_for_intake,
     )
 
@@ -259,7 +259,7 @@ def test_ig555_plan_has_minimum_steps_none_decision_returns_false() -> None:
 
 def test_ig555_plan_has_minimum_steps_single_step_returns_false() -> None:
     """Single step for complex intake at iter=0 is undersized."""
-    from soothe.foundation.sloop.cognition.plan_step_safety import (
+    from soothe.sloop.cognition.plan_step_safety import (
         plan_has_minimum_steps_for_intake,
     )
 

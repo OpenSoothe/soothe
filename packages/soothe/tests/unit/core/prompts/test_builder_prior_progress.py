@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.state.schemas import (
+from soothe.prompts import PromptBuilder
+from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     ToolCallHead,
     WaveStepProgress,
 )
-from soothe.prompts import PromptBuilder
 
 
 def _digest(iteration: int = 1) -> PriorProgressDigest:

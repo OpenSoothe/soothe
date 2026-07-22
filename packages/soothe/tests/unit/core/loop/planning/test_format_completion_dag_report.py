@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.planning import StepPlanManagerAdapter
-from soothe.foundation.context.planning.models import CompletionStrategy
-from soothe.foundation.sloop.state.schemas import (
+from soothe.context import StepPlanManagerAdapter
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.planning_models import CompletionStrategy
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,

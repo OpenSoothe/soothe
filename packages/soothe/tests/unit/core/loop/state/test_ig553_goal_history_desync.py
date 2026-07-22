@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from soothe.foundation.sloop.state.checkpoint import (
+from soothe.sloop.state.checkpoint import (
     GoalIndexEntry,
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
 )
-from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
+from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
 
 def _goal(goal_id: str) -> GoalIndexEntry:

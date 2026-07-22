@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.sloop.state.schemas import LoopState, StatusAssessment, StepResult
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.prompts import PromptBuilder
 from soothe.prompts.plan_ledger_projection import (
     project_planner_ledger,
     resolve_planner_projection_mode,
 )
+from soothe.sloop.state.schemas import LoopState, StatusAssessment, StepResult
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_resolve_planner_projection_mode_new_goal() -> None:

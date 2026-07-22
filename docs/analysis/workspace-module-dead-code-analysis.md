@@ -1,7 +1,7 @@
 # Workspace Module Dead Code Analysis
 
 **Generated**: 2026-06-17  
-**Module**: `soothe.foundation.workspace`
+**Module**: `soothe.workspace`
 
 ---
 
@@ -253,7 +253,7 @@ After removing dead code, verify tests:
 ## Appendix A: Module Structure
 
 ```
-packages/soothe/src/soothe/foundation/workspace/
+packages/soothe/src/soothe/workspace/
 ├── __init__.py              # Public API exports (42 items)
 ├── context.py               # WorkspaceContext dataclass + ContextVar
 ├── core_resolution.py       # Unified resolution (RFC-621)

@@ -22,7 +22,7 @@ from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
     from soothe.config.models import OutputStreamingConfig
-    from soothe.foundation.events import EventMeta
+    from soothe.events import EventMeta
 
     from soothe_daemon.channels.base import Channel
     from soothe_daemon.event import EventBus
@@ -176,7 +176,7 @@ def _queue_has_high_priority(queue: asyncio.Queue) -> bool:
         return False
     temp: list[Any] = []
     has_high = False
-    from soothe.foundation.events import EventPriority
+    from soothe.events import EventPriority
 
     try:
         while not queue.empty():
@@ -375,7 +375,7 @@ class ClientSessionManager:
         worker filter to allow Loop Observation Room (LOR) access.
         """
         try:
-            from soothe.foundation.autopilot.service.worker_pool import is_autopilot_worker_loop_id
+            from soothe.autopilot.worker_pool import is_autopilot_worker_loop_id
 
             if is_autopilot_worker_loop_id(loop_id):
                 # RFC-228: Check if client has autopilot subscription bypass
@@ -798,7 +798,7 @@ class ClientSessionManager:
                         if isinstance(event_data, tuple) and len(event_data) == 2:
                             event_meta = event_data[1]
                             if event_meta is not None:
-                                from soothe.foundation.events import EventPriority
+                                from soothe.events import EventPriority
 
                                 if event_meta.priority.value <= EventPriority.HIGH.value:
                                     skip_batch_fill = True
@@ -839,7 +839,7 @@ class ClientSessionManager:
                         else:
                             event = event_data
 
-                        from soothe.foundation.events.visibility import (
+                        from soothe.events.visibility import (
                             decide_client_wire_visibility,
                             is_progress_wire_event,
                         )

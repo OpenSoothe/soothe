@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from soothe.foundation.sloop.engine.strange_loop import StrangeLoop
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.engine.strange_loop import StrangeLoop
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
@@ -82,25 +82,25 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
 
     with (
         patch.object(sl, "_ce", None),
-        patch("soothe.foundation.context.engine.ContextEngine", return_value=ce_instance),
-        patch("soothe.foundation.context.persistence.sqlite_backend.SqliteContextPersistence"),
+        patch("soothe.context.engine.ContextEngine", return_value=ce_instance),
+        patch("soothe.context.store_sqlite.SqliteContextPersistence"),
         patch(
-            "soothe.foundation.sloop.state.persistence.runtime_paths.resolve_context_engine_db_path",
+            "soothe.sloop.checkpoints.runtime_paths.resolve_context_engine_db_path",
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
-            "soothe.foundation.sloop.orchestrator.runner.invoke_strange_loop_graph",
+            "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",
@@ -188,25 +188,25 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
 
     with (
         patch.object(sl, "_ce", None),
-        patch("soothe.foundation.context.engine.ContextEngine", return_value=ce_instance),
-        patch("soothe.foundation.context.persistence.sqlite_backend.SqliteContextPersistence"),
+        patch("soothe.context.engine.ContextEngine", return_value=ce_instance),
+        patch("soothe.context.store_sqlite.SqliteContextPersistence"),
         patch(
-            "soothe.foundation.sloop.state.persistence.runtime_paths.resolve_context_engine_db_path",
+            "soothe.sloop.checkpoints.runtime_paths.resolve_context_engine_db_path",
             return_value="/tmp/soothe-test.db",
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
-            "soothe.foundation.sloop.orchestrator.runner.invoke_strange_loop_graph",
+            "soothe.sloop.orchestrator.runner.invoke_strange_loop_graph",
             new=AsyncMock(),
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
         ) as runtime_ctx_cls,
         patch(
             "soothe_nano.workspace.workspace_paths.filesystem_virtual_mode_from_soothe_config",

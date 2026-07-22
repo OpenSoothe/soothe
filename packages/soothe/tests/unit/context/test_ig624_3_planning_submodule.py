@@ -12,16 +12,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from soothe.config.models import CompletionRulesConfig, normalize_agentic_final_response_mode
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode, StepNode
-from soothe.foundation.context.planning import (
+from soothe.context import (
     GoalPlanningSubengine,
     GoalScheduler,
     PlanningFacade,
     StepPlanManagerAdapter,
     StepPlanningSubengine,
 )
-from soothe.foundation.context.planning.completion import (
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode, StepNode
+from soothe.context.planning_completion import (
     _LEDGER_DIRECT_MAX_TOOL_CALLS,
     _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
     DAG_DEPENDENCY_THRESHOLD,
@@ -32,7 +32,7 @@ from soothe.foundation.context.planning.completion import (
     determine_goal_completion_needs,
     heuristic_requires_goal_completion,
 )
-from soothe.foundation.context.planning.models import (
+from soothe.context.planning_models import (
     DagPlanningContext,
     DecompositionRequest,
     DecompositionResult,
@@ -40,7 +40,7 @@ from soothe.foundation.context.planning.models import (
     PlanWave,
     SubGoalSpec,
 )
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
@@ -736,7 +736,7 @@ class TestStepPlanManagerAdapter:
         assert adapter.determine_goal_completion_needs(False, state, "llm_only") is False
 
     def test_determine_completion_strategy_delegates(self) -> None:
-        from soothe.foundation.sloop.utils.messages import LoopAIMessage
+        from soothe.sloop.utils.messages import LoopAIMessage
 
         ce = ContextEngine()
         goal = GoalNode(description="Test goal")

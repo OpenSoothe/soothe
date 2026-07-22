@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from soothe.config import SootheConfig
-from soothe.foundation.sloop import StrangeLoop
-from soothe.foundation.sloop.state.schemas import PlanResult
+from soothe.sloop import StrangeLoop
+from soothe.sloop.state.schemas import PlanResult
 
 
 def _make_mock_core_with_checkpointer() -> Mock:
@@ -63,7 +63,7 @@ def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
 
 def _make_mock_ce() -> Mock:
     """Build a mock ContextEngine with all required attributes."""
-    from soothe.foundation.context.planning.models import CompletionStrategy
+    from soothe.context.planning_models import CompletionStrategy
 
     mock_ce = Mock()
     mock_goal = Mock()
@@ -110,7 +110,7 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
         captured["clarification_policy"] = kwargs.get("clarification_policy")
         return real_runtime_context_cls(*args, **kwargs)
 
-    from soothe.foundation.sloop.orchestrator import runtime_context as rtx_mod
+    from soothe.sloop.orchestrator import runtime_context as rtx_mod
 
     real_runtime_context_cls = rtx_mod.LoopRuntimeContext
 
@@ -127,18 +127,18 @@ async def test_run_with_progress_forwards_clarification_policy() -> None:
 
     with (
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.context.engine.ContextEngine",
+            "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):
@@ -168,7 +168,7 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
         captured["clarification_policy"] = kwargs.get("clarification_policy")
         return real_runtime_context_cls(*args, **kwargs)
 
-    from soothe.foundation.sloop.orchestrator import runtime_context as rtx_mod
+    from soothe.sloop.orchestrator import runtime_context as rtx_mod
 
     real_runtime_context_cls = rtx_mod.LoopRuntimeContext
 
@@ -185,18 +185,18 @@ async def test_run_with_progress_defaults_clarification_policy_to_none() -> None
 
     with (
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.StrangeLoopStateManager",
+            "soothe.sloop.engine.strange_loop.StrangeLoopStateManager",
             return_value=mock_sm,
         ),
         patch(
-            "soothe.foundation.context.engine.ContextEngine",
+            "soothe.context.engine.ContextEngine",
             return_value=mock_ce,
         ),
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.CheckpointAnchorManager",
+            "soothe.sloop.engine.strange_loop.CheckpointAnchorManager",
         ) as am_cls,
         patch(
-            "soothe.foundation.sloop.engine.strange_loop.LoopRuntimeContext",
+            "soothe.sloop.engine.strange_loop.LoopRuntimeContext",
             side_effect=_capturing_runtime_context,
         ),
     ):

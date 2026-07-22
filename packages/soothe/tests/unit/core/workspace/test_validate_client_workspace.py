@@ -1,14 +1,14 @@
 """Tests for client workspace validation.
 
 Moved from ``soothe_nano`` to the host (IG-678 PR-4): ``validate_client_workspace``
-is host-owned (``soothe.foundation.workspace.resolution``).
+is host-owned (``soothe.workspace.resolution``).
 """
 
 from pathlib import Path
 
 import pytest
 
-from soothe.foundation.workspace import validate_client_workspace
+from soothe.workspace import validate_client_workspace
 
 
 class TestValidateClientWorkspace:
@@ -36,7 +36,7 @@ class TestValidateClientWorkspace:
         """Should log when workspace doesn't exist (debug — callers may fall back)."""
         import logging
 
-        from soothe.foundation.workspace.resolution import logger as ws_logger
+        from soothe.workspace.resolution import logger as ws_logger
 
         nonexistent = tmp_path / "nonexistent"
 

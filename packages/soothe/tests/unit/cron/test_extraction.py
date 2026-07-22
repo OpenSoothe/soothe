@@ -9,12 +9,12 @@ import asyncio
 from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
-from soothe.foundation.cron.extraction import (
+from soothe.cron.extraction import (
     CronExtractionService,
     ExtractionError,
     ExtractionSchema,
 )
-from soothe.foundation.cron.models import ExtractionResult, ScheduleKind
+from soothe.cron.models import ExtractionResult, ScheduleKind
 
 
 class MockExtractionService:

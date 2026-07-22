@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from soothe.foundation.cron import ExtractionError
-from soothe.foundation.cron.extraction import AutopilotDisabledError
-from soothe.foundation.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
-from soothe.foundation.cron.models import (
+from soothe.cron import ExtractionError
+from soothe.cron.extraction import AutopilotDisabledError
+from soothe.cron.messages import AUTOPILOT_REQUIRED_FOR_CRON
+from soothe.cron.models import (
     DEFAULT_CRON_USER_ID,
     CronJob,
     JobStatus,
@@ -109,7 +109,7 @@ async def test_cmd_cron_add_lazy_service_creation(monkeypatch: pytest.MonkeyPatc
     mock_instance = MagicMock()
     mock_instance.add_job = AsyncMock(return_value=job)
     mock_cls = MagicMock(return_value=mock_instance)
-    monkeypatch.setattr("soothe.foundation.cron.CronService", mock_cls)
+    monkeypatch.setattr("soothe.cron.CronService", mock_cls)
 
     result = await _cmd_cron_add(
         daemon,

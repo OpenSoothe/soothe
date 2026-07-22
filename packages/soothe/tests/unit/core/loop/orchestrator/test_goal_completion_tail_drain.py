@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from soothe.foundation.sloop.orchestrator.nodes.goal_completion import (
+from soothe.sloop.nodes.goal_completion import (
     await_goal_completion_tail_persistence,
 )
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
 
 
 @pytest.mark.asyncio
@@ -53,7 +53,7 @@ async def test_await_goal_completion_tail_persistence_cancels_on_timeout() -> No
 
 @pytest.mark.asyncio
 async def test_close_blocks_async_flush_worker_restart() -> None:
-    from soothe.foundation.sloop.state.sloop_manager import StrangeLoopStateManager
+    from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
     manager = StrangeLoopStateManager(loop_id="closed-loop-test")
 
@@ -74,7 +74,7 @@ async def test_close_blocks_async_flush_worker_restart() -> None:
 @pytest.mark.asyncio
 async def test_tail_persistence_chains_instead_of_cancelling_prior() -> None:
     """A second goal must await the first tail persist, not cancel it."""
-    from soothe.foundation.sloop.orchestrator.nodes.goal_completion import (
+    from soothe.sloop.nodes.goal_completion import (
         _start_goal_completion_tail_persistence,
     )
 
@@ -98,7 +98,7 @@ async def test_tail_persistence_chains_instead_of_cancelling_prior() -> None:
     await asyncio.wait_for(first_started.wait(), timeout=1.0)
 
     with patch(
-        "soothe.foundation.sloop.orchestrator.nodes.goal_completion._goal_completion_tail_persistence",
+        "soothe.sloop.nodes.goal_completion._goal_completion_tail_persistence",
         new=AsyncMock(side_effect=lambda **_kwargs: order.append("second-done")),
     ):
         _start_goal_completion_tail_persistence(

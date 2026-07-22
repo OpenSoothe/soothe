@@ -41,11 +41,11 @@ guard) + PR-11 (release cutover: nano 0.9.6 + changelogs) all resolved.
 
 **PR-3 done**: checkpoints schema ownership moved from nano to host.
 - Host's two `postgres_schema.py` copies (`foundation/persistence/` and
-  `foundation/sloop/state/persistence/`) now pass `sql_root=_HOST_SQL_ROOT`
+  `foundation/sloop/checkpoints/`) now pass `sql_root=_HOST_SQL_ROOT`
   (the host `foundation/persistence/sql/` dir) to `initialize_database`, so the
   StrangeLoop/CE `soothe_checkpoints/init.sql` is loaded from the host, not nano.
   The host sql tree (previously dead-duplicate) is now the canonical live copy.
-- Deleted nano's `persistence/sql/soothe_checkpoints/init.sql` (+ empty dir).
+- Deleted nano's `persistence/sql/init.sql` (+ empty dir).
 - Removed the dead `checkpoints` branch from nano's `postgres_pool_registry.py`:
   `open_all()` no longer calls `_open_pool("checkpoints")`, and `_open_pool` no
   longer imports the non-existent `soothe_nano.persistence.postgres_schema`
@@ -129,7 +129,7 @@ middleware (`SystemPromptMiddleware`, `ToolEnforcementMiddleware`,
 graceful degradation. `SystemPrompt` is load-bearing for standalone nano (builds
 the system prompt regardless of `routing_classification`); the other 3 no-op
 when host state is absent. The host does **not** have its own copies; it extends
-nano's stack via `soothe/foundation/coreagent/builder.py:AgentBuilder` (subclass
+nano's stack via `soothe/coreagent/builder.py:AgentBuilder` (subclass
 of nano's `AgentBuilder`) overriding `_host_middleware_prefix`/`_host_middleware_suffix`
 to inject `IdentityMiddleware`/`IntakeOnlyTaskGuardMiddleware`/`GoalStepGuardMiddleware`
 on top of nano's default stack + setting `routing_classification`/stream overrides.
@@ -235,7 +235,7 @@ the setters or reads those config groups.
 
 | # | Cluster | Location | Leaked concept | Host-only consumer |
 |---|---|---|---|---|
-| 1 | Host-only DDL in nano bootstrap | `persistence/sql/soothe_metadata/init.sql`, `persistence/sql/soothe_checkpoints/init.sql` | `cron_jobs`, `identity_*`, `display_card_mutations`, `goal_display_snapshots`, `agentloop_checkpoints`, `failed_branches`, `goal_records`, `checkpoint_anchors`, `ce_dag`, `ce_ledger` | host `cron/store_postgres.py`, `identity/db.py`, daemon `display/*`, host sloop + CE |
+| 1 | Host-only DDL in nano bootstrap | `persistence/sql/soothe_metadata/init.sql`, `persistence/sql/init.sql` | `cron_jobs`, `identity_*`, `display_card_mutations`, `goal_display_snapshots`, `agentloop_checkpoints`, `failed_branches`, `goal_records`, `checkpoint_anchors`, `ce_dag`, `ce_ledger` | host `cron/store_postgres.py`, `identity/db.py`, daemon `display/*`, host sloop + CE |
 | 2 | Display-card store | `backends/persistence/display_store.py` (+`_postgres.py`) | `DisplayCardStore`, `configure_display_card_store`, `get_display_card_store` (keyed by `loop_id`) | daemon `display/loop_card_*`, `protocol/router.py`, host sloop |
 | 3 | Host-shaped config groups | `config/models.py` | `archive_*`, `GlobalHistoryConfig`/`global_history`, `FailureIntentConfig`, `StructuredPlanConfig`, `OptimizationConfig`, `ThreadLoggingConfig`, `WorkspaceMountConfig` | soothe `config`, sloop cognition, `sloop_manager`, daemon `router.py` |
 | 4 | Nano persistence/provisioning serving daemon | `persistence/unified.py`, `persist_metrics.py`, `postgres_provisioning.py` | `configure_unified_persistence`, `persist_timer(loop_id=)`, `log_pending_loops`, `uses_postgresql_persistence`, `required_postgres_database_keys` | daemon `server/core.py`, host `loop_writer.py` |
@@ -289,10 +289,10 @@ discipline as IG-677. Changelog each package with a short
 
 | Table(s) | Host runtime DDL owner | Host runs it? | Nano action |
 |---|---|---|---|
-| `cron_jobs` | `soothe/foundation/cron/store_postgres.py:_SCHEMA` (run in `PostgresCronJobStore.__init__`, store built at `server/core.py:684`) | Yes | **Delete** from nano `soothe_metadata/init.sql` |
-| `identity_users`/`identity_aksk_pairs`/`identity_tokens`/`identity_external_mappings`/`identity_revoked_jtis` | `soothe/foundation/identity/db.py:_IDENTITY_SCHEMA_PG` (run in `IdentityDbConnection`, service built at `server/core.py:222`) | Yes | **Delete** from nano `soothe_metadata/init.sql` |
+| `cron_jobs` | `soothe/cron/store_postgres.py:_SCHEMA` (run in `PostgresCronJobStore.__init__`, store built at `server/core.py:684`) | Yes | **Delete** from nano `soothe_metadata/init.sql` |
+| `identity_users`/`identity_aksk_pairs`/`identity_tokens`/`identity_external_mappings`/`identity_revoked_jtis` | `soothe/identity/db.py:_IDENTITY_SCHEMA_PG` (run in `IdentityDbConnection`, service built at `server/core.py:222`) | Yes | **Delete** from nano `soothe_metadata/init.sql` |
 | `display_card_mutations`/`goal_display_snapshots` | **none** (no host DDL) | No | **Move** to host-owned DDL (Workstream B) |
-| `agentloop_checkpoints`/`failed_branches`/`goal_records`/`checkpoint_anchors`/`ce_dag`/`ce_ledger` | host `foundation/persistence/sql/soothe_checkpoints/init.sql` + `postgres_schema.py` | Yes (host-owned) | **Move** nano `checkpoints` init ownership to host; fix dead `soothe_nano.persistence.postgres_schema` import (Workstream C) |
+| `agentloop_checkpoints`/`failed_branches`/`goal_records`/`checkpoint_anchors`/`ce_dag`/`ce_ledger` | host `foundation/persistence/sql/init.sql` + `postgres_schema.py` | Yes (host-owned) | **Move** nano `checkpoints` init ownership to host; fix dead `soothe_nano.persistence.postgres_schema` import (Workstream C) |
 | `soothe_persistence` | nano `backends/persistence/postgres_store.py` | n/a (nano-owned) | **Keep** in nano |
 
 All host DDL uses `CREATE TABLE IF NOT EXISTS`, so deletion from nano's bootstrap
@@ -329,7 +329,7 @@ pytest packages/soothe-nano/tests -k 'metadata or persistence or db_init' -q
 - These have **no host DDL owner** today — nano is the sole creator. A pure
   delete would break the daemon display ledger in Postgres mode.
 - **Add** a host-owned SQL home, e.g.
-  `packages/soothe/src/soothe/foundation/persistence/sql/soothe_display/init.sql`
+  `packages/soothe/src/soothe/persistence/sql/soothe_display/init.sql`
   (or fold into `soothe_metadata` host copy with a clear section header).
 - **Rewire** `soothe_nano.backends.persistence.display_store.configure_display_card_store`
   + `PostgresDisplayCardStore` to apply the host-owned script (or have the host
@@ -357,14 +357,14 @@ pytest packages/soothe-nano/tests -k 'display_store' -q  # expect removal/empty
   imports `initialize_agentloop_postgres_schema` from
   `soothe_nano.persistence.postgres_schema` — a module that **does not exist**
   in nano (latent bug; the host has it at
-  `soothe/foundation/persistence/postgres_schema.py`).
+  `soothe/persistence/postgres_schema.py`).
 - **Decision**: the `checkpoints` DB schema is StrangeLoop/CE-shaped (host-owned
   per the host's own `postgres_schema.py` docstring). Nano should **not** own it.
   - Option C-a: remove the `checkpoints` branch from nano's pool registry
     entirely; host's `postgres_schema.py` already applies it.
   - Option C-b: keep a nano `postgres_schema.py` but only for genuinely shared
     LangGraph checkpoint tables (if any survive after host/CE split).
-- **Then** delete `persistence/sql/soothe_checkpoints/init.sql` from nano
+- **Then** delete `persistence/sql/init.sql` from nano
   (host owns the canonical copy).
 - **Decision needed (C1.1)**: confirm no standalone-nano path opens the
   `checkpoints` DB. If standalone nano uses LangGraph `MemorySaver`/in-memory
@@ -454,7 +454,7 @@ the ContextVar and break the contract:
 | `utils/progress.py` | `set_wire_bridge`/`reset_wire_bridge` (host sloop `invoke_wired_subagent`) | `emit_progress` → `get_wire_bridge()` (nano subagents) | `_wire_bridge` |
 
 The host imports these from nano via thin re-export shims
-(e.g. `soothe/foundation/sloop/utils/token_usage.py` re-exports nano's). This
+(e.g. `soothe/sloop/utils/token_usage.py` re-exports nano's). This
 is the **intended read/write split** — not a leak. Moving them requires either
 (a) moving the entire read side + nano middleware to the host, or
 (b) relocating the ContextVar contract to `soothe-sdk`. Both are architectural
@@ -545,7 +545,7 @@ pytest packages/soothe/tests -k 'logging or thread or reload' -q
 - `workspace/workspace_policy.py` — `normalize_user_id`, `user_id_for_hash`,
   `compute_scoped_workspace_dir_name`, `validate_client_workspace`,
   `translate_client_path_to_container`, `translate_container_path_to_client`
-  → `soothe/foundation/workspace/` (sole consumers).
+  → `soothe/workspace/` (sole consumers).
 - `workspace/workspace_api.py:resolve_workspace_for_stream` + the
   `"daemon_default"` `ResolvedWorkspaceSource` literal → host (rename
   `daemon_default` → `installation_default` while moving, since the concept
@@ -581,7 +581,7 @@ via the builder-subclass injection hooks, not by owning the middleware.
   overrides (ContextVar-coupled, W-E) and no-op when no override is installed.
 
 The host does **not** have its own copies of these 4 (verified). The host
-extends nano's stack via `soothe/foundation/coreagent/builder.py:AgentBuilder`
+extends nano's stack via `soothe/coreagent/builder.py:AgentBuilder`
 (subclasses nano's `AgentBuilder`), overriding `_host_middleware_prefix`/
 `_host_middleware_suffix` to inject *additional* host middleware
 (`IdentityMiddleware`, `IntakeOnlyTaskGuardMiddleware`, `GoalStepGuardMiddleware`)

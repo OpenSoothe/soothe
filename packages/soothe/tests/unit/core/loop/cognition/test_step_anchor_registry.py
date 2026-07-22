@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from soothe.foundation.context.models import GoalNode, StepExecution, StepNode
-from soothe.foundation.sloop.cognition.step_anchor_registry import build_step_anchor_registry
-from soothe.foundation.sloop.state.schemas import LoopState, StepResult
+from soothe.context.models import GoalNode, StepExecution, StepNode
+from soothe.sloop.cognition.step_anchor_registry import build_step_anchor_registry
+from soothe.sloop.state.schemas import LoopState, StepResult
 
 
 def test_registry_empty_without_prior_steps() -> None:

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.engine.goal_completion_output import (
+from soothe.sloop.engine.goal_completion_output import (
     collect_execute_step_deliverable_text,
     reconcile_synthesis_with_step_ledger,
     synthesis_reflects_step_deliverables,
 )
-from soothe.foundation.sloop.utils.messages import LoopAIMessage
+from soothe.sloop.utils.messages import LoopAIMessage
 
 
 def test_collect_execute_step_deliverable_text() -> None:

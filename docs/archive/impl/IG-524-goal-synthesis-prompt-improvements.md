@@ -77,7 +77,7 @@ WORK TRANSCRIPT:          ← ACTUAL CONTENT
 
 ### Change 1: Remove EXECUTION SUMMARY (user_message.py)
 
-**Location**: `packages/soothe/src/soothe/foundation/sloop/prompts/user_message.py:358-373`
+**Location**: `packages/soothe/src/soothe/sloop/prompts/user_message.py:358-373`
 
 **Before**:
 ```python
@@ -99,7 +99,7 @@ sections.append(("EXECUTION SUMMARY", "\n".join(summary_lines)))
 
 ### Change 2: Remove AVAILABLE BUILT-IN SCENARIOS (user_message.py)
 
-**Location**: `packages/soothe/src/soothe/foundation/sloop/prompts/user_message.py:375-380`
+**Location**: `packages/soothe/src/soothe/sloop/prompts/user_message.py:375-380`
 
 **Before**:
 ```python
@@ -116,7 +116,7 @@ sections.append(("AVAILABLE BUILT-IN SCENARIOS", scenarios_list))
 
 ### Change 3: Add Scenarios to System Prompt (synthesis_report_system.xml)
 
-**Location**: `packages/soothe/src/soothe/foundation/sloop/prompts/fragments/instructions/synthesis_report_system.xml`
+**Location**: `packages/soothe/src/soothe/sloop/prompts/fragments/instructions/synthesis_report_system.xml`
 
 **Before**:
 ```xml
@@ -166,7 +166,7 @@ Required sections (use these headings):
 
 ### Change 4: Standardize Transcript Markers (synthesis_projection.py)
 
-**Location**: `packages/soothe/src/soothe/foundation/sloop/engine/synthesis_projection.py:87-94`
+**Location**: `packages/soothe/src/soothe/sloop/engine/synthesis_projection.py:87-94`
 
 **Before**:
 ```python

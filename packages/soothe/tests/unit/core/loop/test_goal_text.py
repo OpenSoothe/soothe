@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.goal_text import resolve_planning_goal, resolve_user_request
-from soothe.foundation.sloop.intention.models import (
+from soothe.sloop.goal_text import resolve_planning_goal, resolve_user_request
+from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
     TaskComplexity,
 )
-from soothe.foundation.sloop.state.schemas import LoopState
+from soothe.sloop.state.schemas import LoopState
 
 
 def test_resolve_planning_goal_prefers_goal_user_submission() -> None:

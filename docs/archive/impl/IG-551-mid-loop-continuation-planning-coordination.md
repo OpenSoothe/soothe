@@ -267,8 +267,8 @@ Manual: replay loop `0b37` goal_4 submission; confirm `plan_generate` fires and 
 
 ## References
 
-- `packages/soothe/src/soothe/foundation/sloop/orchestrator/routing.py` — `route_by_intent`
-- `packages/soothe/src/soothe/foundation/sloop/orchestrator/nodes/plan_assess.py` — continuation discriminator
-- `packages/soothe/src/soothe/foundation/sloop/cognition/planner.py` — `assess_continuation`
-- `packages/soothe/src/soothe/foundation/sloop/prompts/plan_ledger_projection.py` — projection modes
+- `packages/soothe/src/soothe/sloop/orchestrator/routing.py` — `route_by_intent`
+- `packages/soothe/src/soothe/sloop/nodes/plan_assess.py` — continuation discriminator
+- `packages/soothe/src/soothe/sloop/cognition/planner.py` — `assess_continuation`
+- `packages/soothe/src/soothe/sloop/prompts/plan_ledger_projection.py` — projection modes
 - `docs/wiki/protocols/planner.md` — continuation routing overview

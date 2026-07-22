@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.foundation.sloop.intention.pass1_social_response import coalesce_pass1_dict
+from soothe.sloop.intention.pass1_social_response import coalesce_pass1_dict
 
 
 def test_coalesce_pass1_dict_defaults_missing_social_kind() -> None:

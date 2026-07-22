@@ -25,7 +25,7 @@ The adapters and StrangeLoop wiring were implemented in a prior session. The rem
 
 ### 3.1 Helper Function
 
-Add `_record_ledger_message()` to `soothe/foundation/sloop/utils/messages.py`:
+Add `_record_ledger_message()` to `soothe/sloop/utils/messages.py`:
 
 ```python
 def _record_ledger_message(
@@ -84,7 +84,7 @@ The helper `_record_ledger_message` is still used in the other 3 call sites (exe
 Import the existing constants from `manager.py` in `context_adapters.py`:
 
 ```python
-from soothe.foundation.sloop.planning.manager import (
+from soothe.sloop.planning.manager import (
     _LOW_SUCCESS_RATE_THRESHOLD,
     _DAG_DEPENDENCY_THRESHOLD,
     _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
@@ -186,8 +186,8 @@ async def test_ce_non_ce_output_equivalence():
 | `foundation/sloop/utils/messages.py` | Add | `_record_ledger_message()` helper |
 | `foundation/sloop/engine/executor.py` | Modify | Replace `loop_messages.append` with `_record_ledger_message` (2 pairs) |
 | `foundation/sloop/planning/planner.py` | Modify | Replace `loop_messages.append` with `_record_ledger_message` (2 pairs) |
-| `foundation/sloop/orchestrator/nodes/execute_steps.py` | Modify | Replace append with `_record_ledger_message` (1 pair) |
-| `foundation/sloop/orchestrator/nodes/goal_completion.py` | Modify | Replace append with `_record_ledger_message` (1 pair) |
+| `foundation/sloop/nodes/execute_steps.py` | Modify | Replace append with `_record_ledger_message` (1 pair) |
+| `foundation/sloop/nodes/goal_completion.py` | Modify | Replace append with `_record_ledger_message` (1 pair) |
 | `foundation/sloop/engine/context_adapters.py` | Modify | Add named constants, logging, remove `__new__()` hack |
 | `foundation/sloop/engine/goal_context_manager.py` | Modify | Extract `format_execute_briefing_from_goals()` |
 | `tests/integration/loop/test_ce_strange_loop_equivalence.py` | Add | Integration test for behavioral equivalence |

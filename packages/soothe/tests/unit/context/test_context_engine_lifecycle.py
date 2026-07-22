@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import StepExecution, StepNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.context.engine import ContextEngine
+from soothe.context.models import StepExecution, StepNode
+from soothe.context.store_sqlite import SqliteContextPersistence
 
 
 class TestContextEngineGoalLifecycle:
@@ -34,7 +34,7 @@ class TestContextEngineGoalLifecycle:
             f"--- Attachment: paper.pdf (application/pdf) ---\n{huge_body}"
         )
         engine = ContextEngine()
-        with caplog.at_level(logging.INFO, logger="soothe.foundation.context.engine"):
+        with caplog.at_level(logging.INFO, logger="soothe.context.engine"):
             goal = await engine.create_goal(description, priority=50)
 
         # Stored goal keeps full text for the agent.

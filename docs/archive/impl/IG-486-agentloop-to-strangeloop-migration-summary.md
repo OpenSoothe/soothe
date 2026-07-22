@@ -14,8 +14,8 @@ This migration renamed the core orchestration class from `AgentLoop` to `Strange
 
 | Old Path | New Path | Notes |
 |----------|----------|-------|
-| `packages/soothe/src/soothe/foundation/loop/engine/agent_loop.py` | `packages/soothe/src/soothe/foundation/loop/engine/strange_loop.py` | Main orchestration class |
-| `packages/soothe/src/soothe/foundation/loop/state/manager.py` | `packages/soothe/src/soothe/foundation/loop/state/sloop_manager.py` | State manager renamed |
+| `packages/soothe/src/soothe/loop/engine/agent_loop.py` | `packages/soothe/src/soothe/loop/engine/strange_loop.py` | Main orchestration class |
+| `packages/soothe/src/soothe/loop/state/manager.py` | `packages/soothe/src/soothe/loop/state/sloop_manager.py` | State manager renamed |
 | `packages/soothe/src/soothe/protocols/agent_loop.py` | `packages/soothe/src/soothe/protocols/strange_loop.py` | Protocol definition |
 
 ### Classes Renamed
@@ -54,17 +54,17 @@ This migration renamed the core orchestration class from `AgentLoop` to `Strange
 
 ```python
 # OLD
-from soothe.foundation.loop import AgentLoop
-from soothe.foundation.loop.engine.agent_loop import AgentLoop
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
+from soothe.loop import AgentLoop
+from soothe.loop.engine.agent_loop import AgentLoop
+from soothe.loop.state.manager import AgentLoopStateManager
 
 # NEW (recommended)
-from soothe.foundation.loop import StrangeLoop, Sloop
-from soothe.foundation.loop.engine.strange_loop import StrangeLoop
-from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
+from soothe.loop import StrangeLoop, Sloop
+from soothe.loop.engine.strange_loop import StrangeLoop
+from soothe.loop.state.sloop_manager import StrangeLoopStateManager
 
 # BACKWARD COMPATIBLE (still works)
-from soothe.foundation.loop import AgentLoop  # Returns StrangeLoop via __getattr__
+from soothe.loop import AgentLoop  # Returns StrangeLoop via __getattr__
 ```
 
 ### Internal Module Updates
@@ -73,13 +73,13 @@ All internal imports across `packages/soothe/src/soothe/` were updated:
 
 ```python
 # Before
-from soothe.foundation.loop.engine.agent_loop import AgentLoop
-from soothe.foundation.loop.state.manager import AgentLoopStateManager
+from soothe.loop.engine.agent_loop import AgentLoop
+from soothe.loop.state.manager import AgentLoopStateManager
 from soothe.protocols.agent_loop import AgentLoopProtocol
 
 # After  
-from soothe.foundation.loop.engine.strange_loop import StrangeLoop
-from soothe.foundation.loop.state.sloop_manager import StrangeLoopStateManager
+from soothe.loop.engine.strange_loop import StrangeLoop
+from soothe.loop.state.sloop_manager import StrangeLoopStateManager
 from soothe.protocols.strange_loop import StrangeLoopProtocol
 ```
 
@@ -118,14 +118,14 @@ Several test files needed updates due to mock patch path changes. The key patter
 
 ```python
 # OLD - patches at definition location (incorrect for mocking)
-patch("soothe.foundation.loop.state.manager.AgentLoopStateManager", ...)
-patch("soothe.foundation.loop.engine.agent_loop.CheckpointAnchorManager", ...)
-patch("soothe.foundation.loop.engine.agent_loop.AgentLoopStateManager", ...)
+patch("soothe.loop.state.manager.AgentLoopStateManager", ...)
+patch("soothe.loop.engine.agent_loop.CheckpointAnchorManager", ...)
+patch("soothe.loop.engine.agent_loop.AgentLoopStateManager", ...)
 
 # NEW - patches at usage location (correct for mocking)
-patch("soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager", ...)
-patch("soothe.foundation.loop.engine.strange_loop.CheckpointAnchorManager", ...)
-patch("soothe.foundation.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path", ...)
+patch("soothe.loop.engine.strange_loop.StrangeLoopStateManager", ...)
+patch("soothe.loop.engine.strange_loop.CheckpointAnchorManager", ...)
+patch("soothe.loop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path", ...)
 ```
 
 ### Test Files Updated
@@ -196,12 +196,12 @@ After all fixes, `./scripts/verify_finally.sh` passes:
 uv run pytest packages/soothe/tests/unit -v --tb=short
 
 # Fix patch paths in tests
-sed -i '' 's/soothe.foundation.loop.state.manager/soothe.foundation.loop.state.sloop_manager/g' <test_files>
+sed -i '' 's/soothe.loop.state.manager/soothe.loop.state.sloop_manager/g' <test_files>
 ```
 
 ## Key Lessons
 
-1. **Mock patch paths must target usage location**: When a class is imported into a module (e.g., `StrangeLoopStateManager` imported into `strange_loop.py`), patches must target `soothe.foundation.loop.engine.strange_loop.StrangeLoopStateManager`, not the definition location.
+1. **Mock patch paths must target usage location**: When a class is imported into a module (e.g., `StrangeLoopStateManager` imported into `strange_loop.py`), patches must target `soothe.loop.engine.strange_loop.StrangeLoopStateManager`, not the definition location.
 
 2. **Dataclass fields vs properties**: A dataclass cannot have a property with the same name as a field - the property gets treated as a default value, breaking field ordering.
 

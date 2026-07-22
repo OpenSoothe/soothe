@@ -14,11 +14,11 @@ Centralized event infrastructure for Soothe's protocol observability.
 
 ## What This Module Is
 
-The event system (`soothe.foundation.events`) provides the vocabulary and plumbing for all observability in Soothe. It defines event type constants, Pydantic event models, a registry for O(1) lookup, and the visibility rules that decide which events reach WebSocket clients. Every `soothe.*` custom event in the stream originates here.
+The event system (`soothe.events`) provides the vocabulary and plumbing for all observability in Soothe. It defines event type constants, Pydantic event models, a registry for O(1) lookup, and the visibility rules that decide which events reach WebSocket clients. Every `soothe.*` custom event in the stream originates here.
 
 The system exists because Soothe streams execution progress to clients in real time. Without a centralized event catalog, visibility rules would be scattered across daemon delivery stages, and bugs would silently drop user-visible output.
 
-**Source**: `packages/soothe/src/soothe/foundation/events/` (`constants.py`, `catalog.py`, `visibility.py`, `internal_bus.py`)
+**Source**: `packages/soothe/src/soothe/events/` (`constants.py`, `catalog.py`, `visibility.py`, `internal_bus.py`)
 
 ---
 
@@ -66,7 +66,7 @@ Event models (Pydantic subclasses of `SootheEvent` from `soothe_sdk`) are regist
 Custom events from plugins register via `register_event()`:
 
 ```python
-from soothe.foundation.events import register_event, SootheEvent
+from soothe.events import register_event, SootheEvent
 
 class MyCustomEvent(SootheEvent):
     type: str = "soothe.cognition.plugin.my_event"
@@ -113,7 +113,7 @@ Events flow through the system as `StreamChunk` tuples: `(namespace, mode, data)
 The recommended pattern for type-safe emission:
 
 ```python
-from soothe.foundation.events import GoalCreatedEvent, custom_event
+from soothe.events import GoalCreatedEvent, custom_event
 
 yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
 ```
@@ -121,7 +121,7 @@ yield custom_event(GoalCreatedEvent(goal_id=gid).to_dict())
 For comparisons and routing, use the string constants:
 
 ```python
-from soothe.foundation.events import GOAL_CREATED
+from soothe.events import GOAL_CREATED
 if event_type == GOAL_CREATED:
     handle_goal_created(event_data)
 ```

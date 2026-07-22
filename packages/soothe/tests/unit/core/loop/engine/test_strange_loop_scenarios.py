@@ -13,8 +13,8 @@ from soothe.config.models import (
     ExecutePromptLedgerConfig,
     PlanPromptLedgerConfig,
 )
-from soothe.foundation.sloop import StrangeLoop
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop import StrangeLoop
+from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     PriorProgressDigest,
@@ -92,7 +92,7 @@ class MockLoopPlanner:
         **_kwargs: Any,
     ):
         """Assess-only call for split graph flow."""
-        from soothe.foundation.sloop.state.schemas import StatusAssessment
+        from soothe.sloop.state.schemas import StatusAssessment
 
         self._assess_count += 1
 

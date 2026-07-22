@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 import pytest
 from langchain_core.messages import ToolMessage
 
-from soothe.foundation.sloop.middleware.intake_task_guard import IntakeOnlyTaskGuardMiddleware
-from soothe.foundation.sloop.state.schemas import (
+from soothe.sloop.intake_task_guard import IntakeOnlyTaskGuardMiddleware
+from soothe.sloop.state.schemas import (
     INTAKE_ONLY_WIRE_SUBAGENTS,
     filter_task_catalog_subagent_names,
     is_intake_only_wire_subagent,

@@ -13,14 +13,14 @@ from typing import Any
 
 from soothe.config import SootheConfig
 from soothe.config.reload import ConfigReloadEvent, ConfigWatcher
-from soothe.foundation.sloop.state.persistence.manager import (
+from soothe.logging import ThreadLogger
+from soothe.sloop.checkpoints.manager import (
     StrangeLoopCheckpointPersistenceManager,
 )
-from soothe.foundation.workspace import (
+from soothe.workspace import (
     cleanup_anonymous_workspaces,
     resolve_daemon_workspace,
 )
-from soothe.logging import ThreadLogger
 
 from soothe_daemon.bootstrap.logging import set_client_id, set_loop_id
 from soothe_daemon.bootstrap.paths import pid_path
@@ -233,7 +233,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """
         from pathlib import Path
 
-        from soothe.foundation.identity.identity_service import IdentityService
+        from soothe.identity.identity_service import IdentityService
         from soothe_sdk.paths import SOOTHE_DATA_DIR
 
         identity_cfg = self._daemon_config.identity
@@ -285,7 +285,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if self._identity_service is None:
             return None
 
-        from soothe.foundation.identity.runtime import IdentityRuntime
+        from soothe.identity.runtime import IdentityRuntime
 
         return IdentityRuntime(
             service=self._identity_service,
@@ -508,7 +508,7 @@ class SootheDaemon(DaemonHandlersMixin):
             apply_env_overrides(self._daemon_config)
 
             if self._config.persistence.postgres_base_dsn:
-                from soothe.foundation.persistence.postgres_provisioning import (
+                from soothe.persistence.postgres_provisioning import (
                     ensure_postgres_databases_async,
                 )
 
@@ -523,7 +523,7 @@ class SootheDaemon(DaemonHandlersMixin):
             # Unified persistence: cron/identity follow default_backend via host
             # stores; the display card store is daemon-owned (IG-678 PR-2).
             try:
-                from soothe.foundation.persistence.unified import configure_unified_persistence
+                from soothe.persistence.unified import configure_unified_persistence
 
                 configure_unified_persistence(self._config)
             except Exception:
@@ -597,15 +597,15 @@ class SootheDaemon(DaemonHandlersMixin):
             #
             # RFC-625: Uses ContextEngine + AutopilotMonitor instead of GoalEngine.
             try:
-                from soothe.foundation.autopilot.monitor import AutopilotMonitor
-                from soothe.foundation.autopilot.service import (
+                from soothe.autopilot import (
+                    AutopilotMonitor,
                     AutopilotService,
                     ContextProjector,
                     DurabilityGoalDispatchContextStore,
                     WorkspaceReservation,
                 )
-                from soothe.foundation.context import ContextEngine
-                from soothe.foundation.events.internal_bus import InternalEventBus
+                from soothe.context import ContextEngine
+                from soothe.events.internal_bus import InternalEventBus
                 from soothe_nano.backends.persistence import create_persist_store
                 from soothe_sdk.paths import SOOTHE_DATA_DIR
 
@@ -629,7 +629,7 @@ class SootheDaemon(DaemonHandlersMixin):
                 dur_cfg = self._config.agent.protocols.durability
                 persist_dir = dur_cfg.persist_dir or str(SOOTHE_DATA_DIR)
                 if dur_backend == "postgresql":
-                    from soothe.foundation.persistence.shared_metadata_pool import (
+                    from soothe.persistence.shared_metadata_pool import (
                         SharedMetadataPool,
                     )
 
@@ -688,7 +688,7 @@ class SootheDaemon(DaemonHandlersMixin):
                         context_persist_store
                     )
                 else:
-                    from soothe.foundation.autopilot.service import InMemoryGoalDispatchContextStore
+                    from soothe.autopilot.context_store import InMemoryGoalDispatchContextStore
 
                     self._autopilot_service._context_store = InMemoryGoalDispatchContextStore()
                 self._autopilot_service._context_projector = ContextProjector(
@@ -702,8 +702,8 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 # RFC-229: Create daemon-owned CronService for scheduled jobs
                 try:
-                    from soothe.foundation.cron import CronService
-                    from soothe.foundation.cron.store_factory import create_cron_job_store
+                    from soothe.cron import CronService
+                    from soothe.cron.store_factory import create_cron_job_store
 
                     self._cron_service = CronService(
                         config=self._config,
@@ -719,7 +719,7 @@ class SootheDaemon(DaemonHandlersMixin):
 
                 # RFC-228: Bridge internal autopilot events to client-visible events
                 # for desktop clients with autopilot_subscribed=True
-                from soothe.foundation.events.internal_events import internal_to_client_event
+                from soothe.events.internal_events import internal_to_client_event
 
                 async def _bridge_internal_to_client(event: Any) -> None:
                     """Bridge internal event to client-visible event for autopilot subscribers."""
@@ -1457,7 +1457,7 @@ class SootheDaemon(DaemonHandlersMixin):
         from datetime import UTC, datetime
         from time import monotonic
 
-        from soothe.foundation.events import DaemonHeartbeatEvent
+        from soothe.events import DaemonHeartbeatEvent
 
         while self._running:
             await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
@@ -1697,14 +1697,14 @@ class SootheDaemon(DaemonHandlersMixin):
         try:
             # Skip SQLite WAL housekeeping when the process is in PostgreSQL mode.
             if self._config.persistence.default_backend != "postgresql":
-                from soothe.foundation.sloop.state.persistence.directory_manager import (
+                from soothe.sloop.checkpoints.directory_manager import (
                     PersistenceDirectoryManager,
                 )
-                from soothe.foundation.sloop.state.persistence.runtime_paths import (
+                from soothe.sloop.checkpoints.runtime_paths import (
                     resolve_context_engine_db_path,
                     resolve_display_db_path,
                 )
-                from soothe.foundation.sloop.state.persistence.wal_maintenance import (
+                from soothe.sloop.checkpoints.wal_maintenance import (
                     checkpoint_runtime_databases,
                 )
 
@@ -1752,8 +1752,8 @@ class SootheDaemon(DaemonHandlersMixin):
         msg_type = msg.get("type", "")
         lid = str(msg.get("loop_id") or "").strip()
 
-        from soothe.foundation.events import REGISTRY
-        from soothe.foundation.events.visibility import (
+        from soothe.events import REGISTRY
+        from soothe.events.visibility import (
             decide_client_wire_visibility,
             event_type_from_wire_message,
         )

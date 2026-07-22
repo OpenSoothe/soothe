@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from soothe.foundation.sloop.orchestrator.nodes.goal_completion import (
+from soothe.sloop.nodes.goal_completion import (
     _goal_completion_tail_persistence,
 )
 

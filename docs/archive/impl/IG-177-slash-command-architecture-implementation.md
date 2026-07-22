@@ -577,7 +577,7 @@ grep "from soothe_cli" packages/soothe/src/soothe/daemon/*.py
 # Should return nothing
 
 # Verify daemon has no Rich imports
-grep "from rich" packages/soothe/src/soothe/daemon/*.py packages/soothe/src/soothe/foundation/*.py
+grep "from rich" packages/soothe/src/soothe/daemon/*.py packages/soothe/src/soothe/*.py
 # Should return nothing
 
 # Verify CLI has unified registry

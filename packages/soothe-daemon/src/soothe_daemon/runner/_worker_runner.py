@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.foundation.identity.runtime import IdentityRuntime
+    from soothe.identity.runtime import IdentityRuntime
     from soothe.runner import SootheRunner
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ async def _warmup_worker_core_agent(
     if not warmup_core_agent:
         return
 
-    from soothe.foundation.coreagent.lazy import LazyCoreAgent
+    from soothe.coreagent.lazy import LazyCoreAgent
     from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 
     if config.agent.runtime.lazy_core_agent:

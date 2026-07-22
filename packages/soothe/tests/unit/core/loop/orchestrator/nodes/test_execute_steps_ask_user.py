@@ -8,21 +8,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import GoalNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
-from soothe.foundation.sloop.clarification import (
+from soothe.context.engine import ContextEngine
+from soothe.context.models import GoalNode
+from soothe.context.store_sqlite import SqliteContextPersistence
+from soothe.sloop.clarification import (
     ClarificationAnswer,
     answer_to_state,
     request_from_state,
 )
-from soothe.foundation.sloop.engine.executor import StepWaveStart
-from soothe.foundation.sloop.orchestrator.nodes.execute_steps import (
+from soothe.sloop.engine.executor import StepWaveStart
+from soothe.sloop.nodes.execute_steps import (
     PLANNER_ASK_INTERRUPT_PREFIX,
     node_execute,
 )
-from soothe.foundation.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.foundation.sloop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
 
 
 def _make_ce() -> ContextEngine:
@@ -114,7 +114,7 @@ async def test_branch2_short_circuits_when_planner_emits_ask_user(
 
     executor_called = MagicMock()
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", executor_called)
 
@@ -162,7 +162,7 @@ async def test_branch2_noop_when_no_clarification_policy(
     mock_executor = MagicMock()
     mock_executor.execute = _empty_stream
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
@@ -238,7 +238,7 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
         mock_ex.execute = _empty_stream
         return mock_ex
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", _factory)
 
@@ -304,8 +304,8 @@ async def test_branch1_ce_bound_does_not_re_emit_planner_ask(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CE-bound loop state must persist the synth result before Branch 2 runs."""
-    from soothe.foundation.context.models import StepNode
-    from soothe.foundation.sloop.state.schemas import LoopState
+    from soothe.context.models import StepNode
+    from soothe.sloop.state.schemas import LoopState
 
     decision = AgentDecision(
         type="execute_steps",
@@ -360,7 +360,7 @@ async def test_branch1_ce_bound_does_not_re_emit_planner_ask(
     mock_executor = MagicMock()
     mock_executor.execute = _empty_stream
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", MagicMock(return_value=mock_executor))
 
@@ -425,7 +425,7 @@ async def test_branch2_picks_first_ask_user_in_mixed_wave(
 
     executor_called = MagicMock()
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", executor_called)
 
@@ -488,7 +488,7 @@ async def test_real_coreagent_resume_payload_passes_through(
         mock_ex.execute = _yield_wave
         return mock_ex
 
-    import soothe.foundation.sloop.orchestrator.nodes.execute_steps as mod
+    import soothe.sloop.nodes.execute_steps as mod
 
     monkeypatch.setattr(mod, "Executor", _factory)
 
@@ -512,12 +512,12 @@ async def test_synth_path_persists_qa_pair_to_goal_record() -> None:
     the checkpoint persisted. Without this, the next clarification round trip
     reloads ``goal_record`` with a stale ledger and plan-assess / plan-generate
     re-ask the same question."""
-    from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+    from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
     emitted: list[tuple[str, Any]] = []
 
     # Real LoopState so loop_messages is a list we can mutate and read back.
-    from soothe.foundation.sloop.state.schemas import LoopState
+    from soothe.sloop.state.schemas import LoopState
 
     ce = _make_ce()
     loop_state = LoopState(

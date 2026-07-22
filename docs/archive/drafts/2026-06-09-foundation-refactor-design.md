@@ -8,7 +8,7 @@
 
 ## Abstract
 
-Refactor `soothe.core` into `soothe.foundation` with clear three-layer separation (CoreAgent, StrangeLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
+Refactor `soothe.core` into `soothe` with clear three-layer separation (CoreAgent, StrangeLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
 
 ---
 
@@ -338,8 +338,8 @@ from typing import Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.foundation.core.agent import CoreAgentProtocol
-    from soothe.foundation.sloop.state.schemas import LoopState, PlanResult
+    from soothe.core.agent import CoreAgentProtocol
+    from soothe.sloop.state.schemas import LoopState, PlanResult
 
 
 @runtime_checkable
@@ -398,7 +398,7 @@ from typing import Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.foundation.autopilot.engine.models import Goal
+    from soothe.autopilot.engine_models import Goal
 
 
 @runtime_checkable
@@ -448,24 +448,24 @@ class AutopilotProtocol(Protocol):
 
 | Current Location | New Location | Layer Affinity |
 |------------------|--------------|----------------|
-| `soothe.core.agent/` | `soothe.foundation.core.agent/` | Core |
-| `soothe.core.context/` | `soothe.foundation.core.context/` | Core |
-| `soothe.core.security/` | `soothe.foundation.security/` | Core |
-| `soothe.core.filesystem/` | `soothe.foundation.filesystem/` | Core |
-| `soothe.core.quiz_messages.py` | `soothe.foundation.core.quiz_messages.py` | Core |
-| `soothe.core.loop/` | `soothe.foundation.sloop/` | Loop |
-| `soothe.core.prompts/` | `soothe.foundation.sloop.prompts/` | Loop |
-| `soothe.core.intention/` | `soothe.foundation.sloop.intention/` | Loop |
-| `soothe.core.goal_engine/` | `soothe.foundation.autopilot.engine/` | Autopilot |
-| `soothe.core.autopilot/` | `soothe.foundation.autopilot.service/` | Autopilot |
-| `soothe.core.events/` | `soothe.foundation.events/` | Shared |
-| `soothe.core.workspace/` | `soothe.foundation.workspace/` | Shared |
-| `soothe.core.persistence/` | `soothe.foundation.persistence/` | Shared |
+| `soothe.core.agent/` | `soothe.core.agent/` | Core |
+| `soothe.core.context/` | `soothe.core.context/` | Core |
+| `soothe.core.security/` | `soothe.security/` | Core |
+| `soothe.core.filesystem/` | `soothe.filesystem/` | Core |
+| `soothe.core.quiz_messages.py` | `soothe.core.quiz_messages.py` | Core |
+| `soothe.core.loop/` | `soothe.sloop/` | Loop |
+| `soothe.core.prompts/` | `soothe.sloop.prompts/` | Loop |
+| `soothe.core.intention/` | `soothe.sloop.intention/` | Loop |
+| `soothe.core.goal_engine/` | `soothe.autopilot/` | Autopilot |
+| `soothe.core.autopilot/` | `soothe.autopilot/` | Autopilot |
+| `soothe.core.events/` | `soothe.events/` | Shared |
+| `soothe.core.workspace/` | `soothe.workspace/` | Shared |
+| `soothe.core.persistence/` | `soothe.persistence/` | Shared |
 | `soothe.core.runner/` | `soothe.runner/` | Top-level |
 | `soothe.core.resolver/` | `soothe.runner.resolver/` | Runner-owned |
-| `soothe.foundation.base_events.py` | `soothe.foundation.base_events.py` | Unchanged |
-| `soothe.foundation.types.py` | `soothe.foundation.types.py` | Unchanged |
-| `soothe.foundation.ai_message.py` | `soothe.foundation.ai_message.py` | Unchanged |
+| `soothe.base_events.py` | `soothe.base_events.py` | Unchanged |
+| `soothe.types.py` | `soothe.types.py` | Unchanged |
+| `soothe.ai_message.py` | `soothe.ai_message.py` | Unchanged |
 
 ---
 
@@ -475,15 +475,15 @@ class AutopilotProtocol(Protocol):
 
 | Before | After |
 |--------|-------|
-| `from soothe.core import CoreAgent` | `from soothe.foundation.core import CoreAgent` |
-| `from soothe.core.agent import create_soothe_agent` | `from soothe.foundation.core.agent import create_soothe_agent` |
-| `from soothe.core.loop import StrangeLoop` | `from soothe.foundation.sloop import StrangeLoop` |
-| `from soothe.core.loop.state.schemas import LoopState` | `from soothe.foundation.sloop.state.schemas import LoopState` |
-| `from soothe.core.goal_engine import GoalEngine` | `from soothe.foundation.autopilot import GoalEngine` |
-| `from soothe.core.autopilot import AutopilotService` | `from soothe.foundation.autopilot import AutopilotService` |
+| `from soothe.core import CoreAgent` | `from soothe.core import CoreAgent` |
+| `from soothe.core.agent import create_soothe_agent` | `from soothe.core.agent import create_soothe_agent` |
+| `from soothe.core.loop import StrangeLoop` | `from soothe.sloop import StrangeLoop` |
+| `from soothe.core.loop.state.schemas import LoopState` | `from soothe.sloop.state.schemas import LoopState` |
+| `from soothe.core.goal_engine import GoalEngine` | `from soothe.autopilot import GoalEngine` |
+| `from soothe.core.autopilot import AutopilotService` | `from soothe.autopilot import AutopilotService` |
 | `from soothe.core import SootheRunner` | `from soothe.runner import SootheRunner` |
-| `from soothe.core.events import GOAL_CREATED` | `from soothe.foundation.events import GOAL_CREATED` |
-| `from soothe.core.workspace import resolve_daemon_workspace` | `from soothe.foundation.workspace import resolve_daemon_workspace` |
+| `from soothe.core.events import GOAL_CREATED` | `from soothe.events import GOAL_CREATED` |
+| `from soothe.core.workspace import resolve_daemon_workspace` | `from soothe.workspace import resolve_daemon_workspace` |
 
 ### Backward Compatibility
 
@@ -491,21 +491,21 @@ Lazy imports in `soothe.core.__init__.py` will redirect to new locations:
 
 ```python
 # soothe/core/__init__.py (backward compatibility shim)
-"""Deprecated - use soothe.foundation imports instead."""
+"""Deprecated - use soothe imports instead."""
 
 def __getattr__(name: str) -> Any:
     import warnings
     warnings.warn(
-        f"soothe.core.{name} is deprecated. Use soothe.foundation imports.",
+        f"soothe.core.{name} is deprecated. Use soothe imports.",
         DeprecationWarning,
         stacklevel=2,
     )
     # Redirect to new locations
     if name == "CoreAgent":
-        from soothe.foundation.core import CoreAgent
+        from soothe.core import CoreAgent
         return CoreAgent
     if name == "create_soothe_agent":
-        from soothe.foundation.core.agent import create_soothe_agent
+        from soothe.core.agent import create_soothe_agent
         return create_soothe_agent
     # ... etc
 ```
@@ -527,7 +527,7 @@ def __getattr__(name: str) -> Any:
 
 ### Phase 2: Create Foundation Package Structure (Medium Risk)
 
-1. Create `soothe.foundation/core/`, `loop/`, `autopilot/` directories
+1. Create `soothe/core/`, `loop/`, `autopilot/` directories
 2. Create `soothe.runner/` directory
 3. Create package `__init__.py` files with re-exports
 4. Move shared utilities (events, workspace, persistence)
@@ -538,10 +538,10 @@ def __getattr__(name: str) -> Any:
 
 ### Phase 3: Move Layer Modules (High Risk)
 
-1. Move `soothe.core.agent/` → `soothe.foundation.core.agent/`
-2. Move `soothe.core.loop/` → `soothe.foundation.sloop/`
-3. Move `soothe.core.goal_engine/` → `soothe.foundation.autopilot.engine/`
-4. Move `soothe.core.autopilot/` → `soothe.foundation.autopilot.service/`
+1. Move `soothe.core.agent/` → `soothe.core.agent/`
+2. Move `soothe.core.loop/` → `soothe.sloop/`
+3. Move `soothe.core.goal_engine/` → `soothe.autopilot/`
+4. Move `soothe.core.autopilot/` → `soothe.autopilot/`
 5. Move `soothe.core.runner/` → `soothe.runner/`
 6. Update all internal imports across packages
 7. Run full test suite
@@ -567,7 +567,7 @@ def __getattr__(name: str) -> Any:
 2. Update `docs/specs/` RFC references
 3. Update `CLAUDE.md` architecture section
 4. Update `soothe.core/README.md` → deprecation notice
-5. Create `soothe.foundation/README.md`
+5. Create `soothe/README.md`
 6. Run verification script
 
 **Duration**: ~1 day

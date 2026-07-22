@@ -98,8 +98,8 @@ After this implementation, the following must always hold:
 
 | File | Action | Purpose |
 |------|--------|---------|
-| `packages/soothe/src/soothe/foundation/core/filesystem/local.py` | **Modify** (+614 / −291) | Layer 1: `_write_atomic()` (temp + fsync + `os.replace`), `_compute_version_stamp()`, `_check_file_size()`. Layer 2: `self._edit_locks = FileEditLockRegistry()` and lock acquisition wrapping `aedit`/`aedit_lines`/`aedit_batched` critical sections. Atomic-write + version-stamp verification on the write path. |
-| `packages/soothe/src/soothe/foundation/core/filesystem/_lock_registry.py` | **Create** (new) | Layer 2: `FileEditLockRegistry` — per-resolved-path async (`asyncio.Lock`) and sync (`threading.RLock`) lock pools, meta-lock-guarded lazy creation, `os.path.realpath` key canonicalization. |
+| `packages/soothe/src/soothe/core/filesystem/local.py` | **Modify** (+614 / −291) | Layer 1: `_write_atomic()` (temp + fsync + `os.replace`), `_compute_version_stamp()`, `_check_file_size()`. Layer 2: `self._edit_locks = FileEditLockRegistry()` and lock acquisition wrapping `aedit`/`aedit_lines`/`aedit_batched` critical sections. Atomic-write + version-stamp verification on the write path. |
+| `packages/soothe/src/soothe/core/filesystem/_lock_registry.py` | **Create** (new) | Layer 2: `FileEditLockRegistry` — per-resolved-path async (`asyncio.Lock`) and sync (`threading.RLock`) lock pools, meta-lock-guarded lazy creation, `os.path.realpath` key canonicalization. |
 | `packages/soothe/src/soothe/middleware/edit_coalescing.py` | **Modify** (+461 / −13) | Layer 3: staging buffer (`StagingEntry`, in-memory snapshot per file per turn), `StringReplacement` dataclass, `EditCoalescingConfig` (detection window, staging buffer limits, eviction policy), detection-window grouping, batch dispatch to `aedit_batched()`, result-to-call-ID mapping, buffer invalidation/flush before non-edit tools. |
 
 ### Wiring / configuration
@@ -108,9 +108,9 @@ After this implementation, the following must always hold:
 |------|--------|---------|
 | `packages/soothe/src/soothe/middleware/_builder.py` | **Modify** | `EditCoalescingMiddleware` already mounted in the stack (position ~1d); log messages cleaned of internal identifiers. |
 | `packages/soothe/src/soothe/config/models.py` | **Modify** | Config field descriptions cleaned of internal identifiers (no behavioral change). |
-| `packages/soothe/src/soothe/foundation/context/models.py` | **Modify** | Minor cleanup. |
-| `packages/soothe/src/soothe/foundation/sloop/state/execution_checkpoint.py` | **Modify** | Minor cleanup. |
-| `packages/soothe/src/soothe/foundation/sloop/state/schemas.py` | **Modify** | Minor cleanup. |
+| `packages/soothe/src/soothe/context/models.py` | **Modify** | Minor cleanup. |
+| `packages/soothe/src/soothe/sloop/state/execution_checkpoint.py` | **Modify** | Minor cleanup. |
+| `packages/soothe/src/soothe/sloop/state/schemas.py` | **Modify** | Minor cleanup. |
 | `packages/soothe/src/soothe/runner/__init__.py` | **Modify** | Minor cleanup. |
 | `packages/soothe-daemon/src/soothe_daemon/config/models.py` | **Modify** | Daemon config description cleanup (mirrors soothe config). |
 | `packages/soothe-daemon/src/soothe_daemon/health/checks/observability_check.py` | **Modify** | Minor cleanup. |

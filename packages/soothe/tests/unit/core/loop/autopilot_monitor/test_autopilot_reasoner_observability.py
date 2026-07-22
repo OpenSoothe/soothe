@@ -7,13 +7,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.autopilot.engine.models import EvidenceBundle
-from soothe.foundation.autopilot.monitor.backoff_reasoner import GoalBackoffReasoner
-from soothe.foundation.autopilot.monitor.dreaming_reasoner import (
+from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
+from soothe.autopilot.dreaming_reasoner import (
     DreamingDistillationReasoner,
     EpisodicDistillationContext,
 )
-from soothe.foundation.context.models import GoalNode
+from soothe.autopilot.engine_models import EvidenceBundle
+from soothe.context.models import GoalNode
 
 _BACKOFF_JSON = """```json
 {
@@ -156,7 +156,7 @@ async def test_dreaming_reasoner_logs_episodic_result(
 
     monkeypatch.setattr(reasoner, "_invoke_llm", mock_invoke_llm)
     monkeypatch.setattr(
-        "soothe.foundation.autopilot.monitor.dreaming_reasoner.EPISODIC_DISTILLATION_PROMPT",
+        "soothe.autopilot.dreaming_reasoner.EPISODIC_DISTILLATION_PROMPT",
         "{goals_detail}\n{ledger_summary}\n{max_episodes}",
     )
 

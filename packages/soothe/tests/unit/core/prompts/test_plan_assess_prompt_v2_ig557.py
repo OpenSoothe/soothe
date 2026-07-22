@@ -6,20 +6,20 @@ from types import SimpleNamespace
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.foundation.context.projection import ContextBundle, PriorGoalSummary
-from soothe.foundation.sloop.state.schemas import (
-    AgentDecision,
-    LoopState,
-    StepAction,
-    StepResult,
-)
-from soothe.foundation.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
+from soothe.context.projection import ContextBundle, PriorGoalSummary
 from soothe.prompts import PromptBuilder
 from soothe.prompts.plan_ledger_projection import (
     project_planner_ledger,
     project_planner_ledger_for_assess,
 )
 from soothe.prompts.user_message import UserMessageBuilder
+from soothe.sloop.state.schemas import (
+    AgentDecision,
+    LoopState,
+    StepAction,
+    StepResult,
+)
+from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
 def test_assess_execute_ai_compaction_keeps_head_and_tail() -> None:

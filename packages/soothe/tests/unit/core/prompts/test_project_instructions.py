@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from soothe.foundation.sloop.state.schemas import LoopState
 from soothe.prompts import PromptBuilder
+from soothe.sloop.state.schemas import LoopState
 
 
 def test_headline_max_chars_caps_inlined_body(tmp_path: Path) -> None:
@@ -132,8 +132,8 @@ async def test_executor_envelope_without_project_instructions(tmp_path: Path) ->
     """Executor envelope no longer embeds project_instructions (moved to system prompt)."""
     from unittest.mock import MagicMock
 
-    from soothe.foundation.sloop.engine.executor import Executor
-    from soothe.foundation.sloop.state.schemas import StepAction
+    from soothe.sloop.engine.executor import Executor
+    from soothe.sloop.state.schemas import StepAction
 
     (tmp_path / "AGENTS.md").write_text("execute agents guidance\n", encoding="utf-8")
     state = LoopState(goal="g", thread_id="t1", max_iterations=5, workspace=str(tmp_path))

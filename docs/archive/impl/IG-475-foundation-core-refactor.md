@@ -6,17 +6,17 @@
 
 ## Goal
 
-Refactor `soothe.core` into `soothe.foundation` with clear three-layer separation (CoreAgent, StrangeLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
+Refactor `soothe.core` into `soothe` with clear three-layer separation (CoreAgent, StrangeLoop, Autopilot). Define CoreAgentProtocol interface enabling future implementations. Merge GoalEngine with Autopilot as unified Layer 3. Move SootheRunner to top-level `soothe.runner` package.
 
 ## Scope
 
 ### In Scope
 
-- Create `soothe.foundation/core/`, `loop/`, `autopilot/` package structure
+- Create `soothe/core/`, `loop/`, `autopilot/` package structure
 - Create `soothe.runner/` package
 - Define CoreAgentProtocol, StrangeLoopProtocol, AutopilotProtocol in `soothe.protocols/`
 - Move layer-specific modules to their respective layer packages
-- Move shared utilities to `soothe.foundation/`
+- Move shared utilities to `soothe/`
 - Update all imports across packages
 - Add backward compatibility shim in `soothe.core.__init__.py`
 
@@ -41,10 +41,10 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 ### Phase 2: Create Package Structure 🔄
 
 **Directories to create:**
-- `soothe/foundation/__init__.py`
-- `soothe/foundation/core/__init__.py`
-- `soothe/foundation/loop/__init__.py`
-- `soothe/foundation/autopilot/__init__.py`
+- `soothe/__init__.py`
+- `soothe/core/__init__.py`
+- `soothe/loop/__init__.py`
+- `soothe/autopilot/__init__.py`
 - `soothe/runner/__init__.py`
 
 **Verification:**
@@ -53,31 +53,31 @@ Refactor `soothe.core` into `soothe.foundation` with clear three-layer separatio
 ### Phase 3: Move Shared Utilities
 
 **Moves:**
-- `soothe.core.events/` → `soothe.foundation.events/`
-- `soothe.core.workspace/` → `soothe.foundation.workspace/`
-- `soothe.core.persistence/` → `soothe.foundation.persistence/`
+- `soothe.core.events/` → `soothe.events/`
+- `soothe.core.workspace/` → `soothe.workspace/`
+- `soothe.core.persistence/` → `soothe.persistence/`
 
 ### Phase 4: Move Core (Layer 1)
 
 **Moves:**
-- `soothe.core.agent/` → `soothe.foundation.core.agent/`
-- `soothe.core.context/` → `soothe.foundation.core.context/`
-- `soothe.core.security/` → `soothe.foundation.security/`
-- `soothe.core.filesystem/` → `soothe.foundation.filesystem/`
-- `soothe.core.quiz_messages.py` → `soothe.foundation.core.quiz_messages.py`
+- `soothe.core.agent/` → `soothe.core.agent/`
+- `soothe.core.context/` → `soothe.core.context/`
+- `soothe.core.security/` → `soothe.security/`
+- `soothe.core.filesystem/` → `soothe.filesystem/`
+- `soothe.core.quiz_messages.py` → `soothe.core.quiz_messages.py`
 
 ### Phase 5: Move Loop (Layer 2)
 
 **Moves:**
-- `soothe.core.loop/` → `soothe.foundation.loop/`
-- `soothe.core.prompts/` → `soothe.foundation.loop.prompts/`
-- `soothe.core.intention/` → `soothe.foundation.loop.intention/`
+- `soothe.core.loop/` → `soothe.loop/`
+- `soothe.core.prompts/` → `soothe.loop.prompts/`
+- `soothe.core.intention/` → `soothe.loop.intention/`
 
 ### Phase 6: Move Autopilot (Layer 3)
 
 **Moves:**
-- `soothe.core.goal_engine/` → `soothe.foundation.autopilot.engine/`
-- `soothe.core.autopilot/` → `soothe.foundation.autopilot.service/`
+- `soothe.core.goal_engine/` → `soothe.autopilot/`
+- `soothe.core.autopilot/` → `soothe.autopilot/`
 
 ### Phase 7: Move Runner
 
@@ -137,16 +137,16 @@ The sys.modules registration in `soothe.core/__init__.py` causes issues with ser
 ## Summary
 
 **Foundation refactor complete** with clear three-layer separation:
-- `soothe.foundation.core/` - Layer 1 CoreAgent (unaware of loop/autopilot)
-- `soothe.foundation.loop/` - Layer 2 StrangeLoop
-- `soothe.foundation.autopilot/` - Layer 3 (merged goal_engine)
+- `soothe.core/` - Layer 1 CoreAgent (unaware of loop/autopilot)
+- `soothe.loop/` - Layer 2 StrangeLoop
+- `soothe.autopilot/` - Layer 3 (merged goal_engine)
 - `soothe.runner/` - Top-level orchestrator
 
 **New import paths:**
 ```python
-from soothe.foundation.core import CoreAgent, create_soothe_agent
-from soothe.foundation.loop import StrangeLoop, LoopState
-from soothe.foundation.autopilot import GoalEngine, AutopilotService
+from soothe.core import CoreAgent, create_soothe_agent
+from soothe.loop import StrangeLoop, LoopState
+from soothe.autopilot import GoalEngine, AutopilotService
 from soothe.runner import SootheRunner
 ```
 
@@ -156,7 +156,7 @@ from soothe.runner import SootheRunner
 
 Hundreds of files modified - see git status for full list. Key structural changes:
 - New: `soothe/protocols/core_agent.py`, `strange_loop.py`, `autopilot.py`
-- New: `soothe/foundation/core/`, `loop/`, `autopilot/` packages
+- New: `soothe/core/`, `loop/`, `autopilot/` packages
 - New: `soothe.runner/` package
 - Modified: All packages' imports updated from `soothe.core.*` to new paths
 - Modified: `soothe/core/__init__.py` - backward compatibility shim

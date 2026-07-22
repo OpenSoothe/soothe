@@ -16,7 +16,7 @@ from soothe_nano.utils.llm.structured import (
     invoke_structured_chat,
 )
 
-from soothe.foundation.sloop.clarification.protocol import ClarificationRequest
+from soothe.sloop.clarification.protocol import ClarificationRequest
 from soothe.subagents.veritas.prompts import (
     build_veritas_system_prompt,
     build_veritas_user_prompt,

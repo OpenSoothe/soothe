@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import HumanMessage
 
-from soothe.foundation.context.engine import ContextEngine
-from soothe.foundation.context.models import StepExecution, StepNode
-from soothe.foundation.context.persistence.sqlite_backend import SqliteContextPersistence
+from soothe.context.engine import ContextEngine
+from soothe.context.models import StepExecution, StepNode
+from soothe.context.store_sqlite import SqliteContextPersistence
 
 
 class TestLedgerRecoveryFromDAG:

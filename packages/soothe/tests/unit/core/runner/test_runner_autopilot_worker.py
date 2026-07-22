@@ -14,10 +14,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from soothe.foundation.autopilot.engine.models import GoalDispatchContextBundle
-from soothe.foundation.sloop.state.schemas import PlanResult
+from soothe.autopilot.engine_models import GoalDispatchContextBundle
 from soothe.protocols.runner import GoalDispatchEnvelope
 from soothe.runner._runner_autopilot_worker import AutopilotWorkerMixin
+from soothe.sloop.state.schemas import PlanResult
 
 _COMPLETION_TYPE = "soothe.internal.autopilot.goal_completion"
 
@@ -182,7 +182,7 @@ def _patch_strange_loop(monkeypatch: pytest.MonkeyPatch, fake: _FakeStrangeLoop)
         return fake
 
     monkeypatch.setattr(
-        "soothe.foundation.sloop.engine.strange_loop.StrangeLoop",
+        "soothe.sloop.engine.strange_loop.StrangeLoop",
         _factory,
     )
 
@@ -406,7 +406,7 @@ async def test_stream_forces_auto_clarification_policy(
         return sentinel_policy
 
     monkeypatch.setattr(
-        "soothe.foundation.sloop.clarification.build_clarification_policy_for_runner",
+        "soothe.sloop.clarification.build_clarification_policy_for_runner",
         _stub_builder,
         raising=True,
     )
@@ -446,7 +446,7 @@ async def test_stream_continues_when_clarification_builder_fails(
         raise RuntimeError("no model")
 
     monkeypatch.setattr(
-        "soothe.foundation.sloop.clarification.build_clarification_policy_for_runner",
+        "soothe.sloop.clarification.build_clarification_policy_for_runner",
         _raising_builder,
         raising=True,
     )
