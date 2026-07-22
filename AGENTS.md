@@ -75,9 +75,10 @@ rule 3c bans L2/L3 symbol names in nano, and `scripts/check_nano_duplicate_symbo
 bans dead-duplicate host symbols in nano. A docstring scanner for IG/RFC refs
 is a TODO (PR-10 follow-on); for now, reviewers must enforce by eye.
 
-Host packages (`soothe`, `soothe-daemon`, `soothe-cli`, `soothe-plugins`) MAY
+Host packages (`soothe`, `soothe-daemon`, `soothe-cli`) MAY
 reference IG-XXX/RFC-XXX in docstrings and comments (they live in the monorepo
-alongside `docs/`).
+alongside `docs/`). Standalone packages (`soothe-sdk`, `soothe-nano`,
+`soothe-plugins`) must not.
 
 ### 8. DO NOT Cheat Tests
 Fix the implementation, not test expectations. "Passing tests" ≠ "Working correctly"
@@ -113,7 +114,7 @@ packages/
 ├── soothe/          # Host composition: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
 ├── soothe-daemon/   # Daemon server (soothed); depends on soothe + soothe-nano directly
 ├── soothe-cli/      # Typer CLI + Textual TUI client (talks to daemon via WebSocket)
-└── soothe-plugins/  # Community plugins (depends on soothe-nano, not full soothe)
+└── soothe-plugins/  # Community plugins submodule (mirasoth/soothe-plugins); depends on nano, not full soothe
 
 client/
 ├── go/              # soothe-client-go
