@@ -61,11 +61,3 @@ class ProposalQueue:
         proposals = self._proposals
         self._proposals = []
         return proposals
-
-    def is_empty(self) -> bool:
-        """Check if the queue is empty.
-
-        Returns:
-            True if no proposals are pending.
-        """
-        return len(self._proposals) == 0

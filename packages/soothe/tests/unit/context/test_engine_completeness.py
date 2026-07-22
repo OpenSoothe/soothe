@@ -88,7 +88,7 @@ class TestPublicReadAPI:
         parent = await ce.create_goal("Parent")
         child = GoalNode(description="Child", parent_id=parent.id)
         ce._dag.add_goal(child)
-        lineage = ce.get_goal_lineage(child.id)
+        lineage = ce._dag.goal_lineage(child.id)
         assert lineage == ["Parent", "Child"]
 
 
@@ -131,140 +131,6 @@ class TestMissingTransitions:
         await ce.block_goal(goal.id)
         await ce.unblock_goal(goal.id)
         assert goal.status == "pending"
-
-
-# ── Callback Event Mechanism ─────────────────────────────────────────
-
-
-class TestCallbacks:
-    @pytest.mark.asyncio
-    async def test_goal_created_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str]] = []
-        ce.on("goal_created", lambda gid: events.append(("created", gid)))
-        goal = await ce.create_goal("Test goal")
-        assert len(events) == 1
-        assert events[0] == ("created", goal.id)
-
-    @pytest.mark.asyncio
-    async def test_goal_activated_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str]] = []
-        ce.on("goal_activated", lambda gid: events.append(("activated", gid)))
-        goal = await ce.create_goal("Test goal")
-        await ce.activate_goal(goal.id, loop_id="loop-1")
-        assert len(events) == 1
-        assert events[0] == ("activated", goal.id)
-
-    @pytest.mark.asyncio
-    async def test_goal_completed_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str]] = []
-        ce.on("goal_completed", lambda gid: events.append(("completed", gid)))
-        goal = await ce.create_goal("Test goal")
-        await ce.complete_goal(goal.id)
-        assert len(events) == 1
-        assert events[0] == ("completed", goal.id)
-
-    @pytest.mark.asyncio
-    async def test_goal_failed_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str, str]] = []
-        ce.on("goal_failed", lambda gid, err: events.append(("failed", gid, err)))
-        goal = await ce.create_goal("Test goal")
-        await ce.fail_goal(goal.id, "something broke")
-        assert len(events) == 1
-        assert events[0] == ("failed", goal.id, "something broke")
-
-    @pytest.mark.asyncio
-    async def test_goal_suspended_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str, str]] = []
-        ce.on("goal_suspended", lambda gid, reason: events.append(("suspended", gid, reason)))
-        goal = await ce.create_goal("Test goal")
-        await ce.suspend_goal(goal.id, "waiting")
-        assert len(events) == 1
-        assert events[0] == ("suspended", goal.id, "waiting")
-
-    @pytest.mark.asyncio
-    async def test_goal_cancelled_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str, str]] = []
-        ce.on("goal_cancelled", lambda gid, reason: events.append(("cancelled", gid, reason)))
-        goal = await ce.create_goal("Test goal")
-        await ce.cancel_goal(goal.id)
-        assert len(events) == 1
-        assert events[0] == ("cancelled", goal.id, "user_cancelled")
-
-    @pytest.mark.asyncio
-    async def test_step_completed_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str, str]] = []
-        ce.on("step_completed", lambda gid, sid: events.append(("step_completed", gid, sid)))
-        goal = await ce.create_goal("Test goal")
-        await ce.add_step(goal.id, StepNode(id="s1", description="Step 1"))
-        await ce.complete_step(goal.id, "s1", StepExecution(duration_ms=100))
-        assert len(events) == 1
-        assert events[0] == ("step_completed", goal.id, "s1")
-
-    @pytest.mark.asyncio
-    async def test_step_failed_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str, str]] = []
-        ce.on("step_failed", lambda gid, sid: events.append(("step_failed", gid, sid)))
-        goal = await ce.create_goal("Test goal")
-        await ce.add_step(goal.id, StepNode(id="s1", description="Step 1"))
-        await ce.fail_step(goal.id, "s1", StepExecution(duration_ms=100, error="timeout"))
-        assert len(events) == 1
-        assert events[0] == ("step_failed", goal.id, "s1")
-
-    @pytest.mark.asyncio
-    async def test_step_skipped_callback(self) -> None:
-        ce = _ce()
-        events: list[tuple[str, str, str]] = []
-        ce.on("step_skipped", lambda gid, sid: events.append(("step_skipped", gid, sid)))
-        goal = await ce.create_goal("Test goal")
-        await ce.add_step(goal.id, StepNode(id="s1", description="Step 1"))
-        await ce.skip_step(goal.id, "s1")
-        assert len(events) == 1
-        assert events[0] == ("step_skipped", goal.id, "s1")
-
-    @pytest.mark.asyncio
-    async def test_callback_error_does_not_block_transition(self) -> None:
-        ce = _ce()
-
-        def bad_callback(gid: str) -> None:
-            raise RuntimeError("callback error")
-
-        ce.on("goal_created", bad_callback)
-        goal = await ce.create_goal("Test goal")
-        # State change still happened despite callback error
-        assert goal.status == "pending"
-        assert ce.get_all_goals()[0].description == "Test goal"
-
-    @pytest.mark.asyncio
-    async def test_off_unregisters_callback(self) -> None:
-        ce = _ce()
-        events: list[str] = []
-        cb = lambda gid: events.append(gid)  # noqa: E731
-        ce.on("goal_created", cb)
-        await ce.create_goal("First")
-        assert len(events) == 1
-        ce.off("goal_created", cb)
-        await ce.create_goal("Second")
-        # Callback no longer fires
-        assert len(events) == 1
-
-    @pytest.mark.asyncio
-    async def test_multiple_callbacks_same_event(self) -> None:
-        ce = _ce()
-        results1: list[str] = []
-        results2: list[str] = []
-        ce.on("goal_created", lambda gid: results1.append(gid))
-        ce.on("goal_created", lambda gid: results2.append(gid))
-        await ce.create_goal("Test")
-        assert len(results1) == 1
-        assert len(results2) == 1
 
 
 # ── Lossless Persistence ─────────────────────────────────────────────

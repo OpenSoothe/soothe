@@ -11,8 +11,6 @@ Relevance heuristic (v1, per RFC-222 Q2):
 - Files: dedup by path; latest hash wins.
 - Plan steps: union, prefer most recent N by parent ``updated_at``.
 - Tool stats: simple counter union.
-- Cached prompt prefix: take the most recent parent's hash (best chance of
-  provider-side cache hit on the next call).
 
 The projector never mutates the goal store or the goal engine; it only reads.
 """
@@ -31,12 +29,12 @@ if TYPE_CHECKING:
     from soothe.autopilot.context_store import GoalDispatchContextStoreProtocol
     from soothe.autopilot.engine_models import (
         FileTouchSummary,
-        Goal,
         GoalDispatchContextContribution,
         PriorStepSummary,
         ToolCallStats,
     )
     from soothe.config.models import ContextProjectionConfig
+    from soothe.context.models import GoalNode
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +60,14 @@ class ContextProjector:
 
     async def project(
         self,
-        goal: Goal,
-        all_goals: dict[str, Goal],
+        goal: GoalNode,
+        all_goals: dict[str, GoalNode],
     ) -> GoalDispatchContextBundle:
         """Project parents' stored contributions into a hydration bundle.
 
         Args:
             goal: The goal that is about to be dispatched.
-            all_goals: Lookup table {goal_id: Goal} used to read parent
+            all_goals: Lookup table {goal_id: GoalNode} used to read parent
                 metadata (recency, status). Pass ``goal_engine._goals``
                 or any equivalent mapping.
 
@@ -94,7 +92,6 @@ class ContextProjector:
             files_touched=self._merge_files(ordered_pairs),
             findings=self._merge_findings(ordered_pairs),
             tool_call_summary=self._merge_tool_stats(ordered_pairs),
-            cached_system_prompt_hash=self._pick_prompt_cache_hash(ordered_pairs),
         )
 
     # ---- merge helpers --------------------------------------------------
@@ -103,7 +100,7 @@ class ContextProjector:
     def _order_by_recency(
         parent_ids: list[str],
         contributions: dict[str, GoalDispatchContextContribution],
-        all_goals: dict[str, Goal],
+        all_goals: dict[str, GoalNode],
     ) -> list[tuple[str, GoalDispatchContextContribution]]:
         """Return (parent_id, contribution) pairs ordered most-recent-first."""
 
@@ -195,13 +192,3 @@ class ContextProjector:
             for name, n in contribution.tool_call_stats.failures_by_name.items():
                 failures[name] = failures.get(name, 0) + n
         return ToolCallStats(counts_by_name=counts, failures_by_name=failures)
-
-    @staticmethod
-    def _pick_prompt_cache_hash(
-        ordered_pairs: list[tuple[str, GoalDispatchContextContribution]],
-    ) -> str | None:
-        # GoalDispatchContextContribution doesn't carry a prompt hash on the
-        # output side today; this hook is reserved for Phase B when the worker
-        # emits its last-used prompt prefix. For now, return None so callers
-        # can degrade gracefully.
-        return None

@@ -3,10 +3,6 @@
 Stores one ``GoalDispatchContextContribution`` per ``goal_id``. Used by the
 ``ContextProjector`` to merge a goal's parents' contributions into a single
 ``GoalDispatchContextBundle`` for hydration.
-
-Phase A scaffolding ships an in-memory implementation. Later phases can
-swap in a backend that persists through ``DurabilityProtocol`` without
-changing the public interface.
 """
 
 from __future__ import annotations
@@ -52,11 +48,12 @@ class GoalDispatchContextStoreProtocol(Protocol):
 
 
 class InMemoryGoalDispatchContextStore:
-    """In-memory implementation (Phase A scaffolding).
+    """In-memory implementation.
 
     Thread-safe under single-event-loop asyncio. Suitable for daemon-resident
-    use; not multi-process. Phase C will swap in a durability-backed
-    implementation when crash recovery requires persistence across restarts.
+    use; not multi-process. A durability-backed implementation
+    (``DurabilityGoalDispatchContextStore``) is used when crash recovery
+    requires persistence across restarts.
     """
 
     def __init__(self) -> None:

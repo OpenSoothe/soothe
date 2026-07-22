@@ -1,4 +1,4 @@
-"""Shared autopilot action dispatch for protocol-1 RPC and legacy WS commands."""
+"""Shared autopilot action dispatch for protocol-1 RPC commands."""
 
 from __future__ import annotations
 

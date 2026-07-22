@@ -101,12 +101,11 @@ class AutopilotService:
                 When provided (daemon mode), handles goal intake, verification,
                 and dreaming coordination.
             subscribe_to_bus: When True (default), subscribe handlers to the
-                bus immediately. RFC-222 (revised, Phase B): the daemon
-                constructs a daemon-owned ``AutopilotService`` alongside the
-                per-runner one — they share the singleton bus, so the daemon
-                instance must pass ``subscribe_to_bus=False`` to avoid
-                double-handling every event. Phase D will retire the
-                per-runner instance and the daemon's will start subscribing.
+                bus immediately. RFC-222 (revised): the daemon constructs a
+                daemon-owned ``AutopilotService`` alongside the per-runner
+                one — they share the singleton bus, so the daemon instance
+                must pass ``subscribe_to_bus=False`` to avoid
+                double-handling every event.
             runner_factory: ``LoopRunnerFactory``-shaped object exposing
                 ``create_runner(loop_id) -> LoopRunnerProtocol``. Required for
                 worker-pool dispatch (RFC-222 Phase C+).
@@ -193,7 +192,7 @@ class AutopilotService:
 
         # Trigger scheduling if new active goal
         if event.new_status == "active" and self._running and not self._dreaming:
-            await self._schedule_next_goal()
+            await self._schedule_ready_goals()
 
     async def _handle_goals_ready(self, event: InternalGoalsReadyEvent) -> None:
         """Handle goals ready for scheduling.
@@ -653,8 +652,6 @@ class AutopilotService:
         """Build the LoopRunRequest and spawn a stream-consuming task."""
         from soothe.protocols.runner import GoalDispatchEnvelope, LoopRunRequest
 
-        # Phase C ships an empty merged_context. Phase C+ wires the
-        # ContextProjector to fetch and project parents' contributions.
         bundle = await self._build_merged_context(goal)
 
         # RFC-222 H5: compute wall-clock deadline from config. The worker logs
@@ -691,7 +688,7 @@ class AutopilotService:
     async def _build_merged_context(self, goal: GoalNode) -> Any:
         """Build the GoalDispatchContextBundle for ``goal``.
 
-        Hooks the ``ContextProjector`` if one was wired (Phase C+ optional).
+        Hooks the ``ContextProjector`` if one was wired.
         Returns an empty bundle by default so dispatch always succeeds.
         """
         from soothe.autopilot.engine_models import GoalDispatchContextBundle
@@ -898,10 +895,6 @@ class AutopilotService:
         candidate = next(g for g in ready if g.id == goal_id)
         if not await self._try_dispatch_goal(candidate):
             logger.warning("No worker capacity for goal %s", goal_id)
-
-    async def _schedule_next_goal(self) -> None:
-        """Schedule next ready goal (single goal trigger)."""
-        await self._schedule_ready_goals()
 
     async def _monitor_loop_health(self) -> None:
         """Monitor active workers — enforce wall-clock deadlines (RFC-222 H5).

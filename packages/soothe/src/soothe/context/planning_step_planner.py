@@ -329,7 +329,13 @@ class StepPlanningSubengine:
         return "\n".join(lines).strip()
 
     def _format_single_goal_report(self, goal: GoalNode) -> str:
-        """Format a single goal's step DAG report (backward-compat with PlanManager output)."""
+        """Format a single goal's step DAG report.
+
+        Emits a Markdown report covering execution statistics (planned,
+        completed, failed, pending step counts, dependency depth, success
+        rate, replan count) followed by a per-step breakdown of status and
+        dependencies. Consumed by ``format_completion_dag_report``.
+        """
         ctx = self.get_planning_context(goal.id)
         step_dag = goal.steps
         failed_n = len(ctx.failed_step_ids)

@@ -38,7 +38,6 @@ def resolve_context_engine_persistence(config: SootheConfig, loop_id: str) -> An
             raise ValueError(msg)
         persistence = PgsqlContextPersistence(
             loop_id=loop_id,
-            dsn=pgsql_dsn,
             config=config,
         )
 

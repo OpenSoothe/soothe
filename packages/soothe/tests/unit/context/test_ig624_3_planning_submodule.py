@@ -22,10 +22,6 @@ from soothe.context import (
 from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode, StepNode
 from soothe.context.planning_completion import (
-    _LEDGER_DIRECT_MAX_TOOL_CALLS,
-    _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
-    DAG_DEPENDENCY_THRESHOLD,
-    LOW_SUCCESS_RATE_THRESHOLD,
     _dag_requires_synthesis,
     _ledger_direct_eligible,
     determine_completion_strategy,
@@ -967,23 +963,6 @@ class TestGoalSchedulerCheckReactivatable:
 # ═══════════════════════════════════════════════════════════════════════
 
 
-class TestGoalPlanningSubengineDecompose:
-    @pytest.mark.asyncio
-    async def test_stub_returns_empty(self) -> None:
-        ce = ContextEngine()
-        planner = ce.planning.goal
-
-        result = await planner.decompose_goal(
-            DecompositionRequest(
-                goal_description="Complex objective",
-                goal_id="g1",
-                context_summary="",
-            )
-        )
-        assert result.subgoals == []
-        assert result.reasoning == "Not yet implemented"
-
-
 class TestGoalPlanningSubengineCreateSubgoals:
     def test_creates_child_goals(self) -> None:
         ce = ContextEngine()
@@ -1081,11 +1060,6 @@ class TestGoalPlanningSubengineReflect:
         result = await planner.reflect_and_create_goals("g1")
         assert result == []
 
-    def test_suggest_adjustments_stub(self) -> None:
-        ce = ContextEngine()
-        planner = ce.planning.goal
-        assert planner.suggest_goal_adjustments("g1") == []
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # PlanningFacade
@@ -1149,8 +1123,12 @@ class TestPlanningModels:
 
 
 def test_completion_constants_single_source() -> None:
-    """Constants live in completion.py (single source of truth)."""
-    assert DAG_DEPENDENCY_THRESHOLD == 3
-    assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
-    assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 1
-    assert _LEDGER_DIRECT_MAX_TOOL_CALLS == 50
+    """Completion threshold defaults live in CompletionRulesConfig (single source of truth)."""
+    from soothe.config.models import CompletionRulesConfig
+
+    rules = CompletionRulesConfig()
+
+    assert rules.dag_dependency_threshold == 3
+    assert rules.low_success_rate_threshold == 0.6
+    assert rules.simple_ledger_direct_max_steps == 1
+    assert rules.ledger_direct_max_tool_calls == 50

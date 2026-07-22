@@ -17,28 +17,22 @@ class TestConsensusPrompt:
     """Tests for consensus prompt builder."""
 
     def test_basic_prompt(self) -> None:
-        prompt = _build_consensus_prompt("Test goal", "Response text", "", None)
+        prompt = _build_consensus_prompt("Test goal", "Response text", "")
         assert "Test goal" in prompt
         assert "Response text" in prompt
         assert "DECISION:" in prompt
 
     def test_prompt_with_evidence(self) -> None:
-        prompt = _build_consensus_prompt("Goal", "Response", "Evidence summary", None)
+        prompt = _build_consensus_prompt("Goal", "Response", "Evidence summary")
         assert "Evidence Summary: Evidence summary" in prompt
-
-    def test_prompt_with_criteria(self) -> None:
-        criteria = ["Export data", "Generate report"]
-        prompt = _build_consensus_prompt("Goal", "Response", "Evidence", criteria)
-        assert "Export data" in prompt
-        assert "Generate report" in prompt
 
     def test_prompt_truncates_long_response(self) -> None:
         long_response = "x" * 1000
-        prompt = _build_consensus_prompt("Goal", long_response, "", None)
+        prompt = _build_consensus_prompt("Goal", long_response, "")
         assert len(prompt) < 1000
 
     def test_prompt_includes_instructions(self) -> None:
-        prompt = _build_consensus_prompt("Goal", "Response", "", None)
+        prompt = _build_consensus_prompt("Goal", "Response", "")
         assert "send_back" in prompt.lower()
         assert "suspend" in prompt.lower()
         assert "accept" in prompt.lower()

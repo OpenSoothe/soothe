@@ -77,13 +77,3 @@ class DreamingContext:
     goals: list[Any]  # list[GoalNode]
     ledger: list[tuple[Any, str | None]]  # list[(BaseMessage, phase)]
     scope_id: str  # loop_id, workspace path, or topic name
-
-
-class EpisodeSpec(BaseModel):
-    """Episode extracted by LLM distillation."""
-
-    goal_id: str
-    description: str
-    outcome_summary: str
-    key_steps: list[str] = []
-    lessons_learned: str = ""

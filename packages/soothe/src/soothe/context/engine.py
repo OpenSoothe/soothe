@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import (
     AIMessage,
@@ -37,20 +36,6 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-EngineEvent = Literal[
-    "goal_created",
-    "goal_activated",
-    "goal_completed",
-    "goal_failed",
-    "goal_suspended",
-    "goal_cancelled",
-    "goal_blocked",
-    "goal_unblocked",
-    "step_completed",
-    "step_failed",
-    "step_skipped",
-]
 
 _MESSAGE_TYPES: dict[str, type[BaseMessage]] = {
     "AIMessage": AIMessage,
@@ -133,7 +118,6 @@ class ContextEngine:
         self._semantic = SemanticLoader(soothe_home=soothe_home, workspace=workspace)
         self._projection = ProjectionEngine(projection_config)
         self._persistence = persistence
-        self._callbacks: dict[str, list[Callable]] = {}
         self._save_dirty = False
         self.execute_ai_ledger_max_tokens: int = 0
 
@@ -176,26 +160,6 @@ class ContextEngine:
             len(self._dag.goals),
         )
 
-    # ── Callback mechanism ────────────────────────────────────────
-
-    def on(self, event: EngineEvent, callback: Callable) -> None:
-        """Register a callback for an event."""
-        self._callbacks.setdefault(event, []).append(callback)
-
-    def off(self, event: EngineEvent, callback: Callable) -> None:
-        """Unregister a callback for an event."""
-        callbacks = self._callbacks.get(event, [])
-        if callback in callbacks:
-            callbacks.remove(callback)
-
-    def _fire(self, event: EngineEvent, *args: Any) -> None:
-        """Fire all callbacks for an event, catching errors."""
-        for cb in self._callbacks.get(event, []):
-            try:
-                cb(*args)
-            except Exception:
-                logger.warning("Callback error for event %s", event, exc_info=True)
-
     # ── Public read API ──────────────────────────────────────────
 
     def get_dag_snapshot(self) -> GoalStepDAGSnapshot:
@@ -216,10 +180,6 @@ class ContextEngine:
     def get_all_goals(self) -> list[GoalNode]:
         """Return all goals in the DAG."""
         return list(self._dag.goals.values())
-
-    def get_goal_lineage(self, goal_id: str) -> list[str]:
-        """Return chain of goal descriptions from root to this goal."""
-        return self._dag.goal_lineage(goal_id)
 
     def get_goal_sync(self, goal_id: str) -> GoalNode | None:
         """Synchronous goal lookup (in-memory, no I/O)."""
@@ -285,7 +245,6 @@ class ContextEngine:
             goal_description_for_log(description),
             priority,
         )
-        self._fire("goal_created", goal.id)
         return goal
 
     async def get_goal(self, goal_id: str) -> GoalNode | None:
@@ -317,12 +276,10 @@ class ContextEngine:
         goal.assigned_loop_id = loop_id
         goal.updated_at = datetime.now(UTC)
         logger.info("Activated goal %s (loop_id=%s)", goal_id, loop_id)
-        self._fire("goal_activated", goal_id)
 
     async def complete_goal(self, goal_id: str) -> None:
         self._dag.complete_goal(goal_id)
         logger.info("Completed goal %s", goal_id)
-        self._fire("goal_completed", goal_id)
 
     async def fail_goal(
         self,
@@ -341,12 +298,10 @@ class ContextEngine:
         error_msg = error or (evidence.narrative if evidence else "unknown error")
         self._dag.fail_goal(goal_id, error_msg)
         logger.info("Failed goal %s: %s", goal_id, error_msg)
-        self._fire("goal_failed", goal_id, error_msg)
 
     async def suspend_goal(self, goal_id: str, reason: str) -> None:
         self._dag.suspend_goal(goal_id, reason)
         logger.info("Suspended goal %s: %s", goal_id, reason)
-        self._fire("goal_suspended", goal_id, reason)
 
     async def cancel_goal(self, goal_id: str, *, reason: str = "user_cancelled") -> None:
         """Transition goal to cancelled (terminal state).
@@ -357,7 +312,6 @@ class ContextEngine:
         """
         self._dag.cancel_goal(goal_id)
         logger.info("Cancelled goal %s: %s", goal_id, reason)
-        self._fire("goal_cancelled", goal_id, reason)
 
     def collect_subtree_ids(self, root_id: str) -> list[str]:
         """Return ``root_id`` and descendants (deepest-first). See GoalStepDAG."""
@@ -367,13 +321,11 @@ class ContextEngine:
         """Transition goal to blocked."""
         self._dag.block_goal(goal_id)
         logger.info("Blocked goal %s", goal_id)
-        self._fire("goal_blocked", goal_id)
 
     async def unblock_goal(self, goal_id: str) -> None:
         """Transition goal from blocked back to pending."""
         self._dag.unblock_goal(goal_id)
         logger.info("Unblocked goal %s", goal_id)
-        self._fire("goal_unblocked", goal_id)
 
     async def finalize_goal(self, goal_id: str, *, status: str = "completed") -> None:
         """Finalize a goal: set terminal status and reset per-goal mutable state.
@@ -567,8 +519,6 @@ class ContextEngine:
             GoalNode if claimed, None if ineligible or conflict appeared.
         """
         goal = self._scheduler.claim_goal(goal_id, loop_id=loop_id)
-        if goal is not None:
-            self._fire("goal_activated", goal_id)
         return goal
 
     # ── RFC-204 consensus methods ───────────────────────────────────────────
@@ -607,28 +557,6 @@ class ContextEngine:
             goal.max_send_backs,
             reason,
         )
-        self._fire("goal_suspended", goal_id, reason)  # Use existing event
-        return goal
-
-    async def validate_goal(self, goal_id: str) -> GoalNode:
-        """Mark goal as validated (Layer 3 accepted completion).
-
-        Args:
-            goal_id: Goal to validate.
-
-        Returns:
-            The updated GoalNode.
-
-        Raises:
-            KeyError: If goal not found.
-        """
-        goal = self._dag.get_goal(goal_id)
-        if goal is None:
-            raise KeyError(f"Goal {goal_id} not found")
-        goal.status = "validated"
-        goal.updated_at = datetime.now(UTC)
-        logger.info("Validated goal %s", goal_id)
-        self._fire("goal_completed", goal_id)  # validated is a completion form
         return goal
 
     async def reactivate_goal(self, goal_id: str) -> GoalNode:
@@ -654,7 +582,6 @@ class ContextEngine:
         goal.send_back_count = 0  # Reset send-back budget
         goal.updated_at = datetime.now(UTC)
         logger.info("Reactivated goal %s (was %s)", goal_id, old)
-        self._fire("goal_unblocked", goal_id)
         return goal
 
     # ── RFC-204 Group C directives ──────────────────────────────────────────
@@ -803,7 +730,6 @@ class ContextEngine:
             goal_id,
             reason,
         )
-        self._fire("goal_blocked", goal_id)
         return goal
 
     async def answer_clarification(
@@ -843,7 +769,6 @@ class ContextEngine:
             goal_id,
             len(answers),
         )
-        self._fire("goal_unblocked", goal_id)
         return goal
 
     # ── RFC-228 guidance ─────────────────────────────────────────────────────
@@ -932,7 +857,6 @@ class ContextEngine:
             error=None,
             success=True,
         )
-        self._fire("step_completed", goal_id, step_id)
 
     async def fail_step(
         self,
@@ -956,7 +880,6 @@ class ContextEngine:
             error=execution.error,
             success=False,
         )
-        self._fire("step_failed", goal_id, step_id)
 
     async def skip_step(self, goal_id: str, step_id: str) -> None:
         """Skip a pending step."""
@@ -966,7 +889,6 @@ class ContextEngine:
         goal.steps.mark_skipped(step_id)
         goal.updated_at = datetime.now(UTC)
         logger.info("Skipped step %s in goal %s", step_id, goal_id)
-        self._fire("step_skipped", goal_id, step_id)
 
     # ── Ledger management ────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 """Goal models for autonomous iteration (RFC-204, RFC-200, RFC-217, RFC-222, RFC-625).
 
-Goal class deleted per RFC-625. All goal state is managed via GoalNode in
-soothe.context.models. This module retains models used for:
+All goal state is managed via GoalNode in soothe.context.models. This module
+retains models used for:
 - Evidence/Backoff: LLM-driven backoff reasoning
 - GoalDispatchContext*: IPC between daemon and workers
 - Status constants: Shared lifecycle state definitions

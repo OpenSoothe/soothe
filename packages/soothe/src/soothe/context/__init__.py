@@ -3,7 +3,7 @@
 Located in soothe.context as foundational infrastructure.
 """
 
-from soothe.context.engine import ContextEngine, EngineEvent
+from soothe.context.engine import ContextEngine
 from soothe.context.ledger import LedgerManager
 from soothe.context.models import (
     BLOCKED_STATES,
@@ -27,7 +27,6 @@ from soothe.context.semantic import SemanticLoader
 
 __all__ = [
     "ContextEngine",
-    "EngineEvent",
     "ContextBundle",
     "ProjectionConfig",
     "ProjectionEngine",

@@ -28,7 +28,6 @@ async def evaluate_goal_completion(
     goal_description: str,
     response_text: str,
     evidence_summary: str = "",
-    success_criteria: list[str] | None = None,
     model: BaseChatModel | None = None,
 ) -> tuple[ConsensusDecision, str]:
     """RFC-204: Holistic evaluation of goal completion via LLM.
@@ -40,7 +39,6 @@ async def evaluate_goal_completion(
         goal_description: The original goal text.
         response_text: Agentic loop's response/output.
         evidence_summary: Accumulated evidence from execution.
-        success_criteria: List of success criteria to check.
         model: LLM for evaluation (required).
 
     Returns:
@@ -54,9 +52,7 @@ async def evaluate_goal_completion(
         msg = "Consensus model is required for goal completion validation"
         raise ConsensusEvaluationError(msg)
 
-    prompt = _build_consensus_prompt(
-        goal_description, response_text, evidence_summary, success_criteria
-    )
+    prompt = _build_consensus_prompt(goal_description, response_text, evidence_summary)
     try:
         from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
@@ -109,7 +105,6 @@ def _build_consensus_prompt(
     goal: str,
     response: str,
     evidence: str,
-    criteria: list[str] | None,
 ) -> str:
     """Build prompt for consensus evaluation.
 
@@ -117,7 +112,6 @@ def _build_consensus_prompt(
         goal: Goal description.
         response: Layer 2 response text.
         evidence: Evidence summary.
-        criteria: Success criteria.
 
     Returns:
         Prompt string for LLM evaluation.
@@ -129,9 +123,6 @@ def _build_consensus_prompt(
     ]
     if evidence:
         parts.append(f"\nEvidence Summary: {preview_first(evidence, 500)}")
-    if criteria:
-        parts.append("\nSuccess Criteria:")
-        parts.extend(f"  - {c}" for c in criteria)
 
     parts.append(
         "\nRespond with exactly one line in this format:\n"

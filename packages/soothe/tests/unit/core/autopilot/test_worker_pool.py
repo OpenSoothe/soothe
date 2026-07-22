@@ -55,7 +55,6 @@ class TestPoolConstruction:
         assert pool.total_count() == 0
         assert pool.idle_count() == 0
         assert pool.active_count() == 0
-        assert pool.has_capacity() is True
 
 
 class TestPickWorkerSpawn:

@@ -18,12 +18,6 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_RULES = CompletionRulesConfig()
 
-# Backward-compatible module aliases (tests and legacy imports).
-DAG_DEPENDENCY_THRESHOLD = _DEFAULT_RULES.dag_dependency_threshold
-LOW_SUCCESS_RATE_THRESHOLD = _DEFAULT_RULES.low_success_rate_threshold
-_SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS = _DEFAULT_RULES.simple_ledger_direct_max_steps
-_LEDGER_DIRECT_MAX_TOOL_CALLS = _DEFAULT_RULES.ledger_direct_max_tool_calls
-
 
 def _rules(completion_rules: CompletionRulesConfig | None) -> CompletionRulesConfig:
     return completion_rules or _DEFAULT_RULES

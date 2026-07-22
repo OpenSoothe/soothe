@@ -74,4 +74,4 @@ class TestProposalFlow:
         q = ProposalQueue()
         q.enqueue(Proposal(type="report_progress", goal_id="g1", payload={}))
         q.drain()
-        assert q.is_empty()
+        assert q.drain() == []

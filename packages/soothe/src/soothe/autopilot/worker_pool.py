@@ -9,9 +9,6 @@ queue. The pool itself does not spawn processes — it asks the injected
 Worker loop_ids are namespaced as ``autopilot__wNNN`` so the daemon's
 client subscription router can filter them out — autopilot workers are
 not user-facing sessions.
-
-Phase A scaffolding: defines models and the pool API with unit tests.
-No production code wires this yet; that happens in Phase B/C.
 """
 
 from __future__ import annotations
@@ -24,7 +21,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
-    from soothe.autopilot.engine_models import Goal
+    from soothe.context.models import GoalNode
     from soothe.protocols.runner import LoopRunnerProtocol
 
 logger = logging.getLogger(__name__)
@@ -135,15 +132,11 @@ class WorkerPool:
     def active_count(self) -> int:
         return sum(1 for w in self._workers.values() if w.status == "active")
 
-    def has_capacity(self) -> bool:
-        """True if the pool can dispatch one more goal right now."""
-        return self.idle_count() > 0 or len(self._workers) < self._max_loops
-
     # ---- pick / release -----------------------------------------------
 
     async def pick_worker(
         self,
-        goal: Goal,
+        goal: GoalNode,
         *,
         prefer: str | None = None,
     ) -> WorkerSlot | None:

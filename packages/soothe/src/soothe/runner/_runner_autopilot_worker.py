@@ -243,9 +243,9 @@ class AutopilotWorkerMixin:
     ) -> GoalDispatchContextContribution:
         """Synthesize a minimal contribution from the final ``PlanResult``.
 
-        Phase B intentionally keeps this small — Phase C / later phases can
-        extract real ``files_touched`` and ``tool_call_stats`` from working
-        memory once the runner exposes that telemetry to autopilot.
+        Extracts evidence summary as a finding and best-effort plan steps from
+        decision actions. ``files_touched`` and ``tool_call_stats`` are empty
+        until the runner exposes per-tool telemetry to autopilot.
         """
         if plan_result is None:
             return GoalDispatchContextContribution()
@@ -257,7 +257,7 @@ class AutopilotWorkerMixin:
 
         plan_steps: list[StepSummary] = []
         # Best-effort: the PlanResult may carry decision.actions or similar;
-        # we don't rely on a specific shape here in Phase B.
+        # the shape is not guaranteed.
         decision = getattr(plan_result, "decision", None)
         actions = getattr(decision, "actions", None) if decision else None
         if isinstance(actions, list):
@@ -381,10 +381,5 @@ def _proposals_to_directives(
                     rationale=payload.get("rationale", ""),
                 )
             )
-
-        elif p.type == "add_finding":
-            # Findings enrich context_contribution, not goal_directives
-            # They are handled separately in _build_contribution (Phase C.4)
-            logger.debug("add_finding proposal will be added to context_contribution")
 
     return directives

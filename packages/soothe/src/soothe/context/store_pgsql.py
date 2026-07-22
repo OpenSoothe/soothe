@@ -32,19 +32,16 @@ class PgsqlContextPersistence:
 
     Args:
         loop_id: Loop identifier used as primary key.
-        dsn: PostgreSQL connection string (legacy; reads use shared pool).
         config: SootheConfig for shared pool and persistence writer access.
     """
 
     def __init__(
         self,
         loop_id: str,
-        dsn: str,
         *,
         config: SootheConfig | None = None,
     ) -> None:
         self._loop_id = loop_id
-        self._dsn = dsn
         self._config = config
         self._loop_writer: Any = None
 

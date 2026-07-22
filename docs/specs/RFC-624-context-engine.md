@@ -634,7 +634,7 @@ class StepPlanManagerAdapter:
 
 - `PlanWave`: Record of a single plan ingestion wave
 - `SubGoalSpec`: Specification for a subgoal to be created during decomposition
-- `DecompositionRequest` / `DecompositionResult`: LLM-driven goal decomposition (Phase 2 future)
+- `DecompositionRequest` / `DecompositionResult`: Goal decomposition request/result models. LLM-driven decomposition is wired through the AutopilotMonitor verifier path (`apply_llm_subgoals`), not a `decompose_goal()` entry point.
 - `OrchestrationStrategy`: Multi-goal orchestration strategy
 - `CompletionStrategy` (StrEnum): `ledger_direct`, `synthesize`, `summary` — moved from `manager.py` to break circular imports
 - `DagPlanningContext` (dataclass): 9-attribute structured DAG summary — moved from `manager.py` to break circular imports
@@ -653,7 +653,7 @@ class PlanningFacade:
 
 `ContextEngine.planning` property returns `PlanningFacade`.
 
-**GoalPlanningSubengine**: Stub for Phase 2 — `decompose_goal()` returns empty decomposition, `compute_orchestration_strategy()` computes from goal DAG.
+**GoalPlanningSubengine**: LLM-driven decomposition flows through the AutopilotMonitor verifier (`apply_llm_subgoals()` → `create_subgoals()`); `compute_orchestration_strategy()` computes from goal DAG.
 
 **GoalScheduler**: Extracts scheduling logic from `GoalEngine._filter_ready_candidates` — `ready_goals()`, `claim_goal()`, `is_complete()`.
 
@@ -665,7 +665,7 @@ class PlanningFacade:
 | `packages/soothe/src/soothe/context/completion.py` | New: extracted heuristic functions (single source of truth) |
 | `packages/soothe/src/soothe/context/models.py` | New: planning models, `DagPlanningContext`, `CompletionStrategy` |
 | `packages/soothe/src/soothe/context/step_planner.py` | New: `StepPlanningSubengine` + `StepPlanManagerAdapter` |
-| `packages/soothe/src/soothe/context/goal_planner.py` | New: `GoalPlanningSubengine` (stub) |
+| `packages/soothe/src/soothe/context/goal_planner.py` | New: `GoalPlanningSubengine` |
 | `packages/soothe/src/soothe/context/scheduling.py` | New: `GoalScheduler` |
 | `packages/soothe/src/soothe/context/engine.py` | Add planning subengines and `planning` property |
 | `packages/soothe/src/soothe/sloop/planning/manager.py` | Delegate heuristics to `completion.py`; import `DagPlanningContext` and `CompletionStrategy` from `soothe.context.planning_models` |

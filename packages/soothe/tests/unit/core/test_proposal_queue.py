@@ -27,12 +27,12 @@ class TestProposalQueue:
 
     def test_initially_empty(self) -> None:
         queue = ProposalQueue()
-        assert queue.is_empty() is True
+        assert queue.drain() == []
 
     def test_enqueue_adds_proposal(self) -> None:
         queue = ProposalQueue()
         queue.enqueue(Proposal(type="report_progress", goal_id="g1", payload={}))
-        assert queue.is_empty() is False
+        assert len(queue.drain()) == 1
 
     def test_drain_returns_all_and_clears(self) -> None:
         queue = ProposalQueue()
@@ -45,7 +45,7 @@ class TestProposalQueue:
 
         results = queue.drain()
         assert len(results) == 4
-        assert queue.is_empty() is True
+        assert queue.drain() == []
 
     def test_drain_twice_returns_empty(self) -> None:
         queue = ProposalQueue()

@@ -8,10 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
-from soothe.autopilot.dreaming_reasoner import (
-    DreamingDistillationReasoner,
-    EpisodicDistillationContext,
-)
 from soothe.autopilot.engine_models import EvidenceBundle
 from soothe.context.models import GoalNode
 
@@ -21,13 +17,6 @@ _BACKOFF_JSON = """```json
   "reason": "Dependency assumption failed",
   "new_directives": [{"description": "Fix deps"}],
   "evidence_summary": "Step failed"
-}
-```"""
-
-_EPISODIC_JSON = """```json
-{
-  "episodes": [{"goal_id": "g1", "description": "d", "outcome_summary": "ok"}],
-  "reasoning": "One episode distilled"
 }
 ```"""
 
@@ -115,53 +104,3 @@ async def test_backoff_reasoner_logs_decision(
 
     assert any("Backoff reasoning" in record.message for record in caplog.records)
     assert any("parent-1" in record.message for record in caplog.records)
-
-
-@pytest.mark.asyncio
-async def test_dreaming_reasoner_uses_metadata_only_invoke_config(
-    mock_config: MagicMock,
-) -> None:
-    """Dreaming distillation must not register observability callbacks."""
-    reasoner = DreamingDistillationReasoner(mock_config)
-    captured: dict[str, object] = {}
-
-    async def capture_invoke(_messages: object, config: dict | None = None) -> MagicMock:
-        captured["config"] = config
-        return MagicMock(content=_EPISODIC_JSON)
-
-    reasoner._model = AsyncMock()
-    reasoner._model.ainvoke = capture_invoke  # type: ignore[method-assign]
-
-    await reasoner._invoke_llm("prompt", "system prompt")
-
-    config = captured.get("config")
-    assert isinstance(config, dict)
-    assert not config.get("callbacks")
-    metadata = config.get("metadata")
-    assert isinstance(metadata, dict)
-    assert metadata.get("soothe_call_purpose") == "dreaming_distillation"
-
-
-@pytest.mark.asyncio
-async def test_dreaming_reasoner_logs_episodic_result(
-    mock_config: MagicMock,
-    caplog: pytest.LogCaptureFixture,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Episodic distillation logs structured summary after parsing."""
-    reasoner = DreamingDistillationReasoner(mock_config)
-
-    async def mock_invoke_llm(_prompt: str, system_prompt: str = "") -> str:
-        return _EPISODIC_JSON
-
-    monkeypatch.setattr(reasoner, "_invoke_llm", mock_invoke_llm)
-    monkeypatch.setattr(
-        "soothe.autopilot.dreaming_reasoner.EPISODIC_DISTILLATION_PROMPT",
-        "{goals_detail}\n{ledger_summary}\n{max_episodes}",
-    )
-
-    context = EpisodicDistillationContext(goals_detail="g1", ledger_summary="none")
-    with caplog.at_level(logging.INFO):
-        await reasoner.distill_episodic(context)
-
-    assert any("Dreaming episodic distillation" in record.message for record in caplog.records)

@@ -1,38 +1,27 @@
-"""Context Engine goal context provider (RFC-624 Phase 4).
+"""Context Engine goal context provider.
 
-Former adapters removed:
-- ``ContextEngineLedgerAdapter`` — ledger writes now go through
-  ``_record_ledger_message()`` which calls ``context_engine.ledger.record_message()``
-  directly.
-- ``ContextEnginePlanAdapter`` — replaced by ``StepPlanManagerAdapter``
-  in ``soothe.context`` (RFC-624 Phase 3c).
-- ``ContextEngineLifecycle`` — lifecycle calls are now inline in graph nodes
-  (record_iteration, goal_completion, resolve_decision).
-
-This module provides ``ContextEngineGoalContextAdapter``, the CE-native
-replacement for ``GoalContextManager``. It reads completed goals directly
-from the CE GoalStepDAG with no checkpoint fallback.
+Provides ``ContextEngineGoalContextAdapter``, which exposes completed-goal
+history to the Plan phase.  Goal data is read directly from the CE
+GoalStepDAG via the ``ContextEngine`` public API; thread-switch detection
+remains delegated to ``state_manager`` (outside CE's scope).
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from soothe.context.engine import ContextEngine
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
 
 class ContextEngineGoalContextAdapter:
-    """Wraps ContextEngine to provide the same interface as GoalContextManager.
+    """Exposes completed-goal history from ContextEngine to the Plan phase.
 
-    Reads goal history from the GoalStepDAG (via ContextEngine public API).
-    Thread switch detection still uses state_manager (that concern is outside
-    CE's scope), but completed goal data comes from the CE DAG.
+    Goal data is read from the GoalStepDAG via the ContextEngine public API.
+    Thread-switch detection is delegated to ``state_manager`` (outside CE's
+    scope); completed-goal data comes from the CE DAG.
     """
 
     def __init__(

@@ -1,8 +1,8 @@
-"""Goal-level planning subengine for ContextEngine (RFC-624 Phase 3c).
+"""Goal-level planning subengine for ContextEngine.
 
-Provides goal decomposition, multi-goal orchestration, and reflection-driven
-goal creation. Phase 1 implements the structure with stub decomposition;
-Phase 2 adds LLM-driven decomposition.
+Provides goal decomposition helpers, multi-goal orchestration, and
+reflection-driven goal creation. LLM-driven decomposition is wired
+through the AutopilotMonitor verifier path (apply_llm_subgoals).
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from typing import Any
 
 from soothe.context.models import GoalNode, GoalStepDAG
 from soothe.context.planning_models import (
-    DecompositionRequest,
     DecompositionResult,
     OrchestrationStrategy,
     SubGoalSpec,
@@ -22,36 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 class GoalPlanningSubengine:
-    """Manages goal-level planning: decomposition, orchestration, and lifecycle.
+    """Manages goal-level planning: decomposition helpers, orchestration, and lifecycle.
 
-    Provides three capabilities not present in the current architecture:
-    1. LLM-driven goal decomposition (complex objective → sub-goal DAG)
-    2. Multi-goal orchestration strategy
-    3. Reflection-driven goal creation
-
-    Eventually replaces GoalEngine in AutopilotService, but during
-    migration, both can coexist.
+    Provides goal creation from LLM decomposition payloads, multi-goal
+    orchestration strategy computation, and reflection-driven follow-up
+    goal creation. LLM decomposition results flow in from the
+    AutopilotMonitor verifier; this subengine materializes them in the DAG.
     """
 
     def __init__(self, dag: GoalStepDAG) -> None:
         self._dag = dag
 
     # --- Goal decomposition ---
-
-    async def decompose_goal(
-        self,
-        request: DecompositionRequest,
-    ) -> DecompositionResult:
-        """Decompose a complex goal into subgoals.
-
-        Phase 1: Returns empty decomposition (stub).
-        Phase 2: LLM-driven decomposition implementation.
-        """
-        logger.info(
-            "GoalPlanningSubengine.decompose_goal: stub called for goal %s",
-            request.goal_id,
-        )
-        return DecompositionResult(subgoals=[], reasoning="Not yet implemented")
 
     def create_subgoals(
         self,
@@ -221,17 +202,6 @@ class GoalPlanningSubengine:
             concurrency_mode=mode,
             dependency_graph=dep_graph,
         )
-
-    def suggest_goal_adjustments(
-        self,
-        goal_id: str,
-    ) -> list[dict[str, Any]]:
-        """Suggest priority/dependency adjustments based on execution evidence.
-
-        Called after step outcomes to dynamically reprioritize goals.
-        Phase 1: Returns empty list (stub).
-        """
-        return []
 
     # --- Reflection-driven goal creation ---
 

@@ -207,15 +207,13 @@ class TestLedgerAdapterCEOnly:
 
 
 class TestNamedConstantsEquivalence:
-    """Verify constants are defined once in completion.py (single source of truth)."""
+    """Verify completion threshold defaults (single source of truth in config)."""
 
     def test_threshold_values_defined(self) -> None:
-        from soothe.context.planning_completion import (
-            _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS,
-            DAG_DEPENDENCY_THRESHOLD,
-            LOW_SUCCESS_RATE_THRESHOLD,
-        )
+        from soothe.config.models import CompletionRulesConfig
 
-        assert LOW_SUCCESS_RATE_THRESHOLD == 0.6
-        assert DAG_DEPENDENCY_THRESHOLD == 3
-        assert _SIMPLE_DAG_LEDGER_DIRECT_MAX_STEPS == 1
+        rules = CompletionRulesConfig()
+
+        assert rules.low_success_rate_threshold == 0.6
+        assert rules.dag_dependency_threshold == 3
+        assert rules.simple_ledger_direct_max_steps == 1

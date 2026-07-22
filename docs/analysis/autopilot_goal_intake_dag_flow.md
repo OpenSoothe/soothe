@@ -175,22 +175,13 @@ Goals in terminal states:
 - Unblock dependent goals (dependents become schedulable)
 - Persist final state to storage
 
-### ContextEngine Event Callbacks
+### ContextEngine Goal Status Transitions
 
-```python
-EngineEvent = Literal[
-    "goal_created",       # New goal added
-    "goal_activated",     # Claimed for dispatch
-    "goal_completed",     # Marked completed
-    "goal_failed",        # Marked failed (with evidence)
-    "goal_suspended",     # Paused (dependency/blockage)
-    "goal_cancelled",     # User cancelled
-    "goal_blocked",       # Workspace conflict
-    "goal_unblocked",     # Dependency resolved
-]
-```
+Goal state transitions are driven by the AutopilotMonitor verifier loop and
+ContextEngine's own mutation methods (no pub/sub callback layer). Key
+transitions:
 
-Event flow triggers downstream handlers:
+- `goal_created` → AutopilotMonitor `_on_goal_created()` → post-creation verification
 - `goal_completed` → AutopilotMonitor `_on_goal_completed()` → post-completion verification
 - `goal_failed` → AutopilotMonitor `_on_goal_failed()` → backoff reasoning (LLM)
 - `goal_unblocked` → AutopilotService `_handle_goal_unblocked()` → check reactivated goals

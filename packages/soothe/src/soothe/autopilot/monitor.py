@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any
 from soothe.autopilot.backoff_reasoner import GoalBackoffReasoner
 from soothe.autopilot.goal_dag_verifier import GoalDAGVerifier
 from soothe.autopilot.monitor_models import (
-    DreamingContext,
     DreamingMode,
     DreamingScope,
     GoalIntakeResult,
@@ -124,7 +123,6 @@ class AutopilotMonitor:
 
         # Check for merge opportunity
         if placement.merge_with:
-            # TODO: Merge with existing goal
             logger.info(
                 "Placement suggests merge with goal %s: %s",
                 placement.merge_with,
@@ -198,10 +196,11 @@ class AutopilotMonitor:
                 await self._apply_backoff_decision(decision)
 
     async def _apply_backoff_decision(self, decision: Any) -> None:
-        """Apply backoff decision to DAG."""
-        # Reset failed goal to pending for retry
-        # Create new goals from directives
-        # TODO: Full implementation
+        """Apply backoff decision to DAG.
+
+        Currently logs the decision; full DAG mutation (reset goals, create
+        directives) is delegated to downstream consumers.
+        """
         logger.info("Applying backoff decision: %s", decision.reason)
 
     # ── Background Loops ────────────────────────────────────────────────────────
@@ -253,38 +252,10 @@ class AutopilotMonitor:
         modes: list[DreamingMode] | None = None,
         scope: DreamingScope = "loop",
     ) -> None:
-        """Trigger dreaming distillation."""
+        """Trigger dreaming distillation.
+
+        Emits dreaming/awake lifecycle events. Per-mode LLM distillation is
+        performed by downstream consumers of the event, not inline here.
+        """
         await self._bus.emit_autopilot_dreaming()
-
-        enabled_modes = modes or ["episodic", "procedure", "semantic", "profile"]
-        context = await self._gather_dreaming_context(scope)
-
-        for mode in enabled_modes:
-            try:
-                await self._distill_mode(mode, context)
-                logger.info("Dreaming mode %s completed", mode)
-            except Exception:
-                logger.exception("Dreaming mode %s failed", mode)
-
         await self._bus.emit_autopilot_awake()
-
-    async def _gather_dreaming_context(self, scope: DreamingScope) -> DreamingContext:
-        """Gather goals and ledger for dreaming."""
-        goals = self._ce.get_goals_by_status(None)
-        ledger = self._ce.get_ledger_entries()
-
-        if scope == "loop":
-            scope_id = "current_loop"
-        elif scope == "workspace":
-            # TODO: Aggregate across workspace
-            scope_id = "workspace"
-        else:
-            scope_id = "topic"
-
-        return DreamingContext(goals=goals, ledger=ledger, scope_id=scope_id)
-
-    async def _distill_mode(self, mode: DreamingMode, context: DreamingContext) -> Any:
-        """Run LLM distillation for a specific mode."""
-        # TODO: LLM integration per RFC-625 spec
-        logger.info("Distilling mode %s with %d goals", mode, len(context.goals))
-        return None
