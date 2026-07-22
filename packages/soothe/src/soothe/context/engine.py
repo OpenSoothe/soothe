@@ -459,9 +459,7 @@ class ContextEngine:
         """Store the previous plan result on the goal node."""
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
-            goal.previous_plan = (
-                plan.model_dump(mode="json") if hasattr(plan, "model_dump") else plan
-            )
+            goal.previous_plan = plan.model_dump(mode="json")
 
     def set_last_assessment(
         self,
@@ -473,11 +471,7 @@ class ContextEngine:
         """Overwrite per-goal assess audit snapshot (RFC-624, IG-557)."""
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
-            goal.last_assessment = (
-                assessment.model_dump(mode="json")
-                if hasattr(assessment, "model_dump")
-                else assessment
-            )
+            goal.last_assessment = assessment.model_dump(mode="json")
             goal.last_assessment_iteration = iteration
             goal.touch()
 
@@ -491,9 +485,7 @@ class ContextEngine:
         """Overwrite per-goal gap analysis audit snapshot (IG-557)."""
         goal = self._dag.get_goal(goal_id)
         if goal is not None:
-            goal.last_gap_analysis = (
-                gap.model_dump(mode="json") if hasattr(gap, "model_dump") else gap
-            )
+            goal.last_gap_analysis = gap.model_dump(mode="json")
             goal.touch()
             _ = iteration
 

@@ -24,7 +24,7 @@ def test_registry_lists_completed_composite_ids() -> None:
         )
     )
     state = LoopState(thread_id="t1", goal="demo")
-    state.step_results = [
+    state._step_results_cache = [
         StepExecutionRecord(
             step_id="KFA-01",
             success=True,
@@ -41,7 +41,7 @@ def test_registry_lists_completed_composite_ids() -> None:
 
 def test_registry_fallback_to_step_results() -> None:
     state = LoopState(thread_id="t1", goal="demo")
-    state.step_results = [
+    state._step_results_cache = [
         StepExecutionRecord(
             step_id="ABC-02",
             success=True,

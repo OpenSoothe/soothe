@@ -42,7 +42,7 @@ async def test_assess_status_forces_done_for_simple_intake_with_evidence() -> No
         derived_progress_hint="high",
         steps_completed=1,
     )
-    state.step_results = [
+    state._step_results_cache = [
         StepExecutionRecord(
             step_id="CSF-01",
             success=True,

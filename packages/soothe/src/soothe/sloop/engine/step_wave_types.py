@@ -16,7 +16,6 @@ from langchain_core.messages import BaseMessage
 from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
 from soothe.sloop.state.schemas import StepAction, StepExecutionRecord
 
-# Re-export for executor tests and legacy imports.
 _DEFAULT_MAX_TOOL_CALLS_PER_STEP = DEFAULT_MAX_TOOL_CALLS_PER_STEP
 
 # ``task`` tool return text cap per invocation before joining (delegate finals).

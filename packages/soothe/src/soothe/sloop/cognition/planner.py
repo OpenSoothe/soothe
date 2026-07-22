@@ -1302,9 +1302,7 @@ class LLMPlanner:
         )
 
         plan_result = populate_plan_generate_full_descriptions(plan_result)
-        if ai_response is plan_result or (
-            hasattr(ai_response, "model_dump") and hasattr(plan_result, "model_dump")
-        ):
+        if ai_response is not None:
             ai_response = plan_result
 
         # RFC-214: Record plan-generate pair in ledger (not injected into CoreAgent)
@@ -1329,9 +1327,7 @@ class LLMPlanner:
                 update={"content": compact_planning_human_content(str(human_msg.content))}
             )
             ai_msg = LoopAIMessage(
-                content=str(ai_response.model_dump())
-                if hasattr(ai_response, "model_dump")
-                else str(ai_response),
+                content=str(ai_response.model_dump()),
                 thread_id=state.thread_id,
                 iteration=state.iteration,
                 phase="plan_generate",

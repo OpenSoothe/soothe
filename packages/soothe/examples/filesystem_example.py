@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import tempfile
 
+from soothe_deepagents.backends.protocol import (
+    GrepResult,
+)
 from soothe_nano.filesystem import (
     DirectoryNotEmptyError,
     LocalFilesystem,
     PathNotFoundError,
     PathTraversalError,
-)
-from soothe_deepagents.backends.protocol import (
-    GrepResult,
 )
 
 

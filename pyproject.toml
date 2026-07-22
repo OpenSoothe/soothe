@@ -30,7 +30,6 @@ soothe-client-python = { workspace = true }
 soothe-cli = { workspace = true }
 soothe = { workspace = true }
 soothe-daemon = { workspace = true }
-soothe-deepagents = { workspace = true }
 
 [dependency-groups]
 dev = [

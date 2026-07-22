@@ -1397,11 +1397,6 @@ class LoopState(BaseModel):
             self._loop_msg_cache_result = result
         return result
 
-    @loop_messages.setter
-    def loop_messages(self, value: list[LoopHumanMessage | LoopAIMessage]) -> None:
-        """Allow legacy assignment (e.g., constructor). Writes to cache only."""
-        self._loop_messages_cache = value
-
     async def get_loop_messages(self) -> list[LoopHumanMessage | LoopAIMessage]:
         """Async accessor for ``loop_messages`` that runs CE rebuild off-loop.
 
@@ -1435,11 +1430,6 @@ class LoopState(BaseModel):
             return self._step_results_cache
         return self._build_step_results_from_ce()
 
-    @step_results.setter
-    def step_results(self, value: list[StepExecutionRecord]) -> None:
-        """Allow legacy assignment. Writes to cache only."""
-        self._step_results_cache = value
-
     @property
     def completed_step_ids(self) -> set[str]:
         """Set of completed step IDs. When CE is bound, derived from CE StepDAG."""
@@ -1453,11 +1443,6 @@ class LoopState(BaseModel):
         except Exception:
             logger.warning("completed_step_ids property: CE query failed", exc_info=True)
             return self._completed_step_ids_cache
-
-    @completed_step_ids.setter
-    def completed_step_ids(self, value: set[str]) -> None:
-        """Allow legacy assignment. Writes to cache only."""
-        self._completed_step_ids_cache = value
 
     def _build_loop_messages_from_ce_sync(self) -> list[LoopHumanMessage | LoopAIMessage]:
         """Convert CE ledger entries to Loop message types (synchronous).

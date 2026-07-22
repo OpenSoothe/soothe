@@ -78,7 +78,7 @@ def test_simple_intake_should_force_done_after_substantial_wave() -> None:
         derived_progress_hint="high",
         steps_completed=1,
     )
-    state.step_results = [
+    state._step_results_cache = [
         StepExecutionRecord(
             step_id="CSF-01",
             success=True,

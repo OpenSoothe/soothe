@@ -173,7 +173,7 @@ def _build_state(
         iteration=iteration,
         prior_progress=_build_prior_progress() if include_prior_progress else None,
     )
-    state.loop_messages = list(ledger) if ledger is not None else _build_baseline_ledger()
+    state._loop_messages_cache = list(ledger) if ledger is not None else _build_baseline_ledger()
     return state
 
 

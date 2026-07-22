@@ -59,7 +59,13 @@ the subagent's unique capability:
 - planner: Agentic plan design — iterative markdown execution plan; one report.
 - browser_use, deep_research, and academic_research are not available via `task`; \
 they run only through intake/slash wired routing.
-Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.\
+Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.
+
+Do NOT use `task` for mechanical multi-pattern repo search, file enumeration, \
+or reference confirmation — use batched `grep` / one `run_command` with `rg` instead. \
+Use `task` only for multi-hop reasoning the parent tools cannot finish in one wave. \
+After a `task` report returns, treat it as evidence: do not re-grep the same \
+symbols/paths; only spot-check disputed hits.\
 """
 
 _TOOL_ORCHESTRATION_GUIDE = f"""\

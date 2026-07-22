@@ -15,8 +15,12 @@ Independent steps may share a parallel wave when scopes do not conflict (readonl
 - Read→write: step 1 read/analyze; step 2 edit using step 1 findings.
 - Dependent steps need ``full_description`` with concrete follow-up instructions.
 
-**Discovery**: One recon step + targeted reads beats many shallow parallel scans; narrow ``glob`` patterns.
-After glob timeout or empty results, switch to ``grep`` (with path/glob filter) or ``ls`` on known directories — do not retry broad ``**`` globs.
+**Discovery**: Prefer a **single** discovery wave when scopes overlap. Do not emit a
+separate enumerate-only step when the goal or prior evidence already names the
+search space. Narrow ``glob`` patterns; after empty/timeout results switch to
+``grep`` (path/glob filter) or ``ls`` — do not retry broad ``**`` globs.
+After predecessor or ``task`` evidence, **do not re-search the same symbols/paths**;
+only spot-check disputed hits.
 
 **On failure**: Different approach; do not repeat same step text.
 

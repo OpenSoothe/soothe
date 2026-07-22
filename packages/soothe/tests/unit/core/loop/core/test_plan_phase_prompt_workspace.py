@@ -146,7 +146,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
         execution_mode="parallel",
         reasoning="r",
     )
-    state.completed_step_ids = {"a"}
+    state._completed_step_ids_cache = {"a"}
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext())
 
@@ -158,7 +158,7 @@ def test_build_loop_plan_messages_plan_continue_when_steps_remain() -> None:
 def test_build_plan_messages_appends_ledger_loop_messages() -> None:
     """Assess projection keeps execute AI only between system and task envelope (IG-557)."""
     state = LoopState(goal="read readme", thread_id="t1", max_iterations=8, iteration=1)
-    state.loop_messages = [
+    state._loop_messages_cache = [
         LoopHumanMessage(
             content="Execute: read top of README",
             thread_id="t1",

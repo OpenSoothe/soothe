@@ -18,7 +18,7 @@ def test_detect_stuck_loop_repeated_actions() -> None:
 
 def test_detect_stuck_loop_consecutive_failures() -> None:
     state = LoopState(goal="g", thread_id="t")
-    state.step_results = [
+    state._step_results_cache = [
         StepExecutionRecord(
             step_id="s1",
             success=False,

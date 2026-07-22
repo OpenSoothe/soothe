@@ -13,10 +13,8 @@
 .PHONY: docker-dev-up docker-dev-down docker-dev-ps
 .PHONY: docker-prod-pull docker-prod-up docker-prod-down docker-prod-ps
 
-# Docker Compose env file (all commands use deploy/.env)
-DOCKER_ENV_FILE := --env-file deploy/.env
-# Production stack (deploy/docker-compose.yml)
-DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml $(DOCKER_ENV_FILE)
+# Production stack only (deploy/docker-compose.yml needs API keys from deploy/.env)
+DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file deploy/.env
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
@@ -118,7 +116,7 @@ sync-verify:
 
 docker-dev-up:
 	@echo "Starting dev dependencies (pgvector + Langfuse)..."
-	docker compose $(DOCKER_ENV_FILE) --profile langfuse up -d
+	docker compose --profile langfuse up -d
 	@echo ""
 	@echo "Dev database: port 6432"
 	@echo "Langfuse UI: http://localhost:3300"
@@ -126,10 +124,10 @@ docker-dev-up:
 
 docker-dev-down:
 	@echo "Stopping dev dependencies..."
-	docker compose $(DOCKER_ENV_FILE) --profile langfuse down
+	docker compose --profile langfuse down
 
 docker-dev-ps:
-	docker compose $(DOCKER_ENV_FILE) --profile langfuse ps
+	docker compose --profile langfuse ps
 
 # --- Production Stack (deploy/docker-compose.yml) --------------------------
 
@@ -161,11 +159,11 @@ docker-prod-ps:
 
 reset-the-world:
 	@echo "Resetting all Docker state and local data..."
-	docker compose $(DOCKER_ENV_FILE) --profile langfuse down -v 2>/dev/null || true
+	docker compose --profile langfuse down -v 2>/dev/null || true
 	@if [ -d ~/.soothe ]; then \
 		find ~/.soothe -mindepth 1 -maxdepth 1 ! -name config -exec rm -rf {} + 2>/dev/null || true; \
 	fi
-	docker compose $(DOCKER_ENV_FILE) --profile langfuse up -d 2>/dev/null || true
+	docker compose --profile langfuse up -d 2>/dev/null || true
 	@echo "World reset complete. Dev stack (pgvector + Langfuse) restarted."
 
 # ============================================================================

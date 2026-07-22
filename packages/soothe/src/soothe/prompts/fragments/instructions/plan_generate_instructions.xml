@@ -7,6 +7,7 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
 
 **Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
 - If one remaining actionable gap can be completed in one execute wave using projected prior context, emit exactly one step.
+- Do not split overlapping discovery (enumerate / search / confirm) across multiple steps when the goal or prior evidence already scopes the work — merge into one execute step.
 
 **Top-level fields** (only these — never put field names inside ``steps[]``):
 - ``reasoning`` (≤500 chars): First-person cognition for the TUI (I'll / Let me …).
