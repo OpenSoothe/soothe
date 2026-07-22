@@ -20,8 +20,6 @@ class LoopWorkingMemoryProtocol(Protocol):
         output: str | None,
         error: str | None,
         success: bool,
-        workspace: str | None,
-        thread_id: str,
     ) -> None:
         """Record one Act step outcome."""
         ...

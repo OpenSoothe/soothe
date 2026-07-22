@@ -86,8 +86,6 @@ async def test_tail_persistence_surfaces_ce_save_failure(caplog: pytest.LogCaptu
         context_engine=ce,
         state_manager=sm,
         goal_record=Mock(),
-        full_output="answer",
-        loop_state=LoopState(goal="g", thread_id="t1"),
         loop_id="loop-abc",
     )
 

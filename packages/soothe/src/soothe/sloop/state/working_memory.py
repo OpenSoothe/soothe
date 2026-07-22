@@ -77,12 +77,8 @@ class LoopWorkingMemory:
         output: str | None,
         error: str | None,
         success: bool,
-        workspace: str | None,
-        thread_id: str,
     ) -> None:
         """Record one Act step outcome."""
-        _ = workspace  # Spill files live under SOOTHE_HOME/data/threads/{thread_id}/; arg kept for API stability.
-        _ = thread_id  # thread_id is set in constructor; kept for protocol compatibility.
         desc = (description or "").strip().replace("\n", " ")
         if len(desc) > _DESC_INLINE_MAX:
             desc = desc[: _DESC_INLINE_MAX - 3] + "…"

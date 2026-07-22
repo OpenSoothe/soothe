@@ -32,7 +32,7 @@ async def test_close_stops_flush_worker() -> None:
             "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            manager = StrangeLoopStateManager(loop_id="async_worker_loop", workspace=workspace)
+            manager = StrangeLoopStateManager(loop_id="async_worker_loop")
             checkpoint = await manager.initialize("thread_001", max_iterations=3)
             goal = manager.start_new_goal("goal")
             checkpoint.goal_history.append(goal)

@@ -306,39 +306,6 @@ class LLMPlanner:
             thread_id=thread_id,
         )
 
-    async def _invoke_messages(self, messages: list[Any]) -> str:
-        """Invoke the LLM with a message list and return the response (RFC-207).
-
-        Used for Plan phase with SystemMessage/HumanMessage separation.
-
-        Args:
-            messages: List of BaseMessage objects (SystemMessage, HumanMessage)
-
-        Returns:
-            The LLM's response as a string.
-        """
-        try:
-            response = await self._ainvoke_bounded(self._model, messages, thread_id=None)
-            content = getattr(response, "content", str(response))
-
-            if isinstance(content, str):
-                return content
-
-            # Anthropic-style list-of-blocks response
-            if isinstance(content, list):
-                text_parts = []
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        text_parts.append(block.get("text", ""))
-                    elif hasattr(block, "type") and block.type == "text":
-                        text_parts.append(getattr(block, "text", ""))
-                return "".join(text_parts)
-
-            return str(content)
-        except Exception:
-            logger.exception("LLM invocation failed")
-            raise
-
     async def _invoke(self, prompt: str) -> str:
         """Invoke the LLM with a free-form prompt and return the response.
 

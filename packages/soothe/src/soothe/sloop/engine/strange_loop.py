@@ -235,7 +235,6 @@ class StrangeLoop:
         # IG-406: Pass shared_pool for high-concurrency support
         state_manager = StrangeLoopStateManager(
             loop_id,
-            Path(workspace) if workspace else None,
             config=self.config,
             shared_pool=shared_pool,
         )

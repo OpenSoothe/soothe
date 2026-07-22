@@ -49,17 +49,6 @@ class ArchiveMetadata(BaseModel):
     goal_summaries: list[GoalSummary] = Field(default_factory=list)
 
 
-class ArchivedGoalMatch(BaseModel):
-    """Match result from searching archived goals."""
-
-    loop_id: str
-    goal_id: str
-    goal_text: str
-    final_report_preview: str
-    archived_at: datetime
-    similarity: float = Field(..., ge=0.0, le=1.0)
-
-
 class ArchiveBackend:
     """Archive storage for finalized loops.
 
@@ -130,29 +119,6 @@ class ArchiveBackend:
         # Return relative path
         return str(checkpoint_file.relative_to(self._base_path.parent.parent))
 
-    async def save_metadata(self, metadata: ArchiveMetadata) -> None:
-        """Persist metadata index for archived loop.
-
-        Args:
-            metadata: Archive metadata to save
-        """
-        loop_id = metadata.loop_id
-        loop_archive_dir = self._base_path / loop_id
-        loop_archive_dir.mkdir(parents=True, exist_ok=True)
-
-        metadata_file = loop_archive_dir / "metadata.json"
-        metadata_data = metadata.model_dump(mode="json")
-
-        def _write_metadata() -> None:
-            with open(metadata_file, "w", encoding="utf-8") as f:
-                json.dump(metadata_data, f, indent=2, default=str)
-
-        import asyncio
-
-        await asyncio.to_thread(_write_metadata)
-
-        logger.debug("Saved metadata for archived loop %s", loop_id)
-
     async def list_archived_loops(
         self,
         *,
@@ -209,123 +175,3 @@ class ArchiveBackend:
 
         archives = await asyncio.to_thread(_load_archives)
         return archives
-
-    async def get_archive_checkpoint(
-        self,
-        loop_id: str,
-        timestamp: datetime | None = None,
-    ) -> StrangeLoopCheckpoint | None:
-        """Load archived checkpoint for knowledge transfer.
-
-        Args:
-            loop_id: Loop ID to load
-            timestamp: Optional specific timestamp, defaults to latest
-
-        Returns:
-            Archived checkpoint or None if not found
-        """
-        from soothe.sloop.state.checkpoint import StrangeLoopCheckpoint
-
-        loop_dir = self._base_path / loop_id
-        if not loop_dir.exists():
-            return None
-
-        def _load_checkpoint() -> StrangeLoopCheckpoint | None:
-            # Find checkpoint file
-            if timestamp:
-                timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
-                checkpoint_file = loop_dir / f"checkpoint_{timestamp_str}.json"
-                if not checkpoint_file.exists():
-                    return None
-            else:
-                # Find latest checkpoint
-                checkpoints = sorted(
-                    loop_dir.glob("checkpoint_*.json"),
-                    key=lambda p: p.name,
-                    reverse=True,
-                )
-                if not checkpoints:
-                    return None
-                checkpoint_file = checkpoints[0]
-
-            try:
-                with open(checkpoint_file, encoding="utf-8") as f:
-                    data = json.load(f)
-                return StrangeLoopCheckpoint(**data)
-            except Exception as e:
-                logger.warning(
-                    "Failed to load checkpoint from %s: %s",
-                    checkpoint_file,
-                    e,
-                )
-                return None
-
-        import asyncio
-
-        return await asyncio.to_thread(_load_checkpoint)
-
-    async def search_archived_goals(
-        self,
-        query: str,
-        *,
-        limit: int = 10,
-        min_similarity: float = 0.5,
-    ) -> list[ArchivedGoalMatch]:
-        """Semantic search across archived loops.
-
-        Used for knowledge transfer after /clear.
-
-        Args:
-            query: Search query
-            limit: Maximum results to return
-            min_similarity: Minimum similarity threshold (0.0-1.0)
-
-        Returns:
-            List of matching archived goals
-        """
-        # Load metadata index
-        all_metadata = await self.list_archived_loops(limit=1000)
-
-        # Simple text match (can be upgraded to vector search later)
-        matches: list[ArchivedGoalMatch] = []
-        query_lower = query.lower()
-
-        for meta in all_metadata:
-            for summary in meta.goal_summaries:
-                similarity = self._compute_similarity(query_lower, summary.goal_text.lower())
-                if similarity >= min_similarity:
-                    matches.append(
-                        ArchivedGoalMatch(
-                            loop_id=meta.loop_id,
-                            goal_id=summary.goal_id,
-                            goal_text=summary.goal_text,
-                            final_report_preview=summary.final_report_preview,
-                            archived_at=meta.archived_at,
-                            similarity=similarity,
-                        )
-                    )
-
-        # Sort by similarity, return top-K
-        matches.sort(key=lambda m: m.similarity, reverse=True)
-        return matches[:limit]
-
-    def _compute_similarity(self, query: str, text: str) -> float:
-        """Compute simple text similarity (Jaccard on words).
-
-        Args:
-            query: Query text (lowercase)
-            text: Target text (lowercase)
-
-        Returns:
-            Similarity score between 0.0 and 1.0
-        """
-        query_words = set(query.split())
-        text_words = set(text.split())
-
-        if not query_words or not text_words:
-            return 0.0
-
-        intersection = query_words & text_words
-        union = query_words | text_words
-
-        return len(intersection) / len(union) if union else 0.0

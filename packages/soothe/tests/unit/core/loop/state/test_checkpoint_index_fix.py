@@ -31,7 +31,6 @@ def temp_state_manager():
         ):
             state_manager = StrangeLoopStateManager(
                 loop_id="test_loop_001",
-                workspace=workspace,
             )
             bind_sync_persist_writes(state_manager)
             yield state_manager
@@ -73,7 +72,7 @@ class TestIndexCalculationFix:
         await sm.save(checkpoint)
 
         # Complete first goal (changes status to idle)
-        await sm.finalize_goal(goal1, "report 1")
+        await sm.finalize_goal(goal1)
 
         # Now loop is ready for next goal, add second goal
         goal2 = sm.start_new_goal("goal 2")
@@ -105,7 +104,7 @@ class TestIndexCalculationFix:
             assert checkpoint.current_goal_index == i, f"Goal {i} should have index={i}"
 
             # Finalize before next iteration
-            await sm.finalize_goal(goal, f"report {i}")
+            await sm.finalize_goal(goal)
             # Reload checkpoint for next iteration
             checkpoint = sm._checkpoint
 
@@ -168,7 +167,7 @@ class TestValidationLogic:
         await sm.save(checkpoint)
 
         # Finalize goal (status becomes idle)
-        await sm.finalize_goal(goal1, "report 1")
+        await sm.finalize_goal(goal1)
 
         # Reload checkpoint
         checkpoint = sm._checkpoint
@@ -253,7 +252,7 @@ class TestOrphanedGoalRecovery:
         await sm.save(checkpoint)
 
         # Finalize goal (IG-055: resets current_goal_index to -1)
-        await sm.finalize_goal(goal, "report")
+        await sm.finalize_goal(goal)
 
         # Load should NOT repair (status=idle is correct)
         loaded = await sm.load()
@@ -281,7 +280,7 @@ class TestDatabaseConsistency:
             await sm.save(checkpoint)
 
             if i < 2:  # Finalize first 2 goals
-                await sm.finalize_goal(goal, f"report {i}")
+                await sm.finalize_goal(goal)
 
         # Load and verify
         loaded = await sm.load()
@@ -323,7 +322,7 @@ class TestDatabaseConsistency:
                 assert db_index == i, f"Database index should match {i}"
 
             # Finalize before next goal
-            await sm.finalize_goal(goal, f"report {i}")
+            await sm.finalize_goal(goal)
             # Reload checkpoint for next iteration
             checkpoint = sm._checkpoint
 

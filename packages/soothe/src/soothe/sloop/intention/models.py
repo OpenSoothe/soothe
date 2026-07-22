@@ -120,13 +120,6 @@ class IntentClassification(BaseModel):
         description="Routing complexity derived from intake_label"
     )
 
-    def to_routing_classification(self) -> RoutingClassification:
-        """Convert to RoutingClassification for execution path selection."""
-        return RoutingClassification(
-            task_complexity=self.task_complexity,
-            routing_hint="intent_based",
-        )
-
 
 def build_loop_routing_classification(
     intent: IntentClassification | None,

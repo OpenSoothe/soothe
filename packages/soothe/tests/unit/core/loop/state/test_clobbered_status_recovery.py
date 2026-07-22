@@ -39,7 +39,7 @@ def temp_state_manager():
             "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            state_manager = StrangeLoopStateManager(loop_id="clobber_loop_001", workspace=workspace)
+            state_manager = StrangeLoopStateManager(loop_id="clobber_loop_001")
             bind_sync_persist_writes(state_manager)
             yield state_manager
 
@@ -59,7 +59,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
     await sm.save(checkpoint)
 
     # Finalize → sets status=idle, current_goal_index=-1
-    await sm.finalize_goal(goal1, "There are 12 file types.")
+    await sm.finalize_goal(goal1)
     assert sm._checkpoint.status == "idle"
     assert sm._checkpoint.current_goal_index == -1
     assert len(sm._checkpoint.goal_history) == 1
@@ -80,7 +80,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
         "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
-        sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm2 = StrangeLoopStateManager(loop_id=sm.loop_id)
         bind_sync_persist_writes(sm2)
         loaded = await sm2.load()
 
@@ -122,7 +122,7 @@ async def test_idle_continuation_runs_when_daemon_clobbers_status_to_running(
         "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
-        sm3 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm3 = StrangeLoopStateManager(loop_id=sm.loop_id)
         final = await sm3.load()
     assert final is not None
     assert len(final.goal_history) == 2

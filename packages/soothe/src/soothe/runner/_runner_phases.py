@@ -224,7 +224,7 @@ class PhasesMixin:
                             "CE finalize_goal failed for chitchat fast path",
                             exc_info=True,
                         )
-                await sm.finalize_goal(goal_record, response)
+                await sm.finalize_goal(goal_record)
             finally:
                 await sm.close()
         except Exception:

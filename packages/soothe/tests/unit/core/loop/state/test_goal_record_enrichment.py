@@ -25,7 +25,7 @@ def temp_state_manager():
             "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
             return_value=db_path,
         ):
-            state_manager = StrangeLoopStateManager(loop_id="ig445_loop_001", workspace=workspace)
+            state_manager = StrangeLoopStateManager(loop_id="ig445_loop_001")
             bind_sync_persist_writes(state_manager)
             yield state_manager
 
@@ -53,7 +53,7 @@ async def test_goal_index_entry_round_trip_through_sqlite(temp_state_manager) ->
         "soothe.sloop.state.sloop_manager.PersistenceDirectoryManager.get_loop_checkpoint_path",
         return_value=sm.db_path,
     ):
-        sm2 = StrangeLoopStateManager(loop_id=sm.loop_id, workspace=Path(sm.db_path).parent)
+        sm2 = StrangeLoopStateManager(loop_id=sm.loop_id)
         loaded = await sm2.load()
 
     assert loaded is not None

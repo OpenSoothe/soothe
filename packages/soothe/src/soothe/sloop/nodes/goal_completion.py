@@ -127,8 +127,6 @@ async def _goal_completion_tail_persistence(
     context_engine: Any | None,
     state_manager: Any,
     goal_record: Any,
-    full_output: str | None,
-    loop_state: LoopState,
     loop_id: str,
 ) -> list[str]:
     """Persist CE + checkpoint tail state after the ``completed`` wire event."""
@@ -138,8 +136,6 @@ async def _goal_completion_tail_persistence(
     try:
         await state_manager.finalize_goal(
             goal_record,
-            full_output,
-            loop_state=loop_state,
             skip_persist=True,
         )
     except Exception as exc:
@@ -210,7 +206,6 @@ def _start_goal_completion_tail_persistence(
     ctx: LoopRuntimeContext,
     *,
     goal_record: Any,
-    full_output: str | None,
 ) -> None:
     """Start tail persistence without blocking the ``completed`` wire event."""
     loop_id = str(getattr(ctx.state_manager, "loop_id", "unknown"))
@@ -220,8 +215,6 @@ def _start_goal_completion_tail_persistence(
             context_engine=ctx.ce,
             state_manager=ctx.state_manager,
             goal_record=goal_record,
-            full_output=full_output,
-            loop_state=ctx.loop_state,
             loop_id=loop_id,
         )
         if failures:
@@ -505,7 +498,6 @@ async def node_goal_completion(
     _start_goal_completion_tail_persistence(
         ctx,
         goal_record=goal_record,
-        full_output=updated_result.full_output,
     )
     # IG-475: Force garbage collection after goal completion to reclaim
     # LLM streaming objects (langchain message buffers, tokenizer caches, etc.)

@@ -11,9 +11,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from soothe.sloop.checkpoints.directory_manager import (
-    PersistenceDirectoryManager,
-)
 from soothe.sloop.checkpoints.shared_pool import (
     acquire_shared_sqlite_backend_sync,
     release_shared_sqlite_backend,
@@ -506,118 +503,6 @@ class StrangeLoopCheckpointPersistenceManager:
             loop_id,
             status,
             duration_ms,
-        )
-
-    def write_goal_report_markdown(
-        self,
-        loop_id: str,
-        goal_id: str,
-        description: str,
-        summary: str,
-        status: str,
-        duration_ms: int,
-        reflection_assessment: str = "",
-        cross_validation_notes: str = "",
-        step_reports: list[Any] | None = None,
-    ) -> None:
-        """Write goal report markdown file at loop level (RFC-215).
-
-        Path: data/loops/{loop_id}/goals/{goal_id}/report.md
-
-        Args:
-            loop_id: StrangeLoop identifier.
-            goal_id: Goal identifier.
-            description: Goal description.
-            summary: Goal summary.
-            status: Goal status.
-            duration_ms: Execution duration in milliseconds.
-            reflection_assessment: Reflection analysis text.
-            cross_validation_notes: Cross-validation notes.
-            step_reports: List of step report objects.
-        """
-        goal_dir = PersistenceDirectoryManager.get_goal_directory(loop_id, goal_id)
-        goal_dir.mkdir(parents=True, exist_ok=True)
-
-        # Build Markdown report
-        md_parts = [
-            f"# Goal: {description}\n",
-            f"**Status**: {status}  \n**Duration**: {duration_ms}ms\n",
-            f"\n## Summary\n\n{summary}\n",
-        ]
-        if reflection_assessment:
-            md_parts.append(f"\n## Reflection\n\n{reflection_assessment}\n")
-        if cross_validation_notes:
-            md_parts.append(f"\n## Cross-Validation\n\n{cross_validation_notes}\n")
-
-        step_reports_list = step_reports or []
-        if step_reports_list:
-            md_parts.append("\n## Steps\n")
-            for sr in step_reports_list:
-                icon = "+" if getattr(sr, "status", "") == "completed" else "x"
-                step_id = getattr(sr, "step_id", "unknown")
-                step_desc = getattr(sr, "description", "")
-                step_status = getattr(sr, "status", "")
-                md_parts.append(f"- [{icon}] **{step_id}**: {step_desc} ({step_status})")
-            md_parts.append("")
-
-        md_path = goal_dir / "report.md"
-        md_path.write_text("\n".join(md_parts), encoding="utf-8")
-
-        logger.info(
-            "Wrote goal report markdown: goal=%s loop=%s path=%s",
-            goal_id,
-            loop_id,
-            md_path,
-        )
-
-    def write_step_report_markdown(
-        self,
-        loop_id: str,
-        goal_id: str,
-        step_id: str,
-        description: str,
-        status: str,
-        result: str,
-        duration_ms: int,
-        depends_on: list[str] | None = None,
-    ) -> None:
-        """Write step report markdown file at loop level (RFC-215).
-
-        Path: data/loops/{loop_id}/goals/{goal_id}/steps/{step_id}/report.md
-
-        Args:
-            loop_id: StrangeLoop identifier.
-            goal_id: Goal identifier.
-            step_id: Step identifier.
-            description: Step description.
-            status: Step status.
-            result: Step execution result.
-            duration_ms: Execution duration in milliseconds.
-            depends_on: Step dependency IDs.
-        """
-        step_dir = PersistenceDirectoryManager.get_step_directory(loop_id, goal_id, step_id)
-        step_dir.mkdir(parents=True, exist_ok=True)
-
-        deps = depends_on or []
-
-        # Build Markdown report
-        md_parts = [
-            f"# Step: {description}\n",
-            f"**Status**: {status}  \n**Duration**: {duration_ms}ms\n",
-        ]
-        if deps:
-            md_parts.append(f"**Depends on**: {', '.join(deps)}\n")
-        md_parts.append(f"\n## Result\n\n{result}\n")
-
-        md_path = step_dir / "report.md"
-        md_path.write_text("\n".join(md_parts), encoding="utf-8")
-
-        logger.debug(
-            "Wrote step report: step=%s goal=%s loop=%s path=%s",
-            step_id,
-            goal_id,
-            loop_id,
-            md_path,
         )
 
     async def close(self) -> None:

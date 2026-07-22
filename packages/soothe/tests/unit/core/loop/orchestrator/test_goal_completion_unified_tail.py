@@ -27,8 +27,6 @@ async def test_unified_tail_uses_single_goal_boundary_persist() -> None:
         context_engine=ce,
         state_manager=state_manager,
         goal_record=Mock(goal_id="g1"),
-        full_output="done",
-        loop_state=Mock(),
         loop_id="loop-unified",
     )
 
@@ -56,8 +54,6 @@ async def test_sqlite_tail_uses_ce_save_and_flush() -> None:
         context_engine=ce,
         state_manager=state_manager,
         goal_record=Mock(goal_id="g1"),
-        full_output="done",
-        loop_state=Mock(),
         loop_id="loop-legacy",
     )
 

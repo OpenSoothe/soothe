@@ -168,8 +168,6 @@ async def _record_and_emit_step_completed(
             output=outcome_summary,
             error=result.error,
             success=result.success,
-            workspace=state.workspace,
-            thread_id=state.thread_id,
         )
     if result.success:
         output_preview = "Done"

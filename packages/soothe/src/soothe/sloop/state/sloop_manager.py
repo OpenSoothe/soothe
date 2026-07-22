@@ -70,20 +70,14 @@ class StrangeLoopStateManager:
     def __init__(
         self,
         loop_id: str | None = None,
-        workspace: Path | None = None,
         reader_pool_size: int = 2,
         config: SootheConfig | None = None,
         shared_pool: SharedPostgreSQLPool | None = None,
-    ) -> None:  # noqa: ARG002
+    ) -> None:
         """Initialize with loop_id (primary key), not thread_id.
-
-        IG-055: Configuration-driven backend selection.
-        IG-258 Phase 2: Instance-level connection pool.
-        IG-406: Shared pool for high-concurrency support.
 
         Args:
             loop_id: Loop identifier (UUID or existing). None generates new UUID.
-            workspace: Optional workspace path (not used for checkpoint storage)
             reader_pool_size: Number of reader connections for concurrent reads (Phase 2).
             config: SootheConfig for backend selection (PostgreSQL vs SQLite).
             shared_pool: SharedPostgreSQLPool for high-concurrency (IG-406).
@@ -1068,20 +1062,15 @@ class StrangeLoopStateManager:
     async def finalize_goal(
         self,
         goal_record: GoalIndexEntry,
-        _goal_completion: str,
-        loop_state: LoopState | None = None,
         *,
         skip_persist: bool = False,
     ) -> None:
-        """Mark goal completed, update loop metrics (RFC-216).
+        """Mark goal completed, update loop metrics.
 
         Args:
             goal_record: Goal execution record to finalize.
-            _goal_completion: Ledger-owned synthesis text (kept for call-site compat).
-            loop_state: Active LoopState (unused; CE owns execution payloads).
             skip_persist: When True, only apply in-memory updates (tail uses durable persist).
         """
-        _ = loop_state
         self._apply_goal_finalize_memory(goal_record)
         if skip_persist:
             logger.info(

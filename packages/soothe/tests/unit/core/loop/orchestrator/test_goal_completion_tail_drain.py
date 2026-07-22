@@ -104,7 +104,6 @@ async def test_tail_persistence_chains_instead_of_cancelling_prior() -> None:
         _start_goal_completion_tail_persistence(
             ctx,
             goal_record=Mock(goal_id="g2"),
-            full_output="done",
         )
         release_first.set()
         await await_goal_completion_tail_persistence(ctx, timeout_seconds=2.0)

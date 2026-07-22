@@ -8,7 +8,6 @@ from .metadata_generator import generate_outcome_metadata
 from .scenario_classifier import ScenarioClassification
 from .step_wave_types import StepWaveQueued, StepWaveStart
 from .synthesis import SynthesisGenerator, generate_user_fallback_summary
-from .thread_switch_policy import ThreadSwitchPolicyManager
 
 _LAZY_EXPORTS = {
     "StrangeLoop": (".strange_loop", "StrangeLoop"),
@@ -39,5 +38,4 @@ __all__ = [
     "StepWaveQueued",
     "StepWaveStart",
     "SynthesisGenerator",
-    "ThreadSwitchPolicyManager",
 ]

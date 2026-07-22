@@ -24,8 +24,5 @@ class ClarificationCapture:
         if self.pending_request is None:
             self.pending_request = request
 
-    def has_pending(self) -> bool:
-        return self.pending_request is not None
-
 
 __all__ = ["ClarificationCapture"]

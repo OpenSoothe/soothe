@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
 
 from soothe_sdk.protocols.planner import Plan, PlanStep
 
@@ -19,26 +18,6 @@ _PLAN_STEP_RE = re.compile(
     r"\*\*Step\s+(\d+)[:\s]*(.+?)\*\*",
     re.IGNORECASE,
 )
-
-
-async def parse_plan_from_text_async(
-    goal: str,
-    text: str,
-    model: Any | None = None,
-    *,
-    structured_config: Any | None = None,
-    soothe_config: Any | None = None,
-) -> Plan:
-    """Parse plan text with optional structured LLM extraction (IG-433)."""
-    from soothe.sloop.cognition.structured_plan_parser import parse_plan_with_config
-
-    return await parse_plan_with_config(
-        goal,
-        text,
-        model,
-        config=structured_config,
-        soothe_config=soothe_config,
-    )
 
 
 def parse_plan_from_text(goal: str, text: str) -> Plan:

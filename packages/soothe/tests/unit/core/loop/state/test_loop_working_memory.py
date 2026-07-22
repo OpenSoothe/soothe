@@ -28,8 +28,6 @@ def test_spill_large_output_to_soothe_home(tmp_path: Path) -> None:
             output=body,
             error=None,
             success=True,
-            workspace=str(tmp_path),
-            thread_id="thread-1",
         )
     spill_dir = tmp_path / "data" / "threads" / "thread-1" / "working_memory"
     assert spill_dir.is_dir()
@@ -48,8 +46,6 @@ def test_failed_step_recorded_inline() -> None:
         output=None,
         error="boom",
         success=False,
-        workspace=None,
-        thread_id="t",
     )
     assert "✗" in wm.render_for_reason()
     assert "boom" in wm.render_for_reason()
