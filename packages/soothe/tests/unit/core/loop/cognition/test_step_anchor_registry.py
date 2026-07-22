@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from soothe.context.models import GoalNode, StepExecution, StepNode
 from soothe.sloop.cognition.step_anchor_registry import build_step_anchor_registry
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 
 
 def test_registry_empty_without_prior_steps() -> None:
@@ -25,7 +25,7 @@ def test_registry_lists_completed_composite_ids() -> None:
     )
     state = LoopState(thread_id="t1", goal="demo")
     state.step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="KFA-01",
             success=True,
             outcome={"summary": "3 lint errors"},
@@ -42,7 +42,7 @@ def test_registry_lists_completed_composite_ids() -> None:
 def test_registry_fallback_to_step_results() -> None:
     state = LoopState(thread_id="t1", goal="demo")
     state.step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="ABC-02",
             success=True,
             outcome={"type": "text", "summary": "done"},

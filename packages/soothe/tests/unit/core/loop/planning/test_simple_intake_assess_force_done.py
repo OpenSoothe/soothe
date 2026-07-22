@@ -15,7 +15,7 @@ from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     StatusAssessment,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -43,7 +43,7 @@ async def test_assess_status_forces_done_for_simple_intake_with_evidence() -> No
         steps_completed=1,
     )
     state.step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="CSF-01",
             success=True,
             duration_ms=1000,

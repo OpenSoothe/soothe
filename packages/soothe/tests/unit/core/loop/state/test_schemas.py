@@ -17,7 +17,7 @@ from soothe.sloop.state.schemas import (
     PlanGeneration,
     PlanResult,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
     allocate_plan_id,
     apply_step_wire_subagents,
     assign_plan_step_ids,
@@ -314,7 +314,7 @@ class TestAgentDecision:
     def test_replan_scoping_prefixes_new_steps(self) -> None:
         """New plan scope prefixes step ids within the loop."""
 
-        sr = StepResult(
+        sr = StepExecutionRecord(
             step_id="1",
             success=True,
             outcome={"type": "generic"},
@@ -631,11 +631,11 @@ class TestPlanGeneration:
 
 
 class TestStepResult:
-    """Tests for StepResult schema."""
+    """Tests for StepExecutionRecord schema."""
 
     def test_successful_step_result(self):
         """Test successful step result."""
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={
@@ -657,7 +657,7 @@ class TestStepResult:
 
     def test_failed_step_result(self):
         """Test failed step result."""
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id="s1",
             success=False,
             outcome={"type": "error", "error": "File not found"},
@@ -673,7 +673,7 @@ class TestStepResult:
 
     def test_to_evidence_string_success(self):
         """Test evidence string for successful step."""
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={
@@ -694,7 +694,7 @@ class TestStepResult:
 
     def test_to_evidence_string_failure(self):
         """Test evidence string for failed step."""
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id="s1",
             success=False,
             error="Error occurred",
@@ -708,7 +708,7 @@ class TestStepResult:
 
     def test_to_evidence_string_subagent_includes_delegate_preview(self):
         """Subagent steps surface bounded delegate preview for planning (IG-356)."""
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={
@@ -760,7 +760,7 @@ class TestLoopState:
         state = LoopState(goal="Test", thread_id="t1")
 
         # Add successful result
-        result1 = StepResult(
+        result1 = StepExecutionRecord(
             step_id="s1",
             success=True,
             output="Output",
@@ -773,7 +773,7 @@ class TestLoopState:
         assert "s1" in state.completed_step_ids
 
         # Add failed result
-        result2 = StepResult(
+        result2 = StepExecutionRecord(
             step_id="s2",
             success=False,
             error="Failed",
@@ -811,7 +811,7 @@ class TestLoopState:
         """Historical successes in ``step_results`` still satisfy dependencies (IG-346)."""
         state = LoopState(goal="Count READMEs", thread_id="t1")
         state.add_step_result(
-            StepResult(
+            StepExecutionRecord(
                 step_id="step_001",
                 success=True,
                 duration_ms=100,
@@ -854,7 +854,7 @@ class TestGoalContinuousStepIdsIg388:
         state = LoopState(goal="g", thread_id="t1")
         assert next_goal_local_step_id_start(state) == 1
         state.add_step_result(
-            StepResult(step_id="ABC-02", success=True, duration_ms=1, thread_id="t1")
+            StepExecutionRecord(step_id="ABC-02", success=True, duration_ms=1, thread_id="t1")
         )
         assert max_goal_step_numeric_suffix(state) == 2
         assert next_goal_local_step_id_start(state) == 3
@@ -871,7 +871,7 @@ class TestGoalContinuousStepIdsIg388:
     def test_renumber_new_plan_after_prior_suffixes(self) -> None:
         state = LoopState(goal="g", thread_id="t1")
         state.add_step_result(
-            StepResult(step_id="X-02", success=True, duration_ms=1, thread_id="t1")
+            StepExecutionRecord(step_id="X-02", success=True, duration_ms=1, thread_id="t1")
         )
         d0 = StepAction(id="01", description="a", expected_output="o")
         d1 = StepAction(id="02", description="b", expected_output="o", dependencies=["01"])
@@ -888,7 +888,7 @@ class TestGoalContinuousStepIdsIg388:
     def test_renumber_preserves_cross_wave_dependency_strings(self) -> None:
         state = LoopState(goal="g", thread_id="t1")
         state.add_step_result(
-            StepResult(step_id="PRIOR-01", success=True, duration_ms=1, thread_id="t1")
+            StepExecutionRecord(step_id="PRIOR-01", success=True, duration_ms=1, thread_id="t1")
         )
         d0 = StepAction(
             id="01",

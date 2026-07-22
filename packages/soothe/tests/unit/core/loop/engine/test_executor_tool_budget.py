@@ -20,7 +20,7 @@ from soothe.sloop.engine.executor import (
     _ActStreamBudget,
 )
 from soothe.sloop.engine.graph_interrupt import DispatchTimeoutError
-from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -130,7 +130,7 @@ async def test_execute_parallel_step_returns_partial_on_tool_budget() -> None:
     )
     out = [item async for item in ex.execute(decision, state)]
 
-    results = [x for x in out if isinstance(x, StepResult)]
+    results = [x for x in out if isinstance(x, StepExecutionRecord)]
     assert len(results) == 1
     sr = results[0]
     assert sr.hit_tool_budget is True

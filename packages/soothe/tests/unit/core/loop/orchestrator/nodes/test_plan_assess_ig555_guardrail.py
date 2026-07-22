@@ -25,7 +25,7 @@ from soothe.sloop.state.schemas import (
     LoopState,
     StatusAssessment,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -145,7 +145,7 @@ async def test_complex_iter0_rejects_complete_even_with_multi_step_plan() -> Non
 async def test_complex_iter1_allows_complete_with_single_step_replan() -> None:
     ctx = _make_ctx(iteration=1, current_decision=_one_step_decision())
     ctx.loop_state.step_results.append(
-        StepResult(step_id="01", success=True, duration_ms=1, thread_id="tid")
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="tid")
     )
     ctx.strange_loop.plan_phase.finalize_plan_result = MagicMock(
         side_effect=lambda **kw: kw["result"]

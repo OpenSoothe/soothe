@@ -2,13 +2,13 @@
 
 Implements the protocol-1 error model (RFC-450 §7). The registry is a
 JSON-RPC 2.0-style numeric scheme with reserved ranges; all wire error
-responses are produced through the `ProtocolError` helper, making a
+responses are produced through the `RpcProtocolError` helper, making a
 malformed error structurally impossible. Error envelopes use the JSON-RPC
 nested ``error:{code, message, data?}`` object per RFC-450 §7.1.
 
 Public API:
     ErrorCode            -- IntEnum of all numeric error codes
-    ProtocolError        -- exception carrying code, message, optional data
+    RpcProtocolError        -- exception carrying code, message, optional data
     build_error_response -- wire envelope dict for an error
     convenience constructors: loop_not_found, job_not_found, goal_not_found,
         skill_not_found, invalid_params, method_not_found, daemon_not_ready,
@@ -31,7 +31,7 @@ from typing import Any
 
 __all__ = [
     "ErrorCode",
-    "ProtocolError",
+    "RpcProtocolError",
     "build_error_response",
     "loop_not_found",
     "job_not_found",
@@ -157,10 +157,10 @@ def severity_of(code: ErrorCode) -> str:
     return _SEVERITY.get(code, "error")
 
 
-class ProtocolError(Exception):
+class RpcProtocolError(Exception):
     """Structured protocol error carrying a numeric code (RFC-450 §7.4).
 
-    Handlers raise `ProtocolError` (or a convenience constructor); the
+    Handlers raise `RpcProtocolError` (or a convenience constructor); the
     transport layer catches it and serializes via `to_dict` /
     `build_error_response`.
 
@@ -283,71 +283,71 @@ def build_error_response(
 # ---------------------------------------------------------------------------
 
 
-def loop_not_found(loop_id: str) -> ProtocolError:
+def loop_not_found(loop_id: str) -> RpcProtocolError:
     """Build a `LOOP_NOT_FOUND` error for a missing loop.
 
     Args:
         loop_id: The loop id that could not be located.
 
     Returns:
-        A `ProtocolError` with code `-32200` and ``{loop_id}`` data.
+        A `RpcProtocolError` with code `-32200` and ``{loop_id}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.LOOP_NOT_FOUND,
         f"Loop {loop_id} not found",
         data={"loop_id": loop_id},
     )
 
 
-def job_not_found(job_id: str) -> ProtocolError:
+def job_not_found(job_id: str) -> RpcProtocolError:
     """Build a `JOB_NOT_FOUND` error for a missing job.
 
     Args:
         job_id: The job id that could not be located.
 
     Returns:
-        A `ProtocolError` with code `-32201` and ``{job_id}`` data.
+        A `RpcProtocolError` with code `-32201` and ``{job_id}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.JOB_NOT_FOUND,
         f"Job {job_id} not found",
         data={"job_id": job_id},
     )
 
 
-def goal_not_found(goal_id: str) -> ProtocolError:
+def goal_not_found(goal_id: str) -> RpcProtocolError:
     """Build a `GOAL_NOT_FOUND` error for a missing goal.
 
     Args:
         goal_id: The goal id that could not be located.
 
     Returns:
-        A `ProtocolError` with code `-32202` and ``{goal_id}`` data.
+        A `RpcProtocolError` with code `-32202` and ``{goal_id}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.GOAL_NOT_FOUND,
         f"Goal {goal_id} not found",
         data={"goal_id": goal_id},
     )
 
 
-def skill_not_found(skill: str) -> ProtocolError:
+def skill_not_found(skill: str) -> RpcProtocolError:
     """Build a `SKILL_NOT_FOUND` error for a missing skill.
 
     Args:
         skill: The skill name that could not be located.
 
     Returns:
-        A `ProtocolError` with code `-32203` and ``{skill}`` data.
+        A `RpcProtocolError` with code `-32203` and ``{skill}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.SKILL_NOT_FOUND,
         f"Skill {skill!r} not found",
         data={"skill": skill},
     )
 
 
-def invalid_params(field: str, reason: str) -> ProtocolError:
+def invalid_params(field: str, reason: str) -> RpcProtocolError:
     """Build an `INVALID_PARAMS` error for a bad parameter.
 
     Args:
@@ -355,32 +355,32 @@ def invalid_params(field: str, reason: str) -> ProtocolError:
         reason: Human-readable explanation of why it is invalid.
 
     Returns:
-        A `ProtocolError` with code `-32602` and ``{field, reason}`` data.
+        A `RpcProtocolError` with code `-32602` and ``{field, reason}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.INVALID_PARAMS,
         f"Invalid parameter: {field}",
         data={"field": field, "reason": reason},
     )
 
 
-def method_not_found(method: str) -> ProtocolError:
+def method_not_found(method: str) -> RpcProtocolError:
     """Build a `METHOD_NOT_FOUND` error for an unknown method/type.
 
     Args:
         method: The method (or type) string the client requested.
 
     Returns:
-        A `ProtocolError` with code `-32601` and ``{method}`` data.
+        A `RpcProtocolError` with code `-32601` and ``{method}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.METHOD_NOT_FOUND,
         f"Method not found: {method}",
         data={"method": method},
     )
 
 
-def daemon_not_ready(state: str) -> ProtocolError:
+def daemon_not_ready(state: str) -> RpcProtocolError:
     """Build a `DAEMON_STARTING` error for a not-yet-ready daemon.
 
     Args:
@@ -388,16 +388,16 @@ def daemon_not_ready(state: str) -> ProtocolError:
             ``"warming"``).
 
     Returns:
-        A `ProtocolError` with code `-32001` and ``{state}`` data.
+        A `RpcProtocolError` with code `-32001` and ``{state}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.DAEMON_STARTING,
         f"Daemon not ready (state: {state})",
         data={"state": state},
     )
 
 
-def internal_error(detail: str) -> ProtocolError:
+def internal_error(detail: str) -> RpcProtocolError:
     """Build an `INTERNAL_ERROR` for an unexpected server failure.
 
     Args:
@@ -405,9 +405,9 @@ def internal_error(detail: str) -> ProtocolError:
             clients).
 
     Returns:
-        A `ProtocolError` with code `-32603` and ``{detail}`` data.
+        A `RpcProtocolError` with code `-32603` and ``{detail}`` data.
     """
-    return ProtocolError(
+    return RpcProtocolError(
         ErrorCode.INTERNAL_ERROR,
         "Internal server error",
         data={"detail": detail},

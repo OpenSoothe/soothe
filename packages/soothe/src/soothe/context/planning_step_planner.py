@@ -27,7 +27,7 @@ from soothe.context.planning_models import (
 from soothe.utils.text_preview import goal_description_for_log
 
 if TYPE_CHECKING:
-    from soothe.sloop.state.schemas import PlanResult, StepResult
+    from soothe.sloop.state.schemas import PlanResult, StepExecutionRecord
 
 logger = logging.getLogger(__name__)
 
@@ -153,9 +153,9 @@ class StepPlanningSubengine:
     def record_step_outcomes(
         self,
         goal_id: str,
-        step_results: list[StepResult],
+        step_results: list[StepExecutionRecord],
     ) -> None:
-        """Map StepResult → StepDAG status transitions.
+        """Map StepExecutionRecord → StepDAG status transitions.
 
         Replaces both PlanManager.record_step_outcomes and
         ContextEnginePlanAdapter.record_step_outcomes.
@@ -485,7 +485,7 @@ class StepPlanManagerAdapter:
         self.plan_history.append(plan_result)
         self._subengine.ingest_plan(self._goal_id, plan_result, plan_id, iteration)
 
-    def record_step_outcomes(self, step_results: list[StepResult]) -> None:
+    def record_step_outcomes(self, step_results: list[StepExecutionRecord]) -> None:
         self._subengine.record_step_outcomes(self._goal_id, step_results)
 
     def get_planning_context(self) -> DagPlanningContext:

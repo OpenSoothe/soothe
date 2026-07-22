@@ -7,8 +7,8 @@ This package provides:
 - Helper functions for event emission
 
 Architecture:
-- constants.py: Event type string constants
-- catalog.py: Event models, registry, registration logic
+- catalog.py: Event type strings, models, registry, registration logic
+- visibility.py / internal_bus.py / internal_events.py: delivery helpers
 
 Usage:
     # For event type constants
@@ -28,10 +28,75 @@ RFC-0015: 4-segment naming convention: soothe.<domain>.<component>.<action>
 from __future__ import annotations
 
 # Import VerbosityTier from SDK for backward compatibility
+from soothe_sdk.core.events import ERROR, LLM_RETRY_ATTEMPT, STREAM_END
 from soothe_sdk.core.verbosity import VerbosityTier
 
 from .catalog import (
+    AUTOPILOT_CHECKPOINT_SAVED,
+    AUTOPILOT_DREAMING_COMPLETED,
+    AUTOPILOT_DREAMING_STARTED,
+    AUTOPILOT_FEEDBACK_SENT,
+    AUTOPILOT_GOAL_BLOCKED,
+    AUTOPILOT_GOAL_COMPLETED,
+    AUTOPILOT_GOAL_CREATED,
+    AUTOPILOT_GOAL_REPORTED,
+    AUTOPILOT_GOAL_SUSPENDED,
+    AUTOPILOT_GOAL_VALIDATED,
+    AUTOPILOT_MODE_SWITCHED,
+    AUTOPILOT_RELATIONSHIP_DETECTED,
+    AUTOPILOT_STATUS_CHANGED,
+    BRANCH_ANALYZED,
+    BRANCH_CREATED,
+    BRANCH_PRUNED,
+    BRANCH_RETRY_STARTED,
+    CHECKPOINT_ANCHOR_CREATED,
+    CHECKPOINT_SAVED,
+    CONFIG_RELOADED,
+    DAEMON_HEARTBEAT,
+    GOAL_BATCH_STARTED,
+    GOAL_COMPLETED,
+    GOAL_CREATED,
+    GOAL_DECOMPOSED,
+    GOAL_DEFERRED,
+    GOAL_DIRECTIVES_APPLIED,
+    GOAL_FAILED,
+    GOAL_REMOVED,
+    GOAL_REPORT,
+    INTENT_CLASSIFIED,  # IG-518
+    ITERATION_COMPLETED,
+    ITERATION_STARTED,
+    LOOP_COMPLETED,
+    LOOP_CREATED,
+    LOOP_DETACHED,
+    LOOP_REATTACHED,
+    LOOP_STARTED,
+    MEMORY_RECALLED,
+    MEMORY_STORED,
+    PLAN_BATCH_STARTED,
+    PLAN_CREATED,
+    PLAN_DAG_SNAPSHOT,
+    PLAN_REFLECTED,
+    PLUGIN_FAILED,
+    PLUGIN_LOADED,
+    PLUGIN_UNLOADED,
+    POLICY_CHECKED,
+    POLICY_DENIED,
+    RECOVERY_RESUMED,
     REGISTRY,
+    REPLAY_COMPLETE,
+    STRANGE_LOOP_COMPLETED,
+    STRANGE_LOOP_CONTEXT_COMPACTED,
+    STRANGE_LOOP_PLAN_DECISION,
+    STRANGE_LOOP_PLAN_PHASE,
+    STRANGE_LOOP_REASONED,
+    STRANGE_LOOP_STARTED,
+    STRANGE_LOOP_STEP_COMPLETED,
+    STRANGE_LOOP_STEP_QUEUED,
+    STRANGE_LOOP_STEP_STARTED,
+    WIRED_SUBAGENT_CANCELLED,
+    WIRED_SUBAGENT_COMPLETED,
+    WIRED_SUBAGENT_FAILED,
+    WIRED_SUBAGENT_STARTED,
     AutopilotModeSwitchedEvent,
     CheckpointSavedEvent,
     ConfigReloadedEvent,
@@ -85,75 +150,6 @@ from .catalog import (
     register_event,
 )
 
-# Import all event type constants
-from .constants import (
-    AUTOPILOT_CHECKPOINT_SAVED,
-    AUTOPILOT_DREAMING_COMPLETED,
-    AUTOPILOT_DREAMING_STARTED,
-    AUTOPILOT_FEEDBACK_SENT,
-    AUTOPILOT_GOAL_BLOCKED,
-    AUTOPILOT_GOAL_COMPLETED,
-    AUTOPILOT_GOAL_CREATED,
-    AUTOPILOT_GOAL_REPORTED,
-    AUTOPILOT_GOAL_SUSPENDED,
-    AUTOPILOT_GOAL_VALIDATED,
-    AUTOPILOT_MODE_SWITCHED,
-    AUTOPILOT_RELATIONSHIP_DETECTED,
-    AUTOPILOT_STATUS_CHANGED,
-    BRANCH_ANALYZED,
-    BRANCH_CREATED,
-    BRANCH_PRUNED,
-    BRANCH_RETRY_STARTED,
-    CHECKPOINT_ANCHOR_CREATED,
-    CHECKPOINT_SAVED,
-    CONFIG_RELOADED,
-    DAEMON_HEARTBEAT,
-    ERROR,
-    GOAL_BATCH_STARTED,
-    GOAL_COMPLETED,
-    GOAL_CREATED,
-    GOAL_DECOMPOSED,
-    GOAL_DEFERRED,
-    GOAL_DIRECTIVES_APPLIED,
-    GOAL_FAILED,
-    GOAL_REMOVED,
-    GOAL_REPORT,
-    INTENT_CLASSIFIED,  # IG-518
-    ITERATION_COMPLETED,
-    ITERATION_STARTED,
-    LOOP_COMPLETED,
-    LOOP_CREATED,
-    LOOP_DETACHED,
-    LOOP_REATTACHED,
-    LOOP_STARTED,
-    MEMORY_RECALLED,
-    MEMORY_STORED,
-    PLAN_BATCH_STARTED,
-    PLAN_CREATED,
-    PLAN_DAG_SNAPSHOT,
-    PLAN_REFLECTED,
-    PLUGIN_FAILED,
-    PLUGIN_LOADED,
-    PLUGIN_UNLOADED,
-    POLICY_CHECKED,
-    POLICY_DENIED,
-    RECOVERY_RESUMED,
-    REPLAY_COMPLETE,
-    STRANGE_LOOP_COMPLETED,
-    STRANGE_LOOP_CONTEXT_COMPACTED,
-    STRANGE_LOOP_PLAN_DECISION,
-    STRANGE_LOOP_PLAN_PHASE,
-    STRANGE_LOOP_REASONED,
-    STRANGE_LOOP_STARTED,
-    STRANGE_LOOP_STEP_COMPLETED,
-    STRANGE_LOOP_STEP_QUEUED,
-    STRANGE_LOOP_STEP_STARTED,
-    WIRED_SUBAGENT_CANCELLED,
-    WIRED_SUBAGENT_COMPLETED,
-    WIRED_SUBAGENT_FAILED,
-    WIRED_SUBAGENT_STARTED,
-)
-
 # Import all event classes, registry, and helpers
 from .visibility import (
     event_type_from_wire_message,
@@ -164,9 +160,10 @@ from .visibility import (
 __all__ = [
     # Verbosity tier (from SDK)
     "VerbosityTier",
-    # All event constants (from constants import *)
+    # All event constants (from catalog)
     "ITERATION_STARTED",
     "ITERATION_COMPLETED",
+    "LLM_RETRY_ATTEMPT",
     "CHECKPOINT_SAVED",
     "CHECKPOINT_ANCHOR_CREATED",
     "RECOVERY_RESUMED",
@@ -230,6 +227,7 @@ __all__ = [
     "PLUGIN_FAILED",
     "PLUGIN_UNLOADED",
     "ERROR",
+    "STREAM_END",
     # Helper functions
     "custom_event",
     "event_type_from_wire_message",

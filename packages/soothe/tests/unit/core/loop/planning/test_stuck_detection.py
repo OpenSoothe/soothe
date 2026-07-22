@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from soothe.sloop.cognition.planner import _detect_stuck_loop
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 
 
 def test_detect_stuck_loop_repeated_actions() -> None:
@@ -19,21 +19,21 @@ def test_detect_stuck_loop_repeated_actions() -> None:
 def test_detect_stuck_loop_consecutive_failures() -> None:
     state = LoopState(goal="g", thread_id="t")
     state.step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="s1",
             success=False,
             error="Error: File not found",
             duration_ms=1,
             thread_id="t",
         ),
-        StepResult(
+        StepExecutionRecord(
             step_id="s2",
             success=False,
             error="Error: Permission denied",
             duration_ms=1,
             thread_id="t",
         ),
-        StepResult(
+        StepExecutionRecord(
             step_id="s3",
             success=False,
             error="Error: Timeout",

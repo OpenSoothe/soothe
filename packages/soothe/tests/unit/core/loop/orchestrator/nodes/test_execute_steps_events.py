@@ -10,21 +10,21 @@ import pytest
 from soothe.sloop.engine.executor import StepWaveQueued, StepWaveStart
 from soothe.sloop.nodes.execute_steps import node_execute
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 
 
 async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
     yield StepWaveQueued(steps=(StepAction(id="WAA-02", description="Second"),))
     yield StepWaveStart(steps=(StepAction(id="WAA-01", description="First"),))
     yield ("ns", "messages", ("chunk", {}))
-    yield StepResult(
+    yield StepExecutionRecord(
         step_id="WAA-01",
         success=True,
         duration_ms=100,
         thread_id="thread-1",
         tool_call_count=2,
     )
-    yield StepResult(
+    yield StepExecutionRecord(
         step_id="WAA-02",
         success=True,
         duration_ms=200,
@@ -103,7 +103,7 @@ async def test_execute_emits_step_completed_per_result() -> None:
 async def _fake_dependency_execute_stream(*_args: Any, **_kwargs: Any):
     """Simulate dependency DAG: one step at a time, second starts after first completes."""
     yield StepWaveStart(steps=(StepAction(id="WAA-01", description="First"),))
-    yield StepResult(
+    yield StepExecutionRecord(
         step_id="WAA-01",
         success=True,
         duration_ms=100,
@@ -111,7 +111,7 @@ async def _fake_dependency_execute_stream(*_args: Any, **_kwargs: Any):
         tool_call_count=2,
     )
     yield StepWaveStart(steps=(StepAction(id="WAA-02", description="Second"),))
-    yield StepResult(
+    yield StepExecutionRecord(
         step_id="WAA-02",
         success=True,
         duration_ms=200,

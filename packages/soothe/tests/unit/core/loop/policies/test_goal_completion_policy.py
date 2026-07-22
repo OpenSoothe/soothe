@@ -17,7 +17,7 @@ from soothe.sloop.state.schemas import (
     LoopState,
     PlanResult,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 from soothe.sloop.utils.messages import LoopAIMessage
 
@@ -107,7 +107,7 @@ def test_hybrid_mode_llm_false_heuristic_true() -> None:
 
 def test_hybrid_mode_both_false() -> None:
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="S1",
             success=True,
             outcome={"type": "file_read"},
@@ -151,7 +151,9 @@ def test_heuristic_single_wave() -> None:
 
 def test_heuristic_few_steps() -> None:
     step_results = [
-        StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
+        StepExecutionRecord(
+            step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"
+        ),
     ]
     state = mock_loop_state(step_results=step_results)
     assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
@@ -184,7 +186,9 @@ def test_heuristic_no_dependencies() -> None:
         execution_mode="parallel",
     )
     step_results = [
-        StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
+        StepExecutionRecord(
+            step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"
+        ),
     ]
     state = mock_loop_state(current_decision=decision, step_results=step_results)
     assert heuristic_requires_goal_completion(**_state_kwargs(state)) is False
@@ -206,8 +210,10 @@ def test_heuristic_failed_steps_low_success_rate() -> None:
     adapter.ingest_plan(pr, "KFA", 0)
     adapter.record_step_outcomes(
         [
-            StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-            StepResult(
+            StepExecutionRecord(
+                step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"
+            ),
+            StepExecutionRecord(
                 step_id="S2",
                 success=False,
                 outcome={},
@@ -219,8 +225,10 @@ def test_heuristic_failed_steps_low_success_rate() -> None:
     )
     state = mock_loop_state(
         step_results=[
-            StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-            StepResult(
+            StepExecutionRecord(
+                step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"
+            ),
+            StepExecutionRecord(
                 step_id="S2",
                 success=False,
                 outcome={},
@@ -235,10 +243,16 @@ def test_heuristic_failed_steps_low_success_rate() -> None:
 
 def test_heuristic_failed_steps_high_success_rate() -> None:
     step_results = [
-        StepResult(step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-        StepResult(step_id="S2", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-        StepResult(step_id="S3", success=True, outcome={}, duration_ms=100, thread_id="t1"),
-        StepResult(
+        StepExecutionRecord(
+            step_id="S1", success=True, outcome={}, duration_ms=100, thread_id="t1"
+        ),
+        StepExecutionRecord(
+            step_id="S2", success=True, outcome={}, duration_ms=100, thread_id="t1"
+        ),
+        StepExecutionRecord(
+            step_id="S3", success=True, outcome={}, duration_ms=100, thread_id="t1"
+        ),
+        StepExecutionRecord(
             step_id="S4", success=False, outcome={}, error="Error", duration_ms=100, thread_id="t1"
         ),
     ]
@@ -251,14 +265,14 @@ def test_heuristic_combined_complexity() -> None:
         iteration=2,
         last_execute_wave_parallel_multi_step=True,
         step_results=[
-            StepResult(
+            StepExecutionRecord(
                 step_id="S1",
                 success=True,
                 outcome={"type": "file_read"},
                 duration_ms=100,
                 thread_id="t1",
             ),
-            StepResult(
+            StepExecutionRecord(
                 step_id="S2",
                 success=True,
                 outcome={"type": "file_read"},
@@ -272,7 +286,7 @@ def test_heuristic_combined_complexity() -> None:
 
 def test_heuristic_simple_execution() -> None:
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="S1",
             success=True,
             outcome={"type": "file_read"},
@@ -340,7 +354,7 @@ def test_step_dag_mark_completed() -> None:
     )
     adapter.ingest_plan(plan_result, "KFA", 0)
     adapter.record_step_outcomes(
-        [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
+        [StepExecutionRecord(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
     )
     ctx = adapter.get_planning_context()
     assert ctx.completed_steps == 1
@@ -360,7 +374,7 @@ def test_step_dag_mark_failed() -> None:
     adapter.ingest_plan(plan_result, "KFA", 0)
     adapter.record_step_outcomes(
         [
-            StepResult(
+            StepExecutionRecord(
                 step_id="01",
                 success=False,
                 outcome={},
@@ -451,7 +465,7 @@ def test_strategy_ledger_direct_simple() -> None:
     )
     adapter.ingest_plan(pr, "KFA", 0)
     adapter.record_step_outcomes(
-        [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
+        [StepExecutionRecord(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
     )
     state = mock_loop_state(
         loop_messages=[
@@ -484,7 +498,7 @@ def test_strategy_simple_empty_ledger_synthesizes() -> None:
     )
     adapter.ingest_plan(pr, "KFA", 0)
     adapter.record_step_outcomes(
-        [StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
+        [StepExecutionRecord(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t")]
     )
     state = mock_loop_state(loop_messages=[])
     assert adapter.determine_completion_strategy(state, pr, "auto") == CompletionStrategy.SYNTHESIZE
@@ -544,8 +558,10 @@ def test_strategy_synthesize_failed_steps() -> None:
     adapter.ingest_plan(pr, "KFA", 0)
     adapter.record_step_outcomes(
         [
-            StepResult(step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t"),
-            StepResult(
+            StepExecutionRecord(
+                step_id="01", success=True, outcome={}, duration_ms=10, thread_id="t"
+            ),
+            StepExecutionRecord(
                 step_id="02", success=False, outcome={}, error="err", duration_ms=10, thread_id="t"
             ),
         ]

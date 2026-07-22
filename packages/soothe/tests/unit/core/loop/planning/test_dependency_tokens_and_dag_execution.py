@@ -10,7 +10,7 @@ from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -119,7 +119,7 @@ class TestStepPlanAdapterIngestRecordFlow:
 
         adapter.record_step_outcomes(
             [
-                StepResult(
+                StepExecutionRecord(
                     step_id="HJK-01",
                     success=True,
                     outcome={},

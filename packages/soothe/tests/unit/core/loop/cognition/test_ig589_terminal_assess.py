@@ -20,7 +20,7 @@ from soothe.sloop.state.schemas import (
     PlanGapAnalysis,
     PriorProgressDigest,
     StatusAssessment,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -64,7 +64,9 @@ def test_normalize_accepts_done_when_gap_confirms_at_goal() -> None:
 
 def test_terminal_assess_rejects_done_with_low_progress() -> None:
     state = _loop_state()
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     assessment = StatusAssessment(status="done", goal_progress="none")
     assert (
         terminal_assess_may_complete(
@@ -79,7 +81,9 @@ def test_terminal_assess_rejects_done_with_low_progress() -> None:
 
 def test_terminal_assess_rejects_when_gap_near_with_open_component() -> None:
     state = _loop_state()
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     gap = PlanGapAnalysis(
         components=[
             GoalComponentStatus(component="final validation", status="partial"),
@@ -116,7 +120,9 @@ def test_terminal_assess_rejects_multi_phase_without_complete_progress() -> None
             task_complexity=TaskComplexity.COMPLEX,
         ),
     )
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="tests green", status="satisfied")],
         evidence_summary="all pass",
@@ -147,7 +153,9 @@ def test_terminal_assess_allows_prior_progress_lag_when_gap_proves_terminal() ->
             derived_progress_hint="medium",
         ),
     )
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="all docs updated", status="satisfied")],
         evidence_summary="all goal components verified",
@@ -173,7 +181,9 @@ def test_terminal_assess_allows_prior_progress_lag_when_gap_proves_terminal() ->
 
 def test_terminal_assess_allows_gap_terminal_even_when_gap_alignment_false() -> None:
     state = _loop_state()
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="all docs updated", status="satisfied")],
         evidence_summary="all goal components verified",
@@ -199,7 +209,9 @@ def test_terminal_assess_allows_gap_terminal_even_when_gap_alignment_false() -> 
 
 def test_terminal_assess_requires_gap_alignment_when_no_gap_snapshot() -> None:
     state = _loop_state()
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     assessment = StatusAssessment(
         status="done",
         goal_progress="high",
@@ -220,7 +232,7 @@ def test_terminal_assess_requires_gap_alignment_when_no_gap_snapshot() -> None:
 def test_terminal_assess_rejects_recoverable_tool_errors_without_complete() -> None:
     state = _loop_state()
     state.add_step_result(
-        StepResult(
+        StepExecutionRecord(
             step_id="01",
             success=True,
             duration_ms=1,
@@ -253,7 +265,9 @@ def test_terminal_assess_rejects_recoverable_tool_errors_without_complete() -> N
 
 def test_terminal_assess_allows_complete_with_at_goal_gap() -> None:
     state = _loop_state()
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     gap = PlanGapAnalysis(
         components=[GoalComponentStatus(component="all tests pass", status="satisfied")],
         evidence_summary="exit 0",

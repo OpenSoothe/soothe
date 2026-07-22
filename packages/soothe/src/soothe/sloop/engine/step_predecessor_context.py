@@ -2,7 +2,7 @@
 
 When a planned step declares ``dependencies``, the executor must ground the
 CoreAgent prompt with concrete output from predecessor steps (RFC-214 ledger and
-``StepResult`` rows). Without this, milestone-only descriptions cause redundant
+``StepExecutionRecord`` rows). Without this, milestone-only descriptions cause redundant
 discovery actions (e.g. re-running a verify script on a fix step).
 """
 

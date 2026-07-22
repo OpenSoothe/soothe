@@ -54,7 +54,6 @@ class TestDaemonLogging:
         """Daemon startup keeps soothe.* on soothe.log, not daemon.log."""
         home = tmp_path / "soothe-home"
         monkeypatch.setattr("soothe_daemon.bootstrap.logging.SOOTHE_HOME", str(home))
-        monkeypatch.setattr("soothe.logging.setup.SOOTHE_HOME", str(home))
         monkeypatch.setattr("soothe_nano.logging.setup.SOOTHE_HOME", home)
         monkeypatch.setattr("soothe_nano.config.SOOTHE_HOME", home)
 

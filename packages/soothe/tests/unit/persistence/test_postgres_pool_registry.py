@@ -73,7 +73,7 @@ class TestPostgresPoolRegistry:
 
         with (
             patch(
-                "soothe.persistence.postgres_provisioning.ensure_postgres_databases_async",
+                "soothe_nano.persistence.postgres_provisioning.ensure_postgres_databases_async",
                 new_callable=AsyncMock,
             ),
             patch("psycopg_pool.AsyncConnectionPool", return_value=mock_pool) as mock_cls,
@@ -83,7 +83,7 @@ class TestPostgresPoolRegistry:
                 new_callable=AsyncMock,
             ),
             patch(
-                "soothe.persistence.db_init.initialize_database",
+                "soothe_nano.persistence.db_init.initialize_database",
                 new_callable=AsyncMock,
             ),
         ):

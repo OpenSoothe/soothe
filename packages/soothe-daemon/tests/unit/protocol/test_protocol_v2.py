@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from soothe_daemon.protocol import (
     ErrorCode,
-    ProtocolError,
+    RpcProtocolError,
     build_error_response,
     validate_message,
     validate_message_size,
@@ -111,8 +111,8 @@ def test_validate_message_size_large() -> None:
 
 
 def test_protocol_error_creation() -> None:
-    """Test ProtocolError creation with numeric code (RFC-450 §7.4)."""
-    error = ProtocolError(
+    """Test RpcProtocolError creation with numeric code (RFC-450 §7.4)."""
+    error = RpcProtocolError(
         ErrorCode.INVALID_REQUEST,
         "Invalid message structure",
         data={"field": "type"},
@@ -125,8 +125,8 @@ def test_protocol_error_creation() -> None:
 
 
 def test_protocol_error_to_dict() -> None:
-    """Test ProtocolError to_dict conversion produces wire envelope."""
-    error = ProtocolError(
+    """Test RpcProtocolError to_dict conversion produces wire envelope."""
+    error = RpcProtocolError(
         ErrorCode.RATE_LIMITED,
         "Rate limit exceeded",
         data={"retry_after_ms": 100},
@@ -141,8 +141,8 @@ def test_protocol_error_to_dict() -> None:
 
 
 def test_protocol_error_to_dict_no_data() -> None:
-    """Test ProtocolError to_dict omits data when empty."""
-    error = ProtocolError(
+    """Test RpcProtocolError to_dict omits data when empty."""
+    error = RpcProtocolError(
         ErrorCode.INVALID_REQUEST,
         "Invalid message",
     )

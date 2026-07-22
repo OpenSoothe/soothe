@@ -136,7 +136,7 @@ from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
     ToolCallHead,
     WaveStepProgress,
 )
@@ -444,7 +444,7 @@ class Executor:
         step_id: str | None = None,
         fallback_tool_name: str = "unknown",
     ) -> dict[str, Any]:
-        """Merge streamed tool outcomes and text into one StepResult outcome dict."""
+        """Merge streamed tool outcomes and text into one StepExecutionRecord outcome dict."""
         if outcomes:
             primary: dict[str, Any] = dict(outcomes[-1])
             if len(outcomes) > 1:
@@ -1028,7 +1028,7 @@ class Executor:
 
     def _aggregate_wave_metrics(
         self,
-        step_results: list[StepResult],
+        step_results: list[StepExecutionRecord],
         output: str,
         messages: list[BaseMessage],
         state: LoopState,
@@ -1097,12 +1097,13 @@ class Executor:
         decision: AgentDecision,
         state: LoopState,
     ) -> AsyncGenerator[
-        StreamEvent | StepResult | StepWaveQueued | StepWaveStart | StepCompletionReport, None
+        StreamEvent | StepExecutionRecord | StepWaveQueued | StepWaveStart | StepCompletionReport,
+        None,
     ]:
         """Execute steps based on execution mode, yielding events and results.
 
         This method yields stream events (custom events from tool execution)
-        during execution, then yields final StepResult objects.
+        during execution, then yields final StepExecutionRecord objects.
 
         Uses router.default for tool-heavy execution phase.
         Bounds concurrent tool calls per thread via semaphore.
@@ -1112,7 +1113,7 @@ class Executor:
             state: Current loop state
 
         Yields:
-            StreamEvent during execution, then StepResult for each step.
+            StreamEvent during execution, then StepExecutionRecord for each step.
         """
         ready_steps = decision.get_ready_steps(state.dependency_completion_ids())
 
@@ -1186,7 +1187,8 @@ class Executor:
         ready_steps: list,
         state: LoopState,
     ) -> AsyncGenerator[
-        StreamEvent | StepResult | StepWaveQueued | StepWaveStart | StepCompletionReport, None
+        StreamEvent | StepExecutionRecord | StepWaveQueued | StepWaveStart | StepCompletionReport,
+        None,
     ]:
         """Run parallel mode in waves bounded by ``max_parallel_steps``."""
         idx = 0
@@ -1595,7 +1597,7 @@ class Executor:
         self,
         steps: list,
         state: LoopState,
-    ) -> AsyncGenerator[StreamEvent | StepResult | StepCompletionReport, None]:
+    ) -> AsyncGenerator[StreamEvent | StepExecutionRecord | StepCompletionReport, None]:
         """Execute steps in parallel with isolated threads.
 
         Stream events are merged onto a shared queue and yielded as they arrive so
@@ -1607,10 +1609,10 @@ class Executor:
             state: Loop state
 
         Yields:
-            StreamEvent chunks in arrival order, then each ``StepResult`` when its step
+            StreamEvent chunks in arrival order, then each ``StepExecutionRecord`` when its step
             finishes (completion order, not necessarily step list order).
         """
-        # Branched LangGraph thread_id for parallel checkpoint isolation; StepResult keeps logical thread_id.
+        # Branched LangGraph thread_id for parallel checkpoint isolation; StepExecutionRecord keeps logical thread_id.
         logical_tid = state.thread_id
         continue_loop_mode = bool(getattr(state, "continue_loop", False))
         n_steps = len(steps)
@@ -1645,7 +1647,7 @@ class Executor:
 
         tasks = [asyncio.create_task(_run_parallel_step(step)) for step in steps]
 
-        all_step_results: list[StepResult] = []
+        all_step_results: list[StepExecutionRecord] = []
         single_wave_messages: list[BaseMessage] = []
         wave_delegate_final = ""
         wave_delegate_parts: list[str] = []
@@ -1673,7 +1675,7 @@ class Executor:
                             result,
                             exc_info=result,
                         )
-                        step_result = StepResult(
+                        step_result = StepExecutionRecord(
                             step_id=sid,
                             success=False,
                             outcome={"type": "error", "error": str(result)},  # RFC-211
@@ -1769,7 +1771,8 @@ class Executor:
         decision: AgentDecision,
         state: LoopState,
     ) -> AsyncGenerator[
-        StreamEvent | StepResult | StepWaveQueued | StepWaveStart | StepCompletionReport, None
+        StreamEvent | StepExecutionRecord | StepWaveQueued | StepWaveStart | StepCompletionReport,
+        None,
     ]:
         """Execute steps respecting dependency DAG.
 
@@ -1778,7 +1781,7 @@ class Executor:
             state: Loop state
 
         Yields:
-            StreamEvent during execution, then StepResult.
+            StreamEvent during execution, then StepExecutionRecord.
         """
         local_done = set(state.dependency_completion_ids())
         failed_sticky: set[str] = set()
@@ -1798,7 +1801,7 @@ class Executor:
             yield StepWaveStart(steps=tuple(chunk))
             async for item in self._execute_parallel(chunk, state):
                 yield item
-                if isinstance(item, StepResult):
+                if isinstance(item, StepExecutionRecord):
                     if item.success:
                         local_done.add(item.step_id)
                     else:
@@ -1832,7 +1835,7 @@ class Executor:
 
         Args:
             step: StepAction with description and optional hints
-            thread_id: Logical thread ID for StepResult, logs, and durability lookups
+            thread_id: Logical thread ID for StepExecutionRecord, logs, and durability lookups
             workspace: Thread-specific workspace path (RFC-103)
             routing_classification: Loop routing payload for middleware (IG-349, IG-383).
             continue_loop_mode: True when this loop has prior goals (RFC-225);
@@ -2199,7 +2202,7 @@ class Executor:
 
             return _ExecuteStepResult(
                 events=events,
-                step_result=StepResult(
+                step_result=StepExecutionRecord(
                     step_id=step.id,
                     success=step_success,
                     outcome=primary_outcome,  # RFC-211: outcome metadata
@@ -2244,7 +2247,7 @@ class Executor:
                 )
                 return _ExecuteStepResult(
                     events=events,
-                    step_result=StepResult(
+                    step_result=StepExecutionRecord(
                         step_id=step.id,
                         success=True,
                         outcome={
@@ -2283,7 +2286,7 @@ class Executor:
 
             return _ExecuteStepResult(
                 events=events,
-                step_result=StepResult(
+                step_result=StepExecutionRecord(
                     step_id=step.id,
                     success=False,
                     outcome={"type": "error", "error": error_msg},  # RFC-211: error outcome

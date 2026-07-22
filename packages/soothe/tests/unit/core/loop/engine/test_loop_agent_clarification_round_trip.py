@@ -3,7 +3,7 @@
 Drives ``StrangeLoop.run_with_progress`` with a stub planner that emits a
 ``kind="ask_user"`` step on the first iteration and a stub
 ``ClarificationPolicy`` that returns canned answers. Confirms the loop
-records a synthesized ``StepResult`` for the ask_user step and the next
+records a synthesized ``StepExecutionRecord`` for the ask_user step and the next
 planning iteration sees the answered question as completed.
 """
 

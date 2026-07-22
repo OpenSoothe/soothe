@@ -23,7 +23,7 @@ from soothe.sloop.engine.step_wave_types import (
     wave_gather_failed,
     wave_gather_slot,
 )
-from soothe.sloop.state.schemas import LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -60,7 +60,7 @@ def test_append_parallel_wave_ledger_success_and_exception() -> None:
     ]
     ok = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -107,7 +107,7 @@ def test_append_parallel_wave_ledger_delegate_fallback() -> None:
     steps = [StepAction(id="only", description="delegate work", expected_output="x")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="only",
             success=True,
             outcome={"type": "generic"},
@@ -200,7 +200,7 @@ def test_append_parallel_wave_ledger_attaches_last_tool_result() -> None:
     steps = [StepAction(id="s1", description="count", expected_output="counts")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -238,7 +238,7 @@ def test_append_parallel_wave_ledger_assistant_response_is_full_not_truncated_ig
     steps = [StepAction(id="s1", description="list files", expected_output="listing")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -285,7 +285,7 @@ def test_append_parallel_wave_ledger_prioritizes_assistant_response_over_raw_too
     steps = [StepAction(id="s1", description="count files", expected_output="counts")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -327,7 +327,7 @@ def test_append_parallel_wave_ledger_task_tool_uses_output_fallback_ig493() -> N
     # Simulate: messages only have ToolMessage (no AIMessage), but output has synthesis
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -365,7 +365,7 @@ def test_append_parallel_wave_ledger_mixed_task_and_tool_uses_core_assistant_tex
     steps = [StepAction(id="s1", description="count files", expected_output="counts")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -429,7 +429,7 @@ def test_append_parallel_wave_ledger_none_messages_uses_output_fallback() -> Non
     steps = [StepAction(id="s1", description="glob READMEs", expected_output="paths")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -461,7 +461,7 @@ def test_append_parallel_wave_ledger_empty_final_records_empty_ai() -> None:
     steps = [StepAction(id="s1", description="count files", expected_output="counts")]
     result = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=False,
             outcome={"type": "error", "error": "tool failed"},

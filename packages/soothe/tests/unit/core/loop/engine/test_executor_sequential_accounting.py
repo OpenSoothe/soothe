@@ -1,4 +1,4 @@
-"""Executor parallel waves: one StepResult per StepAction, chunked by max_parallel_steps."""
+"""Executor parallel waves: one StepExecutionRecord per StepAction, chunked by max_parallel_steps."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -57,7 +57,7 @@ async def test_parallel_single_wave_yields_one_result_per_step() -> None:
         reasoning="r",
     )
     state = LoopState(goal="g", thread_id="t-main")
-    out = [x async for x in executor.execute(decision, state) if isinstance(x, StepResult)]
+    out = [x async for x in executor.execute(decision, state) if isinstance(x, StepExecutionRecord)]
 
     assert len(out) == 2
     assert {r.step_id for r in out} == {"a", "b"}
@@ -80,7 +80,7 @@ async def test_parallel_respects_max_parallel_steps_multiple_waves() -> None:
         reasoning="r",
     )
     state = LoopState(goal="g", thread_id="t-main")
-    out = [x async for x in executor.execute(decision, state) if isinstance(x, StepResult)]
+    out = [x async for x in executor.execute(decision, state) if isinstance(x, StepExecutionRecord)]
 
     assert len(out) == 2
     assert mock_agent.execution_astream.call_count == 2
@@ -113,7 +113,7 @@ async def test_plan_with_dependencies_drains_ready_chain() -> None:
     )
     state = LoopState(goal="g", thread_id="t-main")
 
-    out = [x async for x in executor.execute(decision, state) if isinstance(x, StepResult)]
+    out = [x async for x in executor.execute(decision, state) if isinstance(x, StepExecutionRecord)]
 
     assert [r.step_id for r in out] == ["01", "02", "03"]
     assert mock_agent.execution_astream.call_count == 3

@@ -27,7 +27,7 @@ from soothe.sloop.state.schemas import (
     PlanGapAnalysis,
     StatusAssessment,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -36,7 +36,7 @@ def _make_ctx(
     iteration: int = 1,
     intake_label: IntakeLabel = IntakeLabel.COMPLEX,
     current_decision: AgentDecision | None = None,
-    step_results: list[StepResult] | None = None,
+    step_results: list[StepExecutionRecord] | None = None,
     loop_messages: list | None = None,
 ) -> LoopRuntimeContext:
     now = datetime.now(UTC)
@@ -131,7 +131,7 @@ async def test_complex_mid_goal_rejects_complete_with_remaining_plan_steps() -> 
         iteration=1,
         current_decision=_two_step_decision(),
         step_results=[
-            StepResult(step_id="01", success=True, duration_ms=1, thread_id="tid"),
+            StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="tid"),
         ],
     )
     result = await node_plan_assess(ctx, {})
@@ -150,7 +150,7 @@ async def test_complex_mid_goal_allows_complete_when_plan_exhausted() -> None:
         iteration=1,
         current_decision=decision,
         step_results=[
-            StepResult(step_id="01", success=True, duration_ms=1, thread_id="tid"),
+            StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="tid"),
         ],
     )
     result = await node_plan_assess(ctx, {})
@@ -169,7 +169,7 @@ async def test_simple_mid_goal_allows_complete_with_evidence() -> None:
         intake_label=IntakeLabel.SIMPLE,
         current_decision=decision,
         step_results=[
-            StepResult(step_id="01", success=True, duration_ms=1, thread_id="tid"),
+            StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="tid"),
         ],
     )
     result = await node_plan_assess(ctx, {})
@@ -182,8 +182,8 @@ async def test_structural_gate_reject_forces_done_after_two_no_tool_retries() ->
         iteration=3,
         intake_label=IntakeLabel.COMPLEX,
         step_results=[
-            StepResult(step_id="A-01", success=True, duration_ms=1, thread_id="tid"),
-            StepResult(step_id="A-02", success=True, duration_ms=1, thread_id="tid"),
+            StepExecutionRecord(step_id="A-01", success=True, duration_ms=1, thread_id="tid"),
+            StepExecutionRecord(step_id="A-02", success=True, duration_ms=1, thread_id="tid"),
         ],
     )
     ctx.scratch.plan_gap = PlanGapAnalysis(
@@ -206,8 +206,8 @@ async def test_structural_gate_reject_keeps_replan_when_new_tool_evidence_exists
         iteration=3,
         intake_label=IntakeLabel.COMPLEX,
         step_results=[
-            StepResult(step_id="A-01", success=True, duration_ms=1, thread_id="tid"),
-            StepResult(
+            StepExecutionRecord(step_id="A-01", success=True, duration_ms=1, thread_id="tid"),
+            StepExecutionRecord(
                 step_id="A-02",
                 success=True,
                 duration_ms=1,

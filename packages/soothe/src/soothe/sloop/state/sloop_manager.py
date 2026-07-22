@@ -40,7 +40,7 @@ if TYPE_CHECKING:
         AgentDecision,
         LoopState,
         PlanResult,
-        StepResult,
+        StepExecutionRecord,
     )
     from soothe.sloop.state.working_memory import LoopWorkingMemory
 
@@ -1110,7 +1110,7 @@ class StrangeLoopStateManager:
         iteration: int,
         plan_result: PlanResult,
         decision: AgentDecision | None,  # Allow None for immediate completion
-        step_results: list[StepResult],
+        step_results: list[StepExecutionRecord],
         state: LoopState,
         working_memory: LoopWorkingMemory | None,
     ) -> None:

@@ -1003,7 +1003,7 @@ def derive_plan_action(
     return "new"
 
 
-class StepResult(BaseModel):
+class StepExecutionRecord(BaseModel):
     """Result from executing a single step.
 
     Attributes:
@@ -1129,21 +1129,21 @@ MAX_LOOP_MESSAGES_PER_GOAL = 200  # Cap message ledger
 MAX_ACTION_HISTORY_PER_GOAL = 20  # Cap action descriptions
 MAX_EVIDENCE_LEDGER_PER_GOAL = 100  # Cap evidence entries
 
-# RFC-624 Phase 4: StepResult mapping helpers
+# RFC-624 Phase 4: StepExecutionRecord mapping helpers
 _VALID_ERROR_TYPES = {"execution", "tool", "timeout", "policy", "unknown", "fatal"}
 
 
 def _clamp_error_type(raw: str | None) -> str | None:
-    """Clamp error_type to StepResult's Literal union; unknown values → 'unknown'."""
+    """Clamp error_type to StepExecutionRecord's Literal union; unknown values → 'unknown'."""
     if raw is None:
         return None
     return raw if raw in _VALID_ERROR_TYPES else "unknown"
 
 
-def _step_node_to_result(node: Any) -> StepResult:
-    """Map CE StepNode + StepExecution to LoopState StepResult."""
+def _step_node_to_result(node: Any) -> StepExecutionRecord:
+    """Map CE StepNode + StepExecution to LoopState StepExecutionRecord."""
     ex = node.execution
-    return StepResult(
+    return StepExecutionRecord(
         step_id=node.id,
         success=node.status == "completed",
         outcome=ex.outcome or {},
@@ -1215,7 +1215,7 @@ class LoopState(BaseModel):
     # these caches serve as the authoritative store. When CE is bound,
     # the @property accessors query CE and these caches are unused.
     _loop_messages_cache: list[LoopHumanMessage | LoopAIMessage] = PrivateAttr(default_factory=list)
-    _step_results_cache: list[StepResult] = PrivateAttr(default_factory=list)
+    _step_results_cache: list[StepExecutionRecord] = PrivateAttr(default_factory=list)
     _completed_step_ids_cache: set[str] = PrivateAttr(default_factory=set)
 
     evidence_ledger: list[EvidenceEntry] = Field(
@@ -1429,14 +1429,14 @@ class LoopState(BaseModel):
         return result
 
     @property
-    def step_results(self) -> list[StepResult]:
+    def step_results(self) -> list[StepExecutionRecord]:
         """Step execution results. When CE is bound, derived from CE StepDAG."""
         if self._ce is None:
             return self._step_results_cache
         return self._build_step_results_from_ce()
 
     @step_results.setter
-    def step_results(self, value: list[StepResult]) -> None:
+    def step_results(self, value: list[StepExecutionRecord]) -> None:
         """Allow legacy assignment. Writes to cache only."""
         self._step_results_cache = value
 
@@ -1526,8 +1526,8 @@ class LoopState(BaseModel):
         """
         return await asyncio.to_thread(self._build_loop_messages_from_ce_sync)
 
-    def _build_step_results_from_ce(self) -> list[StepResult]:
-        """Map CE StepNode + StepExecution to StepResult."""
+    def _build_step_results_from_ce(self) -> list[StepExecutionRecord]:
+        """Map CE StepNode + StepExecution to StepExecutionRecord."""
         try:
             goal = self._ce.get_goal_sync(self._ce_goal_id)
             if goal is None:
@@ -1541,7 +1541,7 @@ class LoopState(BaseModel):
             logger.warning("step_results property: CE query failed", exc_info=True)
             return self._step_results_cache
 
-    def add_step_result(self, result: StepResult) -> None:
+    def add_step_result(self, result: StepExecutionRecord) -> None:
         """Add step result and update completed set with bounded accumulation (IG-475).
 
         When CE is bound, this is a no-op — CE writes (``complete_step``,

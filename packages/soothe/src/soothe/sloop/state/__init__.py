@@ -15,7 +15,7 @@ from .schemas import (
     LoopState,
     PlanResult,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 from .sloop_manager import StrangeLoopStateManager
 from .working_memory import LoopWorkingMemory
@@ -31,7 +31,7 @@ __all__ = [
     "StrangeLoopCheckpoint",
     "StrangeLoopStateManager",
     "StepAction",
-    "StepResult",
+    "StepExecutionRecord",
     "WaveMetrics",
     "WorkingMemoryState",
 ]

@@ -8,7 +8,7 @@ from soothe.context.models import GoalNode, StepNode
 from soothe.sloop.state.schemas import LoopState, next_goal_local_step_id_start
 
 if TYPE_CHECKING:
-    from soothe.sloop.state.schemas import StepResult
+    from soothe.sloop.state.schemas import StepExecutionRecord
 
 _OUTCOME_MAX = 120
 _DESC_MAX = 80
@@ -30,7 +30,7 @@ def _outcome_snippet(node: StepNode) -> str:
     return ""
 
 
-def _outcome_from_step_result(result: StepResult) -> str:
+def _outcome_from_step_result(result: StepExecutionRecord) -> str:
     return result.to_evidence_string(truncate=True)[:_OUTCOME_MAX]
 
 

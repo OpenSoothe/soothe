@@ -18,14 +18,14 @@ def test_resolve_execute_projection_mode_goal_boundary() -> None:
 
 
 def test_resolve_execute_projection_mode_mid_goal() -> None:
-    from soothe.sloop.state.schemas import StepResult
+    from soothe.sloop.state.schemas import StepExecutionRecord
 
     state = LoopState(
         goal="g",
         thread_id="t",
         iteration=1,
         step_results=[
-            StepResult(
+            StepExecutionRecord(
                 step_id="01",
                 success=True,
                 duration_ms=1,
@@ -173,7 +173,7 @@ def test_project_execute_step_graph_input_slice_a_on_continue() -> None:
 
 
 def test_project_execute_step_graph_input_mid_goal_no_slice_a() -> None:
-    from soothe.sloop.state.schemas import StepResult
+    from soothe.sloop.state.schemas import StepExecutionRecord
 
     step = StepAction(id="02", description="Fix", dependencies=["01"])
     step_a = StepAction(id="01", description="Verify")
@@ -196,7 +196,7 @@ def test_project_execute_step_graph_input_mid_goal_no_slice_a() -> None:
         continue_loop=True,
         iteration=1,
         step_results=[
-            StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"),
+            StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t"),
         ],
     )
     result = project_execute_step_graph_input(

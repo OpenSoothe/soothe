@@ -22,7 +22,7 @@ from soothe.sloop.nodes.execute_steps import (
     node_execute,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -176,7 +176,7 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """On re-entry with a planner-ask answer, node_execute records a successful
-    StepResult for the matching step id, clears pending_clarification_answer,
+    StepExecutionRecord for the matching step id, clears pending_clarification_answer,
     and DOES NOT pass a resume payload to the executor."""
     decision = AgentDecision(
         type="execute_steps",
@@ -222,7 +222,7 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
     pending_ans = answer_to_state(answer)
 
     async def _empty_stream(*_a: Any, **_k: Any):
-        # After the synthesized StepResult is recorded, the answered step id is
+        # After the synthesized StepExecutionRecord is recorded, the answered step id is
         # in dependency_completion_ids so the executor finds nothing to run.
         if False:
             yield None
@@ -250,10 +250,10 @@ async def test_branch1_synthesizes_step_result_from_planner_ask_answer(
         },
     )
 
-    # The synthesized StepResult was applied to loop state.
+    # The synthesized StepExecutionRecord was applied to loop state.
     assert loop_state.add_step_result.call_count == 1
     applied = loop_state.add_step_result.call_args.args[0]
-    assert isinstance(applied, StepResult)
+    assert isinstance(applied, StepExecutionRecord)
     assert applied.step_id == "ASK-01"
     assert applied.success is True
     assert applied.outcome["kind"] == "ask_user"
@@ -472,7 +472,7 @@ async def test_real_coreagent_resume_payload_passes_through(
 
     async def _yield_wave(*_a: Any, **_k: Any):
         yield StepWaveStart(steps=(StepAction(id="ACT-01", description="do thing"),))
-        yield StepResult(
+        yield StepExecutionRecord(
             step_id="ACT-01",
             success=True,
             duration_ms=1,

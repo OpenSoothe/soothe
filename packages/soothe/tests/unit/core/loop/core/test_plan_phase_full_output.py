@@ -8,7 +8,7 @@ import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.sloop.cognition.phase import PlanPhase
-from soothe.sloop.state.schemas import LoopState, PlanResult, StepResult
+from soothe.sloop.state.schemas import LoopState, PlanResult, StepExecutionRecord
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ async def test_done_preserves_planner_full_output() -> None:
     phase = PlanPhase(mock_lp)
     state = LoopState(goal="g", thread_id="t")
     state.step_results.append(
-        StepResult(
+        StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic", "tool_name": "read_file", "size_bytes": 12},
@@ -61,7 +61,7 @@ async def test_done_does_not_populate_full_output_from_step_evidence() -> None:
     phase = PlanPhase(mock_lp)
     state = LoopState(goal="g", thread_id="t")
     state.step_results.append(
-        StepResult(
+        StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic", "tool_name": "read_file", "size_bytes": 99},

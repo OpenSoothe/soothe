@@ -20,7 +20,7 @@ from soothe_daemon import __version__ as daemon_version
 from soothe_daemon.bootstrap.logging import set_client_id
 from soothe_daemon.protocol.error_codes import (
     ErrorCode,
-    ProtocolError,
+    RpcProtocolError,
     build_error_response,
 )
 from soothe_daemon.protocol.intent_hints import validate_and_normalize_intent_hint
@@ -523,7 +523,7 @@ class MessageRouter:
                 if request_id is not None:
                     # Handler already sent response; nothing to collect
                     pass
-            except ProtocolError as exc:
+            except RpcProtocolError as exc:
                 err = build_error_response(
                     exc.code,
                     exc.message,
@@ -551,7 +551,7 @@ class MessageRouter:
         Performs a dict lookup by ``msg.get("type")`` instead of a linear
         if-chain.  Unknown types receive ``-32601 METHOD_NOT_FOUND``; param
         validation failures receive ``-32602 INVALID_PARAMS``; handler-raised
-        ``ProtocolError`` exceptions are serialized to the standard error
+        ``RpcProtocolError`` exceptions are serialized to the standard error
         envelope.
 
         RFC-450 §5.6: Batch requests (JSON arrays) are processed by dispatching
@@ -666,7 +666,7 @@ class MessageRouter:
         handler = getattr(self, handler_name)
         try:
             await handler(client_id, msg)
-        except ProtocolError as exc:
+        except RpcProtocolError as exc:
             err = build_error_response(
                 exc.code,
                 exc.message,
@@ -675,7 +675,7 @@ class MessageRouter:
             )
             await d._send_client_message(client_id, err)
             logger.debug(
-                "[MsgRouter] Handler %s raised ProtocolError: %s",
+                "[MsgRouter] Handler %s raised RpcProtocolError: %s",
                 handler_name,
                 exc.message,
             )

@@ -10,7 +10,7 @@ from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -63,7 +63,7 @@ def test_format_completion_dag_report_lists_steps_and_stats() -> None:
     )
     adapter.record_step_outcomes(
         [
-            StepResult(
+            StepExecutionRecord(
                 step_id="KFA-01",
                 success=True,
                 outcome={"type": "generic"},
@@ -71,7 +71,7 @@ def test_format_completion_dag_report_lists_steps_and_stats() -> None:
                 duration_ms=10,
                 thread_id="t1",
             ),
-            StepResult(
+            StepExecutionRecord(
                 step_id="KFA-02",
                 success=True,
                 outcome={"type": "generic"},

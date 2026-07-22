@@ -20,7 +20,7 @@ from soothe.sloop.engine.step_wave_types import _ExecuteStepResult
 from soothe.sloop.state.schemas import (
     LoopState,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -56,7 +56,7 @@ def _payload(
     messages.append(AIMessage(content=final_text))
     return _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id=step_id,
             success=True,
             outcome={"type": "code_exec"},
@@ -210,7 +210,7 @@ def test_production_shape_chunked_text_with_empty_final_aimessage() -> None:
     # No ToolMessage in messages list — matches what _stream_and_collect returns.
     payload = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},

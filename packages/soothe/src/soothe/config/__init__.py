@@ -30,7 +30,6 @@ from soothe.config.env import (
 from soothe.config.models import (
     AgentConfig,
     AutopilotConfig,
-    ComplexityThresholds,
     ConsoleLoggingConfig,
     DurabilityProtocolConfig,
     EmbeddingProfile,
@@ -110,7 +109,6 @@ __all__ = [
     "start_config_watcher",
     "stop_config_watcher",
     "StrangeLoopConfig",
-    "ComplexityThresholds",
     "ConsoleLoggingConfig",
     "DurabilityProtocolConfig",
     "EmbeddingProfile",

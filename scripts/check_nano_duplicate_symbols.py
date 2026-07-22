@@ -92,20 +92,6 @@ def _package_symbols(pkg_root: Path) -> dict[str, list[str]]:
 # categories — extend ONLY with a documented reason when the caller-graph
 # filter produces a new false positive.
 _ALLOWED_DUPLICATES: dict[str, str] = {
-    # --- Split-config mirrors (config/ownership.py: host mirrors nano-owned
-    #     config schema so host consumers can import from either side). Not a leak.
-    "AgentRuntimeConfig": "split-config mirror — agent.runtime is nano-owned; host mirrors",
-    "CodeInterpreterConfig": "split-config mirror — code_interpreter is nano-owned; host mirrors",
-    "DeepxivToolsConfig": "split-config mirror — tools config is nano-owned; host mirrors",
-    "ExecutionToolsConfig": "split-config mirror — tools config is nano-owned; host mirrors",
-    "FailureIntentConfig": "split-config mirror — optimization is nano-owned; host mirrors",
-    "LangfuseIntegrationConfig": "split-config mirror — observability is nano-owned; host mirrors",
-    "RoleRoutingConfig": "split-config mirror — agent.middleware is nano-owned; host mirrors",
-    "SootheConfigLoggingView": "split-config mirror — logging view mirrored per ownership",
-    "StructuredPlanConfig": "split-config mirror — optimization is nano-owned; host mirrors",
-    "ToolCallLimitConfig": "split-config mirror — tool config is nano-owned; host mirrors",
-    "ToolRetryConfig": "split-config mirror — tool config is nano-owned; host mirrors",
-    "ToolTimeoutConfig": "split-config mirror — tool config is nano-owned; host mirrors",
     # --- Shared event/wire constants (nano defines the namespace; host
     #     re-declares for its own event catalog merge). Not a leak.
     "MCP_LIST_CHANGED": "shared event constant — nano namespace; host re-declares for catalog",
@@ -117,14 +103,14 @@ _ALLOWED_DUPLICATES: dict[str, str] = {
     "SKILL_BODY_LOADED": "shared event constant — nano namespace; host re-declares for catalog",
     # --- Shared execution constants (nano-owned limits; host re-declares).
     "MAX_EXECUTE_TIMEOUT": "shared execution constant — nano-owned limit; host re-declares",
-    # --- Split-config default factories (nano-owned config defaults; host
-    #     mirrors so host consumers can import from either side).
+    # --- Split-config default factories / logging view (settings.py mirrors).
+    "SootheConfigLoggingView": "split-config mirror — logging view mirrored per ownership",
     "default_embedding_profile": "split-config default — embedding_profile is nano-owned; host mirrors",
     "default_router_profiles": "split-config default — router_profiles is nano-owned; host mirrors",
     "default_vector_store_router": "split-config default — vector_store_router is nano-owned; host mirrors",
     "default_vector_stores": "split-config default — vector_stores is nano-owned; host mirrors",
     # --- Postgres-provisioning helpers (nano-owned; host re-declares in its
-    #     own persistence for host-internal callers). PR-3 territory.
+    #     own persistence for host-internal callers).
     "postgres_admin_dsn": "nano-owned provisioning helper; host re-declares for host callers",
     "postgres_target_dsn": "nano-owned provisioning helper; host re-declares for host callers",
     "required_postgres_database_keys": "nano-owned provisioning helper; host re-declares for host callers",

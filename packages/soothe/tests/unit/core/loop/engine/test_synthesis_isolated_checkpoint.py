@@ -13,7 +13,7 @@ from soothe.sloop.engine.synthesis import (
     SynthesisGenerator,
     synthesis_checkpoint_thread_id,
 )
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -64,7 +64,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
         thread_id="parent-thread",
         workspace="/workspace/repo",
         step_results=[
-            StepResult(
+            StepExecutionRecord(
                 step_id="s1",
                 success=True,
                 outcome={
@@ -129,7 +129,7 @@ async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypa
         thread_id="parent-thread",
         workspace=None,
         step_results=[
-            StepResult(
+            StepExecutionRecord(
                 step_id="s1",
                 success=True,
                 outcome={"type": "generic", "step_input": "run", "output_summary": {"first": "x"}},

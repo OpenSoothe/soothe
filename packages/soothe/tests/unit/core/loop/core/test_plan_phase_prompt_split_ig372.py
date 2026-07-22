@@ -9,7 +9,7 @@ from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.prompts import PromptBuilder
 from soothe.sloop.intention.models import ResponseLanguage
-from soothe.sloop.state.schemas import LoopState, PlanResult, StepResult
+from soothe.sloop.state.schemas import LoopState, PlanResult, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopHumanMessage
 
 
@@ -150,7 +150,9 @@ def test_generate_user_query_in_plan_context_user_message() -> None:
 def test_generate_includes_plan_step_id_hint_after_prior_steps_ig388() -> None:
     """Plan-generate human adds continuation hint when the goal already has step ids (IG-388)."""
     state = LoopState(goal="g", thread_id="t1", iteration=1, max_iterations=8)
-    state.add_step_result(StepResult(step_id="ABC-01", success=True, duration_ms=1, thread_id="t1"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="ABC-01", success=True, duration_ms=1, thread_id="t1")
+    )
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext(), plan_phase="generate")
     human = messages[1].content
@@ -161,7 +163,9 @@ def test_generate_includes_plan_step_id_hint_after_prior_steps_ig388() -> None:
 
 def test_assess_does_not_include_plan_step_id_hint_ig388() -> None:
     state = LoopState(goal="g", thread_id="t1", iteration=1, max_iterations=8)
-    state.add_step_result(StepResult(step_id="ABC-01", success=True, duration_ms=1, thread_id="t1"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="ABC-01", success=True, duration_ms=1, thread_id="t1")
+    )
     builder = PromptBuilder()
     messages = builder.build_plan_messages("g", state, PlanContext(), plan_phase="assess")
     human = messages[1].content

@@ -24,7 +24,7 @@ from soothe.sloop.state.schemas import (
     LoopState,
     PlanGapAnalysis,
     StatusAssessment,
-    StepResult,
+    StepExecutionRecord,
 )
 
 
@@ -53,7 +53,9 @@ def test_should_skip_gap_at_iter0_without_execution() -> None:
 
 def test_should_run_gap_on_mid_goal() -> None:
     state = LoopState(goal="g", thread_id="t", iteration=1)
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     ctx = LoopRuntimeContext(
         strange_loop=MagicMock(
             config=MagicMock(agent=MagicMock(loop=MagicMock(plan_gap_analysis_enabled=True)))
@@ -149,7 +151,9 @@ def test_assess_respects_gap_rejects_complete() -> None:
 
 def test_build_plan_messages_gap_kind_uses_gap_instructions() -> None:
     state = LoopState(goal="g", thread_id="t", iteration=1)
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     msgs = PromptBuilder().build_plan_messages(
         "g",
         state,

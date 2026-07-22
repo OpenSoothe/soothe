@@ -17,7 +17,7 @@ from soothe.sloop.state.checkpoint import (
     WorkingMemoryState,
 )
 from soothe.sloop.state.execution_checkpoint import GoalIndexEntry
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -176,7 +176,7 @@ def test_non_continuation_mid_goal_includes_execute_ledger() -> None:
 def test_continuation_replan_projects_goal_completion_not_prior_execute() -> None:
     state = _continuation_state(iteration=1)
     state.step_results.append(
-        StepResult(step_id="01", success=True, duration_ms=1, thread_id="tid")
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="tid")
     )
 
     msgs = PromptBuilder().build_plan_messages(

@@ -17,7 +17,7 @@ from soothe.sloop.state.schemas import (
     AgentDecision,
     LoopState,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
@@ -198,7 +198,9 @@ def test_plan_coverage_present_when_decision_has_steps() -> None:
             ],
         ),
     )
-    state.add_step_result(StepResult(step_id="01", success=True, duration_ms=1, thread_id="t"))
+    state.add_step_result(
+        StepExecutionRecord(step_id="01", success=True, duration_ms=1, thread_id="t")
+    )
     msgs = PromptBuilder().build_plan_messages(
         state.goal,
         state,

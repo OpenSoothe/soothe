@@ -11,7 +11,7 @@ from soothe.sloop.engine.executor import StepWaveStart
 from soothe.sloop.engine.step_wave_types import StepCompletionReport
 from soothe.sloop.nodes.execute_steps import node_execute
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
-from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
+from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 
 
 async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
@@ -21,7 +21,7 @@ async def _fake_execute_stream(*_args: Any, **_kwargs: Any):
         summary="I finished the first step.",
         iteration=2,
     )
-    yield StepResult(
+    yield StepExecutionRecord(
         step_id="WAA-01",
         success=True,
         duration_ms=100,

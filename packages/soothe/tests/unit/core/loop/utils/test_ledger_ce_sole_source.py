@@ -189,9 +189,9 @@ class TestBindCE:
         state = LoopState(goal="test", thread_id="thread-1")
         state._loop_messages_cache.append(LoopHumanMessage(content="stale", phase="execute_step"))
         state._step_results_cache.append(
-            __import__("soothe.sloop.state.schemas", fromlist=["StepResult"]).StepResult(
-                step_id="s1", success=True, duration_ms=100, thread_id="t1"
-            )
+            __import__(
+                "soothe.sloop.state.schemas", fromlist=["StepExecutionRecord"]
+            ).StepExecutionRecord(step_id="s1", success=True, duration_ms=100, thread_id="t1")
         )
         state._completed_step_ids_cache.add("s1")
 

@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from soothe.events.constants import STRANGE_LOOP_CONTEXT_COMPACTED
+from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
 from soothe.sloop.clarification import (
     ClarificationCapture,
     ClarificationDetector,
@@ -18,7 +18,7 @@ from soothe.sloop.clarification import (
 from soothe.sloop.engine.context_window_manager import ContextWindowManager
 from soothe.sloop.engine.executor import Executor, StepWaveQueued, StepWaveStart
 from soothe.sloop.engine.step_wave_types import StepCompletionReport
-from soothe.sloop.state.schemas import LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 from ..orchestrator.runtime_context import LoopRuntimeContext
@@ -31,7 +31,7 @@ _RECENT_STEP_OUTPUTS_CAP = 8
 PLANNER_ASK_INTERRUPT_PREFIX = "planner-ask:"
 """Sentinel prefix marking a clarification request that came from a planner-emitted
 ``kind="ask_user"`` step rather than a real CoreAgent ``ask_user`` interrupt.
-On answer arrival, ``node_execute`` synthesizes a ``StepResult`` for the matching
+On answer arrival, ``node_execute`` synthesizes a ``StepExecutionRecord`` for the matching
 step id instead of trying to resume a CoreAgent interrupt that never existed."""
 
 
@@ -154,7 +154,7 @@ def _append_ask_user_loop_messages(
 async def _record_and_emit_step_completed(
     ctx: LoopRuntimeContext,
     *,
-    result: StepResult,
+    result: StepExecutionRecord,
     step_desc: dict[str, str],
 ) -> None:
     """Apply step outcome to loop state and emit ``step_completed`` for live UIs."""
@@ -206,7 +206,7 @@ async def _record_and_emit_step_completed(
 
 async def _persist_planner_ask_step_outcome(
     ctx: LoopRuntimeContext,
-    result: StepResult,
+    result: StepExecutionRecord,
 ) -> None:
     """Record a synthesized planner ``ask_user`` step into the plan DAG and CE.
 
@@ -278,7 +278,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             origin_iid = str(pending_request_state.get("origin_interrupt_id", ""))
             if origin_iid.startswith(PLANNER_ASK_INTERRUPT_PREFIX):
                 # IG-462 Branch 1: planner-emitted ask_user step. No CoreAgent
-                # interrupt to resume — instead synthesize a StepResult below
+                # interrupt to resume — instead synthesize a StepExecutionRecord below
                 # so the next get_ready_steps() call naturally skips this step.
                 planner_ask_answered_step_id = origin_iid[len(PLANNER_ASK_INTERRUPT_PREFIX) :]
                 planner_ask_answers = tuple(ans.answers)
@@ -308,7 +308,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             }
             if planner_ask_confidence is not None:
                 outcome_payload["confidence"] = planner_ask_confidence
-            synth_result = StepResult(
+            synth_result = StepExecutionRecord(
                 step_id=planner_ask_answered_step_id,
                 success=True,
                 duration_ms=0,
@@ -394,10 +394,10 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                 {"step_id": step.id, "description": step.description},
             )
 
-    step_results: list[StepResult] = []
+    step_results: list[StepExecutionRecord] = []
     step_desc = {s.id: s.description for s in decision.steps}
 
-    # IG-462 Branch 1 continued: synthesize a successful StepResult for the
+    # IG-462 Branch 1 continued: synthesize a successful StepExecutionRecord for the
     # planner-emitted ask_user step that was just answered. Recording it here
     # adds the id to state.completed_step_ids so the executor's
     # get_ready_steps() will skip it on the resumed wave.
@@ -414,7 +414,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         }
         if planner_ask_confidence is not None:
             outcome_payload["confidence"] = planner_ask_confidence
-        synth_result = StepResult(
+        synth_result = StepExecutionRecord(
             step_id=planner_ask_answered_step_id,
             success=True,
             duration_ms=0,
@@ -537,7 +537,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
                     "iteration": item.iteration,
                 },
             )
-        elif isinstance(item, StepResult):
+        elif isinstance(item, StepExecutionRecord):
             step_results.append(item)
             await _record_and_emit_step_completed(
                 ctx,

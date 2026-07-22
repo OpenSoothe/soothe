@@ -13,7 +13,7 @@ from soothe.config import SootheConfig
 from soothe.context.engine import ContextEngine
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.engine.executor import Executor
-from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -71,7 +71,7 @@ async def test_stream_stops_after_subagent_cap(monkeypatch: pytest.MonkeyPatch) 
     )
     out = [item async for item in ex.execute(decision, state)]
 
-    results = [x for x in out if isinstance(x, StepResult)]
+    results = [x for x in out if isinstance(x, StepExecutionRecord)]
     assert len(results) == 1
     sr = results[0]
     assert sr.success
@@ -104,7 +104,7 @@ async def test_unlimited_subagent_when_cap_zero(monkeypatch: pytest.MonkeyPatch)
     )
     out = [item async for item in ex.execute(decision, state)]
 
-    results = [x for x in out if isinstance(x, StepResult)]
+    results = [x for x in out if isinstance(x, StepExecutionRecord)]
     sr = results[0]
     assert sr.hit_subagent_cap is False
     assert sr.subagent_task_completions == 2

@@ -4,7 +4,7 @@ Covers:
 - All 36 ErrorCode members have the correct numeric values per RFC-450 §7.3
 - ErrorCode is an IntEnum (ints, comparable, JSON-friendly)
 - Reserved range boundaries are respected
-- ProtocolError carries code/message/data/severity and serializes via to_dict
+- RpcProtocolError carries code/message/data/severity and serializes via to_dict
 - build_error_response produces the {type:'error', error:{code, message, data?},
   id?} nested envelope and omits empty data / absent id
 - Convenience constructors produce the correct codes and data payloads
@@ -17,7 +17,7 @@ from enum import IntEnum
 
 import pytest
 
-from soothe_daemon.protocol import ErrorCode, ProtocolError, build_error_response
+from soothe_daemon.protocol import ErrorCode, RpcProtocolError, build_error_response
 from soothe_daemon.protocol.error_codes import (
     daemon_not_ready,
     goal_not_found,
@@ -266,13 +266,13 @@ def test_severity_of_unknown_defaults_to_error() -> None:
 
 
 # ---------------------------------------------------------------------------
-# ProtocolError
+# RpcProtocolError
 # ---------------------------------------------------------------------------
 
 
 def test_protocol_error_attributes() -> None:
-    """ProtocolError stores code, message, data, severity."""
-    err = ProtocolError(
+    """RpcProtocolError stores code, message, data, severity."""
+    err = RpcProtocolError(
         ErrorCode.INVALID_PARAMS,
         "missing field",
         data={"field": "loop_id"},
@@ -286,22 +286,22 @@ def test_protocol_error_attributes() -> None:
 
 def test_protocol_error_defaults() -> None:
     """data defaults to empty dict; severity derived from code."""
-    err = ProtocolError(ErrorCode.PARSE_ERROR, "bad json")
+    err = RpcProtocolError(ErrorCode.PARSE_ERROR, "bad json")
     assert err.data == {}
     assert err.severity == "fatal"
 
 
 def test_protocol_error_is_exception() -> None:
-    """ProtocolError is raisable and carries the message on str()."""
-    with pytest.raises(ProtocolError) as excinfo:
-        raise ProtocolError(ErrorCode.LOOP_NOT_FOUND, "nope")
+    """RpcProtocolError is raisable and carries the message on str()."""
+    with pytest.raises(RpcProtocolError) as excinfo:
+        raise RpcProtocolError(ErrorCode.LOOP_NOT_FOUND, "nope")
     assert excinfo.value.code is ErrorCode.LOOP_NOT_FOUND
     assert "nope" in str(excinfo.value)
 
 
 def test_protocol_error_severity_override() -> None:
     """An explicit severity overrides the registry default."""
-    err = ProtocolError(
+    err = RpcProtocolError(
         ErrorCode.INTERNAL_ERROR,
         "boom",
         severity="warn",
@@ -311,7 +311,7 @@ def test_protocol_error_severity_override() -> None:
 
 def test_protocol_error_to_dict_with_data() -> None:
     """to_dict produces {type, error:{code(int), message, data}}."""
-    err = ProtocolError(
+    err = RpcProtocolError(
         ErrorCode.LOOP_NOT_FOUND,
         "Loop abc not found",
         data={"loop_id": "abc"},
@@ -329,7 +329,7 @@ def test_protocol_error_to_dict_with_data() -> None:
 
 def test_protocol_error_to_dict_without_data() -> None:
     """to_dict omits the data key when data is empty."""
-    err = ProtocolError(ErrorCode.METHOD_NOT_FOUND, "unknown")
+    err = RpcProtocolError(ErrorCode.METHOD_NOT_FOUND, "unknown")
     d = err.to_dict()
     assert d == {
         "type": "error",
@@ -340,7 +340,7 @@ def test_protocol_error_to_dict_without_data() -> None:
 
 def test_protocol_error_to_envelope_with_id() -> None:
     """to_envelope echoes the request id and includes proto."""
-    err = ProtocolError(
+    err = RpcProtocolError(
         ErrorCode.INVALID_REQUEST,
         "malformed",
         data={"reason": "no proto"},
@@ -356,7 +356,7 @@ def test_protocol_error_to_envelope_with_id() -> None:
 
 def test_protocol_error_to_envelope_without_id() -> None:
     """to_envelope omits id when request_id is None (notification)."""
-    err = ProtocolError(ErrorCode.PARSE_ERROR, "bad json")
+    err = RpcProtocolError(ErrorCode.PARSE_ERROR, "bad json")
     env = err.to_envelope()
     assert env["proto"] == "1"
     assert env["type"] == "error"
@@ -510,7 +510,7 @@ def test_internal_error_constructor() -> None:
 def test_error_always_has_code_and_message() -> None:
     """Every to_dict/to_envelope result carries error.code and error.message (RFC-450 §7.1)."""
     for code in ErrorCode:
-        err = ProtocolError(code, "msg")
+        err = RpcProtocolError(code, "msg")
         d = err.to_dict()
         assert d["type"] == "error"
         assert d["error"]["code"] == int(code)

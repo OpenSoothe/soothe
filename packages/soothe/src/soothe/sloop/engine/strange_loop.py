@@ -10,7 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from soothe_nano.utils.text_preview import log_preview
-from soothe_sdk.protocols.planner import PlanContext, StepResult
+from soothe_sdk.protocols.planner import PlanContext
+from soothe_sdk.protocols.planner import StepResult as SdkStepResult
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
@@ -980,7 +981,7 @@ class StrangeLoop:
                 available_subagents.append(capability_subagent)
 
         completed_steps = [
-            StepResult(
+            SdkStepResult(
                 step_id=r.step_id,
                 outcome=r.outcome if r.success else {"type": "error", "error": r.error or ""},
                 success=r.success,

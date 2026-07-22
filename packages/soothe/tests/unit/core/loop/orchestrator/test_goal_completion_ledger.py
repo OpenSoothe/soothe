@@ -117,7 +117,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """When the unified DAG has nodes, goal completion logs it (not user output)."""
-    from soothe.sloop.state.schemas import AgentDecision, StepAction, StepResult
+    from soothe.sloop.state.schemas import AgentDecision, StepAction, StepExecutionRecord
 
     caplog.set_level(logging.INFO)
     ce = _make_ce()
@@ -140,7 +140,7 @@ async def test_goal_completion_logs_planning_dag_at_info(
     pm.ingest_plan(plan_result, "ABC", 1)
     pm.record_step_outcomes(
         [
-            StepResult(
+            StepExecutionRecord(
                 step_id="ABC-01",
                 success=True,
                 outcome={},

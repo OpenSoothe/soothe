@@ -7,7 +7,7 @@ Covers:
 - Param validation failures receive ``-32602 INVALID_PARAMS``
 - Error responses use ``build_error_response()`` wire format (proto, type,
   error:{code, message, data?}, id?)
-- ``ProtocolError`` raised inside a handler is serialized to the standard error envelope
+- ``RpcProtocolError`` raised inside a handler is serialized to the standard error envelope
 - ``dispatch()`` source contains no ``if msg_type ==`` branches (static check)
 """
 
@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from soothe_daemon.protocol import ErrorCode, MessageRouter
-from soothe_daemon.protocol.error_codes import ProtocolError
+from soothe_daemon.protocol.error_codes import RpcProtocolError
 from soothe_daemon.protocol.router import PARAMS_REGISTRY
 
 # ---------------------------------------------------------------------------
@@ -686,23 +686,23 @@ async def test_invalid_params_error_includes_errors_list() -> None:
 
 
 # ---------------------------------------------------------------------------
-# ProtocolError raised in handler → serialized to error envelope
+# RpcProtocolError raised in handler → serialized to error envelope
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_protocol_error_raised_in_handler_is_serialized() -> None:
-    """When a handler raises ProtocolError, dispatch serializes it."""
+    """When a handler raises RpcProtocolError, dispatch serializes it."""
     router, daemon = _make_router()
 
     async def _raising_handler(self, client_id: Any, msg: dict[str, Any]) -> None:
-        raise ProtocolError(
+        raise RpcProtocolError(
             ErrorCode.LOOP_NOT_FOUND,
             "Loop xyz not found",
             data={"loop_id": "xyz"},
         )
 
-    # Monkey-patch one handler to raise ProtocolError.
+    # Monkey-patch one handler to raise RpcProtocolError.
     router._handle_loop_get = _raising_handler.__get__(router)  # type: ignore[method-assign]
 
     await router.dispatch(

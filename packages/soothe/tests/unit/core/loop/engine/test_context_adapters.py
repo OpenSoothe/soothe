@@ -14,7 +14,7 @@ from soothe.sloop.state.schemas import (
     AgentDecision,
     PlanResult,
     StepAction,
-    StepResult,
+    StepExecutionRecord,
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -44,8 +44,8 @@ def _make_plan_result(
     )
 
 
-def _make_step_result(step_id: str, success: bool = True) -> StepResult:
-    return StepResult(
+def _make_step_result(step_id: str, success: bool = True) -> StepExecutionRecord:
+    return StepExecutionRecord(
         step_id=step_id,
         success=success,
         duration_ms=100,

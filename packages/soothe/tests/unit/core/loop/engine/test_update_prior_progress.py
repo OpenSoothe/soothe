@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe.context.engine import ContextEngine
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.engine.executor import Executor, _ExecuteStepResult
-from soothe.sloop.state.schemas import LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -49,7 +49,7 @@ def _ok_payload(
     messages.append(AIMessage(content=final_text))
     return _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id=step_id,
             success=True,
             outcome={"type": "generic"},
@@ -66,7 +66,7 @@ def _ok_payload(
 def _failed_payload(step_id: str = "s1", error: str = "boom") -> _ExecuteStepResult:
     return _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id=step_id,
             success=False,
             outcome={"type": "error", "error": error},
@@ -240,7 +240,7 @@ def test_evidence_uses_chunked_assistant_text_when_final_ai_is_empty() -> None:
     payloads = [
         _ExecuteStepResult(
             events=[],
-            step_result=StepResult(
+            step_result=StepExecutionRecord(
                 step_id="s1",
                 success=True,
                 outcome={"type": "generic"},
@@ -274,7 +274,7 @@ def test_evidence_falls_back_to_delegate_final() -> None:
     payloads = [
         _ExecuteStepResult(
             events=[],
-            step_result=StepResult(
+            step_result=StepExecutionRecord(
                 step_id="s1",
                 success=True,
                 outcome={"type": "generic"},
@@ -400,7 +400,7 @@ def test_streamed_aimessage_chunks_resolve_real_tool_name_and_args() -> None:
     # resolver runs at chunk level only, not across chunks — we must aggregate.
     payload = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},
@@ -455,7 +455,7 @@ def test_streamed_chunks_with_multiple_tool_calls_aggregate_by_index() -> None:
 
     payload = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},
@@ -499,7 +499,7 @@ def test_streamed_chunks_without_ids_fall_back_to_index() -> None:
 
     payload = _ExecuteStepResult(
         events=[],
-        step_result=StepResult(
+        step_result=StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "code_exec"},

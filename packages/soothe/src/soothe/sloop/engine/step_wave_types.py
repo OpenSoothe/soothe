@@ -14,7 +14,7 @@ from typing import Any
 from langchain_core.messages import BaseMessage
 
 from soothe.config.constants import DEFAULT_MAX_TOOL_CALLS_PER_STEP
-from soothe.sloop.state.schemas import StepAction, StepResult
+from soothe.sloop.state.schemas import StepAction, StepExecutionRecord
 
 # Re-export for executor tests and legacy imports.
 _DEFAULT_MAX_TOOL_CALLS_PER_STEP = DEFAULT_MAX_TOOL_CALLS_PER_STEP
@@ -36,7 +36,7 @@ class _ExecuteStepResult:
     """
 
     events: list[Any] = field(default_factory=list)
-    step_result: StepResult | None = None
+    step_result: StepExecutionRecord | None = None
     messages: list[BaseMessage] = field(default_factory=list)
     delegate_final: str = ""
     output: str = ""  # Accumulated text chunks for ledger fallback

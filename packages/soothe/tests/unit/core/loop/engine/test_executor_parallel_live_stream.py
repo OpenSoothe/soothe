@@ -12,7 +12,7 @@ import pytest
 from soothe.context.engine import ContextEngine
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.engine.executor import Executor, StreamEvent, _ExecuteStepResult
-from soothe.sloop.state.schemas import LoopState, StepAction, StepResult
+from soothe.sloop.state.schemas import LoopState, StepAction, StepExecutionRecord
 
 
 def _make_ce() -> ContextEngine:
@@ -44,7 +44,7 @@ async def test_execute_parallel_yields_stream_events_before_all_steps_finish() -
         event = slow_event if step.id == "slow" else fast_event
         if live_event_queue is not None:
             live_event_queue.put_nowait(event)
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id=step.id,
             success=True,
             outcome={"type": "generic"},
@@ -73,16 +73,16 @@ async def test_execute_parallel_yields_stream_events_before_all_steps_finish() -
         seen.append(item)
         if first_tool_at is None and isinstance(item, tuple) and item[1] == "messages":
             first_tool_at = loop.time() - start
-        if all_done_at is None and len([x for x in seen if isinstance(x, StepResult)]) == len(
-            steps
-        ):
+        if all_done_at is None and len(
+            [x for x in seen if isinstance(x, StepExecutionRecord)]
+        ) == len(steps):
             all_done_at = loop.time() - start
 
     assert first_tool_at is not None
     assert all_done_at is not None
     assert first_tool_at < all_done_at - 0.08
     assert len([x for x in seen if isinstance(x, tuple) and len(x) == 3]) == 2
-    step_results = [x for x in seen if isinstance(x, StepResult)]
+    step_results = [x for x in seen if isinstance(x, StepExecutionRecord)]
     assert len(step_results) == 2
     assert {r.step_id for r in step_results} == {"fast", "slow"}
 
@@ -106,7 +106,7 @@ async def test_execute_parallel_ledger_uses_step_id_when_completion_order_differ
         else:
             await asyncio.sleep(0.02)
         order.append(step.id)
-        result = StepResult(
+        result = StepExecutionRecord(
             step_id=step.id,
             success=True,
             outcome={"type": "generic"},

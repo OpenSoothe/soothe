@@ -4,7 +4,7 @@ import pytest
 
 from soothe.config import SootheConfig
 from soothe.sloop.engine.executor import Executor
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def test_aggregate_metrics_basic(mock_core_agent, config, state):
     executor = Executor(mock_core_agent, config=config)
 
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output="Output 1",
@@ -47,7 +47,7 @@ def test_aggregate_metrics_basic(mock_core_agent, config, state):
             subagent_task_completions=1,
             hit_subagent_cap=False,
         ),
-        StepResult(
+        StepExecutionRecord(
             step_id="step2",
             success=True,
             output="Output 2",
@@ -75,7 +75,7 @@ def test_aggregate_metrics_with_errors(mock_core_agent, config, state):
     executor = Executor(mock_core_agent, config=config)
 
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output="Success",
@@ -85,7 +85,7 @@ def test_aggregate_metrics_with_errors(mock_core_agent, config, state):
             subagent_task_completions=0,
             hit_subagent_cap=False,
         ),
-        StepResult(
+        StepExecutionRecord(
             step_id="step2",
             success=False,
             error="Failed",
@@ -108,7 +108,7 @@ def test_aggregate_metrics_cap_hit(mock_core_agent, config, state):
     executor = Executor(mock_core_agent, config=config)
 
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output="Output",
@@ -146,7 +146,7 @@ def test_aggregate_metrics_context_window_estimation(mock_core_agent, config, st
     output = "x" * 4000  # 4000 chars ≈ 1000 tokens
 
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output=output,
@@ -173,7 +173,7 @@ def test_aggregate_metrics_cumulative_tokens(mock_core_agent, config, state):
     # First wave
     output1 = "x" * 4000
     step_results1 = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output=output1,
@@ -190,7 +190,7 @@ def test_aggregate_metrics_cumulative_tokens(mock_core_agent, config, state):
     # Second wave
     output2 = "y" * 8000
     step_results2 = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step2",
             success=True,
             output=output2,
@@ -227,7 +227,7 @@ def test_aggregate_metrics_sums_multi_hop_ai_usage(mock_core_agent, config, stat
         ),
     ]
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output="done",
@@ -249,7 +249,7 @@ def test_aggregate_metrics_multiple_cap_hits(mock_core_agent, config, state):
     executor = Executor(mock_core_agent, config=config)
 
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="step1",
             success=True,
             output="Output 1",
@@ -259,7 +259,7 @@ def test_aggregate_metrics_multiple_cap_hits(mock_core_agent, config, state):
             subagent_task_completions=0,
             hit_subagent_cap=False,
         ),
-        StepResult(
+        StepExecutionRecord(
             step_id="step2",
             success=True,
             output="Output 2",

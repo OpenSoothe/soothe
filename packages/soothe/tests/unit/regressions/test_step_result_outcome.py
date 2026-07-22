@@ -1,14 +1,14 @@
-"""Unit tests for StepResult outcome metadata (RFC-211).
+"""Unit tests for StepExecutionRecord outcome metadata (RFC-211).
 
-Tests that StepResult correctly uses outcome metadata instead of output field.
+Tests that StepExecutionRecord correctly uses outcome metadata instead of output field.
 """
 
-from soothe.sloop.state.schemas import StepResult
+from soothe.sloop.state.schemas import StepExecutionRecord
 
 
 def test_step_result_no_output_field():
-    """StepResult should not have 'output' field (RFC-211)."""
-    result = StepResult(
+    """StepExecutionRecord should not have 'output' field (RFC-211)."""
+    result = StepExecutionRecord(
         step_id="test_step",
         success=True,
         outcome={"type": "file_read", "tool_name": "read_file", "size_bytes": 1024},
@@ -17,16 +17,16 @@ def test_step_result_no_output_field():
     )
 
     # Should not have output attribute
-    assert not hasattr(result, "output"), "StepResult should not have 'output' field"
+    assert not hasattr(result, "output"), "StepExecutionRecord should not have 'output' field"
 
     # Should have outcome attribute
-    assert hasattr(result, "outcome"), "StepResult must have 'outcome' field"
+    assert hasattr(result, "outcome"), "StepExecutionRecord must have 'outcome' field"
     assert result.outcome["type"] == "file_read"
 
 
 def test_step_result_to_evidence_string_file_read():
     """Test evidence string generation for file_read outcome."""
-    result = StepResult(
+    result = StepExecutionRecord(
         step_id="step1",
         success=True,
         outcome={
@@ -53,7 +53,7 @@ def test_step_result_to_evidence_string_file_read():
 
 def test_step_result_to_evidence_string_web_search():
     """Test evidence string generation for web_search outcome."""
-    result = StepResult(
+    result = StepExecutionRecord(
         step_id="step2",
         success=True,
         outcome={
@@ -73,7 +73,7 @@ def test_step_result_to_evidence_string_web_search():
 
 def test_step_result_to_evidence_string_error():
     """Test evidence string generation for failed step."""
-    result = StepResult(
+    result = StepExecutionRecord(
         step_id="step3",
         success=False,
         outcome={"type": "error", "error": "File not found"},
@@ -91,7 +91,7 @@ def test_step_result_to_evidence_string_error():
 
 def test_step_result_to_evidence_string_generic():
     """Test evidence string generation for generic outcome."""
-    result = StepResult(
+    result = StepExecutionRecord(
         step_id="step4",
         success=True,
         outcome={
@@ -110,7 +110,7 @@ def test_step_result_to_evidence_string_generic():
 
 def test_step_result_outcome_metadata_structure():
     """Test that outcome metadata has correct structure."""
-    result = StepResult(
+    result = StepExecutionRecord(
         step_id="step5",
         success=True,
         outcome={

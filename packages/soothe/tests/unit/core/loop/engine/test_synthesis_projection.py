@@ -11,7 +11,7 @@ from soothe.sloop.engine.synthesis_projection import (
     flatten_execute_human_content,
     render_synthesis_system_prompt,
 )
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -127,7 +127,7 @@ def test_build_synthesis_messages_injects_execute_ledger_before_task_human() -> 
         thread_id="t",
         loop_messages=[execute_human, execute_ai],
         step_results=[
-            StepResult(
+            StepExecutionRecord(
                 step_id="s1",
                 success=True,
                 outcome={"type": "generic", "step_input": "x", "output_summary": {}},

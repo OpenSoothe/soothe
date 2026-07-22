@@ -7,7 +7,7 @@ import pytest
 from soothe.config import SootheConfig
 from soothe.sloop.engine.executor import Executor
 from soothe.sloop.engine.step_wave_types import all_tool_outcomes_failed
-from soothe.sloop.state.schemas import LoopState, StepResult
+from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def test_wave_metrics_ignore_recoverable_tool_errors_on_successful_steps(
 ) -> None:
     state = LoopState(goal="g", thread_id="t")
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="s1",
             success=True,
             outcome={"type": "generic"},
@@ -45,7 +45,7 @@ def test_wave_metrics_ignore_recoverable_tool_errors_on_successful_steps(
 def test_wave_metrics_count_failed_steps(executor: Executor) -> None:
     state = LoopState(goal="g", thread_id="t")
     step_results = [
-        StepResult(
+        StepExecutionRecord(
             step_id="s1",
             success=False,
             error="All tool calls failed",
@@ -61,7 +61,7 @@ def test_wave_metrics_count_failed_steps(executor: Executor) -> None:
 
 
 def test_step_evidence_omits_recoverable_tool_warning() -> None:
-    result = StepResult(
+    result = StepExecutionRecord(
         step_id="PYH-01",
         success=True,
         outcome={"type": "generic"},

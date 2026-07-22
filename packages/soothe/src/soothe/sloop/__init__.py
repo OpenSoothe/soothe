@@ -21,7 +21,7 @@ __all__ = [
     "LoopWorkingMemory",
     "PlanResult",
     "StepAction",
-    "StepResult",
+    "StepExecutionRecord",
 ]
 
 
@@ -47,10 +47,10 @@ def __getattr__(name: str) -> Any:
         from soothe.sloop.state.schemas import StepAction
 
         return StepAction
-    if name == "StepResult":
-        from soothe.sloop.state.schemas import StepResult
+    if name == "StepExecutionRecord":
+        from soothe.sloop.state.schemas import StepExecutionRecord
 
-        return StepResult
+        return StepExecutionRecord
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)
