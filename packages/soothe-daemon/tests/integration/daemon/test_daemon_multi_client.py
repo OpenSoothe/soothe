@@ -6,8 +6,9 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from soothe_client import WebSocketClient
 
-from soothe_daemon import SootheDaemon, WebSocketClient
+from soothe_daemon import SootheDaemon
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,
     build_daemon_config,

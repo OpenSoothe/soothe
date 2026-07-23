@@ -30,5 +30,9 @@ soothed stop
 
 ## Dependencies
 
-- `soothe>=0.5.0` — In-process agent core
-- `soothe-sdk>=1.0.0` — wire/events/display contracts
+- `soothe>=0.9.4` — In-process agent core (pulls soothe-nano)
+- `soothe-sdk>=1.0.5` — wire/events/display contracts
+
+Do **not** depend on `soothe-client-python` at runtime; use `soothe_sdk.wire`
+(or `soothe_daemon.admin_rpc` for `soothed` admin commands). Tests may install
+the client via the `dev` extra.

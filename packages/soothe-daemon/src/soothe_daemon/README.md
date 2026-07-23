@@ -50,7 +50,7 @@ daemon **never** duplicates protocol, memory, or planning logic.
 | `client_session.py` | Tracks connected client metadata and event filtering |
 | `event_bus.py` | In-process pub/sub for broadcasting events to all clients |
 | `protocol.py` / `protocol_v2.py` | Wire-format encode/decode helpers |
-| `websocket_client.py` | `WebSocketClient` — for CLI commands that talk to the daemon |
+| `admin_rpc.py` | One-shot admin RPCs (`soothed memory`) via sdk wire |
 | `singleton.py` | Single-instance enforcement |
 | `paths.py` | `pid_path()` — canonical PID file path |
 | `health/` | `HealthChecker` and per-category check implementations |
@@ -120,9 +120,9 @@ on daemon-layer paths (`pid_path`) and daemon connectivity.
 
 ```python
 from soothe_daemon import SootheDaemon      # main daemon class
-from soothe_daemon import WebSocketClient   # client for CLI ↔ daemon
 from soothe_daemon import run_daemon        # entrypoint
 from soothe_daemon import pid_path          # ~/.soothe/soothe.pid
+from soothe_client import WebSocketClient   # tests / external clients only
 from soothe_daemon.health import HealthChecker
 ```
 

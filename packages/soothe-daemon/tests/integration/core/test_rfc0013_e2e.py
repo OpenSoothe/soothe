@@ -19,9 +19,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from soothe_client import WebSocketClient
 from soothe_sdk.wire import ProtocolError
 
-from soothe_daemon import SootheDaemon, WebSocketClient
+from soothe_daemon import SootheDaemon
 from soothe_daemon.event import EventBus
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,

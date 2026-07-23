@@ -9,7 +9,7 @@ except importlib.metadata.PackageNotFoundError:
 
 # Lazy imports to avoid heavy module loading (5+ seconds for channels/nio/crypto)
 # These are only imported when actually accessed, not at package load time
-__all__ = ["SootheDaemon", "WebSocketClient", "__version__", "pid_path", "run_daemon"]
+__all__ = ["SootheDaemon", "__version__", "pid_path", "run_daemon"]
 
 
 def __getattr__(name: str):
@@ -18,10 +18,6 @@ def __getattr__(name: str):
         from soothe_daemon.server import SootheDaemon
 
         return SootheDaemon
-    if name == "WebSocketClient":
-        from soothe_client import WebSocketClient
-
-        return WebSocketClient
     if name == "run_daemon":
         from soothe_daemon.bootstrap.entrypoint import run_daemon
 

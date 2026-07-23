@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
+from soothe_client import WebSocketClient
 
-from soothe_daemon import SootheDaemon, WebSocketClient
+from soothe_daemon import SootheDaemon
 from soothe_daemon.config import SootheDaemonConfig
 from tests.integration.daemon_fixtures import (
     alloc_ephemeral_port,

@@ -58,7 +58,7 @@ soothe-nano           ← Coding CoreAgent (standalone; mirasoth/soothe-nano)
         ↓
 soothe                ← host: StrangeLoop, Autopilot, CE, cron, runner
         ↓
-soothe-daemon         ← soothed process (may also depend on nano + client)
+soothe-daemon         ← soothed process (soothe + soothe-sdk; nano via soothe)
         ↑
 soothe-client-python  ← WebSocket transport (sdk only among workspace pkgs)
         ↑
@@ -84,16 +84,17 @@ soothe-cli            ← Typer + Textual TUI (sdk + client; talks over wire)
 | `soothe-deepagents` | — | any `soothe*` package |
 | `soothe-nano` | `soothe-sdk`, `soothe-deepagents` | `soothe`, `soothe_daemon`, `soothe_cli` |
 | `soothe` | `soothe-sdk`, `soothe-nano`, `soothe-deepagents` | `soothe_daemon`, `soothe_cli` |
-| `soothe-daemon` | `soothe`, `soothe-nano`, `soothe-sdk`, `soothe-client-python` | `soothe_cli` |
+| `soothe-daemon` | `soothe`, `soothe-nano`, `soothe-sdk` | `soothe_cli`, `soothe_client` |
 | `soothe-client-python` | `soothe-sdk` | `soothe`, `soothe_daemon`, `soothe_cli` |
 | `soothe-cli` | `soothe-sdk`, `soothe-client-python` | `soothe`, `soothe_daemon` (use WebSocket, not Python imports) |
 
 Additional hard bans:
 
 1. **CLI sits above the daemon** — `soothe_cli` must not import daemon/host; communicate via wire contracts in sdk + `soothe-client-python`.
-2. **Nano is standalone** — no host/daemon imports (`TYPE_CHECKING` included). No host-only symbols in nano source: `StrangeLoop`, `Autopilot`, `ContextEngine`, `cron`, intake-only, `sloop`, goal-completion hooks, identity runtime/middleware, daemon heartbeat events, etc. (literal ban in `check_module_import_boundaries.sh` rule 3c).
-3. **Private nano middleware is closed** — other packages must not import `soothe_nano.middleware._*`.
-4. **No dead duplicates** — do not redefine in nano a public symbol the host/daemon already owns; host is canonical (`check_nano_duplicate_symbols.py`).
+2. **Daemon does not depend on the WS client** — `soothe_daemon` must not import `soothe_client` in runtime source; admin RPCs use `soothe_sdk.wire` (tests may use the client via the `dev` extra).
+3. **Nano is standalone** — no host/daemon imports (`TYPE_CHECKING` included). No host-only symbols in nano source: `StrangeLoop`, `Autopilot`, `ContextEngine`, `cron`, intake-only, `sloop`, goal-completion hooks, identity runtime/middleware, daemon heartbeat events, etc. (literal ban in `check_module_import_boundaries.sh` rule 3c).
+4. **Private nano middleware is closed** — other packages must not import `soothe_nano.middleware._*`.
+5. **No dead duplicates** — do not redefine in nano a public symbol the host/daemon already owns; host is canonical (`check_nano_duplicate_symbols.py`).
 
 #### Standalone docstring / comment rules (`soothe-sdk`, `soothe-nano`)
 
@@ -156,7 +157,7 @@ packages/
 ├── soothe-deepagents/  # deepagents fork submodule (mirasoth/soothe-deepagents) — leaf
 ├── soothe-nano/        # Coding CoreAgent submodule (mirasoth/soothe-nano); no StrangeLoop/Autopilot
 ├── soothe/             # Host: StrangeLoop, Autopilot, CE, cron, runner (depends on nano)
-├── soothe-daemon/      # Daemon server (soothed); depends on soothe + soothe-nano (+ client)
+├── soothe-daemon/      # Daemon server (soothed); depends on soothe + soothe-sdk (nano via soothe)
 └── soothe-cli/         # Typer CLI + Textual TUI (sdk + client over WebSocket; not soothe/daemon)
 
 client/

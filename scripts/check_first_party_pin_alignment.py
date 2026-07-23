@@ -2,11 +2,12 @@
 """Ensure soothe and soothe-daemon declare compatible first-party pins.
 
 The Docker image installs ``soothe==VERSION`` and ``soothe-daemon==VERSION``
-together from PyPI. If those packages pin disjoint ranges for a shared
-dependency (e.g. soothe-nano), the image build fails at resolve time.
+together from PyPI. Daemon must pin ``soothe`` to a range that admits the
+current monorepo VERSION. When daemon also declares ``soothe-sdk``, that range
+must intersect soothe's ``soothe-sdk`` pin (empty intersection fails resolve).
 
-This gate compares declared ranges for shared first-party packages and fails
-when their SpecifierSets have an empty intersection.
+Daemon must NOT re-pin ``soothe-nano`` (comes via soothe) or depend on
+``soothe-client-python`` at runtime (client sits above the daemon).
 """
 
 from __future__ import annotations
@@ -22,8 +23,8 @@ from packaging.version import Version
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Packages that both soothe and soothe-daemon may declare; ranges must overlap.
-SHARED_FIRST_PARTY = ("soothe-nano", "soothe-sdk")
+# Optional shared first-party pins: if both packages declare them, ranges must overlap.
+SHARED_FIRST_PARTY = ("soothe-sdk",)
 
 # Probe versions covering current and next major floors for intersection tests.
 _PROBE_VERSIONS = tuple(
@@ -65,6 +66,18 @@ def main() -> int:
     daemon = _load_deps("packages/soothe-daemon/pyproject.toml")
     errors: list[str] = []
 
+    # Daemon must not re-pin nano or depend on the WS client at runtime.
+    if "soothe-nano" in daemon:
+        errors.append(
+            "soothe-daemon must not declare soothe-nano "
+            "(it comes transitively via soothe; dual pins drift)"
+        )
+    if "soothe-client-python" in daemon:
+        errors.append(
+            "soothe-daemon must not declare soothe-client-python in core deps "
+            "(client sits above daemon; use soothe-sdk wire + admin_rpc)"
+        )
+
     for name in SHARED_FIRST_PARTY:
         if name not in soothe:
             errors.append(f"soothe is missing dependency on {name}")
@@ -81,8 +94,6 @@ def main() -> int:
                 f"(empty intersection — Docker/PyPI co-install will fail)"
             )
 
-    # Daemon must depend on soothe with a floor that can satisfy soothe's own
-    # first-party pins (soothe-nano floor in particular).
     soothe_req = daemon.get("soothe")
     if soothe_req is None:
         errors.append("soothe-daemon is missing dependency on soothe")
@@ -107,12 +118,14 @@ def main() -> int:
         )
         return 1
 
-    print("OK: soothe and soothe-daemon first-party pins intersect")
+    print("OK: soothe and soothe-daemon first-party pins aligned")
+    print(f"  soothe: daemon pin {_normalize_spec(soothe_req.specifier)} admits VERSION")
     for name in SHARED_FIRST_PARTY:
-        print(
-            f"  {name}: soothe={_normalize_spec(soothe[name].specifier)} "
-            f"daemon={_normalize_spec(daemon[name].specifier)}"
-        )
+        if name in daemon and name in soothe:
+            print(
+                f"  {name}: soothe={_normalize_spec(soothe[name].specifier)} "
+                f"daemon={_normalize_spec(daemon[name].specifier)}"
+            )
     return 0
 
 

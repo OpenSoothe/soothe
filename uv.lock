@@ -8438,8 +8438,6 @@ dependencies = [
     { name = "slack-sdk" },
     { name = "slackify-markdown" },
     { name = "soothe" },
-    { name = "soothe-client-python" },
-    { name = "soothe-nano" },
     { name = "soothe-sdk" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
@@ -8455,6 +8453,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "soothe-cli" },
+    { name = "soothe-client-python" },
 ]
 
 [package.metadata]
@@ -8487,8 +8486,7 @@ requires-dist = [
     { name = "slackify-markdown", specifier = ">=0.2.0,<1.0.0" },
     { name = "soothe", editable = "packages/soothe" },
     { name = "soothe-cli", marker = "extra == 'dev'", editable = "packages/soothe-cli" },
-    { name = "soothe-client-python", editable = "client/python" },
-    { name = "soothe-nano", editable = "packages/soothe-nano" },
+    { name = "soothe-client-python", marker = "extra == 'dev'", editable = "client/python" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "typer", specifier = ">=0.9.0,<2.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0,<1.0.0" },
@@ -8516,7 +8514,7 @@ wheels = [
 
 [[package]]
 name = "soothe-nano"
-version = "1.0.1"
+version = "1.0.2"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },

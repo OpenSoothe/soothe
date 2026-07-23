@@ -454,11 +454,10 @@ def memory_trace(
     ws_url = f"ws://{host}:{port}"
 
     try:
-        from soothe_client.command_client import CommandClient
+        from soothe_daemon.admin_rpc import memory_stats as fetch_memory_stats
 
         timeout = 30 if mode == "objects" else 10
-        client = CommandClient(ws_url, timeout=timeout)
-        data = client.memory_stats(mode)
+        data = fetch_memory_stats(ws_url, mode, timeout=timeout)
     except Exception as e:
         typer.echo(f"Failed to query daemon memory stats: {e}", err=True)
         raise typer.Exit(code=1) from e

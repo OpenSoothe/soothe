@@ -6,7 +6,8 @@
 # Rules:
 #   1. soothe (in-proc agent core) must NOT import soothe_daemon or soothe_cli
 #      (one-way dep: soothe-daemon -> soothe; soothe-cli -> soothe-client-python -> soothe-sdk).
-#   2. soothe_daemon must NOT import soothe_cli (CLI sits above the daemon).
+#   2. soothe_daemon must NOT import soothe_cli or soothe_client
+#      (CLI/client sit above the daemon; admin RPCs use soothe_sdk.wire).
 #   3. soothe_sdk must NOT import any other workspace package.
 #   4. soothe_client must NOT import soothe / soothe_cli / soothe_daemon.
 #
@@ -34,7 +35,7 @@ check_module_import_boundaries.sh — Soothe monorepo import boundaries.
 
 Rules:
   1. soothe must not import soothe_daemon or soothe_cli.
-  2. soothe-daemon must not import soothe_cli.
+  2. soothe-daemon must not import soothe_cli or soothe_client.
   3. soothe-sdk must not import other workspace packages.
   3b. soothe-nano must not import soothe/cli/daemon.
   3c. soothe-nano must not contain L2/L3 symbols (StrangeLoop/Autopilot/CE/cron).
@@ -90,10 +91,13 @@ run_check "${PKG_DIR}/soothe/src" \
   '^\s*(from|import)\s+soothe_cli(\.|\s|$)' \
   "soothe must not import soothe_cli"
 
-# Rule 2: soothe-daemon must not import CLI.
+# Rule 2: soothe-daemon must not import CLI or the WS client (client sits above).
 run_check "${PKG_DIR}/soothe-daemon/src" \
   '^\s*(from|import)\s+soothe_cli(\.|\s|$)' \
   "soothe-daemon must not import soothe_cli"
+run_check "${PKG_DIR}/soothe-daemon/src" \
+  '^\s*(from|import)\s+soothe_client(\.|\s|$)' \
+  "soothe-daemon must not import soothe_client"
 
 # Rule 3: soothe-sdk must be standalone.
 run_check "${PKG_DIR}/soothe-sdk/src" \
