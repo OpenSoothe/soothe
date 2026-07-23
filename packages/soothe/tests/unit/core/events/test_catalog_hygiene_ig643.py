@@ -1,4 +1,4 @@
-"""IG-707: host no longer exports dead loop/checkpoint event consts."""
+"""IG-643: host no longer exports dead loop/checkpoint event consts."""
 
 import soothe.events as events
 

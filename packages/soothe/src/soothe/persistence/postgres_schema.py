@@ -4,7 +4,7 @@ Schema is defined in ``soothe/persistence/sql/``
 (``init.sql`` plus optional versioned ``NNN_name.sql`` scripts) and applied
 idempotently on pool open via :func:`initialize_database`.
 
-IG-678 PR-3: the host owns the StrangeLoop/CE schema; ``sql_root`` is pinned to
+IG-635 PR-3: the host owns the StrangeLoop/CE schema; ``sql_root`` is pinned to
 the host sql dir so the schema no longer lives in ``soothe_nano``.
 """
 

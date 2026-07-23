@@ -31,7 +31,7 @@ def test_split_sql_statements_splits_multiline_ddl() -> None:
 
 
 def test_checkpoints_init_script_contains_core_tables() -> None:
-    """IG-678 PR-3: checkpoints init is host-owned; load from the host sql root."""
+    """IG-635 PR-3: checkpoints init is host-owned; load from the host sql root."""
     from soothe.persistence.postgres_schema import _HOST_SQL_ROOT
 
     sql = load_init_script("soothe_checkpoints", sql_root=_HOST_SQL_ROOT)
@@ -185,7 +185,7 @@ async def test_initialize_database_runs_init_then_migrations(tmp_path: Path) -> 
 
 
 def test_checkpoints_init_lives_in_host_sql_root() -> None:
-    """IG-678 PR-3: the StrangeLoop/CE checkpoints schema is host-owned.
+    """IG-635 PR-3: the StrangeLoop/CE checkpoints schema is host-owned.
 
     Nano no longer ships ``soothe_checkpoints/init.sql``; the host pins
     ``sql_root`` to its own ``persistence/sql`` dir in

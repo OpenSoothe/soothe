@@ -1,7 +1,7 @@
 """Shared checkpointer pool singleton (per-process).
 
 Host ``SharedCheckpointerPool`` is a thin subclass; singleton state lives in
-``soothe_nano.resolve.shared_checkpointer_pool`` (IG-705).
+``soothe_nano.resolve.shared_checkpointer_pool`` (IG-641).
 """
 
 from __future__ import annotations

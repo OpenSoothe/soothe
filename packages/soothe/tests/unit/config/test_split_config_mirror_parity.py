@@ -1,4 +1,4 @@
-"""IG-706: identity guards for nano-owned config models re-exported by host.
+"""IG-642: identity guards for nano-owned config models re-exported by host.
 
 Shared schema classes must be the same class object on both sides
 (``soothe.config.models.X is soothe_nano.config.models.X``).

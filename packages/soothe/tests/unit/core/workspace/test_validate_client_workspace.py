@@ -1,6 +1,6 @@
 """Tests for client workspace validation.
 
-Moved from ``soothe_nano`` to the host (IG-678 PR-4): ``validate_client_workspace``
+Moved from ``soothe_nano`` to the host (IG-635 PR-4): ``validate_client_workspace``
 is host-owned (``soothe.workspace.resolution``).
 """
 

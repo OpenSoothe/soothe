@@ -41,7 +41,7 @@ class StrangeLoopCheckpointPersistenceManager:
             config: SootheConfig for backend selection. If None, uses SQLite.
             display_loop_purger: Optional callable that purges a loop's display
                 card data (``delete_loop(loop_id)``). Injected by the daemon,
-                which owns the display card store (IG-678 PR-2). No-op when None
+                which owns the display card store (IG-635 PR-2). No-op when None
                 (keeps the host free of daemon imports).
         """
         self._display_loop_purger = display_loop_purger

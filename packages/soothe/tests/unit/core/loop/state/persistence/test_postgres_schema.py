@@ -19,7 +19,7 @@ from soothe.sloop.checkpoints.postgres_schema import (
 async def test_initialize_schema_runs_checkpoints_init_and_migrations() -> None:
     """Pool open delegates to soothe_checkpoints init + versioned migrations.
 
-    IG-678 PR-3: the host pins ``sql_root`` to its own sql dir so the
+    IG-635 PR-3: the host pins ``sql_root`` to its own sql dir so the
     StrangeLoop/CE schema no longer lives in ``soothe_nano``.
     """
     from soothe.sloop.checkpoints.postgres_schema import _HOST_SQL_ROOT

@@ -1,6 +1,6 @@
 """Host Executor error classification vs rate-limit detection.
 
-Moved from soothe-nano (IG-705): these tests exercise StrangeLoop Executor
+Moved from soothe-nano (IG-641): these tests exercise StrangeLoop Executor
 and execute_steps helpers, which must not live in nano.
 """
 
