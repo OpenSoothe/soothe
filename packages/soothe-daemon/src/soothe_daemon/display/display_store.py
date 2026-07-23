@@ -68,8 +68,6 @@ class DisplayCardStoreProtocol(Protocol):
 
     def goal_snapshot_count(self, loop_id: str) -> int: ...
 
-    def allocate_goal_snapshot_index(self, loop_id: str) -> int: ...
-
     def insert_goal_snapshot_with_auto_index(
         self,
         loop_id: str,
@@ -250,20 +248,6 @@ class DisplayCardStore:
             (loop_id,),
         ).fetchone()
         return int(row[0]) if row else 0
-
-    def allocate_goal_snapshot_index(self, loop_id: str) -> int:
-        """Return the next goal snapshot index without inserting (non-atomic alone)."""
-        conn = self._connection()
-        with self._lock:
-            row = conn.execute(
-                """
-                SELECT COALESCE(MAX(goal_index), -1) + 1
-                FROM goal_display_snapshots
-                WHERE loop_id = ?
-                """,
-                (loop_id,),
-            ).fetchone()
-            return int(row[0]) if row else 0
 
     def insert_goal_snapshot_with_auto_index(
         self,

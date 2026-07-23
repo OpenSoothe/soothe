@@ -3,6 +3,5 @@
 from __future__ import annotations
 
 from soothe.utils.goal_completion_stream import *  # noqa: F403
-from soothe.utils.loop_messages import *  # noqa: F403
 
 __all__ = [n for n in globals() if not n.startswith("_")]

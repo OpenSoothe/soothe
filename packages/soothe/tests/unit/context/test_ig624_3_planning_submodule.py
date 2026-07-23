@@ -30,9 +30,7 @@ from soothe.context.planning_completion import (
 )
 from soothe.context.planning_models import (
     DagPlanningContext,
-    DecompositionRequest,
     DecompositionResult,
-    OrchestrationStrategy,
     PlanWave,
     SubGoalSpec,
 )
@@ -995,63 +993,6 @@ class TestGoalPlanningSubengineCreateSubgoals:
         assert planner.create_subgoals(parent.id, result) == []
 
 
-class TestGoalPlanningSubengineOrchestration:
-    def test_empty_dag(self) -> None:
-        ce = ContextEngine()
-        planner = ce.planning.goal
-        strategy = planner.compute_orchestration_strategy()
-        assert strategy.concurrency_mode == "adaptive"  # default for empty
-
-    def test_sequential_dag(self) -> None:
-        ce = ContextEngine()
-        g1 = GoalNode(description="G1", status="pending")
-        g2 = GoalNode(description="G2", status="pending", depends_on=[g1.id])
-        ce._dag.add_goal(g1)
-        ce._dag.add_goal(g2)
-
-        planner = ce.planning.goal
-        strategy = planner.compute_orchestration_strategy()
-        # g1 has no deps (parallel flag), g2 has deps (sequential flag) → mixed
-        assert strategy.concurrency_mode == "mixed"
-
-    def test_parallel_dag(self) -> None:
-        ce = ContextEngine()
-        g1 = GoalNode(description="G1", status="pending")
-        g2 = GoalNode(description="G2", status="pending")
-        ce._dag.add_goal(g1)
-        ce._dag.add_goal(g2)
-
-        planner = ce.planning.goal
-        strategy = planner.compute_orchestration_strategy()
-        assert strategy.concurrency_mode == "parallel"
-
-    def test_purely_sequential_all_deps(self) -> None:
-        """All goals have dependencies → sequential."""
-        ce = ContextEngine()
-        g1 = GoalNode(description="G1", status="completed")
-        g2 = GoalNode(description="G2", status="pending", depends_on=[g1.id])
-        ce._dag.add_goal(g1)
-        ce._dag.add_goal(g2)
-
-        planner = ce.planning.goal
-        strategy = planner.compute_orchestration_strategy()
-        # No pending goals without deps, but g2 has deps → sequential
-        assert strategy.concurrency_mode == "sequential"
-
-    def test_mixed_dag(self) -> None:
-        ce = ContextEngine()
-        g1 = GoalNode(description="G1", status="pending")
-        g2 = GoalNode(description="G2", status="pending")
-        g3 = GoalNode(description="G3", status="pending", depends_on=[g1.id])
-        ce._dag.add_goal(g1)
-        ce._dag.add_goal(g2)
-        ce._dag.add_goal(g3)
-
-        planner = ce.planning.goal
-        strategy = planner.compute_orchestration_strategy()
-        assert strategy.concurrency_mode == "mixed"
-
-
 class TestGoalPlanningSubengineReflect:
     @pytest.mark.asyncio
     async def test_stub_returns_empty(self) -> None:
@@ -1103,23 +1044,9 @@ class TestPlanningModels:
         assert spec.depends_on == []
         assert spec.conflicts_with == []
 
-    def test_decomposition_request(self) -> None:
-        req = DecompositionRequest(
-            goal_description="Complex goal",
-            goal_id="g1",
-            context_summary="some context",
-        )
-        assert req.max_subgoals == 5
-        assert req.constraints == []
-
     def test_decomposition_result_strategy(self) -> None:
         result = DecompositionResult(subgoals=[], reasoning="test")
         assert result.strategy == "parallel"
-
-    def test_orchestration_strategy_defaults(self) -> None:
-        strategy = OrchestrationStrategy()
-        assert strategy.concurrency_mode == "adaptive"
-        assert strategy.dependency_graph == {}
 
 
 def test_completion_constants_single_source() -> None:

@@ -29,32 +29,12 @@ class SubGoalSpec(BaseModel):
     informs: list[str] = Field(default_factory=list)
 
 
-class DecompositionRequest(BaseModel):
-    """Request for LLM-driven goal decomposition."""
-
-    goal_description: str
-    goal_id: str
-    context_summary: str = ""
-    constraints: list[str] = Field(default_factory=list)
-    max_subgoals: int = 5
-    max_depth: int = 3
-
-
 class DecompositionResult(BaseModel):
     """Result of goal decomposition."""
 
     subgoals: list[SubGoalSpec] = Field(default_factory=list)
     reasoning: str = ""
     strategy: Literal["sequential", "parallel", "mixed"] = "parallel"
-
-
-class OrchestrationStrategy(BaseModel):
-    """Strategy for multi-goal orchestration."""
-
-    concurrency_mode: Literal["sequential", "parallel", "mixed", "adaptive"] = "adaptive"
-    max_parallel: int = 3
-    priority_weights: dict[str, float] = Field(default_factory=dict)
-    dependency_graph: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class CompletionStrategy(StrEnum):

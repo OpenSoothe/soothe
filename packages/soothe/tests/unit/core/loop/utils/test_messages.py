@@ -15,7 +15,6 @@ from soothe.sloop.utils.messages import (
     LoopAIMessage,
     LoopAIMessageChunk,
     LoopHumanMessage,
-    loop_message_to_thread_metadata,
 )
 
 
@@ -292,49 +291,6 @@ class TestLoopAIMessageWithExecutor:
 
         usage = extract_token_usage_from_messages(messages)
         assert usage == {"prompt": 200, "completion": 100, "total": 400}
-
-
-class TestLoopMessageToThreadMetadata:
-    """Test metadata extraction utility function."""
-
-    def test_full_metadata_extraction(self) -> None:
-        """Test extraction with all fields populated."""
-        msg = LoopHumanMessage(
-            content="Test",
-            thread_id="thread_abc",
-            iteration=5,
-            goal_summary="Goal text",
-            phase="execute_wave",
-            wave_id="wave123",
-            workspace="/path",
-        )
-
-        metadata = loop_message_to_thread_metadata(msg)
-
-        assert metadata["thread_id"] == "thread_abc"
-        assert metadata["iteration"] == 5
-        assert metadata["goal_summary"] == "Goal text"
-        assert metadata["phase"] == "execute_wave"
-        assert metadata["wave_id"] == "wave123"
-        assert metadata["workspace"] == "/path"
-
-    def test_partial_metadata_extraction(self) -> None:
-        """Test extraction with None fields."""
-        msg = LoopHumanMessage(
-            content="Test",
-            thread_id="thread_xyz",
-            iteration=None,
-            goal_summary=None,
-        )
-
-        metadata = loop_message_to_thread_metadata(msg)
-
-        assert metadata["thread_id"] == "thread_xyz"
-        assert metadata["iteration"] is None
-        assert metadata["goal_summary"] is None
-        assert metadata["phase"] is None
-        assert metadata["wave_id"] is None
-        assert metadata["workspace"] is None
 
 
 class TestWaveIdFormat:

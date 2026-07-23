@@ -1902,65 +1902,6 @@ class SootheDaemon(DaemonHandlersMixin):
         return SootheDaemon._is_port_live(ws_host, ws_port)
 
     @staticmethod
-    def find_pid() -> int | None:
-        """Find the PID of a running daemon.
-
-        Checks multiple indicators:
-        1. PID file with valid process
-        2. WebSocket port bound (if enabled)
-        3. Process name scan for zombie daemons (fallback)
-
-        Returns:
-            PID if daemon is running, None otherwise.
-        """
-        # 1. Check PID file first (fastest)
-        pid = SootheDaemon._read_live_pid_from_file()
-        if pid is not None:
-            return pid
-
-        # 2. Check WebSocket port (use daemon config when available)
-        _, ws_port = SootheDaemon._default_ws_endpoint()
-        pid = SootheDaemon._find_port_process(ws_port)
-        if pid:
-            return pid
-
-        # 3. Fallback: check for daemon processes by name
-        # Use specific pattern to match main daemon entrypoint only, not worker subprocesses.
-        # Worker subprocesses have "pool_runner" or "_pool_worker" in their command line.
-        import subprocess
-
-        pgrep_path = "/usr/bin/pgrep"
-        with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-            result = subprocess.run(
-                [pgrep_path, "-f", "python.*-m soothe_daemon"],
-                capture_output=True,
-                text=True,
-                timeout=0.5,  # 500ms timeout
-                check=False,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                pids = result.stdout.strip().split("\n")
-                # Filter out worker subprocesses (they have pool_runner in cmdline)
-                for pid_str in pids:
-                    try:
-                        pid = int(pid_str)
-                        # Verify this is main daemon, not a worker subprocess
-                        cmdline_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "command="],
-                            capture_output=True,
-                            text=True,
-                            timeout=0.2,
-                            check=False,
-                        )
-                        cmdline = cmdline_result.stdout.strip()
-                        if "pool_runner" not in cmdline and "_pool_worker" not in cmdline:
-                            return pid
-                    except (ValueError, subprocess.TimeoutExpired):
-                        continue
-
-        return None
-
-    @staticmethod
     def _find_port_process(port: int) -> int | None:
         """Find PID of process listening on a TCP port using lsof.
 

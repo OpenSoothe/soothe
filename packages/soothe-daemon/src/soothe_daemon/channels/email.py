@@ -281,28 +281,6 @@ class EmailChannel(Channel):
             limit=0,
         )
 
-    def fetch_messages_between_dates(
-        self,
-        start_date: date,
-        end_date: date,
-        limit: int = 20,
-    ) -> list[dict[str, Any]]:
-        """Fetch messages in [start_date, end_date) by IMAP date search."""
-        if end_date <= start_date:
-            return []
-
-        return self._fetch_messages(
-            search_criteria=(
-                "SINCE",
-                self._format_imap_date(start_date),
-                "BEFORE",
-                self._format_imap_date(end_date),
-            ),
-            mark_seen=False,
-            dedupe=False,
-            limit=max(1, int(limit)),
-        )
-
     def _fetch_messages(
         self,
         search_criteria: tuple[str, ...],

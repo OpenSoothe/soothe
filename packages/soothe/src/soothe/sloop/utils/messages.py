@@ -320,36 +320,3 @@ def tag_messages_stream_chunk_for_goal_completion(
         thread_id=thread_id,
         iteration=iteration,
     )
-
-
-def loop_message_to_thread_metadata(msg: LoopHumanMessage) -> dict[str, str | int | None]:
-    """Extract metadata from LoopHumanMessage for ThreadMessage persistence.
-
-    Converts LoopHumanMessage fields to a flat dict suitable for
-    ThreadMessage.metadata field.
-
-    Args:
-        msg: LoopHumanMessage with sloop context (may have None fields)
-
-    Returns:
-        Dict with thread_id, iteration, goal_summary, phase, wave_id, workspace,
-        and core_agent_message_id.
-        Fields may be None if message was created without thread context.
-
-    Example:
-        >>> msg = LoopHumanMessage(content="Test", thread_id="abc", iteration=5)
-        >>> metadata = loop_message_to_thread_metadata(msg)
-        >>> metadata["thread_id"]
-        'abc'
-        >>> metadata["iteration"]
-        5
-    """
-    return {
-        "thread_id": msg.thread_id,
-        "iteration": msg.iteration,
-        "goal_summary": msg.goal_summary,
-        "phase": msg.phase,
-        "wave_id": msg.wave_id,
-        "workspace": msg.workspace,
-        "core_agent_message_id": msg.core_agent_message_id,
-    }

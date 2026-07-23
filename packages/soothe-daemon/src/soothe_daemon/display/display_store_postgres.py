@@ -246,23 +246,6 @@ class PostgresDisplayCardStore:
                 row = cur.fetchone()
         return int(row[0]) if row else 0
 
-    def allocate_goal_snapshot_index(self, loop_id: str) -> int:
-        """Return the next goal snapshot index without inserting (non-atomic alone)."""
-        pool = self._ensure_pool()
-        with self._lock:
-            with pool.connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """
-                        SELECT COALESCE(MAX(goal_index), -1) + 1
-                        FROM goal_display_snapshots
-                        WHERE loop_id = %s
-                        """,
-                        (loop_id,),
-                    )
-                    row = cur.fetchone()
-            return int(row[0]) if row else 0
-
     def insert_goal_snapshot_with_auto_index(
         self,
         loop_id: str,

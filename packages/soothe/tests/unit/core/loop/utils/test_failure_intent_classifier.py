@@ -2,7 +2,6 @@
 
 from soothe.sloop.utils.failure_intent_classifier import (
     classify_failure_intent_keyword,
-    is_missing_prerequisite_intent,
 )
 
 
@@ -10,7 +9,7 @@ class TestFailureIntentClassifier:
     def test_missing_prerequisite_keywords(self) -> None:
         intent = classify_failure_intent_keyword("library not found: libfoo")
         assert intent.category == "missing_prerequisite"
-        assert is_missing_prerequisite_intent(intent)
+        assert intent.suggested_action == "create_prerequisite"
 
     def test_permission_denied(self) -> None:
         intent = classify_failure_intent_keyword("Error: permission denied")

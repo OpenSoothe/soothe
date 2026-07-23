@@ -82,12 +82,6 @@ def set_client_id(client_id: str | None) -> None:
     client_id_ctx.set(client_id)
 
 
-def clear_log_context() -> None:
-    """Clear both loop_id and client_id from logging context."""
-    loop_id_ctx.set(None)
-    client_id_ctx.set(None)
-
-
 def _daemon_log_level_from_soothe_config(cfg: object) -> str:
     """Resolve daemon file log level from ``SootheConfig`` (``debug`` / ``observability``)."""
     if bool(getattr(cfg, "debug", False)):

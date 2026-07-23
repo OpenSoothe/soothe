@@ -72,10 +72,6 @@ class JobStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
-# Active statuses considered when blocking duplicate submissions.
-ACTIVE_CRON_JOB_STATUSES = frozenset({JobStatus.PENDING, JobStatus.RUNNING})
-
-
 class DuplicateCronJobError(Exception):
     """Raised when an equivalent active cron job already exists."""
 

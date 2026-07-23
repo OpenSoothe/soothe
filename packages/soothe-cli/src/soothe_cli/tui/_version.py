@@ -94,25 +94,6 @@ def is_editable_install() -> bool:
     return bool(_editable_source_roots())
 
 
-def editable_install_display_path() -> str | None:
-    """Return a ``~``-contracted source path for editable installs."""
-    roots = _editable_source_roots()
-    if not roots:
-        return None
-
-    install_root = roots[0]
-    for root in roots:
-        if root.name == "soothe-cli":
-            install_root = root
-            break
-
-    path = str(install_root)
-    home = str(Path.home())
-    if path.startswith(home):
-        return "~" + path[len(home) :]
-    return path
-
-
 __version__ = _resolve_version()
 
 DOCS_URL = "https://github.com/mirasoth/soothe/docs"

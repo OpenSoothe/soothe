@@ -107,8 +107,8 @@ def test_start_background_success(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_stop_reports_not_running(monkeypatch) -> None:
-    # Mock the SootheDaemon class methods (lazy import will happen on access)
-    monkeypatch.setattr("soothe_daemon.server.SootheDaemon.find_pid", staticmethod(lambda: None))
+    # Mock the fast PID finder and stop check (lazy import will happen on access)
+    monkeypatch.setattr("soothe_daemon.cli._fast_find_pid", lambda: None)
     monkeypatch.setattr(
         "soothe_daemon.server.SootheDaemon.stop_running", staticmethod(lambda: False)
     )

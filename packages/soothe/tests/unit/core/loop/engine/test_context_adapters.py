@@ -322,17 +322,6 @@ class TestPlanAdapterGoalIdProperty:
 
 class TestGoalContextAdapter:
     @pytest.mark.asyncio
-    async def test_get_plan_context_empty_when_no_history(self) -> None:
-        ce = ContextEngine()
-        adapter = ContextEngineGoalContextAdapter(
-            context_engine=ce,
-            state_manager=None,
-        )
-        # state_manager is None; should return empty
-        result = await adapter.get_plan_context()
-        assert result == []
-
-    @pytest.mark.asyncio
     async def test_get_execute_briefing_prefers_cached_checkpoint(self) -> None:
         ce = ContextEngine()
         g = GoalNode(description="Completed goal", status="completed")

@@ -52,7 +52,6 @@ def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
     mock_sm.close = AsyncMock()
 
     mock_gcm = Mock()
-    mock_gcm.get_plan_context = AsyncMock(return_value=[])
 
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()

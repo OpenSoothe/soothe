@@ -73,59 +73,6 @@ class ThreadHealthMetrics(BaseModel):
     custom_metrics: dict[str, Any] = Field(default_factory=dict)
 
 
-class CustomSwitchTrigger(BaseModel):
-    """Custom thread switching trigger (extensible)."""
-
-    trigger_name: str
-    trigger_condition: str
-    trigger_threshold: float
-    trigger_action: Literal["switch_thread", "alert_user", "log_warning"]
-
-
-class ThreadSwitchPolicy(BaseModel):
-    """Extensible policy for automatic thread switching triggers."""
-
-    # Quantitative triggers
-    message_history_token_threshold: int | None = 100000
-    consecutive_goal_failure_threshold: int | None = 3
-    consecutive_rate_limit_threshold: int | None = 3
-    checkpoint_error_threshold: int | None = 2
-    subagent_timeout_threshold: int | None = 2
-
-    # Semantic trigger
-    goal_thread_relevance_check_enabled: bool = True
-    relevance_analysis_model: str | None = None
-    relevance_confidence_threshold: float = 0.7
-
-    # Behavior
-    auto_switch_enabled: bool = True
-    max_thread_switches_per_loop: int | None = None
-    knowledge_transfer_limit: int = 10
-
-    # Custom triggers
-    custom_triggers: list[CustomSwitchTrigger] = Field(default_factory=list)
-
-    # Metadata
-    policy_name: str = "default"
-    policy_version: str = "1.0"
-
-
-class GoalThreadRelevanceAnalysis(BaseModel):
-    """LLM-based analysis of goal-thread relevance."""
-
-    thread_summary: str
-    next_goal: str
-
-    # LLM response
-    is_relevant: bool
-    hindering_reasons: list[str] = Field(default_factory=list)
-    confidence: float
-    reasoning: str
-
-    # Decision
-    should_switch_thread: bool
-
-
 class StrangeLoopCheckpoint(BaseModel):
     """Complete StrangeLoop state (RFC-216: multi-thread spanning).
 

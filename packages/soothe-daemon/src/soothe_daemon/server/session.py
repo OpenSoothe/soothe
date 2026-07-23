@@ -21,7 +21,6 @@ from soothe_daemon.query.stream_delivery import StreamDeliveryMode
 
 if TYPE_CHECKING:
     from soothe.config import SootheConfig
-    from soothe.config.models import OutputStreamingConfig
     from soothe.events import EventMeta
 
     from soothe_daemon.channels.base import Channel
@@ -235,34 +234,6 @@ class ClientSession:
     stream_delivery: StreamDeliveryMode = "adaptive"  # IG-534 §3.2: per-client preference
     # Subscription correlation ids for protocol-1 ``next`` envelopes (RFC-450).
     loop_subscription_ids: dict[str, str] = field(default_factory=dict)  # loop_id → subscription_id
-
-    def get_effective_streaming_config(
-        self, cli_overrides: dict[str, Any] | None = None
-    ) -> OutputStreamingConfig:
-        """Get effective streaming config with CLI overrides (RFC-614).
-
-        Args:
-            cli_overrides: Optional dict with output_streaming_enabled, output_streaming_mode
-
-        Returns:
-            Effective OutputStreamingConfig with overrides applied.
-        """
-        if self.config is None:
-            # Return defaults if no config
-            from soothe.config.models import OutputStreamingConfig
-
-            return OutputStreamingConfig()
-
-        config = self.config.agent.loop.output_streaming
-
-        if cli_overrides:
-            # Apply CLI overrides (per-session override)
-            if cli_overrides.get("output_streaming_enabled") is not None:
-                config.enabled = cli_overrides["output_streaming_enabled"]
-            if cli_overrides.get("output_streaming_mode") is not None:
-                config.mode = cli_overrides["output_streaming_mode"]
-
-        return config
 
 
 class ClientSessionManager:

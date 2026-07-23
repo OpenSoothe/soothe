@@ -13,7 +13,6 @@ from typing import Any
 from soothe.context.models import GoalNode, GoalStepDAG
 from soothe.context.planning_models import (
     DecompositionResult,
-    OrchestrationStrategy,
     SubGoalSpec,
 )
 
@@ -165,43 +164,6 @@ class GoalPlanningSubengine:
                 )
                 break
         return created
-
-    # --- Orchestration ---
-
-    def compute_orchestration_strategy(
-        self,
-        root_goal_id: str | None = None,
-    ) -> OrchestrationStrategy:
-        """Compute orchestration strategy from the current goal DAG.
-
-        Analyzes dependency structure, priorities, and conflicts
-        to determine optimal execution order and concurrency.
-        """
-        goals = list(self._dag.goals.values())
-        if not goals:
-            return OrchestrationStrategy()
-
-        # Analyze dependency graph
-        dep_graph: dict[str, list[str]] = {}
-        for g in goals:
-            if g.depends_on:
-                dep_graph[g.id] = list(g.depends_on)
-
-        # Determine concurrency mode from structure
-        has_parallel = any(not g.depends_on for g in goals if g.status == "pending")
-        has_sequential = any(g.depends_on for g in goals)
-
-        if has_parallel and has_sequential:
-            mode = "mixed"
-        elif has_parallel:
-            mode = "parallel"
-        else:
-            mode = "sequential"
-
-        return OrchestrationStrategy(
-            concurrency_mode=mode,
-            dependency_graph=dep_graph,
-        )
 
     # --- Reflection-driven goal creation ---
 

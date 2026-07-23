@@ -34,50 +34,6 @@ class ContextEngineGoalContextAdapter:
         self._state_manager = state_manager
         self._config = config
 
-    async def get_plan_context(self, limit: int | None = None) -> list[str]:
-        """Get previous goal summaries for Plan phase (XML blocks).
-
-        Reads completed goals from the CE GoalStepDAG.
-        """
-        if self._config is not None and not getattr(self._config, "enabled", True):
-            return []
-
-        try:
-            if limit is not None:
-                actual_limit = limit
-            elif self._config:
-                actual_limit = getattr(self._config, "plan_limit", 10)
-            else:
-                actual_limit = 10
-
-            all_goals = self._ce.get_all_goals()
-            completed = [g for g in all_goals if g.status == "completed"][-actual_limit:]
-
-            if not completed:
-                return []
-
-            context_blocks = []
-            for goal in completed:
-                step_summary = self._render_step_summary(goal)
-                context_block = (
-                    f"<PREVIOUS_GOAL>\n"
-                    f"Goal: {goal.description}\n"
-                    f"Status: {goal.status}\n"
-                    f"Output:\n{step_summary}\n"
-                    f"</PREVIOUS_GOAL>"
-                )
-                context_blocks.append(context_block)
-
-            logger.info(
-                "CE Plan context: %d previous goals from CE DAG",
-                len(context_blocks),
-            )
-            return context_blocks
-
-        except Exception as e:
-            logger.warning("CE GoalContextAdapter: failed to load plan context: %s", e)
-            return []
-
     async def get_execute_briefing(self, limit: int | None = None) -> str | None:
         """Get goal briefing for Execute phase (only on thread switch).
 

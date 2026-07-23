@@ -4,19 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, Field
-from soothe_nano.utils.llm.invoke_policy import (
-    await_with_llm_call_policy,
-    llm_rate_limit_config_from,
-)
-from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
-
-from soothe.config.models import FailureIntentConfig
-
-if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -133,59 +123,4 @@ def classify_failure_intent_keyword(text: str) -> FailureIntent:
         confidence=best_confidence,
         suggested_action=best_action,
         extracted_entities=_extract_entities(text),
-    )
-
-
-async def classify_failure_intent_async(
-    text: str,
-    model: BaseChatModel | None,
-    *,
-    config: FailureIntentConfig | None = None,
-    soothe_config: Any | None = None,
-) -> FailureIntent:
-    """Classify failure intent with LLM-first policy and keyword offline fallback."""
-    cfg = config or FailureIntentConfig()
-    if not cfg.enabled or model is None:
-        return classify_failure_intent_keyword(text)
-
-    try:
-        from langchain_core.messages import HumanMessage
-        from soothe_sdk.observability.langfuse import SootheLangfuse
-
-        prompt = (
-            "Classify this tool/step failure for an autonomous agent.\n"
-            f"Failure text:\n{text[:2000]}\n"
-            "\nReturn category, confidence 0-1, suggested_action, and extracted_entities."
-        )
-        invoke_config = SootheLangfuse(soothe_config).traced_llm(
-            purpose="failure_intent_classify",
-            component="loop.failure_intent",
-            phase="reflect",
-            run_name="soothe:failure-intent",
-        )
-
-        async def _invoke() -> FailureIntent:
-            return await invoke_structured_chat_typed(
-                model,
-                [HumanMessage(content=prompt)],
-                FailureIntent,
-                config=invoke_config,
-            )
-
-        return await await_with_llm_call_policy(
-            _invoke,
-            config=llm_rate_limit_config_from(soothe_config),
-        )
-    except Exception:
-        logger.debug(
-            "LLM failure intent classification failed; using keyword fallback", exc_info=True
-        )
-        return classify_failure_intent_keyword(text)
-
-
-def is_missing_prerequisite_intent(intent: FailureIntent) -> bool:
-    """Return True when failure should spawn a prerequisite goal."""
-    return (
-        intent.category == "missing_prerequisite"
-        and intent.suggested_action == "create_prerequisite"
     )

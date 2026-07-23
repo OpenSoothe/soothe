@@ -13,9 +13,6 @@ from soothe_nano.utils.llm.invoke_policy import (
 from soothe_nano.utils.llm.structured import invoke_structured_chat_typed
 from soothe_sdk.protocols.planner import Plan, PlanStep
 
-from soothe.config.models import StructuredPlanConfig
-from soothe.sloop.cognition.parser import parse_plan_from_text
-
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
@@ -95,21 +92,3 @@ async def parse_plan_structured(
     if not extracted.goal:
         extracted = extracted.model_copy(update={"goal": goal})
     return plan_extracted_to_plan(extracted)
-
-
-async def parse_plan_with_config(
-    goal: str,
-    text: str,
-    model: BaseChatModel | None,
-    *,
-    config: StructuredPlanConfig | None = None,
-    soothe_config: Any | None = None,
-) -> Plan:
-    """Parse plan using structured LLM path when enabled, else regex heuristics."""
-    cfg = config or StructuredPlanConfig()
-    if cfg.enabled and model is not None and text.strip():
-        try:
-            return await parse_plan_structured(goal, text, model, soothe_config=soothe_config)
-        except Exception:
-            logger.warning("Structured plan parse failed, falling back to regex", exc_info=True)
-    return parse_plan_from_text(goal, text)
