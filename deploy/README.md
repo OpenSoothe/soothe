@@ -7,10 +7,15 @@ Self-contained production stack: PostgreSQL + pgvector + Soothe daemon.
 ```bash
 cd deploy
 cp env-example .env && vim .env   # Set API keys
+mkdir -p "$HOME/.soothe/data" "$HOME/.soothe/logs"  # required before first up
 docker compose up -d
 ```
 
+Or from the repo root: `make docker-prod-up` (creates those dirs automatically).
+
 Verify: `docker compose ps` — should show soothe-pgvector and soothed running.
+
+**Colima note**: If you see `chown .../.soothe/logs: permission denied` when starting, the host bind-mount dirs were missing and Docker tried to create+chown them on sshfs (unsupported). Create the dirs on the host and retry.
 
 ## Environment Variables
 

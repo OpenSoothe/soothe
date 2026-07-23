@@ -16,6 +16,9 @@
 #   $HOME/.soothe/data  → data (loops, threads, local artifacts)
 #   $HOME/.soothe/logs  → logs
 #   $SOOTHE_WORKSPACE_HOST_ROOT (default $HOME) → workspaces
+# Pre-create data/logs on the host before `compose up` (make docker-prod-up
+# does this). Colima/Lima sshfs rejects Docker's create+chown of missing
+# bind-mount sources ("chown ... permission denied").
 
 services:
   soothe-pgvector:
