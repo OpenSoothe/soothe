@@ -1,6 +1,6 @@
 # Design Draft: soothe-nano Package Layout
 
-**Status**: Archived — completed via [IG-668](../../impl/IG-668-soothe-nano-package-extract.md)  
+**Status**: Archived — completed via [IG-625](../../impl/IG-625-soothe-nano-package-extract.md)  
 **Date**: 2026-07-20  
 **Scope**: Extract batteries-included Coding CoreAgent into `soothe-nano`; full `soothe` depends on it. No StrangeLoop, Autopilot, Context Engine, cron, or daemon in nano.  
 **Related**: [RFC-000](../../specs/RFC-000-system-conceptual-design.md), [RFC-100](../../specs/RFC-100-coreagent-runtime.md), [RFC-001](../../specs/RFC-001-core-modules-architecture.md)
@@ -57,7 +57,7 @@ packages/soothe-nano/
 
 ## Phased delivery
 
-See [IG-668](../impl/IG-668-soothe-nano-package-extract.md).
+See [IG-625](../impl/IG-625-soothe-nano-package-extract.md).
 
 ## Exit criteria (design)
 

@@ -8,13 +8,13 @@
 **Updated**: 2026-07-17
 **Authors**: Xiaming Chen
 **Dependencies**: RFC-450, RFC-614, RFC-403
-**Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450), IG-655 (Python client), IG-662 (cross-client API parity), IG-663 (Rust client)
+**Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450), IG-612 (Python client), IG-619 (cross-client API parity), IG-620 (Rust client)
 
 ## Abstract
 
 Four language clients talk to soothe-daemon over protocol-1 (RFC-450): `client/python` (`soothe-client-python`), `client/go`, `client/typescript`, and `client/rust` (`soothe-client`). Real applications need more than a thin WebSocket wrapper: panic-safe read loops, drop detection, reconnect + loop reattach + liveness probing, readiness retry, concurrent RPC/subscription multiplexing, per-session pooling, single-flight query gating, cancel-before-context ordering, event→deliverable classification, SSE fan-out, dual-socket turn streaming (`DaemonSession`), ephemeral one-shot RPCs (`CommandClient`), and stream `delivery_ack` for daemon drain gating.
 
-**Python 0.10.x is the reference implementation** for user-facing API tiers, constrained public export surface, turn-session semantics, and production transport behaviors (priority inbound backpressure, `delivery_ack`). Go, TypeScript, and Rust must match that contract with language-idiomatic code (IG-662, IG-663).
+**Python 0.10.x is the reference implementation** for user-facing API tiers, constrained public export surface, turn-session semantics, and production transport behaviors (priority inbound backpressure, `delivery_ack`). Go, TypeScript, and Rust must match that contract with language-idiomatic code (IG-619, IG-620).
 
 This RFC defines a three-layer architecture shared by all four clients:
 
@@ -132,7 +132,7 @@ graph TB
 - Readiness retry folded into the handshake (transient `readiness_state` and Warn-severity error codes).
 - Concurrent-safe multiplexing: pending-request and pending-subscription tables; the reader routes inbound frames by `(type, id)`.
 - `delivery_ack` — on terminal stream frames, notify the daemon with monotonic per-loop `seq` so drain gating stays correct under load (Python reference behavior).
-- Production transport (Python reference; Go/TS converge via IG-662): bounded inbound queue with priority-aware drop, stream-degraded callback, negotiated heartbeat, max frame size aligned with daemon default (10 MiB).
+- Production transport (Python reference; Go/TS converge via IG-619): bounded inbound queue with priority-aware drop, stream-degraded callback, negotiated heartbeat, max frame size aligned with daemon default (10 MiB).
 
 **Interfaces**:
 - Provides: the existing core API plus drop signal, `Reconnect`, `ReattachAndProbe`, `delivery_ack`, peel-stale helpers used by `DaemonSession`.
@@ -333,11 +333,11 @@ SessionStore {
 
 | Language | Layer 0 | Appkit (pool/turn/classifier) | `DaemonSession` | `CommandClient` | Reference status |
 |----------|---------|-------------------------------|-----------------|-----------------|------------------|
-| Python | Done (IG-655) | Done | Done | Done | **Reference (0.10.x)** |
-| Go | Done (2026-06-30) | Done | IG-662 | IG-662 | Converging |
-| TypeScript | Done (IG-531/660) | Done | Done (IG-660) | IG-662 | Converging |
+| Python | Done (IG-612) | Done | Done | Done | **Reference (0.10.x)** |
+| Go | Done (2026-06-30) | Done | IG-619 | IG-619 | Converging |
+| TypeScript | Done (IG-531/660) | Done | Done (IG-617) | IG-619 | Converging |
 
-### Active: cross-client API parity (IG-662)
+### Active: cross-client API parity (IG-619)
 
 1. Spec + vocabulary (this RFC update + namings).
 2. Go: `DaemonSession`, `delivery_ack`, job single-RPC fix, `CommandClient`.
@@ -365,12 +365,12 @@ SessionStore {
 - [RFC-450](./RFC-450-daemon-communication-protocol.md) - Daemon Communication Protocol (protocol-1)
 - [RFC-614](./RFC-614-unified-streaming-messaging.md) - Unified Daemon → Client Streaming Messaging
 - [RFC-610](./RFC-610-sdk-module-structure-refactoring.md) - SDK Module Structure Refactoring
-- [IG-655](../impl/IG-655-python-client-layer0-extract.md) - Python client extract (reference)
-- [IG-660](../impl/IG-660-typescript-client-production-parity.md) - TypeScript production parity
-- [IG-662](../impl/IG-662-cross-client-api-parity.md) - Cross-client API parity (active)
+- [IG-612](../impl/IG-612-python-client-layer0-extract.md) - Python client extract (reference)
+- [IG-617](../impl/IG-617-typescript-client-production-parity.md) - TypeScript production parity
+- [IG-619](../impl/IG-619-cross-client-api-parity.md) - Cross-client API parity (active)
 - [IG-527](../archive/impl/IG-527-go-client-appkit.md) - Go Client Core Upgrade and Appkit (archived)
 - [IG-531](../archive/impl/IG-531-typescript-client-appkit.md) - TypeScript Client Appkit (archived)
 
 ---
 
-*Updated 2026-07-17 for Python reference + three-language API tiers (IG-662).*
+*Updated 2026-07-17 for Python reference + three-language API tiers (IG-619).*

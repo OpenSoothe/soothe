@@ -3,10 +3,10 @@
 **Date**: 2026-07-20  
 **Branch**: `feat/nano-agent` (synced with `origin/feat/nano-agent`)  
 **HEAD**: `58ec867b` — *chore(nano): declare direct deps, polish agent gate, version 0.9.0*  
-**Tracking IG**: [IG-668](IG-668-soothe-nano-package-extract.md)  
+**Tracking IG**: [IG-625](IG-625-soothe-nano-package-extract.md)  
 **Working tree**: dirty — intake-catalog extract uncommitted (see below)
 
-Use this to continue without re-deriving context. Prefer IG-668 + this file over chat history.
+Use this to continue without re-deriving context. Prefer IG-625 + this file over chat history.
 
 ---
 
@@ -44,7 +44,7 @@ Release: `.github/workflows/release.yml` has `deploy-nano` (reads nano `pyprojec
 
 | Commit | Summary |
 |--------|---------|
-| `b10167c6` | Extract Coding CoreAgent into `soothe-nano` (IG-668 scaffold) |
+| `b10167c6` | Extract Coding CoreAgent into `soothe-nano` (IG-625 scaffold) |
 | `bb23c3d9` | Purify nano of L2/L3; direct `soothe_nano.*` imports; delete leaf shims |
 | `a93efcf4` | Move shared protocols to `soothe_sdk.protocols`; delete nano protocols package |
 | `72ee6a9b` | Skillify → `soothe_daemon.skillify`; DTOs → `soothe_sdk.skillify`; nano search substring-only |
@@ -97,7 +97,7 @@ Before next commit/PR: re-run `./scripts/verify_finally.sh` if more edits land.
 
 ## Suggested next work (uncommitted ideas)
 
-From IG-668 follow-ups and leftover polish:
+From IG-625 follow-ups and leftover polish:
 
 1. **RFC-100 / NanoConfig slim** — further separate nano config fields from full `SootheConfig` ownership (nano still exposes a large `SootheConfig`-shaped settings model).
 2. **Agent package polish** — optional: fold thin `factory.py` into `builder.py` / package `__init__` (explicitly out of last execute_stream plan).
@@ -125,7 +125,7 @@ packages/soothe-sdk/src/soothe_sdk/protocols/   # Shared contracts
 packages/soothe-sdk/src/soothe_sdk/skillify/    # SkillBundle DTOs
 packages/soothe-daemon/src/soothe_daemon/skillify/
 packages/soothe/src/soothe/coreagent/coding/  # Host wrappers
-docs/impl/IG-668-soothe-nano-package-extract.md
+docs/impl/IG-625-soothe-nano-package-extract.md
 scripts/check_module_import_boundaries.sh
 ./scripts/verify_finally.sh
 ```
