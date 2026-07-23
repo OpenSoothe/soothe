@@ -274,9 +274,9 @@ class QueryEngine:
         # Monotonic turn counter per loop; stale finally blocks must not emit
         # terminal frames or cancel a successor runner.
         self._loop_turn_generation: dict[str, int] = {}
-        # IG-659: monotonic outbound seq per loop for client stale-drop.
+        # IG-616: monotonic outbound seq per loop for client stale-drop.
         self._loop_event_seq: dict[str, int] = {}
-        # IG-659 phase 4: loops still emitting prior-turn terminals after
+        # IG-616 phase 4: loops still emitting prior-turn terminals after
         # admission release — next admit must wait.
         self._loops_finalizing: set[str] = set()
         # Optional override while a turn broadcasts (emitting generation).
@@ -356,7 +356,7 @@ class QueryEngine:
         # still hold per-loop query admission until stream-finally completes.
         # Queue workers can invoke run_query again before that finally runs; wait
         # here so the follow-up turn is deferred instead of being rejected LOOP_BUSY.
-        # IG-659 phase 4: also wait while prior turn is still emitting terminals.
+        # IG-616 phase 4: also wait while prior turn is still emitting terminals.
         while True:
             async with self._daemon._query_state_lock:
                 if (
@@ -443,7 +443,7 @@ class QueryEngine:
         *,
         turn_generation: int | None = None,
     ) -> dict[str, Any]:
-        """Build a client-visible frame: ``loop_id``, ``turn_id``, ``seq`` (IG-659)."""
+        """Build a client-visible frame: ``loop_id``, ``turn_id``, ``seq`` (IG-616)."""
         from soothe_daemon.query.turn_boundary import format_turn_id
 
         out = dict(payload)
@@ -488,7 +488,7 @@ class QueryEngine:
         reason: str | None = None,
         turn_generation: int | None = None,
     ) -> None:
-        """Broadcast ``soothe.stream.end`` with ``scope=turn`` (IG-556 / IG-659)."""
+        """Broadcast ``soothe.stream.end`` with ``scope=turn`` (IG-556 / IG-616)."""
         from soothe_sdk.core.events import STREAM_END
 
         from soothe_daemon.query.turn_boundary import format_turn_id

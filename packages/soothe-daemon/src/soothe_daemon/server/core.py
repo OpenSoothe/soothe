@@ -297,7 +297,7 @@ class SootheDaemon(DaemonHandlersMixin):
         """Build a purge callable backed by the daemon display card store.
 
         Injected into ``StrangeLoopCheckpointPersistenceManager`` so the host can
-        purge a loop's display rows without importing the daemon (IG-678 PR-2).
+        purge a loop's display rows without importing the daemon (IG-635 PR-2).
         """
         from soothe_daemon.display.display_store import get_display_card_store
 
@@ -534,7 +534,7 @@ class SootheDaemon(DaemonHandlersMixin):
                     raise
 
             # Unified persistence: cron/identity follow default_backend via host
-            # stores; the display card store is daemon-owned (IG-678 PR-2).
+            # stores; the display card store is daemon-owned (IG-635 PR-2).
             try:
                 from soothe.persistence.unified import configure_unified_persistence
 

@@ -3,7 +3,7 @@
 Used when ``persistence.default_backend`` is ``postgresql``. Tables live in the
 RFC-612 ``metadata`` database (``soothe_metadata``) beside durability KV rows.
 
-Moved from ``soothe_nano`` to the daemon (IG-678 PR-2). The store applies its
+Moved from ``soothe_nano`` to the daemon (IG-635 PR-2). The store applies its
 own ``_SCHEMA`` on pool open — same pattern as ``PostgresCronJobStore`` and
 ``IdentityDbConnection`` — so the display-card DDL no longer needs to live in
 nano's ``soothe_metadata/init.sql`` bootstrap.

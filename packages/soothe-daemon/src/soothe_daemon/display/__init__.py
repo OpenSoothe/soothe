@@ -5,7 +5,7 @@ This package owns the per-loop card ledger that backs the TUI's resume flow:
 * ``DisplayCardStore`` / ``PostgresDisplayCardStore`` — durable card mutation +
   goal snapshot persistence (SQLite ``display.db`` or PostgreSQL
   ``soothe_metadata`` when ``persistence.default_backend: postgresql``).
-  Moved from ``soothe_nano`` (IG-678 PR-2); the store and its DDL are
+  Moved from ``soothe_nano`` (IG-635 PR-2); the store and its DDL are
   daemon-owned since display cards are a daemon concept.
 * ``LoopCardLedger`` — durable wrapper around
   ``soothe_sdk.display.InMemoryCardLedger``; persists via

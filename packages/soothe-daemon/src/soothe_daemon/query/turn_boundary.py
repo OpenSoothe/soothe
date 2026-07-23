@@ -1,4 +1,4 @@
-"""Turn / stream boundary helpers for QueryEngine (IG-659)."""
+"""Turn / stream boundary helpers for QueryEngine (IG-616)."""
 
 from __future__ import annotations
 

@@ -45,7 +45,7 @@ def _ensure_default_config_dir() -> Path:
 def default_soothe_config_path() -> Path:
     """Default path of the nano-owned agent config YAML the daemon loads.
 
-    Split layout (IG-674): ``~/.soothe/config/nano.yml``. Host overlay lives in
+    Split layout (IG-631): ``~/.soothe/config/nano.yml``. Host overlay lives in
     ``soothe.yml`` beside it and is composed when present.
     """
     return _ensure_default_config_dir() / "nano.yml"

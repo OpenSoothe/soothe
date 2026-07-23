@@ -3,7 +3,7 @@
 SQLite (``display.db``) is the default. When ``persistence.default_backend`` is
 ``postgresql``, the process configures a PostgreSQL store in ``soothe_metadata``.
 
-Moved from ``soothe_nano`` to the daemon (IG-678 PR-2): display cards are a
+Moved from ``soothe_nano`` to the daemon (IG-635 PR-2): display cards are a
 daemon display concept with no standalone-nano consumers; the store and its
 DDL belong here beside ``LoopCardLedger`` / ``LoopCardManager``.
 """

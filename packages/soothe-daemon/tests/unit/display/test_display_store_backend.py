@@ -1,6 +1,6 @@
 """Tests for display card store backend selection.
 
-Moved from ``soothe_nano`` to the daemon (IG-678 PR-2) alongside the store.
+Moved from ``soothe_nano`` to the daemon (IG-635 PR-2) alongside the store.
 """
 
 from __future__ import annotations
