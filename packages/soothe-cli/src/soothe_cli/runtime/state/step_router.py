@@ -146,7 +146,7 @@ class StepTaskRouter:
             self._pending_subgraph_tools[key] = item
             return
         # Prefer meaningful args over placeholder metadata like {"_subgraph_tool": true}.
-        from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+        from soothe_sdk.display.message_processing import extract_tool_args_dict
 
         item_meaningful = extract_tool_args_dict(item.args or {})
         existing_meaningful = extract_tool_args_dict(existing.args or {})
@@ -521,7 +521,7 @@ class StepTaskRouter:
                 resolved_args = dict(item.args or {})
                 # Placeholder args like {"_subgraph_tool": true} are not meaningful.
                 # Parse raw_args when resolved_args lacks real invocation kwargs.
-                from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+                from soothe_sdk.display.message_processing import extract_tool_args_dict
 
                 meaningful_args = extract_tool_args_dict(resolved_args)
                 if item.raw_args and not meaningful_args:
@@ -531,7 +531,7 @@ class StepTaskRouter:
                 update(row_id, resolved_args)
         else:
             resolved_args = dict(item.args or {})
-            from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+            from soothe_sdk.display.message_processing import extract_tool_args_dict
 
             meaningful_args = extract_tool_args_dict(resolved_args)
             if item.raw_args and not meaningful_args:

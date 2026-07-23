@@ -7,8 +7,7 @@ import queue
 from dataclasses import dataclass
 
 import pytest
-
-from soothe_cli.runtime.turn.pipeline import (
+from soothe_client.appkit.turn import (
     PRIORITY_CRITICAL,
     PRIORITY_HIGH,
     PRIORITY_LOW,

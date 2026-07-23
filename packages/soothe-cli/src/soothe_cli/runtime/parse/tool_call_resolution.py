@@ -17,6 +17,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from soothe_sdk.display.message_processing import (
+    extract_tool_args_dict,
+    normalize_tool_calls_list,
+    try_parse_pending_tool_call_args,
+)
 from soothe_sdk.ux.execute_namespace import (
     is_root_execute_namespace_key,
     is_step_level_execute_namespace_key,
@@ -25,12 +30,6 @@ from soothe_sdk.ux.task_namespace import (
     TaskScope,
     parse_unified_tool_call_id,
     row_key_for_subgraph_tool,
-)
-
-from soothe_cli.runtime.parse.message_processing import (
-    extract_tool_args_dict,
-    normalize_tool_calls_list,
-    try_parse_pending_tool_call_args,
 )
 
 logger = logging.getLogger(__name__)
@@ -247,13 +246,13 @@ def merge_tool_display_args(
         if isinstance(raw, dict):
             stream_args = dict(raw)
         if not stream_args:
-            from soothe_cli.runtime.parse.message_processing import (
+            from soothe_sdk.display.message_processing import (
                 _resolve_pending_lookup_tool_name,
             )
 
             lookup_name = _resolve_pending_lookup_tool_name(tcid, tool_name=tool_name)
             if lookup_name and pending_tool_calls_lc:
-                from soothe_cli.runtime.parse.message_processing import (
+                from soothe_sdk.display.message_processing import (
                     _pending_or_overlay_id_matches_lookup,
                 )
 
@@ -275,7 +274,7 @@ def merge_tool_display_args(
                 stream_args = best
     pend_parsed: dict[str, Any] = {}
     if tcid and pending_tool_calls_lc:
-        from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+        from soothe_sdk.display.message_processing import richest_pending_args_for_lookup
 
         pend_parsed = richest_pending_args_for_lookup(
             pending_tool_calls_lc,
@@ -294,7 +293,7 @@ def merge_tool_display_args(
                     message_args = extract_tool_args_dict(tc)
                     break
             if not message_args:
-                from soothe_cli.runtime.parse.message_processing import (
+                from soothe_sdk.display.message_processing import (
                     _resolve_pending_lookup_tool_name,
                 )
 
@@ -306,7 +305,7 @@ def merge_tool_display_args(
                     if len(matches) == 1:
                         message_args = extract_tool_args_dict(matches[0])
                     elif matches:
-                        from soothe_cli.runtime.parse.message_processing import (
+                        from soothe_sdk.display.message_processing import (
                             _pending_or_overlay_id_matches_lookup,
                         )
 
@@ -524,8 +523,7 @@ def build_streaming_args_overlay(
     Otherwise every pending entry is considered (legacy / final flush).
     """
     from langchain_core.messages import AIMessageChunk
-
-    from soothe_cli.runtime.parse.message_processing import tool_ids_touched_by_stream_message
+    from soothe_sdk.display.message_processing import tool_ids_touched_by_stream_message
 
     overlay: dict[str, dict[str, Any]] = {}
     chunk_pos = getattr(message, "chunk_position", None)

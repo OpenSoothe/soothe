@@ -9,7 +9,7 @@ class TestProposalsToDirectives:
 
     def test_empty_proposals_returns_empty_list(self) -> None:
         """Empty proposal list returns empty directives."""
-        result = _proposals_to_directives([], source_goal_id="g1")
+        result = _proposals_to_directives([])
         assert result == []
 
     def test_suggest_goal_converts_to_create_directive(self) -> None:
@@ -27,7 +27,7 @@ class TestProposalsToDirectives:
             ),
         ]
 
-        directives = _proposals_to_directives(proposals, source_goal_id="g_parent")
+        directives = _proposals_to_directives(proposals)
 
         assert len(directives) == 1
         d = directives[0]
@@ -52,7 +52,7 @@ class TestProposalsToDirectives:
             ),
         ]
 
-        directives = _proposals_to_directives(proposals, source_goal_id="g_parent")
+        directives = _proposals_to_directives(proposals)
 
         assert len(directives) == 0  # Findings don't become directives
 
@@ -65,7 +65,7 @@ class TestProposalsToDirectives:
             Proposal(type="report_progress", goal_id="", payload={"status": "in progress"}),
         ]
 
-        directives = _proposals_to_directives(proposals, source_goal_id="g_parent")
+        directives = _proposals_to_directives(proposals)
 
         assert len(directives) == 2
         assert directives[0].description == "Task A"
@@ -78,7 +78,7 @@ class TestProposalsToDirectives:
             Proposal(type="suggest_goal", goal_id="", payload={"description": "Valid"}),
         ]
 
-        directives = _proposals_to_directives(proposals, source_goal_id="g_parent")
+        directives = _proposals_to_directives(proposals)
 
         assert len(directives) == 1
         assert directives[0].description == "Valid"
@@ -89,7 +89,7 @@ class TestProposalsToDirectives:
             Proposal(type="suggest_goal", goal_id="", payload={"description": "test"}),
         ]
 
-        directives = _proposals_to_directives(proposals, source_goal_id="g_parent")
+        directives = _proposals_to_directives(proposals)
 
         assert directives[0].priority == 50
 
@@ -101,7 +101,7 @@ class TestProposalsToDirectives:
             Proposal(type="suggest_goal", goal_id="", payload={"description": "third"}),
         ]
 
-        directives = _proposals_to_directives(proposals, source_goal_id="g_parent")
+        directives = _proposals_to_directives(proposals)
 
         assert len(directives) == 3
         assert [d.description for d in directives] == ["first", "second", "third"]

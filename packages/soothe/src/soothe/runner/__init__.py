@@ -275,9 +275,9 @@ class SootheRunner(
     def _clear_query_scoped_runner_state(self) -> None:
         """Clear per-query mirrors on this singleton runner (IG-110).
 
-        Authoritative plan data lives on ``RunnerState`` per call;
-        this resets CLI/debug pointers so cancelled or completed runs do not
-        leak into the next ``astream`` invocation.
+        Per-call state is held in local variables of ``astream``; this resets
+        CLI/debug pointers so cancelled or completed runs do not leak into
+        the next ``astream`` invocation.
         """
         self._current_plan = None
 

@@ -35,15 +35,12 @@ _EXECUTE_PHASE_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS = 30.0
 
 # IG-477: Limit in-flight chunk deliveries (blocks worker thread when full)
 # IG-535: Tuned for 32 concurrent loops - 100 slots per worker allows heavier per-loop streams
-_MAX_PENDING_CALLBACKS = 200  # Legacy global fallback (unused when worker_id provided)
+_MAX_PENDING_CALLBACKS = 200  # Slot count for the shared default pool (no worker_id)
 _DEFAULT_SLOTS_PER_WORKER = 100  # IG-535: Increased from 50 for dense streaming workloads
 
 # Semaphore slots per worker thread — isolates backpressure across pool workers.
 _worker_pending_slots: dict[str, threading.Semaphore] = {}
 _worker_slots_lock = threading.Lock()
-
-# Legacy export: global semaphore name kept for tests that patch a single slot pool.
-_pending_slots = threading.Semaphore(_MAX_PENDING_CALLBACKS)
 
 
 def _pending_slots_for(worker_id: str | None) -> threading.Semaphore:
@@ -56,10 +53,6 @@ def _pending_slots_for(worker_id: str | None) -> threading.Semaphore:
             sem = threading.Semaphore(limit)
             _worker_pending_slots[key] = sem
         return sem
-
-
-# Legacy export name kept for tests and callers.
-_QUEUE_PUT_TIMEOUT_SECONDS = _DEFAULT_SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS
 
 
 def _chunk_is_goal_completion(payload: Any) -> bool:
@@ -220,7 +213,6 @@ __all__ = [
     "WORKER_MSG_READY",
     "WORKER_MSG_ERROR",
     "WORKER_MSG_TIMEOUT",
-    "_QUEUE_PUT_TIMEOUT_SECONDS",
     "_DEFAULT_SLOTS_PER_WORKER",
     "_pending_slots_for",
     "_chunk_is_goal_completion",

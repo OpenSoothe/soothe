@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 from langchain_core.messages import AIMessageChunk
+from soothe_sdk.display.message_processing import tool_ids_touched_by_stream_message
 
-from soothe_cli.runtime.parse.message_processing import tool_ids_touched_by_stream_message
 from soothe_cli.runtime.parse.tool_call_resolution import build_streaming_args_overlay
 from soothe_cli.tui.textual_adapter import TurnToolUiCoalescer
 

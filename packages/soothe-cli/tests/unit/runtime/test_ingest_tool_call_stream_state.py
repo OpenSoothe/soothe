@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from langchain_core.messages import AIMessageChunk
-
-from soothe_cli.runtime.parse.message_processing import (
+from soothe_sdk.display.message_processing import (
     ingest_tool_call_stream_state,
     try_parse_pending_tool_call_args,
 )
+
 from soothe_cli.runtime.parse.tool_call_resolution import build_streaming_args_overlay
 
 

@@ -12,12 +12,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe_sdk.core.events import PLAN_CREATED
 from soothe_sdk.core.verbosity import VerbosityTier
-from soothe_sdk.ux import classify_event_to_tier
-from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-from soothe_sdk.ux.task_namespace import resolve_task_scope_for_namespace
-
-from soothe_cli.runtime.headless.processor_state import ProcessorState
-from soothe_cli.runtime.parse.message_processing import (
+from soothe_sdk.display.message_processing import (
     accumulate_tool_call_chunks,
     extract_tool_args_dict,
     extract_tool_brief,
@@ -26,10 +21,15 @@ from soothe_cli.runtime.parse.message_processing import (
     tool_calls_have_any_arg_dict,
     try_parse_pending_tool_call_args,
 )
-from soothe_cli.runtime.parse.tool_result import (
+from soothe_sdk.display.tool_result import (
     extract_tool_result_payload,
     infer_tool_output_suggests_error,
 )
+from soothe_sdk.ux import classify_event_to_tier
+from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
+from soothe_sdk.ux.task_namespace import resolve_task_scope_for_namespace
+
+from soothe_cli.runtime.headless.processor_state import ProcessorState
 from soothe_cli.runtime.policy.display_policy import DisplayPolicy
 from soothe_cli.runtime.policy.tui_trace_log import log_tui_trace
 from soothe_cli.runtime.presentation.engine import PresentationEngine

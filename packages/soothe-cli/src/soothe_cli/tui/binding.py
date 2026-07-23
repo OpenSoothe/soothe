@@ -7,7 +7,7 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from soothe_cli.runtime.state.transcript import MessageData, MessageType
+from soothe_sdk.display.transcript_types import MessageData, MessageType
 
 if TYPE_CHECKING:
     from textual.widget import Widget

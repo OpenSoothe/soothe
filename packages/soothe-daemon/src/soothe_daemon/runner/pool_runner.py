@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 
 from soothe.config import SOOTHE_HOME
 from soothe.config.settings import SootheConfig
-from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
+from soothe.protocols.runner import LoopRunRequest
 from soothe.runner._worker_utils import spawn_safe_config
 
 from soothe_daemon.config import SootheDaemonConfig
@@ -1842,11 +1842,6 @@ class PoolLoopRunner:
         """Request cancellation."""
         if self._pool is not None:
             await self._pool.cancel_request(self._loop_id)
-
-
-# Verify structural compliance at import time (no overhead at runtime).
-def _assert_protocol() -> None:
-    _: LoopRunnerProtocol = PoolLoopRunner.__new__(PoolLoopRunner)  # type: ignore[assignment]
 
 
 __all__ = [

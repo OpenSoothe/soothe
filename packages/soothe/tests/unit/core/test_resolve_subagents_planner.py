@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from soothe_nano.resolve._resolver_tools import resolve_subagents
+
 from soothe.config import SootheConfig, SubagentConfig
-from soothe.runner.resolver._resolver_tools import resolve_subagents
 
 
 def test_resolve_subagents_planner_uses_model_role() -> None:

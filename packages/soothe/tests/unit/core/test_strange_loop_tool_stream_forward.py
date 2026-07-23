@@ -6,17 +6,50 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
 from soothe.runner._runner_strange_loop import (
+    _MSG_PAIR_LEN,
+    _STREAM_CHUNK_LEN,
     _forward_messages_chunk,
     _is_ai_messages_stream_chunk,
-    _is_ai_tool_invocation_messages_chunk,
-    _is_subgraph_tool_call_update_chunk,
     _is_tool_call_update_chunk,
     _is_tool_stream_chunk,
+    _message_has_tool_invocation_metadata,
 )
 from soothe.sloop.utils.messages import (
     LoopAIMessageChunk,
     loop_message_assistant_output_phase,
 )
+
+# ---------------------------------------------------------------------------
+# Test-only helpers (moved here from ``_runner_strange_loop.py``).
+# These were never called by production code — only by this test module.
+# They are kept verbatim so existing assertions remain meaningful.
+# ---------------------------------------------------------------------------
+
+
+def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
+    """Return True for ``messages`` chunks that carry AI tool-call metadata.
+
+    Forwards ``ToolMessage`` chunks but previously dropped all ``AIMessage`` chunks
+    to avoid duplicating assistant prose. The TUI still needs AI chunks that contain
+    ``tool_calls`` / ``tool_call_chunks`` so it can mount ``ToolCallMessage`` with args
+    before tool results arrive (otherwise only orphan result rows with ``{}`` appear).
+    """
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    _namespace, mode, data = chunk
+    if mode != "messages":
+        return False
+    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
+        return False
+    return _message_has_tool_invocation_metadata(data[0])
+
+
+def _is_subgraph_tool_call_update_chunk(chunk: object) -> bool:
+    """Return True for namespaced ``tool_call.update`` custom events (compat)."""
+    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
+        return False
+    namespace, _, _ = chunk
+    return bool(namespace) and _is_tool_call_update_chunk(chunk)
 
 
 def test_tool_stream_chunk_detects_tool_message() -> None:

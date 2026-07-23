@@ -13,6 +13,11 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from soothe.context.goal_interrupt_persistence import (
+    _build_cancelled_digest,
+    _new_ledger_entry,
+    mark_cancelled_goal_interrupted,
+)
 from soothe.context.store_sqlite import (
     SqliteContextPersistence,
 )
@@ -20,11 +25,6 @@ from soothe.context.store_sqlite import (
 # Initialize the daemon package graph (events/config) before importing from
 # the query subpackage, mirroring how test_engine_cancel.py orders its imports.
 from soothe_daemon.config import SootheDaemonConfig  # noqa: F401  (side-effect import)
-from soothe_daemon.query.goal_interrupt_persistence import (
-    _build_cancelled_digest,
-    _new_ledger_entry,
-    mark_cancelled_goal_interrupted,
-)
 
 
 def _sqlite_config() -> Any:
@@ -102,13 +102,10 @@ async def test_mark_cancelled_writes_pair_to_persistence(tmp_path: Path) -> None
     # keep this test hermetic we patch the factory to return our tmp-path backend.
     import soothe.context.store_factory as factory
 
-    import soothe_daemon.query.goal_interrupt_persistence as mod
-
     original = factory.resolve_context_engine_persistence
     factory.resolve_context_engine_persistence = lambda cfg, lid: SqliteContextPersistence(
         loop_id=lid, db_path=tmp_path / "ce.db"
     )
-    mod.resolve_context_engine_persistence = factory.resolve_context_engine_persistence
     try:
         appended = await mark_cancelled_goal_interrupted(
             _sqlite_config(), "loop-1", reason="user_cancelled"
@@ -130,14 +127,11 @@ async def test_mark_cancelled_writes_pair_to_persistence(tmp_path: Path) -> None
         assert "located the bug" in ai_body
     finally:
         factory.resolve_context_engine_persistence = original
-        mod.resolve_context_engine_persistence = original
 
 
 @pytest.mark.asyncio
 async def test_mark_cancelled_noop_without_evidence(tmp_path: Path) -> None:
     import soothe.context.store_factory as factory
-
-    import soothe_daemon.query.goal_interrupt_persistence as mod
 
     persistence = SqliteContextPersistence(loop_id="loop-2", db_path=tmp_path / "ce2.db")
     await persistence.save_ledger([])
@@ -147,7 +141,6 @@ async def test_mark_cancelled_noop_without_evidence(tmp_path: Path) -> None:
     factory.resolve_context_engine_persistence = lambda cfg, lid: SqliteContextPersistence(
         loop_id=lid, db_path=tmp_path / "ce2.db"
     )
-    mod.resolve_context_engine_persistence = factory.resolve_context_engine_persistence
     try:
         appended = await mark_cancelled_goal_interrupted(
             _sqlite_config(), "loop-2", reason="user_cancelled"
@@ -155,4 +148,3 @@ async def test_mark_cancelled_noop_without_evidence(tmp_path: Path) -> None:
         assert appended == 0
     finally:
         factory.resolve_context_engine_persistence = original
-        mod.resolve_context_engine_persistence = original

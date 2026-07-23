@@ -171,7 +171,7 @@ def test_merge_tool_display_args_prefers_message_tool_calls() -> None:
 
 def test_richest_pending_task_args_scoped_with_placeholder_tool_name() -> None:
     """Placeholder stream name ``tool`` must not match parallel ``task:0`` on another step."""
-    from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+    from soothe_sdk.display.message_processing import richest_pending_args_for_lookup
 
     pending = {
         "AGP_01:s:task:0": {
@@ -204,7 +204,7 @@ def test_richest_pending_task_args_scoped_with_placeholder_tool_name() -> None:
 
 def test_richest_pending_same_step_different_task_index() -> None:
     """``task:0`` and ``task:1`` on one step are distinct delegations."""
-    from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+    from soothe_sdk.display.message_processing import richest_pending_args_for_lookup
 
     pending = {
         "WAV_01:s:task:0": {
@@ -233,7 +233,7 @@ def test_richest_pending_same_step_different_task_index() -> None:
 
 def test_richest_pending_task_args_scoped_to_execute_step() -> None:
     """Parallel ``task`` spawns must not reuse another step's pending description."""
-    from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+    from soothe_sdk.display.message_processing import richest_pending_args_for_lookup
 
     pending = {
         "AAA_01:s:task:0": {
@@ -266,7 +266,7 @@ def test_richest_pending_task_args_scoped_to_execute_step() -> None:
 
 def test_richest_pending_parallel_subgraph_grep_scoped_by_step() -> None:
     """Parallel PGY steps must not cross-match ``grep`` pending buffers."""
-    from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+    from soothe_sdk.display.message_processing import richest_pending_args_for_lookup
 
     pending = {
         "PGY_01:t0:grep:0": {
@@ -293,7 +293,7 @@ def test_richest_pending_parallel_subgraph_grep_scoped_by_step() -> None:
 
 def test_richest_pending_does_not_steal_task_args_for_inner_tool() -> None:
     """Task pending buffer must not supply kwargs to unrelated subgraph tools."""
-    from soothe_cli.runtime.parse.message_processing import richest_pending_args_for_lookup
+    from soothe_sdk.display.message_processing import richest_pending_args_for_lookup
 
     pending = {
         "STEP_01:s:task:0": {

@@ -5,9 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from soothe.config import SootheConfig
-from soothe.persistence.postgres_provisioning import (
+from soothe_nano.persistence.postgres_provisioning import (
     ensure_postgres_databases,
     postgres_admin_dsn,
     postgres_target_dsn,
@@ -16,6 +14,8 @@ from soothe.persistence.postgres_provisioning import (
     uses_postgresql_persistence,
     validate_database_name,
 )
+
+from soothe.config import SootheConfig
 
 
 @pytest.fixture(autouse=True)

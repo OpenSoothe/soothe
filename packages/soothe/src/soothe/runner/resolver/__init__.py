@@ -1,9 +1,10 @@
 """Protocol, subagent, and tool resolution logic for create_soothe_agent.
 
 Protocol resolution (memory, planner, policy) lives here.
-Tool/subagent resolution is in ``_resolver_tools.py`` and infrastructure
-(durability, checkpointer) in ``_resolver_infra.py``.  All public names
-are re-exported here for convenience.
+Tool/subagent/infrastructure resolution is delegated to ``soothe_nano.resolve``
+; only ``resolve_planner`` (host-specific ``LLMPlanner``) and the checkpointer
+/durability bindings (``_resolver_infra.py``, ``shared_checkpointer_pool.py``)
+are defined locally.
 """
 
 from __future__ import annotations
@@ -11,20 +12,22 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from soothe.config import SootheConfig
-
-from ._resolver_infra import resolve_checkpointer, resolve_durability
-from ._resolver_tools import (
+from soothe_nano.resolve import (
     SUBAGENT_FACTORIES,
+    _create_loop_phase_model,
+    resolve_memory,
+    resolve_policy,
     resolve_subagents,
     resolve_tools,
 )
 
+from soothe.config import SootheConfig
+
+from ._resolver_infra import resolve_checkpointer, resolve_durability
+
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
-    from soothe_sdk.protocols.memory import MemoryProtocol
     from soothe_sdk.protocols.planner import PlannerProtocol
-    from soothe_sdk.protocols.policy import PolicyProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -42,58 +45,13 @@ __all__ = [
 
 # ---------------------------------------------------------------------------
 # Protocol resolution (memory, planner, policy)
+#
+# ``resolve_memory``, ``resolve_policy``, ``_create_loop_phase_model``,
+# ``SUBAGENT_FACTORIES``, ``resolve_subagents``, and ``resolve_tools`` are
+# imported from ``soothe_nano.resolve`` — they are byte-identical to the
+# previous local copies.  Only ``resolve_planner`` diverges (host returns an
+# ``LLMPlanner`` instance rather than ``None``), so it stays local.
 # ---------------------------------------------------------------------------
-
-
-def _create_loop_phase_model(
-    config: SootheConfig,
-    role: str,
-    *,
-    fallback: BaseChatModel | None,
-    phase: str,
-) -> BaseChatModel | None:
-    """Resolve a loop-phase chat model from router role."""
-    try:
-        return config.create_chat_model(role)
-    except Exception:
-        logger.warning(
-            "Failed to create %s model for role=%s; falling back to planner model",
-            phase,
-            role,
-            exc_info=True,
-        )
-        return fallback
-
-
-def resolve_memory(config: SootheConfig) -> MemoryProtocol | None:
-    """Instantiate the MemoryProtocol implementation using MemU.
-
-    Args:
-        config: Soothe configuration.
-
-    Returns:
-        A MemoryProtocol instance, or None if disabled.
-    """
-    if not config.agent.protocols.memory.enabled:
-        return None
-
-    try:
-        from soothe_nano.backends.memory.memu_adapter import MemUMemory
-
-        logger.info(
-            "Using MemU memory backend (chat: %s, embed: %s)",
-            config.resolve_model(config.agent.protocols.memory.llm_chat_role),
-            config.resolve_model(config.agent.protocols.memory.llm_embed_role),
-        )
-
-        return MemUMemory(config)
-
-    except ImportError:
-        logger.exception("MemU memory backend requires dependencies")
-        raise
-    except Exception:
-        logger.exception("Failed to initialize MemU memory backend")
-        raise
 
 
 def resolve_planner(
@@ -139,17 +97,3 @@ def resolve_planner(
         plan_assess_model=plan_assess_model,
         plan_generate_model=plan_generate_model,
     )
-
-
-def resolve_policy(config: SootheConfig) -> PolicyProtocol | None:
-    """Instantiate the PolicyProtocol implementation from config.
-
-    Args:
-        config: Soothe configuration.
-
-    Returns:
-        A PolicyProtocol instance.
-    """
-    from soothe_nano.security import ConfigDrivenPolicy
-
-    return ConfigDrivenPolicy(config=config)

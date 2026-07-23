@@ -817,7 +817,7 @@ class CognitionStepMessage(Vertical):
             except (TypeError, ValueError):
                 loaded = None
             if isinstance(loaded, dict):
-                from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+                from soothe_sdk.display.message_processing import extract_tool_args_dict
 
                 parsed_from_raw = extract_tool_args_dict(loaded)
                 if parsed_from_raw:
@@ -908,7 +908,8 @@ class CognitionStepMessage(Vertical):
 
     def update_tool_args(self, tool_call_id: str, args: dict[str, Any]) -> None:
         """Refresh kwargs when streaming fills in arguments."""
-        from soothe_cli.runtime.parse.message_processing import extract_tool_args_dict
+        from soothe_sdk.display.message_processing import extract_tool_args_dict
+
         from soothe_cli.runtime.parse.tool_call_resolution import tool_args_meaningful
 
         row = self._row_index.get(str(tool_call_id))

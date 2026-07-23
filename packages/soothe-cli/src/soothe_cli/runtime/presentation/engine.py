@@ -143,7 +143,7 @@ class PresentationEngine:
         Returns:
             Plain-text status line (may already start with a status icon from brief).
         """
-        from soothe_cli.runtime.parse.message_processing import extract_tool_brief
+        from soothe_sdk.display.message_processing import extract_tool_brief
 
         brief = extract_tool_brief(tool_name, raw_content)
         summarized = self.summarize_tool_result(brief)

@@ -10,8 +10,8 @@ from pathlib import Path
 
 import jwt
 import pytest
+from soothe_sdk.protocols.identity import TokenClaims
 
-from soothe.identity.models import TokenClaims
 from soothe.identity.tokens import (
     JWTManager,
     generate_jwt_key,

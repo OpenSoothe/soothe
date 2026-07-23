@@ -1,6 +1,6 @@
 """Message store for virtualized chat history (DOM window only).
 
-Transcript models live in ``soothe_cli.runtime.state.transcript``. Widget
+Transcript models live in ``soothe_sdk.display.transcript_types``. Widget
 construction uses ``soothe_cli.tui.binding``.
 """
 
@@ -9,14 +9,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe_cli.runtime.state.transcript import (
+from soothe_sdk.display.transcript_types import (
     UPDATABLE_FIELDS as _UPDATABLE_FIELDS,
 )
-from soothe_cli.runtime.state.transcript import (
+from soothe_sdk.display.transcript_types import (
     MessageData,
     MessageType,
     ToolStatus,
 )
+
 from soothe_cli.tui.binding import message_from_widget, message_to_widget
 
 logger = logging.getLogger(__name__)

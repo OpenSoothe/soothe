@@ -10,6 +10,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from langchain_core.messages import ToolMessage
+from soothe_client.appkit.turn import (
+    PRIORITY_CRITICAL,
+    PRIORITY_HIGH,
+    PRIORITY_LOW,
+    PRIORITY_NORMAL,
+)
 from soothe_sdk.core.events import (
     STRANGE_LOOP_COMPLETED,
     STRANGE_LOOP_PLAN_DECISION,
@@ -24,12 +30,6 @@ from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UP
 
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.runtime.state.session_stats import TurnEventStats
-from soothe_cli.runtime.turn.pipeline import (
-    PRIORITY_CRITICAL,
-    PRIORITY_HIGH,
-    PRIORITY_LOW,
-    PRIORITY_NORMAL,
-)
 from soothe_cli.runtime.wire.chunk_filter import (
     message_has_tool_invocation_metadata,
     updates_chunk_is_noop,

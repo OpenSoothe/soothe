@@ -8,11 +8,11 @@ import pytest
 from langchain_core.language_models.fake_chat_models import FakeListChatModel
 from langchain_core.messages import HumanMessage
 from soothe_nano.plugin.global_registry import load_plugins
+from soothe_nano.resolve import resolve_subagents
 
 from soothe.config import SootheConfig
 from soothe.config.models import SubagentConfig, ToolsConfig
 from soothe.coreagent import create_soothe_agent
-from soothe.runner.resolver import resolve_subagents
 
 pytest.importorskip("soothe_plugins.sample_echo", reason="soothe-plugins not installed")
 

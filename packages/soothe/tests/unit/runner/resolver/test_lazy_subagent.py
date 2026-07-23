@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from soothe.runner.resolver._lazy_subagent import LazySubagentRunnable, lazy_compiled_subagent_spec
+from soothe_nano.resolve._lazy_subagent import LazySubagentRunnable, lazy_compiled_subagent_spec
 
 
 def test_lazy_subagent_defers_factory_until_invoke() -> None:

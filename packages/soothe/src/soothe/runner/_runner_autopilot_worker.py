@@ -182,7 +182,7 @@ class AutopilotWorkerMixin:
 
         # RFC-204 Group C: Drain proposal queue and convert to directives
         proposals = proposal_queue.drain()
-        proposal_directives = _proposals_to_directives(proposals, source_goal_id=job.goal_id)
+        proposal_directives = _proposals_to_directives(proposals)
         logger.debug(
             "Drained %d proposals from queue, converted to %d directives",
             len(proposals),
@@ -344,7 +344,6 @@ def _extract_reflection_directives(plan_result: PlanResult | None) -> list[GoalD
 
 def _proposals_to_directives(
     proposals: list[Proposal],
-    source_goal_id: str,
 ) -> list[GoalDirective]:
     """Convert ProposalQueue proposals to GoalDirectives (RFC-204 Group C).
 
@@ -354,7 +353,6 @@ def _proposals_to_directives(
 
     Args:
         proposals: List of Proposal objects from the queue.
-        source_goal_id: Goal that owns this queue (for parent_id default).
 
     Returns:
         List of GoalDirective objects for 'suggest_goal' proposals.

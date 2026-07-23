@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from soothe_cli.runtime.parse.message_processing import (
+from soothe_sdk.display.message_processing import (
     _normalize_tool_name_for_arg_map,
     accumulate_tool_call_chunks,
     extract_tool_args_dict,

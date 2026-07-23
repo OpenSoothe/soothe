@@ -243,7 +243,7 @@ class SharedPostgreSQLPool:
             except RuntimeError:
                 pass
 
-            from soothe.persistence.postgres_provisioning import (
+            from soothe_nano.persistence.postgres_provisioning import (
                 ensure_postgres_databases_async,
             )
 

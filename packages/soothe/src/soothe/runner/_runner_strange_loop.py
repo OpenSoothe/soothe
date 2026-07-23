@@ -253,24 +253,6 @@ def _message_has_tool_invocation_metadata(msg: object) -> bool:
     return False
 
 
-def _is_ai_tool_invocation_messages_chunk(chunk: object) -> bool:
-    """Return True for ``messages`` chunks that carry AI tool-call metadata.
-
-    IG-119 forwards ``ToolMessage`` chunks but previously dropped all ``AIMessage`` chunks
-    to avoid duplicating assistant prose. The TUI still needs AI chunks that contain
-    ``tool_calls`` / ``tool_call_chunks`` so it can mount ``ToolCallMessage`` with args
-    before tool results arrive (otherwise only orphan result rows with ``{}`` appear).
-    """
-    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
-        return False
-    _namespace, mode, data = chunk
-    if mode != "messages":
-        return False
-    if not isinstance(data, (list, tuple)) or len(data) < _MSG_PAIR_LEN:
-        return False
-    return _message_has_tool_invocation_metadata(data[0])
-
-
 def _ai_chunk_has_actionable_payload(msg: object) -> bool:
     """True when an AI message should be forwarded (text, tools, or loop phase)."""
     from langchain_core.messages import AIMessage, AIMessageChunk
@@ -287,7 +269,7 @@ def _ai_chunk_has_actionable_payload(msg: object) -> bool:
             return True
         if _message_has_tool_invocation_metadata(msg):
             return True
-        from soothe.ai_message import extract_text_from_ai_message
+        from soothe_sdk.display.text_extract import extract_text_from_ai_message
 
         return bool("".join(extract_text_from_ai_message(msg)).strip())
     return False
@@ -348,14 +330,6 @@ def _is_tool_call_update_chunk(chunk: object) -> bool:
     if not isinstance(data, dict):
         return False
     return str(data.get("type", "")) == STREAM_TOOL_CALL_UPDATE
-
-
-def _is_subgraph_tool_call_update_chunk(chunk: object) -> bool:
-    """Return True for namespaced ``tool_call.update`` custom events (compat)."""
-    if not isinstance(chunk, tuple) or len(chunk) != _STREAM_CHUNK_LEN:
-        return False
-    namespace, _, _ = chunk
-    return bool(namespace) and _is_tool_call_update_chunk(chunk)
 
 
 def _is_subagent_wire_custom_chunk(chunk: object) -> bool:

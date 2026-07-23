@@ -14,6 +14,16 @@ from soothe_sdk.identity.errors import (
     TokenRevokedError,
     UnmappedIdentityError,
 )
+from soothe_sdk.protocols.identity import (
+    AKSKPair,
+    AuthResult,
+    ExternalIdentityMapping,
+    IdentityStatus,
+    TokenClaims,
+    TokenInfo,
+    TokenRefreshResult,
+    User,
+)
 
 from soothe.identity.credentials import (
     generate_access_key,
@@ -26,16 +36,6 @@ from soothe.identity.identity_service import (
     initialize_identity_tables_sync,
 )
 from soothe.identity.middleware import IdentityMiddleware
-from soothe.identity.models import (
-    AKSKPair,
-    AuthResult,
-    ExternalIdentityMapping,
-    IdentityStatus,
-    TokenClaims,
-    TokenInfo,
-    TokenRefreshResult,
-    User,
-)
 from soothe.identity.runtime import (
     AKSKConfig,
     IdentityConfig,

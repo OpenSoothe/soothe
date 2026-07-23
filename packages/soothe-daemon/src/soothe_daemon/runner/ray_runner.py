@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import ray
 from ray.util.queue import Queue
-from soothe.protocols.runner import LoopRunnerProtocol, LoopRunRequest
+from soothe.protocols.runner import LoopRunRequest
 
 if TYPE_CHECKING:
     from soothe.config.settings import SootheConfig
@@ -84,11 +84,6 @@ class RayLoopRunner:
         except Exception:  # noqa: BLE001
             pass
         self._actor = None
-
-
-# Structural protocol check.
-def _assert_protocol() -> None:
-    _: LoopRunnerProtocol = RayLoopRunner.__new__(RayLoopRunner)  # type: ignore[assignment]
 
 
 __all__ = ["RayLoopRunner"]

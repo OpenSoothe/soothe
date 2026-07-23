@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from soothe_sdk.protocols.planner import planner_outcome_text_preview
 
 from soothe.config.constants import DEFAULT_STRANGE_LOOP_MAX_ITERATIONS
 from soothe.sloop.subagent_catalog import (  # noqa: F401
@@ -21,7 +22,6 @@ from soothe.sloop.subagent_catalog import (  # noqa: F401
     spec_subagent_name,
 )
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
-from soothe.sloop.utils.outcome_preview import planner_outcome_text_preview
 
 logger = logging.getLogger(__name__)
 

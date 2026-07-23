@@ -13,9 +13,9 @@ from unittest.mock import MagicMock
 import pytest
 from langchain.agents.middleware.types import ToolCallRequest
 from langchain_core.messages import ToolMessage
+from soothe_sdk.protocols.identity import TokenClaims
 
 from soothe.identity.middleware import IdentityMiddleware
-from soothe.identity.models import TokenClaims
 from soothe.identity.runtime import (
     AKSKConfig,
     IdentityConfig,

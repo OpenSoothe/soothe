@@ -521,7 +521,7 @@ class SootheDaemon(DaemonHandlersMixin):
             apply_env_overrides(self._daemon_config)
 
             if self._config.persistence.postgres_base_dsn:
-                from soothe.persistence.postgres_provisioning import (
+                from soothe_nano.persistence.postgres_provisioning import (
                     ensure_postgres_databases_async,
                 )
 
