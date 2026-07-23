@@ -14,7 +14,7 @@
 # This script enforces literal-symbol-name bans (rules 1-4, 3b, 3c). The
 # complementary check `scripts/check_nano_duplicate_symbols.py` (invoked by
 # verify_finally.sh) catches dead-duplicate public symbols — nano defining a
-# name the host already owns (IG-678 PR-10). The literal ban is a backstop;
+# name the host already owns (IG-635 PR-10). The literal ban is a backstop;
 # the duplicate checker is the primary guard against the renamed-leak pattern.
 #
 # Usage:

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Detect dead-duplicate public symbols defined in both soothe-nano and host.
 
-IG-678 PR-10: the literal-name boundary ban in
+IG-635 PR-10: the literal-name boundary ban in
 ``check_module_import_boundaries.sh`` catches direct host-concept names
 (``StrangeLoop``, ``CronConfig``, etc.) but misses the case where nano
 defines a public class/function that the **host already defines under the
-same name** — a dead stale duplicate. This recurred across IG-678 PR-2
+same name** — a dead stale duplicate. This recurred across IG-635 PR-2
 (``DisplayCardStore``), PR-4 (``translate_client_path_to_container`` etc.),
 and PR-6 (``ThreadLogger``, ``ConfigWatcher``, ``THREADS_DATA_DIR``). The
 host's copy is always the live canonical one (all callers import from the
