@@ -5,9 +5,11 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Updated**: 2026-04-22
+**Updated**: 2026-07-24
 **Authors**: Platonic Coding Workflow
+**Related**: RFC-801 (SQLite Runtime), RFC-803 (checkpoint write pipeline)
 **Note**: Moved from 6xx (RFC-802) per RFC-900 reclassification
+**Design draft (SQLite layout cut)**: [2026-07-24-sqlite-runtime-isolation-performance-design.md](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
 
 ---
 
@@ -119,19 +121,27 @@ persistence:
 
 **Database mapping**:
 
+All SQLite purpose files live under **`$SOOTHE_DATA_DIR/databases/`** (default `~/.soothe/data/databases/`). Naming is unified `{purpose}.db` (RFC-801). Hard cut: no legacy path shims.
+
 | Purpose | PostgreSQL DB | SQLite File | Contents |
 |---------|---------------|-------------|----------|
-| LangGraph Checkpoints | soothe_checkpoints | langgraph_checkpoints.db | CoreAgent state |
-| StrangeLoop Checkpoints | soothe_checkpoints | loop_checkpoints.db | Loop metadata (same PG db) |
-| Thread Metadata | soothe_metadata | metadata.db | DurabilityProtocol ThreadInfo |
-| Vector Embeddings | soothe_vectors | vectors.db | pgvector/sqlite_vec |
-| User Memory | soothe_memory | memory.db | MemU long-term memory |
+| StrangeLoop / loop checkpoints (+ co-located LangGraph checkpoint state when applicable) | soothe_checkpoints | `databases/checkpoints.db` | Loop + checkpoint rows |
+| Context Engine | soothe_checkpoints / host CE | `databases/context.db` | CE DAG + ledger |
+| Display cards | soothe_metadata | `databases/display.db` | Card mutations + goal snapshots |
+| Cron | soothe_metadata | `databases/cron.db` | Scheduled jobs |
+| Identity | soothe_metadata | `databases/identity.db` | Users, AKSK, tokens |
+| Thread Metadata | soothe_metadata | `databases/metadata.db` | DurabilityProtocol ThreadInfo |
+| Persist KV | soothe_metadata (namespaces) | `databases/persist.db` | Key-value namespaces |
+| Vector Embeddings | soothe_vectors | `databases/vectors.db` | pgvector / sqlite-vec |
+| User Memory | soothe_memory | `databases/memory.db` | MemU long-term memory (when enabled) |
+
+**SQLite concurrency control**: one process-scoped `SqliteStoreRuntime` per file (RFC-801). PostgreSQL uses shared pools / process writer (RFC-803). Same logical separation; different connection machinery.
 
 **Separation rationale**:
 1. **Lifecycle differences**: Checkpoints can be purged, metadata persists longer
 2. **Backup granularity**: Backup critical metadata without checkpoint data
-3. **Connection pooling**: Different pools per-purpose for isolation
-4. **pgvector requirement**: Extension requires dedicated PostgreSQL database
+3. **Connection pooling / Runtime isolation**: Different pools (PG) or Runtimes (SQLite) per purpose
+4. **pgvector / sqlite-vec requirement**: Extension requires dedicated database / file
 5. **Consistent architecture**: Same logical separation across SQLite/PostgreSQL
 
 **Schema design** (see detailed schemas in implementation section):
@@ -192,20 +202,20 @@ persistence:
     vectors: soothe_vectors
     memory: soothe_memory
   
-  sqlite_paths:
-    checkpoints: ""      # Empty → $SOOTHE_DATA_DIR/langgraph_checkpoints.db
-    loop_checkpoints: "" # Empty → $SOOTHE_DATA_DIR/loop_checkpoints.db
-    metadata: ""         # Empty → $SOOTHE_DATA_DIR/metadata.db
-    vectors: ""          # Empty → $SOOTHE_DATA_DIR/vectors.db
-    memory: ""           # Empty → $SOOTHE_DATA_DIR/memory.db
+  # SQLite paths are convention-only under $SOOTHE_DATA_DIR/databases/
+  # (RFC-801). No per-file path overrides in v1 — hard cut, no shims.
+  sqlite:
+    reader_pool_size: 3
+    busy_timeout_ms: 60000
+    wal_checkpoint_on_shutdown: true
 ```
 
-**Connection pattern**:
+**Connection pattern (PostgreSQL)**:
 - Base DSN provides: host, port, credentials, SSL options (no database name)
 - Each backend connects to: `{base_dsn}/{database_name}`
 - Connection pools per-database for isolation
 
-**SQLite defaults**: Convention-based paths if empty (developers don't configure paths manually).
+**SQLite defaults**: Fixed conventions under `$SOOTHE_DATA_DIR/databases/{purpose}.db` (RFC-801). Operators do not configure individual file paths.
 
 ---
 
@@ -289,12 +299,9 @@ persistence:
     vectors: soothe_vectors
     memory: soothe_memory
   
-  sqlite_paths:
-    checkpoints: ""
-    loop_checkpoints: ""
-    metadata: ""
-    vectors: ""
-    memory: ""
+  sqlite:
+    reader_pool_size: 3
+    busy_timeout_ms: 60000
 
 protocols:
   durability:
@@ -408,7 +415,7 @@ def validate_backends_for_mode(config: SootheConfig) -> None:
 
 **Changes**:
 1. Add `postgres_base_dsn` and `postgres_databases` fields
-2. Add `sqlite_paths` configuration section
+2. Use convention-only `$SOOTHE_DATA_DIR/databases/` paths (RFC-801); optional `persistence.sqlite` Runtime tuning only
 3. Update backend resolution to use new structure
 4. Remove old fields (consolidate)
 5. Update config models
@@ -426,12 +433,12 @@ class PersistenceConfig(BaseModel):
     postgres_base_dsn: str | None = None
     postgres_databases: dict[str, str] | None = None
     
-    sqlite_paths: dict[str, str] = Field(default_factory=dict)
+    # Optional Runtime tuning — paths fixed under databases/ (RFC-801)
+    sqlite: SqliteRuntimeConfig | None = None
     
     # Removed:
     # soothe_postgres_dsn: str  # Replaced by postgres_base_dsn + databases
-    # metadata_sqlite_path: str  # Consolidated into sqlite_paths
-    # checkpoint_sqlite_path: str  # Consolidated into sqlite_paths
+    # sqlite_paths / metadata_sqlite_path / checkpoint_sqlite_path  # Hard cut
 ```
 
 ---
@@ -529,7 +536,7 @@ class PostgreSQLPersistStore:
 4. ✅ **Schema initialization** - All tables auto-created, no manual setup
 5. ✅ **Unified config** - Single persistence section, clear structure
 6. ✅ **Migration smoothness** - Dev config works unchanged, production guide available
-7. ✅ **Backward compatibility** - Development mode uses existing SQLite paths by default
+7. ✅ **Hard cut SQLite layout** - `$SOOTHE_DATA_DIR/databases/{purpose}.db` only; no legacy path shims (RFC-801)
 
 ---
 
@@ -537,7 +544,7 @@ class PostgreSQLPersistStore:
 
 | Risk | Mitigation |
 |------|------------|
-| Existing sqlite user data | Migration guide + doctor command |
+| Existing sqlite user data | Hard cut: wipe legacy `*.db`; recreate under `databases/` (RFC-801). No in-process migration |
 | PostgreSQL auto-provision fails | Graceful error + privilege validation |
 | Schema initialization race conditions | Connection pooling, WAL mode |
 | pgvector extension missing | Pre-flight validation + install guide |
@@ -651,6 +658,15 @@ CREATE INDEX embeddings_hnsw_idx ON embeddings USING hnsw (embedding);
 -- soothe_memory database
 -- MemU schema (existing implementation)
 ```
+
+---
+
+## Change History
+
+| Date | Change |
+|------|--------|
+| 2026-04-22 | Initial Draft — mode validation, multi-purpose DBs, sqlite_paths |
+| 2026-07-24 | SQLite layout cut to `$SOOTHE_DATA_DIR/databases/{purpose}.db`; remove path overrides; Runtime tuning via `persistence.sqlite` (RFC-801) |
 
 ---
 

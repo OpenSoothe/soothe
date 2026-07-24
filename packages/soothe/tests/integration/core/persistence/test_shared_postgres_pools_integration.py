@@ -83,10 +83,12 @@ def _postgres_integration_config() -> SootheConfig:
         persistence={
             "default_backend": "postgresql",
             "postgres_base_dsn": base,
-            "checkpoints_pool_size": 6,
-            "postgres_pool_max_idle_seconds": 30,
-            "postgres_pool_max_lifetime_seconds": 300,
-            "postgres_pool_acquire_timeout_seconds": 5,
+            "postgres": {
+                "checkpoints_pool_size": 6,
+                "pool_max_idle_seconds": 30,
+                "pool_max_lifetime_seconds": 300,
+                "pool_acquire_timeout_seconds": 5,
+            },
         },
         providers=providers,
         agent={"protocols": {"memory": memory_config}},

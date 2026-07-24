@@ -107,9 +107,11 @@ services:
 **Connection pooling**:
 ```yaml
 persistence:
-  postgres_pool_min_size: 16
-  checkpointer_pool_size: 48
-  sloop_pool_size: 48
+  postgres:
+    pool_min_size: 16
+    checkpoints_pool_size: 48
+    metadata_pool_size: 48
+    vectors_pool_size: 48
 ```
 
 ### Daemon Node Configuration
@@ -350,9 +352,11 @@ WITH (lists = 100);
 
 ```yaml
 persistence:
-  postgres_pool_min_size: 16  # Base pool
-  checkpointer_pool_size: 48  # LangGraph checkpoints
-  sloop_pool_size: 48     # StrangeLoop state
+  postgres:
+    pool_min_size: 16              # Warm connections
+    checkpoints_pool_size: 48      # LangGraph + StrangeLoop checkpoints
+    metadata_pool_size: 24
+    vectors_pool_size: 24
   
 agent:
   autonomous:
@@ -368,8 +372,8 @@ agent:
 ```
 
 **Pool sizing formula**:
-- `postgres_pool_min_size`: 4 × number of nodes
-- `checkpointer_pool_size`: 24 × number of nodes
+- `persistence.postgres.pool_min_size`: 4 × number of nodes
+- `persistence.postgres.checkpoints_pool_size`: 24 × number of nodes
 - `max_loops`: CPU cores × 2
 - `max_parallel_goals`: max_loops ÷ 2
 

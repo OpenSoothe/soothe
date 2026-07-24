@@ -689,8 +689,9 @@ agent:
 **PostgreSQL optimization**:
 ```yaml
 persistence:
-  postgres_pool_min_size: 4
-  checkpointer_pool_size: 24
+  postgres:
+    pool_min_size: 4
+    checkpoints_pool_size: 32
 ```
 
 **Vector store indexes**:

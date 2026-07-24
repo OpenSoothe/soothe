@@ -67,7 +67,7 @@ class StrangeLoopCheckpointPersistenceManager:
                     "Install with: pip install -U soothe"
                 ) from exc
             dsn = config.resolve_postgres_dsn_for_database("checkpoints")
-            pool_size = config.persistence.metadata_pool_size
+            pool_size = config.persistence.postgres.metadata_pool_size
             pool_timing = postgres_pool_timing_from_config(config, max_size=pool_size)
             self._backend = PostgreSQLPersistenceBackend(
                 dsn=dsn,

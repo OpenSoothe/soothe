@@ -5,10 +5,11 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-04-22
-**Last Updated**: 2026-07-08
-**Dependencies**: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
+**Last Updated**: 2026-07-24
+**Dependencies**: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX), RFC-801 (SQLite Runtime), RFC-802 (Persistence Architecture)
 **Author**: Claude Sonnet 4.6
 **Note**: Moved from 2xx (RFC-215) to 8xx persistence series per RFC-900 reclassification
+**Design draft (SQLite flush parity)**: [2026-07-24-sqlite-runtime-isolation-performance-design.md](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
 
 ---
 
@@ -95,7 +96,9 @@ SOOTHE_HOME/
 
 ### Schema Design
 
-**Database location**: `$SOOTHE_HOME/data/loops/{loop_id}/checkpoint.db`
+**Database location**: `$SOOTHE_DATA_DIR/databases/checkpoints.db` (RFC-801; shared process Runtime — not per-loop files)
+
+**Access**: All reads/writes via `SqliteStoreRuntime` for that path. `StrangeLoopStateManager` MUST NOT open a private `sqlite3` connection to this file.
 
 **Tables**:
 
@@ -717,6 +720,8 @@ Disable async writes for:
 
 **PostgreSQL note**: When `persistence.default_backend=postgresql` and the unified writer is enabled (IG-550), per-loop `_flush_worker_loop` is **not** used for checkpoint writes. See §Unified Write Pipeline below.
 
+**SQLite note**: When `persistence.default_backend=sqlite`, per-loop flush workers and per-manager private `sqlite3` writer/reader pools are **forbidden**. Checkpoint I/O uses the process-scoped `checkpoints.db` `SqliteStoreRuntime` (RFC-801) with one coalescing flush worker bound to that Runtime (same control-plane shape as `LoopPersistenceWriter`). See §Unified Write Pipeline — SQLite amendment below.
+
 ---
 
 ## Unified Write Pipeline (Amendment — IG-550 / IG-571)
@@ -771,7 +776,25 @@ Cross-thread pending-map mutations use **`threading.Lock`**. DB serialization us
 
 **Failure mode (pre-IG-571)**: `asyncio.Lock` on a process singleton called from worker loops raises `RuntimeError: … bound to a different event loop`, failing goal init/close and killing thread workers.
 
-**Safe failure (post-IG-571)**: When the writer is active, PostgreSQL checkpoint writes go **only** through `LoopPersistenceWriter`. On durable failure, return `PersistResult.ok=False` and call `mark_persist_degraded()` — **no** bypass to `_do_save_checkpoint()`. SQLite backends continue to use per-manager `_do_save_checkpoint()` when `writer is None`.
+**Safe failure (post-IG-571)**: When the writer is active, PostgreSQL checkpoint writes go **only** through `LoopPersistenceWriter`. On durable failure, return `PersistResult.ok=False` and call `mark_persist_degraded()` — **no** bypass to `_do_save_checkpoint()`.
+
+**SQLite (post–RFC-801 Runtime amendment, 2026-07-24)**: SQLite MUST NOT keep the historical bypass of “`writer is None` → per-manager `_do_save_checkpoint` with a private connection.” Instead:
+
+| Layer | Component | Scope | Responsibility |
+|-------|-----------|-------|----------------|
+| Domain | `StrangeLoopStateManager` | per `loop_id` | Checkpoint model, in-memory cache, load/merge, enqueue coalesced state |
+| Write pipeline | Process-scoped flush bound to `SqliteStoreRuntime` for `databases/checkpoints.db` | per process | Latest-wins coalesce, durable flush, shutdown drain |
+| Connections | `SqliteStoreRuntime` / `SqliteRuntimeRegistry` | per DB file | Single writer, leased readers, `BEGIN IMMEDIATE`, WAL + busy_timeout |
+
+Managers MUST NOT open private writer/reader pools on `checkpoints.db`. Reads and writes go through the shared Runtime (`run_read` / `run_write`). Cross-file CE/display updates remain separate Runtimes (ordered best-effort), matching multi-DB PostgreSQL non-atomicity.
+
+### SQLite data flow
+
+```text
+StrangeLoopStateManager ──┐
+  (coalesced pending)     ├──► process flush (checkpoints Runtime) ──► databases/checkpoints.db
+Context / display / … ────┘    (separate Runtimes per RFC-801 files)
+```
 
 ### Execution model (worker_pool)
 
@@ -807,21 +830,24 @@ agent:
 ### Success criteria (amendment)
 
 1. No `bound to a different event loop` from writer under max thread_pool concurrency
-2. Goal boundary: checkpoint + CE tables consistent within durable flush timeout
+2. Goal boundary: checkpoint + CE tables consistent within durable flush timeout (PostgreSQL single-DB transaction; SQLite best-effort across Runtimes per RFC-801)
 3. `close()` bounded by `close_timeout_seconds` (not outer request timeout)
-4. Process connection count to `soothe_checkpoints` ≤ configured pool cap
+4. Process connection count to `soothe_checkpoints` ≤ configured pool cap (PostgreSQL)
+5. SQLite: one `SqliteStoreRuntime` for `databases/checkpoints.db`; zero per-manager private write connections; process-scoped coalesce flush only
 
 ### Related implementation guides
 
 - [IG-550](../impl/IG-550-high-performance-persistence.md) — writer introduction, coalescing, goal-boundary transaction
 - [IG-571](../impl/IG-571-main-loop-persistence-writer-bridge.md) — main-loop submit bridge (thread_pool fix)
+- [RFC-801](./RFC-801-sqlite-backend.md) — `SqliteStoreRuntime` / `databases/` layout
+- Design draft: [2026-07-24-sqlite-runtime-isolation-performance-design.md](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
 
 ---
 
 ## Success Criteria
 
 1. Thread/loop isolation enforced ✓
-2. SQLite backend works (per-loop database) ✓
+2. SQLite backend works via process-scoped `databases/checkpoints.db` Runtime (RFC-801) ✓
 3. PostgreSQL backend works (connection pool) ✓
 4. Cross-reference queries work (thread_id → checkpoint_ids) ✓
 5. Checkpoint anchors saved correctly ✓
@@ -841,9 +867,22 @@ agent:
 - RFC-207: StrangeLoop Thread Lifecycle & Goal Context (supersedes RFC-216)
 - RFC-503: Loop-First User Experience
 - RFC-411: Event Stream Replay
-- RFC-801: SQLite Backend (existing)
+- RFC-801: SQLite Backend / `SqliteStoreRuntime`
+- RFC-802: Persistence Architecture Refactor (`databases/` layout)
 - IG-550: High-Performance Persistence Optimization (unified writer)
 - IG-571: Main-Loop Persistence Writer Bridge (thread_pool execution model)
+- Design draft: [2026-07-24-sqlite-runtime-isolation-performance-design.md](../drafts/2026-07-24-sqlite-runtime-isolation-performance-design.md)
+
+---
+
+## Change History
+
+| Date | Change |
+|------|--------|
+| 2026-04-22 | Initial Draft (as RFC-215) |
+| 2026-06-04 | Reclassified as RFC-803 |
+| 2026-07-08 | Unified write pipeline amendment (IG-550 / IG-571) |
+| 2026-07-24 | SQLite process-scoped Runtime + flush parity; `databases/checkpoints.db` hard cut (RFC-801) |
 
 ---
 

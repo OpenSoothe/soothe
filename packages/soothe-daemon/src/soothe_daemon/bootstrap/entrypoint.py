@@ -116,11 +116,6 @@ def main() -> None:
         foreground=args.foreground,
     )
 
-    # Migrate runtime data files from root to data/ subdirectory
-    from soothe_sdk.paths import migrate_data_to_subdir
-
-    migrate_data_to_subdir()
-
     run_daemon(cfg, daemon_config=daemon_cfg, detached=args.detached)
 
 

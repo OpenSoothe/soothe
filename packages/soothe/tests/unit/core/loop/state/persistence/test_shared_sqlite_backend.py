@@ -57,7 +57,7 @@ async def test_acquire_sync_creates_data_directory(tmp_path, monkeypatch) -> Non
 
     backend = shared_pool.acquire_shared_sqlite_backend_sync()
     assert data_dir.exists()
-    assert (data_dir / "soothe_checkpoints.db").exists()
+    assert (data_dir / "databases" / "checkpoints.db").exists()
     await backend.close()
     shared_pool._shared_sqlite_backend = None
     shared_pool._shared_sqlite_refcount = 0

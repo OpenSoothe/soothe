@@ -410,10 +410,10 @@ class TestModelRouter:
     def test_persistence_postgres_pool_size_defaults(self) -> None:
         """Shared PostgreSQL pool defaults (PostgresPoolRegistry per-database budgets)."""
         p = PersistenceConfig(default_backend="postgresql")
-        assert p.postgres_pool_min_size == 4
-        assert p.checkpoints_pool_size == 32
-        assert p.metadata_pool_size == 16
-        assert p.vectors_pool_size == 16
+        assert p.postgres.pool_min_size == 4
+        assert p.postgres.checkpoints_pool_size == 32
+        assert p.postgres.metadata_pool_size == 16
+        assert p.postgres.vectors_pool_size == 16
 
 
 class TestRouterProfiles:

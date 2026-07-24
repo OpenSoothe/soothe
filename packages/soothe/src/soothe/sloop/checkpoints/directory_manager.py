@@ -53,16 +53,6 @@ class PersistenceDirectoryManager:
         return Path(SOOTHE_HOME).expanduser() / THREADS_DATA_DIR / thread_id
 
     @staticmethod
-    def get_thread_checkpoint_path(thread_id: str) -> Path:
-        """Get CoreAgent thread checkpoint database path.
-
-        Returns:
-            Path to thread's checkpoint.db (managed by LangGraph).
-        """
-        # No need to import SOOTHE_HOME here - uses get_thread_directory
-        return PersistenceDirectoryManager.get_thread_directory(thread_id) / "checkpoint.db"
-
-    @staticmethod
     def get_thread_artifacts_dir(thread_id: str) -> Path:
         """Get CoreAgent thread artifacts directory.
 
@@ -152,12 +142,12 @@ class PersistenceDirectoryManager:
         """Get StrangeLoop global checkpoint database path (IG-055: unified SQLite).
 
         Returns:
-            Path to shared soothe_checkpoints.db (managed by StrangeLoop + LangGraph).
+            Path to shared ``databases/checkpoints.db`` (StrangeLoop + LangGraph).
             Table: agentloop_checkpoints (separate from LangGraph checkpoint tables).
         """
-        from soothe_sdk.paths import SOOTHE_DATA_DIR
+        from soothe_sdk.paths import resolve_checkpoints_db_path
 
-        return Path(SOOTHE_DATA_DIR) / "soothe_checkpoints.db"
+        return resolve_checkpoints_db_path()
 
     @staticmethod
     def get_loop_working_memory_dir(loop_id: str) -> Path:

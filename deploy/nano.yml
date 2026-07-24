@@ -67,8 +67,9 @@ agent:
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@soothe-pgvector:5432"
-  postgres_pool_max_idle_seconds: 90
-  postgres_pool_max_lifetime_seconds: 900
+  postgres:
+    pool_max_idle_seconds: 90
+    pool_max_lifetime_seconds: 900
 
 # =============================================================================
 # Vector Stores

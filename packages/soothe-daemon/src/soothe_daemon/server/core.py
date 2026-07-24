@@ -231,10 +231,8 @@ class SootheDaemon(DaemonHandlersMixin):
         Raises:
             RuntimeError: If JWT signing key is required but not available.
         """
-        from pathlib import Path
 
         from soothe.identity.identity_service import IdentityService
-        from soothe_sdk.paths import SOOTHE_DATA_DIR
 
         identity_cfg = self._daemon_config.identity
 
@@ -265,7 +263,9 @@ class SootheDaemon(DaemonHandlersMixin):
                 postgres_dsn=self._config.resolve_postgres_dsn_for_database("metadata"),
             )
 
-        db_path = Path(SOOTHE_DATA_DIR) / "identity.db"
+        from soothe_sdk.paths import resolve_identity_db_path
+
+        db_path = resolve_identity_db_path()
         return IdentityService(
             db_path=db_path,
             jwt_key=jwt_key,
@@ -539,6 +539,10 @@ class SootheDaemon(DaemonHandlersMixin):
                 from soothe.persistence.unified import configure_unified_persistence
 
                 configure_unified_persistence(self._config)
+                if self._config.persistence.default_backend == "sqlite":
+                    from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+                    SqliteRuntimeRegistry.set_default_config(self._config.persistence.sqlite)
             except Exception:
                 logger.warning(
                     "Failed to configure unified persistence; falling back to per-store defaults",
@@ -1712,24 +1716,17 @@ class SootheDaemon(DaemonHandlersMixin):
         try:
             # Skip SQLite WAL housekeeping when the process is in PostgreSQL mode.
             if self._config.persistence.default_backend != "postgresql":
-                from soothe.sloop.checkpoints.directory_manager import (
-                    PersistenceDirectoryManager,
+                from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
+                from soothe.sloop.checkpoints.shared_pool import (
+                    close_shared_sqlite_backend_instance,
                 )
-                from soothe.sloop.checkpoints.runtime_paths import (
-                    resolve_context_engine_db_path,
-                    resolve_display_db_path,
-                )
-                from soothe.sloop.checkpoints.wal_maintenance import (
-                    checkpoint_runtime_databases,
-                )
+                from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
 
-                checkpoint_runtime_databases(
-                    PersistenceDirectoryManager.get_loop_checkpoint_path(),
-                    resolve_context_engine_db_path(),
-                    resolve_display_db_path(),
-                )
+                await SqliteLoopFlushCoordinator.close_shared_instance()
+                await close_shared_sqlite_backend_instance()
+                await SqliteRuntimeRegistry.close_all()
         except Exception:
-            logger.debug("Runtime database WAL checkpoint skipped", exc_info=True)
+            logger.debug("SQLite Runtime shutdown skipped", exc_info=True)
 
         # Clean up anonymous workspace directories
         cleanup_anonymous_workspaces()

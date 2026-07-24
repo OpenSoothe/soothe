@@ -5,8 +5,8 @@ Provides a singleton pool at daemon level for high-concurrency scenarios
 of creating its own, preventing connection exhaustion.
 
 SQLite mode uses a ref-counted singleton ``SQLitePersistenceBackend`` so each
-loop's anchor manager does not open another writer + reader pool on
-``soothe_checkpoints.db``.
+loop's anchor manager shares the process ``SqliteStoreRuntime`` for
+``databases/checkpoints.db``.
 
 Architecture:
     Daemon → SootheRunner → SharedPostgreSQLPool
@@ -62,7 +62,7 @@ class SharedPostgreSQLPool:
     """Shared PostgreSQL connection pool for StrangeLoop state persistence.
 
     IG-406: High-concurrency architecture with 200+ thread support.
-    Pool size is config-driven (``persistence.checkpoints_pool_size``); default suits
+    Pool size is config-driven (``persistence.postgres.checkpoints_pool_size``); default suits
     one active run per process (e.g. pool workers) without multiplying connections by 30×N workers.
 
     Usage:
@@ -298,10 +298,19 @@ def acquire_shared_sqlite_backend_sync() -> SQLitePersistenceBackend:
     """Return the process-wide SQLite backend; increment ref count (sync).
 
     Safe in ``__init__`` because ``SQLitePersistenceBackend`` opens connections lazily.
+    Recreates the singleton if a prior ``SqliteRuntimeRegistry.close_all`` left a
+    closed Runtime attached to a stale backend.
     """
     global _shared_sqlite_backend, _shared_sqlite_refcount
 
     with _sqlite_thread_lock:
+        if _shared_sqlite_backend is not None:
+            runtime = getattr(_shared_sqlite_backend, "_runtime", None)
+            if runtime is not None and getattr(runtime, "_closed", False):
+                logger.warning("Shared SQLite backend held a closed Runtime; recreating singleton")
+                _shared_sqlite_backend = None
+                _shared_sqlite_refcount = 0
+
         if _shared_sqlite_backend is None:
             db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
             db_path.parent.mkdir(parents=True, exist_ok=True)

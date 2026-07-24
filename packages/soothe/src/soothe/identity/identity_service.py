@@ -108,29 +108,49 @@ class IdentityService(IdentityProtocol):
         )
 
         self._writer_conn: Any | None = None
+        self._sqlite_runtime: Any | None = None
         self._writer_thread_lock = threading.Lock()
         self._init_lock = asyncio.Lock()
 
     async def _ensure_initialized(self) -> None:
         """Lazy initialization of database tables."""
-        if self._writer_conn is None:
+        ready = (
+            self._sqlite_runtime is not None
+            if self._backend == "sqlite"
+            else self._writer_conn is not None
+        )
+        if not ready:
             async with self._init_lock:
-                if self._writer_conn is None:
+                ready = (
+                    self._sqlite_runtime is not None
+                    if self._backend == "sqlite"
+                    else self._writer_conn is not None
+                )
+                if not ready:
                     await asyncio.to_thread(self._init_writer_sync)
 
     def _init_writer_sync(self) -> None:
-        """Initialize writer connection and create identity tables."""
+        """Initialize backend storage (PostgreSQL conn or SQLite Runtime)."""
         with self._writer_thread_lock:
-            if self._writer_conn is not None:
+            if self._backend == "postgresql":
+                if self._writer_conn is not None:
+                    return
+                from soothe.identity.db import open_identity_connection
+
+                self._writer_conn = open_identity_connection(
+                    backend="postgresql",
+                    dsn=self._postgres_dsn,
+                )
                 return
 
-            from soothe.identity.db import open_identity_connection
+            if self._sqlite_runtime is not None:
+                return
 
-            self._writer_conn = open_identity_connection(
-                backend=self._backend,  # type: ignore[arg-type]
-                db_path=self.db_path,
-                dsn=self._postgres_dsn,
-            )
+            from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+            assert self.db_path is not None
+            initialize_identity_tables_sync(self.db_path)
+            self._sqlite_runtime = SqliteRuntimeRegistry.acquire(self.db_path)
 
     async def _writer_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
         """Run sync_fn on writer connection with thread safety."""
@@ -138,8 +158,18 @@ class IdentityService(IdentityProtocol):
         return await asyncio.to_thread(self._exec_on_writer_locked, sync_fn, *args)
 
     def _exec_on_writer_locked(self, sync_fn: Callable[..., T], *args: Any) -> T:
-        """Execute function on writer connection with lock."""
+        """Execute function on writer connection / SQLite Runtime."""
         with self._writer_thread_lock:
+            if self._backend == "sqlite":
+                runtime = self._sqlite_runtime
+                if runtime is None:
+                    raise RuntimeError("IdentityService SQLite Runtime not initialized")
+                from soothe.identity.db import IdentityDbConnection
+
+                return runtime.run_write_sync(
+                    lambda raw: sync_fn(IdentityDbConnection("sqlite", raw), *args)
+                )
+
             conn = self._writer_conn
             if conn is None:
                 raise RuntimeError("IdentityService writer connection not initialized")
@@ -1082,100 +1112,93 @@ class IdentityService(IdentityProtocol):
         return (users, active_aksk, active_tokens)
 
 
-def initialize_identity_tables_sync(db_path: Path) -> None:
-    """Initialize identity tables in SQLite database.
+def _apply_identity_schema(conn: sqlite3.Connection) -> None:
+    """Create identity tables/indexes on an open connection (Runtime-managed txn)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS identity_users (
+            user_id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            metadata TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS identity_aksk_pairs (
+            aksk_id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES identity_users(user_id),
+            access_key TEXT NOT NULL UNIQUE,
+            secret_key_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            revoked_at TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS identity_tokens (
+            jti TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            aksk_id TEXT NOT NULL REFERENCES identity_aksk_pairs(aksk_id),
+            token_type TEXT NOT NULL,
+            issued_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL,
+            revoked INTEGER NOT NULL DEFAULT 0,
+            revoked_at TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS identity_external_mappings (
+            mapping_id TEXT PRIMARY KEY,
+            channel TEXT NOT NULL,
+            sender_id TEXT NOT NULL,
+            user_id TEXT NOT NULL REFERENCES identity_users(user_id),
+            created_at TEXT NOT NULL,
+            UNIQUE(channel, sender_id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS identity_revoked_jtis (
+            jti TEXT PRIMARY KEY,
+            revoked_at TEXT NOT NULL,
+            reason TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_identity_aksk_user
+        ON identity_aksk_pairs(user_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_identity_tokens_user
+        ON identity_tokens(user_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_identity_tokens_aksk
+        ON identity_tokens(aksk_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_identity_mappings_channel_sender
+        ON identity_external_mappings(channel, sender_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_identity_mappings_user
+        ON identity_external_mappings(user_id)
+    """)
 
-    Tables are added to the same database as StrangeLoop persistence.
-    RFC-307 §Storage Schema.
+
+def initialize_identity_tables_sync(db_path: Path) -> None:
+    """Initialize identity tables via process-scoped ``SqliteStoreRuntime``.
+
+    RFC-307 §Storage Schema. Hard cut: ``databases/identity.db`` layout (RFC-801).
 
     Args:
         db_path: Path to SQLite database file.
     """
+    from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+    db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with sqlite3.connect(db_path) as db:
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA journal_mode=WAL")
-
-        # Users table
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS identity_users (
-                user_id TEXT PRIMARY KEY,
-                created_at TEXT NOT NULL,
-                metadata TEXT
-            )
-        """)
-
-        # AKSK pairs table
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS identity_aksk_pairs (
-                aksk_id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL REFERENCES identity_users(user_id),
-                access_key TEXT NOT NULL UNIQUE,
-                secret_key_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                expires_at TEXT,
-                revoked INTEGER NOT NULL DEFAULT 0,
-                revoked_at TEXT
-            )
-        """)
-
-        # Tokens table (for revocation tracking)
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS identity_tokens (
-                jti TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                aksk_id TEXT NOT NULL REFERENCES identity_aksk_pairs(aksk_id),
-                token_type TEXT NOT NULL,
-                issued_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                revoked INTEGER NOT NULL DEFAULT 0,
-                revoked_at TEXT
-            )
-        """)
-
-        # External identity mappings table
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS identity_external_mappings (
-                mapping_id TEXT PRIMARY KEY,
-                channel TEXT NOT NULL,
-                sender_id TEXT NOT NULL,
-                user_id TEXT NOT NULL REFERENCES identity_users(user_id),
-                created_at TEXT NOT NULL,
-                UNIQUE(channel, sender_id)
-            )
-        """)
-
-        # Revoked JTIs table (fast lookup)
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS identity_revoked_jtis (
-                jti TEXT PRIMARY KEY,
-                revoked_at TEXT NOT NULL,
-                reason TEXT NOT NULL
-            )
-        """)
-
-        # Create indexes
-        db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_identity_aksk_user
-            ON identity_aksk_pairs(user_id)
-        """)
-        db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_identity_tokens_user
-            ON identity_tokens(user_id)
-        """)
-        db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_identity_tokens_aksk
-            ON identity_tokens(aksk_id)
-        """)
-        db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_identity_mappings_channel_sender
-            ON identity_external_mappings(channel, sender_id)
-        """)
-        db.execute("""
-            CREATE INDEX IF NOT EXISTS idx_identity_mappings_user
-            ON identity_external_mappings(user_id)
-        """)
-
-        db.commit()
+    runtime = SqliteRuntimeRegistry.acquire(db_path)
+    try:
+        runtime.run_write_sync(_apply_identity_schema)
         logger.info("Identity tables initialized: db=%s", db_path)
+    finally:
+        SqliteRuntimeRegistry.release_sync(db_path)

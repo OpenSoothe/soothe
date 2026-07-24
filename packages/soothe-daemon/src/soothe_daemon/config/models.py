@@ -125,7 +125,7 @@ class WorkerPoolConfig(BaseModel):
 
     PostgreSQL Pool Considerations (multiprocessing spawn isolation):
     Each worker process has its OWN PostgreSQL connection pools (checkpoints + metadata + vectors).
-    Total PG connections = active_workers × (checkpoints_pool_size + metadata_pool_size + vectors_pool_size).
+    Total PG connections = active_workers × (persistence.postgres checkpoints+metadata+vectors pool sizes).
     Use small pool sizes in persistence config (2-4) to avoid connection exhaustion.
     For high-concurrency scenarios, consider PGBouncer as external connection proxy.
 
@@ -300,9 +300,9 @@ class ThreadPoolConfig(BaseModel):
     PostgreSQL Pool Sharing (IG-406):
     Daemon-level singleton pools are shared by ALL threads in the pool. This is
     efficient because threads share the same memory space and asyncio event loops
-    can access shared AsyncConnectionPool instances. Defaults use postgres_pool_min_size
+    can access shared AsyncConnectionPool instances. Defaults use persistence.postgres.pool_min_size
     8 and max 64 per shared checkpointer/sloop pool; tune for 50–100 concurrent loops
-    with PgBouncer (see persistence.metadata_pool_size).
+    with PgBouncer (see persistence.postgres.metadata_pool_size).
 
     Trade-offs vs WorkerPoolConfig:
     - Lower spawn overhead (milliseconds vs ~8s subprocess)

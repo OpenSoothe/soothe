@@ -49,12 +49,12 @@ def resolve_context_engine_persistence(config: SootheConfig, loop_id: str) -> An
             SqliteContextPersistence,
         )
         from soothe.sloop.checkpoints.runtime_paths import (
-            resolve_context_engine_db_path,
+            resolve_context_db_path,
         )
 
         persistence = SqliteContextPersistence(
             loop_id=loop_id,
-            db_path=resolve_context_engine_db_path(),
+            db_path=resolve_context_db_path(),
         )
 
     return persistence

@@ -115,7 +115,7 @@ identity:
 # IG-534: Each concurrent synthesis loop occupies one thread for the full turn.
 # IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
 # IG-553: For 50–100 concurrent loops, raise max_pool_size to 96–100 and align
-# persistence.checkpoints_pool_size / metadata_pool_size / vectors_pool_size behind PgBouncer.
+# persistence.postgres.checkpoints_pool_size / metadata_pool_size / vectors_pool_size behind PgBouncer.
 # - max_pool_size ≥ concurrent loops for full parallelism
 # - min_pool_size pre-warms threads for fast initial dispatch
 # - Lower values cause queue waits; higher values increase memory and PG connection usage.

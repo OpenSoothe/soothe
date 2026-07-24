@@ -14,9 +14,11 @@ def _postgres_config(**overrides: object) -> SootheConfig:
         "persistence": {
             "default_backend": "postgresql",
             "postgres_base_dsn": "postgresql://postgres:postgres@127.0.0.1:6432",
-            "checkpoints_pool_size": 32,
-            "metadata_pool_size": 16,
-            "vectors_pool_size": 16,
+            "postgres": {
+                "checkpoints_pool_size": 32,
+                "metadata_pool_size": 16,
+                "vectors_pool_size": 16,
+            },
         },
         "vector_stores": [
             {"name": "pgvector_dev", "provider_type": "pgvector"},
@@ -44,10 +46,12 @@ class TestPostgresPoolRegistry:
             persistence={
                 "default_backend": "postgresql",
                 "postgres_base_dsn": "postgresql://postgres:postgres@127.0.0.1:6432",
-                "checkpoints_pool_size": 80,
-                "metadata_pool_size": 40,
-                "vectors_pool_size": 40,
-                "postgres_connection_budget_warn": 100,
+                "postgres": {
+                    "checkpoints_pool_size": 80,
+                    "metadata_pool_size": 40,
+                    "vectors_pool_size": 40,
+                    "connection_budget_warn": 100,
+                },
             }
         )
         from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry

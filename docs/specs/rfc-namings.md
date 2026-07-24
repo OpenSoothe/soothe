@@ -2,7 +2,7 @@
 
 This document defines the terminology and naming conventions used in this project.
 
-**Last Updated**: 2026-06-30
+**Last Updated**: 2026-07-24
 
 > Note: Also covers start-phase intake & branch routing terms (RFC-630).
 
@@ -237,6 +237,15 @@ This document defines the terminology and naming conventions used in this projec
 | `StaleLoopError` | Typed error returned by `ReattachAndProbe` when a loop accepts the reattach handshake but fails the `loop_get` liveness probe; signals the caller to fall back to a fresh `loop_new` bootstrap. | RFC-629 |
 | `DisconnectCause` | Enum distinguishing clean vs unclean connection loss (Go: `DisconnectClean`/`DisconnectUnclean`; TypeScript: `DisconnectCause.Clean`/`DisconnectCause.Unclean`). Clean follows a `disconnect` notification; unclean is a read/write error or missed pong. | RFC-629 |
 | `Multiplexer` | Core client component that routes inbound protocol-1 frames to the correct waiter by `(type, id)` instead of discarding non-matching events, enabling concurrent RPCs and subscription streams. | RFC-629 |
+
+### Persistence / SQLite Runtime (RFC-801, RFC-802)
+
+| Term | Definition | Introduced In |
+|------|------------|---------------|
+| `SqliteStoreRuntime` | Process-scoped owner of connections for one SQLite DB file: single writer, leased readers, WAL + busy_timeout, `BEGIN IMMEDIATE` writes. | RFC-801 |
+| `SqliteRuntimeRegistry` | Process map of absolute path → `SqliteStoreRuntime` with refcount; closes and WAL-checkpoints on daemon shutdown. | RFC-801 |
+| `databases/` layout | All purpose SQLite files under `$SOOTHE_DATA_DIR/databases/{purpose}.db` (e.g. `checkpoints.db`, `persist.db`, `vectors.db`). Hard cut; no legacy path shims. | RFC-801, RFC-802 |
+| Purpose DB file | Unified `{purpose}.db` name for a logical store (checkpoints, context, display, cron, identity, metadata, persist, vectors, memory). | RFC-801, RFC-802 |
 
 ### Code Naming
 

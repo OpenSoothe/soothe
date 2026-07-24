@@ -6,17 +6,13 @@ IG-055: Backend-agnostic implementation with connection pooling
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import sqlite3
-import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
-
-import aiosqlite
 
 from soothe.sloop.checkpoints.base_backend import StrangeLoopPersistenceBackend
 
@@ -68,91 +64,41 @@ _SLIM_GOAL_RECORD_COLUMNS = frozenset(
 class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     """SQLite backend for StrangeLoop checkpoint persistence.
 
-    IG-055: Backend-agnostic implementation with instance-level connection pooling.
+    IG-647 / RFC-801: process-scoped ``SqliteStoreRuntime`` per database file.
     """
 
     def __init__(self, db_path: Path, pool_size: int = 5) -> None:
-        """Initialize SQLite backend with connection pool.
+        """Initialize SQLite backend backed by ``SqliteRuntimeRegistry``.
 
         Args:
             db_path: Path to SQLite database file.
-            pool_size: Number of reader connections (default: 5).
+            pool_size: Reader pool size for the Runtime (default: 5).
         """
-        self.db_path = db_path
+        from soothe_nano.config.models import SqliteRuntimeConfig
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+        self.db_path = Path(db_path)
         self._pool_size = pool_size
-        self._writer_conn: sqlite3.Connection | None = None
-        self._reader_pool: list[sqlite3.Connection] = []
-        self._pool_semaphore = asyncio.Semaphore(pool_size)
-        self._init_lock = asyncio.Lock()
-        self._writer_thread_lock = threading.Lock()
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.initialize_database_sync(self.db_path)
+        self._runtime = SqliteRuntimeRegistry.acquire(
+            self.db_path,
+            SqliteRuntimeConfig(reader_pool_size=pool_size),
+        )
+        self._registry_path = self.db_path
+        logger.info(
+            "SQLite backend using SqliteStoreRuntime path=%s pool=%d",
+            self.db_path,
+            pool_size,
+        )
 
     async def _writer_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
-        """Run ``sync_fn(self._writer_conn, *args)`` with serialized SQLite writer access."""
-        await self._ensure_pool_initialized()
-        return await asyncio.to_thread(self._exec_on_writer_locked, sync_fn, *args)
+        """Run ``sync_fn(conn, *args)`` on the process Runtime writer."""
+        return await self._runtime.run_write(lambda conn: sync_fn(conn, *args))
 
-    def _exec_on_writer_locked(self, sync_fn: Callable[..., T], *args: Any) -> T:
-        with self._writer_thread_lock:
-            conn = self._writer_conn
-            if conn is None:
-                msg = "SQLite persistence writer connection is not available"
-                raise RuntimeError(msg)
-            return sync_fn(conn, *args)
-
-    async def _ensure_pool_initialized(self) -> None:
-        """Lazy pool initialization."""
-        if self._writer_conn is None:
-            async with self._init_lock:
-                if self._writer_conn is None:
-                    await asyncio.to_thread(self._init_writer_sync)
-
-    def _init_writer_sync(self) -> None:
-        """Initialize writer connection with WAL mode."""
-        with self._writer_thread_lock:
-            if self._writer_conn is not None:
-                return
-            self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            # Ensure database schema
-            self.initialize_database_sync(self.db_path)
-
-            # Create writer connection
-            self._writer_conn = sqlite3.connect(
-                str(self.db_path),
-                check_same_thread=False,
-                timeout=30,
-            )
-            self._writer_conn.execute("PRAGMA journal_mode=WAL")
-            self._writer_conn.execute("PRAGMA foreign_keys=ON")
-            self._writer_conn.execute("PRAGMA busy_timeout=60000")
-            self._writer_conn.row_factory = sqlite3.Row
-
-            logger.info("SQLite backend writer connection initialized at %s", self.db_path)
-
-    async def _get_reader_connection(self) -> sqlite3.Connection:
-        """Get reader connection from pool."""
-        async with self._pool_semaphore:
-            if not self._reader_pool:
-                await asyncio.to_thread(self._init_reader_pool_sync)
-
-            # Return connection from pool (round-robin)
-            return self._reader_pool[0] if self._reader_pool else self._writer_conn
-
-    def _init_reader_pool_sync(self) -> None:
-        """Initialize reader connection pool."""
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        for i in range(self._pool_size):
-            conn = sqlite3.connect(
-                str(self.db_path),
-                check_same_thread=False,
-                timeout=30,
-            )
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("PRAGMA busy_timeout=60000")
-            conn.row_factory = sqlite3.Row
-            self._reader_pool.append(conn)
-
-        logger.info("SQLite backend reader pool initialized: size=%d", self._pool_size)
+    async def _reader_to_thread(self, sync_fn: Callable[..., T], *args: Any) -> T:
+        """Run ``sync_fn(conn, *args)`` on a leased Runtime reader."""
+        return await self._runtime.run_read(lambda conn: sync_fn(conn, *args))
 
     # IG-055: Implement abstract interface methods
 
@@ -202,12 +148,11 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 now,
             ),
         )
-        conn.commit()
         logger.debug("Registered loop: loop=%s threads=%s", loop_id, thread_ids)
 
     async def get_loop_metadata(self, loop_id: str) -> dict | None:
         """Get loop metadata for daemon reconstruction."""
-        return await self._writer_to_thread(self._get_loop_metadata_sync, loop_id)
+        return await self._reader_to_thread(self._get_loop_metadata_sync, loop_id)
 
     def _get_loop_metadata_sync(self, conn: sqlite3.Connection, loop_id: str) -> dict | None:
         """Sync get loop metadata."""
@@ -307,7 +252,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             f"UPDATE agentloop_loops SET {set_clause} WHERE loop_id = ?",  # noqa: S608
             params,
         )
-        conn.commit()
 
     async def set_resume_topic_once(self, loop_id: str, topic: str) -> bool:
         """Write resume topic only when the loop row has no topic yet."""
@@ -332,7 +276,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             """,
             (topic, loop_id),
         )
-        conn.commit()
         return bool(cursor.rowcount)
 
     async def list_loops(
@@ -351,7 +294,7 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 messages (bootstrap-only loops with no real exchange).
             workspace_filter: Optional client_workspace path to filter by.
         """
-        return await self._writer_to_thread(
+        return await self._reader_to_thread(
             self._list_loops_sync, status_filter, limit, exclude_empty, workspace_filter
         )
 
@@ -431,7 +374,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             "UPDATE agentloop_loops SET updated_at = ? WHERE loop_id = ?",
             (now_iso, loop_id),
         )
-        conn.commit()
 
     async def increment_loop_message_count(
         self,
@@ -467,7 +409,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             """,
             (human, ai, now_iso, now_iso, loop_id),
         )
-        conn.commit()
 
     async def list_empty_loops(
         self,
@@ -588,7 +529,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         conn.execute("DELETE FROM failed_branches WHERE loop_id = ?", (loop_id,))
         conn.execute("DELETE FROM goal_records WHERE loop_id = ?", (loop_id,))
         conn.execute("DELETE FROM agentloop_loops WHERE loop_id = ?", (loop_id,))
-        conn.commit()
         logger.info("Purged loop execution data from SQLite: loop=%s", loop_id)
 
     async def save_checkpoint_anchor(
@@ -649,7 +589,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 execution_summary.get("reasoning_decision") if execution_summary else None,
             ),
         )
-        conn.commit()
         logger.debug(
             "Saved anchor: loop=%s iter=%d thread=%s checkpoint=%s type=%s",
             loop_id,
@@ -823,7 +762,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 datetime.now(UTC).isoformat(),
             ),
         )
-        conn.commit()
         logger.debug("Saved branch: branch=%s loop=%s iter=%d", branch_id, loop_id, iteration)
 
     async def update_branch_analysis(
@@ -872,7 +810,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 loop_id,
             ),
         )
-        conn.commit()
         logger.debug("Updated branch: branch=%s loop=%s", branch_id, loop_id)
 
     async def get_failed_branches_for_loop(
@@ -924,7 +861,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             (datetime.now(UTC).isoformat(), loop_id, cutoff_str),
         )
         count = cursor.rowcount
-        conn.commit()
         logger.info(
             "Pruned %d branches for loop=%s (max_age=%d days)", count, loop_id, max_age_days
         )
@@ -966,7 +902,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
         """,
             (goal_id, loop_id, thread_id, status, started_at),
         )
-        conn.commit()
         logger.debug(
             "Saved goal: id=%s loop=%s thread=%s status=%s",
             goal_id,
@@ -1024,7 +959,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
                 loop_id,
             ),
         )
-        conn.commit()
         logger.debug(
             "Updated goal: id=%s loop=%s status=%s dur=%dms",
             goal_id,
@@ -1033,21 +967,12 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             duration_ms,
         )
 
-    def _close_writer_locked(self) -> None:
-        with self._writer_thread_lock:
-            if self._writer_conn:
-                self._writer_conn.close()
-                self._writer_conn = None
-
     async def close(self) -> None:
-        """Close backend connections."""
-        await asyncio.to_thread(self._close_writer_locked)
+        """Release the process Runtime reference for this database path."""
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
 
-        for conn in self._reader_pool:
-            conn.close()
-        self._reader_pool.clear()
-
-        logger.info("SQLite backend closed")
+        await SqliteRuntimeRegistry.release(self._registry_path)
+        logger.info("SQLite backend closed path=%s", self.db_path)
 
     @staticmethod
     def _ensure_loop_columns(db: sqlite3.Connection) -> None:
@@ -1114,10 +1039,17 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
     @staticmethod
     def _ensure_loop_columns_on_path(db_path: Path) -> None:
         """Migrate ``agentloop_loops`` and ``goal_records`` columns on an existing database file."""
-        with sqlite3.connect(db_path) as db:
-            SQLitePersistenceBackend._ensure_loop_columns(db)
-            SQLitePersistenceBackend._ensure_goal_record_columns(db)
-            db.commit()
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+        def _migrate(conn: sqlite3.Connection) -> None:
+            SQLitePersistenceBackend._ensure_loop_columns(conn)
+            SQLitePersistenceBackend._ensure_goal_record_columns(conn)
+
+        runtime = SqliteRuntimeRegistry.acquire(db_path)
+        try:
+            runtime.run_write_sync(_migrate)
+        finally:
+            SqliteRuntimeRegistry.release_sync(db_path)
 
     @staticmethod
     def initialize_database_sync(db_path: Path) -> None:
@@ -1270,157 +1202,6 @@ class SQLitePersistenceBackend(StrangeLoopPersistenceBackend):
             """)
 
             db.commit()
-
-        logger.info("Initialized SQLite database schema at %s", db_path)
-
-    @staticmethod
-    async def initialize_database(db_path: Path) -> None:
-        """Initialize SQLite database schema (async version).
-
-        Creates tables for:
-        - agentloop_loops (metadata)
-        - checkpoint_anchors (synchronization)
-        - failed_branches (learning history)
-        - goal_records (execution history)
-
-        Args:
-            db_path: Path to SQLite database file.
-        """
-        # Ensure parent directory exists
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        async with aiosqlite.connect(db_path) as db:
-            # Enable FK constraints and WAL mode BEFORE creating tables
-            await db.execute("PRAGMA foreign_keys=ON")
-            await db.execute("PRAGMA journal_mode=WAL")
-
-            # Create agentloop_loops table (MISSING in async version - add it)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS agentloop_loops (
-                    loop_id TEXT PRIMARY KEY,
-                    thread_ids TEXT NOT NULL,
-                    current_thread_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    current_goal_index INTEGER DEFAULT -1,
-                    working_memory_state TEXT,
-                    thread_health_metrics TEXT,
-                    total_goals_completed INTEGER DEFAULT 0,
-                    total_thread_switches INTEGER DEFAULT 0,
-                    total_duration_ms INTEGER DEFAULT 0,
-                    total_tokens_used INTEGER DEFAULT 0,
-                    thread_switch_pending INTEGER DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    schema_version TEXT DEFAULT '5.0',
-                    client_workspace TEXT,
-                    detached_at TEXT,
-                    user_id TEXT,
-                    client_workspace_id TEXT,
-                    is_ephemeral INTEGER NOT NULL DEFAULT 0,
-                    last_message_at TEXT,
-                    current_workspace TEXT,
-                    human_message_count INTEGER NOT NULL DEFAULT 0,
-                    ai_message_count INTEGER NOT NULL DEFAULT 0
-                )
-            """)
-
-            # Create checkpoint_anchors table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS checkpoint_anchors (
-                    anchor_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    loop_id TEXT NOT NULL,
-                    iteration INTEGER NOT NULL,
-                    thread_id TEXT NOT NULL,
-                    checkpoint_id TEXT NOT NULL,
-                    checkpoint_ns TEXT DEFAULT '',
-                    anchor_type TEXT NOT NULL,
-                    timestamp TEXT NOT NULL,
-                    iteration_status TEXT,
-                    next_action_summary TEXT,
-                    tools_executed TEXT,
-                    reasoning_decision TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id),
-                    UNIQUE(loop_id, iteration, anchor_type)
-                )
-            """)
-
-            # Create indexes for checkpoint_anchors
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_anchors_loop_iteration
-                ON checkpoint_anchors(loop_id, iteration)
-            """)
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_anchors_thread
-                ON checkpoint_anchors(thread_id)
-            """)
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_anchors_loop_thread
-                ON checkpoint_anchors(loop_id, thread_id)
-            """)
-
-            # Create failed_branches table
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS failed_branches (
-                    branch_id TEXT PRIMARY KEY,
-                    loop_id TEXT NOT NULL,
-                    iteration INTEGER NOT NULL,
-                    thread_id TEXT NOT NULL,
-                    root_checkpoint_id TEXT NOT NULL,
-                    failure_checkpoint_id TEXT NOT NULL,
-                    failure_reason TEXT NOT NULL,
-                    execution_path TEXT NOT NULL,
-                    failure_insights TEXT,
-                    avoid_patterns TEXT,
-                    suggested_adjustments TEXT,
-                    created_at TEXT NOT NULL,
-                    analyzed_at TEXT,
-                    pruned_at TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
-                )
-            """)
-
-            # Create indexes for failed_branches
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_branches_loop
-                ON failed_branches(loop_id)
-            """)
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_branches_thread
-                ON failed_branches(thread_id)
-            """)
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_branches_iteration
-                ON failed_branches(loop_id, iteration)
-            """)
-
-            # Create goal_records table (RFC-626 GoalIndexEntry index)
-            await db.execute("""
-                CREATE TABLE IF NOT EXISTS goal_records (
-                    goal_id TEXT PRIMARY KEY,
-                    loop_id TEXT NOT NULL,
-                    thread_id TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    duration_ms INTEGER DEFAULT 0,
-                    tokens_used INTEGER DEFAULT 0,
-                    started_at TEXT NOT NULL,
-                    completed_at TEXT,
-                    FOREIGN KEY (loop_id) REFERENCES agentloop_loops(loop_id)
-                )
-            """)
-
-            # Create indexes for goal_records
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_goals_loop
-                ON goal_records(loop_id)
-            """)
-            await db.execute("""
-                CREATE INDEX IF NOT EXISTS idx_goals_thread
-                ON goal_records(thread_id)
-            """)
-
-            await db.commit()
-
-        SQLitePersistenceBackend._ensure_loop_columns_on_path(db_path)
 
         logger.info("Initialized SQLite database schema at %s", db_path)
 

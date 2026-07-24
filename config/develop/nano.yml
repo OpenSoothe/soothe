@@ -81,8 +81,9 @@ agent:
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
-  postgres_pool_max_idle_seconds: 90
-  postgres_pool_max_lifetime_seconds: 900
+  postgres:
+    pool_max_idle_seconds: 90
+    pool_max_lifetime_seconds: 900
 
 security:
   allow_paths_outside_workspace: true

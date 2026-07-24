@@ -144,7 +144,7 @@ A list of `MCPServerConfig` entries. Each has `name` (unique, validated at start
 
 ## Persistence
 
-`PersistenceConfig` supports two modes: single-database (`soothe_postgres_dsn`) or multi-database (`postgres_base_dsn` + `postgres_databases` map of checkpoints/metadata/vectors/memory, RFC-802). `default_backend` selects sqlite or postgresql. SQLite paths default to `~/.soothe/data/`. Pool fields: `postgres_pool_min_size`, `checkpointer_pool_size`, `sloop_pool_size`, and idle/lifetime/acquire timeouts. Multi-database is preferred for production — independent backup/restore per component. Pool sizing differs between thread-pool (shared singleton) and worker-pool (per-worker) modes; see [Provider Setup](provider-setup.md).
+`PersistenceConfig` supports two modes: single-database (`soothe_postgres_dsn`) or multi-database (`postgres_base_dsn` + `postgres_databases` map of checkpoints/metadata/vectors/memory, RFC-802). `default_backend` selects sqlite or postgresql. SQLite purpose files live under `~/.soothe/data/databases/` (e.g. `checkpoints.db`, `metadata.db`, `vectors.db`). Pool tuning is nested: `persistence.postgres` (`pool_min_size`, per-DB `*_pool_size`, idle/lifetime/acquire timeouts) and `persistence.sqlite` (`reader_pool_size`, `busy_timeout_ms`). Multi-database is preferred for production — independent backup/restore per component. Pool sizing differs between thread-pool (shared singleton) and worker-pool (per-worker) modes; see [Provider Setup](provider-setup.md).
 
 ## Vector Stores
 

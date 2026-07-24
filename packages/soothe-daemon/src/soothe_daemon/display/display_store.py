@@ -1,6 +1,6 @@
 """Display card mutation persistence (RFC-413).
 
-SQLite (``display.db``) is the default. When ``persistence.default_backend`` is
+SQLite (``databases/display.db``) is the default. When ``persistence.default_backend`` is
 ``postgresql``, the process configures a PostgreSQL store in ``soothe_metadata``.
 
 Moved from ``soothe_nano`` to the daemon (IG-635 PR-2): display cards are a
@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -95,119 +94,114 @@ class DisplayCardStoreProtocol(Protocol):
 
 
 class DisplayCardStore:
-    """Append-only SQLite store for ``CardMutation`` rows."""
+    """Append-only SQLite store for ``CardMutation`` rows (Runtime-backed)."""
 
     def __init__(self, db_path: Path | None = None) -> None:
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
         self._db_path = db_path or resolve_display_db_path()
-        self._lock = threading.Lock()
-        self._conn: sqlite3.Connection | None = None
+        self._runtime = SqliteRuntimeRegistry.acquire(self._db_path)
+        self._runtime.run_write_sync(lambda conn: conn.executescript(_SCHEMA))
 
     @property
     def db_path(self) -> Path:
         return self._db_path
 
-    def _connection(self) -> sqlite3.Connection:
-        with self._lock:
-            if self._conn is not None:
-                return self._conn
-            self._db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(self._db_path), timeout=30, check_same_thread=False)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.execute("PRAGMA busy_timeout=60000")
-            conn.executescript(_SCHEMA)
-            conn.commit()
-            self._conn = conn
-            return conn
-
     def list_mutations(self, loop_id: str) -> list[CardMutation]:
         """Load all mutations for a loop ordered by ``seq``."""
-        conn = self._connection()
-        cursor = conn.execute(
-            """
-            SELECT seq, ts, op, card_id, kind, data_json
-            FROM display_card_mutations
-            WHERE loop_id = ?
-            ORDER BY seq ASC
-            """,
-            (loop_id,),
-        )
-        mutations: list[CardMutation] = []
-        for row in cursor.fetchall():
-            data = json.loads(row[5])
-            mutations.append(
-                CardMutation(
-                    seq=int(row[0]),
-                    ts=str(row[1]),
-                    op=row[2],  # type: ignore[arg-type]
-                    card_id=str(row[3]),
-                    kind=str(row[4]),
-                    data=data,
-                )
+
+        def _read(conn: Any) -> list[CardMutation]:
+            cursor = conn.execute(
+                """
+                SELECT seq, ts, op, card_id, kind, data_json
+                FROM display_card_mutations
+                WHERE loop_id = ?
+                ORDER BY seq ASC
+                """,
+                (loop_id,),
             )
-        return mutations
+            mutations: list[CardMutation] = []
+            for row in cursor.fetchall():
+                data = json.loads(row[5])
+                mutations.append(
+                    CardMutation(
+                        seq=int(row[0]),
+                        ts=str(row[1]),
+                        op=row[2],  # type: ignore[arg-type]
+                        card_id=str(row[3]),
+                        kind=str(row[4]),
+                        data=data,
+                    )
+                )
+            return mutations
+
+        return self._runtime.run_read_sync(_read)
 
     def append_mutations(self, loop_id: str, mutations: list[CardMutation]) -> None:
         """Insert mutations; ignores duplicates on ``(loop_id, seq)``."""
         if not mutations:
             return
-        conn = self._connection()
-        with self._lock:
+        rows = [
+            (
+                loop_id,
+                mutation.seq,
+                mutation.ts,
+                mutation.op,
+                mutation.card_id,
+                mutation.kind,
+                json.dumps(mutation.data, default=str),
+            )
+            for mutation in mutations
+        ]
+
+        def _write(conn: Any) -> None:
             conn.executemany(
                 """
                 INSERT OR IGNORE INTO display_card_mutations
                 (loop_id, seq, ts, op, card_id, kind, data_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                [
-                    (
-                        loop_id,
-                        mutation.seq,
-                        mutation.ts,
-                        mutation.op,
-                        mutation.card_id,
-                        mutation.kind,
-                        json.dumps(mutation.data, default=str),
-                    )
-                    for mutation in mutations
-                ],
+                rows,
             )
-            conn.commit()
+
+        self._runtime.run_write_sync(_write)
 
     def replace_mutations(self, loop_id: str, mutations: list[CardMutation]) -> None:
         """Replace all mutations for a loop."""
-        conn = self._connection()
-        with self._lock:
+        rows = [
+            (
+                loop_id,
+                mutation.seq,
+                mutation.ts,
+                mutation.op,
+                mutation.card_id,
+                mutation.kind,
+                json.dumps(mutation.data, default=str),
+            )
+            for mutation in mutations
+        ]
+
+        def _write(conn: Any) -> None:
             conn.execute(
                 "DELETE FROM display_card_mutations WHERE loop_id = ?",
                 (loop_id,),
             )
-            if mutations:
+            if rows:
                 conn.executemany(
                     """
                     INSERT INTO display_card_mutations
                     (loop_id, seq, ts, op, card_id, kind, data_json)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    [
-                        (
-                            loop_id,
-                            mutation.seq,
-                            mutation.ts,
-                            mutation.op,
-                            mutation.card_id,
-                            mutation.kind,
-                            json.dumps(mutation.data, default=str),
-                        )
-                        for mutation in mutations
-                    ],
+                    rows,
                 )
-            conn.commit()
+
+        self._runtime.run_write_sync(_write)
 
     def delete_loop(self, loop_id: str) -> None:
         """Delete all card mutations and goal snapshots for a loop."""
-        conn = self._connection()
-        with self._lock:
+
+        def _write(conn: Any) -> None:
             conn.execute(
                 "DELETE FROM display_card_mutations WHERE loop_id = ?",
                 (loop_id,),
@@ -216,38 +210,45 @@ class DisplayCardStore:
                 "DELETE FROM goal_display_snapshots WHERE loop_id = ?",
                 (loop_id,),
             )
-            conn.commit()
+
+        self._runtime.run_write_sync(_write)
 
     def list_goal_snapshots(self, loop_id: str) -> list[dict[str, Any]]:
         """Load goal display snapshots ordered by ``goal_index``."""
-        conn = self._connection()
-        cursor = conn.execute(
-            """
-            SELECT snapshot_json
-            FROM goal_display_snapshots
-            WHERE loop_id = ?
-            ORDER BY goal_index ASC
-            """,
-            (loop_id,),
-        )
-        out: list[dict[str, Any]] = []
-        for row in cursor.fetchall():
-            try:
-                data = json.loads(row[0])
-            except json.JSONDecodeError:
-                continue
-            if isinstance(data, dict):
-                out.append(data)
-        return out
+
+        def _read(conn: Any) -> list[dict[str, Any]]:
+            cursor = conn.execute(
+                """
+                SELECT snapshot_json
+                FROM goal_display_snapshots
+                WHERE loop_id = ?
+                ORDER BY goal_index ASC
+                """,
+                (loop_id,),
+            )
+            out: list[dict[str, Any]] = []
+            for row in cursor.fetchall():
+                try:
+                    data = json.loads(row[0])
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(data, dict):
+                    out.append(data)
+            return out
+
+        return self._runtime.run_read_sync(_read)
 
     def goal_snapshot_count(self, loop_id: str) -> int:
         """Return number of stored goal snapshots for a loop."""
-        conn = self._connection()
-        row = conn.execute(
-            "SELECT COUNT(*) FROM goal_display_snapshots WHERE loop_id = ?",
-            (loop_id,),
-        ).fetchone()
-        return int(row[0]) if row else 0
+
+        def _read(conn: Any) -> int:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM goal_display_snapshots WHERE loop_id = ?",
+                (loop_id,),
+            ).fetchone()
+            return int(row[0]) if row else 0
+
+        return self._runtime.run_read_sync(_read)
 
     def insert_goal_snapshot_with_auto_index(
         self,
@@ -257,8 +258,8 @@ class DisplayCardStore:
         snapshot: dict[str, Any],
     ) -> tuple[int, str]:
         """Reserve ``goal_index`` and insert the snapshot in one critical section."""
-        conn = self._connection()
-        with self._lock:
+
+        def _write(conn: Any) -> tuple[int, str]:
             row = conn.execute(
                 """
                 SELECT COALESCE(MAX(goal_index), -1) + 1
@@ -295,8 +296,9 @@ class DisplayCardStore:
                     card_count,
                 ),
             )
-            conn.commit()
             return goal_index, resolved_goal_id
+
+        return self._runtime.run_write_sync(_write)
 
     def insert_goal_snapshot(
         self,
@@ -307,30 +309,32 @@ class DisplayCardStore:
         snapshot: dict[str, Any],
     ) -> None:
         """Insert one immutable goal snapshot (ignore duplicate goal_index)."""
-        conn = self._connection()
         card_count = int(snapshot.get("card_count") or 0)
         frozen_at = str(snapshot.get("completed_at") or snapshot.get("started_at") or "")
         if not frozen_at:
             from datetime import UTC, datetime
 
             frozen_at = datetime.now(UTC).isoformat()
-        with self._lock:
+        payload = (
+            loop_id,
+            goal_index,
+            goal_id,
+            frozen_at,
+            json.dumps(snapshot, default=str),
+            card_count,
+        )
+
+        def _write(conn: Any) -> None:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO goal_display_snapshots
                 (loop_id, goal_index, goal_id, frozen_at, snapshot_json, card_count)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    loop_id,
-                    goal_index,
-                    goal_id,
-                    frozen_at,
-                    json.dumps(snapshot, default=str),
-                    card_count,
-                ),
+                payload,
             )
-            conn.commit()
+
+        self._runtime.run_write_sync(_write)
 
     def peek_user_prompt(
         self,
@@ -339,34 +343,37 @@ class DisplayCardStore:
         max_chars: int = 120,
     ) -> str | None:
         """Return the first user card content for ``loop_id``, if present."""
-        conn = self._connection()
-        row = conn.execute(
-            """
-            SELECT data_json
-            FROM display_card_mutations
-            WHERE loop_id = ? AND op = 'create' AND kind = 'user'
-            ORDER BY seq ASC
-            LIMIT 1
-            """,
-            (loop_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            data = json.loads(row[0])
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(data, dict):
-            return None
-        content = data.get("content")
-        if not isinstance(content, str):
-            return None
-        cleaned = " ".join(content.split())
-        if not cleaned:
-            return None
-        if len(cleaned) > max_chars:
-            return cleaned[: max_chars - 1] + "…"
-        return cleaned
+
+        def _read(conn: Any) -> str | None:
+            row = conn.execute(
+                """
+                SELECT data_json
+                FROM display_card_mutations
+                WHERE loop_id = ? AND op = 'create' AND kind = 'user'
+                ORDER BY seq ASC
+                LIMIT 1
+                """,
+                (loop_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            try:
+                data = json.loads(row[0])
+            except json.JSONDecodeError:
+                return None
+            if not isinstance(data, dict):
+                return None
+            content = data.get("content")
+            if not isinstance(content, str):
+                return None
+            cleaned = " ".join(content.split())
+            if not cleaned:
+                return None
+            if len(cleaned) > max_chars:
+                return cleaned[: max_chars - 1] + "…"
+            return cleaned
+
+        return self._runtime.run_read_sync(_read)
 
     def peek_latest_assistant_response(
         self,
@@ -375,43 +382,42 @@ class DisplayCardStore:
         max_chars: int = 120,
     ) -> str | None:
         """Return the latest assistant card content for ``loop_id``, if present."""
-        conn = self._connection()
-        row = conn.execute(
-            """
-            SELECT data_json
-            FROM display_card_mutations
-            WHERE loop_id = ? AND op = 'create' AND kind = 'assistant'
-            ORDER BY seq DESC
-            LIMIT 1
-            """,
-            (loop_id,),
-        ).fetchone()
-        if row is None:
-            return None
-        try:
-            data = json.loads(row[0])
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(data, dict):
-            return None
-        content = data.get("content")
-        if not isinstance(content, str):
-            return None
-        cleaned = " ".join(content.split())
-        if not cleaned:
-            return None
-        if len(cleaned) > max_chars:
-            return cleaned[: max_chars - 1] + "…"
-        return cleaned
+
+        def _read(conn: Any) -> str | None:
+            row = conn.execute(
+                """
+                SELECT data_json
+                FROM display_card_mutations
+                WHERE loop_id = ? AND op = 'create' AND kind = 'assistant'
+                ORDER BY seq DESC
+                LIMIT 1
+                """,
+                (loop_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            try:
+                data = json.loads(row[0])
+            except json.JSONDecodeError:
+                return None
+            if not isinstance(data, dict):
+                return None
+            content = data.get("content")
+            if not isinstance(content, str):
+                return None
+            cleaned = " ".join(content.split())
+            if not cleaned:
+                return None
+            if len(cleaned) > max_chars:
+                return cleaned[: max_chars - 1] + "…"
+            return cleaned
+
+        return self._runtime.run_read_sync(_read)
 
     def close(self) -> None:
-        with self._lock:
-            if self._conn is not None:
-                try:
-                    self._conn.close()
-                except Exception:
-                    pass
-                self._conn = None
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+        SqliteRuntimeRegistry.release_sync(self._db_path)
 
 
 _shared_store: DisplayCardStoreProtocol | None = None

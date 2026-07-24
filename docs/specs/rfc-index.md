@@ -599,26 +599,28 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Kind: Architecture Design + Implementation Interface Design
   - Status: Draft
   - Created: 2026-04-04
-  - Dependencies: RFC-000, RFC-001, RFC-302, RFC-303
-  - Related: RFC-200
-  - Note: Reclassified from 6xx per RFC-900 series semantics
+  - Updated: 2026-07-24
+  - Dependencies: RFC-000, RFC-001, RFC-302, RFC-303, RFC-802
+  - Related: RFC-803, RFC-229, RFC-307, RFC-413, RFC-624
+  - Note: Reclassified from 6xx per RFC-900. 2026-07-24: process-scoped `SqliteStoreRuntime`, `$SOOTHE_DATA_DIR/databases/` hard cut.
 
 - **RFC-802**: [Persistence Architecture Refactor](RFC-802-persistence-architecture-refactor.md)
   - Kind: Architecture Design
   - Status: Draft
   - Created: 2026-04-22
-  - Updated: 2026-04-22
+  - Updated: 2026-07-24
   - Authors: Platonic Coding Workflow
-  - Note: Reclassified from 6xx per RFC-900 series semantics
+  - Related: RFC-801, RFC-803
+  - Note: Reclassified from 6xx per RFC-900. 2026-07-24: SQLite purpose files under `databases/{purpose}.db`; remove path overrides.
 
 - **RFC-803**: [StrangeLoop Checkpoint Backend Architecture](RFC-803-strangeloop-checkpoint-backend.md)
   - Kind: Architecture Design
-  - Status: Implemented
+  - Status: Draft
   - Created: 2026-04-22
-  - Updated: 2026-06-28
-  - Dependencies: RFC-207 (Thread Lifecycle & Goal Context), RFC-218 (Checkpoint Tree), RFC-503 (Loop-First UX)
+  - Updated: 2026-07-24
+  - Dependencies: RFC-207, RFC-218, RFC-503, RFC-801, RFC-802
   - Authors: Claude Sonnet 4.6
-  - Note: Moved from 2xx (RFC-215) per RFC-900 reclassification. Phase 6 async checkpoint added (IG-523).
+  - Note: Moved from 2xx (RFC-215) per RFC-900. 2026-07-24: SQLite process-scoped flush via `SqliteStoreRuntime` (parity with Postgres writer).
 
 ---
 

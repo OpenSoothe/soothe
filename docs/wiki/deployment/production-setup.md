@@ -587,8 +587,9 @@ embedding_profile:
 persistence:
   default_backend: postgresql
   postgres_base_dsn: "${SOOTHE_POSTGRES_BASE_DSN}"
-  postgres_pool_min_size: 8
-  checkpointer_pool_size: 24
+  postgres:
+    pool_min_size: 8
+    checkpoints_pool_size: 32
 
 vector_stores:
   - name: pgvector

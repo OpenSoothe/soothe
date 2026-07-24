@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import os
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
 import typer
@@ -57,7 +56,7 @@ def _get_jwt_key() -> str:
 def _get_identity_service() -> IdentityService:
     """Build IdentityService using the same backend as the daemon (unified persistence)."""
     from soothe.identity import IdentityService
-    from soothe_sdk.paths import SOOTHE_DATA_DIR
+    from soothe_sdk.paths import resolve_identity_db_path
 
     jwt_key = _get_jwt_key()
 
@@ -80,7 +79,7 @@ def _get_identity_service() -> IdentityService:
         pass
 
     return IdentityService(
-        db_path=Path(SOOTHE_DATA_DIR) / "identity.db",
+        db_path=resolve_identity_db_path(),
         jwt_key=jwt_key,
         enabled=True,
     )

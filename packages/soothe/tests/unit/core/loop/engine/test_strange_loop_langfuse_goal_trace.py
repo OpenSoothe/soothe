@@ -85,7 +85,7 @@ async def test_run_with_progress_pins_goal_trace_before_pass1_and_pass2() -> Non
         patch("soothe.context.engine.ContextEngine", return_value=ce_instance),
         patch("soothe.context.store_sqlite.SqliteContextPersistence"),
         patch(
-            "soothe.sloop.checkpoints.runtime_paths.resolve_context_engine_db_path",
+            "soothe.sloop.checkpoints.runtime_paths.resolve_context_db_path",
             return_value="/tmp/soothe-test.db",
         ),
         patch(
@@ -191,7 +191,7 @@ async def test_run_with_progress_skips_begin_goal_loop_when_langfuse_disabled() 
         patch("soothe.context.engine.ContextEngine", return_value=ce_instance),
         patch("soothe.context.store_sqlite.SqliteContextPersistence"),
         patch(
-            "soothe.sloop.checkpoints.runtime_paths.resolve_context_engine_db_path",
+            "soothe.sloop.checkpoints.runtime_paths.resolve_context_db_path",
             return_value="/tmp/soothe-test.db",
         ),
         patch(

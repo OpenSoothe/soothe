@@ -90,6 +90,14 @@ async def close_shared_postgres_pools() -> None:
         except ImportError:
             pass
 
+        try:
+            from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
+
+            await SqliteLoopFlushCoordinator.close_shared_instance()
+            logger.info("SQLite loop flush coordinator closed")
+        except ImportError:
+            pass
+
         await SharedPostgreSQLPool.close_shared_instance()
         await SharedCheckpointerPool.close_shared_instance()
         await SharedMetadataPool.close_shared_instance()

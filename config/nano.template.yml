@@ -181,14 +181,19 @@ persistence:
     vectors: soothe_vectors
     memory: soothe_memory
   soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
-  postgres_pool_min_size: 4
-  checkpoints_pool_size: 32
-  metadata_pool_size: 16
-  vectors_pool_size: 16
-  postgres_pool_max_idle_seconds: 120.0
-  postgres_pool_max_lifetime_seconds: 1800.0
-  postgres_pool_acquire_timeout_seconds: 45.0
-  sqlite_reader_pool_size: 8
+  postgres:
+    pool_min_size: 4
+    checkpoints_pool_size: 32
+    metadata_pool_size: 16
+    vectors_pool_size: 16
+    connection_budget_warn: 120
+    pool_max_idle_seconds: 120.0
+    pool_max_lifetime_seconds: 1800.0
+    pool_acquire_timeout_seconds: 45.0
+  sqlite:
+    reader_pool_size: 8
+    busy_timeout_ms: 60000
+    wal_checkpoint_on_shutdown: true
   archive_enabled: true
   archive_retention_days: 90
   archive_max_count: 1000

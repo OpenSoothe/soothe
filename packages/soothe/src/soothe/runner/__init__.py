@@ -480,9 +480,7 @@ class SootheRunner(
         # in thread_pool mode. Pool is closed at daemon shutdown via LoopRunnerFactory.
         self._sloop_shared_pool = None
 
-        # IG-404: Close durability backend connection pool (SQLitePersistStore)
-        # Each runner creates its own SQLitePersistStore with writer + reader pool.
-        # Must close to prevent file descriptor exhaustion.
+        # Close durability / memory stores attached to this runner (Runtime-backed when SQLite).
         await self._close_attached_store(self._durability)
 
         await self._close_attached_store(self._memory)

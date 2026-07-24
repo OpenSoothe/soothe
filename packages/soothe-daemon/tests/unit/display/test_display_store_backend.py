@@ -29,7 +29,7 @@ def test_configure_display_card_store_sqlite(tmp_path: Path, monkeypatch) -> Non
     cfg = SootheConfig(persistence=PersistenceConfig(default_backend="sqlite"))
     store = configure_display_card_store(cfg)
     assert isinstance(store, DisplayCardStore)
-    assert store.db_path == tmp_path / "display.db"
+    assert store.db_path == tmp_path / "databases" / "display.db"
     reset_display_card_store_for_tests()
 
 

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-import sqlite3
-from pathlib import Path
 from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
@@ -63,7 +61,10 @@ CREATE INDEX IF NOT EXISTS idx_identity_mappings_user ON identity_external_mappi
 
 
 class IdentityDbConnection:
-    """Connection wrapper so IdentityService SQL can use ``?`` placeholders on both backends."""
+    """Connection wrapper so IdentityService SQL can use ``?`` placeholders on both backends.
+
+    For SQLite, commit is a no-op: ``SqliteStoreRuntime`` owns BEGIN IMMEDIATE / COMMIT.
+    """
 
     def __init__(self, backend: IdentityBackend, conn: Any) -> None:
         self.backend = backend
@@ -76,43 +77,36 @@ class IdentityDbConnection:
         return self._conn.execute(sql, params)
 
     def commit(self) -> None:
-        self._conn.commit()
+        if self.backend == "postgresql":
+            self._conn.commit()
 
     def close(self) -> None:
-        self._conn.close()
+        if self.backend == "postgresql":
+            self._conn.close()
 
 
 def open_identity_connection(
     *,
     backend: IdentityBackend,
-    db_path: Path | None = None,
     dsn: str | None = None,
 ) -> IdentityDbConnection:
-    """Open a writer connection and ensure identity tables exist."""
-    if backend == "postgresql":
-        if not dsn:
-            raise ValueError("dsn required for postgresql identity backend")
-        import psycopg
+    """Open PostgreSQL identity storage (SQLite uses ``SqliteStoreRuntime`` via IdentityService)."""
+    if backend != "postgresql":
+        raise ValueError(
+            "SQLite identity must use IdentityService Runtime path; "
+            "open_identity_connection is PostgreSQL-only"
+        )
+    if not dsn:
+        raise ValueError("dsn required for postgresql identity backend")
+    import psycopg
 
-        conn = psycopg.connect(dsn, autocommit=False)
-        with conn.cursor() as cur:
-            for statement in (s.strip() for s in _IDENTITY_SCHEMA_PG.split(";") if s.strip()):
-                cur.execute(statement)
-        conn.commit()
-        logger.info("IdentityService initialized: backend=postgresql")
-        return IdentityDbConnection("postgresql", conn)
-
-    if db_path is None:
-        raise ValueError("db_path required for sqlite identity backend")
-    from soothe.identity.identity_service import initialize_identity_tables_sync
-
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    initialize_identity_tables_sync(db_path)
-    conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30)
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA journal_mode=WAL")
-    logger.info("IdentityService initialized: backend=sqlite path=%s", db_path)
-    return IdentityDbConnection("sqlite", conn)
+    conn = psycopg.connect(dsn, autocommit=False)
+    with conn.cursor() as cur:
+        for statement in (s.strip() for s in _IDENTITY_SCHEMA_PG.split(";") if s.strip()):
+            cur.execute(statement)
+    conn.commit()
+    logger.info("IdentityService initialized: backend=postgresql")
+    return IdentityDbConnection("postgresql", conn)
 
 
 __all__ = [

@@ -84,7 +84,7 @@ The five roles and their typical cost/quality profile:
 
 | Backend | When | Notes |
 |---------|------|-------|
-| `sqlite_vec` (default) | Dev, single-user, <100k vectors | Zero deps, file-based under `~/.soothe/data/` |
+| `sqlite_vec` (default) | Dev, single-user, <100k vectors | Zero deps, file-based under `~/.soothe/data/databases/vectors.db` |
 | `pgvector` | Production, shared with Postgres persistence | `hnsw` for speed, `ivfflat` for huge static sets |
 | `weaviate` | Managed vector DB decoupled from Postgres | Cloud or self-hosted |
 | `in_memory` | Tests, ephemeral sessions | Lost on restart |
@@ -101,9 +101,10 @@ The router format is `provider_name:collection_name`. Unset roles fall back to `
 **RFC-802 multi-database architecture:** when `postgres_base_dsn` is set, Soothe splits state across four databases (checkpoints, metadata, vectors, memory) for lifecycle isolation and backup granularity. Define them in the `postgres_databases` map. If `postgres_base_dsn` is unset, it falls back to a single `soothe_postgres_dsn` database. The multi-database layout is strongly recommended for production — it lets you back up/restore components independently.
 
 **Pool sizing (from source docstrings):**
-- `postgres_pool_min_size` (default 4): warm connections kept ready.
-- `checkpointer_pool_size` (default 24): LangGraph checkpoint pool. In thread-pool mode it's a daemon-level singleton shared across threads; in worker-pool mode each worker gets its own (so `workers × pool_size` total connections — lower it).
-- `sloop_pool_size` (default 24): StrangeLoop pool, same sharing semantics.
+- `persistence.postgres.pool_min_size` (default 4): warm connections kept ready.
+- `persistence.postgres.checkpoints_pool_size` (default 32): LangGraph + StrangeLoop checkpoints pool. In thread-pool mode it's a daemon-level singleton shared across threads; in worker-pool mode each worker gets its own (so `workers × pool_size` total connections — lower it).
+- `persistence.postgres.metadata_pool_size` / `vectors_pool_size` (default 16): metadata and pgvector pools, same sharing semantics.
+- Idle/lifetime/acquire: `pool_max_idle_seconds`, `pool_max_lifetime_seconds`, `pool_acquire_timeout_seconds` under `persistence.postgres`.
 
 Rule of thumb: for thread-pool mode keep defaults; for worker-pool mode divide by your worker count to avoid exhausting Postgres `max_connections`.
 

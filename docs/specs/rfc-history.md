@@ -2,7 +2,7 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-06-30
+**Last Updated**: 2026-07-24
 **Total RFCs**: 82
 
 ## Summary Statistics
@@ -37,6 +37,17 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Unknown | 2 |
 
 ## Chronological Timeline
+
+### Major Changes - 2026-07-24
+
+**SQLite process-scoped Runtime + layout hard cut** (design draft formalized into RFC-801 / RFC-802 / RFC-803)
+
+- Introduce `SqliteStoreRuntime` / `SqliteRuntimeRegistry`: one Runtime per DB file; leased readers; `BEGIN IMMEDIATE` writes; uniform WAL + busy_timeout
+- All SQLite purpose files under `$SOOTHE_DATA_DIR/databases/{purpose}.db` (`checkpoints`, `context`, `display`, `cron`, `identity`, `metadata`, `persist`, `vectors`, optional `memory`)
+- Hard cut: no migration or legacy path shims
+- RFC-803: SQLite checkpoint flush is process-scoped (parity with Postgres `LoopPersistenceWriter` shape); per-manager private pools forbidden
+
+---
 
 ### Major Changes - 2026-07-19
 

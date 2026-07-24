@@ -97,7 +97,7 @@ async def test_semantic_reads_run_concurrently_with_ce_load() -> None:
         patch("soothe.context.engine.ContextEngine", return_value=ce_instance),
         patch("soothe.context.store_sqlite.SqliteContextPersistence"),
         patch(
-            "soothe.sloop.checkpoints.runtime_paths.resolve_context_engine_db_path",
+            "soothe.sloop.checkpoints.runtime_paths.resolve_context_db_path",
             return_value="/tmp/soothe-test.db",
         ),
         patch("soothe.context.StepPlanManagerAdapter"),

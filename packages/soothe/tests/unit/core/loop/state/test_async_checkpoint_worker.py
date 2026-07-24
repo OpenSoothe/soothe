@@ -1,4 +1,4 @@
-"""Tests for async checkpoint flush worker lifecycle (RFC-803 Phase 6)."""
+"""Tests for process-scoped SQLite checkpoint coalesce flush (IG-647)."""
 
 from __future__ import annotations
 
@@ -9,22 +9,20 @@ from unittest.mock import patch
 
 import pytest
 
+from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
 from soothe.runner._worker_utils import cancel_orphan_loop_tasks
-from soothe.sloop.state.sloop_manager import (
-    StrangeLoopStateManager,
-    _is_async_loop_runtime_error,
-)
+from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
 
-def test_is_async_loop_runtime_error() -> None:
-    assert _is_async_loop_runtime_error(RuntimeError("no running event loop"))
-    assert _is_async_loop_runtime_error(RuntimeError("Event loop is closed"))
-    assert _is_async_loop_runtime_error(RuntimeError("Queue is bound to a different event loop"))
-    assert not _is_async_loop_runtime_error(RuntimeError("other failure"))
+@pytest.fixture(autouse=True)
+async def _reset_sqlite_flush_coordinator():
+    await SqliteLoopFlushCoordinator.close_shared_instance()
+    yield
+    await SqliteLoopFlushCoordinator.close_shared_instance()
 
 
 @pytest.mark.asyncio
-async def test_close_stops_flush_worker() -> None:
+async def test_close_releases_loop_from_process_flush() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         workspace = Path(tmpdir)
         db_path = workspace / "test_loop_checkpoints.db"
@@ -40,13 +38,14 @@ async def test_close_stops_flush_worker() -> None:
             checkpoint.status = "running"
             await manager.save(checkpoint)
 
-            assert manager._worker_started is True
-            assert manager._flush_worker is not None
+            coord = SqliteLoopFlushCoordinator.existing_instance()
+            assert coord is not None
+            assert coord._worker_task is not None
 
             await manager.close()
 
-            assert manager._worker_started is False
-            assert manager._flush_worker is None
+            with coord._pending_guard:
+                assert "async_worker_loop" not in coord._pending
 
 
 def test_cancel_orphan_loop_tasks_clears_leaked_worker() -> None:

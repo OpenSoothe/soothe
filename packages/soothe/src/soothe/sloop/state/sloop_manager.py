@@ -2,7 +2,7 @@
 
 Manages checkpoint lifecycle: initialize, save, load, recovery.
 RFC-216: Multi-thread spanning with loop_id as primary key.
-RFC-215: Unified global SQLite persistence backend (loop_checkpoints.db).
+RFC-215: Unified global SQLite persistence backend (databases/checkpoints.db).
 IG-055: PostgreSQL backend support using soothe_checkpoints database.
 IG-258 Phase 2: Connection pooling to eliminate database lock contention.
 IG-406: Shared pool for high-concurrency (200+ threads) support.
@@ -45,18 +45,6 @@ if TYPE_CHECKING:
     from soothe.sloop.state.working_memory import LoopWorkingMemory
 
 logger = logging.getLogger(__name__)
-
-
-def _is_async_loop_runtime_error(exc: BaseException) -> bool:
-    """Return True when asyncio cannot run because the event loop is gone or mismatched."""
-    if not isinstance(exc, RuntimeError):
-        return False
-    msg = str(exc).casefold()
-    return (
-        "no running event loop" in msg
-        or "event loop is closed" in msg
-        or "bound to a different event loop" in msg
-    )
 
 
 class StrangeLoopStateManager:
@@ -110,16 +98,13 @@ class StrangeLoopStateManager:
         else:
             self.db_path = PersistenceDirectoryManager.get_loop_checkpoint_path()
             logger.info(
-                "StrangeLoop using SQLite backend (loop_checkpoints.db): loop_id=%s",
+                "StrangeLoop using SQLite backend (databases/checkpoints.db): loop_id=%s",
                 self.loop_id,
             )
 
-        # Instance-level connection pool (Phase 2) - matching SQLitePersistStore pattern
+        # IG-647: process-scoped SqliteStoreRuntime (no private connections)
         self._reader_pool_size = reader_pool_size
-        self._writer_conn: sqlite3.Connection | None = None
-        self._reader_pool: list[sqlite3.Connection] = []
-        self._reader_pool_index = 0
-        self._pool_semaphore = asyncio.Semaphore(reader_pool_size)
+        self._sqlite_runtime = None
         self._init_lock = asyncio.Lock()
 
         # RFC-803 / IG-550: async coalesced checkpoint writes (always on).
@@ -152,13 +137,9 @@ class StrangeLoopStateManager:
         self._config = config
         self._loop_writer = None
 
-        # SQLite-only async coalesce worker (PostgreSQL uses LoopPersistenceWriter)
-        self._coalesced_pending: StrangeLoopCheckpoint | None = None
-        self._flush_worker: asyncio.Task | None = None
-        self._worker_loop: asyncio.AbstractEventLoop | None = None
+        # IG-647 P1b: process-scoped SQLite coalesce (no per-manager flush worker)
+        self._sqlite_flush = None
         self._last_save_checkpoint: StrangeLoopCheckpoint | None = None
-        self._worker_started = False
-        self._worker_lock = asyncio.Lock()
         self._checkpoint_write_lock = asyncio.Lock()
         self._closed = False
         self._goal_boundary_persisted = False
@@ -222,93 +203,36 @@ class StrangeLoopStateManager:
                                 "StrangeLoop PostgreSQL backend ready: loop_id=%s", self.loop_id
                             )
         else:
-            # SQLite backend initialization
-            if self._writer_conn is None:
+            # SQLite: process-scoped Runtime (IG-647 / RFC-801)
+            if self._sqlite_runtime is None:
                 async with self._init_lock:
-                    if self._writer_conn is None:
-                        await asyncio.to_thread(self._init_writer_connection_sync)
+                    if self._sqlite_runtime is None:
+                        await asyncio.to_thread(self._init_sqlite_runtime_sync)
 
-    async def _ensure_writer_connection(self) -> sqlite3.Connection:
-        """Lazy writer connection initialization with WAL mode (Phase 2).
+    def _init_sqlite_runtime_sync(self) -> None:
+        """Acquire shared SqliteStoreRuntime for checkpoints.db."""
+        from soothe_nano.config.models import SqliteRuntimeConfig
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
 
-        IG-055: SQLite-only, PostgreSQL uses connection pool.
-
-        Returns:
-            Active SQLite writer connection.
-        """
-        if self._backend_type == "postgresql":
-            # PostgreSQL doesn't use direct writer connection
-            raise RuntimeError("PostgreSQL backend doesn't use writer connection")
-
-        await self._ensure_backend_initialized()
-        return self._writer_conn
-
-    def _init_writer_connection_sync(self) -> None:
-        """Sync writer initialization executed in thread pool."""
         db_path = Path(self.db_path)
         db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self._writer_conn = sqlite3.connect(
-            str(db_path),
-            check_same_thread=False,
-            timeout=30,
-        )
-        self._writer_conn.execute("PRAGMA journal_mode=WAL")
-        self._writer_conn.execute("PRAGMA foreign_keys=ON")
-        self._writer_conn.row_factory = sqlite3.Row
-
-        # Initialize database schema
         SQLitePersistenceBackend.initialize_database_sync(db_path)
+        self._sqlite_runtime = SqliteRuntimeRegistry.acquire(
+            db_path,
+            SqliteRuntimeConfig(reader_pool_size=self._reader_pool_size),
+        )
+        logger.info(
+            "StrangeLoop SQLite Runtime acquired path=%s loop=%s",
+            db_path,
+            self.loop_id,
+        )
 
-        logger.info("StrangeLoop SQLite writer connection initialized at %s", db_path)
-
-    async def _get_reader_connection(self) -> sqlite3.Connection:
-        """Get reader connection from pool (Phase 2).
-
-        Uses semaphore to limit concurrent reads to pool size.
-        Connections are leased round-robin and remain in the pool (no pop/leak).
-
-        Returns:
-            Reader connection from pool.
-        """
-        async with self._init_lock:
-            if not self._reader_pool:
-                await asyncio.to_thread(self._init_reader_pool_sync)
-
-        async with self._pool_semaphore:
-            index = self._reader_pool_index % len(self._reader_pool)
-            self._reader_pool_index += 1
-            return self._reader_pool[index]
-
-    def _init_reader_pool_sync(self) -> None:
-        """Sync reader pool initialization executed in thread pool."""
-        db_path = Path(self.db_path)
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-        for _i in range(self._reader_pool_size):
-            conn = sqlite3.connect(
-                str(db_path),
-                check_same_thread=False,
-                timeout=30,
-            )
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA foreign_keys=ON")
-            conn.row_factory = sqlite3.Row
-            self._reader_pool.append(conn)
-
-        logger.info("StrangeLoop SQLite reader pool initialized: size=%d", self._reader_pool_size)
-
-    async def _create_reader_conn(self) -> sqlite3.Connection:
-        """Create new reader connection if pool empty."""
-        return await asyncio.to_thread(self._create_reader_conn_sync)
-
-    def _create_reader_conn_sync(self) -> sqlite3.Connection:
-        """Sync reader connection creation."""
-        db_path = Path(self.db_path)
-        conn = sqlite3.connect(str(db_path), check_same_thread=False, timeout=30)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA foreign_keys=ON")
-        conn.row_factory = sqlite3.Row
-        return conn
+    async def _ensure_sqlite_runtime(self):
+        """Ensure SQLite Runtime is acquired (sqlite backend only)."""
+        if self._backend_type == "postgresql":
+            raise RuntimeError("PostgreSQL backend does not use SqliteStoreRuntime")
+        await self._ensure_backend_initialized()
+        return self._sqlite_runtime
 
     async def initialize(
         self,
@@ -453,128 +377,122 @@ class StrangeLoopStateManager:
             return None
 
         try:
-            # Get reader connection from pool (Phase 2)
-            async with self._pool_semaphore:
-                conn = await self._get_reader_connection()
+            runtime = await self._ensure_sqlite_runtime()
+            row_data = await runtime.run_read(
+                lambda conn: self._load_loop_metadata_sync(conn, self.loop_id)
+            )
 
-                # Execute query in thread pool
-                row_data = await asyncio.to_thread(
-                    self._load_loop_metadata_sync, conn, self.loop_id
+            if not row_data:
+                return None
+
+            # Deserialize row
+            thread_ids = json.loads(row_data[0])
+            current_thread_id = row_data[1]
+            status = row_data[2]
+            current_goal_index = row_data[3]
+            working_memory_state = (
+                WorkingMemoryState.model_validate_json(row_data[4])
+                if row_data[4]
+                else WorkingMemoryState(entries=[], spill_files=[])
+            )
+            thread_health_metrics = (
+                ThreadHealthMetrics.model_validate_json(row_data[5])
+                if row_data[5]
+                else ThreadHealthMetrics(
+                    thread_id=current_thread_id, last_updated=datetime.now(UTC)
                 )
+            )
+            total_goals_completed = row_data[6]
+            total_thread_switches = row_data[7]
+            total_duration_ms = row_data[8]
+            total_tokens_used = row_data[9]
+            thread_switch_pending = bool(row_data[10])
+            created_at = datetime.fromisoformat(row_data[11])
+            updated_at = datetime.fromisoformat(row_data[12])
+            schema_version = row_data[13]
 
-                if not row_data:
-                    return None
+            # Load goal_history from goal_records table
+            goal_rows_data = await runtime.run_read(
+                lambda c: self._load_goal_records_sync(c, self.loop_id)
+            )
 
-                # Deserialize row
-                thread_ids = json.loads(row_data[0])
-                current_thread_id = row_data[1]
-                status = row_data[2]
-                current_goal_index = row_data[3]
-                working_memory_state = (
-                    WorkingMemoryState.model_validate_json(row_data[4])
-                    if row_data[4]
-                    else WorkingMemoryState(entries=[], spill_files=[])
-                )
-                thread_health_metrics = (
-                    ThreadHealthMetrics.model_validate_json(row_data[5])
-                    if row_data[5]
-                    else ThreadHealthMetrics(
-                        thread_id=current_thread_id, last_updated=datetime.now(UTC)
+            goal_history = []
+            for goal_row in goal_rows_data:
+                goal_history.append(
+                    GoalIndexEntry(
+                        goal_id=goal_row[0],
+                        thread_id=goal_row[2],
+                        status=goal_row[3],
+                        duration_ms=goal_row[4] or 0,
+                        tokens_used=goal_row[5] or 0,
+                        started_at=datetime.fromisoformat(goal_row[6]),
+                        completed_at=datetime.fromisoformat(goal_row[7]) if goal_row[7] else None,
                     )
                 )
-                total_goals_completed = row_data[6]
-                total_thread_switches = row_data[7]
-                total_duration_ms = row_data[8]
-                total_tokens_used = row_data[9]
-                thread_switch_pending = bool(row_data[10])
-                created_at = datetime.fromisoformat(row_data[11])
-                updated_at = datetime.fromisoformat(row_data[12])
-                schema_version = row_data[13]
 
-                # Load goal_history from goal_records table
-                goal_rows_data = await asyncio.to_thread(
-                    self._load_goal_records_sync, conn, self.loop_id
-                )
+            checkpoint = StrangeLoopCheckpoint(
+                loop_id=self.loop_id,
+                thread_ids=thread_ids,
+                current_thread_id=current_thread_id,
+                status=status,
+                goal_history=goal_history,
+                current_goal_index=current_goal_index,
+                working_memory_state=working_memory_state,
+                thread_health_metrics=thread_health_metrics,
+                total_goals_completed=total_goals_completed,
+                total_thread_switches=total_thread_switches,
+                total_duration_ms=total_duration_ms,
+                total_tokens_used=total_tokens_used,
+                thread_switch_pending=thread_switch_pending,
+                created_at=created_at,
+                updated_at=updated_at,
+                schema_version=schema_version,
+            )
 
-                goal_history = []
-                for goal_row in goal_rows_data:
-                    goal_history.append(
-                        GoalIndexEntry(
-                            goal_id=goal_row[0],
-                            thread_id=goal_row[2],
-                            status=goal_row[3],
-                            duration_ms=goal_row[4] or 0,
-                            tokens_used=goal_row[5] or 0,
-                            started_at=datetime.fromisoformat(goal_row[6]),
-                            completed_at=datetime.fromisoformat(goal_row[7])
-                            if goal_row[7]
-                            else None,
-                        )
+            checkpoint = self._merge_loaded_checkpoint(checkpoint)
+
+            self._checkpoint = checkpoint
+
+            # Auto-repair: Detect and fix orphaned running goals
+            from soothe.sloop.state.status_vocabulary import (
+                is_goal_index_in_flight,
+                suggest_loop_checkpoint_status,
+            )
+
+            suggested_status = suggest_loop_checkpoint_status(
+                loop_status=checkpoint.status,
+                goal_index_statuses=[g.status for g in checkpoint.goal_history],
+            )
+            if checkpoint.status == "idle" and suggested_status == "running":
+                running_goals = [
+                    g for g in checkpoint.goal_history if is_goal_index_in_flight(g.status)
+                ]
+                if running_goals:
+                    logger.warning(
+                        "Found orphaned in-flight goals in loop %s while loop status idle (%d goals)",
+                        checkpoint.loop_id,
+                        len(running_goals),
                     )
+                    # Auto-repair: set index to last running goal
+                    checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
+                    checkpoint.status = "running"
+                    logger.info(
+                        "Auto-repaired orphaned goal index: set to %d (goal_id=%s)",
+                        checkpoint.current_goal_index,
+                        checkpoint.goal_history[checkpoint.current_goal_index].goal_id,
+                    )
+                    # Save repaired checkpoint
+                    await self._save_checkpoint_to_db(checkpoint)
 
-                checkpoint = StrangeLoopCheckpoint(
-                    loop_id=self.loop_id,
-                    thread_ids=thread_ids,
-                    current_thread_id=current_thread_id,
-                    status=status,
-                    goal_history=goal_history,
-                    current_goal_index=current_goal_index,
-                    working_memory_state=working_memory_state,
-                    thread_health_metrics=thread_health_metrics,
-                    total_goals_completed=total_goals_completed,
-                    total_thread_switches=total_thread_switches,
-                    total_duration_ms=total_duration_ms,
-                    total_tokens_used=total_tokens_used,
-                    thread_switch_pending=thread_switch_pending,
-                    created_at=created_at,
-                    updated_at=updated_at,
-                    schema_version=schema_version,
-                )
+            logger.info(
+                "Loaded loop %s checkpoint from SQLite (status %s, %d goals, %d threads)",
+                self.loop_id,
+                checkpoint.status,
+                len(checkpoint.goal_history),
+                len(checkpoint.thread_ids),
+            )
 
-                checkpoint = self._merge_loaded_checkpoint(checkpoint)
-
-                self._checkpoint = checkpoint
-
-                # Auto-repair: Detect and fix orphaned running goals
-                from soothe.sloop.state.status_vocabulary import (
-                    is_goal_index_in_flight,
-                    suggest_loop_checkpoint_status,
-                )
-
-                suggested_status = suggest_loop_checkpoint_status(
-                    loop_status=checkpoint.status,
-                    goal_index_statuses=[g.status for g in checkpoint.goal_history],
-                )
-                if checkpoint.status == "idle" and suggested_status == "running":
-                    running_goals = [
-                        g for g in checkpoint.goal_history if is_goal_index_in_flight(g.status)
-                    ]
-                    if running_goals:
-                        logger.warning(
-                            "Found orphaned in-flight goals in loop %s while loop status idle (%d goals)",
-                            checkpoint.loop_id,
-                            len(running_goals),
-                        )
-                        # Auto-repair: set index to last running goal
-                        checkpoint.current_goal_index = len(checkpoint.goal_history) - 1
-                        checkpoint.status = "running"
-                        logger.info(
-                            "Auto-repaired orphaned goal index: set to %d (goal_id=%s)",
-                            checkpoint.current_goal_index,
-                            checkpoint.goal_history[checkpoint.current_goal_index].goal_id,
-                        )
-                        # Save repaired checkpoint
-                        await self._save_checkpoint_to_db(checkpoint)
-
-                logger.info(
-                    "Loaded loop %s checkpoint from SQLite (status %s, %d goals, %d threads)",
-                    self.loop_id,
-                    checkpoint.status,
-                    len(checkpoint.goal_history),
-                    len(checkpoint.thread_ids),
-                )
-
-                return checkpoint
+            return checkpoint
 
         except Exception:
             logger.exception("Failed to load loop %s checkpoint", self.loop_id)
@@ -664,10 +582,23 @@ class StrangeLoopStateManager:
             await self._do_save_checkpoint(checkpoint)
             return
 
-        if not self._worker_started:
-            await self._start_flush_worker()
+        await self._ensure_sqlite_runtime()
+        from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
 
-        self._coalesced_pending = checkpoint
+        coord = await SqliteLoopFlushCoordinator.get_shared_instance(
+            self._config,
+            flush_interval=self._flush_interval,
+            close_timeout_seconds=self._close_timeout_seconds,
+            durable_flush_timeout=self._durable_flush_timeout,
+        )
+        self._sqlite_flush = coord
+        await coord.enqueue(
+            self.loop_id,
+            checkpoint,
+            self._save_checkpoint_sync,
+            runtime=self._sqlite_runtime,
+            durable=False,
+        )
         logger.debug(
             "Coalesced async checkpoint: loop=%s status=%s",
             self.loop_id,
@@ -694,83 +625,8 @@ class StrangeLoopStateManager:
                     hot_cold_enabled=hot_cold,
                 )
             else:
-                conn = await self._ensure_writer_connection()
-                await asyncio.to_thread(self._save_checkpoint_sync, conn, checkpoint)
-
-    async def _start_flush_worker(self) -> None:
-        """Start SQLite background worker for periodic coalesced flushes."""
-        async with self._worker_lock:
-            if self._closed or self._worker_started:
-                return
-
-            worker_loop = asyncio.get_running_loop()
-            self._worker_loop = worker_loop
-            self._flush_worker = worker_loop.create_task(self._flush_worker_loop())
-            self._worker_started = True
-
-            logger.info(
-                "Async checkpoint worker started: loop=%s flush_interval=%ss",
-                self.loop_id,
-                self._flush_interval,
-            )
-
-    async def _stop_flush_worker(self, *, timeout: float | None = None) -> None:
-        """Stop the SQLite flush worker and drain coalesced pending writes."""
-        timeout = self._close_timeout_seconds if timeout is None else timeout
-        async with self._worker_lock:
-            coalesced = self._coalesced_pending
-            self._coalesced_pending = None
-            worker = self._flush_worker
-            self._flush_worker = None
-            self._worker_started = False
-            self._worker_loop = None
-
-        async def _drain() -> None:
-            if coalesced is not None:
-                await self._do_save_checkpoint(coalesced, write_mode="full")
-
-        try:
-            async with asyncio.timeout(timeout):
-                await _drain()
-        except TimeoutError:
-            logger.warning(
-                "Checkpoint worker drain timed out after %.0fs loop=%s",
-                timeout,
-                self.loop_id,
-            )
-
-        if worker is None:
-            return
-
-        worker.cancel()
-        try:
-            async with asyncio.timeout(timeout):
-                await worker
-        except (TimeoutError, asyncio.CancelledError):
-            pass
-
-    async def _flush_worker_loop(self) -> None:
-        """Periodic flush of coalesced SQLite checkpoint writes."""
-        while True:
-            try:
-                await asyncio.sleep(self._flush_interval)
-                if self._coalesced_pending is not None:
-                    pending = self._coalesced_pending
-                    self._coalesced_pending = None
-                    await self._do_save_checkpoint(pending, write_mode="full")
-            except asyncio.CancelledError:
-                logger.info("Async checkpoint worker stopped: loop=%s", self.loop_id)
-                raise
-            except RuntimeError as exc:
-                if _is_async_loop_runtime_error(exc):
-                    logger.warning(
-                        "Async checkpoint worker stopping: event loop unavailable loop=%s",
-                        self.loop_id,
-                    )
-                    return
-                raise
-            except Exception:
-                logger.exception("Async checkpoint write failed: loop=%s", self.loop_id)
+                runtime = await self._ensure_sqlite_runtime()
+                await runtime.run_write(lambda conn: self._save_checkpoint_sync(conn, checkpoint))
 
     async def force_flush(self, *, timeout: float | None = None) -> None:
         """Force immediate checkpoint write (for critical operations).
@@ -793,16 +649,27 @@ class StrangeLoopStateManager:
             logger.info("Force checkpoint flush: loop=%s ok=%s", self.loop_id, result.ok)
             return
 
-        async def _flush() -> None:
-            if self._coalesced_pending is not None:
-                pending = self._coalesced_pending
-                self._coalesced_pending = None
-                await self._do_save_checkpoint(pending, write_mode="full")
-            await self._do_save_checkpoint(self._last_save_checkpoint, write_mode="full")
+        await self._ensure_sqlite_runtime()
+        from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
 
+        coord = await SqliteLoopFlushCoordinator.get_shared_instance(
+            self._config,
+            flush_interval=self._flush_interval,
+            close_timeout_seconds=self._close_timeout_seconds,
+            durable_flush_timeout=self._durable_flush_timeout,
+        )
+        self._sqlite_flush = coord
+        await coord.enqueue(
+            self.loop_id,
+            self._last_save_checkpoint,
+            self._save_checkpoint_sync,
+            runtime=self._sqlite_runtime,
+            durable=True,
+        )
         try:
             async with asyncio.timeout(timeout):
-                await _flush()
+                await coord.flush_loop(self.loop_id, timeout=timeout)
+                await self._do_save_checkpoint(self._last_save_checkpoint, write_mode="full")
             self._goal_boundary_persisted = True
             logger.info("Force checkpoint flush: loop=%s", self.loop_id)
         except TimeoutError:
@@ -945,8 +812,6 @@ class StrangeLoopStateManager:
                     completed_at_str,
                 ),
             )
-
-        conn.commit()
 
     def start_new_goal(
         self,
@@ -1378,9 +1243,27 @@ class StrangeLoopStateManager:
                         timeout=self._close_timeout_seconds,
                     )
                 else:
-                    await self._stop_flush_worker(timeout=self._close_timeout_seconds)
-                    if not self._goal_boundary_persisted:
-                        await self.force_flush(timeout=self._close_timeout_seconds)
+                    from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
+
+                    coord = await SqliteLoopFlushCoordinator.get_shared_instance(
+                        self._config,
+                        flush_interval=self._flush_interval,
+                        close_timeout_seconds=self._close_timeout_seconds,
+                        durable_flush_timeout=self._durable_flush_timeout,
+                    )
+                    self._sqlite_flush = coord
+                    if not self._goal_boundary_persisted and self._last_save_checkpoint:
+                        await coord.enqueue(
+                            self.loop_id,
+                            self._last_save_checkpoint,
+                            self._save_checkpoint_sync,
+                            runtime=await self._ensure_sqlite_runtime(),
+                            durable=True,
+                        )
+                    await coord.release_loop(
+                        self.loop_id,
+                        timeout=self._close_timeout_seconds,
+                    )
         except TimeoutError:
             logger.warning(
                 "StrangeLoopStateManager.close timed out after %.0fs loop=%s",
@@ -1400,27 +1283,13 @@ class StrangeLoopStateManager:
             self._shared_pool = None
             logger.debug("Released PostgreSQL backend for loop %s", self.loop_id)
 
-        # Close SQLite connections (always owned by this manager)
-        if self._writer_conn is not None:
-            await asyncio.to_thread(self._close_writer_sync)
-            logger.debug("Closed SQLite writer connection for loop %s", self.loop_id)
+        # Release process-scoped SQLite Runtime ref (IG-647)
+        if self._sqlite_runtime is not None:
+            from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
 
-        # Close reader pool connections
-        if self._reader_pool:
-            await asyncio.to_thread(self._close_reader_pool_sync)
-            logger.debug("Closed SQLite reader pool for loop %s", self.loop_id)
-
-    def _close_writer_sync(self) -> None:
-        """Sync close of writer connection."""
-        if self._writer_conn:
-            self._writer_conn.close()
-            self._writer_conn = None
-
-    def _close_reader_pool_sync(self) -> None:
-        """Sync close of reader pool connections."""
-        for conn in self._reader_pool:
-            conn.close()
-        self._reader_pool.clear()
+            await SqliteRuntimeRegistry.release(self.db_path)
+            self._sqlite_runtime = None
+            logger.debug("Released SQLite Runtime for loop %s", self.loop_id)
 
     def _serialize_working_memory(self, working_memory: LoopWorkingMemory) -> WorkingMemoryState:
         """Serialize working memory state."""

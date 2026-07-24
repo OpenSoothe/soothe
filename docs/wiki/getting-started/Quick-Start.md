@@ -114,10 +114,11 @@ persistence:
     metadata: soothe_metadata
     vectors: soothe_vectors
     memory: soothe_memory
-  postgres_pool_min_size: 4
-  checkpoints_pool_size: 32
-  metadata_pool_size: 16
-  vectors_pool_size: 16
+  postgres:
+    pool_min_size: 4
+    checkpoints_pool_size: 32
+    metadata_pool_size: 16
+    vectors_pool_size: 16
   archive_enabled: true
   archive_retention_days: 90
 
@@ -199,6 +200,12 @@ soothed start
 
 SQLite is the default backend. No configuration required.
 
+Purpose databases live under `~/.soothe/data/databases/` (`checkpoints.db`,
+`context.db`, `display.db`, `cron.db`, `identity.db`, `metadata.db`,
+`persist.db`, `vectors.db`). Upgrading from older builds that used flat
+`~/.soothe/data/*.db` files requires deleting those legacy files; there is
+no automatic import.
+
 Full reference: [Environment variables](../configuration-guide/environment-variables.md).
 
 ### Verify
@@ -218,7 +225,7 @@ curl -sf http://127.0.0.1:8765/healthz
 | `default_backend` | `postgresql` | `sqlite` (default) |
 | `archive_enabled` | `true` | `true` |
 | `archive_retention_days` | 90 | 90 |
-| `checkpoints_pool_size` | 32 | N/A |
+| `postgres.checkpoints_pool_size` | 32 | N/A |
 | `thread_inactivity_timeout_hours` | 72 | 72 |
 
 ### Checkpoint & Durability

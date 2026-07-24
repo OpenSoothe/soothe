@@ -17,7 +17,7 @@ def test_get_or_create_pool_uses_metadata_pool_size(monkeypatch) -> None:
         persistence=PersistenceConfig(
             default_backend="postgresql",
             postgres_base_dsn="postgresql://postgres:postgres@localhost:5432",
-            metadata_pool_size=40,
+            postgres={"metadata_pool_size": 40},
         ),
         agent={
             "protocols": {"durability": {"backend": "postgresql", "checkpointer": "postgresql"}}

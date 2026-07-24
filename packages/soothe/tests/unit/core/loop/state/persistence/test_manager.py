@@ -65,15 +65,12 @@ async def test_directory_manager_paths(tmp_path):
         thread_dir = PersistenceDirectoryManager.get_thread_directory("thread_001")
         assert thread_dir == tmp_path / "data" / "threads" / "thread_001"
 
-        thread_checkpoint = PersistenceDirectoryManager.get_thread_checkpoint_path("thread_001")
-        assert thread_checkpoint == tmp_path / "data" / "threads" / "thread_001" / "checkpoint.db"
-
-        # Loop paths (now global database)
+        # Loop paths (process-wide databases/checkpoints.db)
         loop_dir = PersistenceDirectoryManager.get_loop_directory("loop_abc")
         assert loop_dir == tmp_path / "data" / "loops" / "loop_abc"
 
         loop_checkpoint = PersistenceDirectoryManager.get_loop_checkpoint_path()
-        assert loop_checkpoint == tmp_path / "data" / "soothe_checkpoints.db"
+        assert loop_checkpoint == tmp_path / "data" / "databases" / "checkpoints.db"
 
     finally:
         config.SOOTHE_HOME = original_home

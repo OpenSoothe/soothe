@@ -23,8 +23,9 @@ Soothe maintains multiple log files in `~/.soothe/` for different purposes:
 | `~/.soothe/logs/soothed.log` | Daemon backend (agent execution, protocols, tools) |
 | `~/.soothe/logs/soothe-cli.log` | CLI client (connection, UI, event handling) |
 | `~/.soothe/data/threads/{thread_id}/logs/` | Thread conversation audit (when `thread_logging.enabled`) |
-| `~/.soothe/data/langgraph_checkpoints.db` | LangGraph checkpoint database |
-| `~/.soothe/data/metadata.db` | Metadata database |
+| `~/.soothe/data/databases/checkpoints.db` | StrangeLoop + LangGraph checkpoint database |
+| `~/.soothe/data/databases/metadata.db` | Metadata / durability database |
+| `~/.soothe/data/databases/` | Other purpose DBs (`context.db`, `display.db`, `cron.db`, `identity.db`, `persist.db`, `vectors.db`) |
 
 ---
 

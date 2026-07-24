@@ -12,7 +12,7 @@ from soothe.context.store_sqlite import SqliteContextPersistence
 
 @pytest.fixture
 def tmp_db(tmp_path: Path) -> Path:
-    return tmp_path / "context_engine.db"
+    return tmp_path / "context.db"
 
 
 @pytest.fixture
@@ -98,13 +98,14 @@ class TestSqliteContextPersistence:
         assert await p1.load_dag() is not None
 
     async def test_corrupt_dag_returns_none(self, persistence: SqliteContextPersistence) -> None:
-        # Write invalid JSON directly
-        conn = persistence._ensure_connection()
-        conn.execute(
-            "INSERT INTO ce_dag (loop_id, dag_json, updated_at) VALUES (?, ?, ?)",
-            ("test-loop-1", "not json{", "2026-01-01"),
-        )
-        conn.commit()
+        # Write invalid JSON via Runtime
+        def _corrupt(conn) -> None:
+            conn.execute(
+                "INSERT INTO ce_dag (loop_id, dag_json, updated_at) VALUES (?, ?, ?)",
+                ("test-loop-1", "not json{", "2026-01-01"),
+            )
+
+        persistence._runtime.run_write_sync(_corrupt)
 
         loaded = await persistence.load_dag()
         assert loaded is None
@@ -112,12 +113,13 @@ class TestSqliteContextPersistence:
     async def test_corrupt_ledger_returns_empty(
         self, persistence: SqliteContextPersistence
     ) -> None:
-        conn = persistence._ensure_connection()
-        conn.execute(
-            "INSERT INTO ce_ledger (loop_id, ledger_json, updated_at) VALUES (?, ?, ?)",
-            ("test-loop-1", "not json{", "2026-01-01"),
-        )
-        conn.commit()
+        def _corrupt(conn) -> None:
+            conn.execute(
+                "INSERT INTO ce_ledger (loop_id, ledger_json, updated_at) VALUES (?, ?, ?)",
+                ("test-loop-1", "not json{", "2026-01-01"),
+            )
+
+        persistence._runtime.run_write_sync(_corrupt)
 
         loaded = await persistence.load_ledger()
         assert loaded == []

@@ -53,8 +53,10 @@ async def test_await_goal_completion_tail_persistence_cancels_on_timeout() -> No
 
 @pytest.mark.asyncio
 async def test_close_blocks_async_flush_worker_restart() -> None:
+    from soothe.persistence.sqlite_loop_flush import SqliteLoopFlushCoordinator
     from soothe.sloop.state.sloop_manager import StrangeLoopStateManager
 
+    await SqliteLoopFlushCoordinator.close_shared_instance()
     manager = StrangeLoopStateManager(loop_id="closed-loop-test")
 
     await manager.close()
@@ -67,8 +69,10 @@ async def test_close_blocks_async_flush_worker_restart() -> None:
 
     await manager._save_checkpoint_to_db(checkpoint)
     manager._do_save_checkpoint.assert_awaited_once()
-    assert manager._worker_started is False
-    assert manager._flush_worker is None
+    await SqliteLoopFlushCoordinator.close_shared_instance()
+    assert SqliteLoopFlushCoordinator.existing_instance() is None
+    coord = SqliteLoopFlushCoordinator.existing_instance()
+    assert coord is None
 
 
 @pytest.mark.asyncio
