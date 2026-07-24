@@ -51,18 +51,22 @@ def _event_loop() -> None:
 def identity_service(tmp_path: Path) -> IdentityService:
     """Create an IdentityService with a temp SQLite database."""
     db_path = tmp_path / "test_identity.db"
-    return IdentityService(db_path=db_path, jwt_key=TEST_JWT_KEY)
+    svc = IdentityService(db_path=db_path, jwt_key=TEST_JWT_KEY)
+    yield svc
+    svc.close_sync()
 
 
 @pytest.fixture()
 def identity_service_no_expiry(tmp_path: Path) -> IdentityService:
     """Create an IdentityService with AKSK that never expires."""
     db_path = tmp_path / "test_identity_no_exp.db"
-    return IdentityService(
+    svc = IdentityService(
         db_path=db_path,
         jwt_key=TEST_JWT_KEY,
         default_aksk_expiry_days=None,
     )
+    yield svc
+    svc.close_sync()
 
 
 def _create_user_with_aksk(

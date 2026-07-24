@@ -58,6 +58,33 @@ def pytest_collection_modifyitems(config, items) -> None:
             item.add_marker(skip)
 
 
+@pytest.fixture(autouse=True)
+def _close_sqlite_runtime_registry():
+    """Session backstop: release every ``SqliteStoreRuntime`` after each test.
+
+    IG-647 unified all SQLite durability surfaces (checkpoints, context, cron,
+    identity, display) under the process-global ``SqliteRuntimeRegistry`` in
+    soothe-nano.  Each ``acquire()`` that isn't matched by ``release_sync()``
+    leaks a Runtime (1 writer + ``reader_pool_size`` readers = 4 open sqlite3
+    connections) for the process lifetime — the registry has no
+    ``__del__``/weakref fallback.  Under the macOS default soft fd limit (256)
+    the suite exhausts file descriptors and dies in pytest's own session
+    teardown with ``OSError: [Errno 24] Too many open files``.
+
+    Per-fixture ``store.close()`` is the first line of defense; this backstop
+    mirrors the daemon's prod shutdown (``server/core.py`` calls
+    ``SqliteRuntimeRegistry.close_all()``) so a store fixture that forgets to
+    close cannot pin connections, including against the real ``SOOTHE_HOME``.
+    """
+    yield
+    try:
+        from soothe_nano.persistence.sqlite_runtime import SqliteRuntimeRegistry
+
+        SqliteRuntimeRegistry.close_all_sync()
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # External service probes
 # ---------------------------------------------------------------------------

@@ -176,6 +176,51 @@ class IdentityService(IdentityProtocol):
             return sync_fn(conn, *args)
 
     # -----------------------------------------------------------------------
+    # Lifecycle teardown
+    # -----------------------------------------------------------------------
+
+    def close_sync(self) -> None:
+        """Release the SQLite Runtime / close the PostgreSQL writer.
+
+        Matches ``acquire`` in ``_init_writer_sync``: every store that pulls a
+        ``SqliteStoreRuntime`` from the process registry must release it, or the
+        registry (and its 1 + reader-pool open connections) leaks for the
+        process lifetime (IG-647). Idempotent and safe when never initialized.
+        """
+        with self._writer_thread_lock:
+            if self._backend == "sqlite":
+                runtime = self._sqlite_runtime
+                self._sqlite_runtime = None
+                if runtime is not None and self.db_path is not None:
+                    from soothe_nano.persistence.sqlite_runtime import (
+                        SqliteRuntimeRegistry,
+                    )
+
+                    try:
+                        SqliteRuntimeRegistry.release_sync(self.db_path)
+                    except Exception:
+                        logger.warning(
+                            "IdentityService: failed to release SQLite Runtime",
+                            exc_info=True,
+                        )
+                return
+
+            conn = self._writer_conn
+            self._writer_conn = None
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    logger.warning(
+                        "IdentityService: failed to close writer connection",
+                        exc_info=True,
+                    )
+
+    async def close(self) -> None:
+        """Async close."""
+        await asyncio.to_thread(self.close_sync)
+
+    # -----------------------------------------------------------------------
     # User Management
     # -----------------------------------------------------------------------
 

@@ -61,7 +61,9 @@ def _event_loop() -> None:
 def identity_service(tmp_path: Path) -> IdentityService:
     """Real IdentityService with a temp SQLite DB."""
     db_path = tmp_path / "test_identity_ws.db"
-    return IdentityService(db_path=db_path, jwt_key=TEST_JWT_KEY)
+    svc = IdentityService(db_path=db_path, jwt_key=TEST_JWT_KEY)
+    yield svc
+    svc.close_sync()
 
 
 @pytest.fixture()
