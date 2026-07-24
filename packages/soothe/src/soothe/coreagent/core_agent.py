@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+# Re-export facade — canonical source: soothe_nano.agent.core_agent
 from soothe_nano.agent import core_agent as nano_core_agent
 
 from soothe.sloop.subagent_catalog import lookup_subagent_spec

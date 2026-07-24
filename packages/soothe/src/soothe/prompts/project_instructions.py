@@ -1,25 +1,36 @@
-"""Host wrappers for shared AGENTS.md/CLAUDE.md prompt loading."""
+"""Host wrappers for shared AGENTS.md/CLAUDE.md prompt loading.
+
+Thin re-export wrapper — canonical implementations live in
+``soothe_nano.prompts.project_instructions``.  The host adds a test-hook
+sync helper for monkeypatch propagation; all business logic is in nano.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+# Re-export facade — canonical source: soothe_nano.prompts.project_instructions
 from soothe_nano.prompts import project_instructions
 from soothe_nano.prompts.project_instructions import (
     DEFAULT_PROJECT_INSTRUCTION_MAX_LINES,
     PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS,
+    build_block_cached,
+    read_file_head_lines,
 )
-
-_build_block_cached = project_instructions._build_block_cached
-_read_file_head_lines = project_instructions._read_file_head_lines
 
 
 def _sync_test_hooks() -> None:
-    """Keep monkeypatchable helper references aligned with nano implementation."""
-    if project_instructions._read_file_head_lines is _read_file_head_lines:
+    """Propagate host-module monkeypatches of ``read_file_head_lines`` into nano.
+
+    Tests monkeypatch this module's public ``read_file_head_lines`` attribute to
+    intercept disk reads. Since ``load_agent_instructions`` delegates to nano,
+    the patched reference must be propagated into nano's module globals so
+    ``build_block_cached`` (which calls the public alias) picks it up.
+    """
+    if project_instructions.read_file_head_lines is read_file_head_lines:
         return
-    project_instructions._read_file_head_lines = _read_file_head_lines
-    _build_block_cached.cache_clear()
+    project_instructions.read_file_head_lines = read_file_head_lines
+    build_block_cached.cache_clear()
 
 
 def load_agent_instructions(
@@ -54,6 +65,8 @@ def load_workspace_project_instructions(
 __all__ = [
     "DEFAULT_PROJECT_INSTRUCTION_MAX_LINES",
     "PROJECT_INSTRUCTION_HEADLINE_MAX_CHARS",
+    "build_block_cached",
     "load_agent_instructions",
     "load_workspace_project_instructions",
+    "read_file_head_lines",
 ]

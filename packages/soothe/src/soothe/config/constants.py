@@ -11,6 +11,7 @@ and re-exported here so host consumers keep a single import surface. Host-only
 iteration/budget limits stay local.
 """
 
+# Re-export facade — canonical source: soothe_nano.config.constants
 from soothe_nano.config.constants import (  # noqa: F401
     DEFAULT_CODE_EXEC_MAX_OUTPUT_CHARS,
     DEFAULT_EXECUTE_TIMEOUT,

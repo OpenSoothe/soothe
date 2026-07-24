@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+# Re-export facade — canonical source: soothe_nano.logging.*
 from soothe_nano.logging.context import get_thread_id, set_thread_id
 from soothe_nano.logging.setup import ThreadFormatter, setup_logging
 

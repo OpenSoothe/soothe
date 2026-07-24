@@ -9,6 +9,8 @@ fragments under ``soothe.prompts.fragments``. CoreAgent defaults also live in
 
 from __future__ import annotations
 
+# Re-export facade — canonical source: soothe_nano.prompts.system_templates
+# (nano owns the shared guide strings; host overrides are marked [HOST OVERRIDES])
 from soothe_nano.prompts.system_templates import (
     _DATA_GUIDE,
     _FILE_OPS_GUIDE,
@@ -30,6 +32,9 @@ from soothe.prompts.fragments import (
 # module as the runtime tool registration.
 # ---------------------------------------------------------------------------
 
+# [HOST OVERRIDES] — nano's _SHELL_GUIDE is generic; this override adds
+# Soothe daemon-safety rules (never kill soothed / :8765 / pkill soothe) and
+# integration-test guidance (ephemeral ports, never bind :8765).
 _SHELL_GUIDE = """\
 Execution tools (always bound — not listed in <AVAILABLE_TOOLS>):
 - run_command: Sync shell — waits for completion and returns output. Default timeout 60s; pass timeout for longer bounded jobs (max 5h, e.g. timeout=3600). Use for: ls, curl, git, make test, one-shot scripts.
@@ -45,6 +50,9 @@ Choose run_command vs run_background:
 - Integration tests for soothe-daemon: use ephemeral ports from fixtures — never bind or target host :8765.
 """
 
+# [HOST OVERRIDES] — nano's _RESEARCH_GUIDE suggests "dedicated research tools
+# or specialists"; this override documents Soothe intake/slash routing
+# (deep_research / academic_research are not open via `task`).
 _RESEARCH_GUIDE = """\
 Research tools (deferred by default — see <AVAILABLE_TOOLS> or search_tools):
 - search_web: Quick web search for factual lookups, news, current events (single call).
@@ -53,6 +61,10 @@ Thorough multi-source public-web or academic research is intake/slash routed
 (deep_research / academic_research) — those specialists are not available via `task`.\
 """
 
+# [HOST OVERRIDES] — nano's _SUBAGENT_GUIDE is generic; this override reflects
+# Soothe's intake/slash routing for browser_use, deep_research, and
+# academic_research (not available via open `task`), and adds a grep/glob
+# guard against redundant repo scans after a task report returns.
 _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:

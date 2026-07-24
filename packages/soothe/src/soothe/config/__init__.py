@@ -4,6 +4,17 @@ All public names are re-exported here so that ``from soothe.config import X``
 continues to work after the module was split into a package.
 """
 
+# Disambiguating alias for nano's SootheConfig.
+#
+# Both the host (soothe.config.settings.SootheConfig) and nano
+# (soothe_nano.config.settings.SootheConfig) ship a top-level config class
+# named ``SootheConfig``.  When host code needs the *nano* config class — for
+# example to type a helper that runs inside the nano CoreAgent boundary — the
+# bare ``SootheConfig`` name is ambiguous.  ``NanoSootheConfig`` makes the
+# intent explicit.  Nano also re-exports the same class as ``NanoConfig``.
+from soothe_nano.config.settings import SootheConfig as NanoSootheConfig
+
+# Re-export facade — canonical source: soothe_nano.prompts.system_templates
 from soothe_nano.prompts.system_templates import (
     _DEFAULT_SYSTEM_PROMPT,
     _MEDIUM_SYSTEM_PROMPT,
@@ -128,6 +139,7 @@ __all__ = [
     "PolicyProtocolConfig",
     "ProtocolsConfig",
     "SecurityConfig",
+    "NanoSootheConfig",
     "SootheConfig",
     "SubagentConfig",
     "ThreadLoggingConfig",

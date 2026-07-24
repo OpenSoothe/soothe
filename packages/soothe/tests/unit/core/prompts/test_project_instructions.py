@@ -217,16 +217,16 @@ def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
 
     (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
     # Reset the LRU cache so neighboring tests don't pollute the counter.
-    project_instructions._build_block_cached.cache_clear()
+    project_instructions.build_block_cached.cache_clear()
 
     calls = {"n": 0}
-    original = project_instructions._read_file_head_lines
+    original = project_instructions.read_file_head_lines
 
     def counting_read(path, *, max_lines):
         calls["n"] += 1
         return original(path, max_lines=max_lines)
 
-    monkeypatch.setattr(project_instructions, "_read_file_head_lines", counting_read)
+    monkeypatch.setattr(project_instructions, "read_file_head_lines", counting_read)
 
     first = load_agent_instructions(tmp_path)
     second = load_agent_instructions(tmp_path)
@@ -245,7 +245,7 @@ def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:
 
     agents = tmp_path / "AGENTS.md"
     agents.write_text("original rule\n", encoding="utf-8")
-    project_instructions._build_block_cached.cache_clear()
+    project_instructions.build_block_cached.cache_clear()
 
     first = load_agent_instructions(tmp_path)
     assert first is not None

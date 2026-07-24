@@ -1,5 +1,6 @@
 """Soothe workspace: loop resolution + explicit nano workspace re-exports."""
 
+# Re-export facade — canonical source: soothe_nano.workspace.* submodules
 from soothe_nano.workspace.workspace_api import (
     ResolvedWorkspace,
     resolve_workspace_for_stream,

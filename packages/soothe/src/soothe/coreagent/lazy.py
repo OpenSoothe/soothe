@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+# Re-export facade — canonical source: soothe_nano.agent.lazy
 from soothe_nano.agent import lazy as nano_lazy
 
 if TYPE_CHECKING:

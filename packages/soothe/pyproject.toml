@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
     # First-party (Coding CoreAgent stack lives in soothe-nano; do not re-pin its deps here)
     "soothe-sdk>=1.0.5,<2.0.0",
-    "soothe-nano>=1.0.0,<2.0.0",
+    "soothe-nano>=1.0.3,<2.0.0",
     "soothe-deepagents>=0.8.2,<1.0.0",
     # Host-owned runtime (StrangeLoop / config / identity / checkpointers)
     "aiosqlite>=0.22.1,<1.0.0",

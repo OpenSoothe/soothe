@@ -13,6 +13,10 @@ Jinja2 templates under ``instructions/`` (e.g. ``synthesis_report_system.xml``) 
 loaded on demand via ``prompts.loader.load_prompt_fragment``.
 """
 
+# Re-export facade — canonical source: soothe_nano.prompts.fragments
+# (nano owns the identity / system-prompt body / complexity fragments
+#  re-exported below; host-only XML files loaded further down are local).
+
 from pathlib import Path
 
 from soothe_nano.prompts.fragments import (

@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
+
+# Re-export facade — canonical source: soothe_nano.config.models
 from soothe_nano.config.models import (  # noqa: F401
     MODEL_KNOWLEDGE_CUTOFFS,
     AgentRuntimeConfig,
