@@ -164,7 +164,17 @@ docker-prod-down:
 	$(DOCKER_PROD_COMPOSE) down
 
 docker-prod-ps:
-	$(DOCKER_PROD_COMPOSE) ps
+	@$(DOCKER_PROD_COMPOSE) ps
+	@echo ""
+	@if curl -sf -m 2 http://127.0.0.1:8765/healthz >/dev/null 2>&1; then \
+		echo "API healthz: ok"; \
+	else \
+		echo "API healthz: unreachable (is soothed up? local soothed holding :8765?)"; \
+	fi
+	@# Surface Autopilot construction failures that leave the container "healthy"
+	@$(DOCKER_PROD_COMPOSE) logs --tail=300 soothed 2>/dev/null \
+		| grep -Ei '\[Autopilot\].*(failed|constructed)|ImportError: cannot import' \
+		| tail -3 || true
 
 # --- Reset -----------------------------------------------------------------
 

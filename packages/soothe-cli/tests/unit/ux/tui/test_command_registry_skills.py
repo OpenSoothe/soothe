@@ -59,5 +59,15 @@ class TestParseSkillCommand:
 def test_resolve_command_head_maps_aliases() -> None:
     assert resolve_command_head("/tokens") == "/context"
     assert resolve_command_head("/q") == "/quit"
+    assert resolve_command_head("/exit") == "/quit"
     assert resolve_command_head("/plan refactor auth") == "/plan"
     assert resolve_command_head("/unknown") == "/unknown"
+
+
+def test_bare_quit_words_are_exact_single_tokens() -> None:
+    from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE, BARE_QUIT_WORDS
+
+    assert BARE_QUIT_WORDS == frozenset({"exit", "quit"})
+    assert "/quit" in ALWAYS_IMMEDIATE
+    assert "/q" in ALWAYS_IMMEDIATE
+    assert "/exit" in ALWAYS_IMMEDIATE

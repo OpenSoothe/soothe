@@ -1,4 +1,4 @@
-"""Tests for unified TUI quit paths (Ctrl+D, double Ctrl+C, /quit)."""
+"""Tests for unified TUI quit paths (Ctrl+D, double Ctrl+C, /quit, bare exit/quit)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ import pytest
 from textual.app import App
 
 from soothe_cli.runtime.state.session_stats import SessionStats
+from soothe_cli.tui.app._execution import _ExecutionMixin
 from soothe_cli.tui.app._messages_mixin import _MessagesMixin
+from soothe_cli.tui.widgets.chat_input import ChatInput
 
 
 class _QuitAppStub(App, _MessagesMixin):
@@ -40,6 +42,20 @@ class _QuitAppStub(App, _MessagesMixin):
         message=None,
     ) -> None:
         _MessagesMixin.exit(self, result=result, return_code=return_code, message=message)
+
+
+class _SubmitQuitStub(_ExecutionMixin):
+    """Minimal execution stub for bare/slash quit submission."""
+
+    def __init__(self) -> None:
+        self._loop_switching = False
+        self._agent_running = False
+        self._shell_running = False
+        self._connecting = False
+        self._pending_messages = deque()
+        self._queued_widgets = deque()
+        self._detach_or_exit = MagicMock()
+        self._process_message = AsyncMock()
 
 
 def test_detach_or_exit_without_daemon_calls_textual_exit() -> None:
@@ -91,3 +107,45 @@ def test_soothe_app_exit_delegates_to_mixin() -> None:
     from soothe_cli.tui.app._app import SootheApp
 
     assert SootheApp.exit is not App.exit
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("word", ["exit", "quit", "Exit", " QUIT "])
+async def test_bare_quit_word_exits_immediately(word: str) -> None:
+    """Single-word exit/quit in normal mode must quit without sending to the agent."""
+    app = _SubmitQuitStub()
+    event = ChatInput.Submitted(word, mode="normal")
+
+    with patch("soothe_cli.tui.app._execution.dispatch_hook", new_callable=AsyncMock):
+        await app.on_chat_input_submitted(event)
+
+    app._detach_or_exit.assert_called_once_with()
+    app._process_message.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["exit please", "please quit", "q"])
+async def test_non_exact_quit_text_is_not_bare_quit(text: str) -> None:
+    """Only exact single-word exit/quit should trigger bare quit."""
+    app = _SubmitQuitStub()
+    event = ChatInput.Submitted(text, mode="normal")
+
+    with patch("soothe_cli.tui.app._execution.dispatch_hook", new_callable=AsyncMock):
+        await app.on_chat_input_submitted(event)
+
+    app._detach_or_exit.assert_not_called()
+    app._process_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cmd", ["/quit", "/q", "/exit"])
+async def test_slash_quit_aliases_exit_immediately(cmd: str) -> None:
+    """Slash quit aliases must quit immediately in command mode."""
+    app = _SubmitQuitStub()
+    event = ChatInput.Submitted(cmd, mode="command")
+
+    with patch("soothe_cli.tui.app._execution.dispatch_hook", new_callable=AsyncMock):
+        await app.on_chat_input_submitted(event)
+
+    app._detach_or_exit.assert_called_once_with()
+    app._process_message.assert_not_awaited()

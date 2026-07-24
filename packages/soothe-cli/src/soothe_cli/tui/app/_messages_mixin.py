@@ -559,7 +559,7 @@ class _MessagesMixin:
         1. If input has pending text, clear it (first Ctrl+C)
         2. If input is empty, interrupt the running task
 
-        When idle, Ctrl+C never exits the TUI. Use `/quit` (or `/q`) to exit.
+        When idle, Ctrl+C never exits the TUI. Type `exit`, `quit`, or `/quit` to exit.
 
         Note: Copying selected text is bound to Ctrl+Y (`action_copy_selection`)
         so Ctrl+C is reserved for interrupt behavior.
@@ -586,7 +586,7 @@ class _MessagesMixin:
         # Idle path: clear any pending draft, but never quit via keyboard shortcut.
         if self._chat_input:
             self._chat_input.clear_input()
-        self.notify("Use /quit (or /q) to exit the TUI", timeout=2, markup=False)
+        self.notify("Type exit, quit, or /quit to exit the TUI", timeout=2, markup=False)
 
     def action_dismiss_ui(self) -> None:
         """Handle Escape — dismiss overlays and optionally cancel queued goals.
@@ -641,8 +641,8 @@ class _MessagesMixin:
         self.action_dismiss_ui()
 
     def action_quit_app(self) -> None:
-        """Handle Ctrl+D by hinting explicit slash-command exit."""
-        self.notify("Use /quit (or /q) to exit the TUI", timeout=2, markup=False)
+        """Handle Ctrl+D by hinting explicit exit words or slash quit."""
+        self.notify("Type exit, quit, or /quit to exit the TUI", timeout=2, markup=False)
 
     async def _detach_then_exit(self) -> None:
         """Detach from daemon, then exit the app."""

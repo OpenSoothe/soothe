@@ -191,10 +191,10 @@ COMMANDS: tuple[SlashCommand, ...] = (
     ),
     SlashCommand(
         name="/quit",
-        description="Exit app",
+        description="Exit app (also: exit, quit)",
         bypass_tier=BypassTier.ALWAYS,
         hidden_keywords="close leave",
-        aliases=("/q",),
+        aliases=("/q", "/exit"),
     ),
 )
 """All slash commands."""
@@ -247,6 +247,9 @@ def _build_bypass_set(tier: BypassTier) -> frozenset[str]:
 
 ALWAYS_IMMEDIATE: frozenset[str] = _build_bypass_set(BypassTier.ALWAYS)
 """Commands that execute regardless of any busy state."""
+
+BARE_QUIT_WORDS: frozenset[str] = frozenset({"exit", "quit"})
+"""Single-word normal-mode input that exits the TUI (no leading slash)."""
 
 BYPASS_WHEN_CONNECTING: frozenset[str] = _build_bypass_set(BypassTier.CONNECTING)
 """Commands that bypass only during initial server connection."""

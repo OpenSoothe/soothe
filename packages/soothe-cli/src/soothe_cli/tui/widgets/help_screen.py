@@ -55,7 +55,7 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
             "Insert newline in the chat input",
         ),
         ("Esc", "Dismiss modal, plan overlay, or autocomplete"),
-        ("Ctrl+D", "Use /quit (or /q) to exit the TUI"),
+        ("Ctrl+D", "Type exit, quit, or /quit to exit the TUI"),
         (
             "Ctrl+C",
             "Clear input or interrupt running agent/shell",

@@ -150,10 +150,15 @@ class _ExecutionMixin:
 
         await dispatch_hook("user.prompt", {})
 
-        # /quit and /q always execute immediately, even mid-loop-switch.
-        from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE
+        # /quit, /q, /exit, and bare exit/quit always execute immediately,
+        # even mid-loop-switch or while the agent is busy.
+        from soothe_cli.tui.command_registry import ALWAYS_IMMEDIATE, BARE_QUIT_WORDS
 
-        if mode == "command" and value.lower().strip() in ALWAYS_IMMEDIATE:
+        stripped = value.lower().strip()
+        if mode == "command" and stripped in ALWAYS_IMMEDIATE:
+            self._detach_or_exit()
+            return
+        if mode == "normal" and stripped in BARE_QUIT_WORDS:
             self._detach_or_exit()
             return
 
@@ -491,7 +496,7 @@ class _ExecutionMixin:
         cmd = command.lower().strip()
         cmd_head = resolve_command_head(command)
 
-        if cmd in {"/quit", "/q"}:
+        if cmd_head == "/quit":
             self._detach_or_exit()
         elif cmd == "/help":
             await self._show_help_screen()

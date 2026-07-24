@@ -614,9 +614,11 @@ class SootheDaemon(DaemonHandlersMixin):
                     AutopilotMonitor,
                     AutopilotService,
                     ContextProjector,
-                    DurabilityGoalDispatchContextStore,
-                    WorkspaceReservation,
                 )
+                from soothe.autopilot.durability_context_store import (
+                    DurabilityGoalDispatchContextStore,
+                )
+                from soothe.autopilot.workspace_reservation import WorkspaceReservation
                 from soothe.context import ContextEngine
                 from soothe.events.internal_bus import InternalEventBus
                 from soothe_nano.backends.persistence import create_persist_store

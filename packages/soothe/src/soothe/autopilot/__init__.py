@@ -23,13 +23,15 @@ from typing import Any
 __all__ = [
     "AutopilotMonitor",
     "BackoffDecision",
+    "ContextProjector",
+    "DurabilityGoalDispatchContextStore",
     "EvidenceBundle",
     "GoalDirective",
     "GoalReport",
     "AutopilotService",
     "WorkerPool",
     "WorkerSlot",
-    "ContextProjector",
+    "WorkspaceReservation",
 ]
 
 
@@ -71,6 +73,16 @@ def __getattr__(name: str) -> Any:
         from soothe.autopilot.context_projector import ContextProjector
 
         return ContextProjector
+    if name == "DurabilityGoalDispatchContextStore":
+        from soothe.autopilot.durability_context_store import (
+            DurabilityGoalDispatchContextStore,
+        )
+
+        return DurabilityGoalDispatchContextStore
+    if name == "WorkspaceReservation":
+        from soothe.autopilot.workspace_reservation import WorkspaceReservation
+
+        return WorkspaceReservation
 
     error_msg = f"module {__name__!r} has no attribute {name!r}"
     raise AttributeError(error_msg)

@@ -16,6 +16,11 @@ dependencies = [
 [tool.uv.workspace]
 members = ["packages/*", "client/python"]
 
+# cryptography 49.0 dropped macOS x86_64/universal2 wheels (arm64-only). Cap below
+# 49 so Intel Macs install a wheel instead of compiling the Rust sdist.
+[tool.uv]
+constraint-dependencies = ["cryptography>=41.0,<49"]
+
 # Pin the default package index to PyPI so `uv sync` / `make all-sync` work even when the
 # environment sets UV_INDEX_URL or UV_DEFAULT_INDEX to a broken or unreachable mirror.
 [[tool.uv.index]]

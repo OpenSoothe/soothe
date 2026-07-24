@@ -32,7 +32,7 @@ def test_ctrl_c_idle_clears_input_and_shows_quit_command_hint() -> None:
 
     app._chat_input.clear_input.assert_called_once()
     app.notify.assert_called_once()
-    assert "Use /quit" in app.notify.call_args.args[0]
+    assert "exit, quit, or /quit" in app.notify.call_args.args[0]
 
 
 def test_ctrl_c_clears_input_first_when_agent_running() -> None:
@@ -221,7 +221,7 @@ def test_double_ctrl_c_no_longer_quits_when_idle() -> None:
     app._detach_or_exit.assert_not_called()
     app._chat_input.clear_input.assert_called_once()
     app.notify.assert_called_once()
-    assert "Use /quit" in app.notify.call_args.args[0]
+    assert "exit, quit, or /quit" in app.notify.call_args.args[0]
 
 
 def test_ctrl_d_hints_use_quit_command() -> None:
@@ -237,7 +237,7 @@ def test_ctrl_d_hints_use_quit_command() -> None:
 
     app._detach_or_exit.assert_not_called()
     app.notify.assert_called_once()
-    assert "Use /quit" in app.notify.call_args.args[0]
+    assert "exit, quit, or /quit" in app.notify.call_args.args[0]
 
 
 def test_ctrl_c_preserves_queued_goal_when_interrupting_agent() -> None:
