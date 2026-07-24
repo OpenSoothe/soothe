@@ -28,12 +28,18 @@ def _stable_prompt_body_length(content: str) -> int:
 class MockModelRequest(ModelRequest[dict]):
     """Mock ModelRequest for testing."""
 
-    def __init__(self, state: dict, system_message: SystemMessage) -> None:
+    def __init__(
+        self,
+        state: dict,
+        system_message: SystemMessage,
+        tools: list | None = None,
+    ) -> None:
         """Initialize mock request.
 
         Args:
             state: Agent state dictionary.
             system_message: System message to include.
+            tools: Optional bound tools list.
         """
         # Don't call super().__init__ - it has deprecated behavior
         # Instead, manually initialize the fields we need
@@ -41,19 +47,27 @@ class MockModelRequest(ModelRequest[dict]):
         object.__setattr__(self, "_messages", [system_message])
         object.__setattr__(self, "_state", state)
         object.__setattr__(self, "_system_message", system_message)
-        object.__setattr__(self, "_tools", [])
+        object.__setattr__(self, "_tools", list(tools or []))
 
     def override(self, **kwargs: object) -> "MockModelRequest":
         """Override request properties.
 
         Args:
-            kwargs: Properties to override (supports system_message).
+            kwargs: Properties to override (supports system_message, tools).
 
         Returns:
             New mock request with overridden properties.
         """
         new_system = kwargs.get("system_message", self._system_message)
-        return MockModelRequest(state=self.state, system_message=new_system)
+        new_tools = kwargs.get("tools", self._tools)
+        if not isinstance(new_system, SystemMessage):
+            new_system = self._system_message
+        tools_list = new_tools if isinstance(new_tools, list) else self._tools
+        return MockModelRequest(
+            state=self.state,
+            system_message=new_system,
+            tools=tools_list,
+        )
 
     @property
     def model(self) -> str:
@@ -816,9 +830,8 @@ def test_available_tools_block_when_progressive_enabled() -> None:
     request = MockModelRequest(
         state={"routing_classification": RoutingClassification(task_complexity="simple")},
         system_message=SystemMessage(content="base"),
+        tools=[core],
     )
-    # Simulate ProgressiveToolMiddleware filtering bound tools to core only.
-    request.tools = [core]
 
     listing.modify_request(request)
     modified = middleware.modify_request(request)

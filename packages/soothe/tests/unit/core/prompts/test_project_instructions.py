@@ -208,7 +208,7 @@ def test_progressive_partial_above_threshold(tmp_path: Path) -> None:
     assert payload.rstrip().endswith(".")
 
 
-def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
+def test_lru_cache_hits_on_unchanged_file(tmp_path: Path) -> None:
     """Second load with unchanged mtime hits the cache; no second disk read."""
     from soothe.prompts import project_instructions
     from soothe.prompts.project_instructions import (
@@ -216,22 +216,19 @@ def test_lru_cache_hits_on_unchanged_file(tmp_path: Path, monkeypatch) -> None:
     )
 
     (tmp_path / "AGENTS.md").write_text("rule\n", encoding="utf-8")
-    # Reset the LRU cache so neighboring tests don't pollute the counter.
+    # Reset the LRU cache so neighboring tests don't pollute hit/miss counts.
     project_instructions.build_block_cached.cache_clear()
 
-    calls = {"n": 0}
-    original = project_instructions.read_file_head_lines
-
-    def counting_read(path, *, max_lines):
-        calls["n"] += 1
-        return original(path, max_lines=max_lines)
-
-    monkeypatch.setattr(project_instructions, "read_file_head_lines", counting_read)
-
     first = load_agent_instructions(tmp_path)
+    after_first = project_instructions.build_block_cached.cache_info()
     second = load_agent_instructions(tmp_path)
+    after_second = project_instructions.build_block_cached.cache_info()
+
+    assert first is not None
     assert first == second
-    assert calls["n"] == 1
+    assert after_first.misses == 1
+    assert after_second.hits >= 1
+    assert after_second.misses == after_first.misses
 
 
 def test_lru_cache_invalidates_on_mtime_change(tmp_path: Path) -> None:

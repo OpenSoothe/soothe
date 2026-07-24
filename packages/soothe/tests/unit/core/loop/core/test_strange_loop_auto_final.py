@@ -37,8 +37,15 @@ def _make_done_plan_result() -> PlanResult:
     )
 
 
-def _make_mock_ce() -> Mock:
-    """Build a mock ContextEngine with all required attributes."""
+def _make_mock_ce(*, ledger_entries: list | None = None) -> Mock:
+    """Build a mock ContextEngine with all required attributes.
+
+    Args:
+        ledger_entries: Optional CE ledger entries. When omitted, seeds one
+            execute-step AI turn so LEDGER_DIRECT does not fall back to
+            synthesis (which would call ``llm.astream`` on the AsyncMock planner).
+            Pass ``[]`` for tests that need an empty ledger.
+    """
     mock_ce = Mock()
     mock_goal = Mock()
     mock_goal.id = "test-goal-id"
@@ -53,7 +60,14 @@ def _make_mock_ce() -> Mock:
     mock_ce.finalize_goal = AsyncMock()  # Called by goal_completion node
     mock_ce.get_all_goals = Mock(return_value=[])
     mock_ce.ledger = Mock()
-    mock_ce.ledger.entries = Mock(return_value=[])
+    mock_ce.ledger.record_message = Mock()
+    if ledger_entries is None:
+        from soothe.sloop.utils.messages import LoopAIMessage
+
+        ledger_entries = [
+            (LoopAIMessage(content="done content", phase="execute_step"), "execute_step")
+        ]
+    mock_ce.ledger.entries = Mock(return_value=ledger_entries)
 
     mock_step_planner = Mock()
     mock_step_planner.ingest_plan = Mock()
@@ -171,13 +185,6 @@ async def test_done_skips_goal_completion_synthesis_when_ledger_direct_selected(
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
     mock_ce = _make_mock_ce()
-    # Add ledger content so LEDGER_DIRECT has content and doesn't fall back to synthesis
-    from soothe.sloop.utils.messages import LoopAIMessage
-
-    mock_ce.ledger.record_message = Mock()
-    mock_ce.ledger.entries = Mock(
-        return_value=[(LoopAIMessage(content="done content", phase="execute_step"), "execute_step")]
-    )
 
     with (
         patch(
@@ -233,7 +240,7 @@ async def test_completed_payload_for_summary_path() -> None:
     mock_anchor_mgr = Mock()
     mock_anchor_mgr.capture_iteration_start_anchor = AsyncMock()
     mock_anchor_mgr.close = AsyncMock()
-    mock_ce = _make_mock_ce()
+    mock_ce = _make_mock_ce(ledger_entries=[])
 
     with (
         patch(

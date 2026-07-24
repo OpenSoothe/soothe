@@ -222,6 +222,10 @@ class TestIntakeClassifier:
             result = await classifier.classify_intake("summarize readme")
         assert result.reasoning == "I'll use tools to work through this goal."
 
+
+class TestPass1ToIntent:
+    """Sync helpers on IntentClassifier (no event loop)."""
+
     def test_pass1_to_intent_propagates_response_language(self) -> None:
         classifier = IntentClassifier(model=MagicMock(), assistant_name="Soothe")
         pass1 = IntakePass1LLMResult(

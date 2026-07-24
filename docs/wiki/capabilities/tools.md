@@ -46,8 +46,8 @@ A defining design decision: **Soothe only builds tools that the langchain ecosys
 
 | Tool | Ecosystem Source |
 |------|-----------------|
-| `run_command` | wraps `langchain_community.ShellTool` |
-| `run_python` | wraps `langchain_experimental.PythonREPLTool` |
+| `run_command` | custom `BaseTool` (subprocess + workspace security) |
+| `run_python` | custom persistent in-process REPL (`BaseTool`) |
 | `read_file`, `write_file`, `glob`, `grep`, `ls` | from `deepagents.FilesystemMiddleware` |
 | `wizsearch_search` | from `wizsearch` library |
 | `transcribe_audio` | OpenAI Whisper |

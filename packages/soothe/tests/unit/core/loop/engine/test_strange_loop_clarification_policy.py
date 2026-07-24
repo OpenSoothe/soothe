@@ -63,6 +63,7 @@ def _wire_mocks() -> tuple[Mock, Mock, Mock, Mock]:
 def _make_mock_ce() -> Mock:
     """Build a mock ContextEngine with all required attributes."""
     from soothe.context.planning_models import CompletionStrategy
+    from soothe.sloop.utils.messages import LoopAIMessage
 
     mock_ce = Mock()
     mock_goal = Mock()
@@ -74,7 +75,11 @@ def _make_mock_ce() -> Mock:
     mock_ce.complete_goal = AsyncMock()
     mock_ce.get_all_goals = Mock(return_value=[])
     mock_ce.ledger = Mock()
-    mock_ce.ledger.entries = Mock(return_value=[])
+    # Seed execute-step content so LEDGER_DIRECT does not fall back to synthesis.
+    mock_ce.ledger.record_message = Mock()
+    mock_ce.ledger.entries = Mock(
+        return_value=[(LoopAIMessage(content="done content", phase="execute_step"), "execute_step")]
+    )
 
     # Mock planning subengine
     mock_step_planner = Mock()

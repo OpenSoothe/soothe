@@ -2257,19 +2257,6 @@ wheels = [
 ]
 
 [[package]]
-name = "langchain-experimental"
-version = "0.4.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "langchain-community" },
-    { name = "langchain-core" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d9/1c/8240195c1b27f2c45b2ee93a07b2a5a466c92dec8881fc1213ec8e3cb6a8/langchain_experimental-0.4.2.tar.gz", hash = "sha256:1130fa7ecad5959e687295b2f7850ae3e5d8eeee6796bf9e99910806475d8acc", size = 172068, upload-time = "2026-05-22T20:38:42.184Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/ce/5c56f08407648ab897b119a4add46391560a144285cf89e060091bc793e9/langchain_experimental-0.4.2-py3-none-any.whl", hash = "sha256:fd98b9948cb6f991e0f632ea3d5fb839bcfe21e6d5a190a51126a76270a66d40", size = 211226, upload-time = "2026-05-22T20:38:40.678Z" },
-]
-
-[[package]]
 name = "langchain-google-genai"
 version = "4.3.1"
 source = { registry = "https://pypi.org/simple" }
@@ -8528,7 +8515,6 @@ dependencies = [
     { name = "langchain" },
     { name = "langchain-community" },
     { name = "langchain-core" },
-    { name = "langchain-experimental" },
     { name = "langchain-mcp-adapters" },
     { name = "langchain-openai" },
     { name = "langchain-quickjs" },
@@ -8578,7 +8564,6 @@ requires-dist = [
     { name = "langchain", specifier = ">=1.2.11,<2.0.0" },
     { name = "langchain-community", specifier = ">=0.3.0,<1.0.0" },
     { name = "langchain-core", specifier = ">=1.2.18,<2.0.0" },
-    { name = "langchain-experimental", specifier = ">=0.0.50,<1.0.0" },
     { name = "langchain-mcp-adapters", specifier = ">=0.2.0,<1.0.0" },
     { name = "langchain-openai", specifier = ">=0.3.0,<1.0.0" },
     { name = "langchain-quickjs", specifier = ">=0.1.0" },
