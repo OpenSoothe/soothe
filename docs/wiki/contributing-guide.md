@@ -66,42 +66,34 @@ docker compose -f docker-compose.yml up -d
 
 ### Workspace Structure
 
-Soothe is a **multi-package monorepo**:
+This monorepo **owns** three packages (format / lint / test / publish here):
 
 ```
 packages/
-├── soothe-sdk/        # Shared SDK (protocol types, decorators, client)
-│   ├── src/soothe_sdk/
-│   ├── tests/
-│   └── pyproject.toml
 ├── soothe-cli/        # CLI + TUI
-│   ├── src/soothe_cli/
-│   ├── tests/
-│   └── pyproject.toml
 ├── soothe/            # Agent core (library)
-│   ├── src/soothe/
-│   ├── tests/
-│   └── pyproject.toml
 └── soothe-daemon/     # Daemon server
-    ├── src/soothe_daemon/
-    ├── tests/
-    └── pyproject.toml
 ```
 
-Community plugins and optional subagents ship from the external
-[mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins) repository.
+Submodules are **consumed only** (do not format, lint, test, or release them here):
 
-**Dependency order** (important for imports):
+- `packages/soothe-sdk` — [mirasoth/soothe-sdk](https://github.com/mirasoth/soothe-sdk)
+- `packages/soothe-nano` — [mirasoth/soothe-nano](https://github.com/mirasoth/soothe-nano)
+- `client/{python,go,typescript,rust}` — language clients
+- `apps/soothe-desktop`
+
+Community plugins ship from [mirasoth/soothe-plugins](https://github.com/mirasoth/soothe-plugins).
+
+**Dependency order** (imports):
 ```
-soothe-sdk → soothe-cli → soothe → soothe-daemon
+soothe-sdk → soothe-nano → soothe → soothe-daemon
+soothe-sdk → soothe-client-python → soothe-cli
 ```
 
-**Rules**:
-- **SDK**: Independent (no imports from CLI/soothe/daemon)
-- **CLI**: Can import SDK, **NOT** soothe/daemon
-- **soothe**: Can import SDK, **NOT** daemon
-- **daemon**: Can import all packages (SDK, CLI, soothe)
-- **plugins**: External; install separately, register via entry points
+**Rules** (owned packages):
+- **CLI**: Can import SDK + client, **NOT** soothe/daemon
+- **soothe**: Can import SDK + nano, **NOT** daemon
+- **daemon**: Can import soothe + SDK (+ nano via soothe); **NOT** CLI/client
 
 ---
 
@@ -584,6 +576,9 @@ When making changes, update relevant docs:
 
 ### Publishing
 
+Publishes **owned** packages only (`soothe`, `soothe-cli`, `soothe-daemon`).
+Submodule packages and language clients release from their own repositories.
+
 ```bash
 # Publish to TestPyPI first
 make publish-test
@@ -592,7 +587,6 @@ make publish-test
 make publish
 
 # Or per-package
-make sdk-publish
 make cli-publish
 make soothe-publish
 make daemon-publish

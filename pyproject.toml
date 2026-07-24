@@ -60,8 +60,6 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
-# Example files are intentionally numbered for ordering (01_, 02_, etc.)
-per-file-ignores = { "packages/soothe-nano/examples/nano_agent/*.py" = ["N999"] }
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -70,11 +68,8 @@ docstring-code-format = true
 [tool.vulture]
 paths = [
     "packages/soothe/src",
-    "packages/soothe-nano/src",
     "packages/soothe-daemon/src",
     "packages/soothe-cli/src",
-    "packages/soothe-sdk/src",
-    "client/python/src",
     "scripts/vulture_whitelist.py",
 ]
 exclude = ["*/.backups/*", "*/tests/*", "*/__pycache__/*"]

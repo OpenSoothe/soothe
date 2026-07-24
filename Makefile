@@ -1,11 +1,12 @@
 # Makefile for Soothe Multi-Package Monorepo
 #
-# This Makefile manages packages:
-# 1. soothe-sdk        - Shared SDK submodule (mirasoth/soothe-sdk)
-# 2. soothe-nano       - Coding CoreAgent submodule (mirasoth/soothe-nano)
-# 3. soothe-cli        - CLI client (Typer CLI + Textual TUI)
-# 4. soothe            - StrangeLoop / Autopilot / host composition
-# 5. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
+# Monorepo-owned packages (format / lint / test / publish here):
+# 1. soothe-cli        - CLI client (Typer CLI + Textual TUI)
+# 2. soothe            - StrangeLoop / Autopilot / host composition
+# 3. soothe-daemon     - Daemon server (WebSocket/HTTP transports)
+#
+# Submodules (consume code only — do not format, lint, test, or release here):
+#   soothe-sdk, soothe-nano, client/* (python/go/ts/rust), apps/soothe-desktop
 #
 # Uses .venv managed by uv for development.
 
@@ -18,14 +19,14 @@ DOCKER_PROD_COMPOSE := docker compose -f deploy/docker-compose.yml --env-file de
 .PHONY: reset-the-world
 .PHONY: format format-check lint lint-src lint-fix autofix vulture vulture-whitelist
 .PHONY: test test-unit test-integration test-coverage build clean
-.PHONY: sdk-publish nano-publish cli-publish soothe-publish daemon-publish publish
-.PHONY: sdk-publish-test nano-publish-test cli-publish-test soothe-publish-test daemon-publish-test publish-test
+.PHONY: cli-publish soothe-publish daemon-publish publish
+.PHONY: cli-publish-test soothe-publish-test daemon-publish-test publish-test
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
-PACKAGES = soothe-sdk soothe-nano soothe-cli soothe soothe-daemon
+PACKAGES = soothe-cli soothe soothe-daemon
 
 # Root-level directories to lint (outside packages)
 ROOT_LINT_DIRS = examples scripts
@@ -333,14 +334,8 @@ clean:
 	@echo "Done"
 
 # ============================================================================
-# Publish
+# Publish (monorepo packages only — sdk/nano release from their own repos)
 # ============================================================================
-
-sdk-publish:
-	cd packages/soothe-sdk && uv publish dist/* --native-tls
-
-nano-publish:
-	cd packages/soothe-nano && uv publish dist/* --native-tls
 
 cli-publish:
 	cd packages/soothe-cli && uv publish dist/* --native-tls
@@ -351,14 +346,8 @@ soothe-publish:
 daemon-publish:
 	cd packages/soothe-daemon && uv publish dist/* --native-tls
 
-publish: build sdk-publish nano-publish cli-publish soothe-publish daemon-publish
-	@echo "Published to PyPI"
-
-sdk-publish-test:
-	cd packages/soothe-sdk && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
-
-nano-publish-test:
-	cd packages/soothe-nano && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
+publish: build cli-publish soothe-publish daemon-publish
+	@echo "Published to PyPI (sdk/nano publish from their own repos)"
 
 cli-publish-test:
 	cd packages/soothe-cli && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
@@ -369,5 +358,5 @@ soothe-publish-test:
 daemon-publish-test:
 	cd packages/soothe-daemon && uv publish dist/* --index-url https://test.pypi.org/simple/ --native-tls
 
-publish-test: build sdk-publish-test cli-publish-test soothe-publish-test daemon-publish-test
+publish-test: build cli-publish-test soothe-publish-test daemon-publish-test
 	@echo "Published to TestPyPI"

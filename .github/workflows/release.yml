@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   # soothe-sdk publishes from mirasoth/soothe-sdk (independent repo).
-  # Monorepo release only waits for the pinned submodule version on PyPI.
+  # Monorepo release waits for the submodule version on PyPI; does not publish sdk.
   deploy-sdk:
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +137,7 @@ jobs:
     - name: Wait for soothe-nano on PyPI
       run: |
         # soothe-nano publishes from mirasoth/soothe-nano (independent repo).
-        # Monorepo release only waits for the pinned submodule version on PyPI.
+        # Monorepo release waits for the submodule version on PyPI; does not publish nano.
         VERSION=$(grep '^version = "' packages/soothe-nano/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
         for i in {1..30}; do
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \

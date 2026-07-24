@@ -53,11 +53,9 @@ make test-coverage
 
 ### Run Specific Package Tests
 
-```bash
-# SDK tests
-cd packages/soothe-sdk
-uv run pytest tests/
+Monorepo CI/verify covers **owned** packages only:
 
+```bash
 # CLI tests
 cd packages/soothe-cli
 uv run pytest tests/
@@ -70,6 +68,8 @@ uv run pytest tests/
 cd packages/soothe-daemon
 uv run pytest tests/
 ```
+
+Submodule packages (`soothe-sdk`, `soothe-nano`, clients) run tests in their own repos.
 
 ---
 

@@ -113,15 +113,12 @@ for arg in "$@"; do
   esac
 done
 
-# All packages in dependency order (soothe-client-python lives under client/python)
-ALL_PACKAGES=(soothe-sdk soothe-nano soothe-client-python soothe-cli soothe soothe-daemon)
+# Monorepo-owned packages only (submodules/clients are not formatted or tested here)
+ALL_PACKAGES=(soothe-cli soothe soothe-daemon)
 
 # Resolve package root directory (most packages live under packages/; Python client is under client/).
 package_dir() {
-  case "$1" in
-  soothe-client-python) echo "$WORKSPACE_ROOT/client/python" ;;
-  *) echo "$WORKSPACE_ROOT/packages/$1" ;;
-  esac
+  echo "$WORKSPACE_ROOT/packages/$1"
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -425,45 +422,7 @@ validate_package_dependencies() {
     record_check_outcome "dependencies" "cli → daemon boundary" "pass"
   fi
 
-  # Rule 2: soothe-sdk MUST NOT import any other package
-  # Optimized: single grep pass instead of two
-  violations=$(grep -rE 'from soothe_cli|from soothe_daemon|from soothe_client|from soothe_nano|from soothe[. ]|import soothe_cli|import soothe_daemon|import soothe_client|import soothe_nano|import soothe$|import soothe\.' packages/soothe-sdk/src --include='*.py' 2>/dev/null | head -10 || true)
-  if [ -n "$violations" ]; then
-    print_fail "sdk must be independent"
-    record_check_outcome "dependencies" "sdk independence" "fail"
-    record_failure_log "Dependency: SDK independence" "$violations"
-    return 1
-  else
-    print_ok "sdk independence"
-    record_check_outcome "dependencies" "sdk independence" "pass"
-  fi
-
-  # Rule 2b: soothe-client-python must not import cli/daemon/core
-  # Use word-boundary-style alternation so soothe_client / soothe_sdk self-imports are allowed.
-  violations=$(grep -rE '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' client/python/src --include='*.py' 2>/dev/null | head -10 || true)
-  if [ -n "$violations" ]; then
-    print_fail "soothe-client-python must not import soothe/cli/daemon"
-    record_check_outcome "dependencies" "client → core/cli/daemon boundary" "fail"
-    record_failure_log "Dependency: client independence" "$violations"
-    return 1
-  else
-    print_ok "client → sdk only (no core/cli/daemon)"
-    record_check_outcome "dependencies" "client → core/cli/daemon boundary" "pass"
-  fi
-
-  # Rule 2c: soothe-nano MUST NOT import soothe / cli / daemon
-  violations=$(grep -rE '^\s*(from|import)\s+(soothe|soothe_daemon|soothe_cli)(\.|\s|$)' packages/soothe-nano/src --include='*.py' 2>/dev/null | head -10 || true)
-  if [ -n "$violations" ]; then
-    print_fail "soothe-nano must not import soothe/cli/daemon"
-    record_check_outcome "dependencies" "nano ↛ soothe/cli/daemon" "fail"
-    record_failure_log "Dependency: soothe-nano independence" "$violations"
-    return 1
-  else
-    print_ok "nano ↛ soothe/cli/daemon"
-    record_check_outcome "dependencies" "nano ↛ soothe/cli/daemon" "pass"
-  fi
-
-  # Rule 3: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
+  # Rule 2: soothe (in-proc agent core) MUST NOT depend on soothe-daemon
   # Optimized: single grep pass instead of two
   violations=$(grep -rE 'from soothe_daemon|import soothe_daemon' packages/soothe/src --include='*.py' 2>/dev/null | head -10 || true)
   if [ -n "$violations" ]; then
@@ -473,7 +432,7 @@ validate_package_dependencies() {
     return 1
   fi
 
-  # Rule 3b: Check pyproject.toml dependencies
+  # Rule 2b: Check pyproject.toml dependencies
   # Optimized: read file once, grep from variable
   local soothe_deps daemon_deps
   soothe_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe/pyproject.toml 2>/dev/null || true)
@@ -486,7 +445,7 @@ validate_package_dependencies() {
   print_ok "soothe ↛ soothe-daemon"
   record_check_outcome "dependencies" "soothe ↛ soothe-daemon" "pass"
 
-  # Rule 4: soothe-daemon MUST NOT depend on soothe-cli in core dependencies
+  # Rule 3: soothe-daemon MUST NOT depend on soothe-cli in core dependencies
   # Optimized: read file once, grep from variable
   daemon_deps=$(sed -n '/^dependencies = \[/,/\]/p' packages/soothe-daemon/pyproject.toml 2>/dev/null || true)
   if echo "$daemon_deps" | grep -qE '"soothe-cli("|>=)'; then
@@ -498,7 +457,7 @@ validate_package_dependencies() {
   print_ok "daemon ↛ soothe-cli (runtime)"
   record_check_outcome "dependencies" "daemon ↛ soothe-cli (runtime)" "pass"
 
-  # Rule 5: Workspace integrity - all packages must be in sync
+  # Rule 4: Workspace integrity - all packages must be in sync
   if $WORKSPACE_SYNCED; then
     print_ok "workspace in sync"
     record_check_outcome "dependencies" "workspace in sync" "pass"
@@ -527,32 +486,6 @@ validate_package_dependencies() {
       print_fail "import boundaries"
       record_failure_log "Import boundaries" "$boundary_output"
       record_check_outcome "dependencies" "import boundaries" "fail"
-      return 1
-    fi
-  fi
-
-  if [ -f "$WORKSPACE_ROOT/scripts/check_nano_duplicate_symbols.py" ]; then
-    local dup_output
-    if dup_output=$("$VENV_PYTHON" "$WORKSPACE_ROOT/scripts/check_nano_duplicate_symbols.py" 2>&1); then
-      print_ok "nano dead-duplicate symbols"
-      record_check_outcome "dependencies" "nano dead-duplicate symbols" "pass"
-    else
-      print_fail "nano dead-duplicate symbols"
-      record_failure_log "Nano dead-duplicate symbols" "$dup_output"
-      record_check_outcome "dependencies" "nano dead-duplicate symbols" "fail"
-      return 1
-    fi
-  fi
-
-  if [ -f "$WORKSPACE_ROOT/scripts/check_nano_docstring_refs.py" ]; then
-    local docref_output
-    if docref_output=$("$VENV_PYTHON" "$WORKSPACE_ROOT/scripts/check_nano_docstring_refs.py" 2>&1); then
-      print_ok "nano/sdk docstring refs"
-      record_check_outcome "dependencies" "nano/sdk docstring refs" "pass"
-    else
-      print_fail "nano/sdk docstring refs"
-      record_failure_log "Nano/sdk docstring refs" "$docref_output"
-      record_check_outcome "dependencies" "nano/sdk docstring refs" "fail"
       return 1
     fi
   fi
@@ -677,12 +610,12 @@ _run_pkg_tests_streaming() {
   pkg_root="$(package_dir "$pkg")"
   cd "$pkg_root"
 
-  # Use pytest-xdist for packages with mostly sync tests (sdk, cli, client).
+  # Use pytest-xdist for packages with mostly sync tests (cli).
   # soothe and soothe-daemon have many async fixtures that don't work well with xdist.
   local xdist_opts=""
   if "$VENV_PYTHON" -c "import xdist" 2>/dev/null; then
     case "$pkg" in
-    soothe-sdk | soothe-client-python | soothe-cli | soothe-nano)
+    soothe-cli)
       xdist_opts="-n4 --dist=loadgroup"
       ;;
     *)

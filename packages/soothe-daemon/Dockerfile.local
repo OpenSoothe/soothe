@@ -1,8 +1,12 @@
-# Soothe daemon — local source build (no PyPI dependency).
+# Soothe daemon — local source build (sdk/nano from submodules; deepagents from PyPI).
 #
 # Build context must be the monorepo root (parent of `packages/`). Installs from
-# local source directories: packages/soothe-sdk, packages/soothe-deepagents,
-# packages/soothe-nano, packages/soothe, packages/soothe-daemon.
+# local source: packages/soothe-sdk, packages/soothe-nano, packages/soothe,
+# packages/soothe-daemon. ``soothe-deepagents`` is pulled from PyPI.
+#
+# soothe-sdk / soothe-nano CI and PyPI releases are independent
+# (mirasoth/soothe-sdk, mirasoth/soothe-nano); this image only consumes the
+# submodule checkouts for local builds.
 #
 # Build (full image with browser subagent):
 #   docker build -f packages/soothe-daemon/Dockerfile.local \
@@ -53,8 +57,6 @@ RUN mkdir -p /opt/ms-playwright
 COPY VERSION /app/VERSION
 COPY packages/soothe-sdk/pyproject.toml /app/packages/soothe-sdk/pyproject.toml
 COPY packages/soothe-sdk/README.md /app/packages/soothe-sdk/README.md
-COPY packages/soothe-deepagents/pyproject.toml /app/packages/soothe-deepagents/pyproject.toml
-COPY packages/soothe-deepagents/README.md /app/packages/soothe-deepagents/README.md
 COPY packages/soothe-nano/pyproject.toml /app/packages/soothe-nano/pyproject.toml
 COPY packages/soothe-nano/README.md /app/packages/soothe-nano/README.md
 COPY packages/soothe/pyproject.toml /app/packages/soothe/pyproject.toml
@@ -71,9 +73,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /app/.venv/bin/python -r /tmp/requirements.runtime.txt; \
     rm -f /tmp/requirements.runtime.txt
 
-# Copy local packages after third-party dependencies are cached.
+# Copy local packages after third-party + PyPI deepagents deps are cached.
 COPY packages/soothe-sdk /app/packages/soothe-sdk
-COPY packages/soothe-deepagents /app/packages/soothe-deepagents
 COPY packages/soothe-nano /app/packages/soothe-nano
 COPY packages/soothe /app/packages/soothe
 COPY packages/soothe-daemon /app/packages/soothe-daemon
@@ -83,7 +84,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /app/.venv/bin/python \
         --no-deps \
         "/app/packages/soothe-sdk" \
-        "/app/packages/soothe-deepagents" \
         "/app/packages/soothe-nano" \
         "/app/packages/soothe" \
         "/app/packages/soothe-daemon"; \
