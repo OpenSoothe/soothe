@@ -1,38 +1,76 @@
 # Soothe
 
-Goal-driven multi-agent orchestration framework (in-process agent core).
+Goal-driven multi-agent orchestration framework (in-process host core).
+
+Extends [soothe-nano](https://github.com/mirasoth/soothe-nano) with StrangeLoop
+planning, durability, and Autopilot (daemon-dispatched). For a lightweight
+one-shot coding CLI on nano alone, see [fj-ai](https://github.com/caesar0301/fj-ai).
 
 ## Installation
 
-For the full agent runtime with daemon server and CLI:
+Full runtime (daemon + CLI):
 
 ```bash
 pip install soothe soothe-daemon soothe-cli
 ```
 
-For library use only (no daemon/CLI):
+Library only (this package):
 
 ```bash
 pip install soothe
 ```
 
-## Architecture
+## What's in this package
 
-This package provides the **in-process agent core**:
-- `SootheRunner` - Agent orchestration
-- `SootheConfig` - Configuration
-- Protocols, backends, tools, subagents
+| Piece | Role |
+|-------|------|
+| `SootheRunner` | Protocol orchestration + StrangeLoop stream (`astream`) |
+| `create_soothe_agent` | Host CoreAgent factory (planner/policy/memory wired) |
+| `SootheConfig` | Nano base + host overlay (`nano.yml` / `soothe.yml`) |
+| StrangeLoop / Autopilot / CE / cron | Host orchestration (Autopilot needs the daemon) |
 
-## Related Packages
+## Quick example (StrangeLoop, non-autopilot)
+
+In-process, fj-style one-shot — no daemon:
+
+```python
+import asyncio
+from soothe.config import SootheConfig
+from soothe.runner import SootheRunner
+
+async def main() -> None:
+    config = SootheConfig.from_yaml_file("~/.soothe/config/nano.yml")
+    runner = SootheRunner(config)
+    try:
+        async for _ns, mode, data in runner.astream("Summarize this repo"):
+            if mode == "messages":
+                print(data)  # (message, metadata)
+    finally:
+        await runner.cleanup()
+
+asyncio.run(main())
+```
+
+Runnable script (loads `~/.soothe/config`, SQLite defaults, prints progress):
+
+```bash
+uv run python packages/soothe/examples/01_strange_loop_example.py
+```
+
+Pass `autopilot_job=...` only when embedding a daemon-dispatched worker goal.
+Interactive / library use should omit it so StrangeLoop runs the user query.
+
+## Related packages
 
 | Package | Purpose |
 |---------|---------|
-| `soothe-daemon` | Long-running server with WebSocket/HTTP transports |
-| `soothe-cli` | CLI client with TUI |
-| `soothe-sdk` | Shared types and WebSocket client |
+| `soothe-daemon` | Long-running server (HTTP/WS, channels, Autopilot dispatch) |
+| `soothe-cli` | Human CLI + Textual TUI |
+| `soothe-sdk` | Shared wire contracts and types |
+| `soothe-nano` | Coding CoreAgent (tools, skills, MCP) |
 
 ## Testing
 
 ```bash
-uv run pytest tests/unit/ -v
+uv run pytest packages/soothe/tests/unit/ -v
 ```
