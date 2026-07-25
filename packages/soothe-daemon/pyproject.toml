@@ -80,8 +80,11 @@ Repository = "https://github.com/mirasoth/soothe"
 [tool.hatch.build.targets.wheel]
 packages = ["src/soothe_daemon"]
 
+# Ship setup YAML templates (non-.py package data) inside the wheel.
 [tool.hatch.build.targets.wheel.force-include]
-"src/soothe_daemon/setup/templates" = "soothe_daemon/setup/templates"
+"src/soothe_daemon/setup/templates/nano.yml" = "soothe_daemon/setup/templates/nano.yml"
+"src/soothe_daemon/setup/templates/soothe.yml" = "soothe_daemon/setup/templates/soothe.yml"
+"src/soothe_daemon/setup/templates/daemon.yml" = "soothe_daemon/setup/templates/daemon.yml"
 
 [tool.hatch.build.targets.sdist]
 include = ["src/soothe_daemon/"]
