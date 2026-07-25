@@ -90,7 +90,7 @@ security:
 observability:
   log_file_level: DEBUG
   langfuse:
-    enabled: true
+    enabled: false
     public_key: pk-lf-soothe-local
     secret_key: sk-lf-soothe-local
     host: http://localhost:3300
