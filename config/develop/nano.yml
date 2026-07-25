@@ -73,13 +73,12 @@ embedding_profile:
   - model_role: dashscope:text-embedding-v4
     embedding_dims: 1536
 
-agent:
-  runtime:
-    role_routing:
-      enabled: true
-
+# Local develop defaults to SQLite (one process mode for the whole runtime).
+# Flip to postgresql + pgvector when exercising the Postgres path against
+# docker compose / PgBouncer — do not mix backends in one process.
 persistence:
-  default_backend: postgresql
+  default_backend: sqlite
+  # Unused while default_backend is sqlite; kept for a quick Postgres flip:
   postgres_base_dsn: "postgresql://postgres:postgres@127.0.0.1:6432"
   postgres:
     pool_max_idle_seconds: 90
@@ -100,15 +99,14 @@ observability:
       - soothe
 
 vector_stores:
-  - name: pgvector_dev
-    provider_type: pgvector
+  - name: sqlite_vec_dev
+    provider_type: sqlite_vec
 
 vector_store_router:
-  default: pgvector_dev:soothe_default
+  default: sqlite_vec_dev:soothe_default
 
 tools:
   wizsearch:
     default_engines:
       - duckduckgo
       - bing
-    proxy: http://127.0.0.1:7890

@@ -96,6 +96,7 @@ agent:
         banned_step_patterns:
           - "^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|finish up|complete process|final step|last step|the end)$"
         simple_evidence_min_chars: 200
+        no_tool_evidence_retry_limit: 2
     output_streaming:
       mode: adaptive
       streaming_interval_ms: 100

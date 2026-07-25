@@ -35,10 +35,34 @@ active_router_profile: default
 
 agent:
   name: Soothe
+  system_prompt: |
+    Guidelines:
+    - Be direct and concise. Lead with answers, not preambles.
+    - For multi-step tasks, state a brief plan, then execute.
+    - If you encounter an obstacle, explain what happened and suggest alternatives.
+    - Never reference your internal architecture, frameworks, or technical stack.
+    - Maintain context across the conversation and build on prior results.
   agent_instructions_max_chars: 8000
   protocols:
     memory:
       enabled: false
+      persist_dir: null
+      llm_chat_role: fast
+      llm_embed_role: embedding
+      enable_embeddings: true
+      enable_auto_categorization: true
+      enable_category_summaries: true
+      memory_categories:
+        - name: personal_info
+          description: Personal information
+        - name: preferences
+          description: User preferences and interests
+        - name: knowledge
+          description: Facts and learned information
+        - name: experiences
+          description: Past experiences and events
+        - name: goals
+          description: Goals and objectives
     planner:
       model: think
       routing: auto
@@ -47,20 +71,31 @@ agent:
     durability:
       backend: default
       checkpointer: default
+      persist_dir: null
       thread_inactivity_timeout_hours: 72
   code_interpreter:
     enabled: false
+    ptc_allowlist: []
+    memory_limit_mb: 128
+    timeout_seconds: 30
+    max_ptc_calls: 50
+    max_result_size: 100000
+    console_capture: true
+    snapshot_between_turns: false
   runtime:
     lazy_core_agent: true
     general_purpose_subagent: true
     recursion_limit: 9999
     role_routing:
-      enabled: false
+      enabled: true
       orchestration_model_role: fast
       generation_model_role: default
       max_orchestration_hops: 1
   middleware:
     context_window_limit: 200000
+    tool_output:
+      code_exec_max_output_chars: 32000
+      tool_output_max_chars: 10000
     llm_rate_limit:
       enabled: true
       rpm_limit: 60
@@ -85,6 +120,29 @@ agent:
         browser_use: 1800.0
         task: 18000.0
       skip_tools_with_internal_timeout: true
+    tool_call_limit:
+      global_thread_limit: 200
+      global_run_limit: 200
+      tool_specific_limits:
+        wizsearch_search:
+          thread_limit: 5
+          run_limit: 3
+        wizsearch_crawl:
+          thread_limit: 5
+          run_limit: 3
+        web_search:
+          thread_limit: 5
+          run_limit: 3
+        fetch_url:
+          thread_limit: 5
+          run_limit: 3
+        search:
+          thread_limit: 5
+          run_limit: 3
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
     report_output:
       display_threshold: 20000
       preview_chars: 500
@@ -93,6 +151,8 @@ agent:
 tools:
   execution:
     enabled: true
+    background_log_dir: null
+    background_log_retention_days: 7
   file_ops:
     enabled: true
   datetime:
@@ -113,6 +173,9 @@ tools:
     verify_ssl: true
   deepxiv:
     enabled: false
+    token: null
+    timeout: 60
+    max_retries: 3
 
 subagents:
   planner:
@@ -154,6 +217,7 @@ progressive_skills:
   core_intent_auto_invoke_enabled: true
   intent_prefetch_top_k: 2
   intent_prefetch_min_query_chars: 4
+  max_concurrent_vector_searches: 4
 progressive_tools:
   enabled: true
   budget_pct: 0.01
@@ -191,7 +255,7 @@ persistence:
     pool_max_lifetime_seconds: 1800.0
     pool_acquire_timeout_seconds: 45.0
   sqlite:
-    reader_pool_size: 8
+    reader_pool_size: 3
     busy_timeout_ms: 60000
     wal_checkpoint_on_shutdown: true
   archive_enabled: true
