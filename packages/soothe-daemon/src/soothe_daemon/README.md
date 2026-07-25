@@ -80,25 +80,27 @@ daemon/persistence/
 
 Vital-first health checks for `soothed doctor` (progressive text diagnosis).
 Default categories: configuration, tool_deps, persistence, providers,
-observability, daemon. Use `--deep` for protocols / vector stores / MCP /
+observability, host, daemon. Use `--deep` for protocols / vector stores / MCP /
 models / external APIs.
+
+Package diagnose APIs own most categories; the daemon orchestrates:
+
+| Source | Categories |
+|--------|------------|
+| `soothe_nano.diagnose` | tool_deps, providers, observability; deep: mcp, vector_stores, models, protocols |
+| `soothe.diagnose` | host (cron / skillify / autopilot / loop) |
+| daemon-local | configuration, persistence, daemon; deep: external_apis |
 
 ```
 daemon/health/
 ├── __init__.py          # HealthChecker, ProgressiveReporter, format_* exports
 ├── checker.py           # HealthChecker orchestrator (vitals + deep)
-├── models.py            # CheckResult, CategoryResult, HealthReport
+├── models.py            # CheckResult, CategoryResult, HealthReport, adapters
 ├── formatters.py        # ProgressiveReporter, format_text/markdown/json
 └── checks/
     ├── config_check.py
-    ├── tool_deps_check.py  # rg, fd, git
     ├── daemon_check.py
-    ├── protocols_check.py
-    ├── providers_check.py
-    ├── vector_stores_check.py
-    ├── mcp_check.py
-    ├── external_apis_check.py  # config-gated (deep)
-    └── observability_check.py  # Langfuse when enabled
+    └── external_apis_check.py  # config-gated (deep)
 ```
 
 Persistence checks live in `daemon/persistence/health_check.py` and gate on

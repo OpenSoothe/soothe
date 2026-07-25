@@ -2,9 +2,11 @@
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from functools import total_ordering
 from typing import Any
 
 
+@total_ordering
 class CheckStatus(StrEnum):
     """Health check status levels."""
 
@@ -14,20 +16,22 @@ class CheckStatus(StrEnum):
     INFO = "info"
     SKIPPED = "skipped"
 
-    def __lt__(self, other: "CheckStatus") -> bool:
-        """Compare severity levels for aggregation."""
-        severity = {
+    @property
+    def severity(self) -> int:
+        """Numeric severity for aggregation (higher = worse)."""
+        return {
             CheckStatus.OK: 0,
             CheckStatus.INFO: 1,
             CheckStatus.SKIPPED: 2,
             CheckStatus.WARNING: 3,
             CheckStatus.ERROR: 4,
-        }
-        return severity[self] < severity[other]
+        }[self]
 
-    def __le__(self, other: "CheckStatus") -> bool:
+    def __lt__(self, other: object) -> bool:
         """Compare severity levels for aggregation."""
-        return self == other or self < other
+        if isinstance(other, CheckStatus):
+            return self.severity < other.severity
+        return NotImplemented
 
 
 @dataclass
@@ -80,6 +84,32 @@ class CategoryResult:
             "checks": [check.to_dict() for check in self.checks],
             "message": self.message,
         }
+
+
+def check_result_from_dict(data: dict[str, Any]) -> CheckResult:
+    """Adapt a package diagnose check dict to ``CheckResult``."""
+    return CheckResult(
+        name=str(data.get("name", "unknown")),
+        status=CheckStatus(str(data.get("status", CheckStatus.ERROR.value))),
+        message=str(data.get("message", "")),
+        details=dict(data.get("details") or {}),
+    )
+
+
+def category_result_from_dict(data: dict[str, Any]) -> CategoryResult:
+    """Adapt a package diagnose category dict to ``CategoryResult``.
+
+    Packages return the shared dict contract from ``diagnose()``; the daemon
+    converts them for ``HealthReport`` / progressive UX.
+    """
+    checks_raw = data.get("checks") or []
+    checks = [check_result_from_dict(c) for c in checks_raw if isinstance(c, dict)]
+    return CategoryResult(
+        category=str(data.get("category", "unknown")),
+        status=CheckStatus(str(data.get("status", CheckStatus.ERROR.value))),
+        checks=checks,
+        message=data.get("message"),
+    )
 
 
 @dataclass

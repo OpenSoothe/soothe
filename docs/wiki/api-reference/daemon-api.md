@@ -189,24 +189,25 @@ A critical implementation detail: commands arrive with a `loop_id` (the StrangeL
 
 Default vitals (progressive text diagnosis):
 
-| Category | Module | What it validates |
+| Category | Source | What it validates |
 |----------|--------|-------------------|
-| `configuration` | `config_check` | Config file validity, env resolution, default model |
-| `tool_deps` | `tool_deps_check` | Host binaries (`rg`, `fd`, `git`) |
-| `persistence` | `persistence/health_check` | SQLite home **or** PostgreSQL when `default_backend=postgresql` |
-| `providers` | `providers_check` | Credentials for configured providers (`--live-llm` for invoke) |
-| `observability` | `observability_check` | Langfuse package/credentials/health when enabled |
-| `daemon` | `daemon_check` | Process, WebSocket, readiness (`--require-running` to fail offline) |
+| `configuration` | daemon `config_check` | Config file validity, env resolution, default model |
+| `tool_deps` | `soothe_nano.diagnose` | Host binaries (`rg`, `fd`, `git`) |
+| `persistence` | daemon `persistence/health_check` | SQLite home **or** PostgreSQL when `default_backend=postgresql` |
+| `providers` | `soothe_nano.diagnose` | Credentials for configured providers (`--live-llm` for invoke) |
+| `observability` | `soothe_nano.diagnose` | Langfuse package/credentials/health when enabled |
+| `host` | `soothe.diagnose` | Cron / skillify / autopilot / StrangeLoop import + config |
+| `daemon` | daemon `daemon_check` | Process, WebSocket, readiness (`--require-running` to fail offline) |
 
 Deep / optional (`soothed doctor --deep` or explicit `--category`):
 
-| Category | Module | What it validates |
+| Category | Source | What it validates |
 |----------|--------|-------------------|
-| `protocols` | `protocols_check` | Protocol backend health |
-| `vector_stores` | `vector_stores_check` | Vector DB connectivity + dimension match |
-| `mcp_servers` | `mcp_check` | MCP server reachability |
-| `models` | `embedding_role_check` | Router ``embedding`` role |
-| `external_apis` | `external_apis_check` | Config/env-gated optional SaaS reachability |
+| `protocols` | `soothe_nano.diagnose` | Protocol backend health |
+| `vector_stores` | `soothe_nano.diagnose` | Vector DB connectivity + dimension match |
+| `mcp_servers` | `soothe_nano.diagnose` | MCP server reachability |
+| `models` | `soothe_nano.diagnose` | Router ``embedding`` role |
+| `external_apis` | daemon `external_apis_check` | Config/env-gated optional SaaS reachability |
 
 CLI: `soothed doctor` (vitals + progressive), `--deep`, `--live-llm`, `--require-running`,
 `--format json|markdown`, `--category` / `--exclude`.

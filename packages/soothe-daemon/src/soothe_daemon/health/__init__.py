@@ -1,7 +1,7 @@
 """Health check library for Soothe.
 
 Vital-first doctor checks for soothed (tool deps, persistence, providers,
-observability, daemon) with optional ``--deep`` categories.
+observability, host, daemon) with optional ``--deep`` categories.
 
 Example usage:
 

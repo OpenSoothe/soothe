@@ -12,7 +12,12 @@ from soothe.config import SootheConfig
 from soothe_daemon import __version__ as daemon_version
 from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.health.formatters import aggregate_status
-from soothe_daemon.health.models import CategoryResult, CheckStatus, HealthReport
+from soothe_daemon.health.models import (
+    CategoryResult,
+    CheckStatus,
+    HealthReport,
+    category_result_from_dict,
+)
 
 # Default vitals — answer "can soothed run agent work?"
 VITAL_CATEGORIES: list[str] = [
@@ -21,6 +26,7 @@ VITAL_CATEGORIES: list[str] = [
     "persistence",
     "providers",
     "observability",
+    "host",
     "daemon",
 ]
 
@@ -34,6 +40,22 @@ DEEP_CATEGORIES: list[str] = [
 ]
 
 ALL_CATEGORIES: list[str] = [*VITAL_CATEGORIES, *DEEP_CATEGORIES]
+
+# Categories owned by soothe_nano.diagnose
+_NANO_CATEGORIES: frozenset[str] = frozenset(
+    {
+        "tool_deps",
+        "providers",
+        "observability",
+        "mcp_servers",
+        "vector_stores",
+        "models",
+        "protocols",
+    }
+)
+
+# Categories owned by soothe.diagnose
+_HOST_CATEGORIES: frozenset[str] = frozenset({"host"})
 
 
 class DoctorProgress(Protocol):
@@ -70,6 +92,9 @@ class HealthChecker:
         """
         self.config = config
         self.daemon_config = daemon_config
+        self._nano_cache: dict[str, CategoryResult] | None = None
+        self._host_cache: dict[str, CategoryResult] | None = None
+        self._nano_live_llm: bool | None = None
 
     def _resolve_categories(
         self,
@@ -92,6 +117,77 @@ class HealthChecker:
             selected = [c for c in selected if c not in exclude]
         return selected
 
+    async def _ensure_nano(
+        self,
+        selected: list[str],
+        *,
+        live_llm: bool,
+    ) -> dict[str, CategoryResult]:
+        """Lazily run nano.diagnose once per report for requested nano categories."""
+        needed = [c for c in selected if c in _NANO_CATEGORIES]
+        if not needed:
+            return {}
+        if self._nano_cache is not None and self._nano_live_llm == live_llm:
+            return self._nano_cache
+
+        from soothe_nano.diagnose import diagnose as nano_diagnose
+
+        raw = await nano_diagnose(
+            self.config,
+            live_llm=live_llm,
+            categories=needed,
+        )
+        cache = {item["category"]: category_result_from_dict(item) for item in raw}
+        self._nano_cache = cache
+        self._nano_live_llm = live_llm
+        return cache
+
+    async def _ensure_host(self, selected: list[str]) -> dict[str, CategoryResult]:
+        """Lazily run soothe.diagnose once per report for requested host categories."""
+        needed = [c for c in selected if c in _HOST_CATEGORIES]
+        if not needed:
+            return {}
+        if self._host_cache is not None:
+            return self._host_cache
+
+        from soothe.diagnose import diagnose as host_diagnose
+
+        raw = await host_diagnose(self.config, categories=needed)
+        cache = {item["category"]: category_result_from_dict(item) for item in raw}
+        self._host_cache = cache
+        return cache
+
+    async def _category_from_packages(
+        self,
+        category_name: str,
+        selected: list[str],
+        *,
+        live_llm: bool,
+    ) -> CategoryResult | None:
+        if category_name in _NANO_CATEGORIES:
+            nano = await self._ensure_nano(selected, live_llm=live_llm)
+            result = nano.get(category_name)
+            if result is not None:
+                return result
+            return CategoryResult(
+                category=category_name,
+                status=CheckStatus.ERROR,
+                checks=[],
+                message=f"nano diagnose did not return category: {category_name}",
+            )
+        if category_name in _HOST_CATEGORIES:
+            host = await self._ensure_host(selected)
+            result = host.get(category_name)
+            if result is not None:
+                return result
+            return CategoryResult(
+                category=category_name,
+                status=CheckStatus.ERROR,
+                checks=[],
+                message=f"host diagnose did not return category: {category_name}",
+            )
+        return None
+
     async def run_all_checks(
         self,
         categories: list[str] | None = None,
@@ -104,8 +200,8 @@ class HealthChecker:
     ) -> HealthReport:
         """Run health checks, optionally streaming progressive category updates.
 
-        Categories run sequentially (vital narrative order). Individual check
-        modules may still parallelize internally.
+        Categories run sequentially (vital narrative order). Package diagnose
+        APIs are batched per owner once per report.
 
         Args:
             categories: Specific categories to run (None = vitals, or vitals+deep).
@@ -119,44 +215,48 @@ class HealthChecker:
             Complete health report with all check results.
         """
         selected = self._resolve_categories(categories, exclude, deep=deep)
+        self._nano_cache = None
+        self._host_cache = None
+        self._nano_live_llm = None
 
         check_methods: dict[str, Callable[[], Awaitable[CategoryResult]]] = {
             "configuration": self.check_config,
-            "tool_deps": self.check_tool_deps,
             "daemon": lambda: self.check_daemon(require_running=require_running),
             "persistence": self.check_persistence,
-            "protocols": self.check_protocols,
-            "vector_stores": self.check_vector_stores,
-            "providers": lambda: self.check_providers(live_llm=live_llm),
-            "mcp_servers": self.check_mcp_servers,
-            "models": self.check_models,
             "external_apis": self.check_external_apis,
-            "observability": self.check_observability,
         }
 
         category_results: list[CategoryResult] = []
         for category_name in selected:
-            method = check_methods.get(category_name)
             if on_progress is not None:
                 on_progress.category_start(category_name)
 
-            if method is None:
+            try:
+                packaged = await self._category_from_packages(
+                    category_name,
+                    selected,
+                    live_llm=live_llm,
+                )
+                if packaged is not None:
+                    result = packaged
+                else:
+                    method = check_methods.get(category_name)
+                    if method is None:
+                        result = CategoryResult(
+                            category=category_name,
+                            status=CheckStatus.ERROR,
+                            checks=[],
+                            message=f"Unknown category: {category_name}",
+                        )
+                    else:
+                        result = await method()
+            except Exception as exc:
                 result = CategoryResult(
                     category=category_name,
                     status=CheckStatus.ERROR,
                     checks=[],
-                    message=f"Unknown category: {category_name}",
+                    message=f"Check failed with exception: {exc}",
                 )
-            else:
-                try:
-                    result = await method()
-                except Exception as exc:
-                    result = CategoryResult(
-                        category=category_name,
-                        status=CheckStatus.ERROR,
-                        checks=[],
-                        message=f"Check failed with exception: {exc}",
-                    )
 
             if on_progress is not None:
                 on_progress.category_done(result)
@@ -187,10 +287,8 @@ class HealthChecker:
         return await check_config(self.config)
 
     async def check_tool_deps(self) -> CategoryResult:
-        """Check host tool binaries (rg, fd, git)."""
-        from soothe_daemon.health.checks.tool_deps_check import check_tool_deps
-
-        return await check_tool_deps()
+        """Check host tool binaries via nano diagnose."""
+        return await self._single_nano("tool_deps")
 
     async def check_daemon(self, *, require_running: bool = False) -> CategoryResult:
         """Check daemon health."""
@@ -208,34 +306,37 @@ class HealthChecker:
         return await check_persistence(self.config)
 
     async def check_protocols(self) -> CategoryResult:
-        """Check protocol backends."""
-        from soothe_daemon.health.checks.protocols_check import check_protocols
-
-        return await check_protocols(self.config)
+        """Check protocol backends via nano diagnose."""
+        return await self._single_nano("protocols")
 
     async def check_vector_stores(self) -> CategoryResult:
-        """Check vector store backends."""
-        from soothe_daemon.health.checks.vector_stores_check import check_vector_stores
-
-        return await check_vector_stores(self.config)
+        """Check vector store backends via nano diagnose."""
+        return await self._single_nano("vector_stores")
 
     async def check_providers(self, *, live_llm: bool = False) -> CategoryResult:
-        """Check LLM provider credentials (optional live invoke)."""
-        from soothe_daemon.health.checks.providers_check import check_providers
-
-        return await check_providers(self.config, live_llm=live_llm)
+        """Check LLM provider credentials via nano diagnose."""
+        return await self._single_nano("providers", live_llm=live_llm)
 
     async def check_mcp_servers(self) -> CategoryResult:
-        """Check MCP servers."""
-        from soothe_daemon.health.checks.mcp_check import check_mcp_servers
-
-        return await check_mcp_servers(self.config)
+        """Check MCP servers via nano diagnose."""
+        return await self._single_nano("mcp_servers")
 
     async def check_models(self) -> CategoryResult:
-        """Check embedding router role configuration."""
-        from soothe_daemon.health.checks.embedding_role_check import check_embedding_role
+        """Check embedding router role via nano diagnose."""
+        return await self._single_nano("models")
 
-        return await check_embedding_role(self.config)
+    async def check_host(self) -> CategoryResult:
+        """Check host orchestration features via soothe diagnose."""
+        host = await self._ensure_host(["host"])
+        result = host.get("host")
+        if result is not None:
+            return result
+        return CategoryResult(
+            category="host",
+            status=CheckStatus.ERROR,
+            checks=[],
+            message="host diagnose did not return category: host",
+        )
 
     async def check_external_apis(self) -> CategoryResult:
         """Check config-gated optional external API reachability."""
@@ -244,10 +345,25 @@ class HealthChecker:
         return await check_external_apis(self.config)
 
     async def check_observability(self) -> CategoryResult:
-        """Check observability and tracing configuration."""
-        from soothe_daemon.health.checks.observability_check import check_observability
+        """Check observability via nano diagnose."""
+        return await self._single_nano("observability")
 
-        return await check_observability(self.config)
+    async def _single_nano(
+        self,
+        category: str,
+        *,
+        live_llm: bool = False,
+    ) -> CategoryResult:
+        nano = await self._ensure_nano([category], live_llm=live_llm)
+        result = nano.get(category)
+        if result is not None:
+            return result
+        return CategoryResult(
+            category=category,
+            status=CheckStatus.ERROR,
+            checks=[],
+            message=f"nano diagnose did not return category: {category}",
+        )
 
 
 def _upgrade_offline_daemon_to_error(result: CategoryResult) -> CategoryResult:

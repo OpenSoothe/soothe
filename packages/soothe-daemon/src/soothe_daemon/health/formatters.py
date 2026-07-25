@@ -247,7 +247,4 @@ def aggregate_status(statuses: list[CheckStatus]) -> CheckStatus:
     """Aggregate multiple statuses into one (worst wins)."""
     if not statuses:
         return CheckStatus.OK
-    worst = CheckStatus.OK
-    for status in statuses:
-        worst = max(worst, status)
-    return worst
+    return max(statuses, key=lambda s: s.severity)
