@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
     # First-party (sdk/nano are workspace submodules; CI/release independent)
     "soothe-sdk>=1.0.5,<2.0.0",
-    "soothe-nano>=1.0.5,<2.0.0",
+    "soothe-nano>=1.0.6,<2.0.0",
     "soothe-deepagents>=0.8.2,<1.0.0",
     # Host-owned runtime (StrangeLoop / config / identity / checkpointers)
     "aiosqlite>=0.22.1,<1.0.0",
