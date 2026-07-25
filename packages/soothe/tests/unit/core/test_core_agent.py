@@ -123,7 +123,8 @@ class TestCoreAgentClass:
         # String input is normalized to graph state; config is {} when None; subgraphs=False
         inp, cfg, kw = call_args[0]
         assert cfg == {}
-        assert kw == {"subgraphs": False, "durability": None}
+        # durability omitted when unset / no checkpointer (avoids LangGraph warning)
+        assert kw == {"subgraphs": False}
         assert isinstance(inp, dict)
         assert len(inp["messages"]) == 1
         assert inp["messages"][0].content == "test input"

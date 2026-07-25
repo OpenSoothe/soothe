@@ -420,6 +420,8 @@ class Executor:
             config=graph_config,
             stream_mode=["messages", "custom"],
             subgraphs=True,
+            # Honored only when the graph has a checkpointer; CoreAgent omits
+            # the kwarg on the ephemeral twin to avoid a LangGraph UserWarning.
             durability="exit",
         )
 
