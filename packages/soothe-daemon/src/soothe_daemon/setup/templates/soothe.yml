@@ -1,0 +1,237 @@
+# Soothe Host Overlay Template (soothe.yml)
+# ------------------------------------------------------------
+# Host-only configuration overlay. Compose with nano.yml.
+# This file must not contain nano-owned/shared keys.
+
+agent:
+  goal_completion_mode: llm_only
+  final_response: auto
+
+  autopilot:
+    enabled: false
+    max_iterations: 10
+    max_retries: 2
+    max_total_goals: 50
+    max_goal_depth: 5
+    max_parallel_goals: 3
+    enable_dynamic_goals: true
+    max_send_backs: 3
+    checkpoint_interval: 10
+    dreaming_enabled: true
+    dreaming_consolidation_interval: 300
+    dreaming_health_check_interval: 60
+    monitor_model_role: think
+    consensus_model_role: think
+    verify_interval: 30
+    dreaming_interval: 300
+    dreaming_scope: workspace
+    dreaming_modes:
+      episodic:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      procedure:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      semantic:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+      profile:
+        enabled: true
+        max_episodes: 10
+        min_success_rate: 0.8
+    webhooks: {}
+    max_loops: 4
+    loop_idle_timeout: 300
+    poll_interval: 5
+    dreaming_poll_interval: 60
+    goal_deadline_seconds: 1209600
+    context_projection:
+      max_findings: 20
+      max_files: 50
+      max_plan_steps: 30
+      context_retention_hours: 168
+    workspace_reservation:
+      enabled: true
+      strict_overlap: true
+
+  loop:
+    enabled: true
+    max_iterations: 99
+    max_plan_steps_per_wave: 10
+    max_tool_calls_per_step: 999
+    dispatch_timeout_seconds: 0
+    execute_action_retry_max: 1
+    execute_min_answer_chars: 20
+    execute_deliverable_assess: auto
+    step_completion_report_max_words: 50
+    max_subagent_tasks_per_wave: 4
+    strange_loop_output_contract_enabled: true
+    goal_completion_mode: llm_only
+    final_response: auto
+    step_brief_hydration_enabled: true
+    prior_conversation_limit: 10
+    context_window_limit: 200000
+    context_overflow_threshold_pct: 0.8
+    context_compaction_target_pct: 0.6
+    step_context_check_enabled: false
+    plan_assess_model_role: think
+    plan_gap_analysis_enabled: true
+    plan_generate_model_role: think
+    goal_synthesis_model_role: default
+    rules:
+      completion:
+        dag_dependency_threshold: 3
+        low_success_rate_threshold: 0.6
+        simple_ledger_direct_max_steps: 1
+        ledger_direct_max_tool_calls: 50
+      scenario:
+        skip_llm_when_single_step: true
+        skip_llm_when_all_failed: true
+        high_step_count_threshold: 4
+        low_evidence_volume_threshold: 2000
+      plan_safety:
+        banned_step_patterns:
+          - "^(wrap up|conclude|terminate|stop|halt|cease|end process|close|exit|quit|finish up|complete process|final step|last step|the end)$"
+        simple_evidence_min_chars: 200
+    output_streaming:
+      mode: adaptive
+      streaming_interval_ms: 100
+      tui_flush_interval_ms: 200
+      adaptive_threshold_chars: 500
+      adaptive_block_chars: 500
+      adaptive_block_interval_ms: 250
+      file_output_threshold_chars: 0
+      file_output_preview_chars: 500
+      file_output_dir: null
+      message_coalesce_enabled: true
+      tool_batch_enabled: true
+      tool_batch_interval_ms: 500
+      suppress_redundant_stream_tool_updates: true
+      skip_redundant_tool_message_wire: true
+    working_memory:
+      enabled: true
+      max_inline_chars: 4000
+      max_entry_chars_before_spill: 1500
+    goal_context:
+      plan_limit: 10
+      execute_limit: 10
+      enabled: true
+    context_engine:
+      projection_max_goals: 5
+      projection_max_steps_per_goal: 10
+      projection_max_ledger_chars: 4000
+      projection_max_ledger_messages: 20
+      projection_max_lineage_chars: 2000
+      projection_max_project_instructions_chars: 8000
+    plan_prompt_ledger:
+      plan_ledger_max_messages: 40
+      plan_ledger_max_total_chars: 0
+      plan_ledger_max_message_chars: 0
+    plan_assess_prompt:
+      ledger_max_messages: 24
+      execute_ai_max_chars: 2048
+      keep_head_tail_execute_ai: true
+      omit_prior_progress_hint: true
+      include_plan_coverage: true
+    execute_prompt_ledger:
+      cross_goal_completion_tail: 3
+      predecessor_max_messages: 96
+      execute_ai_ledger_max_tokens: 65536
+    report_output:
+      display_threshold: 20000
+      preview_chars: 500
+      synthesis_max_chars: 0
+    checkpoint:
+      progressive: true
+      auto_resume_on_start: false
+    concurrency:
+      max_parallel_goals: 4
+      max_parallel_steps: 4
+      max_parallel_subagents: 4
+      global_max_llm_calls: 10
+      step_parallelism: dependency
+      max_parallel_tools: 99
+      checkpoint:
+        flush_interval: 5.0
+        close_timeout_seconds: 30
+        durable_flush_timeout: 10
+    tool_output:
+      code_exec_max_output_chars: 32000
+      tool_output_max_chars: 10000
+    tool_call_limit:
+      global_thread_limit: 200
+      global_run_limit: 200
+      tool_specific_limits:
+        wizsearch_search:
+          thread_limit: 5
+          run_limit: 3
+        wizsearch_crawl:
+          thread_limit: 5
+          run_limit: 3
+        web_search:
+          thread_limit: 5
+          run_limit: 3
+        fetch_url:
+          thread_limit: 5
+          run_limit: 3
+        search:
+          thread_limit: 5
+          run_limit: 3
+    tool_retry:
+      max_retries: 3
+      backoff_factor: 2.0
+      initial_delay: 1.0
+    tool_timeout:
+      enabled: true
+      default_seconds: 60.0
+      per_tool:
+        grep: 30.0
+        read_file: 30.0
+        browser_use: 1800.0
+        task: 18000.0
+      skip_tools_with_internal_timeout: true
+    llm_rate_limit:
+      enabled: true
+      rpm_limit: 60
+      concurrent_limit: 8
+      call_timeout_seconds: 600
+      call_timeout_max_seconds: 900
+      retry_on_timeout: true
+      max_timeout_retries: 10
+      timeout_retry_multiplier: 1.2
+      retry_on_rate_limit: true
+      max_rate_limit_retries: 10
+      rate_limit_backoff_base: 2.0
+      rate_limit_backoff_max: 60.0
+      respect_retry_after_header: true
+      rate_limit_retry_timeout_seconds: 120
+    loop_orchestrator_evidence_validate: true
+
+  clarification:
+    auto_policy: veritas
+    auto_min_confidence: 0.4
+    max_defer_age_hours: 168
+    default_mode: auto
+
+  veritas:
+    model_role: think
+    max_context_steps: 8
+
+skillify:
+  enabled: false
+  model_role: embedding
+  warehouse_paths: []
+  index_collection: soothe_skillify
+  index_interval_seconds: 300
+  retrieval_top_k: 10
+
+cron:
+  max_jobs: 100
+  poll_interval: 60
+  extraction_model: fast
+  extraction_timeout: 30
+  default_priority: 50
+  timezone: local

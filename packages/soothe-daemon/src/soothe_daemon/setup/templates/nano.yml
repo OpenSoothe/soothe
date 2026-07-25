@@ -1,0 +1,291 @@
+# Soothe Nano Configuration Template (nano.yml)
+# ------------------------------------------------------------
+# Nano-owned/shared configuration for both soothe-nano and soothe host.
+# Use with a host overlay file (soothe.yml) when running full soothe.
+#
+# Example split usage:
+#   soothe --config ~/.soothe/config/nano.yml
+#   # Host composition APIs can merge nano.yml + soothe.yml
+
+providers:
+  - name: openai
+    provider_type: openai
+    api_key: "${OPENAI_API_KEY}"
+    api_base_url: null
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - o3-mini
+      - text-embedding-3-small
+
+router_profiles:
+  - name: default
+    router:
+      default: openai:gpt-4o-mini
+      think: null
+      fast: null
+      image: null
+      ocr: null
+
+embedding_profile:
+  - model_role: openai:text-embedding-3-small
+    embedding_dims: 1536
+
+active_router_profile: default
+
+agent:
+  name: Soothe
+  agent_instructions_max_chars: 8000
+  protocols:
+    memory:
+      enabled: false
+    planner:
+      model: think
+      routing: auto
+    policy:
+      profile: standard
+    durability:
+      backend: default
+      checkpointer: default
+      thread_inactivity_timeout_hours: 72
+  code_interpreter:
+    enabled: false
+  runtime:
+    lazy_core_agent: true
+    general_purpose_subagent: true
+    recursion_limit: 9999
+    role_routing:
+      enabled: false
+      orchestration_model_role: fast
+      generation_model_role: default
+      max_orchestration_hops: 1
+  middleware:
+    context_window_limit: 200000
+    llm_rate_limit:
+      enabled: true
+      rpm_limit: 60
+      concurrent_limit: 8
+      call_timeout_seconds: 600
+      call_timeout_max_seconds: 900
+      retry_on_timeout: true
+      max_timeout_retries: 10
+      timeout_retry_multiplier: 1.2
+      retry_on_rate_limit: true
+      max_rate_limit_retries: 10
+      rate_limit_backoff_base: 2.0
+      rate_limit_backoff_max: 60.0
+      respect_retry_after_header: true
+      rate_limit_retry_timeout_seconds: 120
+    tool_timeout:
+      enabled: true
+      default_seconds: 60.0
+      per_tool:
+        grep: 30.0
+        read_file: 30.0
+        browser_use: 1800.0
+        task: 18000.0
+      skip_tools_with_internal_timeout: true
+    report_output:
+      display_threshold: 20000
+      preview_chars: 500
+      synthesis_max_chars: 0
+
+tools:
+  execution:
+    enabled: true
+  file_ops:
+    enabled: true
+  datetime:
+    enabled: true
+  data:
+    enabled: true
+  wizsearch:
+    enabled: true
+    default_engines:
+      - tavily
+    max_results_per_engine: 10
+    timeout: 30
+    proxy: null
+  http_requests:
+    enabled: true
+    allow_dangerous_requests: true
+    headers: {}
+    verify_ssl: true
+  deepxiv:
+    enabled: false
+
+subagents:
+  planner:
+    enabled: true
+    model_role: think
+    transport: local
+  deep_research:
+    enabled: true
+    transport: local
+    config: {}
+  academic_research:
+    enabled: true
+    transport: local
+    config: {}
+  browser_use:
+    enabled: true
+    model_role: default
+    transport: local
+    config: {}
+
+mcp_servers: []
+mcp_builtins: []
+progressive_mcp:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
+
+plugins: []
+skills: []
+progressive_skills:
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 250
+  min_listing_chars_per_entry: 20
+  core_skills: null
+  search_skills_enabled: true
+  semantic_search_enabled: true
+  semantic_search_min_score: 0.0
+  intent_prefetch_enabled: true
+  core_intent_auto_invoke_enabled: true
+  intent_prefetch_top_k: 2
+  intent_prefetch_min_query_chars: 4
+progressive_tools:
+  enabled: true
+  budget_pct: 0.01
+  max_listing_chars_per_entry: 120
+  min_listing_chars_per_entry: 20
+  core_tools: null
+  search_tools_enabled: true
+memory: []
+
+debug: false
+activity_max_lines: 300
+tui_debug: false
+ui:
+  theme: null
+update:
+  check: true
+  auto_update: true
+
+persistence:
+  default_backend: sqlite
+  postgres_base_dsn: null
+  postgres_databases:
+    checkpoints: soothe_checkpoints
+    metadata: soothe_metadata
+    vectors: soothe_vectors
+    memory: soothe_memory
+  soothe_postgres_dsn: postgresql://postgres:postgres@localhost:5432/soothe
+  postgres:
+    pool_min_size: 4
+    checkpoints_pool_size: 32
+    metadata_pool_size: 16
+    vectors_pool_size: 16
+    connection_budget_warn: 120
+    pool_max_idle_seconds: 120.0
+    pool_max_lifetime_seconds: 1800.0
+    pool_acquire_timeout_seconds: 45.0
+  sqlite:
+    reader_pool_size: 8
+    busy_timeout_ms: 60000
+    wal_checkpoint_on_shutdown: true
+  archive_enabled: true
+  archive_retention_days: 90
+  archive_max_count: 1000
+
+observability:
+  log_file_level: INFO
+  log_file_path: null
+  log_file_max_bytes: 5242880
+  log_file_backup_count: 3
+  console:
+    enabled: false
+    level: WARNING
+    stream: stderr
+    format: "%(level_short)s %(name)s %(message)s"
+  global_history:
+    enabled: true
+    max_size: 5000
+    dedup_window: 10
+    retention_days: 90
+  verbosity: normal
+  thread_logging_enabled: true
+  thread_logging_retention_days: 30
+  thread_logging_max_size_mb: 100
+  profile_model_calls: false
+  langfuse:
+    enabled: false
+    public_key: null
+    secret_key: null
+    host: null
+    environment: null
+    release: null
+    sample_rate: null
+    trace_name: null
+    tags: null
+    user_id: null
+
+security:
+  allow_paths_outside_workspace: false
+  require_approval_for_outside_paths: true
+  denied_paths:
+    - /etc/**
+    - /bin/**
+    - /sbin/**
+    - /usr/**
+    - /System/**
+    - /Library/**
+    - /private/etc/**
+    - ~/.ssh/**
+    - ~/.gnupg/**
+    - ~/.aws/**
+    - "**/.env"
+    - "**/credentials.json"
+    - "**/secrets.json"
+  allowed_paths:
+    - "**"
+  denied_file_types: []
+  require_approval_for_file_types:
+    - .env
+    - .pem
+    - .key
+    - .p12
+    - .pfx
+    - .crt
+  whitelist_paths_bypass: []
+  whitelist_commands_bypass: []
+
+filesystem_middleware:
+  backup_enabled: true
+  backup_dir: null
+  workspace_root: null
+  max_file_size_mb: 10
+  tool_token_limit_before_evict: 20000
+
+workspace_mount:
+  host_root: null
+  container_root: null
+
+optimization:
+  failure_intent:
+    enabled: true
+    llm_confidence_threshold: 0.7
+  structured_plan:
+    enabled: true
+
+vector_stores:
+  - name: sqlite_vec_default
+    provider_type: sqlite_vec
+    dsn: null
+    index_type: hnsw
+    url: null
+    api_key: null
+    grpc_port: 50051
+
+vector_store_router:
+  default: sqlite_vec_default:soothe_default

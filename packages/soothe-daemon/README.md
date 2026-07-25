@@ -17,6 +17,7 @@ pip install soothe soothe-daemon soothe-cli
 ## Usage
 
 ```bash
+soothed setup                 # scaffold nano.yml / soothe.yml / daemon.yml + provider wizard
 soothed start --foreground
 soothed status
 soothed doctor
@@ -26,7 +27,10 @@ soothed stop
 ## Configuration
 
 - `~/.soothe/config/nano.yml` — Agent config (`SootheConfig`)
+- `~/.soothe/config/soothe.yml` — Host overlay (StrangeLoop / autopilot / cron)
 - `~/.soothe/config/daemon.yml` — Daemon config (`SootheDaemonConfig`)
+
+Run `soothed setup` (or `soothed setup --yes`) to create these from packaged templates.
 
 ## Dependencies
 

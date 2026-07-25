@@ -40,7 +40,7 @@ def _ensure_cli_dotenv() -> None:
 
 app = typer.Typer(
     name="soothed",
-    help="Soothe daemon management - start/stop/status/doctor",
+    help="Soothe daemon management - setup/start/stop/status/doctor",
 )
 
 # Register identity sub-app (RFC-307)
@@ -540,6 +540,60 @@ def _format_memory_output(mode: str, data: dict) -> None:
         import json
 
         typer.echo(json.dumps(stats, indent=2, default=str))
+
+
+@app.command("setup")
+def setup_command(
+    config_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--config-dir",
+            help="Directory for nano.yml / soothe.yml / daemon.yml (default: $SOOTHE_HOME/config).",
+        ),
+    ] = None,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Non-interactive: scaffold templates only; merge provider from env if present.",
+        ),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite existing config files with packaged templates.",
+        ),
+    ] = False,
+    skip_provider: Annotated[
+        bool,
+        typer.Option(
+            "--skip-provider",
+            help="Skip the interactive LLM provider wizard.",
+        ),
+    ] = False,
+    skip_doctor: Annotated[
+        bool,
+        typer.Option(
+            "--skip-doctor",
+            help="Skip the post-setup provider health check.",
+        ),
+    ] = False,
+) -> None:
+    """Scaffold nano.yml / soothe.yml / daemon.yml and configure an LLM provider."""
+    from soothe_daemon.setup import run_setup
+
+    _ensure_cli_dotenv()
+    code = run_setup(
+        config_dir=config_dir,
+        yes=yes,
+        force=force,
+        skip_provider=skip_provider,
+        skip_doctor=skip_doctor,
+    )
+    if code != 0:
+        raise typer.Exit(code=code)
 
 
 @app.command("help")

@@ -12,6 +12,8 @@
 
 ### 2. Config Sync
 When editing `config/nano.template.yml`, MUST also update `config/develop/nano.yml` with matching structure.
+When editing any `config/*.template.yml`, also sync the packaged copies under
+`packages/soothe-daemon/src/soothe_daemon/setup/templates/` (used by `soothed setup`).
 
 ### 3. Ecosystem First
 Check `langchain-core`, `langchain-community`, `deepagents` before implementing anything:

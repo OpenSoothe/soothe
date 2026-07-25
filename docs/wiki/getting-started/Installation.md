@@ -140,19 +140,35 @@ export TAVILY_API_KEY=tvly-your-key
 
 ## Configuration Setup
 
-### Auto-Created Directory Structure
+### Interactive setup (recommended)
 
-Starting the daemon (`soothed start`) automatically creates the `~/.soothe/` directory tree on first run. No manual initialization is needed.
+Scaffold `nano.yml`, `soothe.yml`, and `daemon.yml`, then configure an LLM provider:
 
-This creates:
+```bash
+soothed setup
+```
+
+Non-interactive (CI / scripts) — copy templates only; merge provider from env keys if set:
+
+```bash
+export OPENAI_API_KEY=sk-...
+soothed setup --yes
+```
+
+This writes:
+
 ```
 ~/.soothe/                    # SOOTHE_HOME (default location)
 ├── config/
 │   ├── nano.yml              # Nano-owned agent configuration
-│   └── daemon.yml            # Default daemon configuration
-├── runs/                     # Thread execution data
-└── logs/                     # Daemon and thread logs
+│   ├── soothe.yml            # Host overlay (StrangeLoop / autopilot / cron)
+│   └── daemon.yml            # Daemon transports and concurrency
+├── .env                      # Optional: API keys written by setup
+├── runs/                     # Thread execution data (created at runtime)
+└── logs/                     # Daemon and thread logs (created at runtime)
 ```
+
+`soothed start` creates `$SOOTHE_HOME` directories as needed and can run with in-memory defaults when YAML is absent, but it does **not** write template config files. Prefer `soothed setup` for an explicit three-file layout.
 
 ### Verify Installation
 
@@ -161,7 +177,7 @@ This creates:
 soothe --version
 
 # Verify configuration exists
-ls ~/.soothe/config/nano.yml
+ls ~/.soothe/config/nano.yml ~/.soothe/config/soothe.yml ~/.soothe/config/daemon.yml
 
 # Test with simple query
 soothe -p "Hello, are you working?"
@@ -277,9 +293,11 @@ pip install -U soothe soothe-cli soothe-daemon
 
 **Problem**: `Config file not found`
 
-**Solution**: The daemon auto-creates a default configuration on first start. Simply launch `soothed` and it will bootstrap `~/.soothe/config/nano.yml` automatically:
+**Solution**: Run the setup wizard to scaffold templates and configure a provider:
 ```bash
-soothed  # Auto-creates config on first run
+soothed setup
+# or non-interactive:
+soothed setup --yes
 ```
 
 **Problem**: `OPENAI_API_KEY not set`

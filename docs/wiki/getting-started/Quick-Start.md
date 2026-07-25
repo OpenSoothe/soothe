@@ -149,10 +149,18 @@ Full production deployment guide: see [`deploy/README.md`](../../../deploy/READM
 ```bash
 pip install -U soothe soothe-daemon
 export OPENAI_API_KEY=sk-...
+soothed setup --yes   # scaffold nano.yml / soothe.yml / daemon.yml
 soothed start
 ```
 
-Minimal daemon config (`~/.soothe/config/daemon.yml`):
+Or interactively (provider endpoint, key, model picker):
+
+```bash
+soothed setup
+soothed start
+```
+
+Minimal daemon config is written by setup (`~/.soothe/config/daemon.yml`):
 
 ```yaml
 transports:
@@ -295,14 +303,15 @@ soothe   # interactive TUI
 
 ## Optional: Custom configuration
 
-Copy the template config for multi-provider routing:
+Prefer the setup wizard (scaffolds all three files and configures a provider):
 
 ```bash
-mkdir -p ~/.soothe/config
-cp config/nano.template.yml ~/.soothe/config/nano.yml
+soothed setup
 ```
 
-Edit `~/.soothe/config/nano.yml` to add providers, models, and router profiles. The daemon loads config from `SOOTHE_CONFIG_PATH` or `~/.soothe/config/nano.yml`.
+Re-run anytime to modify or add providers without wiping unrelated keys. For a fresh copy of packaged templates over existing files, use `soothed setup --force`.
+
+The daemon loads agent config from `SOOTHE_DAEMON_SOOTHE_CONFIG_PATH` or `~/.soothe/config/nano.yml` (composed with sibling `soothe.yml` when present).
 
 ---
 

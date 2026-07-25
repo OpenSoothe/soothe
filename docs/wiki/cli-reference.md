@@ -262,6 +262,29 @@ soothe agent status
 
 Manage the Soothe daemon process.
 
+### soothed setup
+
+Scaffold `nano.yml` / `soothe.yml` / `daemon.yml` from packaged templates and configure an LLM provider (endpoint, API key, default model).
+
+**Usage**: `soothed setup [options]`
+
+**Options**:
+- `--config-dir <path>` - Target config directory (default: `$SOOTHE_HOME/config`)
+- `--yes` / `-y` - Non-interactive: scaffold only; merge provider from env keys if present
+- `--force` - Overwrite existing YAML files with packaged templates
+- `--skip-provider` - Skip the interactive provider wizard
+- `--skip-doctor` - Skip the post-setup provider health check
+
+**Examples**:
+```bash
+# Interactive first-time setup
+soothed setup
+
+# CI / scripts
+export OPENAI_API_KEY=sk-...
+soothed setup --yes
+```
+
 ### soothed start
 
 Start the Soothe daemon.

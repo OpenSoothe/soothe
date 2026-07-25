@@ -1,0 +1,165 @@
+# Soothe daemon server configuration (SootheDaemonConfig)
+# Install: ~/.soothe/config/daemon.yml
+# CLI: soothed --config <path>
+# Env overrides: SOOTHE_DAEMON_<KEY> or nested SOOTHE_DAEMON_<SECTION>__<KEY>
+
+# ============================================================================
+# TRANSPORTS
+# ============================================================================
+transports:
+  websocket:
+    enabled: true
+    host: 127.0.0.1
+    port: 8765
+    tls_enabled: false
+    tls_cert: null
+    tls_key: null
+    cors_origins:
+      - http://localhost:*
+      - http://127.0.0.1:*
+    max_frame_size: 10485760  # 10MB
+
+# ============================================================================
+# CONCURRENCY
+# ============================================================================
+max_concurrent_threads: 100
+max_concurrent_dispatches: 50
+max_concurrent_vision_preflight: 8  # 0 = unlimited
+max_in_flight_broadcasts_per_loop: 80  # 0 = unlimited; blocks only that loop's stream
+card_ingest_queue_maxsize: 2000  # IG-534 §2.3: async card binding backlog per loop
+card_flush_debounce_ms: 200  # IG-546: coalesce card binds during dense tool streams
+max_input_queue_size: 1000
+
+# ============================================================================
+# TIMEOUTS & CANCELLATION
+# ============================================================================
+max_query_duration_minutes: 0  # 0 = unlimited
+thread_max_age_hours: 24
+cancel_retry_count: 3
+cancel_retry_interval_seconds: 2.0
+cancel_force_kill_timeout_seconds: 10.0
+query_timeout_action: cancel  # cancel | terminate
+auto_cancel_on_startup: true
+
+# ============================================================================
+# LOOP GC
+# ============================================================================
+# Two passes per tick: ephemeral (is_ephemeral=true) and empty (zero messages)
+loop_gc:
+  enabled: true
+  interval_seconds: 3600  # Scan every hour
+  ephemeral_idle_hours: 24
+  empty_idle_hours: 24
+  batch_size: 50
+
+# ============================================================================
+# LOOP STATUS RECONCILIATION
+# ============================================================================
+# Demote stale status=running loops missing heartbeat (~30s intervals)
+loop_status_reconciliation:
+  enabled: true
+  interval_seconds: 300  # Scan every 5 minutes
+  stale_running_seconds: 180  # ~6 heartbeat windows
+  batch_size: 100
+
+# ============================================================================
+# STALE WORKER REAP
+# ============================================================================
+stale_worker_reap:
+  enabled: true  # Also requires worker_pool.enabled
+  interval_seconds: 1800  # Every 30 minutes
+
+# ============================================================================
+# OBSERVABILITY
+# ============================================================================
+event_size_stats_enabled: true
+event_size_stats_interval_seconds: 60
+event_size_stats_idle_pause_seconds: 120
+
+# ============================================================================
+# MEMORY PROFILING
+# ============================================================================
+# tracemalloc-based leak detection (~5-10% overhead when enabled)
+# Access via RPC: /memory mode=daemon|gc|snapshot|objects|compare
+memory_profiling:
+  enabled: false
+  trace_depth: 25
+  snapshot_interval_seconds: 0  # 0 = manual via RPC
+  top_allocations_limit: 20
+  log_growth_threshold_mb: 100
+  log_growth_interval_seconds: 0  # 0 = disabled
+
+# ============================================================================
+# IDENTITY SERVICE
+# ============================================================================
+# AKSK authentication & JWT tokens. Disabled by default (no auth required).
+identity:
+  enabled: false
+  tokens:
+    access_token_expiry_hours: 1
+    refresh_token_expiry_days: 7
+    jwt_signing_key: null  # Use SOOTHE_JWT_KEY or auto-generate
+  aksk:
+    default_expiry_days: 90  # null = never expires
+    max_expiry_days: 365
+  unmapped_sender_policy: anonymous  # anonymous | reject | use_sender_id
+
+# ============================================================================
+# RUNNER MODES (enable exactly ONE)
+# ============================================================================
+# thread_pool: Daemon-level singleton PG pool shared by all threads
+# worker_pool: Each subprocess has its OWN pool (N × connections)
+# distributed: Ray cluster for horizontal scaling
+
+# Thread pool (DEFAULT) - Lightweight async, fast startup
+# IG-534: Each concurrent synthesis loop occupies one thread for the full turn.
+# IG-535: Defaults tuned for 32 concurrent loops (production multi-tenant workloads).
+# IG-553: For 50–100 concurrent loops, raise max_pool_size to 96–100 and align
+# persistence.postgres.checkpoints_pool_size / metadata_pool_size / vectors_pool_size behind PgBouncer.
+# - max_pool_size ≥ concurrent loops for full parallelism
+# - min_pool_size pre-warms threads for fast initial dispatch
+# - Lower values cause queue waits; higher values increase memory and PG connection usage.
+#
+# CoreAgent cold start (daemon + TUI): keep agent.runtime.lazy_core_agent=true in soothe
+# config AND warmup_core_agent=true here — lazy defers compile; warmup runs primary +
+# ephemeral execute graphs during daemon "warming" so the first client turn avoids
+# two multi-second compiles (~7s primary + ~7s execute twin).
+thread_pool:
+  enabled: true
+  min_pool_size: 16  # IG-553: Pre-warm baseline for 50–100 loop bursts
+  max_pool_size: 96  # IG-553: Support up to 96 concurrent synthesis loops
+  idle_timeout_seconds: 120
+  max_requests_per_thread: 50
+  request_timeout_seconds: 1209600  # 14d default; 0 = no timeout
+  thread_startup_timeout_seconds: 60
+  reuse_runner: true
+  warmup_runner: true
+  warmup_core_agent: true
+
+# Worker pool - Process-based isolation
+worker_pool:
+  enabled: false
+  min_pool_size: 2
+  max_pool_size: 4
+  idle_timeout_seconds: 300
+  max_requests_per_worker: 100
+  request_timeout_seconds: 1209600  # 14d default; 0 = no timeout
+  heartbeat_interval_seconds: 30
+  stuck_worker_timeout_seconds: 180
+  reuse_runner: true
+  warmup_runner: true
+  warmup_core_agent: true
+  dispatch_wait_stats_enabled: true
+  dispatch_wait_stats_interval_seconds: 60
+  dispatch_wait_stats_idle_pause_seconds: 120
+
+# Distributed - Ray cluster
+distributed:
+  enabled: false
+  ray:
+    address: null  # null = auto-detect
+    num_cpus: 0.0  # 0 = auto
+    object_store_memory: 0  # 0 = auto
+    max_concurrent_actors: 10
+    actor_lifetime: detached
+    log_to_driver: true
