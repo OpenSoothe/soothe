@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from io import StringIO
 from pathlib import Path
 
@@ -12,6 +13,11 @@ from soothe_daemon.setup.cmd import run_setup
 from soothe_daemon.setup.paths import config_paths
 
 runner = CliRunner()
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
 
 
 def test_run_setup_yes_scaffolds(tmp_path: Path) -> None:
@@ -60,5 +66,6 @@ def test_cli_setup_yes(tmp_path: Path) -> None:
 def test_cli_setup_help() -> None:
     result = runner.invoke(app, ["setup", "--help"])
     assert result.exit_code == 0
-    assert "--yes" in result.stdout
-    assert "--config-dir" in result.stdout
+    help_text = _strip_ansi(result.stdout)
+    assert "--yes" in help_text
+    assert "--config-dir" in help_text
