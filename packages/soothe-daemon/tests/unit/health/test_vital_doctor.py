@@ -267,3 +267,86 @@ def test_progressive_reporter_streams_categories() -> None:
     assert "rg missing" in text
     assert "Remediation: install ripgrep" in text
     assert "Overall Status" in text
+
+
+@pytest.mark.asyncio
+async def test_daemon_readiness_skips_initial_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Daemon pushes ``status`` before ``connection_ack``; doctor must drain it."""
+    import websockets as ws_mod
+
+    from soothe_daemon.health.checks import daemon_check as mod
+
+    frames = [
+        '{"proto":"1","type":"status","state":"idle"}',
+        (
+            '{"proto":"1","type":"connection_ack","result":'
+            '{"readiness_state":"ready","protocol_version":"1","server_version":"0.9.6"}}'
+        ),
+    ]
+
+    class FakeWS:
+        def __init__(self) -> None:
+            self._frames = list(frames)
+
+        async def send(self, _data: str) -> None:
+            return None
+
+        async def recv(self) -> str:
+            return self._frames.pop(0)
+
+        async def __aenter__(self) -> FakeWS:
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(ws_mod, "connect", lambda *_a, **_k: FakeWS())
+
+    result = await mod._check_daemon_readiness(None)
+    assert result.status == CheckStatus.OK
+    assert result.details.get("state") == "ready"
+
+
+@pytest.mark.asyncio
+async def test_check_daemon_ws_ok_without_pid_is_quiet(monkeypatch: pytest.MonkeyPatch) -> None:
+    from soothe_daemon.health.checks import daemon_check as mod
+
+    monkeypatch.setattr(
+        mod,
+        "_check_websocket_connectivity",
+        lambda _c: CheckResult(
+            name="websocket_connectivity",
+            status=CheckStatus.OK,
+            message="WebSocket accepting connections at 127.0.0.1:8765",
+            details={"host": "127.0.0.1", "port": 8765},
+        ),
+    )
+
+    async def fake_ready(_c):
+        return CheckResult(
+            name="daemon_readiness",
+            status=CheckStatus.OK,
+            message="Daemon readiness state: ready",
+            details={"state": "ready"},
+        )
+
+    monkeypatch.setattr(mod, "_check_daemon_readiness", fake_ready)
+    monkeypatch.setattr(
+        mod,
+        "_check_pid_file",
+        lambda *, websocket_ok=False: CheckResult(
+            name="pid_file",
+            status=CheckStatus.INFO,
+            message="PID file not found (daemon reachable via WebSocket)",
+            details={},
+        ),
+    )
+    monkeypatch.setattr(mod, "_check_stale_locks", lambda _c: None)
+
+    result = await mod.check_daemon(None)
+    names = [c.name for c in result.checks]
+    assert names == ["websocket_connectivity", "daemon_readiness", "pid_file"]
+    assert "process_alive" not in names
+    assert "daemon_uptime" not in names
+    assert "stale_locks" not in names
+    assert result.status == CheckStatus.OK

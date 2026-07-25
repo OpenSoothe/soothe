@@ -1,5 +1,7 @@
 """Daemon health check implementation."""
 
+from __future__ import annotations
+
 import os
 
 from soothe_daemon.config import SootheDaemonConfig
@@ -7,12 +9,19 @@ from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
-def _check_pid_file() -> CheckResult:
+def _check_pid_file(*, websocket_ok: bool = False) -> CheckResult:
     """Check PID file validity."""
     from soothe_daemon.bootstrap.paths import pid_path
 
     pf = pid_path()
     if not pf.exists():
+        if websocket_ok:
+            return CheckResult(
+                name="pid_file",
+                status=CheckStatus.INFO,
+                message=f"PID file not found at {pf} (daemon reachable via WebSocket)",
+                details={"path": str(pf)},
+            )
         return CheckResult(
             name="pid_file",
             status=CheckStatus.INFO,
@@ -98,87 +107,103 @@ def _check_websocket_connectivity(config: SootheDaemonConfig | None) -> CheckRes
     )
 
 
-def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check daemon readiness state via WebSocket handshake (RFC-450)."""
+async def _check_daemon_readiness(config: SootheDaemonConfig | None) -> CheckResult:
+    """Check daemon readiness state via WebSocket handshake (RFC-450).
+
+    Drains the initial ``status`` push (and other non-ack frames) before
+    requiring ``connection_ack``, matching admin RPC handshake behavior.
+    """
     import asyncio
     import json
+
+    import websockets
+    from soothe_sdk.wire.codec import (
+        ConnectionInitEnvelope,
+        ConnectionInitParams,
+        encode_envelope,
+    )
 
     ws_host = config.transports.websocket.host if config else "127.0.0.1"
     ws_port = config.transports.websocket.port if config else 8765
     ws_url = f"ws://{ws_host}:{ws_port}"
 
-    try:
-
-        async def handshake() -> dict | None:
-            """Perform WebSocket handshake and receive connection_ack message."""
-            import websockets
-
-            async with websockets.connect(ws_url, timeout=2.0) as ws:
-                # Send connection_init (RFC-450 §8.2)
-                init_msg = {
-                    "proto": "1",
-                    "type": "connection_init",
-                    "params": {
-                        "client_version": "health-check",
-                        "accept_proto": ["1"],
-                        "capabilities": ["streaming", "heartbeat"],
-                    },
-                }
-                await ws.send(json.dumps(init_msg))
-                # Wait for connection_ack
-                message = await asyncio.wait_for(ws.recv(), timeout=2.0)
-                data = json.loads(message)
-                if data.get("type") == "connection_ack":
-                    return data.get("result") or {}
-            return None
-
-        ack_result = asyncio.run(handshake())
-        if ack_result:
-            state = ack_result.get("readiness_state", "unknown")
-            status_map = {
-                "ready": CheckStatus.OK,
-                "degraded": CheckStatus.WARNING,
-                "error": CheckStatus.ERROR,
-                "starting": CheckStatus.INFO,
-                "warming": CheckStatus.INFO,
-                "stopped": CheckStatus.INFO,
-                "incompatible": CheckStatus.ERROR,
-            }
-
-            return CheckResult(
-                name="daemon_readiness",
-                status=status_map.get(state, CheckStatus.WARNING),
-                message=f"Daemon readiness state: {state}",
-                details={
-                    "state": state,
-                    "protocol_version": ack_result.get("protocol_version"),
-                    "server_version": ack_result.get("server_version"),
-                },
-            )
-
-        return CheckResult(
-            name="daemon_readiness",
-            status=CheckStatus.WARNING,
-            message="No connection_ack received",
+    init = ConnectionInitEnvelope(
+        params=ConnectionInitParams(
+            client_version="health-check",
+            client_name="soothed-doctor",
+            accept_proto=["1"],
+            capabilities=["streaming", "heartbeat"],
         )
+    )
 
+    try:
+        async with websockets.connect(ws_url, open_timeout=2.0) as ws:
+            await ws.send(encode_envelope(init))
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 2.0
+            while True:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    return CheckResult(
+                        name="daemon_readiness",
+                        status=CheckStatus.WARNING,
+                        message="Timed out waiting for connection_ack",
+                        details={
+                            "remediation": "Check daemon logs; confirm protocol-1 handshake",
+                        },
+                    )
+
+                raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+                if isinstance(raw, bytes):
+                    raw = raw.decode()
+                data = json.loads(raw)
+                msg_type = data.get("type")
+
+                # Daemon pushes ``status`` on connect before ack (RFC-450).
+                if msg_type in ("status", "pong"):
+                    continue
+                if msg_type == "error":
+                    return CheckResult(
+                        name="daemon_readiness",
+                        status=CheckStatus.WARNING,
+                        message=f"Handshake error: {data.get('message', data)}",
+                        details={"frame": data},
+                    )
+                if msg_type != "connection_ack":
+                    continue
+
+                ack_result = data.get("result") or {}
+                state = ack_result.get("readiness_state", "unknown")
+                status_map = {
+                    "ready": CheckStatus.OK,
+                    "degraded": CheckStatus.WARNING,
+                    "error": CheckStatus.ERROR,
+                    "starting": CheckStatus.INFO,
+                    "warming": CheckStatus.INFO,
+                    "stopped": CheckStatus.INFO,
+                    "incompatible": CheckStatus.ERROR,
+                }
+                return CheckResult(
+                    name="daemon_readiness",
+                    status=status_map.get(state, CheckStatus.WARNING),
+                    message=f"Daemon readiness state: {state}",
+                    details={
+                        "state": state,
+                        "protocol_version": ack_result.get("protocol_version"),
+                        "server_version": ack_result.get("server_version"),
+                    },
+                )
     except Exception as e:
         return CheckResult(
             name="daemon_readiness",
             status=CheckStatus.INFO,
-            message=f"Readiness check failed (daemon not running): {e}",
+            message=f"Readiness check failed: {e}",
+            details={"impact": "Port may be open but not a soothed WebSocket"},
         )
 
 
-def _check_daemon_uptime(pid: int | None) -> CheckResult:
+def _check_daemon_uptime(pid: int) -> CheckResult:
     """Calculate daemon uptime from PID start time."""
-    if not pid:
-        return CheckResult(
-            name="daemon_uptime",
-            status=CheckStatus.SKIPPED,
-            message="No PID to check uptime",
-        )
-
     try:
         import time
         from datetime import UTC, datetime
@@ -189,7 +214,6 @@ def _check_daemon_uptime(pid: int | None) -> CheckResult:
         start_time = process.create_time()
         uptime_seconds = time.time() - start_time
 
-        # Format uptime human-readable
         hours = int(uptime_seconds // 3600)
         minutes = int((uptime_seconds % 3600) // 60)
 
@@ -211,15 +235,17 @@ def _check_daemon_uptime(pid: int | None) -> CheckResult:
         )
 
 
-def _check_stale_locks(config: SootheDaemonConfig | None) -> CheckResult:
-    """Check for stale PID files and zombie daemon."""
+def _check_stale_locks(config: SootheDaemonConfig | None) -> CheckResult | None:
+    """Check for stale PID files and zombie daemon.
+
+    Returns ``None`` when there is nothing notable to report (keeps doctor quiet).
+    """
     from soothe_daemon.bootstrap.paths import pid_path
     from soothe_daemon.server import SootheDaemon
 
     pf = pid_path()
-    issues = []
+    issues: list[str] = []
 
-    # Check stale PID file
     if pf.exists():
         try:
             pid_str = pf.read_text().strip()
@@ -228,34 +254,52 @@ def _check_stale_locks(config: SootheDaemonConfig | None) -> CheckResult:
         except (ValueError, ProcessLookupError, OSError):
             issues.append(f"Stale PID file at {pf}")
 
-    # Check zombie daemon (PID valid but WebSocket dead)
     if pf.exists():
         try:
             pid_str = pf.read_text().strip()
             pid = int(pid_str)
-            os.kill(pid, 0)  # PID valid
+            os.kill(pid, 0)
 
-            # Check if WebSocket port is live
             ws_host = config.transports.websocket.host if config else "127.0.0.1"
             ws_port = config.transports.websocket.port if config else 8765
             if not SootheDaemon._is_port_live(ws_host, ws_port):
                 issues.append(f"Zombie daemon (PID {pid} alive but WebSocket port {ws_port} dead)")
         except (ValueError, ProcessLookupError, OSError):
-            pass  # Already caught above
+            pass
 
-    if issues:
-        return CheckResult(
-            name="stale_locks",
-            status=CheckStatus.WARNING,
-            message="Stale files detected: " + "; ".join(issues),
-            details={"issues": issues},
-        )
+    if not issues:
+        return None
 
     return CheckResult(
         name="stale_locks",
-        status=CheckStatus.OK,
-        message="No stale locks detected",
+        status=CheckStatus.WARNING,
+        message="Stale files detected: " + "; ".join(issues),
+        details={"issues": issues},
     )
+
+
+def _category_status(checks: list[CheckResult]) -> CheckStatus:
+    """Aggregate status ignoring informational noise (INFO/SKIPPED)."""
+    substantive = [
+        c.status for c in checks if c.status not in (CheckStatus.INFO, CheckStatus.SKIPPED)
+    ]
+    if substantive:
+        return aggregate_status(substantive)
+    return aggregate_status([c.status for c in checks])
+
+
+def _category_message(status: CheckStatus, *, websocket_ok: bool) -> str:
+    if websocket_ok and status == CheckStatus.OK:
+        return "Daemon healthy (WebSocket responsive)"
+    if websocket_ok and status == CheckStatus.WARNING:
+        return "Daemon reachable but not fully ready"
+    if websocket_ok and status == CheckStatus.ERROR:
+        return "Daemon reachable but unhealthy"
+    if status == CheckStatus.ERROR:
+        return "Daemon unhealthy"
+    if status == CheckStatus.WARNING:
+        return "Daemon not running cleanly"
+    return "Daemon not running (optional for CLI usage)"
 
 
 async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResult:
@@ -270,63 +314,36 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
     Returns:
         CategoryResult with daemon check results
     """
-    checks = []
+    checks: list[CheckResult] = []
 
-    # Priority 1: WebSocket connectivity (primary transport)
     ws_result = _check_websocket_connectivity(config)
     checks.append(ws_result)
 
     if ws_result.status == CheckStatus.OK:
-        # WebSocket healthy - run informational checks
+        checks.append(await _check_daemon_readiness(config))
 
-        # Readiness state check (WebSocket handshake)
-        readiness_result = _check_daemon_readiness(config)
-        checks.append(readiness_result)
-
-        # PID checks as informational when WebSocket OK
-        pid_result = _check_pid_file()
+        pid_result = _check_pid_file(websocket_ok=True)
         checks.append(pid_result)
 
-        if pid_result.details.get("pid"):
-            pid = pid_result.details["pid"]
-            process_result = _check_process_alive(pid)
-            checks.append(process_result)
+        pid = pid_result.details.get("pid")
+        if isinstance(pid, int):
+            checks.append(_check_process_alive(pid))
+            checks.append(_check_daemon_uptime(pid))
 
-            # Uptime check
-            uptime_result = _check_daemon_uptime(pid)
-            checks.append(uptime_result)
-        else:
-            checks.append(
-                CheckResult(
-                    name="process_alive",
-                    status=CheckStatus.SKIPPED,
-                    message="Skipped (no valid PID)",
-                )
-            )
-            checks.append(
-                CheckResult(
-                    name="daemon_uptime",
-                    status=CheckStatus.SKIPPED,
-                    message="Skipped (no valid PID)",
-                )
-            )
+        stale = _check_stale_locks(config)
+        if stale is not None:
+            checks.append(stale)
 
-        # Check for stale locks
-        stale_result = _check_stale_locks(config)
-        checks.append(stale_result)
-
-        # Calculate overall status
-        overall_status = aggregate_status([check.status for check in checks])
-
+        overall_status = _category_status(checks)
         return CategoryResult(
             category="daemon",
             status=overall_status,
             checks=checks,
-            message="Daemon healthy (WebSocket responsive)",
+            message=_category_message(overall_status, websocket_ok=True),
         )
 
     # WebSocket failed - fallback to PID checks
-    pid_result = _check_pid_file()
+    pid_result = _check_pid_file(websocket_ok=False)
     checks.append(pid_result)
 
     if pid_result.status == CheckStatus.OK and pid_result.details.get("pid"):
@@ -335,8 +352,17 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
         checks.append(process_result)
 
         if process_result.status == CheckStatus.OK:
-            # Zombie daemon - process alive but transports dead
-            checks.append(_check_stale_locks(config))
+            stale = _check_stale_locks(config)
+            if stale is not None:
+                checks.append(stale)
+            else:
+                checks.append(
+                    CheckResult(
+                        name="stale_locks",
+                        status=CheckStatus.WARNING,
+                        message=(f"Zombie daemon (PID {pid} alive but WebSocket dead)"),
+                    )
+                )
 
             return CategoryResult(
                 category="daemon",
@@ -345,7 +371,6 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
                 message="Zombie daemon (process alive but WebSocket dead)",
             )
 
-        # Stale PID - process dead
         checks.append(
             CheckResult(
                 name="stale_locks",
@@ -361,22 +386,14 @@ async def check_daemon(config: SootheDaemonConfig | None = None) -> CategoryResu
             message="Daemon not running (stale PID file)",
         )
 
-    # No valid PID file
-    checks.append(
-        CheckResult(
-            name="process_alive",
-            status=CheckStatus.SKIPPED,
-            message="Skipped (no valid PID)",
-        )
-    )
+    stale = _check_stale_locks(config)
+    if stale is not None:
+        checks.append(stale)
 
-    # Check for stale locks
-    stale_result = _check_stale_locks(config)
-    checks.append(stale_result)
-
+    overall_status = _category_status(checks)
     return CategoryResult(
         category="daemon",
-        status=CheckStatus.INFO,
+        status=overall_status,
         checks=checks,
-        message="Daemon not running (optional for CLI usage)",
+        message=_category_message(overall_status, websocket_ok=False),
     )

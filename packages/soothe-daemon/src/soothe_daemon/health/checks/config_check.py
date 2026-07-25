@@ -30,7 +30,7 @@ def _check_config_file(config: SootheConfig | None) -> CheckResult:
 
 
 def _check_env_vars_resolved(config: SootheConfig | None) -> CheckResult:
-    """Check if environment variables are resolved."""
+    """Check if environment variables are resolved for active-profile providers."""
     if config is None:
         return CheckResult(
             name="env_vars_resolved",
@@ -38,12 +38,13 @@ def _check_env_vars_resolved(config: SootheConfig | None) -> CheckResult:
             message="Skipped (no config loaded)",
         )
 
-    # Check for unresolved ${VAR} patterns in config
-    # This is a basic check - the actual resolution happens in config loader
+    from soothe_nano.diagnose.providers import active_provider_names
+
+    active = active_provider_names(config)
     unresolved = [
         f"{provider.name}.api_key"
         for provider in config.providers
-        if provider.api_key and "${" in provider.api_key
+        if provider.api_key and "${" in provider.api_key and (not active or provider.name in active)
     ]
 
     if unresolved:
@@ -60,7 +61,7 @@ def _check_env_vars_resolved(config: SootheConfig | None) -> CheckResult:
     return CheckResult(
         name="env_vars_resolved",
         status=CheckStatus.OK,
-        message="All environment variables resolved",
+        message="All environment variables resolved for active providers",
     )
 
 
@@ -146,9 +147,10 @@ def _check_soothe_home() -> CheckResult:
             details={"path": str(home), "remediation": "Fix directory permissions"},
         )
 
-    # Check required subdirectories
-    required_subdirs = ["config", "data", "logs", "memory", "Workspace"]
-    # Note: "data" now contains "threads" and "loops" subdirectories (RFC-215)
+    # Required top-level dirs for a modern install (see Installation.md / soothed setup).
+    # ``memory`` is created lazily by MemU when enabled; ``Workspace`` was a legacy
+    # default — workspaces live under ``data/workspaces/`` (RFC-621).
+    required_subdirs = ["config", "data", "logs"]
     missing = [subdir for subdir in required_subdirs if not (home / subdir).exists()]
 
     if missing:
@@ -159,7 +161,7 @@ def _check_soothe_home() -> CheckResult:
             details={
                 "path": str(home),
                 "missing": missing,
-                "remediation": "Create ~/.soothe and add config/nano.yml (see docs/user_guide.md)",
+                "remediation": "Run `soothed setup` or create the missing dirs under SOOTHE_HOME",
             },
         )
 
