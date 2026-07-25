@@ -187,21 +187,29 @@ A critical implementation detail: commands arrive with a `loop_id` (the StrangeL
 
 ### Check Categories
 
+Default vitals (progressive text diagnosis):
+
 | Category | Module | What it validates |
 |----------|--------|-------------------|
-| `config` | `config_check` | Config file validity, env resolution |
-| `daemon` | `daemon_check` | Daemon process, PID file, ports |
-| `persistence` | `persistence_check` | DB connectivity (SQLite/PostgreSQL) |
-| `protocols` | `protocols_check` | Protocol backend health (memory, durability, etc.) |
+| `configuration` | `config_check` | Config file validity, env resolution, default model |
+| `tool_deps` | `tool_deps_check` | Host binaries (`rg`, `fd`, `git`) |
+| `persistence` | `persistence/health_check` | SQLite home **or** PostgreSQL when `default_backend=postgresql` |
+| `providers` | `providers_check` | Credentials for configured providers (`--live-llm` for invoke) |
+| `observability` | `observability_check` | Langfuse package/credentials/health when enabled |
+| `daemon` | `daemon_check` | Process, WebSocket, readiness (`--require-running` to fail offline) |
+
+Deep / optional (`soothed doctor --deep` or explicit `--category`):
+
+| Category | Module | What it validates |
+|----------|--------|-------------------|
+| `protocols` | `protocols_check` | Protocol backend health |
 | `vector_stores` | `vector_stores_check` | Vector DB connectivity + dimension match |
-| `providers` | `providers_check` | LLM provider API key validity |
 | `mcp_servers` | `mcp_check` | MCP server reachability |
-| `models` | `embedding_role_configured` | Router ``embedding`` role for Skillify / MemU / vector stores |
-| `external_apis` | `external_apis_check` | OpenAI/Anthropic/etc. connectivity |
-| `observability` | `observability_check` | Logging, tracing config |
+| `models` | `embedding_role_check` | Router ``embedding`` role |
+| `external_apis` | `external_apis_check` | Config/env-gated optional SaaS reachability |
 
-You can run a subset with `categories=["config", "protocols"]` or exclude specific ones with `exclude=["external_apis"]`.
-
+CLI: `soothed doctor` (vitals + progressive), `--deep`, `--live-llm`, `--require-running`,
+`--format json|markdown`, `--category` / `--exclude`.
 ---
 
 ## Daemon Configuration

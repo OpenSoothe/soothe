@@ -31,7 +31,7 @@ def test_loop_continue_without_loop_id_uses_most_recent_loop(monkeypatch) -> Non
             }
         raise AssertionError(f"Unexpected method: {method}")
 
-    monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd._rpc", fake_rpc)
+    monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd.protocol1_rpc", fake_rpc)
 
     result = CliRunner().invoke(app, ["loop", "continue"])
     assert result.exit_code == 0
@@ -55,7 +55,7 @@ def test_loop_continue_without_loop_id_errors_when_no_loops(monkeypatch) -> None
             return {"loops": []}
         raise AssertionError(f"Unexpected method: {method}")
 
-    monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd._rpc", fake_rpc)
+    monkeypatch.setattr("soothe_cli.cli.commands.loop_cmd.protocol1_rpc", fake_rpc)
 
     result = CliRunner().invoke(app, ["loop", "continue"])
     assert result.exit_code == 1

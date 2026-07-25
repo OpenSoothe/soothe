@@ -1,8 +1,13 @@
 """Observability and tracing health check implementation."""
 
+from __future__ import annotations
+
 import importlib.util
 import os
+import urllib.error
+import urllib.request
 from typing import Any
+from urllib.parse import urljoin
 
 from soothe.config import SootheConfig
 from soothe_sdk.observability.langfuse import resolve_langfuse_config_str
@@ -10,33 +15,120 @@ from soothe_sdk.observability.langfuse import resolve_langfuse_config_str
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
+_DEFAULT_LANGFUSE_HOST = "https://cloud.langfuse.com"
 
-def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
+
+def _langfuse_host(lf: Any) -> str:
+    host = resolve_langfuse_config_str(lf.host) or os.environ.get("LANGFUSE_HOST", "").strip()
+    return (host or _DEFAULT_LANGFUSE_HOST).rstrip("/")
+
+
+def _probe_langfuse_health(host: str, timeout: float = 3.0) -> CheckResult:
+    """Probe Langfuse public health endpoint."""
+    url = urljoin(host + "/", "api/public/health")
+    try:
+        req = urllib.request.Request(url, method="GET")  # noqa: S310
+        req.add_header("User-Agent", "Soothe-Doctor/1.0")
+        with urllib.request.urlopen(req, timeout=timeout) as response:  # noqa: S310
+            status = getattr(response, "status", 200)
+            if status in (200, 204):
+                return CheckResult(
+                    name="langfuse_health",
+                    status=CheckStatus.OK,
+                    message=f"Langfuse healthy at {host}",
+                    details={"host": host, "url": url, "http_status": status},
+                )
+            return CheckResult(
+                name="langfuse_health",
+                status=CheckStatus.WARNING,
+                message=f"Langfuse health returned HTTP {status}",
+                details={
+                    "host": host,
+                    "url": url,
+                    "http_status": status,
+                    "remediation": "Check Langfuse service status and observability.langfuse.host",
+                },
+            )
+    except urllib.error.HTTPError as exc:
+        # Some deployments gate /health; reachability still matters.
+        if exc.code in (401, 403, 404):
+            return CheckResult(
+                name="langfuse_health",
+                status=CheckStatus.WARNING,
+                message=f"Langfuse reachable but health endpoint returned HTTP {exc.code}",
+                details={
+                    "host": host,
+                    "url": url,
+                    "http_status": exc.code,
+                    "remediation": "Verify host URL; credentials are checked separately",
+                },
+            )
+        return CheckResult(
+            name="langfuse_health",
+            status=CheckStatus.WARNING,
+            message=f"Langfuse health check HTTP error: {exc.code}",
+            details={
+                "host": host,
+                "url": url,
+                "remediation": "Check Langfuse service status and network access",
+            },
+        )
+    except Exception as exc:
+        return CheckResult(
+            name="langfuse_health",
+            status=CheckStatus.WARNING,
+            message=f"Langfuse unreachable: {exc}",
+            details={
+                "host": host,
+                "url": url,
+                "remediation": "Check observability.langfuse.host and network connectivity",
+            },
+        )
+
+
+def _check_langfuse_from_config(config: SootheConfig | None) -> list[CheckResult]:
     """Check Langfuse integration when enabled in ``observability.langfuse``."""
     if config is None:
-        return CheckResult(
-            name="langfuse",
-            status=CheckStatus.INFO,
-            message="Langfuse: no config loaded (skipped)",
-            details={},
-        )
+        return [
+            CheckResult(
+                name="langfuse",
+                status=CheckStatus.SKIPPED,
+                message="Langfuse: no config loaded (skipped)",
+            )
+        ]
+
     lf = config.observability.langfuse
     if not lf.enabled:
-        return CheckResult(
-            name="langfuse",
-            status=CheckStatus.INFO,
-            message="Langfuse integration disabled (observability.langfuse.enabled=false)",
-            details={"enabled": False},
-        )
+        return [
+            CheckResult(
+                name="langfuse",
+                status=CheckStatus.SKIPPED,
+                message="Langfuse disabled (observability.langfuse.enabled=false)",
+                details={"enabled": False},
+            )
+        ]
+
+    checks: list[CheckResult] = []
     if importlib.util.find_spec("langfuse") is None:
-        return CheckResult(
-            name="langfuse",
-            status=CheckStatus.WARNING,
-            message="Langfuse enabled in config but the langfuse package is not installed",
-            details={
-                "enabled": True,
-                "remediation": "pip install langfuse",
-            },
+        checks.append(
+            CheckResult(
+                name="langfuse",
+                status=CheckStatus.WARNING,
+                message="Langfuse enabled but the langfuse package is not installed",
+                details={
+                    "enabled": True,
+                    "remediation": "pip install langfuse",
+                },
+            )
+        )
+    else:
+        checks.append(
+            CheckResult(
+                name="langfuse",
+                status=CheckStatus.OK,
+                message="Langfuse package installed",
+                details={"enabled": True},
+            )
         )
 
     pub = (
@@ -47,120 +139,54 @@ def _check_langfuse_from_config(config: SootheConfig | None) -> CheckResult:
         resolve_langfuse_config_str(lf.secret_key)
         or os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
     )
-    details: dict[str, Any] = {
+    host = _langfuse_host(lf)
+    cred_details: dict[str, Any] = {
         "enabled": True,
         "public_key_present": bool(pub),
         "secret_key_present": bool(sec),
+        "host": host,
     }
-    host = resolve_langfuse_config_str(lf.host) or os.environ.get("LANGFUSE_HOST", "").strip()
-    if host:
-        details["host"] = host
-
     if pub and sec:
-        details["cost_dashboard"] = "model pricing and verification"
-        return CheckResult(
-            name="langfuse",
-            status=CheckStatus.OK,
-            message="Langfuse tracing enabled with credentials available",
-            details=details,
-        )
-    return CheckResult(
-        name="langfuse",
-        status=CheckStatus.WARNING,
-        message="Langfuse enabled but credentials are incomplete",
-        details={
-            **details,
-            "remediation": "Set observability.langfuse.public_key / secret_key (or LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY)",
-        },
-    )
-
-
-def _check_dotenv_availability() -> CheckResult:
-    """Check if python-dotenv is available and .env file exists.
-
-    Returns:
-        CheckResult with dotenv status
-    """
-    try:
-        from pathlib import Path
-
-        # Check if .env file exists in current directory or parent directories
-        env_file = Path(".env")
-        env_exists = env_file.exists()
-
-        details = {
-            "dotenv_installed": True,
-            "env_file_exists": env_exists,
-        }
-
-        if env_exists:
-            # Check if .env is in .gitignore
-            gitignore = Path(".gitignore")
-            if gitignore.exists():
-                gitignore_content = gitignore.read_text()
-                env_ignored = ".env" in gitignore_content
-                details["env_in_gitignore"] = env_ignored
-
-                if not env_ignored:
-                    return CheckResult(
-                        name="dotenv_setup",
-                        status=CheckStatus.WARNING,
-                        message=".env file exists but not in .gitignore",
-                        details={
-                            **details,
-                            "remediation": "Add .env to .gitignore to prevent committing secrets",
-                        },
-                    )
-
-            return CheckResult(
-                name="dotenv_setup",
+        checks.append(
+            CheckResult(
+                name="langfuse_credentials",
                 status=CheckStatus.OK,
-                message=".env file found and properly configured",
-                details=details,
+                message="Langfuse credentials available",
+                details=cred_details,
             )
-        return CheckResult(
-            name="dotenv_setup",
-            status=CheckStatus.INFO,
-            message="No .env file found (using system environment)",
-            details={
-                **details,
-                "remediation": "Set observability.langfuse in config YAML and export referenced env vars (or use literals for local dev only)",
-            },
+        )
+    else:
+        checks.append(
+            CheckResult(
+                name="langfuse_credentials",
+                status=CheckStatus.WARNING,
+                message="Langfuse enabled but credentials are incomplete",
+                details={
+                    **cred_details,
+                    "remediation": (
+                        "Set observability.langfuse.public_key / secret_key "
+                        "(or LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY)"
+                    ),
+                },
+            )
         )
 
-    except ImportError:
-        return CheckResult(
-            name="dotenv_setup",
-            status=CheckStatus.WARNING,
-            message="python-dotenv not installed",
-            details={
-                "dotenv_installed": False,
-                "remediation": "Install python-dotenv: pip install python-dotenv",
-            },
-        )
+    checks.append(_probe_langfuse_health(host))
+    return checks
 
 
 async def check_observability(config: SootheConfig | None = None) -> CategoryResult:
-    """Check observability and tracing configuration.
-
-    Validates Langfuse configuration when enabled, environment variable setup,
-    and observability tooling configuration.
+    """Check observability and tracing (Langfuse when enabled).
 
     Args:
-        config: SootheConfig instance (used for Langfuse integration checks).
+        config: SootheConfig instance.
 
     Returns:
-        CategoryResult with observability check results
+        CategoryResult with observability check results.
     """
-    checks = [
-        _check_langfuse_from_config(config),
-        _check_dotenv_availability(),
-    ]
-
-    overall_status = aggregate_status([check.status for check in checks])
-
+    checks = _check_langfuse_from_config(config)
     return CategoryResult(
         category="observability",
-        status=overall_status,
+        status=aggregate_status([check.status for check in checks]),
         checks=checks,
     )

@@ -1,9 +1,11 @@
 """Health check orchestration."""
 
-import asyncio
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from importlib.metadata import version as get_version
-from typing import Any
+from typing import Protocol
 
 from soothe.config import SootheConfig
 
@@ -12,18 +14,44 @@ from soothe_daemon.config import SootheDaemonConfig
 from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckStatus, HealthReport
 
+# Default vitals — answer "can soothed run agent work?"
+VITAL_CATEGORIES: list[str] = [
+    "configuration",
+    "tool_deps",
+    "persistence",
+    "providers",
+    "observability",
+    "daemon",
+]
+
+# Optional / deep diagnostics (enabled via --deep or explicit --category)
+DEEP_CATEGORIES: list[str] = [
+    "protocols",
+    "vector_stores",
+    "mcp_servers",
+    "models",
+    "external_apis",
+]
+
+ALL_CATEGORIES: list[str] = [*VITAL_CATEGORIES, *DEEP_CATEGORIES]
+
+
+class DoctorProgress(Protocol):
+    """Progress callbacks for progressive diagnosis display."""
+
+    def category_start(self, category: str) -> None:
+        """Called before a category begins."""
+
+    def category_done(self, result: CategoryResult) -> None:
+        """Called after a category completes."""
+
 
 class HealthChecker:
-    """Orchestrates health checks across all categories.
-
-    This class provides a unified interface for running health checks
-    on various Soothe components including configuration, daemon,
-    persistence, providers, and external services.
+    """Orchestrates health checks across vital (and optional deep) categories.
 
     Attributes:
         config: Agent ``SootheConfig`` for config-driven checks (optional).
-        daemon_config: Daemon ``SootheDaemonConfig`` for transport / queue /
-            worker-pool checks (optional).
+        daemon_config: Daemon ``SootheDaemonConfig`` for transport checks (optional).
     """
 
     def __init__(
@@ -43,91 +71,99 @@ class HealthChecker:
         self.config = config
         self.daemon_config = daemon_config
 
+    def _resolve_categories(
+        self,
+        categories: list[str] | None,
+        exclude: list[str] | None,
+        *,
+        deep: bool,
+    ) -> list[str]:
+        if categories:
+            selected = [c for c in categories if c in ALL_CATEGORIES]
+            # Preserve caller order but keep known names only; allow unknown to surface as error
+            unknown = [c for c in categories if c not in ALL_CATEGORIES]
+            selected = [*selected, *unknown]
+        else:
+            selected = list(VITAL_CATEGORIES)
+            if deep:
+                selected.extend(DEEP_CATEGORIES)
+
+        if exclude:
+            selected = [c for c in selected if c not in exclude]
+        return selected
+
     async def run_all_checks(
         self,
         categories: list[str] | None = None,
         exclude: list[str] | None = None,
+        *,
+        deep: bool = False,
+        live_llm: bool = False,
+        require_running: bool = False,
+        on_progress: DoctorProgress | None = None,
     ) -> HealthReport:
-        """Run all health checks asynchronously.
+        """Run health checks, optionally streaming progressive category updates.
+
+        Categories run sequentially (vital narrative order). Individual check
+        modules may still parallelize internally.
 
         Args:
-            categories: Specific categories to run (None = all categories)
-            exclude: Categories to skip
+            categories: Specific categories to run (None = vitals, or vitals+deep).
+            exclude: Categories to skip.
+            deep: Include deep optional categories when ``categories`` is None.
+            live_llm: Perform a live invoke against ``router.default``.
+            require_running: Treat offline daemon as error (via daemon check message).
+            on_progress: Optional progressive diagnosis callbacks.
 
         Returns:
-            Complete health report with all check results
+            Complete health report with all check results.
         """
-        # Default to all categories
-        all_categories = [
-            "configuration",
-            "daemon",
-            "persistence",
-            "protocols",
-            "vector_stores",
-            "providers",
-            "mcp_servers",
-            "models",
-            "external_apis",
-            "observability",
-        ]
+        selected = self._resolve_categories(categories, exclude, deep=deep)
 
-        # Filter categories
-        selected = [c for c in all_categories if c in categories] if categories else all_categories
-
-        if exclude:
-            selected = [c for c in selected if c not in exclude]
-
-        # Map category names to check methods
-        check_methods: dict[str, Any] = {
+        check_methods: dict[str, Callable[[], Awaitable[CategoryResult]]] = {
             "configuration": self.check_config,
-            "daemon": self.check_daemon,
+            "tool_deps": self.check_tool_deps,
+            "daemon": lambda: self.check_daemon(require_running=require_running),
             "persistence": self.check_persistence,
             "protocols": self.check_protocols,
             "vector_stores": self.check_vector_stores,
-            "providers": self.check_providers,
+            "providers": lambda: self.check_providers(live_llm=live_llm),
             "mcp_servers": self.check_mcp_servers,
             "models": self.check_models,
             "external_apis": self.check_external_apis,
             "observability": self.check_observability,
         }
 
-        # Run selected checks in parallel
-        tasks = [check_methods[category]() for category in selected if category in check_methods]
+        category_results: list[CategoryResult] = []
+        for category_name in selected:
+            method = check_methods.get(category_name)
+            if on_progress is not None:
+                on_progress.category_start(category_name)
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results
-        category_results = []
-        for i, result in enumerate(results):
-            category_name = selected[i]
-
-            if isinstance(result, Exception):
-                # Check method raised an exception
-                category_results.append(
-                    CategoryResult(
-                        category=category_name,
-                        status=CheckStatus.ERROR,
-                        checks=[],
-                        message=f"Check failed with exception: {result}",
-                    )
+            if method is None:
+                result = CategoryResult(
+                    category=category_name,
+                    status=CheckStatus.ERROR,
+                    checks=[],
+                    message=f"Unknown category: {category_name}",
                 )
-            elif isinstance(result, CategoryResult):
-                category_results.append(result)
             else:
-                # Unexpected result type
-                category_results.append(
-                    CategoryResult(
+                try:
+                    result = await method()
+                except Exception as exc:
+                    result = CategoryResult(
                         category=category_name,
                         status=CheckStatus.ERROR,
                         checks=[],
-                        message=f"Unexpected result type: {type(result)}",
+                        message=f"Check failed with exception: {exc}",
                     )
-                )
 
-        # Calculate overall status
+            if on_progress is not None:
+                on_progress.category_done(result)
+            category_results.append(result)
+
         overall_status = aggregate_status([cat.status for cat in category_results])
 
-        # Build report
         soothe_version = get_version("soothe")
         config_path = (
             str(self.config.config_path)
@@ -145,101 +181,102 @@ class HealthChecker:
         )
 
     async def check_config(self) -> CategoryResult:
-        """Check configuration format and values.
-
-        Returns:
-            CategoryResult with config check results
-        """
+        """Check configuration format and values."""
         from soothe_daemon.health.checks.config_check import check_config
 
         return await check_config(self.config)
 
-    async def check_daemon(self) -> CategoryResult:
-        """Check daemon health.
+    async def check_tool_deps(self) -> CategoryResult:
+        """Check host tool binaries (rg, fd, git)."""
+        from soothe_daemon.health.checks.tool_deps_check import check_tool_deps
 
-        Returns:
-            CategoryResult with daemon check results
-        """
+        return await check_tool_deps()
+
+    async def check_daemon(self, *, require_running: bool = False) -> CategoryResult:
+        """Check daemon health."""
         from soothe_daemon.health.checks.daemon_check import check_daemon
 
-        return await check_daemon(self.daemon_config)
+        result = await check_daemon(self.daemon_config)
+        if require_running:
+            result = _upgrade_offline_daemon_to_error(result)
+        return result
 
     async def check_persistence(self) -> CategoryResult:
-        """Check persistence layer (PostgreSQL, filesystem).
-
-        Returns:
-            CategoryResult with persistence check results
-        """
+        """Check persistence layer (PostgreSQL or SQLite)."""
         from soothe_daemon.persistence.health_check import check_persistence
 
         return await check_persistence(self.config)
 
     async def check_protocols(self) -> CategoryResult:
-        """Check protocol backends.
-
-        Returns:
-            CategoryResult with protocol check results
-        """
+        """Check protocol backends."""
         from soothe_daemon.health.checks.protocols_check import check_protocols
 
         return await check_protocols(self.config)
 
     async def check_vector_stores(self) -> CategoryResult:
-        """Check vector store backends.
-
-        Returns:
-            CategoryResult with vector store check results
-        """
+        """Check vector store backends."""
         from soothe_daemon.health.checks.vector_stores_check import check_vector_stores
 
         return await check_vector_stores(self.config)
 
-    async def check_providers(self) -> CategoryResult:
-        """Check LLM provider connectivity.
-
-        Returns:
-            CategoryResult with provider check results
-        """
+    async def check_providers(self, *, live_llm: bool = False) -> CategoryResult:
+        """Check LLM provider credentials (optional live invoke)."""
         from soothe_daemon.health.checks.providers_check import check_providers
 
-        return await check_providers(self.config)
+        return await check_providers(self.config, live_llm=live_llm)
 
     async def check_mcp_servers(self) -> CategoryResult:
-        """Check MCP servers.
-
-        Returns:
-            CategoryResult with MCP server check results
-        """
+        """Check MCP servers."""
         from soothe_daemon.health.checks.mcp_check import check_mcp_servers
 
         return await check_mcp_servers(self.config)
 
     async def check_models(self) -> CategoryResult:
-        """Check embedding router role configuration.
-
-        Returns:
-            CategoryResult with embedding role check results
-        """
+        """Check embedding router role configuration."""
         from soothe_daemon.health.checks.embedding_role_check import check_embedding_role
 
         return await check_embedding_role(self.config)
 
     async def check_external_apis(self) -> CategoryResult:
-        """Check external API connectivity.
-
-        Returns:
-            CategoryResult with external API check results
-        """
+        """Check config-gated optional external API reachability."""
         from soothe_daemon.health.checks.external_apis_check import check_external_apis
 
         return await check_external_apis(self.config)
 
     async def check_observability(self) -> CategoryResult:
-        """Check observability and tracing configuration.
-
-        Returns:
-            CategoryResult with observability check results
-        """
+        """Check observability and tracing configuration."""
         from soothe_daemon.health.checks.observability_check import check_observability
 
         return await check_observability(self.config)
+
+
+def _upgrade_offline_daemon_to_error(result: CategoryResult) -> CategoryResult:
+    """When ``--require-running``, treat offline daemon INFO checks as ERROR."""
+    from soothe_daemon.health.models import CheckResult
+
+    upgraded: list[CheckResult] = []
+    for check in result.checks:
+        if check.status == CheckStatus.INFO and any(
+            token in check.message.lower()
+            for token in ("not running", "not found", "not accepting")
+        ):
+            upgraded.append(
+                CheckResult(
+                    name=check.name,
+                    status=CheckStatus.ERROR,
+                    message=check.message,
+                    details={
+                        **check.details,
+                        "remediation": "Start the daemon with `soothed start`",
+                    },
+                )
+            )
+        else:
+            upgraded.append(check)
+
+    return CategoryResult(
+        category=result.category,
+        status=aggregate_status([c.status for c in upgraded]),
+        checks=upgraded,
+        message=result.message,
+    )

@@ -46,10 +46,6 @@ async def _check_daemon(ws_url: str) -> bool:
     return await is_daemon_live(ws_url, timeout=5.0)
 
 
-# Back-compat alias for tests and internal callers.
-_rpc = protocol1_rpc
-
-
 def _resolve_continue_loop_id(ws_url: str, loop_id: str | None) -> str:
     """Resolve target loop ID for `loop continue`.
 
@@ -60,7 +56,7 @@ def _resolve_continue_loop_id(ws_url: str, loop_id: str | None) -> str:
         return loop_id
 
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_list",
             {"limit": 20},
@@ -121,7 +117,7 @@ def list_loops(
     _require_daemon(ws_url)
 
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_list",
             {"filter": {"status": status} if status else None, "limit": limit},
@@ -178,7 +174,7 @@ def describe_loop(
     _require_daemon(ws_url)
 
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_get",
             {"loop_id": loop_id, "verbose": verbose},
@@ -293,7 +289,7 @@ def visualize_loop_tree(
     _require_daemon(ws_url)
 
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_tree",
             {"loop_id": loop_id, "format": format},
@@ -349,7 +345,7 @@ def prune_loop_branches(
     _require_daemon(ws_url)
 
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_prune",
             {"loop_id": loop_id, "retention_days": retention_days, "dry_run": dry_run},
@@ -391,7 +387,7 @@ def delete_loop(
 
     # Get loop metadata for confirmation
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_get",
             {"loop_id": loop_id, "verbose": False},
@@ -422,7 +418,7 @@ def delete_loop(
 
     # Delete loop
     delete_response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_delete",
             {"loop_id": loop_id},
@@ -705,7 +701,7 @@ def detach_loop(
     _require_daemon(ws_url)
 
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_detach",
             {"loop_id": loop_id},
@@ -743,7 +739,7 @@ def attach_loop(
 
     # Subscribe to loop (same as continue)
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_events",
             {"loop_id": loop_id},
@@ -759,7 +755,7 @@ def attach_loop(
 
     # Show reattachment status
     status_response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_get",
             {"loop_id": loop_id, "verbose": False},
@@ -800,7 +796,7 @@ def new_loop(
 
     # Create new loop
     response = asyncio.run(
-        _rpc(
+        protocol1_rpc(
             ws_url,
             "loop_new",
             {},
@@ -817,7 +813,7 @@ def new_loop(
     # Execute prompt if provided
     if prompt:
         input_response = asyncio.run(
-            _rpc(
+            protocol1_rpc(
                 ws_url,
                 "loop_input",
                 {"loop_id": loop_id, "content": prompt},

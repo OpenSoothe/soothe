@@ -1,5 +1,7 @@
 """LLM provider connectivity health check implementation."""
 
+from __future__ import annotations
+
 import asyncio
 from typing import Any
 
@@ -9,54 +11,60 @@ from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
-async def _check_provider(provider_name: str, config: SootheConfig | None) -> CheckResult:
-    """Check a specific LLM provider.
+def _unresolved_env_ref(value: str | None) -> bool:
+    return bool(value and "${" in value)
 
-    Args:
-        provider_name: Name of the provider to check
-        config: SootheConfig instance
 
-    Returns:
-        CheckResult for the provider
-    """
-    if config is None:
+async def _check_provider_credentials(
+    provider_name: str,
+    api_key: str | None,
+    provider_type: str,
+) -> CheckResult:
+    """Validate that a configured provider has usable credentials."""
+    if _unresolved_env_ref(api_key):
         return CheckResult(
             name=provider_name,
-            status=CheckStatus.SKIPPED,
-            message="Skipped (no config loaded)",
+            status=CheckStatus.ERROR,
+            message=f"{provider_name}: API key still contains unresolved ${{ENV}} reference",
+            details={
+                "provider_type": provider_type,
+                "remediation": f"Export the env var referenced by {provider_name}.api_key",
+            },
         )
 
-    # Find provider config
-    provider_config = None
-    for p in config.providers:
-        if p.name == provider_name:
-            provider_config = p
-            break
-
-    if not provider_config:
+    # Local / keyless providers
+    if provider_type == "ollama":
         return CheckResult(
             name=provider_name,
-            status=CheckStatus.INFO,
-            message=f"{provider_name} not configured",
+            status=CheckStatus.OK,
+            message=f"{provider_name}: configured (local/keyless provider_type={provider_type})",
+            details={"provider_type": provider_type, "api_key_present": bool(api_key)},
         )
 
-    # Check API key
-    if not provider_config.api_key:
+    if not api_key:
         return CheckResult(
             name=provider_name,
-            status=CheckStatus.WARNING,
-            message=f"{provider_name} API key not set",
-            details={"remediation": f"Set {provider_name.upper()}_API_KEY or configure in config"},
+            status=CheckStatus.ERROR,
+            message=f"{provider_name}: API key not set",
+            details={
+                "provider_type": provider_type,
+                "remediation": (
+                    f"Set {provider_name}.api_key in config or the corresponding env var"
+                ),
+            },
         )
 
-    # Try to create a chat model and make a test call
+    return CheckResult(
+        name=provider_name,
+        status=CheckStatus.OK,
+        message=f"{provider_name}: credentials present (provider_type={provider_type})",
+        details={"provider_type": provider_type, "api_key_present": True},
+    )
+
+
+async def _live_invoke_default(config: SootheConfig) -> CheckResult:
+    """Optional live invoke against the default router model."""
     try:
-        # Create a minimal test model
-        model = config.create_chat_model("default")
-
-        # IG-143: Add metadata for tracing
-        # Try a minimal test call with timeout
-        # Use asyncio.wait_for to enforce timeout
         from langchain_core.messages import HumanMessage
         from soothe_nano.utils.llm.invoke_policy import (
             await_with_llm_call_policy,
@@ -64,6 +72,7 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
         )
         from soothe_nano.utils.llm.observability import create_llm_call_metadata
 
+        model = config.create_chat_model("default")
         llm_config = llm_rate_limit_config_from(config).model_copy(
             update={
                 "call_timeout_seconds": 5,
@@ -75,81 +84,109 @@ async def _check_provider(provider_name: str, config: SootheConfig | None) -> Ch
 
         async def test_call() -> Any:
             return await model.ainvoke(
-                [HumanMessage(content="test")],
+                [HumanMessage(content="ping")],
                 config={
                     "metadata": create_llm_call_metadata(
                         purpose="health_check",
                         component="daemon.health.providers",
-                        phase="startup",
-                        provider=provider_name,
+                        phase="doctor",
+                        provider="default",
                     )
                 },
             )
 
-        try:
-            await await_with_llm_call_policy(test_call, config=llm_config)
-
+        await await_with_llm_call_policy(test_call, config=llm_config)
+        return CheckResult(
+            name="default_model_live",
+            status=CheckStatus.OK,
+            message=f"Default model live invoke OK ({config.router.default})",
+            details={"default": config.router.default},
+        )
+    except TimeoutError:
+        return CheckResult(
+            name="default_model_live",
+            status=CheckStatus.WARNING,
+            message="Default model live invoke timed out (5s)",
+            details={"impact": "Provider may be slow or unreachable"},
+        )
+    except Exception as exc:
+        error_msg = str(exc)
+        lower = error_msg.lower()
+        if "api_key" in lower or "unauthorized" in lower or "401" in lower:
             return CheckResult(
-                name=provider_name,
-                status=CheckStatus.OK,
-                message=f"{provider_name} API key valid, models accessible",
-            )
-        except TimeoutError:
-            return CheckResult(
-                name=provider_name,
-                status=CheckStatus.WARNING,
-                message=f"{provider_name} API call timeout (5s)",
-                details={"impact": "Provider may be slow or unreachable"},
-            )
-
-    except Exception as e:
-        error_msg = str(e)
-        # Categorize common errors
-        if "api_key" in error_msg.lower() or "unauthorized" in error_msg.lower():
-            return CheckResult(
-                name=provider_name,
+                name="default_model_live",
                 status=CheckStatus.ERROR,
-                message=f"{provider_name} API key invalid",
-                details={"error": error_msg, "remediation": "Check API key is correct"},
+                message="Default model live invoke failed: invalid credentials",
+                details={"error": error_msg, "remediation": "Check provider API key"},
             )
-        if "rate limit" in error_msg.lower():
+        if "rate limit" in lower:
             return CheckResult(
-                name=provider_name,
+                name="default_model_live",
                 status=CheckStatus.WARNING,
-                message=f"{provider_name} rate limited",
+                message="Default model live invoke rate limited",
                 details={"error": error_msg},
             )
         return CheckResult(
-            name=provider_name,
+            name="default_model_live",
             status=CheckStatus.ERROR,
-            message=f"{provider_name} test call failed: {error_msg}",
-            details={"remediation": f"Check {provider_name} service status"},
+            message=f"Default model live invoke failed: {error_msg}",
+            details={"remediation": "Check provider endpoint and network"},
         )
 
 
-async def check_providers(config: SootheConfig | None = None) -> CategoryResult:
-    """Check LLM provider connectivity.
-
-    Tests each configured provider with a minimal API call to verify
-    credentials and connectivity.
+async def check_providers(
+    config: SootheConfig | None = None,
+    *,
+    live_llm: bool = False,
+) -> CategoryResult:
+    """Check configured LLM providers (credentials; optional live invoke).
 
     Args:
-        config: SootheConfig instance
+        config: SootheConfig instance.
+        live_llm: When True, perform a short invoke against ``router.default``.
 
     Returns:
-        CategoryResult with provider check results
+        CategoryResult with provider check results.
     """
-    # Check common providers in parallel
-    provider_names = ["openai", "anthropic", "google", "ollama"]
+    if config is None:
+        return CategoryResult(
+            category="providers",
+            status=CheckStatus.SKIPPED,
+            checks=[
+                CheckResult(
+                    name="providers",
+                    status=CheckStatus.SKIPPED,
+                    message="Skipped (no config loaded)",
+                )
+            ],
+        )
 
-    # Run all provider checks in parallel
-    tasks = [_check_provider(name, config) for name in provider_names]
-    checks = await asyncio.gather(*tasks)
+    if not config.providers:
+        return CategoryResult(
+            category="providers",
+            status=CheckStatus.ERROR,
+            checks=[
+                CheckResult(
+                    name="providers",
+                    status=CheckStatus.ERROR,
+                    message="No LLM providers configured",
+                    details={
+                        "remediation": "Add providers[] in nano.yml or set OPENAI_API_KEY / ANTHROPIC_API_KEY",
+                    },
+                )
+            ],
+        )
 
-    overall_status = aggregate_status([check.status for check in checks])
+    tasks = [
+        _check_provider_credentials(p.name, p.api_key, p.provider_type) for p in config.providers
+    ]
+    checks = list(await asyncio.gather(*tasks))
+
+    if live_llm:
+        checks.append(await _live_invoke_default(config))
 
     return CategoryResult(
         category="providers",
-        status=overall_status,
-        checks=list(checks),
+        status=aggregate_status([c.status for c in checks]),
+        checks=checks,
     )

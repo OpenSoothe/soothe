@@ -157,7 +157,7 @@ def test_doctor_json_format_with_filters(monkeypatch) -> None:
             pass
 
         async def run_all_checks(  # type: ignore[no-untyped-def]
-            self, categories=None, exclude=None
+            self, categories=None, exclude=None, **_kwargs
         ) -> HealthReport:
             captured["categories"] = categories
             captured["exclude"] = exclude
@@ -200,23 +200,20 @@ def test_doctor_fail_on_warning(monkeypatch) -> None:
             pass
 
         async def run_all_checks(  # type: ignore[no-untyped-def]
-            self, categories=None, exclude=None
+            self, categories=None, exclude=None, **_kwargs
         ) -> HealthReport:
             return report
 
     monkeypatch.setattr("soothe_daemon.health.checker.HealthChecker", _FakeChecker)
     monkeypatch.setattr(
-        "soothe_daemon.health.formatters.format_text", lambda _r, use_color=True: "warn report"
-    )
-    monkeypatch.setattr(
         "soothe_daemon.cli._load_daemon_config",
         lambda *_args: SootheDaemonConfig(),
     )
 
-    result = runner.invoke(app, ["doctor", "--fail-on", "warning"])
+    result = runner.invoke(app, ["doctor", "--fail-on", "warning", "--format", "json"])
 
     assert result.exit_code == 1
-    assert "warn report" in result.stdout
+    assert '"overall_status": "warning"' in result.stdout
 
 
 def test_doctor_output_to_file(monkeypatch, tmp_path: Path) -> None:
@@ -227,7 +224,7 @@ def test_doctor_output_to_file(monkeypatch, tmp_path: Path) -> None:
             pass
 
         async def run_all_checks(  # type: ignore[no-untyped-def]
-            self, categories=None, exclude=None
+            self, categories=None, exclude=None, **_kwargs
         ) -> HealthReport:
             return report
 
@@ -244,3 +241,34 @@ def test_doctor_output_to_file(monkeypatch, tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert output_file.read_text() == "# report"
     assert "Health report written to" in result.stdout
+
+
+def test_doctor_progressive_text(monkeypatch) -> None:
+    report = _make_health_report(CheckStatus.OK)
+    progress_calls: list[str] = []
+
+    class _FakeChecker:
+        def __init__(self, _cfg: object, daemon_config: object = None) -> None:
+            pass
+
+        async def run_all_checks(  # type: ignore[no-untyped-def]
+            self, categories=None, exclude=None, on_progress=None, **_kwargs
+        ) -> HealthReport:
+            if on_progress is not None:
+                on_progress.category_start("daemon")
+                on_progress.category_done(report.categories[0])
+                progress_calls.append("ok")
+            return report
+
+    monkeypatch.setattr("soothe_daemon.health.checker.HealthChecker", _FakeChecker)
+    monkeypatch.setattr(
+        "soothe_daemon.cli._load_daemon_config",
+        lambda *_args: SootheDaemonConfig(),
+    )
+
+    result = runner.invoke(app, ["doctor", "--no-color"])
+
+    assert result.exit_code == 0
+    assert progress_calls == ["ok"]
+    assert "progressive diagnosis" in result.stdout
+    assert "Overall Status" in result.stdout

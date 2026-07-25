@@ -636,10 +636,6 @@ class _MessagesMixin:
             if self._chat_input.exit_mode():
                 return
 
-    def action_interrupt(self) -> None:
-        """Backward-compatible alias for :meth:`action_dismiss_ui`."""
-        self.action_dismiss_ui()
-
     def action_quit_app(self) -> None:
         """Handle Ctrl+D by hinting explicit exit words or slash quit."""
         self.notify("Type exit, quit, or /quit to exit the TUI", timeout=2, markup=False)

@@ -8283,7 +8283,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "pyyaml" },
-    { name = "soothe-deepagents" },
     { name = "soothe-nano" },
     { name = "soothe-sdk" },
     { name = "watchdog" },
@@ -8320,7 +8319,6 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-deepagents", specifier = ">=0.8.2,<1.0.0" },
     { name = "soothe-nano", editable = "packages/soothe-nano" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "watchdog", specifier = ">=3.0.0,<5.0.0" },
@@ -8488,7 +8486,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "soothe-deepagents"
-version = "0.8.2"
+version = "0.8.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "langchain" },
@@ -8498,14 +8496,14 @@ dependencies = [
     { name = "langsmith" },
     { name = "wcmatch" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/19/a8284eaebcc81c788a788872ca895f74c36bd7eb362700fbd4ee1bb3b8af/soothe_deepagents-0.8.2.tar.gz", hash = "sha256:768258fdd8ec345f6db598271e003d480d7dbae3abbdee80a3d07b5092c4113b", size = 277974, upload-time = "2026-07-22T13:44:47.247Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c3/d8/c67fb46a24bde60fb0a8e443280f2f6d3d9eec2cb7049752a32474ef4da2/soothe_deepagents-0.8.4.tar.gz", hash = "sha256:c2935b67156f8248dd2a33c46a2c93d87f2f0e62da369bc1b3035a713dee5d77", size = 279208, upload-time = "2026-07-25T09:59:44.563Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/56/93/e8a65f2827d526df00325429ff2cc249e3a73cd8682caf9ee2a917ce34e1/soothe_deepagents-0.8.2-py3-none-any.whl", hash = "sha256:aa9e4e26e095287427a514eb8802c748448e8ee838731127f33f152d002c82e7", size = 307794, upload-time = "2026-07-22T13:44:45.337Z" },
+    { url = "https://files.pythonhosted.org/packages/ae/7e/5e9e794fe6556d15e73b0b12b265ddc32132c1179a46b836ffd85308c580/soothe_deepagents-0.8.4-py3-none-any.whl", hash = "sha256:f270d721ee8874e48a3681c846aac54dfe2d86b1fa91c0ad9b314d114b67d121", size = 310809, upload-time = "2026-07-25T09:59:42.961Z" },
 ]
 
 [[package]]
 name = "soothe-nano"
-version = "1.0.6"
+version = "1.0.7"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },
@@ -8592,7 +8590,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "requests", specifier = ">=2.32.3,<3.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
-    { name = "soothe-deepagents", specifier = ">=0.8.2,<1.0.0" },
+    { name = "soothe-deepagents", specifier = ">=0.8.4,<1.0.0" },
     { name = "soothe-sdk", editable = "packages/soothe-sdk" },
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5.0.0" },

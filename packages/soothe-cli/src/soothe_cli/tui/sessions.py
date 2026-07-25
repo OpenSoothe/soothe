@@ -253,15 +253,14 @@ async def list_loops_via_daemon_rpc(
 def get_loop_limit() -> int:
     """Default maximum loops to load for `/resume` when no explicit limit is set.
 
-    Reads ``DA_CLI_RECENT_LOOPS``, then the legacy alias ``DA_CLI_RECENT_THREADS``,
-    then defaults to ``20``.
+    Reads ``DA_CLI_RECENT_LOOPS``, then defaults to ``20``.
 
     Returns:
         A positive integer (falls back to ``20`` when unset or invalid).
     """
     import os
 
-    raw = os.environ.get("DA_CLI_RECENT_LOOPS") or os.environ.get("DA_CLI_RECENT_THREADS", "20")
+    raw = os.environ.get("DA_CLI_RECENT_LOOPS", "20")
     try:
         n = int(str(raw).strip(), 10)
     except ValueError:

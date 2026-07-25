@@ -355,8 +355,29 @@ def doctor(
             case_sensitive=False,
         ),
     ] = "error",
+    deep: Annotated[
+        bool,
+        typer.Option(
+            "--deep",
+            help="Include deep optional categories (protocols, vector stores, MCP, models, APIs).",
+        ),
+    ] = False,
+    live_llm: Annotated[
+        bool,
+        typer.Option(
+            "--live-llm",
+            help="Perform a live invoke against router.default (costs tokens / latency).",
+        ),
+    ] = False,
+    require_running: Annotated[
+        bool,
+        typer.Option(
+            "--require-running",
+            help="Fail if the daemon is not running and ready.",
+        ),
+    ] = False,
 ) -> None:
-    """Run comprehensive health checks."""
+    """Run vital health checks with progressive diagnosis (use --deep for extras)."""
     import asyncio
 
     from soothe.config import SootheConfig
@@ -364,7 +385,12 @@ def doctor(
     load_dotenv_adjacent_to_yaml = _load_dotenv_if_needed()
     from soothe_daemon.config import SootheDaemonConfig, default_daemon_config_path
     from soothe_daemon.health.checker import HealthChecker
-    from soothe_daemon.health.formatters import format_json, format_markdown, format_text
+    from soothe_daemon.health.formatters import (
+        ProgressiveReporter,
+        format_json,
+        format_markdown,
+        format_text,
+    )
     from soothe_daemon.health.models import CheckStatus
 
     format_key = output_format.lower()
@@ -405,23 +431,38 @@ def doctor(
             # Keep doctor usable for baseline checks even when config parsing fails.
             cfg = None
 
+    progressive = format_key == "text" and not output_path
+    reporter = ProgressiveReporter(use_color=not no_color) if progressive else None
+
     checker = HealthChecker(cfg, daemon_config=daemon_cfg)
-    report = asyncio.run(checker.run_all_checks(categories=categories, exclude=exclude))
+    report = asyncio.run(
+        checker.run_all_checks(
+            categories=categories,
+            exclude=exclude,
+            deep=deep,
+            live_llm=live_llm,
+            require_running=require_running,
+            on_progress=reporter,
+        )
+    )
 
-    if format_key == "json":
-        rendered = format_json(report)
-    elif format_key == "markdown":
-        rendered = format_markdown(report)
+    if progressive and reporter is not None:
+        reporter.finish(report)
     else:
-        rendered = format_text(report, use_color=not no_color)
+        if format_key == "json":
+            rendered = format_json(report)
+        elif format_key == "markdown":
+            rendered = format_markdown(report)
+        else:
+            rendered = format_text(report, use_color=not no_color)
 
-    if output_path:
-        output_file = Path(output_path).expanduser()
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file.write_text(rendered)
-        typer.echo(f"Health report written to {output_file}")
-    else:
-        typer.echo(rendered)
+        if output_path:
+            output_file = Path(output_path).expanduser()
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+            output_file.write_text(rendered)
+            typer.echo(f"Health report written to {output_file}")
+        else:
+            typer.echo(rendered)
 
     if fail_key == "warning" and _status_meets_or_exceeds(
         report.overall_status, CheckStatus.WARNING

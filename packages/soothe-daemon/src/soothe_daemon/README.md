@@ -78,28 +78,31 @@ daemon/persistence/
 
 ## health/ subpackage
 
-Health checks verify all Soothe components including daemon connectivity,
-persistence, providers, protocols, and external APIs.
+Vital-first health checks for `soothed doctor` (progressive text diagnosis).
+Default categories: configuration, tool_deps, persistence, providers,
+observability, daemon. Use `--deep` for protocols / vector stores / MCP /
+models / external APIs.
 
 ```
 daemon/health/
-├── __init__.py          # HealthChecker, format_* exports
-├── checker.py           # HealthChecker orchestrator
+├── __init__.py          # HealthChecker, ProgressiveReporter, format_* exports
+├── checker.py           # HealthChecker orchestrator (vitals + deep)
 ├── models.py            # CheckResult, CategoryResult, HealthReport
-├── formatters.py        # format_text, format_markdown, format_json
+├── formatters.py        # ProgressiveReporter, format_text/markdown/json
 └── checks/
     ├── config_check.py
-    ├── daemon_check.py  # uses soothe_daemon.paths (pid_path)
+    ├── tool_deps_check.py  # rg, fd, git
+    ├── daemon_check.py
     ├── protocols_check.py
     ├── providers_check.py
     ├── vector_stores_check.py
     ├── mcp_check.py
-    ├── external_apis_check.py
-    └── observability_check.py
+    ├── external_apis_check.py  # config-gated (deep)
+    └── observability_check.py  # Langfuse when enabled
 ```
 
-Health checks live here (not in `core`) because they legitimately depend
-on daemon-layer paths (`pid_path`) and daemon connectivity.
+Persistence checks live in `daemon/persistence/health_check.py` and gate on
+`persistence.default_backend`.
 
 ---
 

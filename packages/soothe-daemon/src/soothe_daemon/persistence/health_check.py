@@ -1,5 +1,7 @@
 """Persistence layer health check implementation."""
 
+from __future__ import annotations
+
 import shutil
 from pathlib import Path
 
@@ -9,7 +11,13 @@ from soothe_daemon.health.formatters import aggregate_status
 from soothe_daemon.health.models import CategoryResult, CheckResult, CheckStatus
 
 
-def _check_postgresql_import() -> CheckResult:
+def _default_backend(config: SootheConfig | None) -> str:
+    if config is None:
+        return "sqlite"
+    return (config.persistence.default_backend or "sqlite").lower()
+
+
+def _check_postgresql_import(*, required: bool) -> CheckResult:
     """Check if PostgreSQL driver is importable."""
     import importlib.util
 
@@ -19,61 +27,38 @@ def _check_postgresql_import() -> CheckResult:
             status=CheckStatus.OK,
             message="PostgreSQL driver (psycopg) available",
         )
+    if required:
+        return CheckResult(
+            name="postgresql_import",
+            status=CheckStatus.ERROR,
+            message="PostgreSQL driver not installed but persistence.default_backend=postgresql",
+            details={"remediation": "Install psycopg (e.g. pip install 'psycopg[binary]')"},
+        )
     return CheckResult(
         name="postgresql_import",
-        status=CheckStatus.INFO,
-        message="PostgreSQL driver not installed (optional)",
-        details={"remediation": "Install psycopg for PostgreSQL support"},
+        status=CheckStatus.SKIPPED,
+        message="PostgreSQL driver not needed (sqlite backend)",
     )
 
 
-def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
-    """Check PostgreSQL connection if configured (RFC-612 multi-database support)."""
-    if config is None:
+def _check_postgresql_connection(config: SootheConfig) -> CheckResult:
+    """Connect to each configured Postgres database when backend is postgresql."""
+    if not config.persistence.postgres_base_dsn:
         return CheckResult(
             name="postgresql_connection",
-            status=CheckStatus.SKIPPED,
-            message="Skipped (no config loaded)",
+            status=CheckStatus.ERROR,
+            message="persistence.default_backend=postgresql but postgres_base_dsn is unset",
+            details={
+                "remediation": "Set persistence.postgres_base_dsn (and postgres_databases) in config",
+            },
         )
 
-    # Check if PostgreSQL is configured for any backend
-    uses_postgres = False
-    databases_to_check = []
+    databases_to_check = list(config.persistence.postgres_databases.keys())
+    if not databases_to_check:
+        databases_to_check = ["metadata"]
 
-    # RFC-612: Check if using multi-database architecture
-    if config.persistence.postgres_base_dsn:
-        uses_postgres = True
-        # Check all databases in postgres_databases mapping
-        databases_to_check = list(config.persistence.postgres_databases.keys())
-
-    # Check durability backend
-    elif (
-        hasattr(config, "protocols")
-        and hasattr(config.protocols, "durability")
-        and config.protocols.durability.backend == "postgresql"
-    ):
-        uses_postgres = True
-        databases_to_check = ["metadata"]  # Legacy: check metadata database
-
-    # Check vector stores for PGVector
-    if hasattr(config, "vector_stores"):
-        for vs in config.vector_stores:
-            if vs.provider_type == "pgvector":
-                uses_postgres = True
-                if "vectors" not in databases_to_check:
-                    databases_to_check.append("vectors")
-                break
-
-    if not uses_postgres:
-        return CheckResult(
-            name="postgresql_connection",
-            status=CheckStatus.INFO,
-            message="PostgreSQL not configured",
-        )
-
-    # Try to connect to each database
-    connection_results = {}
-    successful_connections = []
+    connection_results: dict[str, dict[str, str]] = {}
+    successful: list[str] = []
 
     for db_key in databases_to_check:
         try:
@@ -82,21 +67,19 @@ def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
             from psycopg.rows import dict_row
 
             with psycopg.connect(dsn, row_factory=dict_row) as conn, conn.cursor() as cur:
-                cur.execute("SELECT version()")
-                result = cur.fetchone()
-                version = result["version"] if result else "unknown"
+                cur.execute("SELECT 1 AS ok")
+                row = cur.fetchone()
+                ok = bool(row and row.get("ok") == 1)
                 connection_results[db_key] = {
-                    "status": "ok",
-                    "dsn": dsn.split("/")[-1],  # Show database name only
-                    "version": version.split(",")[0] if version else "unknown",
+                    "status": "ok" if ok else "error",
+                    "database": dsn.split("/")[-1],
                 }
-                successful_connections.append(db_key)
-
+                if ok:
+                    successful.append(db_key)
+                else:
+                    connection_results[db_key]["message"] = "SELECT 1 returned unexpected result"
         except ValueError as e:
-            connection_results[db_key] = {
-                "status": "error",
-                "message": str(e),
-            }
+            connection_results[db_key] = {"status": "error", "message": str(e)}
         except ImportError:
             return CheckResult(
                 name="postgresql_connection",
@@ -110,21 +93,22 @@ def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
                 "message": f"Connection failed: {e}",
             }
 
-    # Report overall status
-    if len(successful_connections) == len(databases_to_check):
+    if len(successful) == len(databases_to_check):
         return CheckResult(
             name="postgresql_connection",
             status=CheckStatus.OK,
-            message=f"PostgreSQL multi-database connection successful ({len(successful_connections)} databases)",
+            message=(
+                f"PostgreSQL connection OK ({len(successful)} databases: {', '.join(successful)})"
+            ),
             details={"databases": connection_results},
         )
 
-    if len(successful_connections) > 0:
-        failed = [db for db in databases_to_check if db not in successful_connections]
+    if successful:
+        failed = [db for db in databases_to_check if db not in successful]
         return CheckResult(
             name="postgresql_connection",
             status=CheckStatus.WARNING,
-            message=f"PostgreSQL partial connection: {len(successful_connections)}/{len(databases_to_check)} databases",
+            message=(f"PostgreSQL partial connection: {len(successful)}/{len(databases_to_check)}"),
             details={
                 "databases": connection_results,
                 "remediation": f"Check database connectivity for: {', '.join(failed)}",
@@ -145,6 +129,30 @@ def _check_postgresql_connection(config: SootheConfig | None) -> CheckResult:
     )
 
 
+def _check_sqlite_backend(config: SootheConfig | None) -> CheckResult:
+    """Confirm sqlite mode and writable data home."""
+    home = Path(SOOTHE_HOME).expanduser()
+    details = {"backend": "sqlite", "soothe_home": str(home)}
+    if config is not None:
+        details["default_backend"] = config.persistence.default_backend
+    if not home.exists():
+        return CheckResult(
+            name="sqlite_backend",
+            status=CheckStatus.ERROR,
+            message=f"SQLite backend selected but SOOTHE_HOME missing: {home}",
+            details={
+                **details,
+                "remediation": "Run `soothed setup` or create ~/.soothe",
+            },
+        )
+    return CheckResult(
+        name="sqlite_backend",
+        status=CheckStatus.OK,
+        message=f"SQLite persistence backend ready ({home})",
+        details=details,
+    )
+
+
 def _check_filesystem_permissions() -> CheckResult:
     """Check filesystem permissions in SOOTHE_HOME."""
     home = Path(SOOTHE_HOME).expanduser()
@@ -159,7 +167,6 @@ def _check_filesystem_permissions() -> CheckResult:
             },
         )
 
-    # Check write permissions
     test_file = home / ".write_test"
     try:
         test_file.touch()
@@ -196,7 +203,6 @@ def _check_disk_space() -> CheckResult:
         total_gb = usage.total / (1024**3)
         percent_free = (usage.free / usage.total) * 100
 
-        # Warn if less than 1GB free
         if usage.free < 1024**3:  # 1GB
             return CheckResult(
                 name="disk_space",
@@ -219,21 +225,8 @@ def _check_disk_space() -> CheckResult:
         )
 
 
-def _check_postgres_pool_registry(config: SootheConfig | None) -> CheckResult:
+def _check_postgres_pool_registry(config: SootheConfig) -> CheckResult:
     """Report registry pool stats when the daemon has pre-opened shared pools."""
-    if config is None:
-        return CheckResult(
-            name="postgres_pool_registry",
-            status=CheckStatus.SKIPPED,
-            message="Skipped (no config loaded)",
-        )
-    if config.persistence.default_backend != "postgresql":
-        return CheckResult(
-            name="postgres_pool_registry",
-            status=CheckStatus.INFO,
-            message="PostgreSQL pool registry not active (sqlite backend)",
-        )
-
     try:
         from soothe.persistence.postgres_pool_registry import PostgresPoolRegistry
 
@@ -242,7 +235,7 @@ def _check_postgres_pool_registry(config: SootheConfig | None) -> CheckResult:
             return CheckResult(
                 name="postgres_pool_registry",
                 status=CheckStatus.INFO,
-                message="Postgres pool registry not initialized",
+                message="Postgres pool registry not initialized (daemon may be offline)",
             )
         stats = registry.pool_stats()
         return CheckResult(
@@ -260,7 +253,7 @@ def _check_postgres_pool_registry(config: SootheConfig | None) -> CheckResult:
 
 
 async def check_persistence(config: SootheConfig | None = None) -> CategoryResult:
-    """Check persistence layer (PostgreSQL, filesystem).
+    """Check persistence layer gated on ``persistence.default_backend``.
 
     Args:
         config: SootheConfig instance
@@ -268,18 +261,42 @@ async def check_persistence(config: SootheConfig | None = None) -> CategoryResul
     Returns:
         CategoryResult with persistence check results
     """
-    checks = [
-        _check_postgresql_import(),
-        _check_postgresql_connection(config),
-        _check_postgres_pool_registry(config),
-        _check_filesystem_permissions(),
-        _check_disk_space(),
+    backend = _default_backend(config)
+    checks: list[CheckResult] = [
+        CheckResult(
+            name="default_backend",
+            status=CheckStatus.OK if config is not None else CheckStatus.INFO,
+            message=f"persistence.default_backend={backend}",
+            details={"backend": backend},
+        )
     ]
 
-    overall_status = aggregate_status([check.status for check in checks])
+    if backend == "postgresql":
+        if config is None:
+            checks.append(
+                CheckResult(
+                    name="postgresql_connection",
+                    status=CheckStatus.SKIPPED,
+                    message="Skipped (no config loaded)",
+                )
+            )
+        else:
+            checks.append(_check_postgresql_import(required=True))
+            checks.append(_check_postgresql_connection(config))
+            checks.append(_check_postgres_pool_registry(config))
+    else:
+        checks.append(_check_postgresql_import(required=False))
+        checks.append(_check_sqlite_backend(config))
+
+    checks.extend(
+        [
+            _check_filesystem_permissions(),
+            _check_disk_space(),
+        ]
+    )
 
     return CategoryResult(
         category="persistence",
-        status=overall_status,
+        status=aggregate_status([check.status for check in checks]),
         checks=checks,
     )

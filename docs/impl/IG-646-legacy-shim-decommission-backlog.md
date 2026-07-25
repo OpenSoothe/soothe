@@ -149,6 +149,7 @@ from older config formats. They are the only shims allowed in nano.
 | Risk | **Low** |
 | Behavior | Legacy env var names read as fallback for current `SOOTHE_UPDATE_CHECK` env vars. |
 | Decommission criterion | All deployments use current env var names. Document in migration guide, remove after 2 release cycles. |
+| Status | **Removed** (2026-07-25). Legacy `SOOTHE_NO_UPDATE_CHECK` / `SOOTHE_AUTO_UPDATE` reads deleted from `update_check.py`; tests updated to use canonical `SOOTHE_CLI_*` names only. |
 
 ### C3: Legacy recent-threads env var alias
 
@@ -161,6 +162,7 @@ from older config formats. They are the only shims allowed in nano.
 | Risk | **Low** |
 | Behavior | Reads legacy `DA_CLI_RECENT_THREADS` as alias for `DA_CLI_RECENT_LOOPS`. |
 | Decommission criterion | All deployments use `DA_CLI_RECENT_LOOPS`. Remove after 2 release cycles. |
+| Status | **Removed** (2026-07-25). Legacy `DA_CLI_RECENT_THREADS` fallback deleted from `sessions.py:get_loop_limit()`. |
 
 ### C4: `action_quit_or_interrupt` backward-compat alias
 
@@ -173,6 +175,7 @@ from older config formats. They are the only shims allowed in nano.
 | Risk | **Low** |
 | Behavior | Backward-compatible alias for `action_dismiss_ui`. Delegates directly. |
 | Decommission criterion | All keybinding configs updated to use `action_dismiss_ui`. Remove after 1 release cycle. |
+| Status | **Removed** (2026-07-25). Dead alias `action_interrupt` (renamed `action_quit_or_interrupt` in earlier audit) deleted from `_messages_mixin.py`; zero callers found in repo-wide grep. |
 
 ### C5: Deprecated `mcp_config` CLI parameter
 
