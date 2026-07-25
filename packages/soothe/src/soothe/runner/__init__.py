@@ -453,6 +453,10 @@ class SootheRunner(
 
         Stops background indexer tasks and closes connection pools.
         IG-406: Closes shared StrangeLoop PostgreSQL pool at daemon shutdown.
+
+        For SQLite checkpointers, closes the underlying ``aiosqlite`` connection.
+        That library runs a non-daemon worker thread; leaving it open prevents the
+        process from exiting after standalone examples / one-shot runners finish.
         """
         if self._checkpointer_pool is not None:
             try:
@@ -462,7 +466,9 @@ class SootheRunner(
                 is_sqlite = False
 
             try:
-                if not is_sqlite:
+                if is_sqlite:
+                    await self._close_sqlite_checkpointer()
+                else:
                     from soothe.runner.resolver.shared_checkpointer_pool import (
                         SharedCheckpointerPool,
                     )
@@ -471,7 +477,6 @@ class SootheRunner(
                         await self._checkpointer_pool.close()
                         logger.info("Closed PostgreSQL checkpointer connection pool")
                     # Shared singleton is closed at daemon shutdown (LoopRunnerFactory).
-                # SQLite checkpointer manages its own connection via AsyncSqliteSaver
             except Exception:
                 logger.debug("Failed to close checkpointer pool", exc_info=True)
 
@@ -529,6 +534,30 @@ class SootheRunner(
         await self._ensure_checkpointer_initialized()
         config = {"configurable": {"thread_id": thread_id}}
         await self._materialized_core_agent().graph.aupdate_state(config, values, as_node=as_node)
+
+    async def _close_sqlite_checkpointer(self) -> None:
+        """Close the runner-owned AsyncSqliteSaver ``aiosqlite`` connection."""
+        checkpointer = getattr(self, "_checkpointer", None)
+        if checkpointer is None:
+            return
+        conn = getattr(checkpointer, "conn", None)
+        if conn is not None:
+            await self._safe_close(conn)
+            logger.info("Closed SQLite checkpointer aiosqlite connection")
+        # Drop graph pointer so a later materialize does not reuse a closed conn.
+        try:
+            from soothe.coreagent.lazy import LazyCoreAgent
+
+            agent = self._core_agent
+            if isinstance(agent, LazyCoreAgent) and not agent.is_materialized:
+                agent = None
+            graph = getattr(agent, "graph", None) if agent is not None else None
+            if graph is not None and getattr(graph, "checkpointer", None) is checkpointer:
+                graph.checkpointer = None
+        except Exception:
+            logger.debug("Failed to clear graph checkpointer after close", exc_info=True)
+        self._checkpointer = None
+        self._checkpointer_initialized = False
 
     async def _close_attached_store(self, owner: Any | None) -> None:
         """Close a nested `_store` field when available."""

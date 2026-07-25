@@ -85,7 +85,7 @@ The runner owns the checkpointer lifecycle:
 
 - **Resolution** — `resolve_checkpointer(config)` returns either a checkpointer (SQLite) or a `(None, pool)` tuple (PostgreSQL).
 - **Deferred initialization** — for PostgreSQL, the actual `AsyncPostgresSaver` is created from the `SharedCheckpointerPool` in async context (`_ensure_checkpointer_initialized()`).
-- **Cleanup** — `runner.cleanup()` must be called to close PostgreSQL connection pools. This is the caller's responsibility.
+- **Cleanup** — `runner.cleanup()` must be called to close PostgreSQL connection pools and SQLite ``aiosqlite`` checkpointer connections (non-daemon worker thread). This is the caller's responsibility.
 
 The `_checkpointer_initialized` flag prevents double-initialization in concurrent async contexts. A `_context_restore_lock` (asyncio.Lock) serializes context restoration.
 
@@ -168,7 +168,7 @@ Custom events are built via `custom_event(data)` from the event system. See [Eve
 
 ## Gotchas
 
-- **PostgreSQL requires `cleanup()`** — if you use PostgreSQL and don't call `runner.cleanup()`, you leak connection pool resources. This won't cause immediate errors but will exhaust connections under load.
+- **PostgreSQL / SQLite require `cleanup()`** — without `runner.cleanup()`, PostgreSQL leaks pool connections and SQLite leaves an ``aiosqlite`` non-daemon thread that can prevent process exit.
 - **Intent classification needs the `fast` model** — without it, all queries go through the agentic loop, including simple questions that could be answered directly.
 - **The consensus model (`think`) affects goal validation** — if unavailable, goal validation suspends goals rather than validating them. This can cause goals to stall.
 - **Thread workspace is per-stream** — `resolve_workspace_for_stream()` resolves a workspace for each stream, not globally. Anonymous users get ephemeral TEMP workspaces.

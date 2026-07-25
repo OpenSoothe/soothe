@@ -18,7 +18,7 @@ class TestCoreAgentClass:
 
     def test_core_agent_has_typed_properties(self) -> None:
         """CoreAgent exposes typed properties for protocols."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         # Create mock graph and protocols
         mock_graph = _mock_graph()
@@ -44,7 +44,7 @@ class TestCoreAgentClass:
 
     def test_core_agent_handles_none_protocols(self) -> None:
         """CoreAgent handles None protocol values gracefully."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
         mock_config = MagicMock()
@@ -66,7 +66,7 @@ class TestCoreAgentClass:
     @pytest.mark.asyncio
     async def test_core_agent_astream_delegates_to_graph(self) -> None:
         """CoreAgent.astream() delegates to underlying graph."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
 
@@ -94,7 +94,7 @@ class TestCoreAgentClass:
     @pytest.mark.asyncio
     async def test_core_agent_astream_with_none_config(self) -> None:
         """CoreAgent.astream() handles None config."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
 
@@ -131,7 +131,7 @@ class TestCoreAgentClass:
     def test_create_factory_returns_core_agent(self) -> None:
         """create_soothe_agent() returns CoreAgent instance."""
         from soothe.config import SootheConfig
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
         from soothe.coreagent import create_soothe_agent
 
         with patch("soothe.runner.resolver.resolve_tools", return_value=[]):
@@ -158,7 +158,7 @@ class TestCoreAgentClass:
 
     def test_no_goal_engine_in_core_agent(self) -> None:
         """CoreAgent does NOT have goal_engine (Layer 3 responsibility)."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
         mock_config = MagicMock()
@@ -174,7 +174,7 @@ class TestCoreAgentClass:
 
     def test_no_soothe_star_attributes(self) -> None:
         """CoreAgent uses properties, not soothe_* attributes."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
         mock_config = MagicMock()
@@ -200,7 +200,7 @@ class TestCoreAgentStateRetrieval:
     @pytest.mark.asyncio
     async def test_aget_state_returns_none_without_checkpointer(self) -> None:
         """No checkpointer → None without raising or noisy logs."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
         mock_graph.checkpointer = None
@@ -218,7 +218,7 @@ class TestCoreAgentStateRetrieval:
         from langgraph._internal._constants import CONFIG_KEY_CHECKPOINTER
         from langgraph.checkpoint.memory import MemorySaver
 
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         mock_graph = _mock_graph()
         mock_graph.checkpointer = MemorySaver()
@@ -239,13 +239,71 @@ class TestCoreAgentStateRetrieval:
         call_config = mock_graph.aget_state.await_args.kwargs["config"]
         assert CONFIG_KEY_CHECKPOINTER not in call_config.get("configurable", {})
 
+    @pytest.mark.asyncio
+    async def test_execution_aget_state_strips_parent_checkpoint_ns(self) -> None:
+        """StrangeLoop node checkpoint_ns must not trigger CoreAgent subgraph lookup."""
+        from unittest.mock import AsyncMock
+
+        from langgraph._internal._constants import (
+            CONFIG_KEY_CHECKPOINT_ID,
+            CONFIG_KEY_CHECKPOINT_MAP,
+            CONFIG_KEY_CHECKPOINT_NS,
+            CONFIG_KEY_CHECKPOINTER,
+        )
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
+
+        mock_graph = _mock_graph()
+        mock_graph.checkpointer = MemorySaver()
+        expected = MagicMock(name="state_snapshot")
+        mock_graph.aget_state = AsyncMock(return_value=expected)
+
+        agent = CoreAgent(graph=mock_graph, config=MagicMock())
+        polluted = {
+            "configurable": {
+                "thread_id": "t1",
+                CONFIG_KEY_CHECKPOINTER: None,
+                CONFIG_KEY_CHECKPOINT_NS: "execute:task-abc",
+                CONFIG_KEY_CHECKPOINT_ID: "cp-parent",
+                CONFIG_KEY_CHECKPOINT_MAP: {"execute": "cp-parent"},
+            },
+        }
+
+        result = await agent.execution_aget_state(polluted)
+
+        assert result is expected
+        call_config = mock_graph.aget_state.await_args.kwargs["config"]
+        conf = call_config.get("configurable", {})
+        assert CONFIG_KEY_CHECKPOINTER not in conf
+        assert CONFIG_KEY_CHECKPOINT_NS not in conf
+        assert CONFIG_KEY_CHECKPOINT_ID not in conf
+        assert CONFIG_KEY_CHECKPOINT_MAP not in conf
+        assert conf.get("thread_id") == "t1"
+
+    @pytest.mark.asyncio
+    async def test_execution_aget_state_soft_fails_on_missing_subgraph(self) -> None:
+        """Defensive: subgraph lookup miss returns None instead of crashing the step."""
+        from unittest.mock import AsyncMock
+
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
+
+        mock_graph = _mock_graph()
+        mock_graph.checkpointer = MemorySaver()
+        mock_graph.aget_state = AsyncMock(side_effect=ValueError("Subgraph execute not found"))
+
+        agent = CoreAgent(graph=mock_graph, config=MagicMock())
+        assert await agent.execution_aget_state({"configurable": {"thread_id": "t1"}}) is None
+
 
 class TestCoreAgentModuleExports:
     """Tests for module exports."""
 
     def test_core_agent_exported_from_core(self) -> None:
         """CoreAgent is exported from soothe.core."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         assert CoreAgent is not None
 
@@ -257,7 +315,7 @@ class TestCoreAgentModuleExports:
 
     def test_core_agent_create_factory_method(self) -> None:
         """CoreAgent.create() factory method works."""
-        from soothe.coreagent import CodingCoreAgent as CoreAgent
+        from soothe.coreagent import SootheNanoAgent as CoreAgent
 
         with patch("soothe.coreagent.builder.create_soothe_agent") as mock_factory:
             mock_agent = MagicMock(spec=CoreAgent)

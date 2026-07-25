@@ -15,8 +15,8 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
 ## Design
 
 1. `AgentBuilder` partitions `resolve_subagents()` into:
-   - **catalog** → `create_deep_agent(subagents=catalog)` / `CodingCoreAgent.subagents`
-   - **intake-only** → `CodingCoreAgent.intake_only_subagents` (lookup only; never on `task`)
+   - **catalog** → `create_deep_agent(subagents=catalog)` / `SootheNanoAgent.subagents`
+   - **intake-only** → `SootheNanoAgent.intake_only_subagents` (lookup only; never on `task`)
 2. `invoke_wired_subagent`:
    - **intake-only wire**: stream specialist (prefer `astream` custom+values; `ainvoke` fallback) → ledger Human/AI execute-step → route `goal_completion` (progress via IG-602 orphan card)
    - **catalog wire (`planner`)**: inject trivial plan → route `resolve_decision` (unchanged)

@@ -129,7 +129,7 @@ only where the field is common-case. Update all callers in the cut; no dual faç
 | Batch types | nano-local | absent | **Add** to deepagents protocol |
 
 **Consumer blast radius (must update in cut):** nano `filesystem/*`,
-`middleware/edit_coalescing.py`, workspace FS tests, `packages/soothe/examples/filesystem_example.py`,
+`middleware/edit_coalescing.py`, workspace FS tests, `examples/filesystem_example.py`,
 `langchain_adapter_example.py`, and any host imports of nano protocol fields.
 
 ### A1. Extend deepagents protocol for promoted fields
@@ -205,7 +205,7 @@ only where the field is common-case. Update all callers in the cut; no dual faç
 - **Keep** `WorkspaceFilesystem`, `factory.py` security wiring, process workspace
   resolution in nano — retarget to deepagents-backed local FS.
 - **Update** `middleware/edit_coalescing.py` for new batch/result types.
-- **Update** `packages/soothe/examples/filesystem_example.py` and
+- **Update** `examples/filesystem_example.py` and
   `langchain_adapter_example.py` for cutover types/APIs.
 - **Audit** `tests/unit/core/filesystem/` + `tests/unit/middleware/test_edit_coalescing*.py`:
   - move pure engine tests (atomic/lock/batch) into deepagents where behavior now lives

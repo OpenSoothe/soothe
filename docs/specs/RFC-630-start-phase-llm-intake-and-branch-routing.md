@@ -254,7 +254,7 @@ Built-in wire specialists have two exposure modes:
 | `deep_research` | Yes (streamed direct invoke) | No | No |
 | `academic_research` | Yes (streamed direct invoke) | No | No |
 
-- Intake-only specialists live on a **parallel registry** (`CodingCoreAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake streams their runnable (custom events forwarded) then completes.
+- Intake-only specialists live on a **parallel registry** (`SootheNanoAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake streams their runnable (custom events forwarded) then completes.
 - `planner` remains on the open CoreAgent `task` catalog and may still use resolve → execute.
 - Open-hop `task` to intake-only names fails naturally (not registered); ToolEnforcement still rejects them as belt-and-suspenders.
 - Plan-wave `delegate` / `resolve_step_wire_subagent` never wires intake-only names; those are intake/slash only.

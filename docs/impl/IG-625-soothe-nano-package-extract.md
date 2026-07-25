@@ -26,7 +26,7 @@ soothe-daemon  → soothe-nano (direct) + soothe
 ## Phase A — CoreAgent wrappers
 
 1. Scaffold `packages/soothe-nano` (layout + `pyproject.toml` + workspace wiring).
-2. Move CoreAgent runtime wrappers into `soothe_nano.agent` (`CodingCoreAgent`, `LazyCoreAgent`).
+2. Move CoreAgent runtime wrappers into `soothe_nano.agent` (`SootheNanoAgent`, `LazyCoreAgent`).
 3. Host nano-local helpers previously imported from `foundation.sloop` (`ephemeral_execute_stream_enabled` now lives on `soothe_nano.agent.core_agent`; intake-only partition helpers live on `soothe.sloop.subagent_catalog`).
 4. Soothe re-exports / shims keep existing import paths working.
 5. Verify scripts know about `soothe-nano` and enforce `nano ↛ soothe`.
@@ -38,7 +38,7 @@ soothe-daemon  → soothe-nano (direct) + soothe
 1. Move `AgentBuilder`, `create_soothe_agent` / `create_nano_agent`, middleware stack builder into `soothe_nano`.
 2. `NanoConfig` alias → slim CoreAgent config; full `SootheConfig` stays in soothe (composition).
 3. Soothe `AgentBuilder` subclass injects StrangeLoop `resolve_planner` when omitted.
-4. Soothe `create_soothe_agent` promotes returned agent to `soothe.coreagent.coding.CodingCoreAgent`.
+4. Soothe `create_soothe_agent` promotes returned agent to `soothe.coreagent.coding.SootheNanoAgent`.
 
 ---
 

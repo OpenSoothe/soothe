@@ -64,16 +64,16 @@ class AgentBuilder(nano_builder.AgentBuilder):
             agent = super().build(*args, **kwargs)
         finally:
             self._identity_runtime = None
-        from soothe.coreagent.core_agent import CodingCoreAgent
+        from soothe.coreagent.core_agent import SootheNanoAgent
 
-        if not isinstance(agent, CodingCoreAgent):
-            agent.__class__ = CodingCoreAgent
+        if not isinstance(agent, SootheNanoAgent):
+            agent.__class__ = SootheNanoAgent
         agent.bind_intake_only_subagents(self._intake_only_specs)
         return agent
 
 
 def create_soothe_agent(config: Any | None = None, **kwargs: Any):
-    """Create Coding CoreAgent with soothe host injections."""
+    """Create SootheNanoAgent with soothe host injections."""
     builder = AgentBuilder(config)
     return builder.build(**kwargs)
 

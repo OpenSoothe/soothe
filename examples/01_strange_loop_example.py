@@ -12,14 +12,9 @@ intent classification, planning, step execution, and ``soothe.*`` events.
 Requires a working model config (``OPENAI_API_KEY`` / ``ANTHROPIC_API_KEY`` /
 provider keys in ``nano.yml``).
 
-Run from the package root::
+Run from the monorepo root::
 
-    cd packages/soothe
-    python examples/01_strange_loop_example.py
-
-Or from the monorepo root with uv::
-
-    uv run python packages/soothe/examples/01_strange_loop_example.py
+    uv run python examples/01_strange_loop_example.py
 """
 
 from __future__ import annotations
@@ -33,7 +28,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _shared.config import load_soothe_example_config
 from _shared.streaming import stream_soothe_runner
-
 from soothe.runner import SootheRunner, generate_thread_id
 
 

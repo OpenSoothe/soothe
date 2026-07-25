@@ -1,4 +1,4 @@
-"""Soothe-hosted Coding CoreAgent (canonical implementation in soothe-nano)."""
+"""Soothe-hosted SootheNanoAgent (canonical implementation in soothe-nano)."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 _normalize_layer1_input = nano_core_agent._normalize_layer1_input
 
 
-class CodingCoreAgent(nano_core_agent.CodingCoreAgent):
-    """Soothe-hosted Coding CoreAgent with intake-only specialist registry."""
+class SootheNanoAgent(nano_core_agent.SootheNanoAgent):
+    """Soothe-hosted nano agent with intake-only specialist registry."""
 
     def bind_intake_only_subagents(self, specs: list[SubAgent | CompiledSubAgent] | None) -> None:
         """Attach specialists withheld from the open ``task`` catalog (host wiring)."""
@@ -33,10 +33,13 @@ class CodingCoreAgent(nano_core_agent.CodingCoreAgent):
         return lookup_subagent_spec(self.intake_only_subagents, name)
 
     @classmethod
-    def create(cls, config: Any | None = None, **kwargs: Any) -> CodingCoreAgent:
+    def create(cls, config: Any | None = None, **kwargs: Any) -> SootheNanoAgent:
         from soothe.coreagent.builder import create_soothe_agent
 
         return create_soothe_agent(config, **kwargs)
 
 
-__all__ = ["CodingCoreAgent", "_normalize_layer1_input"]
+# Compatibility alias — prefer SootheNanoAgent for new code.
+CodingCoreAgent = SootheNanoAgent
+
+__all__ = ["CodingCoreAgent", "SootheNanoAgent", "_normalize_layer1_input"]

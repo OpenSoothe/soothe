@@ -60,6 +60,7 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
+per-file-ignores = { "examples/**/*.py" = ["N999", "E402"] }
 
 [tool.ruff.format]
 docstring-code-format = true

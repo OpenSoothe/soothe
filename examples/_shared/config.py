@@ -49,24 +49,21 @@ def load_soothe_example_config() -> SootheConfig:
     if loaded is not None:
         return apply_example_defaults(loaded)
 
-    # examples/_shared/config.py → package root = parents[2], monorepo = parents[4]
+    # examples/_shared/config.py → monorepo root = parents[2]
     here = Path(__file__).resolve()
-    candidates = [here.parents[2]]
-    if len(here.parents) > 4:
-        candidates.append(here.parents[4])
-    for root in candidates:
-        loaded = _load_from_dir(root / "config" / "develop")
-        if loaded is not None:
-            return apply_example_defaults(loaded)
-        # Template overlay next to develop nano when soothe.yml is absent.
-        nano = root / "config" / "develop" / "nano.yml"
-        soothe_template = root / "config" / "soothe.template.yml"
-        if nano.is_file() and soothe_template.is_file():
-            return apply_example_defaults(
-                SootheConfig.from_split_yaml_files(
-                    nano_path=str(nano),
-                    soothe_path=str(soothe_template),
-                )
+    monorepo_root = here.parents[2]
+    loaded = _load_from_dir(monorepo_root / "config" / "develop")
+    if loaded is not None:
+        return apply_example_defaults(loaded)
+    # Template overlay next to develop nano when soothe.yml is absent.
+    nano = monorepo_root / "config" / "develop" / "nano.yml"
+    soothe_template = monorepo_root / "config" / "soothe.template.yml"
+    if nano.is_file() and soothe_template.is_file():
+        return apply_example_defaults(
+            SootheConfig.from_split_yaml_files(
+                nano_path=str(nano),
+                soothe_path=str(soothe_template),
             )
+        )
 
     return apply_example_defaults(SootheConfig())

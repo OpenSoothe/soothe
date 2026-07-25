@@ -54,7 +54,7 @@ asyncio.run(main())
 Runnable script (loads `~/.soothe/config`, SQLite defaults, prints progress):
 
 ```bash
-uv run python packages/soothe/examples/01_strange_loop_example.py
+uv run python examples/01_strange_loop_example.py
 ```
 
 Pass `autopilot_job=...` only when embedding a daemon-dispatched worker goal.
@@ -67,7 +67,7 @@ Interactive / library use should omit it so StrangeLoop runs the user query.
 | `soothe-daemon` | Long-running server (HTTP/WS, channels, Autopilot dispatch) |
 | `soothe-cli` | Human CLI + Textual TUI |
 | `soothe-sdk` | Shared wire contracts and types |
-| `soothe-nano` | Coding CoreAgent (tools, skills, MCP) |
+| `soothe-nano` | SootheNanoAgent (tools, skills, MCP) |
 
 ## Testing
 

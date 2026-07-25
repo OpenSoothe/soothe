@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 from soothe_nano.utils.llm.invoke_policy import EnhancedTimeoutError
 
-from soothe.coreagent import CodingCoreAgent as CoreAgent
+from soothe.coreagent import SootheNanoAgent as CoreAgent
 from soothe.sloop.engine.executor import Executor
 from soothe.sloop.nodes.execute_steps import _is_rate_limit_error
 

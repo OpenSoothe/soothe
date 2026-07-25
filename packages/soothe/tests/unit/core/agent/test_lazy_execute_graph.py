@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 from soothe_nano.agent.core_agent import ephemeral_execute_stream_enabled
 
-from soothe.coreagent import CodingCoreAgent as CoreAgent
+from soothe.coreagent import SootheNanoAgent as CoreAgent
 
 
 def test_execution_graph_compiles_lazily(monkeypatch: pytest.MonkeyPatch) -> None:
