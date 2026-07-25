@@ -5,6 +5,27 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.6] - 2026-07-25
+
+### Added
+- Vital progressive `soothed doctor` (tool deps, gated persistence/providers/observability, `--deep` / `--live-llm`)
+- Package diagnose APIs: `soothe_nano.diagnose` / `soothe.diagnose`, called by daemon `HealthChecker`
+- `soothed setup` for nano/soothe/daemon config scaffolding
+- TUI: bare `exit`/`quit` words and `/exit` alias
+
+### Changed
+- Require `soothe-nano>=1.0.8` (diagnose API); bump nano submodule pin
+- Unify SQLite under process-scoped runtime; tighten host→nano re-export facades
+- Rename CodingCoreAgent → SootheNanoAgent; scope monorepo tooling to owned packages
+
+### Fixed
+- Honor LangGraph durability kwargs only when a checkpointer is present
+- IdentityService sync close / SQLite registry teardown in tests
+- Daemon setup templates packaging and ANSI stripping in setup help tests
+- Diagnose `CheckStatus` aggregation no longer prefers lexicographic `"ok"` over `"error"`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.5...v0.9.6
+
 ## [v0.9.5] - 2026-07-23
 
 ### Changed
