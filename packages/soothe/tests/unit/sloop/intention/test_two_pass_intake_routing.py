@@ -303,9 +303,9 @@ async def test_two_pass_low_confidence_still_routes_to_task() -> None:
     coordinator = create_mock_coordinator(
         is_task=True,
         confidence="low",
-        scope="complex",
+        scope="simple",
         pass1_reasoning="ambiguous, fail-safe to task",
-        pass2_reasoning="fail-safe complex",
+        pass2_reasoning="fail-safe simple",
     )
     result = await coordinator.classify("ambiguous input")
 

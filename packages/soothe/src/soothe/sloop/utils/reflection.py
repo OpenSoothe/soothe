@@ -88,7 +88,6 @@ def agent_decision_from_dict(data: dict[str, Any], _goal: str) -> Any:
         steps=steps,
         execution_mode=data.get("execution_mode", "parallel"),
         reasoning=data.get("reasoning", ""),
-        adaptive_granularity=data.get("adaptive_granularity"),
     )
 
 

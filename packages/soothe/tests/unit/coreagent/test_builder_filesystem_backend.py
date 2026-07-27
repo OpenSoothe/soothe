@@ -53,7 +53,7 @@ def test_build_passes_filesystem_backend_to_deepagents(
 
     assert captured["backend"] is fs_backend
     assert not isinstance(captured["backend"], str)
-    assert captured["enable_general_purpose_subagent"] is True
+    assert captured["enable_general_purpose_subagent"] is False
     assert captured["filesystem_tools"] == [
         "ls",
         "read_file",

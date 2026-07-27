@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
@@ -16,8 +15,7 @@ from soothe.prompts.plan_ledger_projection import (
     project_planner_ledger,
     resolve_planner_projection_mode,
 )
-from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.state.schemas import AgentDecision, LoopState, StepAction
+from soothe.sloop.state.schemas import LoopState
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
 
@@ -206,93 +204,6 @@ def test_ig555_execute_slice_a_omits_boundary_by_default() -> None:
     if with_boundary:
         content = str(with_boundary[0].content)
         assert _GOAL_COMPLETION_CONTEXT_BOUNDARY.strip() in content
-
-
-# Mock IntakeLabel values (avoid importing from intention.models)
-_COMPLEX_LABEL = "complex"
-_SIMPLE_LABEL = "simple"
-_TRIVIAL_LABEL = "trivial"
-
-
-@pytest.mark.parametrize(
-    "intake_label,iteration,step_count,multi_phase,expected",
-    [
-        # Multi-phase complex at iter=0 needs ≥2 steps
-        (_COMPLEX_LABEL, 0, 1, True, False),  # undersized
-        (_COMPLEX_LABEL, 0, 2, True, True),  # valid
-        (_COMPLEX_LABEL, 0, 3, True, True),  # valid
-        # Non-multi_phase complex may use one CoreAgent step (IG-654)
-        (_COMPLEX_LABEL, 0, 1, False, True),
-        # Complex intake at iter>0 can have 1 step (replan consolidation)
-        (_COMPLEX_LABEL, 1, 1, True, True),
-        (_COMPLEX_LABEL, 2, 1, True, True),
-        # Simple/trivial intake can have 1 step at iter=0
-        (_SIMPLE_LABEL, 0, 1, False, True),
-        (_TRIVIAL_LABEL, 0, 1, False, True),
-        # Unknown intake defaults to allowed
-        (None, 0, 1, False, True),
-    ],
-)
-def test_ig555_plan_has_minimum_steps_for_intake(
-    intake_label: str | None,
-    iteration: int,
-    step_count: int,
-    multi_phase: bool,
-    expected: bool,
-) -> None:
-    """Guardrail enforces ≥2 steps only for multi_phase complex at iter=0."""
-    from soothe.sloop.cognition.plan_step_safety import (
-        plan_has_minimum_steps_for_intake,
-    )
-
-    steps = [StepAction(id=f"S{i}", description=f"Step {i}") for i in range(step_count)]
-    decision = AgentDecision(type="execute_steps", steps=steps, execution_mode="parallel")
-    label = IntakeLabel(intake_label) if intake_label else None
-
-    result = plan_has_minimum_steps_for_intake(decision, label, iteration, multi_phase=multi_phase)
-    assert result == expected
-
-
-def test_ig555_plan_has_minimum_steps_none_decision_returns_false() -> None:
-    """None decision at iter=0 with multi_phase complex returns False (undersized)."""
-    from soothe.sloop.cognition.plan_step_safety import (
-        plan_has_minimum_steps_for_intake,
-    )
-
-    result = plan_has_minimum_steps_for_intake(None, IntakeLabel.COMPLEX, 0, multi_phase=True)
-    assert result is False
-
-
-def test_ig555_plan_has_minimum_steps_single_step_returns_false() -> None:
-    """Single step for multi_phase complex at iter=0 is undersized."""
-    from soothe.sloop.cognition.plan_step_safety import (
-        plan_has_minimum_steps_for_intake,
-    )
-
-    decision = AgentDecision(
-        type="execute_steps",
-        steps=[StepAction(id="S1", description="Step 1")],
-        execution_mode="parallel",
-    )
-    result = plan_has_minimum_steps_for_intake(decision, IntakeLabel.COMPLEX, 0, multi_phase=True)
-    assert result is False
-
-
-def test_ig654_non_multi_phase_complex_allows_single_step() -> None:
-    """Non-phased complex may finish in one CoreAgent execute."""
-    from soothe.sloop.cognition.plan_step_safety import (
-        plan_has_minimum_steps_for_intake,
-    )
-
-    decision = AgentDecision(
-        type="execute_steps",
-        steps=[StepAction(id="S1", description="Step 1")],
-        execution_mode="parallel",
-    )
-    assert (
-        plan_has_minimum_steps_for_intake(decision, IntakeLabel.COMPLEX, 0, multi_phase=False)
-        is True
-    )
 
 
 def test_ig555_planner_projection_mid_goal_includes_boundary() -> None:

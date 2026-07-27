@@ -474,6 +474,18 @@ class SootheConfig(BaseSettings):
         return self
 
     @model_validator(mode="after")
+    def _apply_sloop_general_purpose_gate(self) -> SootheConfig:
+        """StrangeLoop owns general-purpose enablement for host CoreAgent builds.
+
+        Nano keeps ``agent.runtime.general_purpose_subagent`` defaulting to true.
+        Host StrangeLoop defaults ``agent.loop.general_purpose_subagent`` to false and
+        AND-gates the runtime flag so GP stays off unless both allow it.
+        """
+        if not self.agent.loop.general_purpose_subagent:
+            self.agent.runtime.general_purpose_subagent = False
+        return self
+
+    @model_validator(mode="after")
     def _merge_subagents(self) -> SootheConfig:
         """Merge builtin and plugin-discovered subagents with user configs."""
         # Built-in subagent entries merged before user YAML and plugin registry.

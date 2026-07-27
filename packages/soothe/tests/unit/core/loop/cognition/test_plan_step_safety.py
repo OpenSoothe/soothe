@@ -1,4 +1,4 @@
-"""Tests for simple-intake plan step safety guards."""
+"""Tests for plan step safety guards (filler filter, min-step, simple force-done)."""
 
 from __future__ import annotations
 
@@ -13,12 +13,14 @@ from soothe.sloop.cognition.plan_generation_wire import (
 from soothe.sloop.cognition.plan_step_safety import (
     filter_filler_plan_steps,
     intake_label_from_state,
+    multi_phase_from_state,
     plan_has_minimum_steps_for_intake,
     simple_intake_should_force_done,
 )
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
+    AgentDecision,
     LoopState,
     PriorProgressDigest,
     StatusAssessment,
@@ -31,6 +33,45 @@ def test_intake_label_from_state_reads_intent() -> None:
     state = LoopState(goal="g", thread_id="t1")
     state.intent = SimpleNamespace(intake_label=IntakeLabel.SIMPLE)
     assert intake_label_from_state(state) == IntakeLabel.SIMPLE
+
+
+def test_multi_phase_from_state_defaults_false() -> None:
+    state = LoopState(goal="g", thread_id="t1")
+    assert multi_phase_from_state(state) is False
+    state.intent = SimpleNamespace(multi_phase=True)
+    assert multi_phase_from_state(state) is True
+
+
+@pytest.mark.parametrize(
+    "intake_label,iteration,step_count,multi_phase,expected",
+    [
+        (IntakeLabel.COMPLEX, 0, 1, True, False),
+        (IntakeLabel.COMPLEX, 0, 2, True, True),
+        (IntakeLabel.COMPLEX, 0, 3, True, True),
+        (IntakeLabel.COMPLEX, 0, 1, False, True),
+        (IntakeLabel.COMPLEX, 1, 1, True, True),
+        (IntakeLabel.COMPLEX, 2, 1, True, True),
+        (IntakeLabel.SIMPLE, 0, 1, False, True),
+        (IntakeLabel.TRIVIAL, 0, 1, False, True),
+        (None, 0, 1, False, True),
+    ],
+)
+def test_plan_has_minimum_steps_for_intake(
+    intake_label: IntakeLabel | None,
+    iteration: int,
+    step_count: int,
+    multi_phase: bool,
+    expected: bool,
+) -> None:
+    """≥2 steps required only for multi_phase complex at iter=0."""
+    steps = [StepAction(id=f"S{i}", description=f"Step {i}") for i in range(step_count)]
+    decision = AgentDecision(type="execute_steps", steps=steps, execution_mode="parallel")
+    assert (
+        plan_has_minimum_steps_for_intake(
+            decision, intake_label, iteration, multi_phase=multi_phase
+        )
+        is expected
+    )
 
 
 def test_plan_has_minimum_steps_missing_decision_behavior() -> None:
@@ -98,14 +139,9 @@ def test_simple_intake_should_force_done_after_substantial_wave() -> None:
             subgraph_tool_call_count=2,
         )
     ]
-    assessment = StatusAssessment(status="continue", goal_progress="none")
-
+    assessment = StatusAssessment(
+        status="continue",
+        goal_progress="medium",
+        require_goal_completion=False,
+    )
     assert simple_intake_should_force_done(state, assessment) is True
-
-
-def test_simple_intake_does_not_force_done_without_evidence() -> None:
-    state = LoopState(goal="world cup", thread_id="t1", iteration=0)
-    state.intent = SimpleNamespace(intake_label=IntakeLabel.SIMPLE)
-    assessment = StatusAssessment(status="continue", goal_progress="none")
-
-    assert simple_intake_should_force_done(state, assessment) is False

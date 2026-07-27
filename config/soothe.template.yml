@@ -68,6 +68,7 @@ agent:
     execute_deliverable_assess: auto
     step_completion_report_max_words: 50
     max_subagent_tasks_per_wave: 4
+    general_purpose_subagent: false
     strange_loop_output_contract_enabled: true
     goal_completion_mode: llm_only
     final_response: auto

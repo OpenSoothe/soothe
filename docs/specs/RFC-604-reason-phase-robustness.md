@@ -17,7 +17,7 @@ This RFC defines a three-layer defense strategy to prevent JSON truncation failu
 
 **`goal_progress` (IG-376, RFC-603 §3.2)**: After Phase 1 returns `StatusAssessment`, `PlanResult.goal_progress` follows the assess model’s numeric field (merged in `_combine_results`). It is **not** overwritten by a secondary evidence/step blend; optional completion heuristics may still raise `status` / progress when the model stalls. **`confidence`** may still be calibrated with execution evidence in `LLMPlanner.plan()` per RFC-603 §3.1.
 
-**IG-399 addendum**: Progressive planning guidance and `supportive_evidence` fields are removed. The runtime now inserts a bounded `plan_pre_generate` evidence probe (maximum three readonly probes) between assess and generate, and `PlanGeneration` emits flattened decision fields (`type`, `steps`, `execution_mode`, `reasoning`, `adaptive_granularity`) instead of a nested `decision` object.
+**IG-399 addendum**: Progressive planning guidance and `supportive_evidence` fields are removed. The runtime now inserts a bounded `plan_pre_generate` evidence probe (maximum three readonly probes) between assess and generate, and `PlanGeneration` emits flattened decision fields (`type`, `steps`, `execution_mode`, `reasoning`) instead of a nested `decision` object. (`adaptive_granularity` was unused after `planning_utils` removal and is dropped — IG-654.)
 
 ---
 

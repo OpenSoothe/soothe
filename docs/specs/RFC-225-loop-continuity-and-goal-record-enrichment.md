@@ -252,7 +252,7 @@ The full plan DAG of any persisted goal MUST be recoverable from `GoalExecutionR
 | Nodes (steps) | `current_plan.decision.steps: list[StepAction]` — `id`, `description`, `expected_output` |
 | Edges (dependencies) | `StepAction.dependencies: list[str] \| None` |
 | Execution mode | `current_plan.decision.execution_mode` (`parallel` \| `dependency`) |
-| Planner metadata | `current_plan.decision.reasoning`, `adaptive_granularity` |
+| Planner metadata | `current_plan.decision.reasoning` |
 | Done-node overlay | `completed_step_ids` |
 | Per-node outcomes | `step_results: list[StepResult]` (keyed by `step_id`) |
 | Overall plan status | `current_plan.status` (`continue` \| `replan` \| `done`), `goal_progress` |

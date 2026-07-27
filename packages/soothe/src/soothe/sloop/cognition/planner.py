@@ -903,7 +903,6 @@ class LLMPlanner:
             steps=plan_generate_steps_to_step_actions(plan_result.steps),
             execution_mode=plan_result.execution_mode,
             reasoning=plan_result.reasoning or "",
-            adaptive_granularity=plan_result.adaptive_granularity,
         )
 
     def _combine_results(
@@ -1277,10 +1276,6 @@ class LLMPlanner:
                 require_goal_completion=assessment.require_goal_completion,
             )
 
-        # RFC-630: trivial intake uses ``build_trivial_plan`` in init_or_resume;
-        # the ``simple`` label uses ``generate_lightweight``. Neither produces
-        # the "I will complete this goal directly:" prefix.
-
         # Build DAG context for progressive planning (IG-400)
         dag_context = None
         if plan_manager is not None:
@@ -1558,9 +1553,6 @@ class LLMPlanner:
                         full_output=last_ledger_ai_content(state) or None,
                     )
                 else:
-                    # RFC-630: trivial intake uses ``build_trivial_plan`` in
-                    # init_or_resume; the ``simple`` label uses
-                    # ``generate_lightweight``.
                     # Build DAG context for progressive planning (IG-400)
                     dag_context = None
                     if plan_manager is not None:

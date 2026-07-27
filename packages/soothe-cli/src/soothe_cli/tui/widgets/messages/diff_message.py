@@ -25,7 +25,7 @@ class DiffMessage(Static):
     DEFAULT_CSS = """
     DiffMessage {
         height: auto;
-        padding: 0 1;
+        padding: 0 2;
         margin: 0 0 1 0;
         background: $surface;
         border: solid $primary;

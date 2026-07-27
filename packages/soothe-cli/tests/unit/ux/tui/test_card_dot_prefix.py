@@ -58,12 +58,12 @@ def test_glyph_sets_define_distinct_card_prefix_symbols() -> None:
     assert ASCII_GLYPHS.subagent_prefix == "[S]"
 
 
-def test_stream_cards_use_flush_horizontal_padding() -> None:
-    """Agent cards no longer reserve space for removed border-left rails."""
+def test_stream_cards_use_horizontal_inset_padding() -> None:
+    """Agent cards inset from the chat edges; user/input gutters stay separate."""
     step_css = CognitionStepMessage.DEFAULT_CSS
     assistant_css = AssistantMessage.DEFAULT_CSS
-    assert "padding: 0;" in step_css
-    assert "padding: 0;" in assistant_css
+    assert "padding: 0 2;" in step_css
+    assert "padding: 0 2;" in assistant_css
     assert "border-left:" not in step_css
     assert "border-left:" not in assistant_css
 

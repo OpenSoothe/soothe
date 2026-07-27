@@ -128,7 +128,7 @@ class AssistantMessage(Vertical):
     DEFAULT_CSS = """
     AssistantMessage {
         height: auto;
-        padding: 0;
+        padding: 0 2;
         margin: 0 0 1 0;
         background: transparent;
     }

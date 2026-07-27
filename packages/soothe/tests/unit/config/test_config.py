@@ -159,13 +159,15 @@ class TestSootheConfig:
         cfg = SootheConfig()
         assert cfg.agent.name == "Soothe"
 
-    def test_general_purpose_subagent_enabled_by_default(self) -> None:
+    def test_general_purpose_subagent_disabled_by_sloop_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.runtime.general_purpose_subagent is True
+        assert cfg.agent.loop.general_purpose_subagent is False
+        assert cfg.agent.runtime.general_purpose_subagent is False
 
     def test_general_purpose_subagent_config_override(self) -> None:
-        cfg = SootheConfig(agent={"runtime": {"general_purpose_subagent": False}})
-        assert cfg.agent.runtime.general_purpose_subagent is False
+        cfg = SootheConfig(agent={"loop": {"general_purpose_subagent": True}})
+        assert cfg.agent.loop.general_purpose_subagent is True
+        assert cfg.agent.runtime.general_purpose_subagent is True
 
     def test_core_agent_recursion_limit_default(self) -> None:
         cfg = SootheConfig()

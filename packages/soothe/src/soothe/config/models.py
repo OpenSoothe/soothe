@@ -835,6 +835,8 @@ class StrangeLoopConfig(BaseModel):
         enabled: Enable agent loop mode.
         max_iterations: Maximum agent loop iterations.
         max_subagent_tasks_per_wave: Cap ``task`` tool completions per Act wave (0 = unlimited).
+        general_purpose_subagent: When false (default), hide/block deepagents ``general-purpose``
+            on CoreAgent ``task`` even if nano ``agent.runtime.general_purpose_subagent`` is true.
         max_tool_calls_per_step: Cap tool results consumed per execute step from the Act stream (0 = unlimited).
         dispatch_timeout_seconds: Max seconds without CoreAgent graph stream chunks during Execute
             before failing the step. 0 disables the dispatch watchdog.
@@ -891,6 +893,14 @@ class StrangeLoopConfig(BaseModel):
         description="Max completed subagent ``task`` tool results per Execute wave (0 = no limit)",
         ge=0,
         le=20,
+    )
+
+    general_purpose_subagent: bool = Field(
+        default=False,
+        description=(
+            "When true, allow CoreAgent task→general-purpose when nano runtime also enables it. "
+            "When false (default), general-purpose is hidden and blocked for StrangeLoop hosts."
+        ),
     )
 
     max_tool_calls_per_step: int = Field(

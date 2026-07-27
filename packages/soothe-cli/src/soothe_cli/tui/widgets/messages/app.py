@@ -29,7 +29,7 @@ class AppMessage(Static):
     DEFAULT_CSS = """
     AppMessage {
         height: auto;
-        padding: 0;
+        padding: 0 2;
         margin: 0 0 1 0;
         color: $text-muted;
         text-style: italic;
@@ -63,7 +63,7 @@ class SummarizationMessage(AppMessage):
     DEFAULT_CSS = """
     SummarizationMessage {
         height: auto;
-        padding: 0;
+        padding: 0 2;
         margin: 0 0 1 0;
         color: $primary;
         background: $surface;

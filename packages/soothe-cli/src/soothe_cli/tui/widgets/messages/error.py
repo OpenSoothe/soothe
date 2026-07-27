@@ -20,7 +20,7 @@ class ErrorMessage(Static):
     DEFAULT_CSS = """
     ErrorMessage {
         height: auto;
-        padding: 1 1 1 0;
+        padding: 1 2;
         margin: 0 0 1 0;
         background: $error-muted;
         color: white;

@@ -320,14 +320,12 @@ class AgentDecision(BaseModel):
     """LLM's decision on next action for goal execution.
 
     Hybrid model: can specify 1 step or N steps.
-    IG-264: Keep execution-critical fields (used by planning_utils).
 
     Attributes:
         type: "execute_steps" or "final"
         steps: Steps to execute (can be 1 or N)
         execution_mode: ``parallel`` (default) or ``dependency`` when steps have dependencies
-        reasoning: Why these steps advance toward goal (used by planning_utils)
-        adaptive_granularity: Step granularity chosen by LLM (used by planning_utils)
+        reasoning: Why these steps advance toward goal
     """
 
     type: Literal["execute_steps", "final"]
@@ -340,7 +338,6 @@ class AgentDecision(BaseModel):
         ),
     )
     reasoning: str = ""
-    adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
     @model_validator(mode="after")
     def validate_decision(self) -> AgentDecision:
@@ -943,7 +940,6 @@ class PlanGeneration(BaseModel):
             omits this field, it defaults to ``parallel``.
         reasoning: First-person plan rationale shown in the TUI cognition card
             (e.g. "I'll …", "Let me …").
-        adaptive_granularity: Optional step granularity hint.
     """
 
     type: Literal["execute_steps", "final"] | None = None
@@ -960,7 +956,6 @@ class PlanGeneration(BaseModel):
         max_length=500,
         description=("First-person plan rationale for the cognition card (e.g. I'll …, Let me …)."),
     )
-    adaptive_granularity: Literal["atomic", "semantic"] | None = None
 
     @model_validator(mode="before")
     @classmethod

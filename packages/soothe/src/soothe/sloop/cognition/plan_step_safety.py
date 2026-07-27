@@ -66,11 +66,10 @@ def plan_has_minimum_steps_for_intake(
     treat_missing_as_undersized: bool = True,
     multi_phase: bool | None = False,
 ) -> bool:
-    """Return True when a plan satisfies the complex-intake minimum step count.
+    """Return True when a plan satisfies the multi_phase complex minimum step count.
 
-    IG-555 required ≥2 steps for all complex plans at iter=0. IG-654 narrows
-    that floor to ``multi_phase`` goals only — CoreAgent can finish non-phased
-    complex work in a single execute step.
+    For ``multi_phase`` complex goals at iter=0, require ≥2 steps. Non-phased
+    complex work may finish in a single CoreAgent execute (IG-654).
     """
     if intake_label != IntakeLabel.COMPLEX:
         return True

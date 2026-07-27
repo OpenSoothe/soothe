@@ -42,3 +42,13 @@ evidence) is unchanged.
 - Non-`multi_phase` complex 1-step plans accepted at iter=0
 - `multi_phase` complex still rejects undersized 1-step and forces replan
 - Plan/gap prompts encode CoreAgent-first single-execute preference
+
+## Cleanse (follow-up)
+
+- Removed unused `adaptive_granularity` from `AgentDecision` / `PlanGeneration`
+  (never read after `planning_utils` was deleted; wire still strips the token if
+  an LLM emits it as a pseudo-step string).
+- Deduped min-step unit tests into `test_plan_step_safety.py` (removed from
+  ledger-projection suite).
+- Dropped stale planner comments about the removed in-planner simple bypass prefix.
+- Aligned Pass 2 fail-safe test fixtures with `simple` (not `complex`).

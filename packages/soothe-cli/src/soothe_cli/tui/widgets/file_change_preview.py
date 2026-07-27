@@ -109,7 +109,7 @@ class FileChangePreviewWidget(Vertical):
     DEFAULT_CSS = """
     FileChangePreviewWidget {
         height: auto;
-        padding: 0;
+        padding: 0 2;
         margin: 0 0 1 0;
     }
 
