@@ -35,7 +35,7 @@ from soothe_sdk.display.snapshot_collapser import (
     split_cards_by_user_segments,
 )
 from soothe_sdk.display.snapshot_types import GoalDisplaySnapshot
-from soothe_sdk.display.transcript_types import MessageData, MessageType
+from soothe_sdk.display.transcript_types import MessageData
 
 from soothe_daemon.display.loop_card_ledger import LoopCardLedger
 from soothe_daemon.display.loop_history_probe import filter_derivable_log_events

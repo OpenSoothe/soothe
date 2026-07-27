@@ -64,7 +64,6 @@ channels:
           - $ref: '#/components/messages/loopMessagesRequest'
           - $ref: '#/components/messages/loopStateGetRequest'
           - $ref: '#/components/messages/loopStateUpdateRequest'
-          - $ref: '#/components/messages/loopCardsFetchRequest'
           - $ref: '#/components/messages/loopHistoryFetchRequest'
           # Job RPC requests
           - $ref: '#/components/messages/jobCreateRequest'
@@ -390,18 +389,6 @@ components:
         as_node:
           type: string
           description: Node to apply update as
-
-    loopCardsFetchParams:
-      type: object
-      required: [loop_id]
-      properties:
-        loop_id:
-          type: string
-          minLength: 1
-          description: Loop identifier
-        since:
-          type: string
-          description: Fetch cards after this sequence
 
     loopHistoryFetchParams:
       type: object
@@ -1029,24 +1016,6 @@ components:
                 const: loop_state_update
               params:
                 $ref: '#/components/schemas/loopStateUpdateParams'
-              id:
-                type: string
-
-    loopCardsFetchRequest:
-      title: Fetch display cards
-      correlationId:
-        $ref: '#/components/correlationIds/operationId'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/baseEnvelope'
-          - type: object
-            properties:
-              type:
-                const: request
-              method:
-                const: loop_cards_fetch
-              params:
-                $ref: '#/components/schemas/loopCardsFetchParams'
               id:
                 type: string
 
