@@ -88,6 +88,42 @@ def _plan_phase_chat_model(model: Any) -> Any:
         return model
 
 
+def _prompt_chars_for_messages(messages: list[Any]) -> int:
+    """Sum estimated content chars across prompt messages (IG-653)."""
+    return sum(estimate_content_chars(getattr(m, "content", None)) for m in messages)
+
+
+def _log_plan_phase_timing(
+    *,
+    phase: str,
+    elapsed_ms: float,
+    prompt_chars: int,
+    iteration: int,
+    lightweight: bool | None = None,
+) -> None:
+    """Emit stable INFO timing for split-path plan phases (IG-653).
+
+    Grep: ``[Plan] phase=gap|assess|generate``.
+    """
+    if lightweight is None:
+        logger.info(
+            "[Plan] phase=%s elapsed_ms=%.0f prompt_chars=%d iter=%d",
+            phase,
+            elapsed_ms,
+            prompt_chars,
+            iteration,
+        )
+        return
+    logger.info(
+        "[Plan] phase=%s elapsed_ms=%.0f prompt_chars=%d iter=%d lightweight=%s",
+        phase,
+        elapsed_ms,
+        prompt_chars,
+        iteration,
+        str(lightweight).lower(),
+    )
+
+
 _invoke_plan_structured_output = invoke_structured_chat_typed
 
 
@@ -203,6 +239,7 @@ class LLMPlanner:
         *,
         plan_assess_model: Any | None = None,
         plan_generate_model: Any | None = None,
+        plan_gap_model: Any | None = None,
         loop_id: str | None = None,
     ) -> None:
         """Initialize LLMPlanner.
@@ -212,6 +249,7 @@ class LLMPlanner:
             config: Optional configuration for shared context XML in prompts.
             plan_assess_model: Model for plan-assess and continuation-assess calls.
             plan_generate_model: Model for plan-generate calls.
+            plan_gap_model: Model for plan-gap-analysis calls (defaults to assess model).
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
         from soothe.prompts import PromptBuilder
@@ -219,6 +257,7 @@ class LLMPlanner:
         self._model = model
         self._plan_assess_model = plan_assess_model or model
         self._plan_generate_model = plan_generate_model or model
+        self._plan_gap_model = plan_gap_model or self._plan_assess_model
         self._config = config
         self._loop_id = loop_id
         self._prompt_builder = PromptBuilder(config)
@@ -1037,11 +1076,18 @@ class LLMPlanner:
             context_bundle=context_bundle,
             plan_gap=plan_gap,
         )
+        t0 = time.perf_counter()
         assessment, ai_response = await self._assess_status_with_response(
             assess_messages,
             goal,
             state.iteration,
             thread_id=state.thread_id,
+        )
+        _log_plan_phase_timing(
+            phase="assess",
+            elapsed_ms=(time.perf_counter() - t0) * 1000,
+            prompt_chars=_prompt_chars_for_messages(assess_messages),
+            iteration=state.iteration,
         )
         assessment = normalize_status_assessment(assessment, plan_gap)
         assessment.goal_progress = derive_goal_progress_from_status(state, assessment, plan_gap)
@@ -1117,11 +1163,12 @@ class LLMPlanner:
             call_kind="gap",
             context_bundle=context_bundle,
         )
-        model = _plan_phase_chat_model(self._plan_assess_model)
+        model = _plan_phase_chat_model(self._plan_gap_model)
         lf_cfg = self._planner_langfuse_run_config(
             thread_id=state.thread_id,
             phase="plan-gap-analysis",
         )
+        t0 = time.perf_counter()
         gap = await self._invoke_structured(
             model,
             gap_messages,
@@ -1129,6 +1176,12 @@ class LLMPlanner:
             config=lf_cfg,
             thread_id=state.thread_id,
             normalize=coerce_plan_gap_analysis_wire_dict,
+        )
+        _log_plan_phase_timing(
+            phase="gap",
+            elapsed_ms=(time.perf_counter() - t0) * 1000,
+            prompt_chars=_prompt_chars_for_messages(gap_messages),
+            iteration=state.iteration,
         )
         if gap is None:
             raise ValueError("PlanGapAnalysis returned None")
@@ -1159,6 +1212,7 @@ class LLMPlanner:
         checkpoint: Any | None = None,
         exclude_goal_id: str | None = None,
         plan_gap: Any | None = None,
+        lightweight: bool = False,
     ) -> Any:
         """Generate plan after an existing assess result (split graph flow, RFC-214).
 
@@ -1256,12 +1310,20 @@ class LLMPlanner:
             inline_assessment=assessment,
             plan_gap=plan_gap,
         )
+        t0 = time.perf_counter()
         plan_result, ai_response = await self._generate_plan_with_response(
             generate_messages,
             assessment,
             goal,
             state.iteration,
             thread_id=state.thread_id,
+        )
+        _log_plan_phase_timing(
+            phase="generate",
+            elapsed_ms=(time.perf_counter() - t0) * 1000,
+            prompt_chars=_prompt_chars_for_messages(generate_messages),
+            iteration=state.iteration,
+            lightweight=lightweight,
         )
 
         from soothe.sloop.cognition.plan_step_briefs import (
@@ -1359,6 +1421,7 @@ class LLMPlanner:
             checkpoint=checkpoint,
             exclude_goal_id=exclude_goal_id,
             plan_gap=plan_gap,
+            lightweight=True,
         )
 
     async def plan(
@@ -1425,7 +1488,6 @@ class LLMPlanner:
                 assessment.goal_progress = derive_goal_progress_from_status(state, assessment, None)
                 assess_ms = (time.perf_counter() - t_assess) * 1000
                 plan_gen_ms = 0.0
-                llm_calls = 1
 
                 # Guard: always reject premature 'done' at iteration 0 with no execution
                 if assessment.status == "done":
@@ -1531,7 +1593,6 @@ class LLMPlanner:
                         thread_id=state.thread_id,
                     )
                     plan_gen_ms = (time.perf_counter() - t_plan) * 1000
-                    llm_calls = 2
                     result = self._combine_results(assessment, plan_result)
 
                 decision_info = ""
@@ -1546,23 +1607,20 @@ class LLMPlanner:
                     result.goal_progress,
                     decision_info,
                 )
-                prompt_chars = sum(
-                    estimate_content_chars(getattr(m, "content", None)) for m in assess_messages
+                _log_plan_phase_timing(
+                    phase="assess",
+                    elapsed_ms=assess_ms,
+                    prompt_chars=_prompt_chars_for_messages(assess_messages),
+                    iteration=state.iteration,
                 )
-                if generate_messages:
-                    prompt_chars += sum(
-                        estimate_content_chars(getattr(m, "content", None))
-                        for m in generate_messages
+                if generate_messages or plan_gen_ms > 0:
+                    _log_plan_phase_timing(
+                        phase="generate",
+                        elapsed_ms=plan_gen_ms,
+                        prompt_chars=_prompt_chars_for_messages(generate_messages),
+                        iteration=state.iteration,
+                        lightweight=False,
                     )
-                logger.info(
-                    "[LLMPlanner] timings iter=%d assess_ms=%.1f plan_gen_ms=%.1f llm_calls=%d "
-                    "prompt_chars=%d",
-                    state.iteration,
-                    assess_ms,
-                    plan_gen_ms,
-                    llm_calls,
-                    prompt_chars,
-                )
                 break
 
             except Exception as e:

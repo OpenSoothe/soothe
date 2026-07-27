@@ -217,7 +217,8 @@ class TestSootheConfig:
 
     def test_loop_plan_model_roles_default(self) -> None:
         cfg = SootheConfig()
-        assert cfg.agent.loop.plan_assess_model_role == "think"
+        assert cfg.agent.loop.plan_assess_model_role == "fast"
+        assert cfg.agent.loop.plan_gap_model_role == "fast"
         assert cfg.agent.loop.plan_generate_model_role == "think"
         assert cfg.agent.loop.goal_synthesis_model_role == "default"
 
@@ -225,13 +226,15 @@ class TestSootheConfig:
         cfg = SootheConfig(
             agent={
                 "loop": {
-                    "plan_assess_model_role": "fast",
+                    "plan_assess_model_role": "think",
+                    "plan_gap_model_role": "default",
                     "plan_generate_model_role": "think",
                     "goal_synthesis_model_role": "fast",
                 }
             }
         )
-        assert cfg.agent.loop.plan_assess_model_role == "fast"
+        assert cfg.agent.loop.plan_assess_model_role == "think"
+        assert cfg.agent.loop.plan_gap_model_role == "default"
         assert cfg.agent.loop.plan_generate_model_role == "think"
         assert cfg.agent.loop.goal_synthesis_model_role == "fast"
 

@@ -13,11 +13,13 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
         agent={
             "loop": {
                 "plan_assess_model_role": "fast",
+                "plan_gap_model_role": "default",
                 "plan_generate_model_role": "think",
             }
         }
     )
     assess_model = MagicMock(name="assess")
+    gap_model = MagicMock(name="gap")
     generate_model = MagicMock(name="generate")
     base_model = MagicMock(name="base")
 
@@ -26,13 +28,42 @@ def test_resolve_planner_uses_loop_plan_model_roles() -> None:
         "create_chat_model",
         side_effect=lambda *args: {
             "fast": assess_model,
+            "default": gap_model,
             "think": generate_model,
         }[args[-1]],
     ) as create_chat_model:
         planner = resolve_planner(cfg, base_model)
 
-    assert any(call.args[-1] == "fast" for call in create_chat_model.call_args_list)
-    assert any(call.args[-1] == "think" for call in create_chat_model.call_args_list)
+    roles = [call.args[-1] for call in create_chat_model.call_args_list]
+    assert "fast" in roles
+    assert "default" in roles
+    assert "think" in roles
     assert planner._plan_assess_model is assess_model
+    assert planner._plan_gap_model is gap_model
     assert planner._plan_generate_model is generate_model
     assert planner._model is base_model
+
+
+def test_resolve_planner_defaults_gap_and_assess_to_fast() -> None:
+    cfg = SootheConfig()
+    assert cfg.agent.loop.plan_assess_model_role == "fast"
+    assert cfg.agent.loop.plan_gap_model_role == "fast"
+    assert cfg.agent.loop.plan_generate_model_role == "think"
+
+    fast_model = MagicMock(name="fast")
+    think_model = MagicMock(name="think")
+    base_model = MagicMock(name="base")
+
+    with patch.object(
+        SootheConfig,
+        "create_chat_model",
+        side_effect=lambda *args: {
+            "fast": fast_model,
+            "think": think_model,
+        }[args[-1]],
+    ):
+        planner = resolve_planner(cfg, base_model)
+
+    assert planner._plan_assess_model is fast_model
+    assert planner._plan_gap_model is fast_model
+    assert planner._plan_generate_model is think_model

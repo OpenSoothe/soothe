@@ -77,8 +77,9 @@ agent:
     context_overflow_threshold_pct: 0.8
     context_compaction_target_pct: 0.6
     step_context_check_enabled: false
-    plan_assess_model_role: think
+    plan_assess_model_role: fast
     plan_gap_analysis_enabled: true
+    plan_gap_model_role: fast
     plan_generate_model_role: think
     goal_synthesis_model_role: default
     rules:

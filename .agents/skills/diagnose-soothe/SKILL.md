@@ -73,7 +73,10 @@ rg -i 'error|exception|failed|Traceback' ~/.soothe/logs/soothe.log* | tail -80
 rg '^\d{4}-\d{2}-\d{2}.*\[[0-9a-f]{4}\]' ~/.soothe/logs/soothe.log* | tail -30
 
 # Planner / iteration
-rg '\[Loop\]|\[Plan\]|\[Execute\]|\[LLMPlanner\]' ~/.soothe/logs/soothe.log* | tail -50
+rg '\[Loop\]|\[Plan\]|\[Execute\]' ~/.soothe/logs/soothe.log* | tail -50
+
+# Plan-phase wall-clock (IG-653): gap / assess / generate
+rg '\[Plan\] phase=' ~/.soothe/logs/soothe.log* | tail -40
 ```
 
 ### 2. daemon.log — transport & workers
@@ -153,7 +156,7 @@ Key lines:
 
 ### B2. Abnormal tool calls
 
-Requires **DEBUG** level in soothe/runner logs for full `[Tool#N]` lines. At INFO, still catch warnings/errors.
+`[Tool#N]` completion lines are at **INFO**. Dedicated `[write_todos]` dumps remain DEBUG.
 
 #### Errors
 
@@ -171,7 +174,7 @@ Parse step completion lines for `in {ms}ms`. Flag steps where:
 - `duration_ms > 120_000` (2 min) — investigate tool/subagent breakdown
 - Step started (execute / step id in logs) with no completion within 5× median step time
 
-For DEBUG tool timing, count tools per step and note last `[Tool#N]` before silence (hang indicator).
+For tool timing, count tools per step and note last `[Tool#N]` before silence (hang indicator).
 
 ```bash
 rg "\[$SUFFIX\].*Step .* (completed|failed).* in [0-9]+ms" "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
@@ -179,7 +182,7 @@ rg "\[$SUFFIX\].*Step .* (completed|failed).* in [0-9]+ms" "$LOG" ~/.soothe/logs
 
 #### Repetitive calls (same tool + same args)
 
-From DEBUG lines:
+From INFO lines:
 
 ```
 [Tool#N] {name}({id}) args={...} → {type}, {bytes}B
@@ -202,7 +205,8 @@ Also flag:
 Collect all plan-related lines:
 
 ```bash
-rg "\[$SUFFIX\].*(\[Loop\] Plan:|\[Plan\]|\[PlanGenerate\]|\[LLMPlanner\]|Plan result:|\[PlanGen\] Dropped)" "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
+rg "\[$SUFFIX\].*(\[Loop\] Plan:|\[Plan\]|\[PlanGenerate\]|Plan result:|\[PlanGen\] Dropped)" "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
+rg "\[$SUFFIX\].*\[Plan\] phase=" "$LOG" ~/.soothe/logs/soothe.log* 2>/dev/null
 ```
 
 For each iteration, record:
@@ -305,8 +309,8 @@ rg "Warehouse path does not exist|Skillify index ready|Failed to parse.*SKILL\.m
 | `[StrangeLoop] /skill: user line did not expand` | W | `/skill:name` submitted but skill missing or unreadable `SKILL.md` on this host |
 | `[Skill] core intent auto-invoked ['x']` | D | Turn-0 prefetch matched core tier; body preloaded into `SKILL_CONTEXT` |
 | `[Skill] intent prefetch discovered deferred ['x']` | D | Deferred skill metadata discovered only — body not loaded until `invoke_skill` |
-| `[Tool#N] search_skills(...)` | D | Agent searched deferred catalog |
-| `[Tool#N] invoke_skill(...)` | D | Agent requested full skill body load |
+| `[Tool#N] search_skills(...)` | I | Agent searched deferred catalog |
+| `[Tool#N] invoke_skill(...)` | I | Agent requested full skill body load |
 | Tool result `Skill not found: 'x'` | — | Name not in catalog (typo, wrong host, or workspace skill not synced) |
 | Tool result `No deferred skills matched query=...` | — | Search returned nothing (query too narrow, already activated, or index empty) |
 | Tool result `Loaded skill 'x'` | — | Body loaded; should appear in `SKILL_CONTEXT` on next hop |
@@ -397,7 +401,7 @@ soothed stop && soothed start
 soothe --log-level DEBUG
 ```
 
-Reproduce minimally, then re-run Workflow B. `[Tool#N]`, `[write_todos]`, and `[Skill]` lines require DEBUG.
+Reproduce minimally, then re-run Workflow B. `[write_todos]` and `[Skill]` detail lines require DEBUG; `[Tool#N]` completion lines are INFO.
 
 ## Guardrails
 

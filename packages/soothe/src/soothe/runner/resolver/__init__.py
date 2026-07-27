@@ -82,6 +82,12 @@ def resolve_planner(
         fallback=planner_model,
         phase="plan-assess",
     )
+    plan_gap_model = _create_loop_phase_model(
+        config,
+        loop_cfg.plan_gap_model_role,
+        fallback=plan_assess_model,
+        phase="plan-gap-analysis",
+    )
     plan_generate_model = _create_loop_phase_model(
         config,
         loop_cfg.plan_generate_model_role,
@@ -96,4 +102,5 @@ def resolve_planner(
         config=config,
         plan_assess_model=plan_assess_model,
         plan_generate_model=plan_generate_model,
+        plan_gap_model=plan_gap_model,
     )

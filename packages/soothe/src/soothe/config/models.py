@@ -858,7 +858,8 @@ class StrangeLoopConfig(BaseModel):
         tool_retry: Tool failure retry policy.
         llm_rate_limit: LLM rate limiting, per-call timeouts, and retry escalation.
         tool_timeout: Tool timeout middleware configuration (IG-511).
-        plan_assess_model_role: Router role for plan-assess LLM calls (default ``think``).
+        plan_assess_model_role: Router role for plan-assess LLM calls (default ``fast``).
+        plan_gap_model_role: Router role for plan-gap-analysis LLM calls (default ``fast``).
         plan_generate_model_role: Router role for plan-generate LLM calls (default ``think``).
         goal_synthesis_model_role: Router role for goal-completion synthesis streaming (default ``default``).
 
@@ -1106,7 +1107,7 @@ class StrangeLoopConfig(BaseModel):
     """Wrap tool calls with configurable timeout to prevent indefinite hangs."""
 
     plan_assess_model_role: ModelRole = Field(
-        default="think",
+        default="fast",
         description=(
             "Router model role for plan-assess structured LLM calls "
             "(status assessment and continuation routing)."
@@ -1116,6 +1117,14 @@ class StrangeLoopConfig(BaseModel):
     plan_gap_analysis_enabled: bool = Field(
         default=True,
         description="Run plan-gap-analysis before plan-assess on mid-goal paths (IG-557).",
+    )
+
+    plan_gap_model_role: ModelRole = Field(
+        default="fast",
+        description=(
+            "Router model role for plan-gap-analysis structured LLM calls "
+            "(coverage map before assess; IG-653)."
+        ),
     )
 
     plan_generate_model_role: ModelRole = Field(
