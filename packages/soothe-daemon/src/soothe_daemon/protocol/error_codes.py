@@ -45,11 +45,7 @@ __all__ = [
 
 
 class ErrorCode(IntEnum):
-    """Numeric error codes with reserved ranges (RFC-450 §7.3).
-
-    The enum intentionally aliases legacy string code names to their new
-    numeric equivalents so call sites can migrate incrementally.
-    """
+    """Numeric error codes with reserved ranges (RFC-450 §7.3)."""
 
     # Protocol-level (-32768 to -32000)
     PARSE_ERROR = -32700

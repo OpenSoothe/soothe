@@ -119,15 +119,14 @@ class _HistoryMixin:
         return _binder.convert_combined_to_data(combined)
 
     # ------------------------------------------------------------------
-    # I/O: resume reads from the daemon's bound card ledger (RFC-413).
-    # The daemon owns derivation and exposes ``loop_history_fetch`` (RFC-631)
-    # with a ``loop_cards_fetch`` fallback for clients that predate RFC-631.
+    # I/O: resume reads from the daemon's bound card ledger (RFC-631).
+    # The daemon owns derivation and exposes ``loop_history_fetch``; the
+    # legacy ``loop_cards_fetch`` fallback was removed when all supported
+    # clients migrated to the goal-snapshot + live-tail contract.
     # ------------------------------------------------------------------
 
     async def _fetch_loop_history_data(self, loop_id: str) -> _LoopHistoryPayload:
         """Fetch conversation history from goal snapshots + live card tail.
-
-        RFC-631: prefers ``loop_history_fetch``; falls back to ``loop_cards_fetch``.
 
         Args:
             loop_id: Loop id.
@@ -139,43 +138,33 @@ class _HistoryMixin:
         if self._daemon_session is None:
             return _LoopHistoryPayload([], 0)
 
+        from soothe_sdk.display.card_binder import (
+            merge_consecutive_assistant_cards,
+            sanitize_resume_display_cards,
+        )
         from soothe_sdk.display.card_ledger import card_from_wire_dict, card_to_wire_dict
         from soothe_sdk.display.snapshot_types import GoalDisplaySnapshot
 
-        context_tokens = 0
-        goal_dicts: tuple[dict[str, Any], ...] = ()
+        try:
+            response = await self._daemon_session.fetch_loop_history(loop_id)
+        except Exception:
+            logger.warning("loop_history_fetch failed for %s", loop_id, exc_info=True)
+            return _LoopHistoryPayload([], 0)
+
+        if not getattr(response, "success", False):
+            return _LoopHistoryPayload([], 0)
+
+        context_tokens = int(getattr(response, "context_tokens", 0) or 0)
+        goals_raw = getattr(response, "goals", []) or []
+        goal_dicts = tuple(g for g in goals_raw if isinstance(g, dict))
+
         wire_cards: list[dict[str, Any]] = []
-
-        fetch_history = getattr(self._daemon_session, "fetch_loop_history", None)
-        if callable(fetch_history):
-            try:
-                response = await fetch_history(loop_id)
-            except Exception:
-                logger.warning("loop_history_fetch failed for %s", loop_id, exc_info=True)
-                response = None
-            if response is not None and getattr(response, "success", False):
-                context_tokens = int(getattr(response, "context_tokens", 0) or 0)
-                goals_raw = getattr(response, "goals", []) or []
-                goal_dicts = tuple(g for g in goals_raw if isinstance(g, dict))
-                for goal_raw in goal_dicts:
-                    goal = GoalDisplaySnapshot.from_wire_dict(goal_raw)
-                    wire_cards.extend(card_to_wire_dict(card) for card in goal.display_cards)
-                for card in getattr(response, "live_cards", []) or []:
-                    if isinstance(card, dict):
-                        wire_cards.append(card)
-
-        if not wire_cards:
-            try:
-                response = await self._daemon_session.fetch_loop_cards(loop_id)
-            except Exception:
-                logger.warning("loop_cards_fetch failed for %s", loop_id, exc_info=True)
-                return _LoopHistoryPayload([], 0)
-
-            if not getattr(response, "success", False):
-                return _LoopHistoryPayload([], 0)
-
-            wire_cards = list(getattr(response, "cards", []) or [])
-            context_tokens = int(getattr(response, "context_tokens", 0) or 0)
+        for goal_raw in goal_dicts:
+            goal = GoalDisplaySnapshot.from_wire_dict(goal_raw)
+            wire_cards.extend(card_to_wire_dict(card) for card in goal.display_cards)
+        for card in getattr(response, "live_cards", []) or []:
+            if isinstance(card, dict):
+                wire_cards.append(card)
 
         if not wire_cards:
             return _LoopHistoryPayload([], context_tokens, goal_dicts)
@@ -189,11 +178,6 @@ class _HistoryMixin:
                 exc_info=True,
             )
             return _LoopHistoryPayload([], context_tokens, goal_dicts)
-
-        from soothe_sdk.display.card_binder import (
-            merge_consecutive_assistant_cards,
-            sanitize_resume_display_cards,
-        )
 
         data = sanitize_resume_display_cards(merge_consecutive_assistant_cards(data))
 

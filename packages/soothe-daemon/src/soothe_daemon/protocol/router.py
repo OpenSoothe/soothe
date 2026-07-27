@@ -883,7 +883,7 @@ class MessageRouter:
         d._session_manager.record_delivery_ack(str(client_id), loop_id, seq)
 
     async def _handle_command(self, client_id: Any, msg: dict[str, Any]) -> None:
-        """Handle legacy ``command`` (slash) messages.
+        """Handle ``slash_command`` notifications.
 
         Routes ``/exit`` and ``/quit`` to detach, ``/cancel`` to loop
         cancellation, and everything else to the loop input dispatcher.

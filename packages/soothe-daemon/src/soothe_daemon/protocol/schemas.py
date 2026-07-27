@@ -225,7 +225,7 @@ class LoopHistoryFetchParams(ParamsBase):
 
 
 class LoopDetachParams(ParamsBase):
-    """Params for method=loop_detach (legacy flat type)."""
+    """Params for method=loop_detach, type=request."""
 
     loop_id: str = Field(..., min_length=1)
 
@@ -375,13 +375,13 @@ class AuthRefreshParams(ParamsBase):
 
 
 class CommandParams(ParamsBase):
-    """Params for legacy type=command (slash command)."""
+    """Params for type=notification, method=slash_command."""
 
     cmd: str = Field(..., min_length=1)
 
 
 class CommandRequestParams(ParamsBase):
-    """Params for legacy type=command_request (structured RPC command)."""
+    """Params for type=request, method=rpc_command."""
 
 
 # ---------------------------------------------------------------------------
@@ -398,16 +398,14 @@ class SubscribeParams(ParamsBase):
 
 
 class AutopilotSubscribeParams(ParamsBase):
-    """Params for type=autopilot_subscribe (legacy flat) or
-    (subscribe, autopilot_events) in protocol-1 envelope.
-    """
+    """Params for type=subscribe, method=autopilot_events."""
 
     job_id: str | None = None
     filters: dict[str, Any] | None = None
 
 
 class AutopilotUnsubscribeParams(ParamsBase):
-    """Params for type=autopilot_unsubscribe (legacy flat)."""
+    """Params for type=unsubscribe (non-envelope control type)."""
 
 
 class AutopilotStatusParams(EmptyParams):
@@ -536,15 +534,12 @@ class CronCancelParams(ParamsBase):
 
 # ---------------------------------------------------------------------------
 # Wire schema registry — maps (type, method_or_None) → params model.
-# Wire schema registry — maps (type, method_or_None) → params model.
 #
-# The key is ``(msg_type, method)`` where ``method`` is ``None`` for messages
-# that use only the ``type`` field (legacy flat format).  In the protocol-1
-# envelope, the key is ``(type, method)`` — e.g. ``("request", "loop_get")``.
-#
-# Both legacy flat keys (``(msg_type, None)``) and protocol-1 envelope keys
-# (``(type, method)``) are registered so the same registry serves both wire
-# formats during the migration window.
+# The key is ``(type, method)`` where ``method`` is ``None`` for non-envelope
+# control types (``connection_init``, ``ping``, ``pong``).  For protocol-1
+# envelope messages, the key is ``(type, method)`` — e.g.
+# ``("request", "loop_get")``.  The daemon accepts envelope-form only; legacy
+# flat-form messages are rejected at dispatch (RFC-450 §6.3).
 # ---------------------------------------------------------------------------
 
 PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {

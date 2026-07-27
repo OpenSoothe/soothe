@@ -35,7 +35,7 @@ VALID_TYPES: frozenset[str] = frozenset(m.value for m in MessageType)
 
 # Envelope message classes that require ``proto == "1"`` (RFC-450 §8.1).
 # ``ping`` and ``pong`` carry ``proto`` but are validated leniently, so they
-# are exempt. Legacy flat types are also exempt during the migration window.
+# are exempt.
 _CONTROL_TYPES: frozenset[str] = frozenset({MessageType.PING.value, MessageType.PONG.value})
 _ENVELOPE_TYPES: frozenset[str] = VALID_TYPES - _CONTROL_TYPES
 

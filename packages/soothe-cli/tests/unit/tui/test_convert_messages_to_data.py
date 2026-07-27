@@ -485,14 +485,14 @@ def test_convert_loop_events_renders_interleaved_conversation_rows() -> None:
 # Tests for ``_get_loop_state_values`` / ``_recover_missing_checkpoint_messages``
 # were removed when RFC-413 made the daemon authoritative — those helpers
 # are gone (the daemon owns derivation; the TUI reads cards via
-# ``loop_cards_fetch``). The recovery-from-conversation-log behavior is now
+# ``loop_history_fetch``). The recovery-from-conversation-log behavior is now
 # covered server-side in
 # ``soothe-daemon/tests/unit/display/test_loop_card_manager.py``.
 
 
 @pytest.mark.asyncio
 async def test_fetch_loop_history_data_uses_ledger_rpc() -> None:
-    """RFC-413: ``_fetch_loop_history_data`` is the single ledger path."""
+    """``_fetch_loop_history_data`` is the single ledger path (RFC-631)."""
     from soothe_sdk.display.card_ledger import card_to_wire_dict
     from soothe_sdk.display.transcript_types import MessageData, MessageType
 
@@ -501,13 +501,23 @@ async def test_fetch_loop_history_data_uses_ledger_rpc() -> None:
         MessageData(type=MessageType.ASSISTANT, content="hello"),
     ]
     wire_cards = [card_to_wire_dict(c) for c in cards]
+    goal_dict = {
+        "goal_id": "loop_goal_0",
+        "goal_index": 0,
+        "goal_text": "greet",
+        "status": "completed",
+        "display_cards": wire_cards,
+        "card_count": 2,
+        "goal_completion": "hello",
+    }
 
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
-    daemon_session.fetch_loop_cards = AsyncMock(
+    daemon_session.fetch_loop_history = AsyncMock(
         return_value=SimpleNamespace(
-            cards=wire_cards,
-            seq=2,
+            goals=[goal_dict],
+            live_cards=[],
+            live_goal_index=None,
             context_tokens=512,
             success=True,
         )
@@ -518,11 +528,12 @@ async def test_fetch_loop_history_data_uses_ledger_rpc() -> None:
 
     assert [m.content for m in payload.messages] == ["hi", "hello"]
     assert payload.context_tokens == 512
+    assert payload.goals == (goal_dict,)
 
 
 @pytest.mark.asyncio
-async def test_fetch_loop_history_data_prefers_loop_history_fetch() -> None:
-    """RFC-631: prefer goal snapshots + live tail over legacy card fetch."""
+async def test_fetch_loop_history_data_merges_goal_snapshots_with_live_tail() -> None:
+    """Goal-snapshot cards are concatenated before the live card tail."""
     from soothe_sdk.display.card_ledger import card_to_wire_dict
     from soothe_sdk.display.transcript_types import MessageData, MessageType
 
@@ -554,9 +565,6 @@ async def test_fetch_loop_history_data_prefers_loop_history_fetch() -> None:
             success=True,
         )
     )
-    daemon_session.fetch_loop_cards = AsyncMock(
-        side_effect=AssertionError("legacy fetch should not run")
-    )
     app._daemon_session = daemon_session
 
     payload = await app._fetch_loop_history_data("loop-631")
@@ -571,7 +579,7 @@ async def test_fetch_loop_history_data_returns_empty_on_rpc_error() -> None:
     """When the ledger RPC raises, render an empty payload instead of crashing."""
     app = object.__new__(SootheApp)
     daemon_session = SimpleNamespace()
-    daemon_session.fetch_loop_cards = AsyncMock(side_effect=RuntimeError("boom"))
+    daemon_session.fetch_loop_history = AsyncMock(side_effect=RuntimeError("boom"))
     app._daemon_session = daemon_session
 
     payload = await app._fetch_loop_history_data("loop-2")
