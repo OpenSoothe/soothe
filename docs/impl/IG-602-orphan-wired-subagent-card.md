@@ -12,7 +12,7 @@
 
 Intake-only wired specialists run via direct invoke (no CoreAgent `task`), so the TUI never mounts a parented SubAgent card. This guide implements the **stream bridge** (RFC-630 §6.3.3) and **orphan SubAgent card** (RFC-628 Part III): lifecycle emits + custom-wire forward from `invoke_wired_subagent`, and TUI mount/route/complete without a parent step.
 
-`planner` (catalog wire → resolve → execute) is **out of scope** — unchanged.
+All allowlisted specialists (`planner`, `browser_use`, `deep_research`, `academic_research`) use this path after [IG-656](IG-656-planner-intake-only.md).
 
 ---
 
@@ -47,7 +47,7 @@ astream / custom bridge → for each soothe.subagent.*:
 on success → extract report → ledger → wired_subagent_completed
 on exception → wired_subagent_failed (+ existing fatal policy)
 on cancel → wired_subagent_cancelled (best-effort)
-→ wired_route_next = goal_completion
+→ route to goal_completion
 ```
 
 | Field | Source |
@@ -112,7 +112,7 @@ User-visible strings: no IG/RFC identifiers.
 
 | Test | Assert |
 |------|--------|
-| Orchestrator happy path | Emits started; ≥1 forwarded custom (fake runnable writing wire event); completed; ledger Human/AI; `wired_route_next=goal_completion` |
+| Orchestrator happy path | Emits started; ≥1 forwarded custom (fake runnable writing wire event); completed; ledger Human/AI; routes to `goal_completion` |
 | Orchestrator failure | failed lifecycle + existing error outcome |
 | Orchestrator planner path | No orphan lifecycle emits |
 | TUI mount | started → card in registry with empty parent; mounted |

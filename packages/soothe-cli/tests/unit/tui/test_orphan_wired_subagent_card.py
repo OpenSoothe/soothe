@@ -8,7 +8,6 @@ from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     _complete_orphan_subagent_card,
     _mount_orphan_subagent_card,
-    _orphan_registry_key,
     _route_orphan_wire_event,
 )
 
@@ -38,10 +37,8 @@ async def test_mount_orphan_subagent_card_registers_keys() -> None:
         description="World Cup news",
     )
     assert card is not None
-    assert getattr(card, "_parent_step_id", "") == ""
+    assert getattr(card, "_invocation_id", "") == "abc123"
     assert adapter._orphan_cards_by_invocation["abc123"] is card
-    assert adapter._subagent_cards_by_key[_orphan_registry_key("deep_research", "abc123")] is card
-    assert "XYZ-01:t0" not in adapter._subagent_cards_by_key
     assert card in adapter._mounted  # type: ignore[attr-defined]
 
 
@@ -91,8 +88,6 @@ async def test_complete_orphan_clears_registry() -> None:
         summary="Done",
     )
     assert "inv2" not in adapter._orphan_cards_by_invocation
-    assert _orphan_registry_key("deep_research", "inv2") not in adapter._subagent_cards_by_key
-    assert "WRE-02:t0" not in adapter._subagent_cards_by_key
 
 
 @pytest.mark.asyncio
@@ -155,7 +150,6 @@ async def test_orphan_browser_use_step_and_lifecycle() -> None:
     assert handled is True
     assert getattr(card, "_status", "") == "success"
     assert "bu-inv" not in adapter._orphan_cards_by_invocation
-    assert _orphan_registry_key("browser_use", "bu-inv") not in adapter._subagent_cards_by_key
 
 
 @pytest.mark.asyncio

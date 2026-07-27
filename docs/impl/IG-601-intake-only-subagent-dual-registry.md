@@ -1,14 +1,16 @@
 # IG-601: Intake-Only Subagent Dual Registry (True Invisibility)
 
 **Created**: 2026-07-14
-**Status**: Implemented
-**Related**: [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md), [IG-599](IG-599-pass2-wired-subagent-direct-route.md), [IG-600](IG-600-intake-only-wire-subagent-exposure.md)
+**Status**: Implemented (amended by [IG-656](IG-656-planner-intake-only.md) — `planner` is also intake-only)
+**Related**: [RFC-630](../specs/RFC-630-start-phase-llm-intake-and-branch-routing.md), [IG-599](IG-599-pass2-wired-subagent-direct-route.md), [IG-600](IG-600-intake-only-wire-subagent-exposure.md), [IG-656](IG-656-planner-intake-only.md)
 
 ---
 
 ## Executive Summary
 
-Make intake-only specialists (`browser_use`, `deep_research`, `academic_research`) **absent from the main CoreAgent graph** (not merely catalog-filtered). Register them on a parallel intake-only registry and invoke them **directly** from `invoke_wired_subagent`. `planner` stays on the open CoreAgent `task` catalog and continues to use resolve → execute.
+Make intake-only specialists **absent from the main CoreAgent graph** (not merely catalog-filtered). Register them on a parallel intake-only registry and invoke them **directly** from `invoke_wired_subagent`.
+
+Originally covered `browser_use`, `deep_research`, `academic_research` with `planner` dual-exposed on CoreAgent `task`. **IG-656** moves `planner` into the same intake-only set (no resolve → execute catalog path).
 
 ---
 
@@ -17,9 +19,7 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
 1. `AgentBuilder` partitions `resolve_subagents()` into:
    - **catalog** → `create_deep_agent(subagents=catalog)` / `SootheNanoAgent.subagents`
    - **intake-only** → `SootheNanoAgent.intake_only_subagents` (lookup only; never on `task`)
-2. `invoke_wired_subagent`:
-   - **intake-only wire**: stream specialist (prefer `astream` custom+values; `ainvoke` fallback) → ledger Human/AI execute-step → route `goal_completion` (progress via IG-602 orphan card)
-   - **catalog wire (`planner`)**: inject trivial plan → route `resolve_decision` (unchanged)
+2. `invoke_wired_subagent`: stream specialist (prefer `astream` custom+values; `ainvoke` fallback) → ledger Human/AI execute-step → route `goal_completion` (progress via IG-602 orphan card). Catalog resolve→execute for `planner` removed in IG-656.
 3. StrangeLoop `PlanContext` remains catalog-filtered (IG-600).
 4. Open-hop `task` for those names fails naturally (not registered); keep middleware guard as belt-and-suspenders.
 
@@ -52,6 +52,7 @@ Make intake-only specialists (`browser_use`, `deep_research`, `academic_research
 - [x] IG authored
 - [x] Intake-only specs not passed to `create_deep_agent`
 - [x] Wired intake-only → direct invoke → goal_completion
-- [x] Wired `planner` still → resolve → execute
 - [x] Related dead / backward-compat dual paths cleansed
 - [x] Verify green
+
+> Amended: `planner` catalog resolve→execute acceptance superseded by IG-656.

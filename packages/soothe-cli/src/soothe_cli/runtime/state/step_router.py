@@ -331,7 +331,7 @@ class StepTaskRouter:
 
         Some providers emit unified ids like ``{step}:s:call_<uuid>`` that do not
         encode a task index. In that case allocate a stable per-step synthetic
-        index so task activity rows and standalone SubAgent cards stay 1:1.
+        index so task activity rows stay 1:1 with delegated task markers.
         """
         sid = str(step_id).strip()
         tcid = str(tool_call_id).strip()
@@ -697,7 +697,7 @@ class StepTaskRouter:
         return list(self._pending_subgraph_tools.values())
 
     def discard_pending_subgraph_tool(self, ns_key: tuple[str, ...], lookup_id: str) -> None:
-        """Drop a buffered subgraph tool after routing it to a SubAgent card."""
+        """Drop a buffered subgraph tool after routing it to a step/orphan card."""
         self._pending_subgraph_tools.pop(_subgraph_pending_key(ns_key, lookup_id), None)
 
     @property

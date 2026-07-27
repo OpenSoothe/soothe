@@ -10,7 +10,7 @@ from textual.selection import Selection
 from textual.strip import Strip
 from textual.widgets import Static
 
-from soothe_cli.tui.markdown_theme import build_markdown
+from soothe_cli.tui.markdown_theme import ThemedMarkdownRenderer, resolve_markdown_theme_parts
 from soothe_cli.tui.widgets.messages._helpers import (
     _RUNNING_SPINNER_INTERVAL_SECONDS,
     _card_dot_prefix_content,
@@ -155,6 +155,8 @@ class AssistantMessage(Vertical):
 
     # Default flush interval (can be overridden by config)
     DEFAULT_STREAM_FLUSH_INTERVAL: float = 0.2  # 200ms batching for streaming
+    DEFAULT_FIRST_FLUSH_INTERVAL: float = 0.05  # 50ms fast first-token
+    _FAST_FLUSH_THRESHOLD_CHARS: int = 500  # chars before switching to normal interval
 
     def __init__(
         self,
@@ -187,6 +189,11 @@ class AssistantMessage(Vertical):
         self._pending_buffer: str = ""
         self._flush_timer: Timer | None = None
         self._stream_flush_interval: float = self.DEFAULT_STREAM_FLUSH_INTERVAL
+        self._first_flush_interval: float = self.DEFAULT_FIRST_FLUSH_INTERVAL
+
+        # Cached markdown theme parts (entry, colors, code_theme) — resolved
+        # once on first markdown render and reused for the widget's lifetime.
+        self._cached_theme_parts: tuple[Any, Any, str] | None = None
 
         # Determine markdown rendering and flush interval from config
         self._render_markdown: bool = True
@@ -201,6 +208,7 @@ class AssistantMessage(Vertical):
             if hasattr(config, "agent"):
                 streaming_cfg = config.agent.loop.output_streaming
                 self._stream_flush_interval = streaming_cfg.tui_flush_interval_ms / 1000.0
+                self._first_flush_interval = streaming_cfg.tui_first_flush_interval_ms / 1000.0
         except Exception:
             if render_markdown is not None:
                 self._render_markdown = render_markdown
@@ -257,15 +265,38 @@ class AssistantMessage(Vertical):
         if self._streaming_active:
             self._start_dot_animation()
 
+    def _get_theme_parts(self) -> tuple[Any, Any, str]:
+        """Resolve and cache markdown theme parts for repeated renders."""
+        if self._cached_theme_parts is None:
+            self._cached_theme_parts = resolve_markdown_theme_parts(self)
+        return self._cached_theme_parts
+
     def _render_to_body(self) -> None:
-        """Render current content into the body Static widget."""
+        """Render current content into the body Static widget.
+
+        Two-phase rendering: while streaming, the body shows plain text (O(delta)
+        per flush). On stream completion, the full markdown is rendered once.
+        This avoids re-parsing the entire accumulated content on every flush.
+        """
         if self._body is None:
             return
         if not self._content:
             self._body.update("")
             return
         if self._render_markdown:
-            self._body.update(build_markdown(self._content, self))
+            if self._streaming_active:
+                # Two-phase: plain text while streaming for O(delta) flushes.
+                self._body.update(self._content)
+            else:
+                entry, colors, code_theme = self._get_theme_parts()
+                self._body.update(
+                    ThemedMarkdownRenderer(
+                        self._content,
+                        entry=entry,
+                        colors=colors,
+                        code_theme=code_theme,
+                    )
+                )
         elif self._render_ansi:
             from rich.text import Text
 
@@ -278,17 +309,25 @@ class AssistantMessage(Vertical):
         event.stop()
 
     async def _flush_pending_content(self) -> None:
-        """Flush buffered content to body widget (batched update)."""
+        """Flush buffered streaming content to the body (plain text while streaming)."""
         self._flush_timer = None
         if not self._pending_buffer:
             return
         self._pending_buffer = ""
         self._render_to_body()
 
+    def _adaptive_flush_interval(self) -> float:
+        """Fast interval for the first tokens, normal interval once content grows."""
+        if len(self._content) < self._FAST_FLUSH_THRESHOLD_CHARS:
+            return self._first_flush_interval
+        return self._stream_flush_interval
+
     async def append_content(self, text: str) -> None:
         """Append content to the message (for streaming with batching).
 
         Uses internal buffering to batch writes and reduce render frequency.
+        The flush interval adapts: a short interval for the first ~500 chars
+        (fast perceived first-token) then switches to the normal interval.
         """
         if not text:
             return
@@ -305,7 +344,7 @@ class AssistantMessage(Vertical):
         # Schedule batched flush if not already scheduled
         if self._flush_timer is None:
             self._flush_timer = self.set_timer(
-                self._stream_flush_interval,
+                self._adaptive_flush_interval(),
                 self._flush_pending_content,
             )
 
@@ -313,26 +352,31 @@ class AssistantMessage(Vertical):
         """Write initial content from constructor and finalize streaming state."""
         if self._content:
             self._streaming_active = True
-            self._render_to_body()
+            self._refresh_assistant_dot()
             await self.stop_stream()
 
     async def stop_stream(self) -> None:
-        """End streaming batched updates."""
+        """End streaming batched updates.
+
+        Clears the pending buffer without an intermediate render, then does
+        a single full markdown render now that ``_streaming_active`` is False.
+        """
         if self._flush_timer is not None:
             self._flush_timer.stop()
             self._flush_timer = None
 
-        if self._pending_buffer:
-            await self._flush_pending_content()
-
+        self._pending_buffer = ""
         self._streaming_active = False
         self._stop_dot_animation()
         self._render_to_body()
         self._refresh_assistant_dot()
 
     async def set_content(self, content: str) -> None:
-        """Set the full message content (stops any active stream)."""
-        await self.stop_stream()
+        """Set the full message content (stops any active stream).
+
+        Sets content before ``stop_stream`` so the single ``_render_to_body``
+        call inside ``stop_stream`` renders the new content — no redundant
+        double render.
+        """
         self._content = content
-        self._pending_buffer = ""
-        self._render_to_body()
+        await self.stop_stream()

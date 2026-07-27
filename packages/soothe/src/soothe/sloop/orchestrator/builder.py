@@ -150,7 +150,6 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         "invoke_wired_subagent",
         route_after_wired_subagent,
         {
-            "resolve_decision": "resolve_decision",
             "goal_completion": "goal_completion",
             END: END,
         },

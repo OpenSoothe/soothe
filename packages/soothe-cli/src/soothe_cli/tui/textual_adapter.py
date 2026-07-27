@@ -295,13 +295,9 @@ class TextualUIAdapter:
         self._file_preview_assistant_id: str | None = None
         """Agent id for the active turn (path resolution in file previews)."""
 
-        # IG-513: SubAgent card registry for routing inner subgraph tools
-        self._subagent_cards_by_key: dict[str, Any] = {}
-        """SubAgent cards keyed by ``{step}:t{n}`` or ``wire:{name}:{invocation}``."""
-
-        # IG-602: intake-only orphan SubAgent cards by invocation_id
+        # Intake-only orphan SubAgent cards by invocation_id (no in-step SubAgent cards).
         self._orphan_cards_by_invocation: dict[str, Any] = {}
-        """``invocation_id`` → orphan SubAgent card (no parent step)."""
+        """``invocation_id`` → orphan SubAgent card (no parent step task row)."""
 
         # Token display callbacks (set by the app after construction)
         self._seed_loop_token_from_checkpoint: _SeedLoopTokenFromCheckpointCallback | None = None
@@ -397,7 +393,6 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._step_router.reset_turn()
         _finalize_orphan_subagent_cards(self, success=False, summary=error)
-        self._subagent_cards_by_key.clear()
         self._orphan_cards_by_invocation.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
@@ -414,11 +409,10 @@ class TextualUIAdapter:
     def finalize_pending_steps_with_error(self, message: str) -> None:
         """Mark in-flight step cards as interrupted and clear tracking."""
         for step_id in list(self._current_step_messages.keys()):
-            _finalize_subagent_cards_for_step(
+            _finalize_task_rows_for_step(
                 self,
                 step_id,
                 success=False,
-                summary=message,
             )
         _finalize_orphan_subagent_cards(self, success=False, summary=message)
         for step_msg in list(self._current_step_messages.values()):
@@ -428,7 +422,6 @@ class TextualUIAdapter:
         self._step_by_namespace.clear()
         self._tool_display_by_call_id.clear()
         self._step_router.reset_turn()
-        self._subagent_cards_by_key.clear()
         self._orphan_cards_by_invocation.clear()
         self._last_completed_main_step_execute_prose = ""
         self._last_main_flushed_assistant_prose = ""
@@ -470,7 +463,7 @@ def _stream_end_pending_error_message(
 
 _TOOL_UI_COALESCE_SEC = 0.05
 _EXECUTE_WAVE_UI_COALESCE_SEC = 0.2
-_CHUNK_YIELD_INTERVAL = 24
+_CHUNK_YIELD_INTERVAL = 12
 _CHUNK_YIELD_BUDGET_SEC = 0.016
 
 
@@ -694,12 +687,9 @@ def _log_step_completion_stats(
     )
 
 
-def _subagent_registry_key(step_id: str, task_idx: int) -> str:
-    return f"{step_id}:t{task_idx}"
-
-
-def _orphan_registry_key(subagent: str, invocation_id: str) -> str:
-    return f"wire:{subagent}:{invocation_id}"
+def _is_orphan_subagent_card(card: Any) -> bool:
+    """True when ``card`` is an intake-only orphan SubAgent widget."""
+    return bool(str(getattr(card, "_invocation_id", "") or "").strip())
 
 
 def _finalize_orphan_subagent_cards(
@@ -708,21 +698,15 @@ def _finalize_orphan_subagent_cards(
     success: bool,
     summary: str,
 ) -> None:
-    """Complete and unregister all orphan (``wire:``) SubAgent cards."""
-    for key, card in list(adapter._subagent_cards_by_key.items()):
-        if not str(key).startswith("wire:"):
-            continue
+    """Complete and unregister all orphan SubAgent cards."""
+    for inv, card in list(adapter._orphan_cards_by_invocation.items()):
         _complete_subagent_card(
-            adapter,
             card,
             success=success,
             duration_ms=0,
             summary=summary,
         )
-        adapter._subagent_cards_by_key.pop(key, None)
-        inv = str(getattr(card, "_invocation_id", "") or "").strip()
-        if inv:
-            adapter._orphan_cards_by_invocation.pop(inv, None)
+        adapter._orphan_cards_by_invocation.pop(inv, None)
 
 
 async def _mount_orphan_subagent_card(
@@ -747,14 +731,10 @@ async def _mount_orphan_subagent_card(
         step_id=sid,
         description=desc,
         subagent_type=name,
-        parent_step_id="",
-        parent_task_key="",
         task_idx=0,
         id=f"orphan-{uuid.uuid4().hex[:8]}",
     )
     card._invocation_id = inv  # type: ignore[attr-defined]
-    key = _orphan_registry_key(name, inv)
-    adapter._subagent_cards_by_key[key] = card
     adapter._orphan_cards_by_invocation[inv] = card
     await _mount_subagent_card_if_needed(adapter, card)
     return card
@@ -775,14 +755,11 @@ def _complete_orphan_subagent_card(
     if card is None:
         return
     _complete_subagent_card(
-        adapter,
         card,
         success=success,
         duration_ms=duration_ms,
         summary=summary,
     )
-    name = str(getattr(card, "_subagent_type", "") or "").strip()
-    adapter._subagent_cards_by_key.pop(_orphan_registry_key(name, inv), None)
     adapter._orphan_cards_by_invocation.pop(inv, None)
 
 
@@ -832,26 +809,6 @@ def _lookup_orphan_card_by_step_id(
         if str(getattr(orphan, "_step_id", "") or "").strip() == sid:
             return orphan
     return None
-
-
-def _lookup_subagent_card(adapter: TextualUIAdapter, display_key: str) -> Any | None:
-    """Return the SubAgent card for a unified task-level tool id, if registered."""
-    parsed_sid, type_code, task_idx, _ = parse_unified_tool_call_id(str(display_key).strip())
-    if not parsed_sid or type_code != "t" or task_idx is None:
-        return None
-    return adapter._subagent_cards_by_key.get(_subagent_registry_key(parsed_sid, task_idx))
-
-
-def _lookup_subagent_card_for_task_scope(
-    adapter: TextualUIAdapter,
-    task_scope: TaskScope,
-) -> Any | None:
-    """Return the SubAgent card for a resolved task namespace binding."""
-    step_id = task_scope_step_id(task_scope)
-    if not step_id:
-        return None
-    task_idx = task_scope_task_idx(task_scope, step_id)
-    return adapter._subagent_cards_by_key.get(_subagent_registry_key(step_id, task_idx))
 
 
 def _register_execute_namespace_binding(
@@ -926,10 +883,10 @@ def _resolve_token_target_card(
     *,
     message: Any = None,
 ) -> Any | None:
-    """Resolve step or SubAgent card for per-card token accounting.
+    """Resolve step or orphan SubAgent card for per-card token accounting.
 
-    Main execute namespaces update the step card. Subgraph/task namespaces update
-    the SubAgent card only so step totals exclude nested delegation usage.
+    Main execute and in-step task namespaces update the parent step card.
+    Intake-only orphan SubAgent cards keep their own token totals.
     """
     if is_step_card_tool_scope(ns_key=ns_key):
         step_w = adapter._step_by_namespace.get(ns_key)
@@ -959,37 +916,41 @@ def _resolve_token_target_card(
     task_scope = router.resolve_task_scope(ns_key)
     if task_scope is None:
         return None
-    return _lookup_subagent_card_for_task_scope(adapter, task_scope)
+    step_id = task_scope_step_id(task_scope)
+    orphan = _lookup_orphan_card_by_step_id(adapter, step_id)
+    if orphan is not None:
+        return orphan
+    return adapter._current_step_messages.get(step_id)
 
 
-def _ingest_tool_on_subagent_card(
+def _ingest_tool_on_display_card(
     adapter: TextualUIAdapter,
-    subagent_card: Any,
+    card: Any,
     *,
     display_key: str,
     tool_name: str,
     args: dict[str, Any],
     raw_args: str = "",
 ) -> None:
-    """Register or update one tool row on a SubAgent card."""
+    """Register or update one tool row on a step or orphan SubAgent card."""
     row_id = str(display_key).strip()
     resolved_args = dict(args or {})
     if raw_args and not extract_tool_args_dict(resolved_args):
         parsed = extract_tool_args_dict({"_raw": raw_args})
         if parsed:
             resolved_args = parsed
-    if subagent_card.has_tool_call_row(row_id):
-        subagent_card.update_tool_args(row_id, resolved_args)
+    if card.has_tool_call_row(row_id):
+        card.update_tool_args(row_id, resolved_args)
     else:
-        subagent_card.add_tool_call(row_id, tool_name, resolved_args, raw_args=raw_args)
-    adapter._tool_to_step[row_id] = subagent_card
+        card.add_tool_call(row_id, tool_name, resolved_args, raw_args=raw_args)
+    adapter._tool_to_step[row_id] = card
 
 
 async def _mount_subagent_card_if_needed(
     adapter: TextualUIAdapter,
     subagent_card: Any | None,
 ) -> None:
-    """Mount a newly created SubAgent card when not already on the message list."""
+    """Mount a newly created orphan SubAgent card when not already on the list."""
     if subagent_card is None or getattr(subagent_card, "is_mounted", False):
         return
     mount_result = adapter._mount_message(subagent_card)
@@ -997,54 +958,8 @@ async def _mount_subagent_card_if_needed(
         await mount_result
 
 
-def _rehome_subgraph_rows_to_subagent(
-    adapter: TextualUIAdapter,
-    step_widget: Any,
-    subagent_card: Any,
-    task_idx: int,
-) -> None:
-    """Move subgraph tool rows from the step card onto the SubAgent card (RFC-628)."""
-    kept: list[Any] = []
-    moved = False
-    for row in step_widget._rows:
-        _, type_code, idx, _ = parse_unified_tool_call_id(str(row.tool_call_id).strip())
-        if type_code == "t" and idx == task_idx:
-            moved = True
-            row_args = dict(row.args or {})
-            raw_args = str(row_args.pop("_raw", "") or "").strip()
-            _ingest_tool_on_subagent_card(
-                adapter,
-                subagent_card,
-                display_key=str(row.tool_call_id),
-                tool_name=str(row.tool_name or "tool"),
-                args=row_args,
-                raw_args=raw_args,
-            )
-            if row.phase not in ("pending",):
-                phase = str(row.phase or "pending")
-                if phase == "success":
-                    subagent_card.set_tool_success(
-                        str(row.tool_call_id),
-                        str(row.output or ""),
-                        duration_ms=int(row.duration_ms or 0),
-                    )
-                elif phase in ("error", "rejected", "failed"):
-                    subagent_card.set_tool_error(
-                        str(row.tool_call_id),
-                        str(row.output or "Error"),
-                        duration_ms=int(row.duration_ms or 0),
-                    )
-                elif phase == "running":
-                    subagent_card.set_tool_running(str(row.tool_call_id))
-        else:
-            kept.append(row)
-    if moved:
-        step_widget._rows = kept
-        step_widget._sync_step_card_surface()
-
-
 def _subagent_card_tool_count(card: Any) -> int:
-    """Return tracked tool count for a SubAgent card."""
+    """Return tracked tool count for an orphan SubAgent card."""
     build_index = getattr(card, "_build_row_index", None)
     if callable(build_index):
         return int(build_index().total_tool_count)
@@ -1053,14 +968,13 @@ def _subagent_card_tool_count(card: Any) -> int:
 
 
 def _complete_subagent_card(
-    adapter: TextualUIAdapter,
     subagent_card: Any,
     *,
     success: bool,
     duration_ms: int,
     summary: str,
 ) -> None:
-    """Finalize one SubAgent card and sync its task row on the parent step."""
+    """Finalize one orphan SubAgent card."""
     if getattr(subagent_card, "_status", "") in ("success", "error"):
         return
     start = getattr(subagent_card, "_start_time", None)
@@ -1069,70 +983,53 @@ def _complete_subagent_card(
         dur = int((time.time() - start) * 1000)
     tool_count = _subagent_card_tool_count(subagent_card)
     subagent_card.set_complete(success, dur, tool_count, summary)
-    parent_step_id = str(getattr(subagent_card, "_parent_step_id", "") or "").strip()
-    parent_step = adapter._current_step_messages.get(parent_step_id)
-    sync_fn = getattr(subagent_card, "sync_status_to_step", None)
-    if callable(sync_fn) and parent_step is not None:
-        sync_fn(parent_step, success)
 
 
-def _finalize_subagent_cards_for_step(
+def _finalize_task_rows_for_step(
     adapter: TextualUIAdapter,
     step_id: str,
     *,
     success: bool,
-    duration_ms: int = 0,
-    summary: str = "Done",
 ) -> None:
-    """Complete all SubAgent cards delegated from one execute step."""
+    """Mark open task-delegation rows complete when the parent step finishes."""
     sid = str(step_id or "").strip()
     if not sid:
         return
-    keys_done: list[str] = []
-    for key, card in list(adapter._subagent_cards_by_key.items()):
-        parent = str(getattr(card, "_parent_step_id", "") or "").strip()
-        if parent != sid:
+    step_w = adapter._current_step_messages.get(sid)
+    if step_w is None:
+        return
+    terminal = "success" if success else "error"
+    changed = False
+    for row in getattr(step_w, "_rows", []) or []:
+        if not getattr(row, "is_task_row", False):
             continue
-        _complete_subagent_card(
-            adapter,
-            card,
-            success=success,
-            duration_ms=duration_ms,
-            summary=summary,
-        )
-        keys_done.append(key)
-    for key in keys_done:
-        adapter._subagent_cards_by_key.pop(key, None)
+        phase = (getattr(row, "phase", "") or "pending").strip().lower()
+        if phase in ("pending", "running", "skipped"):
+            row.phase = terminal
+            row.started_at = None
+            changed = True
+    if changed:
+        sync = getattr(step_w, "_sync_step_card_surface", None)
+        if callable(sync):
+            sync()
 
 
-def _ensure_subagent_card_for_task_scope(
+def _display_target_for_task_scope(
     adapter: TextualUIAdapter,
     task_scope: TaskScope,
 ) -> Any | None:
-    """Return the SubAgent card for ``task_scope``, creating it when needed."""
-    card = _lookup_subagent_card_for_task_scope(adapter, task_scope)
-    if card is not None:
-        return card
+    """Resolve orphan SubAgent card or parent step card for a task scope.
+
+    In-step ``task`` delegations no longer create SubAgent cards — activity and
+    tool counts live on the parent step card. Intake-only orphans remain.
+    """
     step_id = task_scope_step_id(task_scope)
     orphan = _lookup_orphan_card_by_step_id(adapter, step_id)
     if orphan is not None:
         return orphan
-    step_w = adapter._current_step_messages.get(step_id)
-    if step_w is None:
+    if not step_id:
         return None
-    task_tcid = str(task_scope[0] or "").strip()
-    task_args: dict[str, Any] = {}
-    subagent_type = str(task_scope[1] or "").strip()
-    for row in getattr(step_w, "_rows", []) or []:
-        tcid = str(getattr(row, "tool_call_id", "") or "").strip()
-        if tcid == task_tcid or getattr(row, "is_task_row", False):
-            task_args = dict(getattr(row, "args", None) or {})
-            if task_args or tcid == task_tcid:
-                break
-    if not task_args and subagent_type:
-        task_args = {"subagent_type": subagent_type}
-    _ensure_subagent_card_for_task_row(adapter, step_w, task_tcid, task_args)
-    return _lookup_subagent_card_for_task_scope(adapter, task_scope)
+    return adapter._current_step_messages.get(step_id)
 
 
 def _wire_step_row_id(step_id: str, task_idx: int, tool_name: str, seq: int) -> str:
@@ -1142,9 +1039,8 @@ def _wire_step_row_id(step_id: str, task_idx: int, tool_name: str, seq: int) -> 
     return f"{wire_frag}:t{task_idx}:{slug}:{seq}"
 
 
-def _ingest_wire_step_on_subagent_card(
-    adapter: TextualUIAdapter,
-    subagent_card: Any,
+def _ingest_wire_step_on_display_card(
+    card: Any,
     *,
     step_id: str,
     task_idx: int,
@@ -1153,23 +1049,20 @@ def _ingest_wire_step_on_subagent_card(
     phase: str,
     duration_ms: int,
 ) -> None:
-    """Register one curated wire step as a tool-like row on the SubAgent card."""
-    seq = int(getattr(subagent_card, "_wire_step_seq", 0) or 0)
-    subagent_card._wire_step_seq = seq + 1  # type: ignore[attr-defined]
+    """Register one curated wire step as a tool-like row on step/orphan card."""
+    seq = int(getattr(card, "_wire_step_seq", 0) or 0)
+    card._wire_step_seq = seq + 1  # type: ignore[attr-defined]
     row_id = _wire_step_row_id(step_id, task_idx, tool_name, seq)
-    _ingest_tool_on_subagent_card(
-        adapter,
-        subagent_card,
-        display_key=row_id,
-        tool_name=tool_name,
-        args=dict(args or {}),
-    )
-    if phase == "running":
-        subagent_card.set_tool_running(row_id)
-    elif phase in ("error", "rejected", "failed"):
-        subagent_card.set_tool_error(row_id, "Failed", duration_ms=duration_ms)
+    if card.has_tool_call_row(row_id):
+        card.update_tool_args(row_id, dict(args or {}))
     else:
-        subagent_card.set_tool_success(row_id, "", duration_ms=duration_ms)
+        card.add_tool_call(row_id, tool_name, dict(args or {}))
+    if phase == "running":
+        card.set_tool_running(row_id)
+    elif phase in ("error", "failed", "rejected"):
+        card.set_tool_error(row_id, "Failed", duration_ms=duration_ms)
+    else:
+        card.set_tool_success(row_id, "", duration_ms=duration_ms)
 
 
 def _apply_subagent_wire_step_event(
@@ -1179,7 +1072,7 @@ def _apply_subagent_wire_step_event(
     data: dict[str, Any],
     task_scope: TaskScope,
 ) -> bool:
-    """Render row-style subagent wire events on the SubAgent (TASK) card."""
+    """Render row-style subagent wire events on orphan or parent step card."""
     params = subagent_wire_row_params(event_type, data)
     if params is None:
         return False
@@ -1188,12 +1081,11 @@ def _apply_subagent_wire_step_event(
     if not step_id:
         return True
     task_idx = task_scope_task_idx(task_scope, step_id)
-    subagent_card = _ensure_subagent_card_for_task_scope(adapter, task_scope)
-    if subagent_card is None:
+    card = _display_target_for_task_scope(adapter, task_scope)
+    if card is None:
         return True
-    _ingest_wire_step_on_subagent_card(
-        adapter,
-        subagent_card,
+    _ingest_wire_step_on_display_card(
+        card,
         step_id=step_id,
         task_idx=task_idx,
         tool_name=tool_name,
@@ -1211,7 +1103,7 @@ def _apply_subagent_wire_activity_event(
     data: dict[str, Any],
     task_scope: TaskScope,
 ) -> bool:
-    """Render note-style subagent wire events on the SubAgent card."""
+    """Render note-style subagent wire events on orphan or parent step card."""
     from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
 
     line = summarize_subagent_wire_activity(str(event_type or "").strip(), data).strip()
@@ -1220,10 +1112,17 @@ def _apply_subagent_wire_activity_event(
     step_id = task_scope_step_id(task_scope)
     if not step_id:
         return True
-    subagent_card = _ensure_subagent_card_for_task_scope(adapter, task_scope)
-    if subagent_card is None:
+    card = _display_target_for_task_scope(adapter, task_scope)
+    if card is None:
         return True
-    subagent_card.append_subagent_activity(line)
+    task_tcid = str(task_scope[0] or "").strip()
+    append = getattr(card, "append_subagent_activity", None)
+    if not callable(append):
+        return True
+    if _is_orphan_subagent_card(card):
+        append(line)
+    else:
+        append(line, task_tool_call_id=task_tcid)
     return True
 
 
@@ -1234,33 +1133,15 @@ def _apply_subagent_wire_lifecycle_event(
     data: dict[str, Any],
     task_scope: TaskScope,
 ) -> bool:
-    """Handle subagent ``*.completed`` / ``*.failed`` wire events (RFC-628, IG-513)."""
+    """Handle subagent ``*.completed`` / ``*.failed`` wire events."""
     et = str(event_type or "").strip()
     if not (et.endswith(".completed") or et.endswith(".failed")):
         return False
     step_id = task_scope_step_id(task_scope)
-    task_idx = task_scope_task_idx(task_scope, step_id)
-    registry_key = _subagent_registry_key(step_id, task_idx)
-    card = adapter._subagent_cards_by_key.get(registry_key)
-    orphan_inv = ""
-    if card is None:
-        # Intake-only orphans register as ``wire:{name}:{inv}``, not ``{step}:t0``.
-        card = _lookup_orphan_card_by_step_id(adapter, step_id)
-        if card is None:
-            inv = str(data.get("invocation_id") or "").strip()
-            if inv:
-                card = adapter._orphan_cards_by_invocation.get(inv)
-        if card is not None:
-            orphan_inv = str(getattr(card, "_invocation_id", "") or "").strip()
-            if not orphan_inv:
-                orphan_inv = str(data.get("invocation_id") or "").strip()
-    if card is None:
-        return True
     if et.endswith(".failed"):
         success = False
         summary = str(data.get("failure_reason") or data.get("error") or "Failed").strip()
     else:
-        # Prefer explicit ``success`` (browser_use); ``*.completed`` defaults to success.
         if "success" in data and data.get("success") is not None:
             success = bool(data.get("success"))
         else:
@@ -1269,19 +1150,34 @@ def _apply_subagent_wire_lifecycle_event(
     if not summary:
         summary = "Done" if success else "Failed"
     duration_ms = int(data.get("duration_ms", 0) or 0)
-    _complete_subagent_card(
-        adapter,
-        card,
-        success=success,
-        duration_ms=duration_ms,
-        summary=summary,
-    )
-    if orphan_inv:
-        name = str(getattr(card, "_subagent_type", "") or "").strip()
-        adapter._subagent_cards_by_key.pop(_orphan_registry_key(name, orphan_inv), None)
-        adapter._orphan_cards_by_invocation.pop(orphan_inv, None)
-    else:
-        adapter._subagent_cards_by_key.pop(registry_key, None)
+
+    # Intake-only orphans only — in-step task markers sync on the parent step card.
+    inv = str(data.get("invocation_id") or "").strip()
+    card = adapter._orphan_cards_by_invocation.get(inv) if inv else None
+    if card is None:
+        card = _lookup_orphan_card_by_step_id(adapter, step_id)
+        if card is not None:
+            inv = str(getattr(card, "_invocation_id", "") or "").strip() or inv
+
+    if card is not None:
+        _complete_subagent_card(
+            card,
+            success=success,
+            duration_ms=duration_ms,
+            summary=summary,
+        )
+        if inv:
+            adapter._orphan_cards_by_invocation.pop(inv, None)
+        return True
+
+    # In-step task delegation: sync the task marker on the parent step card.
+    step_w = adapter._current_step_messages.get(step_id) if step_id else None
+    if step_w is None:
+        return True
+    task_key = str(task_scope[0] or "").strip()
+    sync_fn = getattr(step_w, "_sync_task_row_status_from_subagent", None)
+    if callable(sync_fn) and task_key:
+        sync_fn(task_key, success)
     return True
 
 
@@ -1329,13 +1225,14 @@ def _route_subgraph_tool_call(
     args: dict[str, Any],
     raw_args: str = "",
 ) -> bool:
-    """Route a subgraph tool to its SubAgent card, or buffer on the step card."""
+    """Route a subgraph tool to its orphan card (if any) or parent step card."""
     display = str(display_key or lookup_id).strip()
-    subagent_card = _lookup_subagent_card(adapter, display)
-    if subagent_card is not None:
-        _ingest_tool_on_subagent_card(
+    parsed_sid, _, _, _ = parse_unified_tool_call_id(display or str(lookup_id))
+    orphan = _lookup_orphan_card_by_step_id(adapter, parsed_sid) if parsed_sid else None
+    if orphan is not None:
+        _ingest_tool_on_display_card(
             adapter,
-            subagent_card,
+            orphan,
             display_key=display,
             tool_name=tool_name,
             args=args,
@@ -1369,7 +1266,7 @@ def _route_subgraph_tool_call(
 
 
 def _route_pending_subgraph_tools(adapter: TextualUIAdapter, router: StepTaskRouter) -> int:
-    """Flush buffered subgraph tools, preferring SubAgent cards when registered."""
+    """Flush buffered subgraph tools onto orphan or parent step cards."""
     pending = router.pending_subgraph_tools()
     routed = 0
     for item in pending:
@@ -1394,27 +1291,19 @@ def _ingest_main_task_tool_on_step_card(
     display_args: dict[str, Any],
     *,
     bound_step_id: str,
-) -> Any | None:
-    """Register a main-graph ``task`` delegation on the step card and prepare SubAgent card.
-
-    IG-513: Creates a SubAgent card for each task delegation. The caller must mount
-    the returned card asynchronously. Inner subgraph tools route to the SubAgent card
-    via `_subagent_cards_by_key`.
-
-    Returns:
-        SubAgentMessage widget if newly created, None otherwise (caller must mount async).
-    """
+) -> None:
+    """Register a main-graph ``task`` delegation on the step card (no SubAgent card)."""
     tcid = str(tool_call_id).strip()
     sid = str(bound_step_id).strip()
     if not tcid or is_inner_subgraph_task_tool_id(tcid):
-        return None
+        return
     raw_st = display_args.get("subagent_type", "")
     subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
     if subagent_type:
         router.register_task_spawn(tcid, subagent_type, step_id=sid)
     if not sid:
         _route_pending_subgraph_tools(adapter, router)
-        return None
+        return
     norm_tcid = router.normalize_task_delegation_id(
         step_id=sid,
         tool_call_id=tcid,
@@ -1425,10 +1314,8 @@ def _ingest_main_task_tool_on_step_card(
         bound_step_id=sid,
         ns_key=(),
     )
-    subagent_card_to_mount = None
     if step_w is not None:
-        # IG-515: _register_main_tool_on_step_card now returns SubAgent card for task rows
-        subagent_card_to_mount = _register_main_tool_on_step_card(
+        _register_main_tool_on_step_card(
             adapter,
             router,
             step_w,
@@ -1440,56 +1327,6 @@ def _ingest_main_task_tool_on_step_card(
         adapter._tool_display_by_call_id[norm_tcid] = step_w
 
     _route_pending_subgraph_tools(adapter, router)
-    return subagent_card_to_mount
-
-
-def _ensure_subagent_card_for_task_row(
-    adapter: TextualUIAdapter,
-    step_w: CognitionStepMessage,
-    task_tcid: str,
-    task_args: dict[str, Any],
-) -> Any | None:
-    """Create SubAgent card for a task row if not already registered (IG-515 fix).
-
-    Called when buffered task tools are routed to a newly-created step card.
-    Returns the SubAgent card if newly created, None if already exists.
-
-    Args:
-        adapter: TextualUIAdapter with `_subagent_cards_by_key` registry.
-        step_w: Step card that owns the task row.
-        task_tcid: Normalized tool_call_id for the task delegation.
-        task_args: Args dict with subagent_type and description/prompt.
-
-    Returns:
-        SubAgentMessage widget if newly created, None otherwise.
-    """
-    sid = str(getattr(step_w, "_step_id", "") or "").strip()
-    if not sid:
-        return None
-    _, _, _, tool_info = parse_unified_tool_call_id(task_tcid)
-    task_idx = 0
-    if tool_info and ":" in tool_info:
-        tail = tool_info.split(":")[-1]
-        if tail.isdigit():
-            task_idx = int(tail)
-    subagent_key = f"{sid}:t{task_idx}"
-    if subagent_key in adapter._subagent_cards_by_key:
-        return None
-    raw_st = task_args.get("subagent_type", "")
-    subagent_type = raw_st.strip() if isinstance(raw_st, str) else ""
-    desc = str(task_args.get("description") or task_args.get("prompt") or "").strip()
-    subagent_card = create_subagent_card(
-        step_id=sid,
-        description=desc or f"{subagent_type} task",
-        subagent_type=subagent_type or "Task",
-        parent_step_id=sid,
-        parent_task_key=task_tcid,
-        task_idx=task_idx,
-        id=f"subagent-{uuid.uuid4().hex[:8]}",
-    )
-    adapter._subagent_cards_by_key[subagent_key] = subagent_card
-    _rehome_subgraph_rows_to_subagent(adapter, step_w, subagent_card, task_idx)
-    return subagent_card
 
 
 def _register_main_tool_on_step_card(
@@ -1502,19 +1339,12 @@ def _register_main_tool_on_step_card(
     *,
     raw_args: str = "",
     is_task_row: bool = False,
-) -> Any | None:
-    """Register a main-graph tool row and promote the step card when authorized (RFC-628).
+) -> None:
+    """Register a main-graph tool row and promote the step card when authorized.
 
-    For task delegations (is_task_row=True and tool_name=='task'), also ensures
-    a SubAgent card exists via `_ensure_subagent_card_for_task_row`.
-
-    Returns:
-        SubAgentMessage widget if newly created for a task row, None otherwise.
+    Task delegations add a flat marker on the step card only — no SubAgent card.
     """
     tcid = str(tool_call_id).strip()
-    # IG-517: Ensure subagent_type is present in args for task delegations.
-    # The router records this via register_task_spawn, but streaming args
-    # may arrive incomplete. Inject from router registry when missing.
     if is_task_row and tool_name == "task":
         existing_type = args.get("subagent_type")
         if not existing_type or not str(existing_type).strip():
@@ -1537,11 +1367,6 @@ def _register_main_tool_on_step_card(
         step_cards=adapter._current_step_messages,
     )
     adapter._tool_to_step[tcid] = step_w
-
-    # IG-515: For task delegations, ensure SubAgent card exists
-    if is_task_row and tool_name == "task":
-        return _ensure_subagent_card_for_task_row(adapter, step_w, tcid, args)
-    return None
 
 
 def _resolve_step_widget_for_tool(
@@ -1579,8 +1404,8 @@ def _fallback_ingest_subgraph_tool_on_step_card(
 ) -> bool:
     """Best-effort fallback when namespace routing cannot resolve a parent task.
 
-    This keeps subgraph tool activity visible on the step card until a SubAgent
-    card is registered, instead of dropping it when task binding arrives late.
+    Keeps subgraph tool rows on the step card so running task markers can show
+    per-task tool counts (and intake-only orphans still use their own cards).
     """
     lookup = str(lookup_id or "").strip()
     display = str(display_key or "").strip()
@@ -2108,15 +1933,13 @@ async def apply_tool_call_wire_update(
             return True
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
-        subagent_card = _ingest_main_task_tool_on_step_card(
+        _ingest_main_task_tool_on_step_card(
             adapter,
             router,
             tcid,
             display_args,
             bound_step_id=bound_step_id,
         )
-        # IG-513: Mount SubAgent card if newly created
-        await _mount_subagent_card_if_needed(adapter, subagent_card)
         return True
 
     if is_step_scope:
@@ -2774,9 +2597,14 @@ async def _flush_assistant_text_ns(
         return
 
     if ts_card and ts_card[0]:
-        subagent_card = _ensure_subagent_card_for_task_scope(adapter, ts_card)
-        if subagent_card is not None:
-            subagent_card.append_subagent_activity(repaired_text.strip())
+        target = _display_target_for_task_scope(adapter, ts_card)
+        if target is not None:
+            append = getattr(target, "append_subagent_activity", None)
+            if callable(append):
+                if _is_orphan_subagent_card(target):
+                    append(repaired_text.strip())
+                else:
+                    append(repaired_text.strip(), task_tool_call_id=str(ts_card[0]))
             return
         # Suppress standalone AssistantMessage for all subagent tasks —
         # only goal_completion surfaces the final result.
@@ -3797,15 +3625,12 @@ async def execute_task_textual(
                                             bound_step_id = parsed_step_id or (
                                                 router.step_id_for_tool(str(lookup_id))
                                             )
-                                            subagent_card = _ingest_main_task_tool_on_step_card(
+                                            _ingest_main_task_tool_on_step_card(
                                                 adapter,
                                                 router,
                                                 str(lookup_id),
                                                 parsed_args,
                                                 bound_step_id=bound_step_id,
-                                            )
-                                            await _mount_subagent_card_if_needed(
-                                                adapter, subagent_card
                                             )
                                     elif is_step_scope and buffer_name != "task":
                                         parsed_sid, _, _, _ = parse_unified_tool_call_id(
@@ -4274,12 +4099,10 @@ async def execute_task_textual(
                                     )
                                     if not summary.strip():
                                         summary = "Failed" if not success else "Done"
-                                    _finalize_subagent_cards_for_step(
+                                    _finalize_task_rows_for_step(
                                         adapter,
                                         step_id,
                                         success=success,
-                                        duration_ms=duration_ms,
-                                        summary=summary,
                                     )
                                     widget = _pop_step_card_from_adapter(adapter, step_id)
                                     if widget is None:

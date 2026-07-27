@@ -272,7 +272,7 @@ async def test_wire_update_registers_task_on_execute_namespace() -> None:
 
 
 @pytest.mark.asyncio
-async def test_wire_update_task_call_ids_keep_step_rows_and_subagent_cards_in_sync() -> None:
+async def test_wire_update_task_call_ids_keep_step_rows_without_subagent_cards() -> None:
     adapter = TextualUIAdapter(
         mount_message=lambda _w: None,
         update_status=lambda _s: None,
@@ -316,8 +316,7 @@ async def test_wire_update_task_call_ids_keep_step_rows_and_subagent_cards_in_sy
     assert first is True
     assert second is True
     assert len(card._iter_task_delegation_rows()) == 2
-    assert "XQZ-01:t0" in adapter._subagent_cards_by_key
-    assert "XQZ-01:t1" in adapter._subagent_cards_by_key
+    # In-step task delegations no longer mount SubAgent cards.
 
 
 @pytest.mark.asyncio
@@ -353,7 +352,7 @@ async def test_wire_update_registers_subgraph_tool_with_placeholder_args() -> No
 
 @pytest.mark.asyncio
 async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
-    """IG-513: Subgraph tool args hydrate on SubAgent card (not step card)."""
+    """Subgraph tool args hydrate on the parent step card (no SubAgent card)."""
     adapter = TextualUIAdapter(
         mount_message=lambda _w: None,
         update_status=lambda _s: None,
@@ -394,7 +393,6 @@ async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
     )
     assert handled_placeholder is True
 
-    # IG-513: Later stream update routes to SubAgent card
     handled_hydrate = await apply_tool_call_wire_update(
         adapter,
         router,
@@ -409,18 +407,17 @@ async def test_subgraph_row_hydrates_args_from_late_raw_args_update() -> None:
     )
     assert handled_hydrate is True
 
-    # IG-513: Check SubAgent card (not step card)
-    subagent_key = "ZCH-01:t0"
-    subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
-    assert subagent_card is not None, "SubAgent card should exist"
-    text = str(subagent_card._step_task_activity_content())
-    assert "ListFiles(" in text
-    assert "mirasurf/soothe" in text
+    assert card.has_tool_call_row("ZCH_01:t0:list_files:0")
+    row = card._row_index["ZCH_01:t0:list_files:0"]
+    assert "mirasurf/soothe" in str(row.args.get("path") or "")
+    card._status = "running"
+    text = str(card._step_task_activity_content())
+    assert "Deep Research(Enumerate all files) · 1 tool" in text
 
 
 @pytest.mark.asyncio
-async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> None:
-    """Wire updates with string args must render previews for subagent tool rows."""
+async def test_subgraph_wire_string_args_count_on_running_task_line() -> None:
+    """Wire updates with string args count toward the running task-line tool total."""
     adapter = TextualUIAdapter(
         mount_message=lambda _w: None,
         update_status=lambda _s: None,
@@ -475,22 +472,18 @@ async def test_subgraph_wire_string_args_render_for_list_files_and_glob() -> Non
     )
     assert handled_glob is True
 
-    # IG-513: Subgraph tools now route to SubAgent cards, not step card
-    subagent_key = "ZCH-01:t0"
-    subagent_card = adapter._subagent_cards_by_key.get(subagent_key)
-    assert subagent_card is not None, "SubAgent card should be created for task delegation"
-
-    text = str(subagent_card._step_task_activity_content())
-    # Preview shows up to 2 tools; both list_files and glob fit without overflow.
-    assert "Glob(" in text
-    assert "**/*.py" in text
-    assert "ListFiles(" in text
-    assert "mirasurf/soothe" in text
-    assert "+1 more tool" not in text
+    assert card.has_tool_call_row("ZCH_01:t0:list_files:0")
+    assert card.has_tool_call_row("ZCH_01:t0:glob:1")
+    card._status = "running"
+    text = str(card._step_task_activity_content())
+    assert "Deep Research(Enumerate all files in workspace) · 2 tools" in text
+    # Nested subgraph tool lines are not rendered on the step card.
+    assert "Glob(" not in text
+    assert "ListFiles(" not in text
 
 
 @pytest.mark.asyncio
-async def test_subagent_wire_step_event_adds_task_card_rows() -> None:
+async def test_subagent_wire_step_event_counts_on_step_task_line() -> None:
     from soothe_cli.tui.textual_adapter import _apply_subagent_wire_step_event
 
     adapter = TextualUIAdapter(
@@ -525,16 +518,15 @@ async def test_subagent_wire_step_event_adds_task_card_rows() -> None:
         task_scope=scope,
     )
     assert handled is True
-    subagent_card = adapter._subagent_cards_by_key["ZCH-01:t0"]
-    text = str(subagent_card._step_task_activity_content())
-    assert "PlanSearches(4 queries)" in text
+    step._status = "running"
     step_text = str(step._step_task_activity_content())
+    assert "Deep Research(World Cup status) · 1 tool" in step_text
     assert "PlanSearches" not in step_text
 
 
 @pytest.mark.asyncio
-async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> None:
-    """Explore completed wire event must finalize SubAgent card (RFC-628, IG-513)."""
+async def test_subagent_wire_completed_syncs_task_row_on_step_card() -> None:
+    """Completed wire event syncs the step-card task marker (no SubAgent card)."""
     from soothe_cli.tui.textual_adapter import _apply_subagent_wire_lifecycle_event
 
     adapter = TextualUIAdapter(
@@ -574,9 +566,6 @@ async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> No
         pending_tool_calls_lc={},
     )
 
-    card = adapter._subagent_cards_by_key["ZCH-01:t0"]
-    assert card._status == "running"
-
     scope: tuple[str, str, str] = ("ZCH-01:s:task:0", "deep_research", "ZCH-01")
     handled = _apply_subagent_wire_lifecycle_event(
         adapter,
@@ -585,8 +574,6 @@ async def test_subagent_wire_completed_finalizes_card_and_syncs_task_row() -> No
         task_scope=scope,
     )
     assert handled is True
-    assert card._status == "success"
-    assert "ZCH-01:t0" not in adapter._subagent_cards_by_key
     task_rows = step._iter_task_delegation_rows()
     assert task_rows and task_rows[0].phase == "success"
 
@@ -599,8 +586,6 @@ def test_subagent_footer_ignores_server_step_tool_count() -> None:
         step_id="ZCH-01",
         description="Count files",
         subagent_type="deep_research",
-        parent_step_id="ZCH-01",
-        parent_task_key="ZCH-01:s:task:0",
         task_idx=0,
         id="subagent-test",
     )
@@ -623,8 +608,6 @@ def test_subagent_card_shows_latest_two_tool_activities() -> None:
         step_id="ZCH-01",
         description="Scan repo",
         subagent_type="deep_research",
-        parent_step_id="ZCH-01",
-        parent_task_key="ZCH-01:s:task:0",
         task_idx=0,
         id="subagent-preview",
     )
@@ -679,14 +662,13 @@ async def test_subagent_wire_activity_event_shows_progress_note() -> None:
         task_scope=scope,
     )
     assert handled is True
-    subagent_card = adapter._subagent_cards_by_key["ZCH-01:t0"]
-    text = str(subagent_card._step_task_activity_content())
+    text = str(step._step_task_activity_content())
     assert "gather" in text
     assert "Searching web" in text
 
 
 @pytest.mark.asyncio
-async def test_subagent_wire_crawl_summary_adds_row() -> None:
+async def test_subagent_wire_crawl_summary_counts_on_step_task_line() -> None:
     from soothe_cli.tui.textual_adapter import _apply_subagent_wire_step_event
 
     adapter = TextualUIAdapter(
@@ -721,7 +703,7 @@ async def test_subagent_wire_crawl_summary_adds_row() -> None:
         task_scope=scope,
     )
     assert handled is True
-    subagent_card = adapter._subagent_cards_by_key["ZCH-01:t0"]
-    text = str(subagent_card._step_task_activity_content())
-    assert "Crawl(" in text
-    assert "4/5 URLs" in text
+    step._status = "running"
+    text = str(step._step_task_activity_content())
+    assert "Deep Research(OpenVela architecture) · 1 tool" in text
+    assert "Crawl(" not in text

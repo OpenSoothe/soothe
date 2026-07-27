@@ -1910,24 +1910,9 @@ class SootheDaemon(DaemonHandlersMixin):
         Returns:
             PID if found, None otherwise.
         """
-        import subprocess
+        from soothe_daemon.bootstrap.port_lookup import find_listening_pid
 
-        try:
-            result = subprocess.run(
-                ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
-                capture_output=True,
-                text=True,
-                timeout=0.3,  # 300ms timeout
-                check=False,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                # lsof -t returns PIDs, one per line
-                pids = result.stdout.strip().split("\n")
-                if pids:
-                    return int(pids[0])
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-            pass
-        return None
+        return find_listening_pid(port)
 
     @staticmethod
     def stop_running(timeout: float = _STOP_TIMEOUT_S) -> bool:
@@ -1962,7 +1947,7 @@ class SootheDaemon(DaemonHandlersMixin):
         if not stopped:
             _, ws_port = SootheDaemon._default_ws_endpoint()
             orphan_pid = SootheDaemon._find_port_process(ws_port)
-            if orphan_pid and orphan_pid != pid:
+            if orphan_pid is not None and orphan_pid != pid:
                 logger.info(
                     "Found orphan daemon on port %d (PID: %d), stopping", ws_port, orphan_pid
                 )
@@ -1973,8 +1958,11 @@ class SootheDaemon(DaemonHandlersMixin):
                     # Process already gone
                     stopped = True
 
-        # Cleanup PID file regardless of outcome
-        cleanup_pid()
+        # Only remove the PID file after a confirmed stop. Cleaning it up on
+        # failure creates "orphan — PID file missing" daemons that are harder
+        # to stop on the next attempt.
+        if stopped:
+            cleanup_pid()
         return stopped
 
     @staticmethod

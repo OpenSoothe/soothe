@@ -19,6 +19,7 @@ from soothe.sloop.subagent_catalog import (  # noqa: F401
     filter_task_catalog_subagent_names,
     is_intake_only_wire_subagent,
     partition_subagent_specs,
+    resolve_wire_subagent,
     spec_subagent_name,
 )
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
@@ -27,26 +28,6 @@ logger = logging.getLogger(__name__)
 
 ExecutionMode = Literal["parallel", "dependency"]
 """Planner/executor execution mode for step waves."""
-
-_BUILTIN_WIRE_SUBAGENTS = frozenset(
-    {
-        "planner",
-        "browser_use",
-        "deep_research",
-        "academic_research",
-    }
-)
-
-
-def resolve_wire_subagent(
-    *,
-    wire_subagent: str | None = None,
-) -> str | None:
-    """Return wired subagent name when Pass 2 intake named one explicitly."""
-    name = (wire_subagent or "").strip()
-    if name and name in _BUILTIN_WIRE_SUBAGENTS:
-        return name
-    return None
 
 
 class EvidenceEntry(BaseModel):
@@ -91,7 +72,7 @@ class PlanGenerateStep(BaseModel):
         kind: ``action`` (normal) or ``ask_user`` (clarification relay).
         questions: Questions for ``ask_user`` steps.
         execution_hint: Preferred execution routing from the planner.
-        subagent: Subagent name when ``execution_hint='subagent'`` (e.g. ``deep_research``).
+        subagent: Subagent name when ``execution_hint='subagent'``.
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
@@ -127,10 +108,10 @@ def resolve_step_wire_subagent(
     execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto",
     subagent: str | None = None,
 ) -> str | None:
-    """Map planner execution hints to executor subagent wiring.
+    """Plan-wave delegate resolution — always ``None`` after IG-656.
 
-    Intake-only specialists cannot be plan-wave delegates (IG-600); they are
-    reached only via intake / slash → ``invoke_wired_subagent``.
+    Built-in wire specialists are intake-only; they cannot be plan-wave
+    ``delegate`` targets. Non-allowlisted names are also ignored.
     """
     if execution_hint != "subagent":
         return None
@@ -138,19 +119,11 @@ def resolve_step_wire_subagent(
     if not name:
         logger.debug("subagent execution_hint without subagent name; using direct tools")
         return None
-    if is_intake_only_wire_subagent(name):
-        logger.debug(
-            "Ignoring intake-only planner subagent %r; use intake/slash routing",
-            name,
-        )
-        return None
-    if name not in _BUILTIN_WIRE_SUBAGENTS:
-        logger.debug(
-            "Ignoring invalid planner subagent %r; using direct tools",
-            name,
-        )
-        return None
-    return name
+    logger.debug(
+        "Ignoring plan-wave subagent %r; built-in wires are intake-only",
+        name,
+    )
+    return None
 
 
 def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:
@@ -171,19 +144,14 @@ def apply_step_wire_subagents(steps: list[StepAction]) -> list[StepAction]:
 def strip_unrequested_step_delegates(
     steps: list[StepAction],
     *,
-    user_wire_subagent: str | None,
+    user_wire_subagent: str | None = None,
 ) -> list[StepAction]:
-    """Clear planner-chosen subagent wiring unless the user requested a catalog subagent.
+    """Clear all plan-wave subagent wiring from generated steps (IG-656).
 
-    Intake-only specialists (IG-600) never count as a plan-wave user request —
-    those goals take the wired-subagent route instead.
+    Built-in wire specialists are intake-only and never reach plan-generate;
+    ``user_wire_subagent`` is ignored (kept for call-site compatibility).
     """
-    catalog_user_wire = (
-        None if is_intake_only_wire_subagent(user_wire_subagent) else (user_wire_subagent or None)
-    )
-    if catalog_user_wire:
-        return steps
-
+    del user_wire_subagent  # no catalog keep-path after IG-656
     out: list[StepAction] = []
     stripped = 0
     for step in steps:

@@ -103,6 +103,7 @@ agent:
       mode: adaptive
       streaming_interval_ms: 100
       tui_flush_interval_ms: 200
+      tui_first_flush_interval_ms: 50
       adaptive_threshold_chars: 500
       adaptive_block_chars: 500
       adaptive_block_interval_ms: 250

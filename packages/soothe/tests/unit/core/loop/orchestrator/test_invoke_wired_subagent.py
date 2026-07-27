@@ -200,7 +200,7 @@ async def test_invoke_wired_planner_direct_ainvoke() -> None:
         ce=None,
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
     assert route_after_wired_subagent(out) == "goal_completion"
     assert ctx.scratch.plan_result is not None
     assert any(e[0] == "plan_phase_status" for e in emitted)
@@ -269,7 +269,7 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
         ),
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
     assert route_after_wired_subagent(out) == "goal_completion"
     runnable.ainvoke.assert_awaited_once()
     assert ctx.scratch.plan_result is not None
@@ -327,7 +327,8 @@ async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
         ),
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
+    assert route_after_wired_subagent(out) == "goal_completion"
     assert any(getattr(m, "content", None) == body for m in loop_state._loop_messages_cache)
     completed = next(p for t, p in emitted if t == "wired_subagent_completed")
     assert isinstance(completed, dict)
@@ -388,7 +389,8 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
         ),
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
+    assert route_after_wired_subagent(out) == "goal_completion"
     runnable.ainvoke.assert_not_called()
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
@@ -450,7 +452,8 @@ async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field()
     )
 
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
+    assert route_after_wired_subagent(out) == "goal_completion"
     runnable.ainvoke.assert_not_called()
     assert any(getattr(m, "content", None) == synthesized for m in loop_state._loop_messages_cache)
 
@@ -515,7 +518,8 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
         ),
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
+    assert route_after_wired_subagent(out) == "goal_completion"
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
     ns, mode, data = stream_customs[0]  # type: ignore[misc]
@@ -584,7 +588,8 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
         ),
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {"wired_route_next": "goal_completion"}
+    assert out == {}
+    assert route_after_wired_subagent(out) == "goal_completion"
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
     _ns, mode, data = stream_customs[0]  # type: ignore[misc]

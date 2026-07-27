@@ -5,7 +5,7 @@ Used by:
 - intake-only wired path (plan bookkeeping only; specialist runs via streamed direct invoke)
 
 Execute (or post-direct-invoke) routes to ``goal_completion`` via
-``terminal_after_execute`` / ``wired_route_next`` without a second assess wave.
+``terminal_after_execute`` without a second assess wave.
 """
 
 from __future__ import annotations

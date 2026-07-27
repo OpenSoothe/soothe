@@ -172,16 +172,12 @@ def route_after_resolve_decision(state: dict[str, Any]) -> str:
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
-    """IG-601/IG-656: intake-only direct invoke → goal_completion (else resolve)."""
+    """IG-601/IG-656: intake-only direct invoke → goal_completion (or END on fatal)."""
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END
-    if state.get("wired_route_next") == "goal_completion":
-        logger.info("[routing] route_after_wired_subagent → goal_completion")
-        return "goal_completion"
-    # Defensive: allowlisted wires are all intake-only (IG-656).
-    logger.info("[routing] route_after_wired_subagent → resolve_decision")
-    return "resolve_decision"
+    logger.info("[routing] route_after_wired_subagent → goal_completion")
+    return "goal_completion"
 
 
 def route_after_validate_evidence(state: dict[str, Any]) -> str:

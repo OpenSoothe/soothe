@@ -35,8 +35,9 @@ from soothe_cli.tui.widgets.messages._helpers import _MAX_TASK_DELEGATION_DESC_C
 class StepToolRow:
     """One tool invocation row on the step card (IG-402 / RFC-628).
 
-    Task delegation rows use ``is_task_row=True`` as flat markers; subgraph tools
-    (type ``t``) are transient until rehomed onto SubAgent cards (IG-513).
+    Task delegation rows use ``is_task_row=True`` as flat markers. Subgraph tools
+    (type ``t``) stay on the step card for per-task counts; they are not rendered
+    as nested activity lines (task call line shows the running tool total).
     """
 
     tool_call_id: str
@@ -52,14 +53,16 @@ class StepToolRow:
 
 @dataclass
 class StepRowIndex:
-    """Single-pass classification of tool rows for one step card (IG-513).
+    """Single-pass classification of tool rows for one step card.
 
-    Simplified for flattened display: step cards show flat tool rows and
-    task delegation markers only. SubAgent cards own their own tool rows.
+    Step cards show flat tool rows and task delegation markers. Subgraph tools
+    are counted under ``children_by_task`` for the running task-line suffix and
+    included in ``total_tool_count``; they are not shown as nested preview lines.
     """
 
     task_delegations: list[StepToolRow] = field(default_factory=list)
     main_tools: list[StepToolRow] = field(default_factory=list)
+    children_by_task: dict[str, list[StepToolRow]] = field(default_factory=dict)
     total_tool_count: int = 0
     main_tool_count: int = 0
     task_delegation_count: int = 0
@@ -101,11 +104,11 @@ def latest_preview_rows(
 
 
 def stats_title_suffix(index: StepRowIndex) -> str:
-    """Step status suffix: main-graph tool count plus task delegation count."""
+    """Step status suffix: total tool count plus task delegation count."""
     parts: list[str] = []
-    if index.main_tool_count:
+    if index.total_tool_count:
         parts.append(
-            format_tool_count_label(index.main_tool_count, singular="tool", plural="tools")
+            format_tool_count_label(index.total_tool_count, singular="tool", plural="tools")
         )
     if index.task_delegation_count:
         parts.append(
@@ -248,9 +251,9 @@ def row_counts_for_main_tools(row: StepToolRow, step_id: str) -> bool:
 def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
     """True for rows that belong in the step-card footer tool total (RFC-628).
 
-    Subgraph tools (type ``t``) and rows parented under a task belong on SubAgent
-    cards only and are excluded. Unified main-graph rows use type ``s``; legacy
-    opaque ids count only when they are not task-scoped.
+    Includes main-graph tools (type ``s``) and subgraph tools (type ``t``).
+    Task delegation rows and task-metadata-only rows are excluded. Legacy opaque
+    ids parented under a task are also excluded.
     """
     if row.is_task_row:
         return False
@@ -258,17 +261,62 @@ def row_counts_for_step_tool_total(row: StepToolRow, step_id: str) -> bool:
         return False
     if not row_belongs_to_step(row, step_id):
         return False
-    if row.parent_tool_call_id:
-        return False
     tcid = str(row.tool_call_id).strip()
     if not tcid:
         return False
     _, type_code, _, _ = parse_unified_tool_call_id(tcid)
-    if type_code == "t":
-        return False
-    if type_code == "s":
+    if type_code in ("s", "t"):
         return True
-    return True
+    return not bool(row.parent_tool_call_id)
+
+
+def _task_idx_from_task_row(row: StepToolRow) -> int | None:
+    """Parse task index from a step-level ``…:s:task:N`` row id."""
+    tcid = str(row.tool_call_id).strip()
+    if not tcid:
+        return None
+    _, type_code, _, tool_info = parse_unified_tool_call_id(tcid)
+    if type_code != "s":
+        return None
+    head = (tool_info or "").split(":")[0]
+    if head != "task":
+        return None
+    tail = (tool_info or "").split(":")[-1]
+    if tail.isdigit():
+        return int(tail)
+    return None
+
+
+def build_children_by_task(
+    step_id: str,
+    rows: list[StepToolRow],
+    task_delegations: list[StepToolRow],
+) -> dict[str, list[StepToolRow]]:
+    """Group countable subgraph tools under their parent task delegation key."""
+    idx_to_key: dict[int, str] = {}
+    for task_row in task_delegations:
+        key = task_delegation_dedupe_key(task_row, step_id)
+        idx = _task_idx_from_task_row(task_row)
+        if key and idx is not None:
+            idx_to_key[idx] = key
+    if not idx_to_key:
+        return {}
+    children: dict[str, list[StepToolRow]] = {k: [] for k in idx_to_key.values()}
+    for row in rows:
+        if row.is_task_row or is_task_metadata_only_tool_row(row):
+            continue
+        if not row_belongs_to_step(row, step_id):
+            continue
+        tcid = str(row.tool_call_id).strip()
+        if not tcid:
+            continue
+        _, type_code, idx, _ = parse_unified_tool_call_id(tcid)
+        if type_code != "t":
+            continue
+        key = idx_to_key.get(idx)
+        if key:
+            children[key].append(row)
+    return {k: v for k, v in children.items() if v}
 
 
 def normalized_task_note_key(step_id: str, task_tool_call_id: str) -> str:
@@ -282,21 +330,19 @@ def normalized_task_note_key(step_id: str, task_tool_call_id: str) -> str:
 
 
 class StepRowClassifier:
-    """Builds a :class:`StepRowIndex` from raw tool rows (IG-513 simplified)."""
+    """Builds a :class:`StepRowIndex` from raw tool rows."""
 
     @staticmethod
     def build(step_id: str, rows: list[StepToolRow]) -> StepRowIndex:
-        """Classify rows into task delegations and main tools (flat display).
-
-        IG-513: Removed children_by_task and orphan_tools — subgraph tools
-        route to SubAgent cards, not nested under step card task rows.
-        """
+        """Classify rows into task delegations, main tools, and per-task children."""
         task_delegations = StepRowClassifier._iter_task_delegation_rows(step_id, rows)
         main_tools = [r for r in rows if row_counts_for_main_tools(r, step_id)]
+        children_by_task = build_children_by_task(step_id, rows, task_delegations)
         countable = [r for r in rows if row_counts_for_step_tool_total(r, step_id)]
         return StepRowIndex(
             task_delegations=task_delegations,
             main_tools=main_tools,
+            children_by_task=children_by_task,
             total_tool_count=count_distinct_tool_call_ids(countable),
             main_tool_count=count_distinct_tool_call_ids(main_tools),
             task_delegation_count=len(task_delegations),
@@ -481,10 +527,10 @@ class StepCardStatusLine:
 
 
 class StepActivityTree:
-    """Pure render: task delegation markers and main tool preview (IG-513 simplified).
+    """Pure render: task delegation markers and main tool preview.
 
-    IG-513: Removed nested child rendering — subgraph tools route to SubAgent cards.
-    Step cards show flat list: task delegation markers + main-agent tools.
+    Task rows are flat markers. While a task is running, the marker line shows
+    that task's subgraph tool count. Nested child tool lines are not rendered.
     """
 
     @staticmethod
@@ -514,16 +560,26 @@ class StepActivityTree:
         ):
             return Content("")
 
-        # IG-513: Task delegations shown as flat markers (no nested children)
         for task_row in index.task_delegations:
             if not first_block:
                 parts.append("\n")
             first_block = False
             task_key = task_delegation_dedupe_key(task_row, step_id)
             task_phase = (task_row.phase or "pending").strip().lower()
-            # Phase icon for task marker (syncs from SubAgent card on completion)
-            task_icon = phase_icon(task_phase, g, animate_running=False)
+            if task_phase == "pending" and step_status == "running":
+                task_phase = "running"
+            task_icon = phase_icon(
+                task_phase,
+                g,
+                spinner_position=spinner_position,
+                animate_running=task_phase == "running",
+            )
             label = task_delegation_label(task_row)
+            if task_phase == "running":
+                child_count = count_distinct_tool_call_ids(index.children_by_task.get(task_key, []))
+                count_label = format_tool_count_label(child_count, singular="tool", plural="tools")
+                if count_label:
+                    label = f"{label} · {count_label}"
             task_tone = task_tool_row_tone_for_phase(task_phase, colors)
             parts.append(
                 Content.styled(
@@ -532,7 +588,6 @@ class StepActivityTree:
                 )
             )
 
-            # Per-task subagent notes (from SubAgent card)
             for note in subagent_notes_by_task.get(task_key, []):
                 text = (note or "").strip()
                 if not text:

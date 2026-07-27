@@ -14,7 +14,7 @@ from typing import Final
 # When True, the full nested tool list also renders in `#step-cognition-tools`.
 STEP_CARD_SHOW_TOOL_ROW_DETAILS: Final[bool] = False
 
-# Latest per-tool invocation lines on step and SubAgent cards (shared activity tree).
+# Latest per-tool invocation lines on step cards and orphan SubAgent cards.
 STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT: Final[int] = 2
 
 # Optional manual full tool-list folding threshold (not auto-collapse).

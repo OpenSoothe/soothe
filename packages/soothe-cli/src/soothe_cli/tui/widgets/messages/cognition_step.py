@@ -505,18 +505,14 @@ class CognitionStepMessage(Vertical):
     def _status_tool_stats_suffix(self, fallback_count: int = 0) -> str:
         """Tracked scope-local totals for status lines.
 
-        Server ``tool_call_count`` on step completion aggregates main + subgraph
-        tools (RFC-628). Use it only for main-only steps with no local rows yet.
-        SubAgent cards always use their own row index.
+        Step cards use ``total_tool_count`` (main + subgraph). Intake-only orphan
+        SubAgent cards use the same index over their filtered subgraph rows.
+        Server ``tool_call_count`` is only a fallback when no local rows exist.
         """
         index = self._build_row_index()
-        tool_count = index.main_tool_count
-        is_subagent = bool(getattr(self, "_parent_step_id", ""))
-        if is_subagent:
-            tool_count = index.total_tool_count
-        elif index.task_delegation_count > 0 or index.main_tool_count > 0:
-            pass
-        elif fallback_count > tool_count:
+        tool_count = index.total_tool_count
+        # Server totals can inflate when only task markers exist locally.
+        if tool_count == 0 and fallback_count > 0 and index.task_delegation_count == 0:
             tool_count = fallback_count
         parts: list[str] = []
         if tool_count:
@@ -537,7 +533,7 @@ class CognitionStepMessage(Vertical):
             )
         if parts:
             return f" · {', '.join(parts)}"
-        if not is_subagent and index.task_delegation_count == 0 and fallback_count > 0:
+        if fallback_count > 0:
             return f" · {fallback_count} tools"
         return ""
 
@@ -992,19 +988,10 @@ class CognitionStepMessage(Vertical):
     def mark_unfinished_tools_on_step_complete(self, *, success: bool) -> None:
         """Finalize open tool rows when the step card completes.
 
-        On successful steps, pending/running/skipped subgraph tools are marked
-        ``success`` so task branches show Done instead of Skipped/Pending when
-        the subagent finished without per-tool ToolMessage events.
+        On successful steps, pending/running/skipped tools are marked ``success``
+        so branches show Done instead of Skipped/Pending when the task finished
+        without per-tool ToolMessage events.
         """
-        from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
-
-        # RFC-628: subgraph rows belong on SubAgent cards; strip from step cards only.
-        if not getattr(self, "_parent_step_id", ""):
-            self._rows = [
-                row
-                for row in self._rows
-                if parse_unified_tool_call_id(str(row.tool_call_id).strip())[1] != "t"
-            ]
         finalize_tool_rows_on_step_end(
             self._rows,
             self._iter_task_delegation_rows(),
@@ -1386,20 +1373,22 @@ class CognitionStepMessage(Vertical):
             self._detail_widget.display = False
 
     def _sync_task_row_status_from_subagent(self, task_key: str, success: bool) -> None:
-        """Update task row icon when SubAgent card completes (IG-513).
+        """Update task row icon when a delegated task completes.
 
         Args:
-            task_key: Dedupe key for the task delegation row.
+            task_key: Dedupe key or raw task tool_call_id for the delegation row.
             success: True for success (✓ icon), False for error (✗ icon).
         """
         if not task_key:
             return
-        # Find the task row by key and update its phase
+        # Accept either raw or normalized ids from wire lifecycle events.
+        raw = str(task_key).strip()
+        candidates = {raw, normalize_step_task_tool_call_id(self._step_id, raw)}
         for row in self._rows:
             if not getattr(row, "is_task_row", False):
                 continue
             row_key = task_delegation_dedupe_key(row, self._step_id)
-            if row_key == task_key:
+            if row_key in candidates or str(row.tool_call_id).strip() in candidates:
                 row.phase = "success" if success else "error"
                 row.started_at = None
                 self._sync_step_card_surface()

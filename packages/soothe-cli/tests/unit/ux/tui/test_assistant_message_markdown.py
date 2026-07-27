@@ -119,26 +119,11 @@ async def test_stop_stream_no_op_when_content_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_flush_renders_themed_markdown_to_body() -> None:
-    """_flush_pending_content renders accumulated content with markdown theme."""
-    msg = AssistantMessage(id="asst-test")
-    msg._content = "# Hello\n\nSome text"
-    msg._pending_buffer = "Some text"
-    msg._render_markdown = True
-    body = MagicMock()
-    msg._body = body
-
-    await msg._flush_pending_content()
-
-    assert msg._pending_buffer == ""
-    body.update.assert_called_once()
-    call_arg = body.update.call_args[0][0]
-    assert isinstance(call_arg, ThemedMarkdownRenderer)
-
-
-@pytest.mark.asyncio
 async def test_set_content_hydration_uses_themed_markdown() -> None:
-    """set_content() (used by hydration) renders content with markdown theme."""
+    """set_content() (used by hydration) renders content with markdown theme.
+
+    Content is set before stop_stream so only one render occurs (no double render).
+    """
     msg = AssistantMessage(id="asst-test")
     msg._render_markdown = True
     msg._streaming_active = False
@@ -148,8 +133,9 @@ async def test_set_content_hydration_uses_themed_markdown() -> None:
     await msg.set_content("# Hydrated\n\nContent here")
 
     assert msg._content == "# Hydrated\n\nContent here"
-    last_call_arg = body.update.call_args[0][0]
-    assert isinstance(last_call_arg, ThemedMarkdownRenderer)
+    body.update.assert_called_once()
+    call_arg = body.update.call_args[0][0]
+    assert isinstance(call_arg, ThemedMarkdownRenderer)
 
 
 @pytest.mark.asyncio
@@ -226,3 +212,151 @@ def test_selectable_markdown_body_extracts_text_from_render_cache() -> None:
     assert "Result" in text
     assert "Hello world" in text
     assert ending == "\n"
+
+
+# ---------------------------------------------------------------------------
+# Two-phase rendering (A): plain text while streaming, markdown on stop
+# ---------------------------------------------------------------------------
+
+
+def test_render_to_body_plain_text_while_streaming() -> None:
+    """While streaming, the body shows plain text, not a ThemedMarkdownRenderer."""
+    msg = AssistantMessage(id="asst-stream")
+    msg._content = "# Hello\n\nSome **bold** text"
+    msg._streaming_active = True
+    msg._render_markdown = True
+    body = MagicMock()
+    msg._body = body
+
+    msg._render_to_body()
+
+    body.update.assert_called_once_with("# Hello\n\nSome **bold** text")
+    call_arg = body.update.call_args[0][0]
+    assert not isinstance(call_arg, ThemedMarkdownRenderer)
+
+
+def test_render_to_body_markdown_when_not_streaming() -> None:
+    """When not streaming, the body renders ThemedMarkdownRenderer."""
+    msg = AssistantMessage(id="asst-done")
+    msg._content = "# Hello\n\nSome text"
+    msg._streaming_active = False
+    msg._render_markdown = True
+    body = MagicMock()
+    msg._body = body
+
+    msg._render_to_body()
+
+    body.update.assert_called_once()
+    call_arg = body.update.call_args[0][0]
+    assert isinstance(call_arg, ThemedMarkdownRenderer)
+
+
+@pytest.mark.asyncio
+async def test_flush_during_stream_renders_plain_text() -> None:
+    """_flush_pending_content during active streaming renders plain text."""
+    msg = AssistantMessage(id="asst-stream")
+    msg._content = "Hello world"
+    msg._pending_buffer = " world"
+    msg._streaming_active = True
+    msg._render_markdown = True
+    body = MagicMock()
+    msg._body = body
+
+    await msg._flush_pending_content()
+
+    assert msg._pending_buffer == ""
+    body.update.assert_called_once_with("Hello world")
+    call_arg = body.update.call_args[0][0]
+    assert not isinstance(call_arg, ThemedMarkdownRenderer)
+
+
+@pytest.mark.asyncio
+async def test_stop_stream_switches_from_plain_to_markdown() -> None:
+    """stop_stream transitions from plain-text streaming to a single markdown render."""
+    msg = AssistantMessage(id="asst-transition")
+    msg._content = "# Title\n\nParagraph"
+    msg._streaming_active = True
+    msg._render_markdown = True
+    body = MagicMock()
+    msg._body = body
+
+    await msg.stop_stream()
+
+    assert not msg._streaming_active
+    # Only one render call (the final markdown), no intermediate plain-text flush.
+    body.update.assert_called_once()
+    call_arg = body.update.call_args[0][0]
+    assert isinstance(call_arg, ThemedMarkdownRenderer)
+
+
+# ---------------------------------------------------------------------------
+# Theme caching (B): resolve_markdown_theme_parts called once per widget
+# ---------------------------------------------------------------------------
+
+
+def test_theme_parts_cached_after_first_resolve() -> None:
+    """_get_theme_parts resolves once and reuses the cached tuple."""
+    msg = AssistantMessage(id="asst-cache")
+    msg._render_markdown = True
+
+    parts_a = msg._get_theme_parts()
+    parts_b = msg._get_theme_parts()
+
+    assert parts_a is parts_b
+    assert msg._cached_theme_parts is not None
+
+
+def test_render_to_body_uses_cached_theme_parts() -> None:
+    """Multiple non-streaming renders reuse the same theme parts (no re-resolve)."""
+    msg = AssistantMessage(id="asst-cache2")
+    msg._render_markdown = True
+    msg._streaming_active = False
+    msg._content = "# Title"
+    body = MagicMock()
+    msg._body = body
+
+    msg._render_to_body()
+    cached = msg._cached_theme_parts
+    assert cached is not None
+
+    msg._content = "Different content"
+    msg._render_to_body()
+    assert msg._cached_theme_parts is cached  # still the same tuple
+
+
+# ---------------------------------------------------------------------------
+# Adaptive flush interval (C): fast for first tokens, normal after
+# ---------------------------------------------------------------------------
+
+
+def test_adaptive_flush_interval_fast_for_short_content() -> None:
+    """Short content (< 500 chars) uses the fast first-flush interval."""
+    msg = AssistantMessage(id="asst-adaptive")
+    msg._content = "Hello"
+    msg._first_flush_interval = 0.05
+    msg._stream_flush_interval = 0.2
+
+    assert msg._adaptive_flush_interval() == 0.05
+
+
+def test_adaptive_flush_interval_normal_for_long_content() -> None:
+    """Long content (>= 500 chars) uses the normal flush interval."""
+    msg = AssistantMessage(id="asst-adaptive2")
+    msg._content = "x" * 500
+    msg._first_flush_interval = 0.05
+    msg._stream_flush_interval = 0.2
+
+    assert msg._adaptive_flush_interval() == 0.2
+
+
+def test_adaptive_flush_interval_boundary() -> None:
+    """Exactly at the threshold (499 vs 500 chars) the interval switches."""
+    msg = AssistantMessage(id="asst-boundary")
+    msg._first_flush_interval = 0.05
+    msg._stream_flush_interval = 0.2
+
+    msg._content = "x" * 499
+    assert msg._adaptive_flush_interval() == 0.05
+
+    msg._content = "x" * 500
+    assert msg._adaptive_flush_interval() == 0.2

@@ -1,7 +1,8 @@
-"""Task delegation markers under step cards (IG-513 flattened display).
+"""Task delegation markers under step cards.
 
-IG-513: Step cards show flat task delegation markers (no nested child tools).
-Subgraph tools route to SubAgent cards. Tests updated for flattened design.
+Step cards show flat task delegation markers. Subgraph tools stay on the step
+card for running task-line tool counts (not nested preview lines). Intake-only
+orphan SubAgent cards are a separate widget path.
 """
 
 from __future__ import annotations
@@ -53,21 +54,22 @@ def test_task_delegation_label_collapses_multiline_description() -> None:
     assert "\n" not in text.split("Deep Research(", 1)[-1].split(")", 1)[0]
 
 
-def test_task_activity_tree_shows_name_desc_flat_marker() -> None:
-    """IG-513: Task delegation shown as flat marker (no nested child stats)."""
+def test_task_activity_tree_shows_running_tool_count() -> None:
+    """Running task marker shows subgraph tool count on the item line."""
     card = CognitionStepMessage("ABC-01", "Scan workspace", id="stp-task-tree")
+    card._status = "running"
     card.add_tool_call(
         "ABC_01:s:task:0",
         "task",
         {"subagent_type": "deep_research", "description": "scan the repository"},
         is_task_row=True,
     )
-    # IG-513: Subgraph tools no longer appear nested under step card
+    card.add_tool_call("ABC_01:t0:glob:0", "glob", {"pattern": "**/*"})
+    card.add_tool_call("ABC_01:t0:grep:1", "grep", {"pattern": "x"})
 
     text = _plain(card._step_task_activity_content())
-    assert "Deep Research(scan the repository)" in text
-    # IG-513: No nested tool count under task marker on step card
-    # (SubAgent card shows tool count)
+    assert "Deep Research(scan the repository) · 2 tools" in text
+    assert "Glob(" not in text
 
 
 def test_task_activity_links_children_by_unified_task_index() -> None:

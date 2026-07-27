@@ -32,10 +32,7 @@ def _row(
 
 
 def test_classifier_splits_main_and_task_delegations() -> None:
-    """IG-513: Simplified classifier - main tools and task delegations only.
-
-    Subgraph tools (type 't') route to SubAgent cards, not nested under step.
-    """
+    """Classifier keeps subgraph tools under children_by_task for counting."""
     rows = [
         _row("ABC_01:s:grep:0"),
         _row(
@@ -53,10 +50,12 @@ def test_classifier_splits_main_and_task_delegations() -> None:
     # Task delegations: step-level task rows
     assert len(index.task_delegations) == 1
     key = task_delegation_dedupe_key(index.task_delegations[0], "ABC-01")
-    assert key  # Key exists but children_by_task removed (IG-513)
+    assert key in index.children_by_task
+    assert len(index.children_by_task[key]) == 1
+    assert index.children_by_task[key][0].tool_call_id == "ABC_01:t0:glob:1"
 
 
-def test_stats_title_suffix_uses_main_tool_count() -> None:
+def test_stats_title_suffix_uses_total_tool_count() -> None:
     rows = [
         _row("ABC_01:s:grep:0"),
         _row("ABC_01:s:task:0", tool_name="task", is_task_row=True),
@@ -64,9 +63,9 @@ def test_stats_title_suffix_uses_main_tool_count() -> None:
     ]
     index = StepRowClassifier.build("ABC-01", rows)
     assert index.main_tool_count == 1
-    assert index.total_tool_count == 1
+    assert index.total_tool_count == 2
     assert index.task_delegation_count == 1
-    assert stats_title_suffix(index) == " · 1 tool, 1 task"
+    assert stats_title_suffix(index) == " · 2 tools, 1 task"
 
 
 def test_row_counts_for_step_tool_total_excludes_task_parented_fallback() -> None:

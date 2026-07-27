@@ -20,7 +20,6 @@ from langchain_core.messages import AIMessage, HumanMessage
 from soothe.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.goal_text import resolve_user_request
-from soothe.sloop.state.schemas import is_intake_only_wire_subagent
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
@@ -333,7 +332,7 @@ async def _invoke_intake_only_direct(
     )
     # Do not set after_record_route — that flag means record_iteration already
     # advanced the counter. Direct intake-only skips record_iteration.
-    return {"wired_route_next": "goal_completion"}
+    return {}
 
 
 async def node_invoke_wired_subagent(
@@ -363,20 +362,4 @@ async def node_invoke_wired_subagent(
             "total_tokens_used": ctx.loop_state.total_tokens_used,
         },
     )
-
-    if not is_intake_only_wire_subagent(wire):
-        logger.error(
-            "[WiredSubagent] Unexpected non-intake wire=%s; all allowlisted "
-            "specialists are intake-only",
-            wire,
-        )
-        await ctx.emit(
-            "fatal_error",
-            {
-                "error": f"Wired subagent is not intake-only: {wire}",
-                "step_id": "",
-            },
-        )
-        return {"last_outcome": "fatal"}
-
     return await _invoke_intake_only_direct(ctx, wire=wire, goal_text=goal_text)

@@ -457,12 +457,4 @@ class PromptBuilder:
             )
         if plan_gap is not None:
             generate_kwargs["plan_gap"] = plan_gap
-        from soothe.sloop.engine.thread_selection import (
-            resolve_user_requested_wire_subagent,
-        )
-
-        generate_kwargs["user_wire_subagent"] = resolve_user_requested_wire_subagent(
-            routing_classification=context.routing_classification,
-            intent=getattr(state, "intent", None),
-        )
         return builder.build_plan_generate_message(**generate_kwargs)

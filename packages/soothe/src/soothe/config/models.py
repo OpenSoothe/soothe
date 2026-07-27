@@ -579,6 +579,7 @@ class OutputStreamingConfig(BaseModel):
         mode: Delivery mode (``batch`` | ``adaptive`` | ``streaming``).
         streaming_interval_ms: Daemon WebSocket batching interval (milliseconds).
         tui_flush_interval_ms: TUI rendering flush interval (milliseconds).
+        tui_first_flush_interval_ms: TUI flush interval for the first tokens (milliseconds).
         adaptive_threshold_chars: Cumulative chars at which adaptive switches
             from streaming phase to chunked-streaming phase.
         adaptive_block_chars: Chars per block in chunked-streaming phase.
@@ -618,6 +619,16 @@ class OutputStreamingConfig(BaseModel):
         ge=50,
         le=1000,
         description="TUI markdown stream flush interval (milliseconds)",
+    )
+    tui_first_flush_interval_ms: int = Field(
+        default=50,
+        ge=10,
+        le=500,
+        description=(
+            "TUI flush interval for the first tokens of a reply (milliseconds). "
+            "Gives fast perceived first-token, then switches to tui_flush_interval_ms "
+            "after ~500 chars."
+        ),
     )
     adaptive_threshold_chars: int = Field(
         default=500,

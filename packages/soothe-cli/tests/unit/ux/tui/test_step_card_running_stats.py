@@ -55,7 +55,7 @@ def test_status_tool_stats_suffix_prefers_tracked_when_server_count_lower() -> N
 
 
 def test_status_tool_stats_suffix_ignores_inflated_server_count_when_tracked() -> None:
-    """Server fallback may include subgraph tools; tracked main-only rows win."""
+    """Server fallback is ignored once local tool rows exist."""
     card = CognitionStepMessage("ABC-01", "Scan", id="stp-server")
     card.add_tool_call("ABC_01:s:grep:0", "grep", {})
     suffix = card._status_tool_stats_suffix(fallback_count=5)
@@ -129,7 +129,25 @@ def test_stats_include_main_tools_and_task_delegations() -> None:
         {"pattern": "**/*"},
     )
     suffix = card._stats_title_suffix()
-    assert suffix == " · 1 tool, 1 task"
+    # Footer total includes subgraph tools under the task.
+    assert suffix == " · 2 tools, 1 task"
+
+
+def test_running_task_line_shows_subgraph_tool_count() -> None:
+    card = CognitionStepMessage("ABC-01", "Scan", id="stp-task-count")
+    card._status = "running"
+    card.add_tool_call(
+        "ABC_01:s:task:0",
+        "task",
+        {"subagent_type": "deep_research", "description": "scan"},
+        is_task_row=True,
+    )
+    card.add_tool_call("ABC_01:t0:glob:1", "glob", {"pattern": "**/*"})
+    card.add_tool_call("ABC_01:t0:grep:2", "grep", {"pattern": "x"})
+    text = str(card._step_task_activity_content())
+    assert "Deep Research(scan) · 2 tools" in text
+    assert "Glob(" not in text
+    assert "Grep(" not in text
 
 
 def test_route_pending_main_tools_single_active_step_without_unified_id() -> None:
@@ -314,11 +332,11 @@ def test_no_duplicate_tool_rows_in_activity_preview() -> None:
     task_rows = card._iter_task_delegation_rows()
     assert len(task_rows) == 1
 
-    # IG-513: No more children_by_task - subgraph tools route to SubAgent cards
+    # Task marker shown; subgraph tools stay on the step card for counts only.
 
 
 def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
-    """IG-513: Subgraph tools (type_code 't') never appear in main_preview stats."""
+    """Subgraph tools (type_code 't') never appear in main_preview stats."""
     card = CognitionStepMessage("MAIN-01", "Test main preview", id="step-main")
 
     card.add_tool_call("MAIN_01:s:grep:0", "grep", {"pattern": "x"})
@@ -327,8 +345,6 @@ def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
     main_preview = card._main_agent_tool_rows_for_preview()
     assert len(main_preview) == 1
     assert main_preview[0].tool_call_id == "MAIN_01:s:grep:0"
-
-    # IG-513: Subgraph tools route to SubAgent cards, not step main_preview
 
 
 def test_tool_stats_show_immediately_when_widget_not_visible() -> None:

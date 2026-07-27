@@ -55,5 +55,3 @@ class LoopGraphState(TypedDict, total=False):
     resume_synth: bool | None
     # RFC-226 / terminal bootstrap: record_iteration → goal_completion.
     after_record_route: Literal["goal_completion", ""] | None
-    # IG-601: invoke_wired_subagent → goal_completion (all allowlisted wires intake-only).
-    wired_route_next: Literal["goal_completion", "resolve_decision"] | None

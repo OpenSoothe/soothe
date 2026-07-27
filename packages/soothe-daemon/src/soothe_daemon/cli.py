@@ -91,19 +91,9 @@ def _find_port_pid(port: int) -> int | None:
     Returns:
         PID if found, None otherwise.
     """
-    with contextlib.suppress(subprocess.TimeoutExpired, FileNotFoundError, ValueError):
-        result = subprocess.run(
-            ["lsof", "-i", f"TCP:{port}", "-t", "-sTCP:LISTEN"],
-            capture_output=True,
-            text=True,
-            timeout=0.3,
-            check=False,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            pids = result.stdout.strip().split("\n")
-            if pids:
-                return int(pids[0])
-    return None
+    from soothe_daemon.bootstrap.port_lookup import find_listening_pid
+
+    return find_listening_pid(port)
 
 
 def _fast_is_running() -> tuple[bool, bool]:

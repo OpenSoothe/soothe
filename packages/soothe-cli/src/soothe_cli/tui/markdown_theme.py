@@ -372,11 +372,24 @@ class ThemedMarkdownRenderer:
         yield from self._markdown.__rich_console__(themed_console, options)
 
 
-def build_markdown(content: str, widget_or_app: object | None = None) -> ThemedMarkdownRenderer:
-    """Build markdown styled with the active markdown theme preset."""
+def resolve_markdown_theme_parts(
+    widget_or_app: object | None = None,
+) -> tuple[MarkdownThemeEntry, theme.ThemeColors, str]:
+    """Resolve and return the ``(entry, colors, code_theme)`` tuple for caching.
+
+    Callers that render markdown repeatedly (e.g. streaming assistant cards)
+    can cache this tuple once and then construct ``ThemedMarkdownRenderer``
+    directly, avoiding repeated theme resolution on every flush.
+    """
     entry = resolve_markdown_theme()
     colors = _colors_for_entry(entry, widget_or_app)
     code_theme = _code_theme_for_entry(entry, widget_or_app, colors)
+    return entry, colors, code_theme
+
+
+def build_markdown(content: str, widget_or_app: object | None = None) -> ThemedMarkdownRenderer:
+    """Build markdown styled with the active markdown theme preset."""
+    entry, colors, code_theme = resolve_markdown_theme_parts(widget_or_app)
     return ThemedMarkdownRenderer(
         content,
         entry=entry,

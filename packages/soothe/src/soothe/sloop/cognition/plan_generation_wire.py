@@ -14,7 +14,6 @@ from soothe.sloop.state.schemas import (
     DEFAULT_MAX_PLAN_STEPS_PER_WAVE,
     PlanGenerateStep,
     PlanGeneration,
-    resolve_step_wire_subagent,
 )
 
 _WIRE_PSEUDO_STEP_TOKENS = frozenset(
@@ -203,20 +202,15 @@ def plan_generation_wire_to_model(wire: PlanGenerationWire) -> PlanGeneration:
     for index, step in enumerate(wire.steps):
         step_id = (step.id or "").strip() or f"{index + 1:02d}"
         deps = _normalize_dependency_list(step.dependencies) or None
-        execution_hint: Literal["tool", "subagent", "remote", "auto"] = "auto"
-        subagent: str | None = None
-        delegate = (step.delegate or "").strip()
-        if delegate and resolve_step_wire_subagent(execution_hint="subagent", subagent=delegate):
-            execution_hint = "subagent"
-            subagent = delegate
+        # IG-656: plan-wave ``delegate`` is ignored (all built-in wires are intake-only).
         plan_steps.append(
             PlanGenerateStep(
                 id=step_id,
                 description=step.description,
                 expected_output=step.expected_output or "Step completed successfully",
                 dependencies=deps,
-                execution_hint=execution_hint,
-                subagent=subagent,
+                execution_hint="auto",
+                subagent=None,
             )
         )
 
