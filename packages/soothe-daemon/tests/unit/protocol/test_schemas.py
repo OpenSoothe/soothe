@@ -37,7 +37,6 @@ from soothe_daemon.protocol.schemas import (
     JobPauseParams,
     JobResumeParams,
     JobStatusParams,
-    LoopCardsFetchParams,
     LoopDeleteParams,
     LoopGetParams,
     LoopInputParams,
@@ -90,7 +89,6 @@ class TestParamsRegistryCompleteness:
         "loop_messages",
         "loop_state_get",
         "loop_state_update",
-        "loop_cards_fetch",
         "loop_history_fetch",
         "skills_list",
         "invoke_skill",
@@ -123,7 +121,6 @@ class TestParamsRegistryCompleteness:
         ("request", "loop_messages"),
         ("request", "loop_state_get"),
         ("request", "loop_state_update"),
-        ("request", "loop_cards_fetch"),
         ("request", "loop_history_fetch"),
         ("request", "loop_detach"),
         ("subscribe", "loop_events"),
@@ -344,14 +341,6 @@ class TestLoopParams:
     def test_loop_state_update_missing_values(self) -> None:
         with pytest.raises(ValidationError):
             LoopStateUpdateParams.model_validate({"loop_id": "abc"})
-
-    def test_loop_cards_fetch_valid(self) -> None:
-        p = LoopCardsFetchParams.model_validate({"loop_id": "abc", "since": "2024-01-01"})
-        assert p.since == "2024-01-01"
-
-    def test_loop_cards_fetch_defaults(self) -> None:
-        p = LoopCardsFetchParams.model_validate({"loop_id": "abc"})
-        assert p.since is None
 
     def test_loop_history_fetch_valid(self) -> None:
         from soothe_daemon.protocol.schemas import LoopHistoryFetchParams

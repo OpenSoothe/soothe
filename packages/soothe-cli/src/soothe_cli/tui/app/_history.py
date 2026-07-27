@@ -120,9 +120,8 @@ class _HistoryMixin:
 
     # ------------------------------------------------------------------
     # I/O: resume reads from the daemon's bound card ledger (RFC-631).
-    # The daemon owns derivation and exposes ``loop_history_fetch``; the
-    # legacy ``loop_cards_fetch`` fallback was removed when all supported
-    # clients migrated to the goal-snapshot + live-tail contract.
+    # The daemon owns derivation and exposes ``loop_history_fetch`` via
+    # the goal-snapshot + live-tail contract.
     # ------------------------------------------------------------------
 
     async def _fetch_loop_history_data(self, loop_id: str) -> _LoopHistoryPayload:

@@ -13,7 +13,7 @@ Coverage:
 3. Heartbeat: ping/pong round-trip, heartbeat timeout.
 4. All major RPC message types: loop_list, loop_get, loop_tree, loop_prune,
    loop_delete, loop_reattach, loop_messages, loop_state_get, loop_state_update,
-   loop_cards_fetch, skills_list, invoke_skill, models_list, mcp_status,
+   loop_history_fetch, skills_list, invoke_skill, models_list, mcp_status,
    daemon_status, config_get, job_create, job_status, job_pause, job_resume,
    job_cancel, job_dag, job_guidance.
 5. Batch request/response.
@@ -711,19 +711,6 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
             },
         )
 
-    async def _handle_loop_cards_fetch(client_id, msg):
-        loop_id = msg.get("loop_id")
-        cards = daemon._loop_cards.get(loop_id, [])
-        await daemon._send_client_message(
-            client_id,
-            {
-                "proto": "1",
-                "type": "response",
-                "result": {"loop_id": loop_id, "cards": cards},
-                "id": msg.get("request_id") or msg.get("id"),
-            },
-        )
-
     async def _handle_loop_history_fetch(client_id, msg):
         loop_id = msg.get("loop_id")
         cards = daemon._loop_cards.get(loop_id, [])
@@ -954,7 +941,6 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
     router._handle_loop_messages = _handle_loop_messages  # type: ignore[method-assign]
     router._handle_loop_state_get = _handle_loop_state_get  # type: ignore[method-assign]
     router._handle_loop_state_update = _handle_loop_state_update  # type: ignore[method-assign]
-    router._handle_loop_cards_fetch = _handle_loop_cards_fetch  # type: ignore[method-assign]
     router._handle_loop_history_fetch = _handle_loop_history_fetch  # type: ignore[method-assign]
     router._handle_skills_list = _handle_skills_list  # type: ignore[method-assign]
     router._handle_invoke_skill = _handle_invoke_skill  # type: ignore[method-assign]
@@ -1328,19 +1314,6 @@ async def test_rpc_loop_state_update(mock_server: _MockDaemonServer) -> None:
         # Verify the state was set
         state_result = await client.request("loop_state_get", {"loop_id": "test"}, timeout=5.0)
         assert state_result["state"].get("key") == "value"
-    finally:
-        if client.is_connected:
-            await client.close()
-
-
-@pytest.mark.asyncio
-async def test_rpc_loop_cards_fetch(mock_server: _MockDaemonServer) -> None:
-    """loop_cards_fetch returns display cards."""
-    client = await _connect_and_handshake(mock_server)
-    try:
-        result = await client.request("loop_cards_fetch", {"loop_id": "test"}, timeout=5.0)
-        assert result["loop_id"] == "test"
-        assert "cards" in result
     finally:
         if client.is_connected:
             await client.close()

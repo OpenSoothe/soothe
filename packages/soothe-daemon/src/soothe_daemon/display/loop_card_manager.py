@@ -35,7 +35,7 @@ from soothe_sdk.display.snapshot_collapser import (
     split_cards_by_user_segments,
 )
 from soothe_sdk.display.snapshot_types import GoalDisplaySnapshot
-from soothe_sdk.display.transcript_types import MessageData, MessageType
+from soothe_sdk.display.transcript_types import MessageData
 
 from soothe_daemon.display.loop_card_ledger import LoopCardLedger
 from soothe_daemon.display.loop_history_probe import filter_derivable_log_events
@@ -635,67 +635,6 @@ class LoopCardManager:
                 exc_info=True,
             )
 
-    async def ensure_snapshots_migrated(self, loop_id: str) -> None:
-        """Lazy migration: synthesize goal snapshots from legacy card ledger."""
-        from soothe_daemon.display.display_store import get_display_card_store
-
-        store = get_display_card_store()
-        if store.goal_snapshot_count(loop_id) > 0:
-            return
-        ledger = await self.ensure_for_loop(loop_id)
-        cards = ledger.snapshot()
-        if not cards:
-            return
-        segments = split_cards_by_user_segments(cards)
-        if not segments:
-            return
-        from datetime import UTC, datetime
-
-        now_iso = datetime.now(UTC).isoformat()
-        for goal_index, segment in enumerate(segments):
-            user_text = ""
-            for card in segment:
-                if card.type == MessageType.USER and card.content.strip():
-                    user_text = card.content.strip()
-                    break
-            assistant_text = ""
-            for card in reversed(segment):
-                if card.type != MessageType.ASSISTANT or not card.content.strip():
-                    continue
-                if card.loop_output_phase == "goal_completion":
-                    assistant_text = card.content.strip()
-                    break
-            if not assistant_text:
-                for card in reversed(segment):
-                    if card.type == MessageType.ASSISTANT and card.content.strip():
-                        assistant_text = card.content.strip()
-                        break
-            goal_id = f"{loop_id}_goal_{goal_index}"
-            snapshot = build_goal_snapshot(
-                goal_id=goal_id,
-                goal_index=goal_index,
-                goal_text=user_text or f"Goal {goal_index + 1}",
-                status="completed",
-                started_at=now_iso,
-                completed_at=now_iso,
-                duration_ms=0,
-                tokens_used=0,
-                goal_completion=assistant_text,
-                live_cards=segment,
-            )
-            await asyncio.to_thread(
-                store.insert_goal_snapshot,
-                loop_id,
-                goal_index=goal_index,
-                goal_id=goal_id,
-                snapshot=snapshot.to_wire_dict(),
-            )
-        logger.info(
-            "Migrated %d legacy goal snapshots for loop %s",
-            len(segments),
-            loop_id[:16],
-        )
-
     async def fetch_loop_history(
         self,
         loop_id: str,
@@ -707,7 +646,6 @@ class LoopCardManager:
 
         from soothe_daemon.display.display_store import get_display_card_store
 
-        await self.ensure_snapshots_migrated(loop_id)
         store = get_display_card_store()
         goals = [
             GoalDisplaySnapshot.from_wire_dict(raw) for raw in store.list_goal_snapshots(loop_id)
