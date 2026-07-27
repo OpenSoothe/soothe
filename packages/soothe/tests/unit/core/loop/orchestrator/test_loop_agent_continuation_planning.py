@@ -169,6 +169,7 @@ async def _make_continuation_context(
     intent = IntentClassification(
         intake_label=IntakeLabel.COMPLEX,
         task_complexity=TaskComplexity.COMPLEX,
+        multi_phase=True,
     )
     loop_state = LoopState(
         goal=goal,
@@ -270,7 +271,7 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
 
 @pytest.mark.asyncio
 async def test_continuation_complex_goal_replans_undersized_plan() -> None:
-    """IG-555: 1-step generate loops via route_after_plan until a multi-step plan is produced."""
+    """IG-555 / IG-654: multi_phase 1-step generate loops until a multi-step plan."""
     goal = "build image then start components and run e2e"
     ctx, _assess_continuation = await _make_continuation_context(goal=goal)
     ctx.strange_loop.plan_phase.generate_from_assessment = AsyncMock(

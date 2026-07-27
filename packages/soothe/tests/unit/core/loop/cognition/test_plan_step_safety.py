@@ -34,12 +34,23 @@ def test_intake_label_from_state_reads_intent() -> None:
 
 
 def test_plan_has_minimum_steps_missing_decision_behavior() -> None:
-    assert plan_has_minimum_steps_for_intake(None, IntakeLabel.COMPLEX, 0) is False
+    # Non-multi_phase complex allows missing / 1-step plans (IG-654).
+    assert plan_has_minimum_steps_for_intake(None, IntakeLabel.COMPLEX, 0) is True
     assert (
         plan_has_minimum_steps_for_intake(
             None,
             IntakeLabel.COMPLEX,
             0,
+            multi_phase=True,
+        )
+        is False
+    )
+    assert (
+        plan_has_minimum_steps_for_intake(
+            None,
+            IntakeLabel.COMPLEX,
+            0,
+            multi_phase=True,
             treat_missing_as_undersized=False,
         )
         is True

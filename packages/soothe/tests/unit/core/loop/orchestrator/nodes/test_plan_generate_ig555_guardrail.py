@@ -54,9 +54,12 @@ def _two_step_plan() -> PlanResult:
     )
 
 
-def _make_ctx(*, replan_attempts: int = 0) -> LoopRuntimeContext:
+def _make_ctx(*, replan_attempts: int = 0, multi_phase: bool = True) -> LoopRuntimeContext:
     loop_state = LoopState(goal="build then test", thread_id="tid", iteration=0)
-    loop_state.intent = SimpleNamespace(intake_label=IntakeLabel.COMPLEX)
+    loop_state.intent = SimpleNamespace(
+        intake_label=IntakeLabel.COMPLEX,
+        multi_phase=multi_phase,
+    )
 
     strange_loop = MagicMock()
     strange_loop._build_plan_context.return_value = MagicMock()
@@ -91,6 +94,18 @@ async def test_undersized_plan_returns_continue_generate_route() -> None:
     assert ctx.scratch.plan_result is None
     assert ctx.scratch.undersized_plan_replan_attempts == 1
     assert route_after_plan(result) == "plan_generate"
+
+
+@pytest.mark.asyncio
+async def test_non_multi_phase_complex_accepts_one_step() -> None:
+    """IG-654: non-phased complex may finish in one CoreAgent execute."""
+    ctx = _make_ctx(multi_phase=False)
+    result = await node_plan_generate(ctx, {})
+    assert result.get("plan_route") == PLAN_ROUTE_EXECUTE
+    assert result.get("assess_route") is None
+    assert ctx.scratch.plan_result is not None
+    assert ctx.scratch.undersized_plan_replan_attempts == 0
+    assert route_after_plan(result) == "resolve_decision"
 
 
 @pytest.mark.asyncio

@@ -48,7 +48,8 @@ def create_pass2_classifier_with_raw_result(raw_result: dict) -> IntakePass2Clas
         ("fix the type error in auth.py", IntakeScope.SIMPLE),
         ("add tests for the new API endpoint", IntakeScope.SIMPLE),
         ("update the README with new instructions", IntakeScope.SIMPLE),
-        ("refactor SessionStore across all callers", IntakeScope.COMPLEX),
+        ("fix the null check across SessionStore callers", IntakeScope.SIMPLE),
+        ("refactor SessionStore across all callers then migrate callers", IntakeScope.COMPLEX),
         ("migrate the auth system to OAuth2", IntakeScope.COMPLEX),
         ("design a new caching architecture", IntakeScope.COMPLEX),
     ],
@@ -64,21 +65,23 @@ async def test_scope_classification(query: str, expected_scope: IntakeScope) -> 
 
 
 @pytest.mark.parametrize(
-    "query",
+    "query,expected_scope",
     [
-        "implement feature X across multiple modules",
-        "refactor the entire authentication flow",
-        "update all API handlers for new schema",
+        ("fix the null check across SessionStore callers", IntakeScope.SIMPLE),
+        ("implement feature X across a few modules", IntakeScope.SIMPLE),
+        ("first scan the repo and then run tests", IntakeScope.COMPLEX),
     ],
 )
-async def test_multi_file_is_complex(query: str) -> None:
-    """Multi-file changes should classify as complex."""
+async def test_coherent_multifile_prefers_simple_unless_phased(
+    query: str, expected_scope: IntakeScope
+) -> None:
+    """Multi-file alone is simple; explicit ordered phases stay complex."""
     classifier = create_pass2_classifier_with_result(
-        scope=IntakeScope.COMPLEX,
-        reasoning="multi-file change",
+        scope=expected_scope,
+        reasoning="coreagent-first scope",
     )
     result = await classifier.classify(query)
-    assert result.scope == IntakeScope.COMPLEX
+    assert result.scope == expected_scope
 
 
 # -- Prior context tests ---------------------------------------------------
@@ -115,20 +118,20 @@ async def test_no_prior_projection_works() -> None:
 # -- Fail-safe tests -------------------------------------------------------
 
 
-async def test_no_model_returns_complex() -> None:
-    """No model should fail-safe to complex."""
+async def test_no_model_returns_simple() -> None:
+    """No model should fail-safe to simple."""
     classifier = IntakePass2Classifier(model=None)
     result = await classifier.classify("any query")
-    assert result.scope == IntakeScope.COMPLEX
+    assert result.scope == IntakeScope.SIMPLE
 
 
-async def test_llm_error_fails_safe_to_complex() -> None:
-    """LLM error should fail-safe to complex."""
+async def test_llm_error_fails_safe_to_simple() -> None:
+    """LLM error should fail-safe to simple."""
     mock_model = MagicMock()
     mock_model.ainvoke = AsyncMock(side_effect=Exception("LLM error"))
     classifier = IntakePass2Classifier(model=mock_model)
     result = await classifier.classify("any query")
-    assert result.scope == IntakeScope.COMPLEX
+    assert result.scope == IntakeScope.SIMPLE
 
 
 async def test_structured_output_error_retries_once() -> None:
@@ -160,12 +163,12 @@ async def test_structured_output_error_retries_once() -> None:
     assert mock_invoke.await_count == 2
 
 
-async def test_invalid_scope_fails_safe_to_complex() -> None:
+async def test_invalid_scope_fails_safe_to_simple() -> None:
     """Invalid scope value should raise and fail-safe."""
     classifier = create_pass2_classifier_with_raw_result({"scope": "invalid", "reasoning": "test"})
     # Invalid scope triggers ValueError, which triggers fallback
     result = await classifier.classify("test")
-    assert result.scope == IntakeScope.COMPLEX
+    assert result.scope == IntakeScope.SIMPLE
 
 
 # -- Intake label conversion tests -----------------------------------------

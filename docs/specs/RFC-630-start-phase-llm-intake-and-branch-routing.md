@@ -178,27 +178,31 @@ Examples:
 Classify work scope: trivial, simple, or complex?
 
 trivial: one obvious action, no planning (e.g., single file read, simple query, math).
-simple: one focused deliverable, light planning (e.g., single function fix, add one test).
-complex: multi-step, multi-file, architecture, migration, multi-phase.
+simple: one focused deliverable CoreAgent can finish in a single execute
+  (tools + todos inside one step). Multi-file OK when it is one coherent change.
+complex: durable phase gates, parallel independent workstreams, architecture /
+  migration spanning ordered phases, or explicit multi-phase wording.
 
 Rules:
-- Multiple files/components → complex
-- Architecture/system change → complex
-- Uncertain → complex
+- Prefer simple when one CoreAgent run can discover + edit + verify.
+- Multiple files alone ≠ complex if there is one coherent deliverable.
+- Uncertain with a clear single deliverable → simple (not complex).
+- Architecture / system migration with ordered phases → complex.
 
 JSON only:
-{"scope":"trivial"|"simple"|"complex","goal_description":"imperative summary","reasoning":"≤15 words"}
-
-goal_description: normalize as action statement, match user's language, preserve code/paths/IDs.
+{"scope":"trivial"|"simple"|"complex","reasoning":"≤15 words, first person","multi_phase":bool,...}
 
 Examples:
 "list the files in src/" → scope:trivial
 "fix the type error in auth.py" → scope:simple
-"refactor SessionStore across all callers" → scope:complex
-"add tests for the new API endpoint" → scope:simple
+"fix the null check across SessionStore callers" → scope:simple
+"first scan the repo and then run tests" → scope:complex, multi_phase:true
 "migrate the auth system to OAuth2" → scope:complex
 </INTAKE_PASS2>
 ```
+
+Fail-safe on classification failure: ``simple`` (lightweight plan), not ``complex``
+(IG-654 CoreAgent-first granularity).
 
 **Context packaging**:
 

@@ -19,7 +19,8 @@ from soothe.sloop.state.schemas import (
 if TYPE_CHECKING:
     from soothe.sloop.state.schemas import LoopState
 
-# IG-555: max plan_generate retries when complex iter=0 plans stay undersized.
+# IG-555 / IG-654: max plan_generate retries when multi_phase complex iter=0
+# plans stay undersized (non-phased complex may use a single CoreAgent step).
 MAX_UNDERSIZED_PLAN_REPLANS = 2
 
 _DEFAULT_PLAN_SAFETY_RULES = PlanSafetyRulesConfig()
@@ -63,11 +64,19 @@ def plan_has_minimum_steps_for_intake(
     iteration: int,
     *,
     treat_missing_as_undersized: bool = True,
+    multi_phase: bool | None = False,
 ) -> bool:
-    """Return True when a plan satisfies the complex-intake minimum step count (IG-555)."""
+    """Return True when a plan satisfies the complex-intake minimum step count.
+
+    IG-555 required ≥2 steps for all complex plans at iter=0. IG-654 narrows
+    that floor to ``multi_phase`` goals only — CoreAgent can finish non-phased
+    complex work in a single execute step.
+    """
     if intake_label != IntakeLabel.COMPLEX:
         return True
     if iteration > 0:
+        return True
+    if not multi_phase:
         return True
     if decision is None:
         return not treat_missing_as_undersized
@@ -75,6 +84,14 @@ def plan_has_minimum_steps_for_intake(
     if not steps:
         return not treat_missing_as_undersized
     return len(steps) >= 2
+
+
+def multi_phase_from_state(state: LoopState) -> bool:
+    """Return Pass 2 ``multi_phase`` from loop intent, defaulting to False."""
+    intent = state.intent
+    if intent is None:
+        return False
+    return bool(getattr(intent, "multi_phase", False))
 
 
 def simple_intake_should_force_done(

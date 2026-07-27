@@ -32,7 +32,8 @@ class IntakePass2Classifier:
 
     Classifies as trivial, simple, or complex. Prior-goal projection included
     for reference resolution ("apply it"). Retries once on structured-output
-    failure, then fail-safe to complex so full pipeline runs.
+    failure, then fail-safe to simple (lightweight plan) so CoreAgent can
+    finish in one execute rather than forcing a full complex spine.
 
     Args:
         model: Fast LLM for classification.
@@ -62,7 +63,7 @@ class IntakePass2Classifier:
     ) -> IntakePass2LLMResult:
         """Classify work scope as trivial, simple, or complex.
 
-        Retries once on structured-output failure, then fail-safe to complex.
+        Retries once on structured-output failure, then fail-safe to simple.
 
         Args:
             query: User input text.
@@ -91,7 +92,7 @@ class IntakePass2Classifier:
             return result
         except Exception as exc:
             logger.warning(
-                "Pass2 classification failed, fail-safe to complex: %s",
+                "Pass2 classification failed, fail-safe to simple: %s",
                 type(exc).__name__,
             )
             logger.debug("Pass2 error: %s", exc, exc_info=True)
@@ -197,12 +198,12 @@ class IntakePass2Classifier:
         *,
         error_context: Exception | None = None,
     ) -> IntakePass2LLMResult:
-        """Fail-safe: complex so full pipeline runs."""
+        """Fail-safe: simple so one CoreAgent execute can finish the deliverable."""
         reason = type(error_context).__name__ if error_context else "no_model"
-        logger.debug("Pass2 fallback to complex (%s)", reason)
+        logger.debug("Pass2 fallback to simple (%s)", reason)
         return IntakePass2LLMResult(
-            scope=IntakeScope.COMPLEX,
-            reasoning="Let me run the full agent loop to work through this goal.",
+            scope=IntakeScope.SIMPLE,
+            reasoning="Let me handle this as a focused single-execute task.",
             multi_phase=False,
             wire_subagent=None,
             requires_tool_use=False,

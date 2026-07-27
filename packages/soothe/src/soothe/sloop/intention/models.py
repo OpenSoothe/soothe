@@ -31,8 +31,8 @@ class IntakeLabel(StrEnum):
       LLM piggybacks ``chitchat_response`` and the runner emits it directly.
     - ``trivial``: trivia, single obvious tool call, or direct answer; pseudo
       1-step plan via execute (no plan_assess/plan_generate).
-    - ``simple``: single focused step, lightweight plan.
-    - ``complex``: multi-step / multi-phase, full plan.
+    - ``simple``: single focused deliverable CoreAgent can finish in one execute.
+    - ``complex``: multi-phase / parallel workstreams / durable phase gates.
     """
 
     CHITCHAT = "chitchat"

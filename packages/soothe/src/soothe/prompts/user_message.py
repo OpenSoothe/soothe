@@ -621,7 +621,8 @@ class UserMessageBuilder:
         sections.append(
             (
                 "TASK",
-                "Decompose GOAL into explicit components (2–8). For each component, classify "
+                "Map GOAL into components (1–8); prefer one when a single CoreAgent "
+                "execute can finish the deliverable. For each component, classify "
                 "evidence from the ledger and PRIOR PROGRESS. List remaining_gaps and "
                 "distance_from_goal. Do NOT decide continue/replan/done.",
             )

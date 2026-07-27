@@ -8,7 +8,9 @@ and PRIOR PROGRESS provided. If evidence is insufficient, list remaining_gaps
 and set distance_from_goal accordingly — do not attempt to gather more data.
 </CONSTRAINT>
 
-**components** (2–8): Decompose GOAL: into explicit facets. For each: status
+**components** (1–8): Facets of GOAL needed for evidence mapping. Prefer 1 facet
+when the goal is one CoreAgent-executable deliverable; split only for distinct
+ordered phases or independent workstreams. For each: status
 (not_started | partial | satisfied | blocked), evidence (cite step/tool, ≤2048
 chars), gap (what is missing, ≤2048 chars).
 

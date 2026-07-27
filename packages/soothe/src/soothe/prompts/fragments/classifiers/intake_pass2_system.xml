@@ -2,13 +2,17 @@
 Classify work scope: trivial, simple, or complex?
 
 trivial: one obvious action, no planning (e.g., single file read, simple query, math).
-simple: one focused deliverable, light planning (e.g., single function fix, add one test).
-complex: multi-step, multi-file, architecture, migration, multi-phase.
+simple: one focused deliverable CoreAgent can finish in a single execute
+  (tools + todos inside one step). Multi-file OK when it is one coherent change
+  (e.g., fix a bug across a few call sites, add one feature + its test).
+complex: durable phase gates, parallel independent workstreams, architecture /
+  migration spanning ordered phases, or explicit multi-phase wording.
 
 Rules:
-- Multiple files/components → complex
-- Architecture/system change → complex
-- Uncertain → complex
+- Prefer simple when one CoreAgent run can discover + edit + verify.
+- Multiple files alone ≠ complex if there is one coherent deliverable.
+- Uncertain with a clear single deliverable → simple (not complex).
+- Architecture / system migration with ordered phases → complex.
 - reasoning: first-person TUI line for the user (I'll / Let me …), ≤15 words; not third-person scope commentary
 - requires_tool_use: true for live/external data (weather, web lookup, file contents); false for pure reasoning/math
 - wire_subagent: set when the GOAL's primary intent is to run one wired specialist end-to-end
@@ -30,13 +34,14 @@ Examples:
 "what is 2+2" → scope:trivial, requires_tool_use:false, multi_phase:false, wire_subagent:null
 "shanghai weather now" → scope:trivial, requires_tool_use:true, multi_phase:false, wire_subagent:null
 "fix the type error in auth.py" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
-"refactor SessionStore across all callers" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"fix the null check across SessionStore callers" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"add tests for the new API endpoint" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"refactor SessionStore across all callers then migrate callers to the new API" → scope:complex, requires_tool_use:true, multi_phase:true, wire_subagent:null
 "first scan the repo and then run tests" → scope:complex, requires_tool_use:true, multi_phase:true, wire_subagent:null
 "use browser_use for weather" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:browser_use
 "/deep_research latest LLM agent evals" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:deep_research
 "run academic_research on transformer attention papers" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:academic_research
 "/plan a migration from SQLite to Postgres" → scope:simple, requires_tool_use:false, multi_phase:false, wire_subagent:planner
-"add tests for the new API endpoint" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
 "migrate the auth system to OAuth2" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null
-"fix this failed CI run: https://github.com/org/repo/actions/runs/123456" → scope:complex, requires_tool_use:true, multi_phase:false, wire_subagent:null
+"fix this failed CI run: https://github.com/org/repo/actions/runs/123456" → scope:simple, requires_tool_use:true, multi_phase:false, wire_subagent:null
 </INTAKE_PASS2>

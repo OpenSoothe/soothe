@@ -2,7 +2,8 @@
 
 IG-476: Also handles fresh-loop bypass where bounded_evidence_gather sets synthetic assessment.
 RFC-630: Also handles the ``simple`` intake branch (lightweight plan, synthetic assessment).
-IG-555: Guardrail rejects undersized plans for complex intake at iter=0.
+IG-555: Guardrail rejects undersized plans for multi_phase complex at iter=0.
+IG-654: Non-phased complex may use a single CoreAgent execute step.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import Any
 
 from soothe.sloop.cognition.plan_step_safety import (
     MAX_UNDERSIZED_PLAN_REPLANS,
+    multi_phase_from_state,
     plan_has_minimum_steps_for_intake,
 )
 from soothe.sloop.goal_text import resolve_planning_goal
@@ -102,13 +104,14 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
 
     ctx.scratch.plan_result = plan_result
 
-    # IG-555: Guardrail rejects undersized plans for complex intake at iter=0
+    # IG-555 / IG-654: Undersized only when multi_phase complex at iter=0
     if intake_label == IntakeLabel.COMPLEX and state.iteration == 0:
         if not plan_has_minimum_steps_for_intake(
             plan_result.decision,
             intake_label,
             state.iteration,
             treat_missing_as_undersized=False,
+            multi_phase=multi_phase_from_state(state),
         ):
             step_count = len(plan_result.decision.steps) if plan_result.decision else 0
             if ctx.scratch.undersized_plan_replan_attempts >= MAX_UNDERSIZED_PLAN_REPLANS:
@@ -120,14 +123,14 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
                 await ctx.emit(
                     "fatal_error",
                     {
-                        "error": "Plan remained undersized for complex goal after replan attempts",
+                        "error": "Plan remained undersized for multi-phase complex goal after replan attempts",
                         "step_id": "",
                     },
                 )
                 return _PLAN_GENERATE_FATAL
 
             logger.warning(
-                "[PlanGenerate] Undersized plan (%d step) for complex intake at iter=0; "
+                "[PlanGenerate] Undersized plan (%d step) for multi_phase complex at iter=0; "
                 "forcing replan with expanded scope",
                 step_count,
             )
@@ -135,7 +138,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             ctx.scratch.plan_assessment = StatusAssessment(
                 status="continue",
                 goal_progress="low",
-                assessment_reasoning="Plan undersized for complex goal; expanding scope.",
+                assessment_reasoning="Plan undersized for multi-phase complex goal; expanding scope.",
                 require_goal_completion=False,
             )
             ctx.scratch.plan_result = None

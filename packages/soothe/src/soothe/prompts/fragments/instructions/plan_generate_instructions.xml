@@ -6,6 +6,11 @@ If ledger ends with ``plan_assess`` AI, use its ``status`` / ``goal_progress``; 
 STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh plan only when needed.
 
 **Step count**: Return at most 10 steps per plan wave; prefer fewer, focused steps.
+- CoreAgent is powerful: one StrangeLoop step is one CoreAgent execute (tools,
+  write_todos, task). Prefer exactly one step when a single execute can finish
+  the remaining deliverable — do not invent discover / edit / verify plan steps.
+- Split only for durable phase gates, parallel independent workstreams, or
+  explicit ordered phases (multi_phase). Not for overlapping discovery.
 - If one remaining actionable gap can be completed in one execute wave using projected prior context, emit exactly one step.
 - Do not split overlapping discovery (enumerate / search / confirm) across multiple steps when the goal or prior evidence already scopes the work — merge into one execute step.
 
