@@ -16,8 +16,19 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import HumanMessage
+from soothe_sdk.core.events import (
+    CARD_CREATED,
+    CARD_FINALIZED,
+    CARD_REPLAY_BEGIN,
+    CARD_REPLAY_END,
+    CARD_UPDATED,
+)
 from soothe_sdk.display import card_binder
-from soothe_sdk.display.card_ledger import cards_to_mutations
+from soothe_sdk.display.card_ledger import (
+    align_cards_preserving_ids,
+    cards_to_mutations,
+    diff_card_snapshots,
+)
 from soothe_sdk.display.snapshot_collapser import (
     build_goal_snapshot,
     fold_display_cards,
@@ -34,9 +45,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-CARD_REPLAY_BEGIN = "card.replay_begin"
-CARD_CREATED = "card.created"
-CARD_REPLAY_END = "card.replay_end"
+_CARD_OP_TO_WIRE = {
+    "create": CARD_CREATED,
+    "update": CARD_UPDATED,
+    "finalize": CARD_FINALIZED,
+}
 
 _DERIVABLE_CUSTOM_KINDS = frozenset({"event", "tool_call", "tool_result", "conversation"})
 
@@ -443,11 +456,14 @@ class LoopCardManager:
 
         IG-535 Optimization 4: Uses isolated ThreadPoolExecutor instead of
         asyncio.to_thread to prevent contention with general thread pool.
+
+        IG-655 / RFC-413 Phase 4: append create/update mutations when possible;
+        fall back to ``replace_with`` only when cards disappear from the
+        projection. Broadcasts live ``card.*`` frames after a successful apply.
         """
         executor = _get_card_bind_executor()
         loop = asyncio.get_running_loop()
 
-        # Run binding in dedicated executor (not asyncio.to_thread pool)
         cards = await loop.run_in_executor(
             executor,
             self._bind_cards,
@@ -455,9 +471,76 @@ class LoopCardManager:
             state.log_events,
         )
         ledger = await self._open_ledger(loop_id)
-        mutations = cards_to_mutations(cards) if cards else []
-        if mutations:
-            await ledger.replace_with(mutations)
+        previous = ledger.snapshot()
+        if not cards:
+            if previous:
+                # Binder produced nothing while cards exist — keep prior
+                # projection (avoid wiping on transient empty binds).
+                return
+            return
+
+        aligned, needs_replace = align_cards_preserving_ids(previous, cards)
+        if needs_replace or not previous:
+            mutations = cards_to_mutations(aligned, start_seq=1) if aligned else []
+            if mutations or needs_replace:
+                await ledger.replace_with(mutations)
+                # Re-read assigned seqs from ledger snapshot for wire frames.
+                wire_mutations = ledger.to_mutations_snapshot()
+                await self._broadcast_card_mutations(loop_id, wire_mutations)
+            return
+
+        mutations = diff_card_snapshots(
+            previous,
+            aligned,
+            start_seq=ledger.next_seq(),
+        )
+        if not mutations:
+            return
+        await ledger.append_many(mutations)
+        await self._broadcast_card_mutations(loop_id, mutations)
+
+    async def _broadcast_card_mutations(
+        self,
+        loop_id: str,
+        mutations: list[Any],
+    ) -> None:
+        """Publish bound card frames to loop subscribers (RFC-413 Phase 4).
+
+        Frames are wrapped as ``event`` / ``mode=custom`` so existing
+        ``iter_turn_chunks`` clients deliver them (top-level ``card.*`` is
+        skipped by that iterator). Zero subscribers is a no-op.
+        """
+        broadcast = getattr(self._daemon, "_broadcast", None)
+        if broadcast is None or not mutations:
+            return
+        for mutation in mutations:
+            op = getattr(mutation, "op", None)
+            if op == "header":
+                continue
+            wire_type = _CARD_OP_TO_WIRE.get(str(op))
+            if wire_type is None:
+                continue
+            frame = {
+                "type": "event",
+                "mode": "custom",
+                "loop_id": loop_id,
+                "data": {
+                    "type": wire_type,
+                    "seq": int(mutation.seq),
+                    "card_id": str(mutation.card_id),
+                    "kind": str(mutation.kind),
+                    "data": dict(mutation.data or {}),
+                },
+            }
+            try:
+                await broadcast(frame)
+            except Exception:
+                logger.debug(
+                    "Failed to broadcast %s for loop %s",
+                    wire_type,
+                    loop_id,
+                    exc_info=True,
+                )
 
     @staticmethod
     def _bind_cards(
@@ -731,9 +814,6 @@ class LoopCardManager:
 
 
 __all__ = [
-    "CARD_CREATED",
-    "CARD_REPLAY_BEGIN",
-    "CARD_REPLAY_END",
     "LoopCardManager",
     "get_card_ingest_overflow_metrics",
     "reset_card_ingest_overflow_metrics",

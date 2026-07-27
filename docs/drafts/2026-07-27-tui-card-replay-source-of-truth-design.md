@@ -6,6 +6,8 @@
 **Related:** RFC-413 (Server-Owned Display Card Ledger), RFC-631 (Goal Display Snapshots), RFC-450 (Daemon Protocol), RFC-505 (Desktop Client), IG-577 (Resume Transcript Hardening)
 **Supersedes / refines:** Completes the unfinished Phase 4 end state of RFC-413; does not replace RFC-413 or RFC-631
 
+**Formalized:** 2026-07-27 — decisions merged into [RFC-413](../specs/RFC-413-server-owned-display-card-ledger.md) (§11 Phase 4, §16); implementation tracked in [IG-655](../impl/IG-655-display-card-phase4-live-cutover.md).
+
 ---
 
 ## 1. Problem

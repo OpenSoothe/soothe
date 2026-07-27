@@ -109,10 +109,6 @@ from soothe_cli.runtime.parse.tool_call_resolution import (
     should_ingest_tool_for_step_stats,
     tool_args_meaningful,
 )
-from soothe_cli.runtime.policy.essential_events import (
-    INTENT_CLASSIFIED_EVENT_TYPE,
-    LOOP_REASON_EVENT_TYPE,
-)
 from soothe_cli.runtime.presentation.duration_format import format_duration
 from soothe_cli.runtime.presentation.engine import PresentationEngine
 from soothe_cli.runtime.presentation.renderer_base import RendererBase
@@ -175,7 +171,6 @@ from soothe_cli.tui.widgets.messages import (
     AssistantMessage,
     ClarificationInputMessage,
     CognitionGoalTreeMessage,
-    CognitionReasonMessage,
     CognitionStepMessage,
     SummarizationMessage,
     create_subagent_card,
@@ -2780,6 +2775,11 @@ async def _flush_assistant_text_ns(
         # only goal_completion surfaces the final result.
         return
 
+    # Do not *create* main-namespace assistant cards from raw stream flushes
+    # (daemon ``card.*`` owns those). Still finalize an existing in-turn card.
+    if not ns_key and assistant_message_by_namespace.get(ns_key) is None:
+        return
+
     current_msg = assistant_message_by_namespace.get(ns_key)
     if current_msg is None:
         # No message was created during streaming - create one with full content
@@ -3380,6 +3380,9 @@ async def execute_task_textual(
 
                         # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
                         if getattr(message, "phase", None) == "goal_completion":
+                            # Main graph: daemon card ledger owns the final assistant card.
+                            if is_main_agent:
+                                continue
                             text_gc = "\n".join(
                                 str(b.get("text", ""))
                                 for b in blocks
@@ -3551,15 +3554,8 @@ async def execute_task_textual(
                                     # (aggregated on the step card when present).
                                     continue
 
-                                # Main graph: skip standalone AssistantMessage cards for
-                                # intermediate AIMessage streams (execute_wave, unphased, etc.).
-                                # ``goal_completion`` is handled above. Other RFC-614 user-output
-                                # phases (chitchat, plan_direct, autonomous_goal) use instant mount.
-                                if (
-                                    is_main_agent
-                                    and assistant_output_phase(message)
-                                    not in LOOP_ASSISTANT_OUTPUT_PHASES
-                                ):
+                                # Main assistant cards come from card.*.
+                                if is_main_agent:
                                     continue
 
                                 # Track accumulated text for reference
@@ -3891,6 +3887,9 @@ async def execute_task_textual(
 
                     elif current_stream_mode == "custom":
                         if isinstance(data, dict):
+                            apply_card = getattr(adapter, "_apply_card_wire_frame", None)
+                            if callable(apply_card) and await apply_card(data):
+                                continue
                             event_type = str(data.get("type", ""))
                             if event_type == TOOL_CALL_UPDATES_BATCH:
                                 updates = data.get("updates")
@@ -4405,61 +4404,6 @@ async def execute_task_textual(
                                 )
                                 if adapter._set_spinner and not clarification_pending:
                                     await adapter._set_spinner(None)
-                                continue
-
-                            if event_type == INTENT_CLASSIFIED_EVENT_TYPE:
-                                reasoning = str(data.get("reasoning", "")).strip()
-                                if not reasoning:
-                                    continue
-                                pending_text = pending_text_by_namespace.get(ns_key, "")
-                                if pending_text:
-                                    await _flush_assistant_text_ns(
-                                        adapter,
-                                        pending_text,
-                                        ns_key,
-                                        assistant_message_by_namespace,
-                                        router=router,
-                                    )
-                                    pending_text_by_namespace[ns_key] = ""
-                                    assistant_message_by_namespace.pop(ns_key, None)
-                                intent_widget = CognitionReasonMessage(
-                                    status="",
-                                    iteration=0,
-                                    plan_reasoning=reasoning,
-                                    id=f"intent-{uuid.uuid4().hex[:8]}",
-                                )
-                                await adapter._mount_message(intent_widget)
-                                continue
-
-                            if event_type == LOOP_REASON_EVENT_TYPE:
-                                assessment_reasoning = str(
-                                    data.get("assessment_reasoning", "")
-                                ).strip()
-                                plan_reasoning = str(data.get("plan_reasoning", "")).strip()
-                                if not assessment_reasoning and not plan_reasoning:
-                                    continue
-                                pending_text = pending_text_by_namespace.get(ns_key, "")
-                                if pending_text:
-                                    await _flush_assistant_text_ns(
-                                        adapter,
-                                        pending_text,
-                                        ns_key,
-                                        assistant_message_by_namespace,
-                                        router=router,
-                                    )
-                                    pending_text_by_namespace[ns_key] = ""
-                                    assistant_message_by_namespace.pop(ns_key, None)
-                                pa_raw = data.get("plan_action", "")
-                                plan_action = pa_raw if pa_raw in ("keep", "new") else ""
-                                plan_widget = CognitionReasonMessage(
-                                    status=str(data.get("status", "")),
-                                    iteration=int(data.get("iteration", 0)),
-                                    plan_action=str(plan_action),
-                                    assessment_reasoning=assessment_reasoning,
-                                    plan_reasoning=plan_reasoning,
-                                    id=f"plan-{uuid.uuid4().hex[:8]}",
-                                )
-                                await adapter._mount_message(plan_widget)
                                 continue
 
                             if ns_key and not is_step_card_tool_scope(ns_key=ns_key):

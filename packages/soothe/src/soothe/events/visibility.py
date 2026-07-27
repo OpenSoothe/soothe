@@ -53,6 +53,11 @@ import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+from soothe_sdk.core.events import (
+    CARD_REPLAY_BEGIN,
+    CARD_REPLAY_END,
+    CARD_WIRE_TYPES,
+)
 from soothe_sdk.core.types import VerbosityLevel
 from soothe_sdk.core.verbosity import VerbosityTier, should_show
 from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE, TOOL_CALL_UPDATES_BATCH
@@ -70,6 +75,9 @@ _ALWAYS_CLIENT_WIRE_INNER_TYPES = frozenset(
         TOOL_CALL_UPDATES_BATCH,
         STREAM_TOOL_CALL_UPDATE,
         "stream_degraded",
+        *CARD_WIRE_TYPES,
+        CARD_REPLAY_BEGIN,
+        CARD_REPLAY_END,
     }
 )
 
@@ -89,6 +97,10 @@ _ALWAYS_CLIENT_WIRE_TOP_TYPES = frozenset(
         "loop_input_response",
         "loop_subscribe_response",
         "loop_new_response",
+        # RFC-413 card frames (reattach + any top-level live emit).
+        *CARD_WIRE_TYPES,
+        CARD_REPLAY_BEGIN,
+        CARD_REPLAY_END,
     }
 )
 

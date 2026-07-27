@@ -315,10 +315,12 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
 
 - **RFC-413**: [Server-Owned Display Card Ledger](RFC-413-server-owned-display-card-ledger.md)
   - Kind: Architecture Design
-  - Status: Draft
+  - Status: Draft (Phases 1–4 shipped — IG-655)
   - Created: 2026-06-04
+  - Updated: 2026-07-27
   - Supersedes: RFC-411 (history reconstruction model)
-  - Amended by: RFC-631 (live-only ledger scope); 2026-07-19 PostgreSQL when `persistence.default_backend: postgresql`
+  - Amended by: RFC-631 (live-only ledger scope); 2026-07-19 PostgreSQL when `persistence.default_backend: postgresql`; 2026-07-27 Phase 4 live `card.*` cutover
+  - Implemented by: IG-655 (Phase 4)
   - Depends on: RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631
   - Authors: xiaming (with Claude)
 
@@ -705,7 +707,7 @@ See [RFC-900](RFC-900-deprecation-reclassification-scheme.md) for reclassificati
 | RFC-625 | AutopilotMonitor and ContextEngine Unification | Implemented | 2026-06-15 |
 | RFC-624 | Context Engine — Unified Context Management | Draft | 2026-06-12 |
 | RFC-228 | Autopilot Job IPC Commands | Proposed | 2026-06-04 |
-| RFC-413 | Server-Owned Display Card Ledger | Draft | 2026-06-04 |
+| RFC-413 | Server-Owned Display Card Ledger | Draft (Phases 1–4 / IG-655) | 2026-06-04 |
 | RFC-505 | Soothe Desktop Client Architecture | Draft | 2026-06-04 |
 | RFC-700 | Desktop App Product Redesign | Proposed | 2026-06-04 |
 | RFC-623 | Veritas Auto-Mode Robustness | Draft | 2026-06-03 |

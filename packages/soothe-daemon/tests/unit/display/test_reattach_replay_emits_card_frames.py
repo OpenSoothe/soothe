@@ -12,13 +12,13 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
-
-from soothe_daemon.display.loop_card_manager import (
+from soothe_sdk.core.events import (
     CARD_CREATED,
     CARD_REPLAY_BEGIN,
     CARD_REPLAY_END,
-    LoopCardManager,
 )
+
+from soothe_daemon.display.loop_card_manager import LoopCardManager
 from soothe_daemon.event.reattachment import handle_loop_reattach
 
 _LEGACY_FRAME_TYPES = frozenset({"history_replay", "loop_reattached", "replay_complete"})

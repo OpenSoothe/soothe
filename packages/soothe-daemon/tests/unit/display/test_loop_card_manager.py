@@ -10,11 +10,14 @@ from unittest.mock import MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-from soothe_daemon.display.loop_card_manager import (
+from soothe_sdk.core.events import (
     CARD_CREATED,
     CARD_REPLAY_BEGIN,
     CARD_REPLAY_END,
+    CARD_UPDATED,
+)
+
+from soothe_daemon.display.loop_card_manager import (
     LoopCardManager,
     _BindingBuffers,
 )
@@ -398,6 +401,54 @@ async def test_freeze_goal_display_snapshots_current_user_segment_only(
     assert state is not None
     assert state.messages == []
     assert state.log_events == []
+
+
+@pytest.mark.asyncio
+async def test_second_flush_appends_update_and_broadcasts_card_frames(
+    isolated_display_db,
+) -> None:
+    """IG-655: subsequent binds append updates instead of replace_with wipe."""
+    broadcasted: list[dict[str, Any]] = []
+
+    async def _broadcast(msg: dict[str, Any]) -> None:
+        broadcasted.append(msg)
+
+    daemon = SimpleNamespace(_runner=MagicMock(), _broadcast=_broadcast)
+    manager = LoopCardManager(daemon)
+
+    await _seed_messages(
+        manager,
+        "loop_append",
+        [HumanMessage(content="q"), AIMessage(content="hel")],
+    )
+    first_count = len(isolated_display_db.list_mutations("loop_append"))
+    assert first_count >= 2  # header + creates
+
+    # Grow assistant content — stable asst ordinal key should emit update.
+    await _seed_messages(
+        manager,
+        "loop_append",
+        [HumanMessage(content="q"), AIMessage(content="hello world")],
+    )
+    mutations = isolated_display_db.list_mutations("loop_append")
+    ops = [m.op for m in mutations]
+    assert "update" in ops
+    assert ops.count("header") == 1
+
+    card_frames = [
+        f
+        for f in broadcasted
+        if f.get("type") == "event"
+        and isinstance(f.get("data"), dict)
+        and str(f["data"].get("type", "")).startswith("card.")
+    ]
+    assert card_frames
+    assert any(f["data"]["type"] == CARD_CREATED for f in card_frames)
+    assert any(f["data"]["type"] == CARD_UPDATED for f in card_frames)
+
+    ledger = await manager.ensure_for_loop("loop_append")
+    texts = [c.content for c in ledger.snapshot() if c.type.value == "assistant"]
+    assert texts and texts[-1] == "hello world"
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience

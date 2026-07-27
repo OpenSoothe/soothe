@@ -2,7 +2,7 @@
 
 This document tracks the chronological evolution of RFCs in the Soothe project.
 
-**Last Updated**: 2026-07-24
+**Last Updated**: 2026-07-27
 **Total RFCs**: 82
 
 ## Summary Statistics
@@ -14,7 +14,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Draft | 53 | 64.6% |
 | Implemented | 16 | 19.5% |
 | Archived | 6 | 7.3% |
-| Proposed | 2 | 2.4% |
+| Proposed | 2 | 2.2% |
 | Accepted | 1 | 1.2% |
 | Implemented (Partially Superseded) | 1 | 1.2% |
 | Implemented — runtime architecture refined | 1 | 1.2% |
@@ -28,6 +28,12 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 | Implementation Interface Design | 14 |
 | Architecture Design + Implementation Interface Design | 2 |
 | Architecture Design / Impl Interface | 1 |
+
+## Recent Changes
+
+### 2026-07-27
+
+- **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 | Conceptual Design | 1 |
 | Architecture Design + Protocol Specification | 1 |
 | Protocol Specification | 1 |

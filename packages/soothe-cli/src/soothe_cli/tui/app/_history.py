@@ -4,13 +4,15 @@ Pure event → card binding logic lives in ``soothe_sdk.display.card_binder``
 (RFC-413). The static methods on ``_HistoryMixin`` are kept as thin
 wrappers so the existing ``SootheApp._convert_messages_to_data(...)`` API
 (used by tests and other mixins) continues to work.
+
+Passive background consumption applies daemon ``card.*`` frames only —
+structural mounts no longer come from raw ``messages`` stream chunks.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
@@ -18,21 +20,11 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 from soothe_sdk.display import card_binder as _binder
-from soothe_sdk.display.text_extract import (
-    extract_ai_text_for_display,
-    extract_user_text_for_display,
-    normalize_stream_message,
-)
 from soothe_sdk.display.transcript_types import MessageData
-from soothe_sdk.ux.loop_stream import is_stream_terminal
 from textual.content import Content
 
 from soothe_cli.tui.app._module_init import _LoopHistoryPayload
-from soothe_cli.tui.widgets.messages import (
-    AppMessage,
-    AssistantMessage,
-    UserMessage,
-)
+from soothe_cli.tui.widgets.messages import AppMessage
 
 logger = logging.getLogger(__name__)
 
@@ -303,101 +295,24 @@ class _HistoryMixin:
     async def _consume_daemon_events_background(self) -> None:
         """Consume daemon websocket events for an already-running loop subscription.
 
-        IG-228: Reads passively when the loop is running without an active local turn,
-        using the same processing pipeline as streaming queries.
+        Applies ``card.*`` frames so a detached/attached TUI stays in sync with the
+        display ledger without rebinding structural cards from raw stream chunks.
         """
         if not self._daemon_session:
             return
 
         logger.info("Starting background event consumer for subscribed loop")
-        from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
-        from soothe_sdk.ux.loop_stream import LOOP_ASSISTANT_OUTPUT_PHASES, assistant_output_phase
-
-        assistant_cards_by_ns: dict[tuple[Any, ...], AssistantMessage] = {}
-        last_user_text_by_ns: dict[tuple[Any, ...], str] = {}
-        last_ai_chunk_by_ns: dict[tuple[Any, ...], str] = {}
 
         try:
-            # Use iter_turn_chunks to read events (same as active turn execution)
             chunk_source = self._daemon_session.iter_turn_chunks()
             async for chunk in chunk_source:
                 if not isinstance(chunk, (list, tuple)) or len(chunk) != 3:
                     logger.debug("Skipping invalid stream chunk: %s", type(chunk).__name__)
                     continue
 
-                namespace, mode, data = chunk
-                ns_key = tuple(namespace) if namespace else ()
-
-                async def _flush_assistant_ns(key: tuple[Any, ...]) -> None:
-                    card = assistant_cards_by_ns.pop(key, None)
-                    if card is not None:
-                        await card.stop_stream()
-
-                if mode == "status":
+                _namespace, mode, data = chunk
+                if mode == "custom" and await self._apply_card_wire_frame(data):
                     continue
-
-                if mode == "messages":
-                    if not isinstance(data, (list, tuple)) or len(data) != 2:
-                        continue
-                    message, _metadata = data
-                    message = normalize_stream_message(message)
-
-                    if self._is_loop_internal_checkpoint_message(message):
-                        continue
-
-                    user_text = extract_user_text_for_display(message)
-                    if user_text is not None:
-                        # Deduplicate immediate replayed user rows after reconnect/resubscribe.
-                        if last_user_text_by_ns.get(ns_key) == user_text:
-                            continue
-                        await _flush_assistant_ns(ns_key)
-                        await self._mount_message(UserMessage(user_text))
-                        last_user_text_by_ns[ns_key] = user_text
-                        continue
-
-                    if isinstance(message, ToolMessage):
-                        continue
-
-                    if isinstance(message, (AIMessage, AIMessageChunk)):
-                        phase = assistant_output_phase(message)
-                        if phase is not None and phase not in LOOP_ASSISTANT_OUTPUT_PHASES:
-                            continue
-                        extracted = extract_ai_text_for_display(message)
-                        is_terminal = is_stream_terminal(message)
-                        if extracted:
-                            # Deduplicate immediate replayed AI chunks after reconnect/resubscribe.
-                            if last_ai_chunk_by_ns.get(ns_key) == extracted:
-                                if is_terminal:
-                                    asst = assistant_cards_by_ns.get(ns_key)
-                                    if asst is not None:
-                                        await asst.stop_stream()
-                                continue
-                            asst = assistant_cards_by_ns.get(ns_key)
-                            if asst is None:
-                                asst = AssistantMessage(id=f"asst-{uuid.uuid4().hex[:8]}")
-                                await self._mount_message(asst)
-                                assistant_cards_by_ns[ns_key] = asst
-                            await asst.append_content(extracted)
-                            last_ai_chunk_by_ns[ns_key] = extracted
-
-                        if is_terminal:
-                            asst = assistant_cards_by_ns.get(ns_key)
-                            if asst is not None:
-                                await asst.stop_stream()
-                            last_ai_chunk_by_ns.pop(ns_key, None)
-                        continue
-                    continue
-
-                if mode != "updates" or not isinstance(data, dict):
-                    continue
-
-                await _flush_assistant_ns(ns_key)
-                payloads: list[dict[str, Any]] = []
-                if isinstance(data.get("type"), str):
-                    payloads.append(data)
-                for value in data.values():
-                    if isinstance(value, dict) and isinstance(value.get("type"), str):
-                        payloads.append(value)
 
         except asyncio.CancelledError:
             logger.info("Background event consumer cancelled")
@@ -415,9 +330,6 @@ class _HistoryMixin:
         except Exception as exc:
             logger.warning("Background event consumer error: %s", exc)
         finally:
-            for card in assistant_cards_by_ns.values():
-                with suppress(Exception):
-                    await card.stop_stream()
             self._bg_event_worker = None
             # If an agent turn was active (e.g. the loop completed while the
             # background consumer was reading), perform the same cleanup that

@@ -216,6 +216,93 @@ class _MessagesMixin:
                 )
                 await self._mount_message(AppMessage(f"Could not load history: {e}"))
 
+    async def _apply_card_wire_frame(self, data: Any) -> bool:
+        """Apply one custom-mode ``card.*`` payload. Returns True if handled."""
+
+        from soothe_cli.tui.binding import message_to_widget
+        from soothe_cli.tui.card_wire import (
+            CARD_CREATED,
+            CARD_FINALIZED,
+            CARD_UPDATED,
+            parse_card_custom_payload,
+        )
+        from soothe_cli.tui.widgets.messages import CognitionStepMessage
+
+        parsed = parse_card_custom_payload(data)
+        if parsed is None:
+            return False
+        wire_type, card, patch = parsed
+
+        if wire_type == CARD_CREATED and card is not None:
+            existing = None
+            try:
+                if card.id:
+                    existing = self.query_one(f"#{card.id}")
+            except Exception:
+                existing = None
+            if existing is not None:
+                self._register_card_widget_with_adapter(existing, card)
+                return True
+            widget = message_to_widget(card)
+            await self._mount_message(widget)
+            self._register_card_widget_with_adapter(widget, card)
+            if isinstance(widget, AssistantMessage) and card.content:
+                self._enqueue_hydrated_assistant_render(widget, card.content)
+            return True
+
+        if wire_type in {CARD_UPDATED, CARD_FINALIZED}:
+            card_id = str(patch.get("id") or data.get("card_id") or "").strip()
+            if not card_id:
+                return True
+            updated = self._message_store.update_message(
+                card_id,
+                **{k: v for k, v in patch.items() if k != "id" and k != "type"},
+            )
+            if not updated:
+                return True
+            try:
+                widget = self.query_one(f"#{card_id}")
+            except Exception:
+                return True
+            content = patch.get("content")
+            if isinstance(widget, AssistantMessage) and isinstance(content, str):
+                self._enqueue_hydrated_assistant_render(widget, content)
+            if isinstance(widget, CognitionStepMessage):
+                phase = patch.get("step_progress_phase")
+                if phase == "running":
+                    widget.set_running()
+                elif phase in ("success", "error") and patch.get("step_success") is not None:
+                    widget.set_complete(
+                        bool(patch.get("step_success")),
+                        int(patch.get("step_duration_ms") or 0),
+                        int(patch.get("step_tool_call_count") or 0),
+                        str(patch.get("step_summary") or ""),
+                    )
+                desc = patch.get("step_progress_description")
+                if isinstance(desc, str) and desc.strip():
+                    widget.set_description(desc)
+            return True
+
+        return True
+
+    def _register_card_widget_with_adapter(self, widget: Any, card: Any) -> None:
+        """Wire card-mounted step widgets into the live tool-routing registry."""
+        from soothe_sdk.display.transcript_types import MessageType
+
+        from soothe_cli.tui.widgets.messages import CognitionStepMessage
+
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None or not isinstance(widget, CognitionStepMessage):
+            return
+        step_id = ""
+        if getattr(card, "type", None) == MessageType.STEP_PROGRESS:
+            step_id = str(getattr(card, "step_progress_id", "") or "").strip()
+        if not step_id:
+            step_id = str(getattr(widget, "_step_id", "") or "").strip()
+        if not step_id:
+            return
+        adapter._current_step_messages[step_id] = widget
+
     @staticmethod
     def _dedupe_message_data_by_id(messages: list[Any]) -> list[Any]:
         """Return messages in order, keeping the last entry per ``MessageData.id``."""
