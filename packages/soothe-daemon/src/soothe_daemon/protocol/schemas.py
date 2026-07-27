@@ -39,7 +39,6 @@ __all__ = [
     "LoopMessagesParams",
     "LoopStateGetParams",
     "LoopStateUpdateParams",
-    "LoopCardsFetchParams",
     "LoopDetachParams",
     # Job RPC
     "JobCreateParams",
@@ -209,13 +208,6 @@ class LoopStateUpdateParams(ParamsBase):
 
     loop_id: str = Field(..., min_length=1)
     values: dict[str, Any]
-
-
-class LoopCardsFetchParams(ParamsBase):
-    """Params for method=loop_cards_fetch, type=request."""
-
-    loop_id: str = Field(..., min_length=1)
-    since: str | None = None
 
 
 class LoopHistoryFetchParams(ParamsBase):
@@ -564,7 +556,6 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "loop_messages"): LoopMessagesParams,
     ("request", "loop_state_get"): LoopStateGetParams,
     ("request", "loop_state_update"): LoopStateUpdateParams,
-    ("request", "loop_cards_fetch"): LoopCardsFetchParams,
     ("request", "loop_history_fetch"): LoopHistoryFetchParams,
     ("request", "job_create"): JobCreateParams,
     ("request", "job_status"): JobStatusParams,
