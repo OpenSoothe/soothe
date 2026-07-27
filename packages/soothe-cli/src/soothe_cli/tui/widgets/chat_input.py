@@ -1027,11 +1027,11 @@ class ChatInput(Vertical):
             Widgets for the input row and completion popup.
         """
         newline_hint = f"{newline_shortcut()} for new line"
+        yield CompletionPopup(id="completion-popup")
+
         with Horizontal(classes="input-row"):
             yield Static(">", classes="input-prompt", id="prompt")
             yield ChatTextArea(id="chat-input", placeholder=newline_hint)
-
-        yield CompletionPopup(id="completion-popup")
 
     def on_mount(self) -> None:
         """Initialize components after mount."""

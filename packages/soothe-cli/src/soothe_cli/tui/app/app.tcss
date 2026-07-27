@@ -175,13 +175,14 @@ ChatTextArea {
     }
 }
 
-/* Completion popup styling (used by ChatInput) - appears BELOW input */
+/* Completion popup styling (used by ChatInput) - appears ABOVE input */
 #completion-popup {
     height: auto;
     max-height: 12;
     width: 100%;
     margin-left: 3;
-    margin-top: 0;
+    margin-bottom: 0;
+    border-bottom: solid $foreground-muted;
     padding: 0;
     color: $text;
 }

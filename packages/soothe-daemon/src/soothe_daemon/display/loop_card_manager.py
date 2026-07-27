@@ -725,27 +725,6 @@ class LoopCardManager:
             "success": True,
         }
 
-    async def flattened_display_cards(
-        self,
-        loop_id: str,
-        *,
-        loop_status: str | None = None,
-    ) -> list[Any]:
-        """Flatten snapshots + live tail for ``loop_cards_fetch`` compatibility."""
-        payload = await self.fetch_loop_history(loop_id, loop_status=loop_status)
-        from soothe_sdk.display.card_ledger import card_from_wire_dict
-
-        cards: list[Any] = []
-        for goal_raw in payload.get("goals") or []:
-            if not isinstance(goal_raw, dict):
-                continue
-            goal = GoalDisplaySnapshot.from_wire_dict(goal_raw)
-            cards.extend(goal.display_cards)
-        for raw in payload.get("live_cards") or []:
-            if isinstance(raw, dict):
-                cards.append(card_from_wire_dict(raw))
-        return cards
-
     async def replay_to_client(
         self,
         loop_id: str,

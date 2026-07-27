@@ -120,9 +120,8 @@ class _HistoryMixin:
 
     # ------------------------------------------------------------------
     # I/O: resume reads from the daemon's bound card ledger (RFC-413).
-    # Legacy checkpoint + activity-log readers were removed when RFC-411
-    # was superseded — the daemon now owns derivation and exposes a single
-    # ``loop_cards_fetch`` RPC.
+    # The daemon owns derivation and exposes ``loop_history_fetch`` (RFC-631)
+    # with a ``loop_cards_fetch`` fallback for clients that predate RFC-631.
     # ------------------------------------------------------------------
 
     async def _fetch_loop_history_data(self, loop_id: str) -> _LoopHistoryPayload:
