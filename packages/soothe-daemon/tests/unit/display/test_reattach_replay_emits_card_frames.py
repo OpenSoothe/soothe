@@ -1,8 +1,8 @@
 """Reattach handler test (RFC-413).
 
 ``handle_loop_reattach`` should drive ``LoopCardManager.replay_to_client``
-and produce ``card.replay_begin`` → ``card.created`` × N →
-``card.replay_end`` frames. RFC-411's legacy frames are no longer emitted.
+and produce ``soothe.card.replay.begin`` → ``soothe.card.created`` × N →
+``soothe.card.replay.end`` frames. RFC-411's legacy frames are no longer emitted.
 """
 
 from __future__ import annotations

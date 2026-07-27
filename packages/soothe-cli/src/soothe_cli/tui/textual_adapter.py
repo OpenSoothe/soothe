@@ -48,6 +48,7 @@ if TYPE_CHECKING:
 from langchain_core.messages import AIMessage, HumanMessage
 from soothe_client.appkit.turn import run_turn_pipeline
 from soothe_sdk.core.events import (
+    INTENT_CLASSIFIED,
     LOOP_CLARIFICATION_ANSWERED,
     LOOP_CLARIFICATION_DEFERRED,
     LOOP_CLARIFICATION_REQUESTED,
@@ -171,6 +172,7 @@ from soothe_cli.tui.widgets.messages import (
     AssistantMessage,
     ClarificationInputMessage,
     CognitionGoalTreeMessage,
+    CognitionReasonMessage,
     CognitionStepMessage,
     SummarizationMessage,
     create_subagent_card,
@@ -183,6 +185,8 @@ logger = logging.getLogger(__name__)
 
 # IG-504: LLM retry event type for step card status display
 LLM_RETRY_ATTEMPT = "soothe.cognition.llm.retry.attempt"
+# Plan-phase cognition card (not yet in soothe_sdk.core.events exports used by CLI).
+STRANGE_LOOP_REASONED = "soothe.cognition.strange_loop.reasoned"
 
 # Single-chunk loop assistant phases mount immediately (avoid "Writing..." spinner).
 _INSTANT_LOOP_ASSISTANT_PHASES = frozenset({"chitchat", "plan_direct", "autonomous_goal"})
@@ -243,6 +247,9 @@ class TextualUIAdapter:
 
         self._sync_message_content = sync_message_content
         """Callback to sync final message content back to the store after streaming."""
+
+        self._apply_card_wire_frame: Callable[[Any], Awaitable[bool]] | None = None
+        """Optional App callback to apply daemon ``soothe.card.*`` custom frames (live SoT)."""
 
         # State tracking
         self._tool_display_by_call_id: dict[str, CognitionStepMessage] = {}
@@ -2775,11 +2782,6 @@ async def _flush_assistant_text_ns(
         # only goal_completion surfaces the final result.
         return
 
-    # Do not *create* main-namespace assistant cards from raw stream flushes
-    # (daemon ``card.*`` owns those). Still finalize an existing in-turn card.
-    if not ns_key and assistant_message_by_namespace.get(ns_key) is None:
-        return
-
     current_msg = assistant_message_by_namespace.get(ns_key)
     if current_msg is None:
         # No message was created during streaming - create one with full content
@@ -3379,10 +3381,9 @@ async def execute_task_textual(
                             continue
 
                         # ``phase=goal_completion`` → standalone ``AssistantMessage`` (all namespaces).
+                        # Live ``soothe.card.*`` may also project this; prefer stream for immediate
+                        # synthesis UX and skip duplicate ledger creates in ``_apply_card_wire_frame``.
                         if getattr(message, "phase", None) == "goal_completion":
-                            # Main graph: daemon card ledger owns the final assistant card.
-                            if is_main_agent:
-                                continue
                             text_gc = "\n".join(
                                 str(b.get("text", ""))
                                 for b in blocks
@@ -3394,6 +3395,25 @@ async def execute_task_textual(
                                 continue
 
                             output_text = text_gc
+                            if (
+                                is_main_agent
+                                and _tui_goal_completion_matches_prior_main_visible_answer(
+                                    adapter,
+                                    ns_key=ns_key,
+                                    output_text=output_text,
+                                    pending_execute_text=pending_text_by_namespace.get(ns_key, ""),
+                                )
+                            ):
+                                if adapter._set_active_message:
+                                    adapter._set_active_message(None)
+                                await _sync_goal_completion_thinking_row_time(
+                                    adapter,
+                                    goal_loop_start_monotonic=goal_loop_start_monotonic,
+                                    turn_start_monotonic=start_time,
+                                    clarification_pending=clarification_pending,
+                                )
+                                continue
+
                             ev_stats.text_chunks += 1
                             pending_text = pending_text_by_namespace.get(ns_key, "")
                             existing_msg = assistant_message_by_namespace.get(ns_key)
@@ -3554,8 +3574,16 @@ async def execute_task_textual(
                                     # (aggregated on the step card when present).
                                     continue
 
-                                # Main assistant cards come from card.*.
-                                if is_main_agent:
+                                # Main graph: skip standalone AssistantMessage for intermediate
+                                # streams (execute_wave, unphased, etc.). RFC-614 user-output
+                                # phases (goal_interrupted, intent hints, …) still stream here;
+                                # goal_completion / chitchat / plan_direct / autonomous_goal are
+                                # handled above via dedicated / instant mounts.
+                                if (
+                                    is_main_agent
+                                    and assistant_output_phase(message)
+                                    not in LOOP_ASSISTANT_OUTPUT_PHASES
+                                ):
                                     continue
 
                                 # Track accumulated text for reference
@@ -3887,7 +3915,7 @@ async def execute_task_textual(
 
                     elif current_stream_mode == "custom":
                         if isinstance(data, dict):
-                            apply_card = getattr(adapter, "_apply_card_wire_frame", None)
+                            apply_card = adapter._apply_card_wire_frame
                             if callable(apply_card) and await apply_card(data):
                                 continue
                             event_type = str(data.get("type", ""))
@@ -4404,6 +4432,61 @@ async def execute_task_textual(
                                 )
                                 if adapter._set_spinner and not clarification_pending:
                                     await adapter._set_spinner(None)
+                                continue
+
+                            if event_type == INTENT_CLASSIFIED:
+                                reasoning = str(data.get("reasoning", "")).strip()
+                                if not reasoning:
+                                    continue
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                        router=router,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                intent_widget = CognitionReasonMessage(
+                                    status="",
+                                    iteration=0,
+                                    plan_reasoning=reasoning,
+                                    id=f"intent-{uuid.uuid4().hex[:8]}",
+                                )
+                                await adapter._mount_message(intent_widget)
+                                continue
+
+                            if event_type == STRANGE_LOOP_REASONED:
+                                assessment_reasoning = str(
+                                    data.get("assessment_reasoning", "")
+                                ).strip()
+                                plan_reasoning = str(data.get("plan_reasoning", "")).strip()
+                                if not assessment_reasoning and not plan_reasoning:
+                                    continue
+                                pending_text = pending_text_by_namespace.get(ns_key, "")
+                                if pending_text:
+                                    await _flush_assistant_text_ns(
+                                        adapter,
+                                        pending_text,
+                                        ns_key,
+                                        assistant_message_by_namespace,
+                                        router=router,
+                                    )
+                                    pending_text_by_namespace[ns_key] = ""
+                                    assistant_message_by_namespace.pop(ns_key, None)
+                                pa_raw = data.get("plan_action", "")
+                                plan_action = pa_raw if pa_raw in ("keep", "new") else ""
+                                plan_widget = CognitionReasonMessage(
+                                    status=str(data.get("status", "")),
+                                    iteration=int(data.get("iteration", 0)),
+                                    plan_action=str(plan_action),
+                                    assessment_reasoning=assessment_reasoning,
+                                    plan_reasoning=plan_reasoning,
+                                    id=f"plan-{uuid.uuid4().hex[:8]}",
+                                )
+                                await adapter._mount_message(plan_widget)
                                 continue
 
                             if ns_key and not is_step_card_tool_scope(ns_key=ns_key):

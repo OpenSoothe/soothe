@@ -198,6 +198,11 @@ class _StartupMixin:
             sync_message_content=self._sync_message_content,
         )
 
+        # Live turns consume ``soothe.card.*`` on the adapter stream path (raw main
+        # assistant mounts are suppressed). Background attach uses the same
+        # App method via ``_consume_daemon_events_background``.
+        self._ui_adapter._apply_card_wire_frame = self._apply_card_wire_frame
+
         # Wire token display callbacks
         self._ui_adapter._seed_loop_token_from_checkpoint = self._seed_loop_token_from_checkpoint
         self._ui_adapter._on_turn_tokens = self._record_loop_turn_tokens

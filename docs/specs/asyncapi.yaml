@@ -8,6 +8,12 @@ info:
 
     Protocol version 1 — see RFC-450 for design rationale.
 
+    Display card ledger frames (UI source of truth) arrive as `event` /
+    `mode=custom` with `data.type` in
+    `soothe.card.created` | `soothe.card.updated` | `soothe.card.finalized` |
+    `soothe.card.replay.begin` | `soothe.card.replay.end` (RFC-413). Legacy bare
+    `card.*` names are not accepted.
+
 servers:
   daemon:
     host: 127.0.0.1:8765

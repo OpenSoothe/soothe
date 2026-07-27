@@ -23,7 +23,7 @@ def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="planner",
+        preferred_subagent="plugin_agent",
         routing_hint="subagent",
     )
     request = ModelRequest(
@@ -37,14 +37,14 @@ def test_wire_subagent_routing_first_hop_narrows_to_task() -> None:
     modified = middleware.modify_request(request)
     assert len(modified.tools) == 1
     assert getattr(modified.tools[0], "name", None) == "task"
-    assert modified.state["_subagent_routing_directive"] == "planner"
+    assert modified.state["_subagent_routing_directive"] == "plugin_agent"
 
 
 def test_wire_subagent_routing_after_first_hop_keeps_full_tools() -> None:
     middleware = ToolEnforcementMiddleware()
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="planner",
+        preferred_subagent="plugin_agent",
         routing_hint="subagent",
     )
     request = ModelRequest(
@@ -64,23 +64,24 @@ def test_intake_only_preferred_subagent_does_not_narrow_tools() -> None:
     """Host guard clears intake-only preferred_subagent before tool enforcement."""
     guard = IntakeOnlyTaskGuardMiddleware()
     middleware = ToolEnforcementMiddleware()
-    classification = RoutingClassification(
-        task_complexity="medium",
-        preferred_subagent="deep_research",
-        routing_hint="subagent",
-    )
-    request = ModelRequest(
-        model=GenericFakeChatModel(messages=iter([AIMessage(content="ok")])),
-        messages=[HumanMessage(content="research")],
-        system_message=SystemMessage(content="orig"),
-        tools=[SimpleNamespace(name="search_web"), SimpleNamespace(name="task")],
-        state={"routing_classification": classification},
-    )
-    scrubbed = guard.modify_request(request)
-    modified = middleware.modify_request(scrubbed)
-    assert len(modified.tools) == 2
-    preferred = getattr(modified.state["routing_classification"], "preferred_subagent", None)
-    assert preferred is None
+    for name in ("deep_research", "planner"):
+        classification = RoutingClassification(
+            task_complexity="medium",
+            preferred_subagent=name,
+            routing_hint="subagent",
+        )
+        request = ModelRequest(
+            model=GenericFakeChatModel(messages=iter([AIMessage(content="ok")])),
+            messages=[HumanMessage(content="research")],
+            system_message=SystemMessage(content="orig"),
+            tools=[SimpleNamespace(name="search_web"), SimpleNamespace(name="task")],
+            state={"routing_classification": classification},
+        )
+        scrubbed = guard.modify_request(request)
+        modified = middleware.modify_request(scrubbed)
+        assert len(modified.tools) == 2
+        preferred = getattr(modified.state["routing_classification"], "preferred_subagent", None)
+        assert preferred is None
 
 
 def test_step_subagent_enforces_task_only_on_all_hops() -> None:
@@ -94,13 +95,13 @@ def test_step_subagent_enforces_task_only_on_all_hops() -> None:
     )
     with patch(
         "langgraph.config.get_config",
-        return_value={"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}},
+        return_value={"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}},
     ):
         modified = middleware.modify_request(request)
 
     assert len(modified.tools) == 1
     assert getattr(modified.tools[0], "name", None) == "task"
-    assert modified.state["_subagent_routing_directive"] == "planner"
+    assert modified.state["_subagent_routing_directive"] == "plugin_agent"
 
 
 def test_goal_synthesis_disables_tools() -> None:

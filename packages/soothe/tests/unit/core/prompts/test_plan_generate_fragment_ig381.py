@@ -39,8 +39,9 @@ def test_execution_policies_subagent_delegation_guidance() -> None:
     from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "Subagent delegation" in EXECUTION_POLICIES_FRAGMENT
-    assert "``planner`` only" in EXECUTION_POLICIES_FRAGMENT
-    assert "intake/slash routed specialists" in EXECUTION_POLICIES_FRAGMENT
+    assert "planner" in EXECUTION_POLICIES_FRAGMENT
+    assert "intake/slash routed" in EXECUTION_POLICIES_FRAGMENT
+    assert "``planner`` only" not in EXECUTION_POLICIES_FRAGMENT
 
 
 def test_execution_policies_forbids_sequential_mode() -> None:
@@ -53,9 +54,9 @@ def test_execution_policies_forbids_sequential_mode() -> None:
 def test_plan_generate_delegate_rules_default_null() -> None:
     text = PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
     assert "Default: omit / null" in text
-    assert "``planner`` among built-ins" in text
-    assert "never plan-wave delegates" in text
-    assert "Never set ``delegate`` on every step" in text
+    assert "never plan-wave delegates" in text or "never plan-wave" in text
+    assert "``planner`` among built-ins" not in text
+    assert "Leave ``delegate`` null" in text
 
 
 def test_plan_generate_preserves_contract_guards() -> None:

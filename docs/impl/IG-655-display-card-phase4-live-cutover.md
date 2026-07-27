@@ -7,7 +7,7 @@
 
 ## Goal
 
-Finish RFC-413 Phase 4: daemon DisplayCardStore is the source of truth for **structural** TUI cards; live clients render from `card.*` (plus hydrate via `loop_history_fetch`); remove the second live binder in the TUI.
+Finish RFC-413 Phase 4: daemon DisplayCardStore is the source of truth for **structural** TUI cards; live clients render from `soothe.card.*` (plus hydrate via `loop_history_fetch`); remove the second live binder in the TUI.
 
 Fidelity bar: **structural parity** (IG-577) — tool **counts** on resume; inline tool rows live-only.
 
@@ -15,8 +15,8 @@ Fidelity bar: **structural parity** (IG-577) — tool **counts** on resume; inli
 
 | Stage | Status | Notes |
 |-------|--------|-------|
-| 4.1 Parity audit | Done | Gap was architectural (`replace_with` + no live `card.*`) |
-| 4.2 Append + emit | Done | Stable-key align/diff; live emit as `event`/`custom`/`card.*` |
+| 4.1 Parity audit | Done | Gap was architectural (`replace_with` + no live `soothe.card.*`) |
+| 4.2 Append + emit | Done | Stable-key align/diff; live emit as `event`/`custom`/`soothe.card.*` |
 | 4.3 TUI cutover | Done | `_apply_card_wire_frame`; suppress raw user/assistant |
 | 4.4 Decommission | Done | Always-on projection; skip raw cognition/assistant mounts; step cards register into tool router |
 
@@ -28,9 +28,9 @@ Phases 1–3 shipped ledger + resume hydrate, but live TUI still binds from raw 
 
 | Package | Work |
 |---------|------|
-| `soothe-daemon` | Append-oriented mutations; emit live `card.*`; keep detached ingest |
+| `soothe-daemon` | Append-oriented mutations; emit live `soothe.card.*`; keep detached ingest |
 | `soothe-sdk` | Shared apply helpers / wire types if needed for client idempotent apply |
-| `soothe-cli` | Consume `card.*` for live structural cards; delete live stream→card binders |
+| `soothe-cli` | Consume `soothe.card.*` for live structural cards; delete live stream→card binders |
 | Docs | Mark RFC-413 Phase 4 stages done as they land |
 
 ## Non-Goals
@@ -50,14 +50,14 @@ Phases 1–3 shipped ledger + resume hydrate, but live TUI still binds from raw 
 ### 4.2 — Mutation stream + live emit
 
 - Diff previous live projection → `append` create/update/finalize (goal reset still clear/replace).
-- On successful store apply, broadcast `card.created` / `card.updated` / `card.finalized` to loop subscribers.
+- On successful store apply, broadcast `soothe.card.created` / `soothe.card.updated` / `soothe.card.finalized` to loop subscribers.
 - Keep raw stream for non-UI; do not require UI to use it for structural cards after 4.3.
 - **Tests:** mutation order, multi-subscriber same `seq`/card ids, overflow does not drop ledger durability, freeze+reset preserves snapshots.
 
 ### 4.3 — TUI live cutover
 
 - Hydrate: `loop_history_fetch` → sanitize → mount (existing).
-- Live: apply `card.*` to `card_id → widget` map (same widgets as resume).
+- Live: apply `soothe.card.*` to `card_id → widget` map (same widgets as resume).
 - Background consumer / `textual_adapter` stop constructing structural cards from raw events.
 - **Acceptance:** live session matches resume structural set for the same turn; two TUIs on one loop stay in sync for structural cards.
 
@@ -67,9 +67,16 @@ Phases 1–3 shipped ledger + resume hydrate, but live TUI still binds from raw 
 - Confirm deprecated RFC-411 frames remain gone.
 - Update RFC-413 status / change history; note desktop/appkit consumer contract.
 
+### Consumer contract (language clients)
+
+Live UI SoT frames use catalog names `soothe.card.created` / `updated` / `finalized` /
+`replay.begin` / `replay.end` (no dual-accept of legacy bare `card.*`). Shared parse/
+projection: `soothe_sdk.display.card_wire` (Python), plus per-language `CardProjection`
+helpers in appkit/display. Headless CLI keeps raw `messages` for stdout.
+
 ## Key files (expected)
 
-- `soothe_daemon/display/loop_card_manager.py` — append vs `replace_with`; emit `card.*`
+- `soothe_daemon/display/loop_card_manager.py` — append vs `replace_with`; emit `soothe.card.*`
 - `soothe_daemon/display/loop_card_ledger.py` — mutation apply API
 - `soothe_daemon/event/reattachment.py` — hydrate/replay interaction
 - `soothe_daemon/query/engine.py` — ingest remains on broadcast path
@@ -87,17 +94,19 @@ cd packages/soothe-sdk && python -m pytest tests/unit/display/ -q
 cd packages/soothe-cli && python -m pytest tests/unit/tui/ tests/unit/ux/tui/ -q
 ```
 
-Add: multi-client identical `seq`; detached→attach structural parity; append-not-replace under stream; Phase 4.3 cutover unit tests.
+Covered by `tests/integration/daemon/test_daemon_display_card_phase4.py`
+(multi-client identical `seq`; detached→attach structural parity) plus unit
+tests for append-not-replace and Phase 4.3 cutover.
 
 Before commit: `./scripts/verify_finally.sh`.
 
 ## Acceptance checklist
 
 - [x] 4.1 parity audit closed or tracked with binder fixes
-- [x] Live segment uses append mutations; `card.*` emitted on apply
+- [x] Live segment uses append mutations; `soothe.card.*` emitted on apply
 - [x] TUI structural live path consumes daemon-bound payloads
-- [ ] Detached → attach and `loop continue` show structural catalogue + tool counts (manual / integration)
-- [ ] Two subscribers: same card ids / ordered segment `seq` (integration)
+- [x] Detached → attach and `loop continue` show structural catalogue + tool counts (manual / integration)
+- [x] Two subscribers: same card ids / ordered segment `seq` (integration)
 - [x] IG-577 sanitize policy unchanged
 - [x] No new SQLite display path when Postgres mode is configured
 - [x] RFC-413 Phase 4 marked complete after 4.4
@@ -110,7 +119,7 @@ Before commit: `./scripts/verify_finally.sh`.
   (`live_card_wire_enabled`, `RAW_SUPPRESSED_WHEN_CARD_LIVE`,
   `should_skip_raw_structural_bind` / `RAW_SUPPRESSED_MESSAGE_TYPES`).
 - Deleted unused `essential_events.py` (INTENT/LOOP_REASON were only no-op skips).
-- Background consumer applies `card.*` only (no raw messages→widget path).
+- Background consumer applies `soothe.card.*` only (no raw messages→widget path).
 - TUI no longer mounts cognition reason/plan widgets from raw
   `INTENT_CLASSIFIED` / loop-reason customs (ledger owns those).
 - `CARD_*` wire constants live only in `soothe_sdk.core.events` (daemon/CLI

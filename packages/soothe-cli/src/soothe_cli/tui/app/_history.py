@@ -5,7 +5,7 @@ Pure event → card binding logic lives in ``soothe_sdk.display.card_binder``
 wrappers so the existing ``SootheApp._convert_messages_to_data(...)`` API
 (used by tests and other mixins) continues to work.
 
-Passive background consumption applies daemon ``card.*`` frames only —
+Passive background consumption applies daemon ``soothe.card.*`` frames only —
 structural mounts no longer come from raw ``messages`` stream chunks.
 """
 
@@ -295,7 +295,7 @@ class _HistoryMixin:
     async def _consume_daemon_events_background(self) -> None:
         """Consume daemon websocket events for an already-running loop subscription.
 
-        Applies ``card.*`` frames so a detached/attached TUI stays in sync with the
+        Applies ``soothe.card.*`` frames so a detached/attached TUI stays in sync with the
         display ledger without rebinding structural cards from raw stream chunks.
         """
         if not self._daemon_session:

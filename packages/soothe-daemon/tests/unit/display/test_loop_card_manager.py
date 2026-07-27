@@ -180,6 +180,50 @@ async def test_replay_to_client_reads_persisted_cards() -> None:
 
 
 @pytest.mark.asyncio
+async def test_live_cognition_custom_events_bind_to_ledger(isolated_display_db) -> None:
+    """Flat live ``soothe.cognition.*`` customs must project intent/plan cards."""
+    manager = LoopCardManager(
+        SimpleNamespace(_runner=MagicMock()),
+        flush_debounce_ms=0,
+    )
+    await manager.ingest_stream_tuple(
+        "loop_cognition",
+        (),
+        "custom",
+        {
+            "type": "soothe.cognition.intent.classified",
+            "reasoning": "I'll map the repository layout first.",
+            "intent_type": "agentic",
+        },
+    )
+    await manager.ingest_stream_tuple(
+        "loop_cognition",
+        (),
+        "custom",
+        {
+            "type": "soothe.cognition.strange_loop.reasoned",
+            "status": "continue",
+            "iteration": 1,
+            "plan_action": "new",
+            "assessment_reasoning": "Need structure discovery.",
+            "plan_reasoning": "Scan packages and config, then summarize architecture.",
+        },
+    )
+    await asyncio.sleep(0.05)
+    ledger = await manager.ensure_for_loop("loop_cognition")
+    cards = ledger.snapshot()
+    reason_cards = [c for c in cards if c.type.value == "cognition_reason"]
+    assert len(reason_cards) >= 2
+    texts = " ".join(
+        f"{c.cognition_plan_strategy or ''} {c.cognition_plan_assessment or ''}"
+        for c in reason_cards
+    )
+    assert "map the repository" in texts
+    assert "Scan packages" in texts or "structure discovery" in texts
+    await manager.stop_for_loop("loop_cognition")
+
+
+@pytest.mark.asyncio
 async def test_debounced_flush_coalesces_rapid_ingests(monkeypatch) -> None:
     """Multiple stream frames within the debounce window produce one bind pass (IG-546)."""
     manager = LoopCardManager(
@@ -440,7 +484,7 @@ async def test_second_flush_appends_update_and_broadcasts_card_frames(
         for f in broadcasted
         if f.get("type") == "event"
         and isinstance(f.get("data"), dict)
-        and str(f["data"].get("type", "")).startswith("card.")
+        and str(f["data"].get("type", "")).startswith("soothe.card.")
     ]
     assert card_frames
     assert any(f["data"]["type"] == CARD_CREATED for f in card_frames)

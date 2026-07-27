@@ -11,7 +11,7 @@ This package owns the per-loop card ledger that backs the TUI's resume flow:
   ``soothe_sdk.display.InMemoryCardLedger``; persists via
   ``get_display_card_store()``.
 * ``LoopCardManager`` — per-loop lifecycle, real-time binding from stream
-  tuples via ``soothe_sdk.display.card_binder``, and ``card.*`` replay-to-client.
+  tuples via ``soothe_sdk.display.card_binder``, and ``soothe.card.*`` replay-to-client.
 
 IG-535 Optimization 4: ``shutdown_card_bind_executor`` for daemon stop cleanup.
 """

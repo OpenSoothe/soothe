@@ -2,21 +2,21 @@
 
 **RFC**: 413
 **Title**: Server-Owned Display Card Ledger
-**Status**: Draft (Phases 1–4 shipped; structural live path via ``card.*`` — IG-655)
+**Status**: Draft (Phases 1–4 shipped; structural live path via ``soothe.card.*`` — IG-655)
 **Kind**: Architecture Design
 **Created**: 2026-06-04
 **Updated**: 2026-07-27
 **Authors**: xiaming (with Claude)
 **Dependencies**: RFC-225 (Goal Record Enrichment), RFC-401 (Event Processing), RFC-403 (Unified Event Naming), RFC-411 (Event Stream Replay), RFC-503 (Loop-First UX), RFC-505 (Soothe Desktop Client), RFC-631 (Goal Display Snapshots)
 **Supersedes**: RFC-411 (history reconstruction model)
-**Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope); 2026-07-19 persistence backend follows `persistence.default_backend` (PostgreSQL `soothe_metadata` when configured); 2026-07-27 Phase 4 completion (live `card.*` cutover, append-oriented ledger, DisplayCardStore as SoT — see §11 / §16 and [design draft](../drafts/2026-07-27-tui-card-replay-source-of-truth-design.md))
+**Amended by**: [RFC-631](RFC-631-goal-display-snapshots.md) (goal-bound display snapshots; live-only ledger scope); 2026-07-19 persistence backend follows `persistence.default_backend` (PostgreSQL `soothe_metadata` when configured); 2026-07-27 Phase 4 completion (live `soothe.card.*` cutover, append-oriented ledger, DisplayCardStore as SoT — see §11 / §16 and [design draft](../drafts/2026-07-27-tui-card-replay-source-of-truth-design.md))
 **Implemented by**: IG-655 (Phase 4 cutover)
 
 ---
 
 ## 1. Abstract
 
-This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them via the configured persistence backend: SQLite (`display.db`) by default, or PostgreSQL (`soothe_metadata` tables) when `persistence.default_backend: postgresql`. Clients become passive renderers consuming a stable `card.*` wire schema.
+This RFC defines a server-owned **display card** model for rendering loop transcripts in Soothe clients (TUI, desktop, future web). The daemon hosts a `CardBinder` that converts raw execution events into bound card mutations, and a per-loop `DisplayCardLedger` that persists them via the configured persistence backend: SQLite (`display.db`) by default, or PostgreSQL (`soothe_metadata` tables) when `persistence.default_backend: postgresql`. Clients become passive renderers consuming a stable `soothe.card.*` wire schema.
 
 The design eliminates the live/replay drift class by construction: live rendering and historical resume both flow through the same binding logic. It supersedes the checkpoint-tree reconstruction model in RFC-411 with a forward-write ledger that is recorded as the loop runs.
 
@@ -30,7 +30,7 @@ The design eliminates the live/replay drift class by construction: live renderin
 
 * `CardBinder`: daemon-resident, single source of card-construction rules.
 * `DisplayCardLedger`: in-memory + durable store of bound card mutations for the **active goal's live tail** (RFC-631). Backend follows `persistence.default_backend` (SQLite `display.db` or PostgreSQL `soothe_metadata`).
-* `card.*` wire frames: `card.created`, `card.updated`, `card.finalized`, `card.replay_begin`, `card.replay_end`.
+* `soothe.card.*` wire frames: `soothe.card.created`, `soothe.card.updated`, `soothe.card.finalized`, `soothe.card.replay.begin`, `soothe.card.replay.end`.
 * Catalogue of card kinds (user message, assistant text, step, cognition plan/reason, subagent, error, system notice).
 * Storage: `display_card_mutations` (+ RFC-631 `goal_display_snapshots`) in SQLite `display.db` or PostgreSQL `soothe_metadata`.
 * Live streaming and reattach replay of the **current goal tail** only.
@@ -94,7 +94,7 @@ The fix here is to **collapse live and replay onto one binding source**, owned b
 2. **Server owns the projection.** The daemon decides what a card is; clients render it. Multiple clients attached to the same loop see identical transcripts.
 3. **Append-only ledger.** Card state changes are recorded as a sequence of mutations, not as snapshots. Replay folds mutations to derive the latest state per card. History is preserved for free.
 4. **Unbounded log, bounded projection** (per RFC-000). The mutation log in DisplayCardStore may grow unboundedly; clients render a bounded window.
-5. **Stable wire schema.** `card.*` frames are versioned and forward-compatible — unknown card kinds degrade to a generic renderer.
+5. **Stable wire schema.** `soothe.card.*` frames are versioned and forward-compatible — unknown card kinds degrade to a generic renderer.
 6. **Backfill, don't migrate.** Pre-existing loops without ledger rows are lazily rebuilt / snapshot-migrated on first read; no destructive migration.
 7. **Clients stay rich.** Only binding rules move server-side. Rendering, theming, input, local state remain client concerns.
 
@@ -114,7 +114,7 @@ LangGraph / runner stream
   CardBinder ──► append CardMutation(s)
         │              │
         │              ├─► DisplayCardStore  (SoT: live tail + goal snapshots)
-        │              └─► wire card.created / updated / finalized
+        │              └─► wire soothe.card.created / updated / finalized
         │                        │
         │                        ▼
         │                 all loop subscribers (0..N)
@@ -165,11 +165,11 @@ LangGraph / runner stream
 
 | Frame type | Direction | Purpose |
 |---|---|---|
-| `card.created` | daemon → client | New card appears in the transcript |
-| `card.updated` | daemon → client | Card state mutated (e.g., step tool count, plan status) |
-| `card.finalized` | daemon → client | Terminal state set (success / error / duration) |
-| `card.replay_begin` | daemon → client | Resume / attach: start of historical card stream |
-| `card.replay_end` | daemon → client | Resume / attach: end of historical card stream — live frames follow |
+| `soothe.card.created` | daemon → client | New card appears in the transcript |
+| `soothe.card.updated` | daemon → client | Card state mutated (e.g., step tool count, plan status) |
+| `soothe.card.finalized` | daemon → client | Terminal state set (success / error / duration) |
+| `soothe.card.replay.begin` | daemon → client | Resume / attach: start of historical card stream |
+| `soothe.card.replay.end` | daemon → client | Resume / attach: end of historical card stream — live frames follow |
 
 Every frame carries `seq` (monotonic per loop) so clients can request "resume from seq N" on reconnect.
 
@@ -180,14 +180,14 @@ The legacy `history_replay`, `loop_reattached`, and `replay_complete` frames are
 **Purpose**: paint cards on screen, handle input, manage local UI state.
 
 **Capabilities**:
-* `card_id → widget` registry; apply diffs from `card.*` frames.
+* `card_id → widget` registry; apply diffs from `soothe.card.*` frames.
 * Reuses existing TUI widget classes (`StepCard`, `AssistantMessage`, `CognitionMessage`, etc.) unchanged.
 * Keeps local-only state (scroll position, expand/collapse, selection, autocomplete).
 * Falls back to a generic renderer for unknown card kinds (forward compatibility).
 
 **Interfaces**:
 * Provides: pluggable widget registry per card kind.
-* Requires: `card.*` frame stream from the daemon.
+* Requires: `soothe.card.*` frame stream from the daemon.
 
 ---
 
@@ -198,12 +198,12 @@ The legacy `history_replay`, `loop_reattached`, and `replay_complete` frames are
 1. Daemon receives user prompt; emits `user_input` event.
 2. `CardBinder.bind(user_input)` → `CardMutation(op="create", kind="user_message", ...)`.
 3. `DisplayCardLedger.apply(mutation)` → appends to DisplayCardStore, sets in-memory state, returns the new card.
-4. Daemon publishes `card.created` frame on the loop's subscription topic (Phase 4: this is the live UI path).
-5. Loop graph executes: `strange_loop.step.started` → binder creates `step` card → `card.created`.
-6. Tool call streams in (`messages` mode AIMessage with tool_calls) → binder binds to the open step card → `card.updated` adds a tool row.
-7. Tool result streams in (`messages` mode ToolMessage) → binder matches by `tool_call_id` → `card.updated` completes the tool row.
-8. `strange_loop.step.completed` → binder finalizes the step → `card.finalized`.
-9. Final consolidated assistant text emitted → binder creates `assistant_text` card → `card.created`.
+4. Daemon publishes `soothe.card.created` frame on the loop's subscription topic (Phase 4: this is the live UI path).
+5. Loop graph executes: `strange_loop.step.started` → binder creates `step` card → `soothe.card.created`.
+6. Tool call streams in (`messages` mode AIMessage with tool_calls) → binder binds to the open step card → `soothe.card.updated` adds a tool row.
+7. Tool result streams in (`messages` mode ToolMessage) → binder matches by `tool_call_id` → `soothe.card.updated` completes the tool row.
+8. `strange_loop.step.completed` → binder finalizes the step → `soothe.card.finalized`.
+9. Final consolidated assistant text emitted → binder creates `assistant_text` card → `soothe.card.created`.
 
 Throughout, `CardBinder` runs in a dedicated asyncio task fed by a bounded queue so it never blocks the live event publish path (see §10.2).
 
@@ -218,8 +218,8 @@ Throughout, `CardBinder` runs in a dedicated asyncio task fed by a bounded queue
 **Live tail on reattach (this RFC):**
 
 1. Client connects (`loop_subscribe` / TUI startup).
-2. Daemon sends `card.replay_begin` → replays **live tail only** (current goal segment) → `card.replay_end`.
-3. Live `card.*` frames stream for the in-flight goal.
+2. Daemon sends `soothe.card.replay.begin` → replays **live tail only** (current goal segment) → `soothe.card.replay.end`.
+3. Live `soothe.card.*` frames stream for the in-flight goal.
 
 Legacy full-ledger replay via `loop_cards_fetch` is deprecated; see RFC-631 migration path.
 
@@ -297,7 +297,7 @@ Future kinds (image attachments, MCP-specific tool cards, etc.) extend the catal
 
 ## 9. Architectural Constraints
 
-1. **Binder runs off the publish hot path.** A bounded queue between the daemon event bus and the `CardBinder` task isolates binding latency from live broadcast. Under pressure, emit `stream_degraded`; the ledger MUST remain durable (overflow deque / zero-loss ingest). Live `card.*` may lag; SoT stays correct for attach/resume.
+1. **Binder runs off the publish hot path.** A bounded queue between the daemon event bus and the `CardBinder` task isolates binding latency from live broadcast. Under pressure, emit `stream_degraded`; the ledger MUST remain durable (overflow deque / zero-loss ingest). Live `soothe.card.*` may lag; SoT stays correct for attach/resume.
 2. **Ledger is single-writer.** Exactly one daemon process writes a given loop's display mutations. Multi-daemon deployments require a loop-to-daemon affinity rule (already true per RFC-450 / daemon communication).
 3. **Wire schema is load-bearing.** Mutations carry `card_schema_version` (header). Daemon must read all prior versions; clients tolerate unknown fields and unknown card kinds.
 4. **No client-side card construction.** Once Phase 4 lands, the TUI's live stream→card binders are removed. Live frames and resume hydrate go through the same renderer.
@@ -354,40 +354,40 @@ Wire switch/resume paths to load history after successful loop switch.
 **Phase 2 — Extract `CardBinder` as a pure module.** ✅ Shipped.  
 `soothe_sdk.display.card_binder` owns conversion rules; unit-tested.
 
-**Phase 3 — Daemon owns binder + ledger; `card.*` + `loop_history_fetch`.** ✅ Largely shipped.  
+**Phase 3 — Daemon owns binder + ledger; `soothe.card.*` + `loop_history_fetch`.** ✅ Largely shipped.  
 * `LoopCardManager` ingests stream tuples off the hot path; persists via DisplayCardStore (SQLite/Postgres).  
 * RFC-631 goal snapshots + `loop_history_fetch` for resume.  
-* `loop_reattach` streams `card.replay_*` for the live tail.  
+* `loop_reattach` streams `soothe.card.replay.*` for the live tail.  
 * Resume policy IG-577 (`sanitize_resume_display_cards`).  
-* **Gap:** live TUI still binds from raw stream events; ledger often `replace_with` full rebind on debounce rather than append mutations + live `card.*` emit.
+* **Gap:** live TUI still binds from raw stream events; ledger often `replace_with` full rebind on debounce rather than append mutations + live `soothe.card.*` emit.
 
 **Phase 4 — Live cutover + decommission (IG-655).** ✅ Shipped (2026-07-27):
 
 | Stage | Work | Status |
 |---|---|---|
 | **4.1** | Structural parity audit for resume/attach vs catalogue (§8 / §15) | Done |
-| **4.2** | Append-oriented mutations; emit live `card.*` as `event`/`custom` | Done |
-| **4.3** | TUI consumes `card.*`; suppress duplicate raw user/assistant mounts | Done |
+| **4.2** | Append-oriented mutations; emit live `soothe.card.*` as `event`/`custom` | Done |
+| **4.3** | TUI consumes `soothe.card.*`; suppress duplicate raw user/assistant mounts | Done |
 | **4.4** | Always-on daemon projection; skip raw cognition/assistant mounts; step cards from ledger register into tool router; keep raw tool-row updates on step widgets | Done |
 
 **Fidelity locked for Phase 4:** structural parity only (user, cognition/plan/reason, step + tool **counts**, assistant text, subagent rollups, error, system notice). Inline tool rows remain live-only via raw tool wire onto ledger-mounted step cards (§15).
 
-**Hydrate policy:** clients prefer `loop_history_fetch` first; apply live `card.*` idempotently by `card_id`. `card.replay_*` remains for subscribers that skip fetch.
+**Hydrate policy:** clients prefer `loop_history_fetch` first; apply live `soothe.card.*` idempotently by `card_id`. `soothe.card.replay.*` remains for subscribers that skip fetch.
 
-**Assistant streaming:** coalesce assistant `card.updated` on the existing debounce flush; main-namespace TUI no longer mounts standalone assistant cards from raw `messages` mode.
+**Assistant streaming:** coalesce assistant `soothe.card.updated` on the existing debounce flush; main-namespace TUI no longer mounts standalone assistant cards from raw `messages` mode.
 
 ---
 
 ## 12. Success Criteria
 
 1. **Live ≡ Replay invariant (structural):** user-visible transcript structure matches after `/resume`, `loop continue`, or attach — user prompts, cognition/step/plan cards, assistant text, subagent rollups, errors, system notices. Inline step/subagent tool rows are **live-only**; resume shows tool-call **counts** on step footers (§15).
-2. **All resume/attach paths converge** on DisplayCardStore output (`loop_history_fetch` + live `card.*`), not a second client binder.
+2. **All resume/attach paths converge** on DisplayCardStore output (`loop_history_fetch` + live `soothe.card.*`), not a second client binder.
 3. **Subagent cards** appear on replay when frozen in the goal snapshot.
 4. **Step tool activity on resume:** `step_tool_call_count` preserved; standalone `TOOL` cards and inline tool-row replay suppressed (IG-577).
 5. **Disk cost** stays under ~1 MB per 100-turn loop (mutation store).
 6. **Replay latency** under 100 ms first-paint, under 500 ms full hydrate for 100-turn loops.
 7. **Phase 4:** Live TUI structural cards come only from daemon-bound payloads; two subscribers on one loop observe the same card ids and ordered segment `seq`.
-8. **Desktop / appkit** (RFC-505 / RFC-629) can consume `card.*` with zero CLI-specific binding code.
+8. **Desktop / appkit** (RFC-505 / RFC-629) can consume `soothe.card.*` with zero CLI-specific binding code.
 9. **Persistence** remains unified — no SQLite display writes when `default_backend: postgresql`.
 
 ---
@@ -418,7 +418,7 @@ Wire switch/resume paths to load history after successful loop switch.
 
 Binder module: `soothe_sdk.display.card_binder` — expanded `_LOOP_INTERNAL_CHECKPOINT_PHASES`, always suppresses checkpoint `ToolMessage` pairs, removed offline `_build_step_tool_rows_map` replay attachment.
 
-TUI (pre–Phase 4.3): `_fetch_loop_history_data` → sanitize → `message_to_widget`; live path still binds from raw stream. Phase 4.3+ live path consumes `card.*`.
+TUI (pre–Phase 4.3): `_fetch_loop_history_data` → sanitize → `message_to_widget`; live path still binds from raw stream. Phase 4.3+ live path consumes `soothe.card.*`.
 
 ---
 
@@ -426,7 +426,7 @@ TUI (pre–Phase 4.3): `_fetch_loop_history_data` → sanitize → `message_to_w
 
 Design draft: [`docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`](../drafts/2026-07-27-tui-card-replay-source-of-truth-design.md). Implementation guide: **IG-655**.
 
-**End state:** daemon appends mutations to DisplayCardStore and broadcasts `card.*` in parallel; zero clients still persist (detached); attach/resume hydrates from SoT then continues on the same frame stream; multiple clients see identical structural transcripts.
+**End state:** daemon appends mutations to DisplayCardStore and broadcasts `soothe.card.*` in parallel; zero clients still persist (detached); attach/resume hydrates from SoT then continues on the same frame stream; multiple clients see identical structural transcripts.
 
 **Non-goals restated:** full tool-row replay; per-loop JSONL as SoT; client MessageStore as authority.
 

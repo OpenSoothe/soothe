@@ -43,16 +43,41 @@ def test_resolve_markdown_theme_name_uses_runtime_config() -> None:
     reset_runtime_config()
 
 
-def test_accent_recipe_uses_primary_headings() -> None:
+def test_accent_recipe_uses_rainbow_headings() -> None:
     styles = _markdown_styles_from_colors(theme.DARK_COLORS, recipe="accent")
-    h1_color = styles["markdown.h1"].color
-    assert h1_color is not None
-    assert h1_color.triplet.red == 122
-    assert h1_color.triplet.green == 162
-    assert h1_color.triplet.blue == 247
+    from rich.color import Color
+
+    expected = {
+        "markdown.h1": theme.LC_BLUE,
+        "markdown.h2": theme.LC_CYAN,
+        "markdown.h3": theme.LC_PURPLE,
+        "markdown.h4": theme.LC_GREEN,
+        "markdown.h5": theme.LC_AMBER,
+        "markdown.h6": theme.LC_PINK,
+    }
+    for key, hex_color in expected.items():
+        color = styles[key].color
+        assert color is not None
+        assert color.triplet == Color.parse(hex_color).triplet
+
     link_color = styles["markdown.link"].color
     assert link_color is not None
-    assert link_color.triplet == h1_color.triplet
+    assert link_color.triplet == Color.parse(theme.LC_BLUE).triplet
+    url_color = styles["markdown.link_url"].color
+    assert url_color is not None
+    assert url_color.triplet == Color.parse(theme.LC_CYAN).triplet
+
+
+def test_accent_recipe_light_uses_darkened_rainbow() -> None:
+    styles = _markdown_styles_from_colors(theme.LIGHT_COLORS, recipe="accent")
+    from rich.color import Color
+
+    h2 = styles["markdown.h2"].color
+    assert h2 is not None
+    assert h2.triplet == Color.parse(theme.LC_LIGHT_CYAN).triplet
+    h3 = styles["markdown.h3"].color
+    assert h3 is not None
+    assert h3.triplet == Color.parse(theme.LC_LIGHT_PURPLE).triplet
 
 
 def test_minimal_recipe_subdues_links() -> None:

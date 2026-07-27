@@ -11,9 +11,9 @@ from typing import Any
 from soothe_nano.agent.subagent_catalog import spec_subagent_name
 
 # Specialists reachable only via host intake wiring — not the open task catalog.
-# ``planner`` is intentionally excluded — it stays in the open task catalog.
 INTAKE_ONLY_WIRE_SUBAGENTS = frozenset(
     {
+        "planner",
         "browser_use",
         "deep_research",
         "academic_research",

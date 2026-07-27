@@ -1,12 +1,10 @@
-"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602).
+"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602 / IG-656).
 
-Catalog wires (``planner``): build the 1-step terminal plan and continue to
-``resolve_decision`` → execute → ``goal_completion``.
-
-Intake-only wires (``browser_use``, ``deep_research``, ``academic_research``):
-stream the specialist runnable from the intake-only registry (not on CoreAgent
-``task``), forward curated wire customs for the orphan SubAgent card, record
-Human/AI execute-step ledger rows, then route to ``goal_completion``.
+Intake-only wires (``planner``, ``browser_use``, ``deep_research``,
+``academic_research``): stream the specialist runnable from the intake-only
+registry (not on CoreAgent ``task``), forward curated wire customs for the
+orphan SubAgent card, record Human/AI execute-step ledger rows, then route to
+``goal_completion``.
 """
 
 from __future__ import annotations
@@ -341,7 +339,7 @@ async def _invoke_intake_only_direct(
 async def node_invoke_wired_subagent(
     ctx: LoopRuntimeContext, _state: dict[str, Any]
 ) -> dict[str, Any]:
-    """Resolve wire and either direct-invoke (intake-only) or inject planner plan."""
+    """Resolve wire and direct-invoke the intake-only specialist."""
     intent = ctx.loop_state.intent
     wire = resolve_user_requested_wire_subagent(
         routing_classification=ctx.loop_state.routing_classification,
@@ -366,18 +364,19 @@ async def node_invoke_wired_subagent(
         },
     )
 
-    if is_intake_only_wire_subagent(wire):
-        return await _invoke_intake_only_direct(ctx, wire=wire, goal_text=goal_text)
+    if not is_intake_only_wire_subagent(wire):
+        logger.error(
+            "[WiredSubagent] Unexpected non-intake wire=%s; all allowlisted "
+            "specialists are intake-only",
+            wire,
+        )
+        await ctx.emit(
+            "fatal_error",
+            {
+                "error": f"Wired subagent is not intake-only: {wire}",
+                "step_id": "",
+            },
+        )
+        return {"last_outcome": "fatal"}
 
-    # Dual-exposed catalog wire (planner): trivial plan → resolve → execute.
-    ctx.scratch.plan_result = build_trivial_plan(
-        goal_text,
-        wire_subagent=wire,
-        requires_tool_use=bool(getattr(intent, "requires_tool_use", True)),
-    )
-    logger.info(
-        "[WiredSubagent] Catalog wire ready (subagent=%s goal=%s)",
-        wire,
-        goal_text[:50],
-    )
-    return {}
+    return await _invoke_intake_only_direct(ctx, wire=wire, goal_text=goal_text)

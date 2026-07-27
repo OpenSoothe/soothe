@@ -42,7 +42,7 @@ RFC-413's card ledger remains the **live projection buffer** for the in-flight g
 * Pixel-perfect replay of every streaming tick for completed goals.
 * Client-side widget or theme changes.
 * Historical scrub UI ("show transcript as of goal N mid-flight").
-* Removing CardBinder or live `card.*` frames.
+* Removing CardBinder or live `soothe.card.*` frames.
 
 ---
 
@@ -257,7 +257,7 @@ New clients SHOULD use `loop_history_fetch`. Removal targeted for Phase P2 (IG-5
 
 ### 9.3 Reattach Replay
 
-`handle_loop_reattach` replays **live tail only** via `card.replay_*` (typically tens of cards, not hundreds). Completed goals come from snapshots via explicit fetch, not wire replay.
+`handle_loop_reattach` replays **live tail only** via `soothe.card.replay.*` (typically tens of cards, not hundreds). Completed goals come from snapshots via explicit fetch, not wire replay.
 
 ---
 

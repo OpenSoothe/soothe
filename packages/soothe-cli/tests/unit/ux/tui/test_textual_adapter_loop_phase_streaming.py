@@ -22,6 +22,24 @@ def test_removed_legacy_phases_not_in_instant_or_allowlist() -> None:
     assert "quiz" not in LOOP_ASSISTANT_OUTPUT_PHASES
 
 
+def test_main_agent_stream_allowlist_keeps_interrupted_and_intent_hints() -> None:
+    """Live cutover must not blanket-suppress RFC-614 user-output phases."""
+    for phase in (
+        "goal_interrupted",
+        "text_completion",
+        "image_to_text",
+        "ocr",
+        "embed",
+        "goal_completion",
+        "chitchat",
+        "plan_direct",
+        "autonomous_goal",
+    ):
+        assert phase in LOOP_ASSISTANT_OUTPUT_PHASES
+    for phase in ("execute_step", "execute_wave", "plan_assess", None, ""):
+        assert phase not in LOOP_ASSISTANT_OUTPUT_PHASES
+
+
 def test_retain_assistant_ns_on_stream_terminal_for_goal_completion_phase() -> None:
     assert (
         _retain_assistant_ns_on_stream_terminal(

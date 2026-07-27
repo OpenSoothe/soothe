@@ -26,20 +26,15 @@ STATUS has pending/ready steps, runtime reuses the in-flight plan — emit fresh
   composite ids from STEP ANCHOR REGISTRY when ordering matters (simple and complex goals).
 - ``expected_output``: Checkable completion signal.
 - ``id``: Optional short token (``01``, ``02``) or per STEP ID HINT.
-- ``delegate``: Optional open-catalog subagent when this step must **exclusively** delegate
-  via ``task`` (``planner`` among built-ins). **Default: omit / null** on every step —
+- ``delegate``: Leave null. Built-in wire specialists (``planner``, ``browser_use``,
+  ``deep_research``, ``academic_research``) are intake/slash routed only —
+  never plan-wave delegates. **Default: omit / null** on every step —
   execute CoreAgent already has ``task`` and local tools and chooses per hop.
-  Do **not** set ``delegate`` to ``browser_use``, ``deep_research``, or
-  ``academic_research``
-  (intake/slash routed; never plan-wave delegates).
 
-**``delegate`` rules** (open task catalog — do not over-delegate):
-- Leave ``delegate`` null for workspace/codebase work: file reads, repo search, config edits,
-  gap analysis from local docs, synthesis from prior step outputs, adb/shell on workspace.
-- Set ``delegate`` to ``planner`` only when the step deliverable is an agentic markdown
-  execution-plan design that cannot be done with local tools alone.
-- Never set ``delegate`` on every step in a wave; mixed local + delegated steps are normal
-  (``delegate`` null on local steps, set only where required).
+**``delegate`` rules**:
+- Leave ``delegate`` null for all steps: workspace/codebase work uses local tools;
+  built-in specialists are intake-only (not plan-wave ``delegate``).
+- Never set ``delegate`` on every step in a wave; leave null so execute CoreAgent chooses.
 
 Runtime derives ``execution_mode`` from ``dependencies`` (``dependency`` when any step lists deps,
 else ``parallel``). Do not emit ``type``, ``execution_mode``, ``full_description``, or ``kind``.

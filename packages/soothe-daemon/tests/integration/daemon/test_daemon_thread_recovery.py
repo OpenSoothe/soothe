@@ -116,10 +116,10 @@ async def test_loop_resume_from_disk(tmp_path: Path) -> None:
             assert loop_id is not None and loop_id in loop_ids
 
             await client2.request("loop_reattach", {"loop_id": loop_id})
-            # RFC-413 card-based replay: reattach emits card.replay_begin →
-            # card.created × N → card.replay_end.  Wait for the terminal frame.
+            # RFC-413 card-based replay: reattach emits soothe.card.replay.begin →
+            # soothe.card.created × N → soothe.card.replay.end. Wait for the terminal frame.
             resume_status = await await_event_type(
-                client2.read_event, "card.replay_end", timeout=10.0
+                client2.read_event, "soothe.card.replay.end", timeout=10.0
             )
             assert resume_status.get("loop_id") == loop_id
 
@@ -203,8 +203,8 @@ async def test_concurrent_thread_execution(
             assert lid in listed
 
         await client.request("loop_reattach", {"loop_id": loop_ids[0]})
-        # RFC-413 card-based replay: wait for terminal card.replay_end frame.
-        await await_event_type(client.read_event, "card.replay_end", timeout=10.0)
+        # RFC-413 card-based replay: wait for terminal soothe.card.replay.end frame.
+        await await_event_type(client.read_event, "soothe.card.replay.end", timeout=10.0)
 
         await subscribe_loop_stream(client, loop_ids[0])
 

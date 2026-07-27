@@ -1,14 +1,14 @@
 """Loop reattachment handler — card-ledger replay (RFC-413).
 
 When a client (re)subscribes to an existing loop, the daemon streams the
-bound display-card ledger through ``card.*`` wire frames. Clients on the
+bound display-card ledger through ``soothe.card.*`` wire frames. Clients on the
 new wire (TUI, soothe-desktop) render directly from those frames.
 
 RFC-411's ``history_replay`` / ``loop_reattached`` / ``replay_complete``
 frames were removed when this RFC superseded it, along with the
 reconstructor / enricher modules under ``soothe.events.replay``.
 Clients that still expect those frames should upgrade to consume
-``card.*``.
+``soothe.card.*``.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ async def handle_loop_reattach(
     Process:
     1. Ensure the daemon's card ledger for this loop is populated (eagerly
        backfill from checkpoint + activity log if needed).
-    2. Stream ``card.replay_begin`` → ``card.created`` × N → ``card.replay_end``.
+    2. Stream ``soothe.card.replay.begin`` → ``soothe.card.created`` × N → ``soothe.card.replay.end``.
 
     Args:
         loop_id: StrangeLoop identifier.

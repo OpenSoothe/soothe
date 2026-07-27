@@ -366,6 +366,14 @@ class LoopCardManager:
             if kind in _DERIVABLE_CUSTOM_KINDS:
                 state.log_events.append(data)
                 changed = True
+            else:
+                # Live wire frames are flat ``{"type": "soothe.cognition.*", ...}``
+                # (no activity-log ``kind``). Normalize so the binder can project
+                # intent / plan / step cognition cards onto the ledger.
+                event_type = self._custom_event_type(data)
+                if isinstance(event_type, str) and event_type.startswith("soothe.cognition."):
+                    state.log_events.append({"kind": "event", "data": dict(data)})
+                    changed = True
         if changed:
             await self._schedule_debounced_flush(loop_id)
 
@@ -459,7 +467,7 @@ class LoopCardManager:
 
         IG-655 / RFC-413 Phase 4: append create/update mutations when possible;
         fall back to ``replace_with`` only when cards disappear from the
-        projection. Broadcasts live ``card.*`` frames after a successful apply.
+        projection. Broadcasts live ``soothe.card.*`` frames after a successful apply.
         """
         executor = _get_card_bind_executor()
         loop = asyncio.get_running_loop()
@@ -507,7 +515,7 @@ class LoopCardManager:
         """Publish bound card frames to loop subscribers (RFC-413 Phase 4).
 
         Frames are wrapped as ``event`` / ``mode=custom`` so existing
-        ``iter_turn_chunks`` clients deliver them (top-level ``card.*`` is
+        ``iter_turn_chunks`` clients deliver them (top-level ``soothe.card.*`` is
         skipped by that iterator). Zero subscribers is a no-op.
         """
         broadcast = getattr(self._daemon, "_broadcast", None)
@@ -743,7 +751,7 @@ class LoopCardManager:
         loop_id: str,
         send_fn: Callable[[dict[str, Any]], Awaitable[None]],
     ) -> int:
-        """Stream ``card.replay_begin`` → ``card.created`` × N → ``card.replay_end``."""
+        """Stream ``soothe.card.replay.begin`` → ``soothe.card.created`` × N → ``soothe.card.replay.end``."""
         ledger = await self.ensure_for_loop(loop_id)
         if ledger.card_count() == 0:
             return await self._emit_empty_replay(loop_id, send_fn)

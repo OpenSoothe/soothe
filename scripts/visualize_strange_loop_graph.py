@@ -256,7 +256,7 @@ Evaluated in order; first match wins:
 | Priority | Condition | Target | Notes |
 |----------|-----------|--------|-------|
 | 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
-| 2 | ``intent_route == wired_subagent`` | ``invoke_wired_subagent`` | Intake-only → goal_completion; planner → resolve → execute → goal_completion |
+| 2 | ``intent_route == wired_subagent`` | ``invoke_wired_subagent`` | Intake-only direct invoke → goal_completion |
 | 3 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
 | 3b | ``is_continuation`` + ``simple`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
 | 3c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
@@ -278,8 +278,8 @@ When Pass 2 ``wire_subagent`` or slash ``preferred_subagent`` resolves to
 ``planner`` / ``browser_use`` / ``deep_research`` / ``academic_research``:
 
 - ``init_or_resume`` sets ``intent_route = wired_subagent``
-- Intake-only specialists: streamed direct invoke from intake-only registry → ``goal_completion``
-- ``planner``: terminal 1-step plan → ``resolve_decision`` → execute → ``goal_completion``
+- All allowlisted specialists are intake-only: streamed direct invoke from
+  intake-only registry → ``goal_completion`` (orphan SubAgent card)
 - Skips evidence gather / plan assess / plan generate; ledger via existing goal completion
 
 ```mermaid
@@ -287,7 +287,7 @@ flowchart TD
     IC[intent_classify] --> IOR[init_or_resume]
     IOR --> R{{route_by_intent}}
     R -->|fast_path| END1[__end__ / chitchat response]
-    R -->|wired_subagent| IWS[invoke_wired_subagent → intake-only GC or planner resolve→execute→GC]
+    R -->|wired_subagent| IWS[invoke_wired_subagent → intake-only → goal_completion]
     R -->|continuation+trivial| PA[plan_assess]
     R -->|continuation+simple| PA2[plan_assess]
     R -->|continuation+complex| BEG[bounded_evidence_gather]

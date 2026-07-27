@@ -224,6 +224,29 @@ def _colors_for_entry(
     return entry.colors
 
 
+def _is_dark_palette(colors: theme.ThemeColors) -> bool:
+    """Heuristic: dark themes use a background darker than mid-gray."""
+    return colors.background < "#888888"
+
+
+def _heading_rainbow(colors: theme.ThemeColors) -> tuple[str, str, str, str, str, str]:
+    """Return H1–H6 colors as a soft rainbow ladder.
+
+    Order mirrors the Tokyo Night–inspired brand palette visible in card
+    chrome (blue title → cyan identity → purple subtext), then continues
+    through green / amber / pink so deeper heading levels stay distinct.
+    """
+    cyan = theme.LC_CYAN if _is_dark_palette(colors) else theme.LC_LIGHT_CYAN
+    return (
+        colors.primary,  # H1 — blue
+        cyan,  # H2 — cyan
+        colors.secondary,  # H3 — purple
+        colors.accent,  # H4 — green
+        colors.warning,  # H5 — amber
+        colors.error,  # H6 — pink
+    )
+
+
 def _markdown_styles_from_colors(
     colors: theme.ThemeColors,
     *,
@@ -258,57 +281,60 @@ def _markdown_styles_from_colors(
             "markdown.table.cell": Style(color=colors.foreground),
         }
 
+    h1, h2, h3, h4, h5, h6 = _heading_rainbow(colors)
+    cyan = h2
+
     if recipe == "standard":
         return {
             "markdown.paragraph": Style(color=colors.foreground),
-            "markdown.h1": Style(color=colors.foreground, bold=True),
-            "markdown.h2": Style(color=colors.foreground, bold=True),
-            "markdown.h3": Style(color=colors.foreground, bold=True),
-            "markdown.h4": Style(color=colors.foreground, bold=True),
-            "markdown.h5": Style(color=colors.foreground, bold=True),
-            "markdown.h6": Style(color=colors.muted, bold=True),
+            "markdown.h1": Style(color=h1, bold=True),
+            "markdown.h2": Style(color=h2, bold=True),
+            "markdown.h3": Style(color=h3, bold=True),
+            "markdown.h4": Style(color=h4, bold=True),
+            "markdown.h5": Style(color=h5, bold=True),
+            "markdown.h6": Style(color=h6, bold=True),
             "markdown.em": Style(color=colors.foreground, italic=True),
             "markdown.strong": Style(color=colors.foreground, bold=True),
             "markdown.s": Style(color=colors.muted, strike=True),
             "markdown.code_inline": Style(color=colors.secondary, bgcolor=colors.panel),
             "markdown.code_block": Style(color=colors.foreground),
-            "markdown.block_quote": Style(color=colors.muted),
+            "markdown.block_quote": Style(color=colors.muted, italic=True),
             "markdown.hr": Style(color=colors.card_border),
             "markdown.link": Style(color=colors.primary, underline=True),
-            "markdown.link_url": Style(color=colors.primary, underline=True),
+            "markdown.link_url": Style(color=cyan, underline=True),
             "markdown.list": Style(color=colors.foreground),
             "markdown.item": Style(color=colors.foreground),
-            "markdown.item.bullet": Style(color=colors.card_activity),
-            "markdown.item.number": Style(color=colors.card_activity),
+            "markdown.item.bullet": Style(color=cyan),
+            "markdown.item.number": Style(color=colors.secondary),
             "markdown.table.border": Style(color=colors.card_border),
             "markdown.table.header": Style(color=colors.primary, bold=True),
             "markdown.table.cell": Style(color=colors.foreground),
         }
 
-    # accent (match-app, langchain*)
+    # accent (match-app, langchain*) — full rainbow headings + soft accents
     return {
         "markdown.paragraph": Style(color=colors.foreground),
-        "markdown.h1": Style(color=colors.primary, bold=True),
-        "markdown.h2": Style(color=colors.primary, bold=True),
-        "markdown.h3": Style(color=colors.card_header, bold=True),
-        "markdown.h4": Style(color=colors.foreground, bold=True),
-        "markdown.h5": Style(color=colors.foreground, bold=True),
-        "markdown.h6": Style(color=colors.muted, bold=True),
-        "markdown.em": Style(color=colors.foreground, italic=True),
+        "markdown.h1": Style(color=h1, bold=True),
+        "markdown.h2": Style(color=h2, bold=True),
+        "markdown.h3": Style(color=h3, bold=True),
+        "markdown.h4": Style(color=h4, bold=True),
+        "markdown.h5": Style(color=h5, bold=True),
+        "markdown.h6": Style(color=h6, bold=True),
+        "markdown.em": Style(color=colors.secondary, italic=True),
         "markdown.strong": Style(color=colors.foreground, bold=True),
         "markdown.s": Style(color=colors.muted, strike=True),
-        "markdown.code_inline": Style(color=colors.secondary, bgcolor=colors.panel),
+        "markdown.code_inline": Style(color=cyan, bgcolor=colors.panel),
         "markdown.code_block": Style(color=colors.foreground),
-        "markdown.block_quote": Style(color=colors.muted),
+        "markdown.block_quote": Style(color=colors.secondary, italic=True),
         "markdown.hr": Style(color=colors.card_border),
         "markdown.link": Style(color=colors.primary, underline=True),
-        "markdown.link_url": Style(color=colors.primary, underline=True),
+        "markdown.link_url": Style(color=cyan, underline=True),
         "markdown.list": Style(color=colors.foreground),
         "markdown.item": Style(color=colors.foreground),
-        "markdown.item.bullet": Style(color=colors.card_activity),
-        "markdown.item.number": Style(color=colors.card_activity),
+        "markdown.item.bullet": Style(color=cyan),
+        "markdown.item.number": Style(color=colors.secondary),
         "markdown.table.border": Style(color=colors.card_border),
-        "markdown.table.header": Style(color=colors.primary, bold=True),
+        "markdown.table.header": Style(color=h1, bold=True),
         "markdown.table.cell": Style(color=colors.foreground),
     }
 

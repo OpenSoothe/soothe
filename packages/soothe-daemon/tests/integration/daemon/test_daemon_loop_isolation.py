@@ -493,9 +493,11 @@ class TestLoopIsolation:
             client1.clear_pending_events()
             await client1.request("loop_reattach", {"loop_id": loop1})
             await await_event_type(
-                client1.read_event, "card.replay_begin", timeout=integration_llm_idle_timeout()
+                client1.read_event,
+                "soothe.card.replay.begin",
+                timeout=integration_llm_idle_timeout(),
             )
-            await await_event_type(client1.read_event, "card.replay_end", timeout=15.0)
+            await await_event_type(client1.read_event, "soothe.card.replay.end", timeout=15.0)
 
             # Verify replay events go only to client1 (already consumed above)
 

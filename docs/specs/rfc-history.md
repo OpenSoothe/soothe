@@ -33,7 +33,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 ### 2026-07-27
 
-- **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
+- **RFC-413** Phase 4 complete (IG-655): append-oriented DisplayCardStore ledger, live `soothe.card.*` via `event`/`custom`, TUI always prefers daemon projection for structural cards; inline tool rows remain live-only on step widgets. Design draft `docs/drafts/2026-07-27-tui-card-replay-source-of-truth-design.md`.
 | Conceptual Design | 1 |
 | Architecture Design + Protocol Specification | 1 |
 | Protocol Specification | 1 |

@@ -11,7 +11,7 @@
 **Extends**: RFC-225 (intent classification taxonomy), RFC-220 (orchestrator topology)
 **Supersedes**: The `_is_likely_agentic` heuristic bypass and `simple_bypass` string-prefix detection introduced by IG-518
 **Related**: RFC-214 (loop-message surface), RFC-604 (reason-phase robustness), RFC-624 (Context Engine), RFC-628 (SubAgent / orphan wired card display)
-**Amended by**: IG-599 (wired-subagent direct route after Pass 2), IG-600 (intake-only exposure), IG-601 (intake-only dual registry / direct invoke), IG-602 (orphan wired-subagent card / stream bridge)
+**Amended by**: IG-599 (wired-subagent direct route after Pass 2), IG-600 (intake-only exposure), IG-601 (intake-only dual registry / direct invoke), IG-602 (orphan wired-subagent card / stream bridge), IG-656 (`planner` intake-only)
 **Design draft (orphan card UX)**: `docs/drafts/2026-07-15-orphan-wired-subagent-card-design.md`
 
 ---
@@ -105,7 +105,7 @@ graph TB
     G2 --> Graph["graph: init_or_resume"]
     Graph --> Route["route_by_intent"]
     Route -->|"chitchat"| END["END (blocked if new_goal_created)"]
-    Route -->|"wired_subagent"| Wired["invoke_wired_subagent → (intake-only direct | planner resolve→execute) → goal_completion"]
+    Route -->|"wired_subagent"| Wired["invoke_wired_subagent → intake-only direct → goal_completion"]
     Route -->|"trivial"| Trivial["resolve_decision → validate → execute"]
     Route -->|"simple (fresh)"| Simple["plan_generate(lightweight) → resolve → validate → execute"]
     Route -->|"complex"| Complex["bounded_evidence_gather → plan_assess? → plan_generate → resolve → validate → execute"]
@@ -240,28 +240,26 @@ When Pass 2 `wire_subagent` or slash/daemon `preferred_subagent` resolves to an 
 
 1. `init_or_resume` sets `intent_route=wired_subagent` when a specialist resolves (no plan inject here).
 2. `route_by_intent` returns `invoke_wired_subagent` (after chitchat, before continuation).
-3. `invoke_wired_subagent` emits delegation status (`plan_phase_status`), then:
-   - **Intake-only** (`browser_use`, `deep_research`, `academic_research`): looks up the specialist on the intake-only registry (not on CoreAgent `task`), runs the CompiledSubAgent runnable **without** resolve → execute, records execute-step Human(goal)+AI(report) on the CE ledger, then routes to `goal_completion`. See §6.3.3 for stream / TUI contract.
-   - **Catalog / dual-exposed** (`planner`): builds the terminal 1-step plan (`build_trivial_plan` with `wire_subagent` + `terminal_after_execute`) and edges to `resolve_decision` → validate → execute (CoreAgent `task`) → `goal_completion`. Progress uses the normal parented SubAgent card path (RFC-628 Part II).
+3. `invoke_wired_subagent` emits delegation status (`plan_phase_status`), then looks up the specialist on the intake-only registry (not on CoreAgent `task`), runs the CompiledSubAgent runnable **without** resolve → execute, records execute-step Human(goal)+AI(report) on the CE ledger, then routes to `goal_completion`. See §6.3.3 for stream / TUI contract (orphan SubAgent card).
 4. Final user-visible text uses the existing goal-completion path (`ledger_direct` / synthesize).
 
 Content judgment for *which* specialist stays on the Pass 2 structured field (or explicit slash). Validation/coerce of names is deterministic allowlist filtering.
 
-### 6.3.2 Intake-only vs task-catalog exposure (IG-600 / IG-601)
+### 6.3.2 Intake-only vs task-catalog exposure (IG-600 / IG-601 / IG-656)
 
-Built-in wire specialists have two exposure modes:
+Built-in wire specialists are **intake-only**:
 
 | Subagent | Intake / wired route | On CoreAgent graph / `task` | Plan-generate `delegate` |
 |----------|----------------------|-----------------------------|---------------------------|
-| `planner` | Yes (resolve→execute) | Yes | Yes |
+| `planner` | Yes (streamed direct invoke) | No | No |
 | `browser_use` | Yes (streamed direct invoke) | No | No |
 | `deep_research` | Yes (streamed direct invoke) | No | No |
 | `academic_research` | Yes (streamed direct invoke) | No | No |
 
 - Intake-only specialists live on a **parallel registry** (`SootheNanoAgent.intake_only_subagents`) and are **not** passed to `create_deep_agent` (IG-601). Wired intake streams their runnable (custom events forwarded) then completes.
-- `planner` remains on the open CoreAgent `task` catalog and may still use resolve → execute.
 - Open-hop `task` to intake-only names fails naturally (not registered); ToolEnforcement still rejects them as belt-and-suspenders.
 - Plan-wave `delegate` / `resolve_step_wire_subagent` never wires intake-only names; those are intake/slash only.
+- Plugin / other open-catalog subagents may still appear on CoreAgent `task` when registered outside this set (not via plan-wave built-in `delegate`).
 
 ### 6.3.3 Intake-only wire: stream bridge and orphan SubAgent card
 
@@ -347,7 +345,7 @@ asyncio.gather(
 2. Routing guard checks `new_goal_created`.
 3. `route_by_intent` dispatches:
    - `chitchat` → END (social fast-path)
-   - `wired_subagent` → `invoke_wired_subagent` → (intake-only → `goal_completion` | `planner` → `resolve` → `validate` → `execute` → `goal_completion`)
+   - `wired_subagent` → `invoke_wired_subagent` → intake-only direct → `goal_completion`
    - `trivial` → `resolve_decision` → `validate` → `execute`
    - `simple` (fresh) → `plan_generate(lightweight)` → `resolve` → `validate` → `execute`
    - `complex` → `bounded_evidence_gather` → `plan_assess?` → `plan_generate` → `resolve` → `validate` → `execute`
@@ -461,7 +459,7 @@ completion remains free-form via `ledger_direct` / synthesis.
 ```
 init_or_resume --(route_by_intent)--> {
   END                      // chitchat (blocked if new_goal_created)
-  invoke_wired_subagent    // IG-599/652 specialist (intake-only → goal_completion; planner → resolve)
+  invoke_wired_subagent    // IG-599/656 specialist (intake-only → goal_completion)
   resolve_decision         // trivial (synth plan in scratch)
   plan_generate            // simple (fresh only)
   bounded_evidence_gather  // complex
@@ -553,3 +551,4 @@ Budget: relaxed (<300ms acceptable). Pass 1 ultra-lean (~50-80 tokens input, ~12
 | 2026-06-30 | Initial Draft |
 | 2026-07-14 | Wired-subagent direct route + intake-only dual registry (IG-599/651/652) |
 | 2026-07-15 | §6.3.3 intake-only stream bridge + orphan SubAgent card contract; IG-602 implemented |
+| 2026-07-27 | `planner` moved to intake-only (IG-656); no CoreAgent `task` / plan delegate |

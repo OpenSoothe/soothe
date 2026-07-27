@@ -704,7 +704,7 @@ class UserMessageBuilder:
         from soothe.sloop.state.schemas import is_intake_only_wire_subagent
 
         # Intake-only specialists never reach plan-generate (wired route). Prefer
-        # catalog names (e.g. planner) when a non-intake wire hint is present.
+        # open catalog names when a non-intake wire hint is present.
         if user_wire_subagent and not is_intake_only_wire_subagent(user_wire_subagent):
             sections.append(
                 (
@@ -718,8 +718,7 @@ class UserMessageBuilder:
             sections.append(
                 (
                     "SUBAGENT ROUTING",
-                    "Leave delegate null on all steps unless GOAL explicitly names a "
-                    "task-catalog subagent such as planner. browser_use / "
+                    "Leave delegate null on all steps. planner / browser_use / "
                     "deep_research / academic_research are intake-only (not plan delegates).",
                 )
             )

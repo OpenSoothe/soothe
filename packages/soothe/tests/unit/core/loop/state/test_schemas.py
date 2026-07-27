@@ -485,15 +485,15 @@ class TestPlanGeneration:
         out = plan_generate_steps_to_step_actions(steps)
         assert len(out) == 1
         assert out[0].description == "Draft migration plan"
-        assert out[0].wire_subagent == "planner"
+        # IG-656: planner is intake-only — plan-wave wire is cleared
+        assert out[0].wire_subagent is None
         assert "evidence_refs" not in StepAction.model_fields
 
     def test_resolve_step_wire_subagent(self) -> None:
         assert resolve_step_wire_subagent(execution_hint="auto") is None
         assert resolve_step_wire_subagent(execution_hint="subagent") is None
-        assert (
-            resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") == "planner"
-        )
+        # IG-656: planner is intake-only — not a plan-wave delegate
+        assert resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") is None
         # IG-600: intake-only specialists are not plan-wave delegates
         assert (
             resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
@@ -518,7 +518,7 @@ class TestPlanGeneration:
             )
         ]
         wired = apply_step_wire_subagents(steps)
-        assert wired[0].wire_subagent == "planner"
+        assert wired[0].wire_subagent is None
 
     def test_resolve_wire_subagent_from_pass2(self) -> None:
         assert resolve_wire_subagent(wire_subagent="browser_use") == "browser_use"
@@ -529,16 +529,16 @@ class TestPlanGeneration:
             id="s1",
             description="Draft plan",
             expected_output="plan",
-            wire_subagent="planner",
+            wire_subagent="plugin_agent",
         )
         routing = {"routing_hint": "subagent", "preferred_subagent": "general_purpose"}
-        assert resolve_wire_subagent_for_step(step, routing) == "planner"
-        assert resolve_wire_subagent_for_step(step, None) == "planner"
+        assert resolve_wire_subagent_for_step(step, routing) == "plugin_agent"
+        assert resolve_wire_subagent_for_step(step, None) == "plugin_agent"
 
     def test_resolve_wire_subagent_falls_back_to_routing(self) -> None:
         step = StepAction(id="s1", description="Draft plan", expected_output="plan")
-        routing = {"routing_hint": "subagent", "preferred_subagent": "planner"}
-        assert resolve_wire_subagent_for_step(step, routing) == "planner"
+        routing = {"routing_hint": "subagent", "preferred_subagent": "plugin_agent"}
+        assert resolve_wire_subagent_for_step(step, routing) == "plugin_agent"
 
     def test_resolve_wire_subagent_ignores_intake_only(self) -> None:
         step = StepAction(
@@ -553,6 +553,21 @@ class TestPlanGeneration:
             resolve_wire_subagent_for_step(
                 StepAction(id="s2", description="x", expected_output="y"),
                 routing,
+            )
+            is None
+        )
+        planner_step = StepAction(
+            id="s3",
+            description="Plan",
+            expected_output="plan",
+            wire_subagent="planner",
+        )
+        planner_routing = {"routing_hint": "subagent", "preferred_subagent": "planner"}
+        assert resolve_wire_subagent_for_step(planner_step, planner_routing) is None
+        assert (
+            resolve_wire_subagent_for_step(
+                StepAction(id="s4", description="x", expected_output="y"),
+                planner_routing,
             )
             is None
         )

@@ -38,9 +38,9 @@ class PlanGenerateStepWire(BaseModel):
     delegate: str | None = Field(
         default=None,
         description=(
-            "Optional open task-catalog subagent (planner among built-ins) only when the "
-            "step exclusively requires that capability; omit for workspace/local steps. "
-            "Never browser_use, deep_research, or academic_research (intake-only)."
+            "Leave null. Built-in wire specialists (planner, browser_use, "
+            "deep_research, academic_research) are intake-only and must not be "
+            "plan-wave delegates."
         ),
     )
 

@@ -62,6 +62,9 @@ LC_BODY = "#C0CAF5"
 LC_BLUE = "#7AA2F7"
 """Primary accent blue."""
 
+LC_CYAN = "#7DCFFF"
+"""Info / identity accent — soft cyan between blue and green."""
+
 LC_PURPLE = "#BB9AF7"
 """Secondary accent / badges / labels."""
 
@@ -193,6 +196,9 @@ LC_LIGHT_BODY = "#24283B"
 
 LC_LIGHT_BLUE = "#2E5EAA"
 """Primary accent blue (darkened for light bg contrast)."""
+
+LC_LIGHT_CYAN = "#0E7490"
+"""Info / identity accent (darkened for light bg contrast)."""
 
 LC_LIGHT_PURPLE = "#7C3AED"
 """Secondary accent (darkened for light bg contrast)."""

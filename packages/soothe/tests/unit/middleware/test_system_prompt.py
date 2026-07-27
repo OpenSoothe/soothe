@@ -313,7 +313,7 @@ def test_explicit_subagent_routing_first_hop_tools_are_task_only() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="planner",
+        preferred_subagent="plugin_agent",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -379,14 +379,16 @@ def test_step_subagent_configurable_first_hop_tools_are_task_only() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}}
+    lg_config = {
+        "configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}
+    }
     with patch("langgraph.config.get_config", return_value=lg_config):
         enforced = guard.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
     assert "SUBAGENT_ROUTING_DIRECTIVE" in modified.system_message.content
-    assert "planner" in modified.system_message.content
+    assert "plugin_agent" in modified.system_message.content
 
 
 def test_step_subagent_configurable_after_assistant_message_still_task_only() -> None:
@@ -406,7 +408,7 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
     request = ModelRequest(
         model=model,
         messages=[
-            HumanMessage(content="Execute: use planner"),
+            HumanMessage(content="Execute: use plugin_agent"),
             AIMessage(content="delegating"),
             ToolMessage(content="plan draft", tool_call_id="t1"),
         ],
@@ -414,13 +416,15 @@ def test_step_subagent_configurable_after_assistant_message_still_task_only() ->
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}}
+    lg_config = {
+        "configurable": {"thread_id": "t1", SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}
+    }
     with patch("langgraph.config.get_config", return_value=lg_config):
         enforced = guard.modify_request(request)
         modified = middleware.modify_request(enforced)
     assert len(enforced.tools) == 1
     assert getattr(enforced.tools[0], "name", None) == "task"
-    assert "planner" in modified.system_message.content
+    assert "plugin_agent" in modified.system_message.content
 
 
 def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
@@ -434,7 +438,7 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
     middleware = SystemPromptMiddleware(config=config)
     classification = RoutingClassification(
         task_complexity="medium",
-        preferred_subagent="planner",
+        preferred_subagent="general_purpose",
         routing_hint="subagent",
     )
     model = GenericFakeChatModel(messages=iter([AIMessage(content="x")]))
@@ -446,13 +450,13 @@ def test_step_subagent_overrides_wire_preferred_on_first_hop() -> None:
         tools=tools,
         state={"routing_classification": classification},
     )
-    lg_config = {"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "planner"}}
+    lg_config = {"configurable": {SOOTHE_STEP_SUBAGENT_CONFIG_KEY: "plugin_agent"}}
     with patch("langgraph.config.get_config", return_value=lg_config):
         after_te = enforcement.modify_request(request)
         enforced = guard.modify_request(after_te)
         modified = middleware.modify_request(enforced)
     content = modified.system_message.content
-    assert "subagent_type='planner'" in content
+    assert "subagent_type='plugin_agent'" in content
 
 
 def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
@@ -462,6 +466,7 @@ def test_intake_only_step_subagent_hint_is_rejected_by_host_resolver() -> None:
     from soothe.sloop.state.schemas import resolve_step_wire_subagent
 
     assert resolve_step_wire_subagent(execution_hint="subagent", subagent="deep_research") is None
+    assert resolve_step_wire_subagent(execution_hint="subagent", subagent="planner") is None
 
     # Host incorrectly setting step wire still narrows via GoalStepGuard (not nano).
     guard = GoalStepGuardMiddleware()

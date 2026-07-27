@@ -63,15 +63,14 @@ Thorough multi-source public-web or academic research is intake/slash routed
 """
 
 # [HOST OVERRIDES] — nano's _SUBAGENT_GUIDE is generic; this override reflects
-# Soothe's intake/slash routing for browser_use, deep_research, and
+# Soothe's intake/slash routing for planner, browser_use, deep_research, and
 # academic_research (not available via open `task`), and adds a grep/glob
 # guard against redundant repo scans after a task report returns.
 _SUBAGENT_GUIDE = """\
 Subagents (via the `task` tool) -- delegate ONLY when the task requires \
 the subagent's unique capability:
-- planner: Agentic plan design — iterative markdown execution plan; one report.
-- browser_use, deep_research, and academic_research are not available via `task`; \
-they run only through intake/slash wired routing.
+- planner, browser_use, deep_research, and academic_research are not available \
+via `task`; they run only through intake/slash wired routing.
 Additional subagents may be available from installed plugins; use only names listed in your runtime capabilities.
 
 Do NOT use `task` for mechanical multi-pattern repo search, file enumeration, \

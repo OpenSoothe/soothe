@@ -157,7 +157,7 @@ async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal
 
 
 @pytest.mark.asyncio
-async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
+async def test_invoke_wired_planner_direct_ainvoke() -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         wire_subagent="planner",
@@ -169,6 +169,14 @@ async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
     async def _emit(event_type: str, payload: object) -> None:
         emitted.append((event_type, payload))
 
+    runnable = SimpleNamespace(
+        ainvoke=AsyncMock(
+            return_value={
+                "answer": "## Migration plan\n\n1. inventory\n2. cutover",
+                "messages": [],
+            }
+        )
+    )
     ctx = SimpleNamespace(
         loop_state=SimpleNamespace(
             intent=intent,
@@ -176,21 +184,29 @@ async def test_invoke_wired_planner_builds_plan_for_resolve() -> None:
             goal="plan the migration",
             goal_user_submission="plan the migration",
             total_tokens_used=0,
+            thread_id="t1",
+            iteration=0,
+            workspace=None,
+            _loop_messages_cache=[],
         ),
         preferred_subagent=None,
         scratch=SimpleNamespace(plan_result=None),
         emit=_emit,
-        core_agent=SimpleNamespace(lookup_intake_only_subagent=lambda _n: None),
+        core_agent=SimpleNamespace(
+            lookup_intake_only_subagent=lambda name: (
+                {"name": "planner", "runnable": runnable} if name == "planner" else None
+            )
+        ),
+        ce=None,
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {}
-    assert route_after_wired_subagent(out) == "resolve_decision"
+    assert out == {"wired_route_next": "goal_completion"}
+    assert route_after_wired_subagent(out) == "goal_completion"
     assert ctx.scratch.plan_result is not None
-    step = ctx.scratch.plan_result.decision.steps[0]
-    assert step.wire_subagent == "planner"
-    assert ctx.scratch.plan_result.terminal_after_execute is True
     assert any(e[0] == "plan_phase_status" for e in emitted)
-    assert not any(e[0].startswith("wired_subagent_") for e in emitted)
+    assert any(e[0] == "wired_subagent_started" for e in emitted)
+    assert any(e[0] == "wired_subagent_completed" for e in emitted)
+    runnable.ainvoke.assert_awaited_once()
 
 
 def test_extract_subagent_report_prefers_answer_field() -> None:

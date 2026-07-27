@@ -217,7 +217,9 @@ class _MessagesMixin:
                 await self._mount_message(AppMessage(f"Could not load history: {e}"))
 
     async def _apply_card_wire_frame(self, data: Any) -> bool:
-        """Apply one custom-mode ``card.*`` payload. Returns True if handled."""
+        """Apply one custom-mode ``soothe.card.*`` payload. Returns True if handled."""
+
+        from soothe_sdk.display.transcript_types import MessageType
 
         from soothe_cli.tui.binding import message_to_widget
         from soothe_cli.tui.card_wire import (
@@ -234,20 +236,32 @@ class _MessagesMixin:
         wire_type, card, patch = parsed
 
         if wire_type == CARD_CREATED and card is not None:
-            existing = None
-            try:
-                if card.id:
-                    existing = self.query_one(f"#{card.id}")
-            except Exception:
-                existing = None
+            existing = self._find_existing_card_widget(card)
             if existing is not None:
                 self._register_card_widget_with_adapter(existing, card)
+                if isinstance(existing, AssistantMessage) and card.content:
+                    self._enqueue_hydrated_assistant_render(existing, card.content)
+                return True
+            # Live turns already mount the user prompt locally; skip duplicate.
+            if card.type == MessageType.USER and self._user_prompt_already_mounted(card.content):
+                return True
+            # Stream path owns live goal_completion; skip ledger duplicate.
+            if card.type == MessageType.ASSISTANT and self._assistant_card_already_visible(card):
+                return True
+            # Live custom handlers mount intent/plan immediately; skip ledger dup.
+            if card.type == MessageType.COGNITION_REASON and self._cognition_reason_already_visible(
+                card
+            ):
                 return True
             widget = message_to_widget(card)
             await self._mount_message(widget)
             self._register_card_widget_with_adapter(widget, card)
             if isinstance(widget, AssistantMessage) and card.content:
                 self._enqueue_hydrated_assistant_render(widget, card.content)
+                if getattr(card, "loop_output_phase", None) == "goal_completion":
+                    adapter = getattr(self, "_ui_adapter", None)
+                    if adapter is not None:
+                        adapter._goal_completion_mounted_this_turn = True
             return True
 
         if wire_type in {CARD_UPDATED, CARD_FINALIZED}:
@@ -258,11 +272,10 @@ class _MessagesMixin:
                 card_id,
                 **{k: v for k, v in patch.items() if k != "id" and k != "type"},
             )
-            if not updated:
+            widget = self._resolve_card_widget_for_patch(card_id, patch)
+            if widget is None:
                 return True
-            try:
-                widget = self.query_one(f"#{card_id}")
-            except Exception:
+            if not updated and not isinstance(widget, CognitionStepMessage):
                 return True
             content = patch.get("content")
             if isinstance(widget, AssistantMessage) and isinstance(content, str):
@@ -284,6 +297,88 @@ class _MessagesMixin:
             return True
 
         return True
+
+    def _find_existing_card_widget(self, card: Any) -> Any | None:
+        """Return an already-mounted widget for ``card``, if any."""
+        from soothe_sdk.display.transcript_types import MessageType
+
+        if getattr(card, "id", None):
+            try:
+                return self.query_one(f"#{card.id}")
+            except Exception:
+                pass
+        if getattr(card, "type", None) == MessageType.STEP_PROGRESS:
+            step_id = str(getattr(card, "step_progress_id", "") or "").strip()
+            adapter = getattr(self, "_ui_adapter", None)
+            if adapter is not None and step_id:
+                return getattr(adapter, "_current_step_messages", {}).get(step_id)
+        return None
+
+    def _resolve_card_widget_for_patch(self, card_id: str, patch: dict[str, Any]) -> Any | None:
+        """Resolve a mounted widget for an update/finalize patch."""
+        try:
+            return self.query_one(f"#{card_id}")
+        except Exception:
+            pass
+        step_id = str(patch.get("step_progress_id") or "").strip()
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is not None and step_id:
+            return getattr(adapter, "_current_step_messages", {}).get(step_id)
+        return None
+
+    def _user_prompt_already_mounted(self, content: str) -> bool:
+        """True when a local user widget already shows this prompt text."""
+        from soothe_sdk.display.transcript_types import MessageType
+
+        text = str(content or "").strip()
+        if not text:
+            return False
+        for msg in reversed(self._message_store.get_all_messages()):
+            if getattr(msg, "type", None) == MessageType.USER:
+                return str(getattr(msg, "content", "") or "").strip() == text
+        return False
+
+    def _assistant_card_already_visible(self, card: Any) -> bool:
+        """True when stream already mounted this assistant body (avoid double report)."""
+        from soothe_sdk.display.transcript_types import MessageType
+
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is not None and getattr(adapter, "_goal_completion_mounted_this_turn", False):
+            return True
+        text = str(getattr(card, "content", "") or "").strip()
+        if not text:
+            return False
+        for msg in reversed(self._message_store.get_all_messages()):
+            if getattr(msg, "type", None) != MessageType.ASSISTANT:
+                continue
+            existing = str(getattr(msg, "content", "") or "").strip()
+            if not existing:
+                continue
+            if existing == text or text.startswith(existing) or existing.startswith(text):
+                return True
+            # Only inspect the latest assistant card.
+            break
+        return False
+
+    def _cognition_reason_already_visible(self, card: Any) -> bool:
+        """True when a live intent/plan cognition card already shows this text."""
+        from soothe_sdk.display.transcript_types import MessageType
+
+        strategy = str(getattr(card, "cognition_plan_strategy", "") or "").strip()
+        assessment = str(getattr(card, "cognition_plan_assessment", "") or "").strip()
+        if not strategy and not assessment:
+            return False
+        for msg in reversed(self._message_store.get_all_messages()):
+            if getattr(msg, "type", None) != MessageType.COGNITION_REASON:
+                continue
+            existing_strategy = str(getattr(msg, "cognition_plan_strategy", "") or "").strip()
+            existing_assessment = str(getattr(msg, "cognition_plan_assessment", "") or "").strip()
+            if strategy and strategy == existing_strategy:
+                return True
+            if assessment and assessment == existing_assessment:
+                return True
+            break
+        return False
 
     def _register_card_widget_with_adapter(self, widget: Any, card: Any) -> None:
         """Wire card-mounted step widgets into the live tool-routing registry."""

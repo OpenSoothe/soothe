@@ -1747,7 +1747,7 @@ class MessageRouter:
 
         # Acknowledge the request before streaming the replay. Per RFC-450
         # §5.2 a ``request`` with an ``id`` MUST receive a ``response``; the
-        # replay itself is streamed as card.replay_* / history frames, not as
+        # replay itself is streamed as soothe.card.replay.* / history frames, not as
         # the response payload.
         await self._send_response(
             client_id,
