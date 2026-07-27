@@ -34,6 +34,8 @@ def test_build_synthesis_message_is_task_only() -> None:
     assert "CONTEXTUAL FOCUS:" not in text
     assert "EVIDENCE EMPHASIS:" not in text
     assert "EVIDENCE:" not in text
+    assert "prefer bullets" in text.lower() or "Prefer bullets" in text
+    assert "required sections" not in text.lower()
 
 
 def test_projection_excludes_plan_phases_from_ledger() -> None:
@@ -212,11 +214,26 @@ def test_system_prompt_uses_synthesis_instructions_wrapper_and_anti_echo_rules()
     assert "</SYNTHESIS_INSTRUCTIONS>" in text
     assert "SYNTHESIS_REPORT" not in text
     assert "Never output `<SYNTHESIS_INSTRUCTIONS>`" in text
-    assert "start immediately with the first required section heading" in text
+    assert "start immediately with the first `##` heading" in text
+    assert "Suggested outline" in text
+    assert "Required sections" not in text
+
+
+def test_system_prompt_empty_sections_asks_model_to_design_outline() -> None:
+    """IG-652: heuristic path leaves sections empty; Phase 2 invents outline."""
+    classification = ScenarioClassification(
+        scenario="general_summary",
+        sections=[],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Bullets first",
+    )
+    text = render_synthesis_system_prompt(classification, user_goal="summarize work")
+    assert "design 3–7" in text or "design 3-7" in text
+    assert "Suggested outline" not in text
 
 
 def test_system_prompt_includes_cli_formatting_rules() -> None:
-    """IG-552: synthesis system prompt instructs tables, bullets, and mermaid."""
+    """IG-552 / IG-652: synthesis system prompt instructs tables, bullets, and mermaid."""
     classification = ScenarioClassification(
         scenario="general_summary",
         sections=["Summary"],
@@ -224,10 +241,12 @@ def test_system_prompt_includes_cli_formatting_rules() -> None:
         evidence_emphasis="Group by theme",
     )
     text = render_synthesis_system_prompt(classification, user_goal="summarize work")
-    assert "CLI presentation" in text
+    assert "Structure and Markdown" in text
     assert "GFM pipe tables" in text
     assert "markdown bullets" in text
     assert "```mermaid" in text
+    assert "Prose budget" in text
+    assert "content_draft" in text
 
 
 def test_system_prompt_includes_scenario_format_hint() -> None:
@@ -242,3 +261,4 @@ def test_system_prompt_includes_scenario_format_hint() -> None:
     assert 'Scenario-specific layout for "decision_analysis"' in text
     assert "Options comparison" in text
     assert "GFM table" in text
+    assert "Bullets/tables first" in text

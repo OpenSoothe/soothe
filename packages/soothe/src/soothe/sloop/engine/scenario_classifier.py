@@ -1,7 +1,9 @@
-"""Scenario classifier for synthesis generation (RFC-616, IG-300).
+"""Scenario classifier for synthesis generation (RFC-616, IG-300, IG-652).
 
-Determines appropriate synthesis scenario from goal + intent + execution pattern
-using fast model with structured output.
+Determines synthesis style from goal + intent + execution pattern using a fast
+model with structured output. Outline ``sections`` are suggestions (or empty
+for heuristic fast-paths); Phase 2 owns the final report outline and Markdown
+structure.
 """
 
 from __future__ import annotations
@@ -28,117 +30,9 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_SCENARIO_RULES = ScenarioRulesConfig()
 
-# Built-in scenario templates with descriptions
-BUILTIN_SCENARIOS: dict[str, list[str]] = {
-    "code_architecture_design": [
-        "Summary",
-        "Component Analysis",
-        "Key Findings",
-        "Recommendations",
-    ],
-    "code_implementation_design": [
-        "Approach",
-        "Implementation Details",
-        "Code Examples",
-        "Usage Guide",
-    ],
-    "research_synthesis": [
-        "Executive Summary",
-        "Key Findings",
-        "Source Analysis",
-        "Conclusions",
-    ],
-    "travel_activity_plan": [
-        "Overview",
-        "Itinerary",
-        "Logistics",
-        "Recommendations",
-    ],
-    "tutorial_guide": [
-        "Introduction",
-        "Prerequisites",
-        "Steps",
-        "Tips",
-    ],
-    "analysis_report": [
-        "Executive Summary",
-        "Metrics/Findings",
-        "Trends",
-        "Recommendations",
-    ],
-    "investigation_summary": [
-        "Problem Statement",
-        "Investigation Process",
-        "Findings",
-        "Resolution",
-    ],
-    "decision_analysis": [
-        "Context",
-        "Options",
-        "Trade-offs",
-        "Recommendation",
-    ],
-    "content_draft": [
-        "Introduction",
-        "Body",
-        "Conclusion",
-    ],
-    "general_summary": [
-        "Summary",
-        "Key Points",
-    ],
-}
-
-# Per-scenario CLI layout hints for goal-completion synthesis (IG-552 Phase 1).
-# Markdown tables and bullets render in Rich TUI today; Mermaid fences are
-# preserved as source until a terminal diagram renderer lands (Phase 3).
-SCENARIO_FORMAT_HINTS: dict[str, str] = {
-    "code_architecture_design": (
-        "Component inventory: GFM table (Name | Role | Location). "
-        "Key findings and recommendations: bullet lists. "
-        "Main request/data/control flow: ```mermaid flowchart when evidence supports it."
-    ),
-    "code_implementation_design": (
-        "APIs, signatures, or config keys: GFM table. "
-        "Patterns, usage, and caveats: bullet lists. "
-        "Call or deployment sequence: ```mermaid sequenceDiagram when helpful."
-    ),
-    "research_synthesis": (
-        "Source comparison: GFM table (Source | Finding | Confidence). "
-        "Discoveries and conclusions: bullet lists."
-    ),
-    "travel_activity_plan": (
-        "Itinerary: GFM table (Day/Time | Activity | Location | Notes). "
-        "Tips and recommendations: bullet lists."
-    ),
-    "tutorial_guide": (
-        "Prerequisites or checklist items: GFM table or bullets. "
-        "Procedure: numbered or bullet steps. "
-        "Optional overview flow: ```mermaid flowchart."
-    ),
-    "analysis_report": (
-        "Metrics and measurements: GFM table (Metric | Value | Notes). "
-        "Trends and recommendations: bullet lists."
-    ),
-    "investigation_summary": (
-        "Symptom/cause matrix: GFM table (Symptom | Cause | Status). "
-        "Investigation steps and resolution: bullet lists. "
-        "Repro or request path: ```mermaid sequenceDiagram when evidence supports it."
-    ),
-    "decision_analysis": (
-        "Options comparison: GFM table (Option | Pros | Cons | Fit). "
-        "Recommendation rationale: bullet lists."
-    ),
-    "content_draft": (
-        "Use short paragraphs for narrative sections; bullet lists for outlines or key beats."
-    ),
-    "general_summary": ("Brief summary paragraph; Key Points as a bullet list (3–5 items)."),
-    "custom": (
-        "Use GFM tables for comparisons or inventories; bullets for lists of 3+ items; "
-        "```mermaid diagrams for workflows when a diagram clarifies structure."
-    ),
-}
-
+# Built-in scenario style names → short descriptions (IG-652).
+# Outline section lists are no longer hardcoded here; the classify LLM designs
+# goal-specific suggestions and Phase 2 may adapt them.
 _SCENARIO_DESCRIPTIONS: dict[str, str] = {
     "code_architecture_design": "System/module structure analysis",
     "code_implementation_design": "Concrete implementation patterns and examples",
@@ -152,6 +46,60 @@ _SCENARIO_DESCRIPTIONS: dict[str, str] = {
     "general_summary": "Simple summarization fallback",
 }
 
+# Per-scenario CLI layout hints for goal-completion synthesis (IG-552 / IG-652).
+# Layout examples only — not outline authority. Markdown tables and bullets
+# render in Rich TUI; Mermaid fences are preserved as source until a terminal
+# diagram renderer lands.
+SCENARIO_FORMAT_HINTS: dict[str, str] = {
+    "code_architecture_design": (
+        "Bullets/tables first. Component inventory: GFM table (Name | Role | Location). "
+        "Key findings and recommendations: bullet lists. "
+        "Main request/data/control flow: ```mermaid flowchart when evidence supports it."
+    ),
+    "code_implementation_design": (
+        "Bullets/tables first. APIs, signatures, or config keys: GFM table. "
+        "Patterns, usage, and caveats: bullet lists. "
+        "Call or deployment sequence: ```mermaid sequenceDiagram when helpful."
+    ),
+    "research_synthesis": (
+        "Bullets/tables first. Source comparison: GFM table (Source | Finding | Confidence). "
+        "Discoveries and conclusions: bullet lists."
+    ),
+    "travel_activity_plan": (
+        "Bullets/tables first. Itinerary: GFM table (Day/Time | Activity | Location | Notes). "
+        "Tips and recommendations: bullet lists."
+    ),
+    "tutorial_guide": (
+        "Bullets/tables first. Prerequisites or checklist items: GFM table or bullets. "
+        "Procedure: numbered or bullet steps. "
+        "Optional overview flow: ```mermaid flowchart."
+    ),
+    "analysis_report": (
+        "Bullets/tables first. Metrics and measurements: GFM table (Metric | Value | Notes). "
+        "Trends and recommendations: bullet lists."
+    ),
+    "investigation_summary": (
+        "Bullets/tables first. Symptom/cause matrix: GFM table (Symptom | Cause | Status). "
+        "Investigation steps and resolution: bullet lists. "
+        "Repro or request path: ```mermaid sequenceDiagram when evidence supports it."
+    ),
+    "decision_analysis": (
+        "Bullets/tables first. Options comparison: GFM table (Option | Pros | Cons | Fit). "
+        "Recommendation rationale: bullet lists."
+    ),
+    "content_draft": (
+        "Short paragraphs OK for narrative body; still use ## outline and bullets for lists."
+    ),
+    "general_summary": (
+        "Bullets first: one-line outcome under Summary, then 3–5 Key Points as bullets "
+        "(use a small GFM table if comparing a few metrics)."
+    ),
+    "custom": (
+        "Bullets/tables first. GFM tables for comparisons or inventories; "
+        "bullets for lists of 3+ items; ```mermaid when a diagram clarifies structure."
+    ),
+}
+
 _JSON_FENCE_PATTERN = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.IGNORECASE | re.DOTALL)
 
 
@@ -161,14 +109,23 @@ def format_hint_for_scenario(scenario: str) -> str:
 
 
 class ScenarioClassification(BaseModel):
-    """Scenario classification result for synthesis generation (IG-300).
+    """Scenario classification result for synthesis generation (IG-300 / IG-652).
 
     Produced by ScenarioClassifier from goal + intent + execution pattern.
-    Guides Phase 2 synthesis with structure + focus + evidence usage.
+    Guides Phase 2 synthesis with style + optional outline suggestions + focus.
+
+    Empty ``sections`` means Phase 2 invents the outline (heuristic fast-path).
+    Non-empty ``sections`` are soft suggestions, not required headings.
     """
 
     scenario: str = Field(description="Built-in scenario name or 'custom' for novel cases")
-    sections: list[str] = Field(description="Section names for synthesis structure")
+    sections: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Suggested ## section titles for the report outline (3–7 when set; "
+            "empty = Phase 2 designs the outline)"
+        ),
+    )
     contextual_focus: list[str] = Field(
         description="2-3 specific focus areas for this goal (not generic)"
     )
@@ -176,9 +133,8 @@ class ScenarioClassification(BaseModel):
 
     @model_validator(mode="after")
     def validate_sections(self) -> ScenarioClassification:
-        """Ensure sections are provided."""
-        if not self.sections:
-            raise ValueError("sections must be provided")
+        """Normalize section titles; empty list is allowed (Phase 2 invents outline)."""
+        self.sections = [s.strip() for s in self.sections if isinstance(s, str) and s.strip()]
         return self
 
 
@@ -224,8 +180,7 @@ def _extract_execution_summary(state: LoopState) -> dict:
 def _build_classifier_system_prompt() -> str:
     """Build system prompt with task instructions, scenario list, and output schema."""
     scenarios_list = "\n".join(
-        f"{i + 1}. {name} - {_SCENARIO_DESCRIPTIONS.get(name, 'General synthesis')}"
-        for i, name in enumerate(BUILTIN_SCENARIOS.keys())
+        f"{i + 1}. {name} - {desc}" for i, (name, desc) in enumerate(_SCENARIO_DESCRIPTIONS.items())
     )
     return SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT.format(scenarios_list=scenarios_list)
 
@@ -323,7 +278,11 @@ def _heuristic_classify(
     *,
     scenario_rules: ScenarioRulesConfig | None = None,
 ) -> ScenarioClassification | None:
-    """Config-driven fast-path classification that skips the LLM call."""
+    """Config-driven fast-path that skips the classify LLM call (IG-652).
+
+    Sets scenario style + focus/emphasis only. Leaves ``sections`` empty so
+    Phase 2 invents the report outline (builtins are not outline authority).
+    """
     rules = scenario_rules or _DEFAULT_SCENARIO_RULES
     total_steps = execution_summary["total_steps"]
     successful_steps = execution_summary["successful_steps"]
@@ -333,37 +292,45 @@ def _heuristic_classify(
     if rules.skip_llm_when_single_step and total_steps <= 1:
         return ScenarioClassification(
             scenario="general_summary",
-            sections=list(BUILTIN_SCENARIOS["general_summary"]),
+            sections=[],
             contextual_focus=[f"Summarize result for: {goal[:120]}"],
-            evidence_emphasis="Present the single step outcome directly",
+            evidence_emphasis=(
+                "Present the single-step outcome as bullets (and a small table if comparing "
+                "a few values); do not narrate the turn"
+            ),
         )
 
     if rules.skip_llm_when_all_failed and successful_steps == 0 and total_steps > 0:
         return ScenarioClassification(
             scenario="investigation_summary",
-            sections=list(BUILTIN_SCENARIOS["investigation_summary"]),
+            sections=[],
             contextual_focus=["Identify root cause of failures", "Summarize troubleshooting steps"],
-            evidence_emphasis="Group error patterns; highlight root causes",
+            evidence_emphasis=(
+                "Group error patterns in a Symptom|Cause|Status table where possible; "
+                "resolution as bullets"
+            ),
         )
 
     has_tool = any(t not in ("unknown", "llm_call") for t in step_types)
     if total_steps >= rules.high_step_count_threshold and has_tool:
         return ScenarioClassification(
             scenario="analysis_report",
-            sections=list(BUILTIN_SCENARIOS["analysis_report"]),
+            sections=[],
             contextual_focus=[
                 f"Aggregate findings across {total_steps} steps",
                 "Highlight key metrics and outcomes",
             ],
-            evidence_emphasis="Summarize tool outputs by concern, not chronologically",
+            evidence_emphasis=(
+                "Summarize tool outputs by concern in tables/bullets, not chronologically"
+            ),
         )
 
     if evidence_volume < rules.low_evidence_volume_threshold and intent_type == "agentic":
         return ScenarioClassification(
             scenario="general_summary",
-            sections=list(BUILTIN_SCENARIOS["general_summary"]),
+            sections=[],
             contextual_focus=[f"Summarize key findings for: {goal[:120]}"],
-            evidence_emphasis="Present key outcomes concisely",
+            evidence_emphasis="Present key outcomes as a short bullet list",
         )
 
     # Could not confidently classify — fall through to LLM
@@ -390,7 +357,9 @@ async def classify_synthesis_scenario(
         soothe_config: Optional SootheConfig for Langfuse tracing.
 
     Returns:
-        ScenarioClassification with scenario, sections, focus, emphasis.
+        ScenarioClassification with scenario style, optional outline suggestions,
+        focus, and evidence emphasis. Empty ``sections`` means Phase 2 invents
+        the outline.
 
     Raises:
         No exceptions - returns fallback classification on any failure.
@@ -479,7 +448,9 @@ async def classify_synthesis_scenario(
         logger.warning("Scenario classification failed, using fallback", exc_info=True)
         return ScenarioClassification(
             scenario="general_summary",
-            sections=list(BUILTIN_SCENARIOS["general_summary"]),
+            sections=[],
             contextual_focus=["Provide concise summary of goal completion"],
-            evidence_emphasis="Use any available tool results or AI responses",
+            evidence_emphasis=(
+                "Use available tool results as bullets/tables; invent a clear ## outline"
+            ),
         )

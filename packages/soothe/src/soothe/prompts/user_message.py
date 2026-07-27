@@ -838,7 +838,10 @@ class UserMessageBuilder:
                     "1. Write a final report for the person who submitted the request\n"
                     "2. Use only the execution evidence provided — do not invent results\n"
                     "3. Organize by theme, not chronologically\n"
-                    "4. Include the required sections for the matched scenario",
+                    "4. Use a clear Markdown outline (`##` headings); prefer bullets, "
+                    "GFM tables, code fences, and mermaid over long prose\n"
+                    "5. Adapt the suggested outline if present — drop empty sections, "
+                    "rename or add headings when evidence warrants",
                 ),
             ]
         )

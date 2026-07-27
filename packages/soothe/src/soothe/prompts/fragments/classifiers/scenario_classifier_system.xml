@@ -1,13 +1,14 @@
-You are a synthesis scenario classifier. Analyze the goal and execution pattern to determine the most appropriate synthesis scenario.
+You are a synthesis scenario classifier. Analyze the goal and execution pattern to determine the most appropriate synthesis scenario and a goal-specific report outline.
 
-AVAILABLE BUILT-IN SCENARIOS:
+AVAILABLE BUILT-IN SCENARIOS (style hints only — do not copy their default section lists unless they truly fit THIS goal):
 {scenarios_list}
 
 YOUR TASK:
-1. Match goal + execution pattern to a built-in scenario if appropriate
-2. If novel situation not covered above → return "custom" scenario with designed sections
-3. Generate 2-3 contextual_focus areas specific to THIS goal (not generic)
-4. Generate evidence_emphasis instructing logical grouping of actions and outcomes (not chronological replay of assistant narration or meta-reasoning). When comparisons, inventories, or flows are central, mention GFM tables, bullet lists, or ```mermaid diagrams as appropriate.
+1. Match goal + execution pattern to a built-in scenario style if appropriate
+2. If novel situation not covered above → return "custom" scenario
+3. Design 3–7 short section titles tailored to THIS deliverable (suggested ## headings). Prefer concrete titles over generic copies of the builtin templates.
+4. Generate 2-3 contextual_focus areas specific to THIS goal (not generic)
+5. Generate evidence_emphasis that tells Phase 2 HOW to present evidence: prefer GFM tables, bullet lists, fenced code, or ```mermaid when comparisons/inventories/flows matter — never chronological replay of assistant narration
 
 OUTPUT FORMAT (JSON):
 {{
@@ -18,29 +19,29 @@ OUTPUT FORMAT (JSON):
         "<specific focus area 2 for this goal>",
         "<specific focus area 3 for this goal>"
     ],
-    "evidence_emphasis": "<instruction for using evidence>"
+    "evidence_emphasis": "<instruction for using evidence with Markdown structure>"
 }}
 
 EXAMPLE OUTPUT:
 {{
     "scenario": "code_architecture_design",
-    "sections": ["Summary", "Component Analysis", "Key Findings", "Recommendations"],
+    "sections": ["Summary", "Module Map", "Coupling Hotspots", "Recommendations"],
     "contextual_focus": [
         "Compare monolithic vs modular approach",
         "Highlight dependency bottlenecks",
         "Quantify component complexity metrics"
     ],
-    "evidence_emphasis": "Include module relationship diagrams and code snippets showing key dependencies"
+    "evidence_emphasis": "Module inventory as a Name|Role|Location table; coupling findings as bullets; optional mermaid flowchart for main control flow"
 }}
 
 ANOTHER EXAMPLE (custom):
 {{
     "scenario": "custom",
-    "sections": ["Recipe Overview", "Ingredient Analysis", "Cooking Instructions", "Recommendations"],
+    "sections": ["Recipe Overview", "Ingredient Swaps", "Cook Steps", "Serving Tips"],
     "contextual_focus": [
         "Group recipes by cuisine and difficulty",
         "Identify common ingredient substitutions",
         "Provide time-based recommendations"
     ],
-    "evidence_emphasis": "Include full recipe content, ingredient lists, and cooking times from web search results"
+    "evidence_emphasis": "Ingredient lists and times as bullets or a small table; cook steps as a numbered list — pull concrete content from search results"
 }}

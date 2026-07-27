@@ -64,6 +64,7 @@ def test_heuristic_single_step_returns_general_summary() -> None:
     result = _heuristic_classify("count readmes", "agentic", summary)
     assert result is not None
     assert result.scenario == "general_summary"
+    assert result.sections == []  # IG-652: Phase 2 invents outline
 
 
 def test_heuristic_zero_successful_steps_returns_investigation() -> None:
@@ -77,6 +78,7 @@ def test_heuristic_zero_successful_steps_returns_investigation() -> None:
     result = _heuristic_classify("fix the build", "agentic", summary)
     assert result is not None
     assert result.scenario == "investigation_summary"
+    assert result.sections == []
 
 
 def test_heuristic_many_steps_with_tools_returns_analysis() -> None:
@@ -90,6 +92,7 @@ def test_heuristic_many_steps_with_tools_returns_analysis() -> None:
     result = _heuristic_classify("analyze the codebase", "agentic", summary)
     assert result is not None
     assert result.scenario == "analysis_report"
+    assert result.sections == []
 
 
 def test_heuristic_low_evidence_returns_general() -> None:
@@ -103,6 +106,7 @@ def test_heuristic_low_evidence_returns_general() -> None:
     result = _heuristic_classify("summarize this", "agentic", summary)
     assert result is not None
     assert result.scenario == "general_summary"
+    assert result.sections == []
 
 
 def test_heuristic_ambiguous_returns_none() -> None:
@@ -174,7 +178,7 @@ async def test_classify_scenario_falls_back_on_invalid_response() -> None:
     # 3-step state → heuristic returns None, falls through to LLM → LLM fails → fallback
     result = await classify_synthesis_scenario("count readmes", _build_state(step_count=3), llm)
     assert result.scenario == "general_summary"
-    assert result.sections == ["Summary", "Key Points"]
+    assert result.sections == []
 
 
 @pytest.mark.asyncio
@@ -184,7 +188,19 @@ async def test_heuristic_skips_llm_for_single_step() -> None:
     llm = _StubLLM("THIS_WOULD_FAIL_IF_CALLED")
     result = await classify_synthesis_scenario("count readmes", _build_state(step_count=1), llm)
     assert result.scenario == "general_summary"
+    assert result.sections == []
     assert result.contextual_focus[0].startswith("Summarize result for:")
+
+
+def test_scenario_classification_allows_empty_sections() -> None:
+    """IG-652: empty sections are valid; Phase 2 invents the outline."""
+    result = ScenarioClassification(
+        scenario="general_summary",
+        sections=[],
+        contextual_focus=["Outcomes"],
+        evidence_emphasis="Bullets first",
+    )
+    assert result.sections == []
 
 
 def test_format_hint_for_scenario_builtin_and_custom_fallback() -> None:
@@ -192,4 +208,5 @@ def test_format_hint_for_scenario_builtin_and_custom_fallback() -> None:
     hint = format_hint_for_scenario("code_architecture_design")
     assert "GFM table" in hint
     assert "mermaid" in hint
+    assert "Bullets/tables first" in hint
     assert format_hint_for_scenario("novel_scenario") == format_hint_for_scenario("custom")

@@ -4,10 +4,10 @@ Consolidated execution module:
 - Scenario classification (Phase 1 via ScenarioClassifier)
 - Synthesis generation (Phase 2 via CoreAgent streaming)
 
-Separation of concerns (IG-300):
-- policies/goal_completion_policy.py: Decision logic ("should we synthesize?")
-- analysis/scenario_classifier.py: Classification logic ("what scenario?")
-- analysis/synthesis.py: Execution logic ("how to synthesize?")
+Separation of concerns (IG-300 / IG-652):
+- ``context/planning_completion.py``: Decision logic ("should we synthesize?")
+- ``sloop/engine/scenario_classifier.py``: Classification ("what style/outline?")
+- ``sloop/engine/synthesis.py``: Execution ("how to synthesize?")
 
 Checkpoint isolation (IG-302): synthesis uses a fresh LangGraph ``thread_id`` so the
 checkpointer does not replay the parent thread. The model receives execute-step ledger
@@ -104,8 +104,8 @@ class SynthesisGenerator:
             state: Loop state with intent and execution history.
 
         Returns:
-            ScenarioClassification with scenario + sections + focus + emphasis.
-            Fallback to general_summary on classification failure.
+            ScenarioClassification with scenario + optional outline suggestions + focus.
+            Fallback to general_summary (empty sections) on classification failure.
         """
         try:
             return await classify_synthesis_scenario(
@@ -113,14 +113,13 @@ class SynthesisGenerator:
             )
         except Exception:
             logger.warning("Classifier failed, using fallback", exc_info=True)
-            from soothe.sloop.engine.scenario_classifier import BUILTIN_SCENARIOS
-
             return ScenarioClassification(
                 scenario="general_summary",
-                sections=BUILTIN_SCENARIOS["general_summary"],
+                sections=[],
                 contextual_focus=["Summarize major actions and outcomes for the request"],
                 evidence_emphasis=(
-                    "Group evidence by concern or outcome; do not replay turns chronologically"
+                    "Group evidence by concern or outcome in bullets/tables; "
+                    "do not replay turns chronologically; invent a clear ## outline"
                 ),
             )
 

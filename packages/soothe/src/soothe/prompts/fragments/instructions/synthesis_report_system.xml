@@ -18,10 +18,14 @@ Available report formats (reference only — do not copy this list into your rep
 
 Report style: {{ scenario }}
 
-Required sections (use these headings in your reply):
+{% if sections %}
+Suggested outline (adapt freely — merge, rename, add, or drop sections to fit the evidence; omit empty sections):
 {% for section in sections %}
 - {{ section }}
 {% endfor %}
+{% else %}
+Outline: design 3–7 `##` section titles appropriate to this goal and evidence, then write the report under them.
+{% endif %}
 
 Focus areas:
 {{ contextual_focus }}
@@ -29,18 +33,22 @@ Focus areas:
 How to use the evidence:
 {{ evidence_emphasis }}
 
-CLI presentation (Markdown for terminal display):
+Structure and Markdown (must follow):
 - Section titles: `##` only (one level; avoid `###` subsections)
-- Lists of 3+ related items: markdown bullets (`- item`)
-- Comparisons, inventories, metrics: GFM pipe tables (≤5 columns; concise cells)
-- Workflows, pipelines, architecture flows: fenced ```mermaid blocks (flowchart, sequenceDiagram, or graph)
-- Prefer tables and bullets over long prose paragraphs where structure helps scanning
+- Default writing unit: markdown bullets (`- item`) or numbered lists — not paragraphs
+- Prose budget: at most 1–2 short sentences under a heading before switching to bullets or a table
+- Comparisons, inventories, metrics, options: GFM pipe tables (≤5 columns; concise cells)
+- Workflows, pipelines, architecture flows: fenced ```mermaid blocks (flowchart, sequenceDiagram, or graph) when evidence supports it
+- Code, configs, commands, paths: fenced code blocks with a language tag when known
+- If a point needs more than ~40 words, split it into bullets or a table row
+- Skip empty sections; do not pad with filler prose
+- Exception: when report style is `content_draft`, short paragraphs are OK for narrative body; still use a `##` outline and bullets for lists. All other styles: bullets and tables first.
 
 Scenario-specific layout for "{{ scenario }}":
 {{ format_hint }}
 
 Rules:
-1. Your reply is ONLY the finished report — start immediately with the first required section heading (e.g. `## Summary`). Never output `<SYNTHESIS_INSTRUCTIONS>`, `</SYNTHESIS_INSTRUCTIONS>`, or any text from this block.
+1. Your reply is ONLY the finished report — start immediately with the first `##` heading. Never output `<SYNTHESIS_INSTRUCTIONS>`, `</SYNTHESIS_INSTRUCTIONS>`, or any text from this block.
 2. Do not repeat, quote, or summarize these instructions, the scenario list, focus areas, or rules.
 3. Use only the execution evidence in the preceding conversation — do not invent steps or results.
 4. Summarize by theme or outcome, not by replaying messages in order.

@@ -60,16 +60,12 @@ EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", st
 
 
 # ---------------------------------------------------------------------------
-# System prompts and response-length guides
+# System prompt fragments
 # (consumed by ``soothe.prompts.system_templates`` / host loop builders).
 # Byte-for-byte preserved from previous Python literals — do not ``.strip()``.
 # ---------------------------------------------------------------------------
 
 PROMPT_TIMESTAMP_FRAGMENT = _read("system/prompts/prompt_timestamp.xml", strip=True)
-
-ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT = _read("system/response_guides/architecture_analysis.xml")
-RESEARCH_SYNTHESIS_GUIDE_FRAGMENT = _read("system/response_guides/research_synthesis.xml")
-LOOP_CONTINUATION_GUIDE_FRAGMENT = _read("system/response_guides/loop_continuation.xml")
 
 
 # ---------------------------------------------------------------------------
@@ -90,18 +86,15 @@ STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("planning/structured_plan_parse.xm
 
 
 __all__ = [
-    "ARCHITECTURE_ANALYSIS_GUIDE_FRAGMENT",
     "ASSISTANT_IDENTITY_FRAGMENT",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
     "EXECUTION_POLICIES_FRAGMENT",
-    "LOOP_CONTINUATION_GUIDE_FRAGMENT",
     "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
     "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
     "PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT",
     "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
     "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
     "PROMPT_TIMESTAMP_FRAGMENT",
-    "RESEARCH_SYNTHESIS_GUIDE_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
     "SCENARIO_CLASSIFIER_USER_FRAGMENT",
     "SIMPLE_SYSTEM_PROMPT_FRAGMENT",

@@ -2,9 +2,10 @@
 
 Moved from ``soothe.config.prompts`` (IG-384); imported by config package for re-exports.
 
-Static prose (system prompts and scenario response guides) lives as ``.xml``
-fragments under ``soothe.prompts.fragments``. CoreAgent defaults also live in
-``soothe_nano.prompts``; this host module composes loop-facing templates.
+Static prose lives as ``.xml`` fragments under ``soothe.prompts.fragments``.
+CoreAgent defaults also live in ``soothe_nano.prompts``; this host module
+composes loop-facing templates. Goal-completion report layout is owned by
+``instructions/synthesis_report_system.xml`` (IG-652), not legacy response guides.
 """
 
 from __future__ import annotations
