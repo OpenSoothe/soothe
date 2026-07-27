@@ -11,6 +11,10 @@ Cache Strategy (RFC-104, IG-183):
 
 Jinja2 templates under ``instructions/`` (e.g. ``synthesis_report_system.xml``) are
 loaded on demand via ``prompts.loader.load_prompt_fragment``.
+
+StrangeLoop-specific fragments (plan_assess, plan_generate, continuation,
+gap_analysis, execution_policies, structured_plan_parse, intake classifiers)
+live in ``soothe.sloop.prompts.fragments`` (migrated in HCD-02).
 """
 
 # Re-export facade — canonical source: soothe_nano.prompts.fragments
@@ -35,41 +39,17 @@ def _read(relative: str, *, strip: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Plan / execution instructions (existing)
-# ---------------------------------------------------------------------------
-
-# Plan-assess only: matches StatusAssessment schema (IG-372)
-PLAN_ASSESS_INSTRUCTIONS_FRAGMENT = _read("instructions/plan_assess_instructions.xml", strip=True)
-
-PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT = _read(
-    "instructions/plan_gap_analysis_instructions.xml", strip=True
-)
-
-# Plan-generate only: matches PlanGenerationWire schema (IG-568)
-PLAN_GENERATE_INSTRUCTIONS_FRAGMENT = _read(
-    "instructions/plan_generate_instructions.xml", strip=True
-)
-
-# Continuation discriminator (RFC-226, RFC-214 §4, IG-538)
-PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT = _read(
-    "instructions/plan_continuation_discriminate.xml", strip=True
-)
-
-# Prefetch static policy fragments (IG-183 merged policies)
-EXECUTION_POLICIES_FRAGMENT = _read("system/policies/execution_policies.xml", strip=True)
-
-
-# ---------------------------------------------------------------------------
 # System prompt fragments
 # (consumed by ``soothe.prompts.system_templates`` / host loop builders).
 # Byte-for-byte preserved from previous Python literals — do not ``.strip()``.
 # ---------------------------------------------------------------------------
 
-PROMPT_TIMESTAMP_FRAGMENT = _read("system/prompts/prompt_timestamp.xml", strip=True)
+PROMPT_TIMESTAMP_FRAGMENT = _read("system/prompt_timestamp.xml", strip=True)
 
 
 # ---------------------------------------------------------------------------
-# Classifier prompts (non-intake; intake loads via ``intention/prompts.py``)
+# Classifier prompts (synthesis scenario — shared systemwide)
+# Intake classifier fragments live in ``soothe.sloop.prompts.fragments``.
 # ---------------------------------------------------------------------------
 
 SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
@@ -78,25 +58,12 @@ SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT = _read(
 SCENARIO_CLASSIFIER_USER_FRAGMENT = _read("classifiers/scenario_classifier_user.xml", strip=True)
 
 
-# ---------------------------------------------------------------------------
-# Planning prompts
-# ---------------------------------------------------------------------------
-
-STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT = _read("planning/structured_plan_parse.xml")
-
-
 __all__ = [
     "ASSISTANT_IDENTITY_FRAGMENT",
     "DEFAULT_SYSTEM_PROMPT_BODY_FRAGMENT",
-    "EXECUTION_POLICIES_FRAGMENT",
     "MEDIUM_SYSTEM_PROMPT_FRAGMENT",
-    "PLAN_ASSESS_INSTRUCTIONS_FRAGMENT",
-    "PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT",
-    "PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT",
-    "PLAN_GENERATE_INSTRUCTIONS_FRAGMENT",
     "PROMPT_TIMESTAMP_FRAGMENT",
     "SCENARIO_CLASSIFIER_SYSTEM_FRAGMENT",
     "SCENARIO_CLASSIFIER_USER_FRAGMENT",
     "SIMPLE_SYSTEM_PROMPT_FRAGMENT",
-    "STRUCTURED_PLAN_PARSE_PROMPT_FRAGMENT",
 ]

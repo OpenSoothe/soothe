@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from soothe_sdk.protocols.planner import PlanContext
 
 import soothe.sloop.state.schemas  # noqa: F401 — break circular import at import time
-from soothe.prompts import PromptBuilder
+from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,

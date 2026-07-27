@@ -14,9 +14,9 @@ from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.prompts import PromptBuilder
 from soothe.sloop.engine.executor import Executor
 from soothe.sloop.engine.step_wave_types import _ExecuteStepResult
+from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.state.schemas import (
     LoopState,
     StepAction,

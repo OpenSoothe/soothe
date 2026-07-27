@@ -7,12 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from soothe.prompts.fragments import (
-    EXECUTION_POLICIES_FRAGMENT,
-    PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
-    PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
-    PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
-)
 from soothe.prompts.system_templates import (
     _TOOL_ORCHESTRATION_GUIDE,
     EXECUTE_WORKSPACE_RULES_FRAGMENT,
@@ -23,6 +17,12 @@ from soothe.sloop.intention.prompts import (
     INTAKE_PASS1_SYSTEM_PROMPT,
     INTAKE_PASS2_HUMAN_TASK,
     INTAKE_PASS2_SYSTEM_PROMPT,
+)
+from soothe.sloop.prompts.fragments import (
+    EXECUTION_POLICIES_FRAGMENT,
+    PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
+    PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
+    PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
 )
 from soothe.subagents.veritas.prompts import build_veritas_system_prompt
 

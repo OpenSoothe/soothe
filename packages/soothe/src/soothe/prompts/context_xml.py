@@ -8,9 +8,7 @@ so host consumers do not reach into nano directly.
 from __future__ import annotations
 
 from soothe_nano.prompts.context_xml import (
-    RFC104_CONTEXT_XML_VERSION,
     build_context_sections_for_complexity,
-    build_shared_environment_workspace_prefix,
     build_soothe_environment_section,
     build_soothe_protocols_section,
     build_soothe_thread_section,
@@ -18,9 +16,7 @@ from soothe_nano.prompts.context_xml import (
 )
 
 __all__ = [
-    "RFC104_CONTEXT_XML_VERSION",
     "build_context_sections_for_complexity",
-    "build_shared_environment_workspace_prefix",
     "build_soothe_environment_section",
     "build_soothe_protocols_section",
     "build_soothe_thread_section",

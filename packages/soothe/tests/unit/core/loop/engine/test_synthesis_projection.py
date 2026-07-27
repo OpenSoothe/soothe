@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from soothe.prompts.user_message import UserMessageBuilder
 from soothe.sloop.engine.scenario_classifier import ScenarioClassification
 from soothe.sloop.engine.synthesis_projection import (
     build_synthesis_messages,
     flatten_execute_human_content,
     render_synthesis_system_prompt,
 )
+from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import LoopState, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 

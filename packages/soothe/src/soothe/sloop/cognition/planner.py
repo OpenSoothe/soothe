@@ -252,7 +252,7 @@ class LLMPlanner:
             plan_gap_model: Model for plan-gap-analysis calls (defaults to assess model).
             loop_id: Optional loop identifier for Langfuse trace correlation.
         """
-        from soothe.prompts import PromptBuilder
+        from soothe.sloop.prompts import PromptBuilder
 
         self._model = model
         self._plan_assess_model = plan_assess_model or model
@@ -1281,7 +1281,7 @@ class LLMPlanner:
         if plan_manager is not None:
             dag_ctx = plan_manager.get_planning_context()
             if dag_ctx.has_prior_state:
-                from soothe.prompts.builder import _format_dag_context
+                from soothe.sloop.prompts.builder import _format_dag_context
 
                 dag_context = _format_dag_context(dag_ctx)
 
@@ -1558,7 +1558,7 @@ class LLMPlanner:
                     if plan_manager is not None:
                         dag_ctx = plan_manager.get_planning_context()
                         if dag_ctx.has_prior_state:
-                            from soothe.prompts.builder import (
+                            from soothe.sloop.prompts.builder import (
                                 _format_dag_context,
                             )
 

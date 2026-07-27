@@ -17,11 +17,6 @@ from soothe_sdk.protocols.planner import PlanContext
 
 from soothe.context.engine import ContextEngine
 from soothe.context.store_sqlite import SqliteContextPersistence
-from soothe.prompts.plan_ledger_projection import (
-    _GOAL_COMPLETION_CONTEXT_BOUNDARY,
-    project_planner_ledger,
-    resolve_planner_projection_mode,
-)
 from soothe.sloop.intention import IntentClassification
 from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.nodes.bounded_evidence_gather import (
@@ -37,6 +32,11 @@ from soothe.sloop.orchestrator.routing import (
     route_by_intent,
 )
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.prompts.plan_ledger_projection import (
+    _GOAL_COMPLETION_CONTEXT_BOUNDARY,
+    project_planner_ledger,
+    resolve_planner_projection_mode,
+)
 from soothe.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,

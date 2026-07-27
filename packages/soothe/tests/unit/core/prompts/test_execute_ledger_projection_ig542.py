@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.prompts.plan_ledger_projection import (
+from soothe.sloop.prompts.plan_ledger_projection import (
     collect_cross_goal_completion_units,
     project_cross_goal_completion_tail,
     project_execute_step_graph_input,
@@ -236,7 +236,7 @@ def test_project_execute_step_graph_input_predecessor_false_when_ledger_empty() 
 
 
 def test_execute_step_ids_subsumed_by_cross_goal_completion() -> None:
-    from soothe.prompts.plan_ledger_projection import (
+    from soothe.sloop.prompts.plan_ledger_projection import (
         execute_step_ids_subsumed_by_cross_goal_completion,
     )
 

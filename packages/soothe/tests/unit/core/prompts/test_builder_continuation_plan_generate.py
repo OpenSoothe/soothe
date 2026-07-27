@@ -6,11 +6,11 @@ from datetime import UTC, datetime
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.prompts import PromptBuilder
-from soothe.prompts.plan_ledger_projection import (
+from soothe.sloop.prompts import PromptBuilder
+from soothe.sloop.prompts.plan_ledger_projection import (
     project_planner_ledger,
 )
-from soothe.prompts.planner_assembly import resolve_planner_projection_mode
+from soothe.sloop.prompts.planner_assembly import resolve_planner_projection_mode
 from soothe.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,

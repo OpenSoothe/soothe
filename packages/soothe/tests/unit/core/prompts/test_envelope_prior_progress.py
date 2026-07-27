@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.prompts.user_message import (
+from soothe.sloop.prompts.user_message import (
     PRIOR_PROGRESS_MAX_CHARS,
     UserMessageBuilder,
 )

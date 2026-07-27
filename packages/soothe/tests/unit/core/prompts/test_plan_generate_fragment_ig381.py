@@ -1,6 +1,6 @@
 """Plan-generate fragment: wire schema contract + bounded discovery guidance."""
 
-from soothe.prompts.fragments import PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
+from soothe.sloop.prompts.fragments import PLAN_GENERATE_INSTRUCTIONS_FRAGMENT
 
 
 def test_plan_generate_uses_wire_schema_fields() -> None:
@@ -17,7 +17,7 @@ def test_plan_generate_uses_wire_schema_fields() -> None:
 
 
 def test_plan_generate_execution_policy_uses_readonly_discovery_wording() -> None:
-    from soothe.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+    from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "Discovery" in EXECUTION_POLICIES_FRAGMENT
     assert "supportive_evidence" not in EXECUTION_POLICIES_FRAGMENT
@@ -29,14 +29,14 @@ def test_plan_generate_per_wave_hard_limit() -> None:
 
 
 def test_execution_policies_per_wave_cap() -> None:
-    from soothe.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+    from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "At most **10 steps per plan wave**" in EXECUTION_POLICIES_FRAGMENT
     assert "runtime truncates extras" in EXECUTION_POLICIES_FRAGMENT
 
 
 def test_execution_policies_subagent_delegation_guidance() -> None:
-    from soothe.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+    from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "Subagent delegation" in EXECUTION_POLICIES_FRAGMENT
     assert "``planner`` only" in EXECUTION_POLICIES_FRAGMENT
@@ -44,7 +44,7 @@ def test_execution_policies_subagent_delegation_guidance() -> None:
 
 
 def test_execution_policies_forbids_sequential_mode() -> None:
-    from soothe.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+    from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
     assert "never ``sequential``" in EXECUTION_POLICIES_FRAGMENT
     assert "only ``parallel`` or ``dependency``" in EXECUTION_POLICIES_FRAGMENT

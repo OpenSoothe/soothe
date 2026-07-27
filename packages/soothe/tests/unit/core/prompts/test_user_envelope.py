@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from soothe.prompts.user_message import (
+from soothe.sloop.prompts.user_message import (
     UserMessageBuilder,
     flatten_user_message_content,
 )
@@ -106,8 +106,8 @@ def test_execute_message_execution_metadata() -> None:
 
 def test_execute_message_prior_steps_section() -> None:
     """Dependent steps include PRIOR STEPS between EXECUTION TASK and INSTRUCTIONS."""
-    from soothe.prompts.user_message import render_prior_steps_tree
     from soothe.sloop.engine.step_predecessor_context import PriorStepSummary
+    from soothe.sloop.prompts.user_message import render_prior_steps_tree
 
     builder = UserMessageBuilder()
     prior_steps = render_prior_steps_tree(

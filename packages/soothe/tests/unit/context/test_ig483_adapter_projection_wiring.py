@@ -179,7 +179,7 @@ class TestPromptBuilderContextBundle:
         """When context_bundle is None, behavior is unchanged."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.prompts.builder import PromptBuilder
         from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
@@ -197,7 +197,7 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects memory instructions into system (not agent/project rules)."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.prompts.builder import PromptBuilder
         from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
@@ -228,7 +228,7 @@ class TestPromptBuilderContextBundle:
         """ContextBundle injects goal/step lineage into generate human (not assess)."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.prompts.builder import PromptBuilder
         from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
@@ -267,7 +267,7 @@ class TestPromptBuilderContextBundle:
         """GOAL LINEAGE matching GOAL alone is not injected."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.prompts.builder import PromptBuilder
         from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()
@@ -291,7 +291,7 @@ class TestPromptBuilderContextBundle:
         """Empty ContextBundle fields are not injected."""
         from soothe_sdk.protocols.planner import PlanContext
 
-        from soothe.prompts.builder import PromptBuilder
+        from soothe.sloop.prompts.builder import PromptBuilder
         from soothe.sloop.state.schemas import LoopState
 
         builder = PromptBuilder()

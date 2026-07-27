@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from soothe.prompts import PromptBuilder
+from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.state.schemas import LoopState
 
 
@@ -90,7 +90,7 @@ def test_load_agent_instructions_agents_from_soothe_dir(tmp_path: Path) -> None:
 
 def test_envelope_functions_do_not_embed_project_instructions() -> None:
     """Envelope builders no longer embed project_instructions (moved to system prompt)."""
-    from soothe.prompts.user_message import UserMessageBuilder
+    from soothe.sloop.prompts.user_message import UserMessageBuilder
 
     # Envelope functions don't have project_instructions parameter anymore
     builder = UserMessageBuilder()

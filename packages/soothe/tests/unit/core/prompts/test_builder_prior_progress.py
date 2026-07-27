@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.prompts import PromptBuilder
+from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.state.schemas import (
     LoopState,
     PriorProgressDigest,

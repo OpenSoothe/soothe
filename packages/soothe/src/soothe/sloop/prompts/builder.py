@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
-from soothe.prompts.plan_ledger_projection import (
+from soothe.sloop.prompts.plan_ledger_projection import (
     project_continuation_assess_ledger,
     project_planner_ledger,
     project_planner_ledger_for_assess,
     projected_ledger_has_goal_completion,
     resolve_planner_projection_mode,
 )
-from soothe.prompts.planner_assembly import (
+from soothe.sloop.prompts.planner_assembly import (
     PlannerCallKind,
     goal_preview_text,
 )
@@ -89,7 +89,7 @@ def _format_dag_context(dag_ctx: Any) -> str:
     """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
     if not dag_ctx or not dag_ctx.has_prior_state:
         return ""
-    from soothe.prompts.user_message import _render_dag_status as _render
+    from soothe.sloop.prompts.user_message import _render_dag_status as _render
 
     return _render(dag_ctx)
 
@@ -288,14 +288,14 @@ class PromptBuilder:
             context_bundle: Optional ContextBundle (RFC-624). When provided, project/agent/memory
                 instructions from the bundle replace or supplement disk reads.
         """
-        from soothe.prompts.fragments import (
+        from soothe.prompts.system_templates import build_response_language_hint
+        from soothe.sloop.prompts.fragments import (
             EXECUTION_POLICIES_FRAGMENT,
             PLAN_ASSESS_INSTRUCTIONS_FRAGMENT,
             PLAN_CONTINUATION_DISCRIMINATE_FRAGMENT,
             PLAN_GAP_ANALYSIS_INSTRUCTIONS_FRAGMENT,
             PLAN_GENERATE_INSTRUCTIONS_FRAGMENT,
         )
-        from soothe.prompts.system_templates import build_response_language_hint
 
         parts: list[str] = []
         kind: PlannerCallKind = call_kind or ("generate" if plan_phase == "generate" else "assess")
@@ -373,7 +373,7 @@ class PromptBuilder:
         Returns:
             Formatted prompt string for the plan-context ``LoopHumanMessage``.
         """
-        from soothe.prompts.user_message import UserMessageBuilder
+        from soothe.sloop.prompts.user_message import UserMessageBuilder
         from soothe.sloop.state.schemas import next_goal_local_step_id_start
 
         builder = UserMessageBuilder()

@@ -1,6 +1,6 @@
 """Execution policies fragment includes IG-380 discovery guidance."""
 
-from soothe.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
+from soothe.sloop.prompts.fragments import EXECUTION_POLICIES_FRAGMENT
 
 
 def test_execution_policies_includes_filesystem_discovery_ig380() -> None:

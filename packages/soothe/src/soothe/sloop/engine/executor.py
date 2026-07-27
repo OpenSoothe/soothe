@@ -523,8 +523,8 @@ class Executor:
         predecessor_projected: bool = False,
     ) -> str:
         """Build the execute-step user envelope (task + hints; ledger slices projected separately)."""
-        from soothe.prompts.builder import _prior_goals_from_checkpoint
-        from soothe.prompts.user_message import (
+        from soothe.sloop.prompts.builder import _prior_goals_from_checkpoint
+        from soothe.sloop.prompts.user_message import (
             UserMessageBuilder,
             _render_prior_goals_tree,
         )
@@ -1917,7 +1917,7 @@ class Executor:
             graph_input_messages: list[BaseMessage] = []
             cross_goal_projected = False
             if loop_state is not None and loop_state.current_decision is not None:
-                from soothe.prompts.plan_ledger_projection import (
+                from soothe.sloop.prompts.plan_ledger_projection import (
                     project_execute_step_graph_input,
                 )
 

@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import soothe.prompts.fragments as _prompt_fragments
+import soothe.sloop.prompts.fragments as _sloop_fragments
 
-_CLASSIFIER_FRAGMENTS_DIR = Path(_prompt_fragments.__file__).resolve().parent / "classifiers"
+_CLASSIFIER_FRAGMENTS_DIR = Path(_sloop_fragments.__file__).resolve().parent / "classifiers"
 
 
 def _read_classifier_fragment(name: str) -> str:

@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 from langchain_core.messages import SystemMessage
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.prompts import PromptBuilder
 from soothe.sloop.intention.models import ResponseLanguage
+from soothe.sloop.prompts import PromptBuilder
 from soothe.sloop.state.schemas import LoopState, PlanResult, StepExecutionRecord
 from soothe.sloop.utils.messages import LoopHumanMessage
 

@@ -10,8 +10,8 @@ from soothe.context.engine import ContextEngine
 from soothe.context.models import GoalNode
 from soothe.context.projection import ContextBundle
 from soothe.context.store_sqlite import SqliteContextPersistence
-from soothe.prompts import PromptBuilder
-from soothe.prompts.user_message import UserMessageBuilder
+from soothe.sloop.prompts import PromptBuilder
+from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import LoopState, StatusAssessment
 
 

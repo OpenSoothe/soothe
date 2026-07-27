@@ -12,16 +12,16 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
-from soothe.prompts.plan_ledger_projection import (
-    project_loop_messages_for_synthesis,
-)
-from soothe.prompts.user_message import (
-    _goal_text,
-    flatten_user_message_content,
-)
 from soothe.sloop.engine.scenario_classifier import (
     ScenarioClassification,
     format_hint_for_scenario,
+)
+from soothe.sloop.prompts.plan_ledger_projection import (
+    project_loop_messages_for_synthesis,
+)
+from soothe.sloop.prompts.user_message import (
+    _goal_text,
+    flatten_user_message_content,
 )
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
@@ -101,7 +101,7 @@ def build_synthesis_messages(
     agent_instructions_max_chars: int = 8000,
 ) -> list[BaseMessage]:
     """Assemble system + execute ledger + TASK human for goal-completion synthesis."""
-    from soothe.prompts.user_message import UserMessageBuilder
+    from soothe.sloop.prompts.user_message import UserMessageBuilder
 
     user_goal = normalize_user_query(user_query if user_query is not None else state.goal)
     system_text = render_synthesis_system_prompt(

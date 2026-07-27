@@ -12,11 +12,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from soothe.prompts.plan_ledger_projection import (
+from soothe.sloop.intention.models import IntakeLabel
+from soothe.sloop.prompts.plan_ledger_projection import (
     _current_goal_has_execute_ledger,
     resolve_planner_projection_mode,
 )
-from soothe.sloop.intention.models import IntakeLabel
 from soothe.sloop.state.schemas import StatusAssessment
 
 from ..orchestrator.runtime_context import LoopRuntimeContext

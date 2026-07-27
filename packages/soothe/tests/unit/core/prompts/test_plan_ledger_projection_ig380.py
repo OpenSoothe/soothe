@@ -5,7 +5,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, HumanMessage
 
 from soothe.config.models import PlanPromptLedgerConfig
-from soothe.prompts.plan_ledger_projection import (
+from soothe.sloop.prompts.plan_ledger_projection import (
     _GOAL_COMPLETION_CONTEXT_BOUNDARY,
     _compact_goal_completion_unit_for_projection,
     project_cross_goal_completion_tail,

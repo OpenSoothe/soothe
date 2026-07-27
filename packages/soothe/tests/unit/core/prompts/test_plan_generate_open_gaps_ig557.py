@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from soothe_sdk.protocols.planner import PlanContext
 
-from soothe.prompts import PromptBuilder
-from soothe.prompts.user_message import UserMessageBuilder
 from soothe.sloop.cognition.planner import LLMPlanner
+from soothe.sloop.prompts import PromptBuilder
+from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import (
     GoalComponentStatus,
     LoopState,

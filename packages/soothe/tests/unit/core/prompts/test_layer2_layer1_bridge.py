@@ -7,11 +7,11 @@ not by mutating ``system_prompt``.
 
 from __future__ import annotations
 
-from soothe.prompts.user_message import UserMessageBuilder
 from soothe.sloop.engine.step_predecessor_context import (
     ExecuteStepEnvelopeBody,
     build_dependent_execution_hints,
 )
+from soothe.sloop.prompts.user_message import UserMessageBuilder
 from soothe.sloop.state.schemas import StepAction
 
 
