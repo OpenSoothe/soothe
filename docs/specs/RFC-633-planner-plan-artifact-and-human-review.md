@@ -60,7 +60,7 @@ Pass2/slash → invoke_wired_subagent(planner)
 host        → write `.soothe/plans/...md`
             → pending_clarification (origin=planner_subagent_review)
             → await_clarification (RFC-622 interrupt)
-TUI         → Q1 action + Q2 comments
+TUI         → plan body + path footer + Approve/Reject/More comments
 resume      → Approve → goal_completion (ledger = plan + path)
               Reject  → goal_completion (rejected status text)
               Comments→ re-invoke planner with prior plan + comments → review again
@@ -91,12 +91,26 @@ resume      → Approve → goal_completion (ledger = plan + path)
 
 ### 4.3 Clarification shape
 
-Questions (stable order):
+Questions (stable order; path/markdown are **not** embedded in Q1):
 
 1. `Action for this plan: Approve, Reject, or More comments`
-2. `Additional comments (required for More comments; optional otherwise)`
+2. `Revision comments (when choosing More comments)`
 
-Event payload includes `plan_path` and a short plan preview for TUI copy.
+`clarification.requested` extras for TUI plan-review card:
+
+- `plan_path` — workspace artifact path (or omitted if memory-only)
+- `plan_markdown` — full draft body (frontmatter stripped in the TUI for display)
+
+TUI layout (top → bottom):
+
+1. Full draft plan markdown preview (scrollable)
+2. `Plan saved to: {path}` footer under the body
+3. Approve / Reject / More comments action buttons
+4. Comments input **only after** More comments is selected
+
+Event payload includes `plan_path` and full `plan_markdown` for TUI copy.
+Approve / Reject submit immediately with empty comments; More comments requires
+non-empty free text before resume.
 
 `ClarificationOrigin` gains `planner_subagent_review` (planner **subagent**
 gate only; not StrangeLoop `plan_generate`/`plan_assess`, not other wired
@@ -112,8 +126,8 @@ subagents).
 | Reject | Mark `status: rejected`; `goal_completion` with short rejection note |
 | More comments | Append comments to planner input; re-run planner; rewrite plan file; re-enter review |
 
-Parsing is case-insensitive prefix / synonym match on Q1 (`approve`/`a`/`yes`,
-`reject`/`r`/`no`); otherwise treat as comments (Q1 and/or Q2 body).
+Parsing uses case-insensitive prefixes on Q1 (`approve`, `reject`,
+`more`/`comments`); otherwise treat the answer body as revision comments.
 
 ## 5. Package boundaries
 
@@ -128,8 +142,9 @@ Parsing is case-insensitive prefix / synonym match on Q1 (`approve`/`a`/`yes`,
 
 1. Wired `planner` intake with `enable_recon` may emit ≥1 tool update on the orphan card when recon runs.
 2. Successful planner invoke writes a file under `{workspace}/.soothe/plans/`.
-3. Loop pauses on clarification; TUI shows two fields (action + comments).
-   Origin ``planner_subagent_review`` is in
+3. Loop pauses on clarification; TUI shows the full draft plan body, a saved-path
+   footer, then Approve / Reject / More comments controls (comments field only
+   for More comments). Origin ``planner_subagent_review`` is in
    ``agent.clarification.force_manual_origins`` by default so veritas does not
    auto-Approve/Reject even when clarification mode is ``auto``. This does not
    force-manual StrangeLoop ``plan_generate`` / ``plan_assess`` clarifications

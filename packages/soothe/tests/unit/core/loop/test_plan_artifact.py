@@ -48,3 +48,5 @@ def test_parse_planner_subagent_review_answers() -> None:
         "comments",
         "tighten scope",
     )
+    assert parse_planner_subagent_review_answers(("More comments", "")) == ("comments", "")
+    assert parse_planner_subagent_review_answers(("Approve", "")) == ("approve", "")

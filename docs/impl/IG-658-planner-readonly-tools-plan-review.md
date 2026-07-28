@@ -41,10 +41,13 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 
 ### C. soothe-cli
 
-1. Clarification UI keys off `origin_node=planner_subagent_review` (title/placeholders).
-2. Existing two-input clarification widget maps to action + comments (no new widget required for v1).
+1. Clarification UI keys off `origin_node=planner_subagent_review`.
+2. Unified plan-review card: full draft markdown preview, `Plan saved to:` path
+   footer, Approve / Reject / More comments buttons; comments `Input` only when
+   More comments is selected (Approve/Reject submit immediately).
 3. Root-ns stamped tool updates route onto the orphan SubAgent card (not the main tool buffer).
 4. Manual clarification mounts even when no execute step card exists (intake-only).
+5. Wire answers remain `["Approve"|"Reject"|"More comments", comments]`.
 
 ### D. Specs
 
@@ -60,6 +63,11 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 - Drop planner prompt language that forbids all recon on the planner thread
   (replace with “readonly tools only; no mutating tools”).
 - Do not revive explore subagent.
+- Drop two-text-input plan-review UX and Q1-embedded `(plan: path)` questions;
+  review uses plan body + path footer + action buttons only.
+- Drop pre-review ledger “awaiting Approve / Reject” footer (widget owns that UX).
+- Drop unused `plan_path` arg on `_planner_subagent_review_pending_payload` and
+  text-input synonym parsing (`a`/`yes`/`r`/`no`) for review answers.
 
 ---
 
@@ -68,6 +76,7 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 - [x] Readonly tools available to planner; tool updates forward to orphan card
 - [x] Plan file written under `.soothe/plans/`
 - [x] Review clarification after planner; Approve/Reject/Comments behavior
+  (full plan preview + path footer + action buttons; comments only for More comments)
 - [x] Planner-subagent review origin forced manual by default
   (`force_manual_origins` includes `planner_subagent_review` only — not
   StrangeLoop `plan_generate`/`plan_assess`)

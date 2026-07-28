@@ -222,3 +222,42 @@ async def test_mode_derived_from_policy_class(policy_factory: Any, expected_mode
     requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
     assert len(requested) == 1
     assert requested[0]["mode"] == expected_mode
+
+
+async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
+    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+    from soothe.sloop.nodes.invoke_wired_subagent import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
+
+    req = ClarificationRequest(
+        questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
+        origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        origin_interrupt_id="planner-subagent-review:abc",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="",
+            user_request="",
+            iteration=0,
+            intent_classification=None,
+            plan_summary=None,
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+    )
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Approve", ""), source="human"))
+    ctx = _StubCtx(policy=policy)
+    ctx.scratch = type(  # type: ignore[attr-defined]
+        "Scratch",
+        (),
+        {
+            "plan_artifact_path": "/ws/.soothe/plans/demo.md",
+            "plan_artifact_markdown": "# Plan\n\nBody.\n",
+        },
+    )()
+    await node_await_clarification(ctx, {"pending_clarification": request_to_state(req)})
+    requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
+    assert len(requested) == 1
+    assert requested[0]["plan_path"] == "/ws/.soothe/plans/demo.md"
+    assert requested[0]["plan_markdown"].startswith("# Plan")
+    assert requested[0]["questions"] == list(_PLANNER_SUBAGENT_REVIEW_QUESTIONS)

@@ -175,8 +175,24 @@ def message_from_widget(widget: Widget) -> MessageData:
         SummarizationMessage,
         UserMessage,
     )
+    from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
 
     widget_id = widget.id or f"msg-{uuid.uuid4().hex[:8]}"
+
+    if isinstance(widget, ClarificationInputMessage):
+        if widget._submitted and widget._answers:  # noqa: SLF001
+            summary = " | ".join(a for a in widget._answers if a)  # noqa: SLF001
+            prefix = (
+                "Plan review"
+                if widget._origin_node == "planner_subagent_review"  # noqa: SLF001
+                else "Clarification"
+            )
+            content = f"{prefix}: {summary}" if summary else f"{prefix} answered"
+        elif widget._origin_node == "planner_subagent_review":  # noqa: SLF001
+            content = "Plan review: awaiting Approve / Reject / More comments"
+        else:
+            content = "Clarification: awaiting answer"
+        return MessageData(type=MessageType.APP, content=content, id=widget_id)
 
     if isinstance(widget, QueuedUserMessage):
         return MessageData(

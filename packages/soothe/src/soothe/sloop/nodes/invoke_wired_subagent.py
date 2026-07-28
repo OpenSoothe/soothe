@@ -50,7 +50,7 @@ WIRED_SUBAGENT_STATUS_LABEL = "Delegating to {subagent}"
 _DESC_DISPLAY_MAX = 200
 _PLANNER_SUBAGENT_REVIEW_QUESTIONS: tuple[str, ...] = (
     "Action for this plan: Approve, Reject, or More comments",
-    "Additional comments (required for More comments; optional otherwise)",
+    "Revision comments (when choosing More comments)",
 )
 
 
@@ -306,16 +306,14 @@ def _save_planner_artifact(ctx: LoopRuntimeContext, report: str) -> str | None:
     return str(path)
 
 
-def _planner_subagent_review_pending_payload(
-    ctx: LoopRuntimeContext, *, plan_path: str | None
-) -> dict[str, Any]:
-    path_line = plan_path or "(plan held in memory only)"
-    questions = (
-        f"{_PLANNER_SUBAGENT_REVIEW_QUESTIONS[0]} (plan: {path_line})",
-        _PLANNER_SUBAGENT_REVIEW_QUESTIONS[1],
-    )
+def _planner_subagent_review_pending_payload(ctx: LoopRuntimeContext) -> dict[str, Any]:
+    """Build pending clarification after planner artifact write.
+
+    Path and markdown are emitted on ``clarification.requested`` from scratch
+    in ``await_clarification`` (not embedded in question text).
+    """
     req = ClarificationRequest(
-        questions=questions,
+        questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
         origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
         origin_interrupt_id=(f"{PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX}{uuid.uuid4().hex[:8]}"),
         loop_state=_build_loop_state_view(ctx),
@@ -495,19 +493,11 @@ async def _invoke_intake_only_direct(
         report = f"({wire} completed with no text output)"
 
     review = wire == PLANNER_WIRE_SUBAGENT
-    plan_path: str | None = None
     if review:
-        plan_path = _save_planner_artifact(ctx, report)
-        ledger_report = (
-            f"{report}\n\n---\nPlan saved to `{plan_path}` — awaiting Approve / Reject / comments."
-            if plan_path
-            else f"{report}\n\n---\nAwaiting Approve / Reject / comments."
-        )
-    else:
-        ledger_report = report
+        _save_planner_artifact(ctx, report)
 
     _record_wired_execute_ledger(
-        ctx, goal_text=goal_text, report=ledger_report, wire=wire, step_id=step_id
+        ctx, goal_text=goal_text, report=report, wire=wire, step_id=step_id
     )
     card_summary = report.strip().splitlines()[0][:160] if report.strip() else "Done"
     await ctx.emit(
@@ -527,7 +517,7 @@ async def _invoke_intake_only_direct(
         review,
     )
     if review:
-        return _planner_subagent_review_pending_payload(ctx, plan_path=plan_path)
+        return _planner_subagent_review_pending_payload(ctx)
     return {}
 
 

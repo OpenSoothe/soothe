@@ -40,6 +40,26 @@ from soothe_cli.tui.widgets.messages import (
 logger = logging.getLogger(__name__)
 
 
+def _widget_is_hidden(widget: Any) -> bool:
+    """Return True when a widget is CSS-hidden or display-none.
+
+    MagicMock-safe: only treats an explicit ``True`` from ``has_class("hidden")``
+    or a concrete ``classes`` collection containing ``hidden`` as hidden.
+    """
+    has_class = getattr(widget, "has_class", None)
+    if callable(has_class):
+        try:
+            if has_class("hidden") is True:
+                return True
+        except Exception:  # noqa: BLE001
+            pass
+    classes = getattr(widget, "classes", None)
+    if isinstance(classes, (set, list, tuple, frozenset)) and "hidden" in classes:
+        return True
+    display = getattr(widget, "display", True)
+    return display is False or display == "none"
+
+
 class _MessagesMixin:
     """Message widget lifecycle, store management, queue, interrupt/quit, toggles, editor, and events."""
 
@@ -945,9 +965,32 @@ class _MessagesMixin:
             if getattr(message, "_submitted", False):
                 continue
             for inp in getattr(message, "_inputs", []):
-                if not inp.disabled:
-                    inputs.append(inp)
+                if inp.disabled:
+                    continue
+                if _widget_is_hidden(inp):
+                    continue
+                inputs.append(inp)
         return inputs
+
+    def _active_plan_review_action_focus(self) -> Widget | None:
+        """Prefer the Approve button when a planner-review card has no comments yet."""
+        adapter = getattr(self, "_ui_adapter", None)
+        if adapter is None:
+            return None
+        by_step = getattr(adapter, "_clarification_input_by_step", None) or {}
+        for message in by_step.values():
+            if getattr(message, "_submitted", False):
+                continue
+            # String compare — avoid MagicMock truthiness on property access in tests.
+            if getattr(message, "_origin_node", None) != "planner_subagent_review":
+                continue
+            buttons = getattr(message, "_action_buttons", None) or {}
+            if not isinstance(buttons, dict):
+                continue
+            approve = buttons.get("approve")
+            if approve is not None and not getattr(approve, "disabled", False):
+                return approve
+        return None
 
     def _non_chat_focusable_inputs(self) -> list[Input]:
         """Return enabled, focusable ``Input`` widgets other than the chat prompt."""
@@ -956,19 +999,24 @@ class _MessagesMixin:
         return [
             widget
             for widget in self.screen.query(Input)
-            if widget.can_focus and not widget.disabled
+            if widget.can_focus and not widget.disabled and not _widget_is_hidden(widget)
         ]
 
     def _primary_text_input(self) -> Widget | None:
         """Return the single input that should receive typing focus, if unambiguous.
 
         When an inline clarification card is active, its answer field takes
-        precedence over the bottom chat prompt. On modal screens, a lone filter
-        box is focused automatically.
+        precedence over the bottom chat prompt. Planner-subagent review with no
+        comments field yet focuses the Approve action. On modal screens, a lone
+        filter box is focused automatically.
         """
         clar_inputs = self._active_clarification_inputs()
         if clar_inputs:
             return clar_inputs[0]
+
+        plan_action = self._active_plan_review_action_focus()
+        if plan_action is not None:
+            return plan_action
 
         non_chat = self._non_chat_focusable_inputs()
         if len(non_chat) == 1:

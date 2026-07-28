@@ -2816,6 +2816,8 @@ async def _mount_manual_clarification_input(
     *,
     questions: list[str],
     origin_node: str = "",
+    plan_path: str = "",
+    plan_markdown: str = "",
 ) -> str:
     """Mount (or reuse) the inline clarification answer widget.
 
@@ -2853,6 +2855,8 @@ async def _mount_manual_clarification_input(
             step_id=target_step_id,
             questions=questions_list,
             origin_node=str(origin_node or ""),
+            plan_path=str(plan_path or ""),
+            plan_markdown=str(plan_markdown or ""),
             widget_id=widget_id,
             id=widget_id,
         )
@@ -4034,6 +4038,8 @@ async def execute_task_textual(
                                             adapter,
                                             questions=questions_list,
                                             origin_node=str(data.get("origin_node") or ""),
+                                            plan_path=str(data.get("plan_path") or ""),
+                                            plan_markdown=str(data.get("plan_markdown") or ""),
                                         )
                                         if adapter._pause_spinner:
                                             await adapter._pause_spinner(SPINNER_LABEL_INPUT)

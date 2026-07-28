@@ -118,15 +118,19 @@ def parse_planner_subagent_review_answers(
     """Parse planner-subagent review answers into ``(action, comments)``.
 
     Actions: ``approve`` | ``reject`` | ``comments``.
+
+    Expects the plan-review widget (or equivalent) to send action label in
+    answers[0] and optional revision text in answers[1].
     """
     vals = [str(a or "").strip() for a in answers]
     q1 = vals[0] if vals else ""
     q2 = vals[1] if len(vals) > 1 else ""
     low = q1.lower()
-    if low.startswith("approve") or low in {"a", "yes", "y", "ok", "lgtm"}:
+    if low.startswith("approve"):
         return "approve", q2
-    if low.startswith("reject") or low in {"r", "no", "n", "cancel", "abort"}:
+    if low.startswith("reject"):
         return "reject", q2
-    # Free-form: prefer Q2, else whole Q1 as comments.
-    comments = q2 or q1
-    return "comments", comments
+    if low.startswith("more") or low in {"comments", "comment", "c"}:
+        return "comments", q2
+    # Untagged free-text body (single answer) → revise with comments.
+    return "comments", q2 or q1

@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
 from soothe.sloop.clarification.protocol import (
     ClarificationDeferredError,
     answer_to_state,
@@ -81,14 +82,20 @@ async def node_await_clarification(
             "last_outcome": "deferred",
         }
 
-    await ctx.emit(
-        _EVT_CLARIFICATION_REQUESTED,
-        {
-            "questions": list(request.questions),
-            "origin_node": request.origin_node,
-            "mode": _mode_for_policy(policy, origin_node=request.origin_node),
-        },
-    )
+    requested_payload: dict[str, Any] = {
+        "questions": list(request.questions),
+        "origin_node": request.origin_node,
+        "mode": _mode_for_policy(policy, origin_node=request.origin_node),
+    }
+    if request.origin_node == ORIGIN_PLANNER_SUBAGENT_REVIEW:
+        scratch = getattr(ctx, "scratch", None)
+        plan_path = getattr(scratch, "plan_artifact_path", None)
+        plan_markdown = getattr(scratch, "plan_artifact_markdown", None)
+        if plan_path:
+            requested_payload["plan_path"] = str(plan_path)
+        if plan_markdown:
+            requested_payload["plan_markdown"] = str(plan_markdown)
+    await ctx.emit(_EVT_CLARIFICATION_REQUESTED, requested_payload)
 
     try:
         answer = await policy.answer(request)

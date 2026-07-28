@@ -269,7 +269,7 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
         ce=None,
         goal_record=SimpleNamespace(goal_id="g1"),
     )
-    pending = _planner_subagent_review_pending_payload(ctx, plan_path=str(plan_path))
+    pending = _planner_subagent_review_pending_payload(ctx)
     state = {
         **pending,
         "pending_clarification_answer": answer_to_state(
