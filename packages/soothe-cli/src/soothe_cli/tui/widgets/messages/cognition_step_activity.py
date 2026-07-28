@@ -474,17 +474,32 @@ class StepCardStatusLine:
         stats_suffix: str,
         token_suffix: str = "",
         retry_suffix: str = "",
+        stage_suffix: str = "",
         colors: Any,
     ) -> Content:
-        """Step card footer while executing."""
-        elapsed = ""
+        """Step card footer while executing.
+
+        Elapsed time uses middot separators (not parentheses), e.g.
+        ``Running... · 12s · recon 1/4 · 3 tools``.
+        """
+        segments: list[str] = []
+        # Elapsed first so a narrow terminal that clips the line end cannot
+        # eat the trailing ``s`` off ``35s`` before stage/tool tails.
         if elapsed_secs is not None:
-            elapsed = f" ({format_running_elapsed(float(elapsed_secs))})"
-        head = f"{gutter}{spinner_frame} Running{retry_suffix}...{elapsed}"
+            segments.append(format_running_elapsed(float(elapsed_secs)))
+        stage_text = (stage_suffix or "").strip()
+        if stage_text:
+            segments.append(stage_text)
+        mid = f" · {' · '.join(segments)}" if segments else ""
+        head = f"{gutter}{spinner_frame} Running{retry_suffix}...{mid}"
         tail = f"{stats_suffix}{token_suffix}"
+        # Keep warning and dim spans in separate Content parts separated by an
+        # unstyled string so markup does not nest at the ``…35s`` boundary.
         parts: list[object] = [Content.styled(head, colors.warning)]
         if tail:
-            parts.append(Content.styled(tail, theme.SECONDARY_TEXT_STYLE))
+            # Leading space keeps a clean close of the warning span before dim.
+            parts.append(Content(" "))
+            parts.append(Content.styled(tail.lstrip(), theme.SECONDARY_TEXT_STYLE))
         return Content.assemble(*parts)
 
     @staticmethod

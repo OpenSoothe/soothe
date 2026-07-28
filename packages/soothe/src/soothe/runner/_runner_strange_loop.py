@@ -652,6 +652,7 @@ class StrangeLoopMixin:
                 elif event_type == "clarification_requested":
                     # RFC-622 / RFC-623: surface the pending question to the TUI so it
                     # can suppress the stream-end "Stream ended unexpectedly" safety net.
+                    # RFC-633: forward plan_path / plan_markdown for the planner review card.
                     payload = event_data if isinstance(event_data, dict) else {}
                     yield _custom(
                         ClarificationRequestedEvent(
@@ -660,6 +661,8 @@ class StrangeLoopMixin:
                             mode=payload.get("mode")
                             if payload.get("mode") in ("manual", "auto")
                             else "manual",
+                            plan_path=str(payload.get("plan_path") or ""),
+                            plan_markdown=str(payload.get("plan_markdown") or ""),
                         ).to_dict()
                     )
 

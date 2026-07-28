@@ -309,8 +309,9 @@ def _save_planner_artifact(ctx: LoopRuntimeContext, report: str) -> str | None:
 def _planner_subagent_review_pending_payload(ctx: LoopRuntimeContext) -> dict[str, Any]:
     """Build pending clarification after planner artifact write.
 
-    Path and markdown are emitted on ``clarification.requested`` from scratch
-    in ``await_clarification`` (not embedded in question text).
+    Persist ``plan_path`` / ``plan_markdown`` on the pending channel so a
+    clarification-resume turn (fresh scratch) can still emit or hydrate the
+    plan body. ``await_clarification`` also reads scratch when present.
     """
     req = ClarificationRequest(
         questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
@@ -318,11 +319,41 @@ def _planner_subagent_review_pending_payload(ctx: LoopRuntimeContext) -> dict[st
         origin_interrupt_id=(f"{PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX}{uuid.uuid4().hex[:8]}"),
         loop_state=_build_loop_state_view(ctx),
     )
+    pending = request_to_state(req)
+    path = (getattr(ctx.scratch, "plan_artifact_path", None) or "").strip()
+    markdown = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
+    if path:
+        pending["plan_path"] = path
+    if markdown:
+        pending["plan_markdown"] = markdown
     return {
-        "pending_clarification": request_to_state(req),
+        "pending_clarification": pending,
         "last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW,
         "pending_clarification_answer": None,
     }
+
+
+def _hydrate_planner_scratch_from_pending(ctx: LoopRuntimeContext, state: dict[str, Any]) -> None:
+    """Restore plan artifact onto scratch after a clarification-resume turn."""
+    pending = state.get("pending_clarification")
+    if not isinstance(pending, dict):
+        return
+    path = str(pending.get("plan_path") or "").strip()
+    markdown = str(pending.get("plan_markdown") or "").strip()
+    if path and not (getattr(ctx.scratch, "plan_artifact_path", None) or "").strip():
+        ctx.scratch.plan_artifact_path = path
+    if markdown and not (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip():
+        ctx.scratch.plan_artifact_markdown = markdown
+    if not (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip() and path:
+        try:
+            from pathlib import Path
+
+            text = Path(path).read_text(encoding="utf-8")
+        except OSError:
+            logger.debug("[WiredSubagent] could not reload plan artifact %s", path, exc_info=True)
+        else:
+            ctx.scratch.plan_artifact_markdown = text
+            ctx.scratch.plan_artifact_path = path
 
 
 async def _handle_planner_subagent_review_answer(
@@ -333,6 +364,7 @@ async def _handle_planner_subagent_review_answer(
     goal_text: str,
 ) -> dict[str, Any]:
     """Resume after planner-subagent review: approve, reject, or re-plan with comments."""
+    _hydrate_planner_scratch_from_pending(ctx, state)
     raw_answer = state.get("pending_clarification_answer")
     try:
         answer = answer_from_state(raw_answer or {})
@@ -347,6 +379,16 @@ async def _handle_planner_subagent_review_answer(
     action, comments = parse_planner_subagent_review_answers(answer.answers)
     path = getattr(ctx.scratch, "plan_artifact_path", None)
     report = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
+
+    # Clarification-resume turns rebuild LoopPhaseScratch; reinject a trivial
+    # plan so goal_completion can ledger_direct without a fatal.
+    if ctx.scratch.plan_result is None:
+        ctx.scratch.plan_result = build_trivial_plan(
+            goal_text,
+            wire_subagent=wire,
+            requires_tool_use=False,
+        )
+
     step_id = "PLAN-RV"
     if ctx.scratch.plan_result and getattr(ctx.scratch.plan_result, "decision", None):
         steps = getattr(ctx.scratch.plan_result.decision, "steps", None) or []
@@ -368,6 +410,7 @@ async def _handle_planner_subagent_review_answer(
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,
+            "last_clarification_origin": None,
         }
 
     if action == "reject":
@@ -385,6 +428,7 @@ async def _handle_planner_subagent_review_answer(
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,
+            "last_clarification_origin": None,
         }
 
     ctx.scratch.planner_subagent_review_comments = comments
@@ -444,6 +488,13 @@ async def _invoke_intake_only_direct(
             "description": description,
         },
     )
+    logger.info(
+        "[WiredSubagent] invoke %s step=%s inv=%s chars=%d",
+        wire,
+        step_id,
+        invocation_id,
+        len(goal_text or ""),
+    )
 
     started_at = time.monotonic()
     try:
@@ -492,6 +543,14 @@ async def _invoke_intake_only_direct(
     if not report.strip():
         report = f"({wire} completed with no text output)"
 
+    logger.info(
+        "[WiredSubagent] done %s step=%s ms=%d chars=%d",
+        wire,
+        step_id,
+        duration_ms,
+        len(report),
+    )
+
     review = wire == PLANNER_WIRE_SUBAGENT
     if review:
         _save_planner_artifact(ctx, report)
@@ -525,6 +584,18 @@ async def node_invoke_wired_subagent(
     ctx: LoopRuntimeContext, state: dict[str, Any]
 ) -> dict[str, Any]:
     """Resolve wire and direct-invoke the intake-only specialist."""
+    goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal
+
+    # Clarification resume re-enters this node without Pass2 wire resolution —
+    # honor planner review answers before requiring a live wire_subagent.
+    if (
+        state.get("pending_clarification_answer")
+        and state.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
+    ):
+        return await _handle_planner_subagent_review_answer(
+            ctx, state, wire=PLANNER_WIRE_SUBAGENT, goal_text=goal_text
+        )
+
     intent = ctx.loop_state.intent
     wire = resolve_user_requested_wire_subagent(
         routing_classification=ctx.loop_state.routing_classification,
@@ -538,17 +609,6 @@ async def node_invoke_wired_subagent(
             {"error": "Wired subagent route without a resolved specialist", "step_id": ""},
         )
         return {"last_outcome": "fatal"}
-
-    goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal
-
-    if (
-        wire == PLANNER_WIRE_SUBAGENT
-        and state.get("pending_clarification_answer")
-        and state.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
-    ):
-        return await _handle_planner_subagent_review_answer(
-            ctx, state, wire=wire, goal_text=goal_text
-        )
 
     label = WIRED_SUBAGENT_STATUS_LABEL.format(subagent=wire)
     await ctx.emit(

@@ -53,6 +53,28 @@ InputMode = Literal["normal", "shell", "command"]
 
 logger = logging.getLogger(__name__)
 
+_PLAN_REVIEW_ACTIONS = frozenset({"Approve", "Reject", "More comments"})
+
+
+def clarification_wire_content(answers: list[str]) -> str:
+    """Human-readable turn content for a clarification submit (not a new goal).
+
+    Plan-review actions use a stable ``Plan review: …`` prefix so a dropped
+    ``clarification_answer`` flag cannot turn bare ``Reject`` into Pass1 TASK.
+    """
+    non_empty = [a for a in answers if str(a).strip()]
+    if not non_empty:
+        return ""
+    first = str(answers[0]).strip() if answers else ""
+    if first in _PLAN_REVIEW_ACTIONS:
+        comments = str(answers[1]).strip() if len(answers) > 1 else ""
+        if comments:
+            return f"Plan review: {first} — {comments}"
+        return f"Plan review: {first}"
+    if len(non_empty) == 1:
+        return non_empty[0]
+    return " | ".join(f"A{i + 1}: {a}" for i, a in enumerate(answers) if str(a).strip())
+
 
 class _ExecutionMixin:
     """Agent execution, message routing, queue, shell commands, and daemon events."""
@@ -229,6 +251,23 @@ class _ExecutionMixin:
         # the user can still see what they answered.
         adapter._clarification_input_by_step.pop(event.step_id, None)
 
+        # A stale empty remount (resume re-emit) can leave another interactive
+        # plan-review card. Disable extras so a second click cannot fire a
+        # "Reject" turn after clarification_answered cleared the pending flag.
+        for sid, other in list(adapter._clarification_input_by_step.items()):
+            if sid == event.step_id:
+                continue
+            try:
+                other._submitted = True  # noqa: SLF001
+                other.add_class("is-submitted")
+                for btn in getattr(other, "_action_buttons", {}).values():
+                    btn.disabled = True
+                for inp in getattr(other, "_inputs", []) or []:
+                    inp.disabled = True
+            except Exception:  # noqa: BLE001
+                logger.debug("Failed to disarm leftover clarification widget", exc_info=True)
+            adapter._clarification_input_by_step.pop(sid, None)
+
         non_empty = [a for a in event.answers if a.strip()]
         if not non_empty:
             return
@@ -237,16 +276,16 @@ class _ExecutionMixin:
         # concatenated string. ``content`` carries a human-readable summary
         # for clients that look at it; the authoritative payload is the
         # ``clarification_answers`` wire field.
-        payload_text = (
-            non_empty[0]
-            if len(non_empty) == 1
-            else " | ".join(f"A{i + 1}: {a}" for i, a in enumerate(event.answers) if a.strip())
-        )
+        payload_text = clarification_wire_content(list(event.answers))
         adapter._clarification_answers_pending = list(event.answers)
+        # Always resume clarification from a widget submit — even if a prior
+        # clarification_answered cleared ``_clarification_pending`` (empty
+        # remount / race). Without this, "Reject" is treated as a new goal.
+        adapter._clarification_pending = True
 
         # Hand off to the standard turn pipeline. ``execute_task_textual``
-        # snapshots ``adapter._clarification_pending`` (still True) and sets
-        # the wire ``clarification_answer`` flag plus the ``clarification_answers``
+        # snapshots ``adapter._clarification_pending`` and sets the wire
+        # ``clarification_answer`` flag plus the ``clarification_answers``
         # list, then clears the persisted flag so a follow-up turn is treated
         # as a new goal.
         #

@@ -108,25 +108,25 @@ def test_loading_widget_activate_status_clears_pause() -> None:
 def test_loading_widget_hint_includes_token_usage_after_elapsed() -> None:
     widget = LoadingWidget("Thinking")
     widget.set_token_usage(1250)
-    assert widget._format_hint_line(12.0) == "(12s · 1.2K tokens)"
+    assert widget._format_hint_line(12.0) == " · 12s · 1.2K tokens"
 
 
 def test_loading_widget_hint_omits_tokens_when_zero() -> None:
     widget = LoadingWidget("Thinking")
     widget.set_token_usage(0)
-    assert widget._format_hint_line(12.0) == "(12s)"
+    assert widget._format_hint_line(12.0) == " · 12s"
 
 
 def test_loading_widget_hint_extra_includes_attempt_and_elapsed() -> None:
     widget = LoadingWidget("Connecting", hint_extra="attempt 2/3")
-    assert widget._format_hint_line(15.0) == "(attempt 2/3 · 15s)"
+    assert widget._format_hint_line(15.0) == " · attempt 2/3 · 15s"
 
 
 def test_loading_widget_default_omits_interrupt_hint() -> None:
     """Task spinners show elapsed time only (no esc hint)."""
     widget = LoadingWidget("Thinking")
     assert widget._show_interrupt_hint is False
-    assert widget._format_hint_line(12.0) == "(12s)"
+    assert widget._format_hint_line(12.0) == " · 12s"
 
 
 def test_loading_widget_startup_mode_omits_interrupt_hint() -> None:
@@ -135,8 +135,8 @@ def test_loading_widget_startup_mode_omits_interrupt_hint() -> None:
     widget.activate_status("Connecting", show_interrupt_hint=False)
     assert widget._show_interrupt_hint is False
     assert widget._format_status_line("Connecting") == " Connecting... "
-    assert widget._format_hint_line(12.0, include_interrupt=False) == "(12s)"
-    assert widget._format_hint_line(12.0, include_interrupt=True) == "(12s · esc to interrupt)"
+    assert widget._format_hint_line(12.0, include_interrupt=False) == " · 12s"
+    assert widget._format_hint_line(12.0, include_interrupt=True) == (" · 12s · esc to interrupt")
 
 
 def test_loading_widget_reset_turn_start_mono_reanchors_elapsed() -> None:
@@ -165,7 +165,7 @@ def test_loading_widget_startup_mode_still_shows_elapsed() -> None:
         mp.setattr("soothe_cli.tui.widgets.loading.monotonic", lambda: 112.5)
         assert widget._elapsed_seconds() == 12.0
         hint = widget._format_hint_line(widget._elapsed_seconds(), include_interrupt=False)
-    assert hint == "(12s)"
+    assert hint == " · 12s"
 
 
 @pytest.mark.asyncio
@@ -214,5 +214,5 @@ async def test_loading_widget_elapsed_ticks_after_connect_status_change() -> Non
         assert elapsed_before >= 1
         assert elapsed_after >= elapsed_before + 1
         assert widget._format_hint_line(float(elapsed_after), include_interrupt=False) == (
-            f"(attempt 2/3 · {elapsed_after}s)"
+            f" · attempt 2/3 · {elapsed_after}s"
         )

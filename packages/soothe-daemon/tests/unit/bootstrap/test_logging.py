@@ -8,8 +8,7 @@ from pathlib import Path
 
 import pytest
 from soothe.config import SootheConfig
-from soothe.logging import setup_logging
-from soothe_nano.logging.setup import PACKAGE_LOGGER_NAMES
+from soothe.logging import PACKAGE_LOGGER_NAMES, setup_logging
 
 from soothe_daemon.bootstrap.logging import (
     DEFAULT_DAEMON_LOG,

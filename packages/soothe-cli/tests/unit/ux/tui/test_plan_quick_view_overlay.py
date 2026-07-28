@@ -111,31 +111,32 @@ def test_plan_quick_view_running_shows_duration_and_tools() -> None:
 
     content = tree.plan_quick_view_content()
 
-    assert "(45s)" in content.plain
+    assert "45s" in content.plain
+    assert "(45s)" not in content.plain
     assert "3 tools" in content.plain
     assert "Running..." in content.plain
 
 
 def test_plan_quick_view_running_status_ticks_like_thinking_row() -> None:
-    """Plan overlay shows a thinking-row style Running...(Xs) status while active."""
+    """Plan overlay shows a Running... · Xs status while active."""
     tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-running-status")
     tree.mark_loop_started(time() - 12)
     tree.sync_plan_steps([{"id": "STEP-1", "description": "Work"}])
     tree.set_step_phase("STEP-1", "running", description="Work")
 
     first = tree.plan_quick_view_content()
-    assert "Running..." in first.plain
-    assert "(12s)" in first.plain
+    assert "Running... · 12s" in first.plain
+    assert "(12s)" not in first.plain
 
     tree._loop_started_at = time() - 13
     tree.tick_running_spinner()
     second = tree.plan_quick_view_content()
-    assert "(13s)" in second.plain
+    assert "Running... · 13s" in second.plain
     assert second.plain.count("Running...") == 1
 
 
 def test_plan_quick_view_running_status_ticks_between_steps() -> None:
-    """Running... (Xs) keeps ticking while the goal loop is up, even between steps."""
+    """Running... · Xs keeps ticking while the goal loop is up, even between steps."""
     tree = CognitionGoalTreeMessage(goal="Ship it", id="gt-between-steps")
     tree.mark_loop_started(time() - 20)
     tree.sync_plan_steps(
@@ -151,7 +152,7 @@ def test_plan_quick_view_running_status_ticks_between_steps() -> None:
 
     content = tree.plan_quick_view_content()
     assert "Running..." in content.plain
-    match = re.search(r"Running\.\.\.\s+\((\d+)s\)", content.plain)
+    match = re.search(r"Running\.\.\. · (\d+)s", content.plain)
     assert match is not None
     assert int(match.group(1)) >= 20
 

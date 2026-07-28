@@ -1,7 +1,7 @@
 """Logging configuration for Soothe daemon server.
 
 ``soothe_daemon.*`` logs go to ``SOOTHE_HOME/logs/daemon.log``. In-process
-``soothe.*`` / ``soothe_plugins.*`` agent logs use ``soothe.log`` via
+``soothe.*`` / ``soothe_nano.*`` / ``soothe_plugins.*`` agent logs use ``soothe.log`` via
 ``soothe.logging.setup_logging`` (separate file by default). Standalone CLI
 runs use the same ``soothe.log`` path when not attached to a daemon.
 """

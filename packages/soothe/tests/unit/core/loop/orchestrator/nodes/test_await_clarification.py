@@ -32,6 +32,9 @@ class _StubCtx:
     emitted: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     status_marks: list[tuple[str, str]] = field(default_factory=list)
     state_manager: _StubStateManager = field(default_factory=_StubStateManager)
+    scratch: Any = None
+    clarification_resume_text: str | None = None
+    clarification_resume_answers: list[str] | None = None
 
     @property
     def clarification_policy(self) -> Any:
@@ -261,3 +264,35 @@ async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
     assert requested[0]["plan_path"] == "/ws/.soothe/plans/demo.md"
     assert requested[0]["plan_markdown"].startswith("# Plan")
     assert requested[0]["questions"] == list(_PLANNER_SUBAGENT_REVIEW_QUESTIONS)
+
+
+async def test_resume_turn_skips_clarification_requested_reemit() -> None:
+    """Reject/Approve resume must not remount an empty plan-review widget."""
+    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+    from soothe.sloop.nodes.invoke_wired_subagent import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
+
+    req = ClarificationRequest(
+        questions=_PLANNER_SUBAGENT_REVIEW_QUESTIONS,
+        origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        origin_interrupt_id="planner-subagent-review:abc",
+        loop_state=LoopStateView(
+            goal_id="g",
+            goal_description="",
+            user_request="",
+            iteration=0,
+            intent_classification=None,
+            plan_summary=None,
+            recent_step_outputs=(),
+            workspace_summary=None,
+            active_skills=(),
+            active_mcp_servers=(),
+        ),
+    )
+    pending = request_to_state(req)
+    pending["plan_path"] = "/ws/.soothe/plans/demo.md"
+    pending["plan_markdown"] = "# Plan\n"
+    policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Reject", ""), source="human"))
+    ctx = _StubCtx(policy=policy, clarification_resume_answers=["Reject", ""])
+    await node_await_clarification(ctx, {"pending_clarification": pending})
+    assert not any(n == "clarification_requested" for n, _ in ctx.emitted)
+    assert any(n == "clarification_answered" for n, _ in ctx.emitted)

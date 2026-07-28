@@ -68,6 +68,12 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 - Drop pre-review ledger “awaiting Approve / Reject” footer (widget owns that UX).
 - Drop unused `plan_path` arg on `_planner_subagent_review_pending_payload` and
   text-input synonym parsing (`a`/`yes`/`r`/`no`) for review answers.
+- Clarification resume must not create a CE goal titled with the answer
+  (`Approve` / `Reject` / …); reuse the active CE goal and restore its
+  description onto `LoopState` so ledger Human rows keep the original planning goal.
+- Orphan planner card shows tool rows only (no start/recon/draft activity notes);
+  planner stage is shown on the Running status line (``Running · recon 1/4…``);
+  planner tool calls and results are logged at INFO.
 
 ---
 
@@ -80,9 +86,14 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 - [x] Planner-subagent review origin forced manual by default
   (`force_manual_origins` includes `planner_subagent_review` only — not
   StrangeLoop `plan_generate`/`plan_assess`)
+- [x] Clarification resume reuses CE goal / original goal text (answers only for
+  `Command(resume)`)
+- [x] Planner orphan card: tool call rows only; stage on Running status line;
+  tool call/result INFO logs
 
 - [x] Non-planner wires unchanged
-- [x] Unit tests (artifact writer, review parse, routing, planner tools filter)
+- [x] Unit tests (artifact writer, review parse, routing, planner tools filter,
+  resume goal helpers, planner tool logging)
 - [x] `./scripts/verify_finally.sh` green for owned packages
 
 **Status**: Implemented

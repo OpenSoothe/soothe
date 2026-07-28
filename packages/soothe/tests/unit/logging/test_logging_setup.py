@@ -7,10 +7,9 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
-from soothe_nano.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 from soothe.config import SootheConfig
-from soothe.logging import setup_logging
+from soothe.logging import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES, setup_logging
 
 
 class TestLoggingSetup:
@@ -290,6 +289,27 @@ class TestLoggingSetup:
 
         community_logger.info("community runtime probe")
         assert "community runtime probe" in log_file.read_text(encoding="utf-8")
+
+    def test_soothe_nano_logger_receives_file_handler(self, tmp_path: Path) -> None:
+        """soothe_nano.* (planner/subagents) share the same rotating file as soothe.*."""
+        log_file = tmp_path / "test.log"
+        cfg = SootheConfig(
+            observability={
+                "log_file_level": "INFO",
+                "log_file_path": str(log_file),
+            }
+        )
+
+        setup_logging(cfg)
+
+        nano_logger = logging.getLogger("soothe_nano")
+        file_handlers = [h for h in nano_logger.handlers if isinstance(h, RotatingFileHandler)]
+        assert len(file_handlers) == 1
+        assert Path(file_handlers[0].baseFilename) == log_file
+
+        planner = logging.getLogger("soothe_nano.subagents.plan.engine")
+        planner.info("[planner] start chars=12 recon=on")
+        assert "[planner] start chars=12 recon=on" in log_file.read_text(encoding="utf-8")
 
     def test_no_duplicate_handlers_on_community_logger(self, tmp_path: Path) -> None:
         """Repeated setup_logging does not duplicate soothe_plugins file handlers."""

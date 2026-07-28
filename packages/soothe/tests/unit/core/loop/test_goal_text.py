@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from soothe.sloop.goal_text import resolve_planning_goal, resolve_user_request
+from types import SimpleNamespace
+
+from soothe.sloop.goal_text import (
+    apply_clarification_resume_goal_text,
+    resolve_clarification_resume_ce_goal,
+    resolve_planning_goal,
+    resolve_user_request,
+)
 from soothe.sloop.intention.models import (
     IntakeLabel,
     IntentClassification,
@@ -43,3 +50,44 @@ def test_resolve_user_request_prefers_goal_user_submission() -> None:
 def test_resolve_user_request_falls_back_to_state_goal() -> None:
     state = LoopState(goal="raw user goal", thread_id="t")
     assert resolve_user_request(state) == "raw user goal"
+
+
+def test_resolve_clarification_resume_ce_goal_prefers_loop_assigned_active() -> None:
+    match = SimpleNamespace(
+        id="g-match",
+        status="active",
+        assigned_loop_id="loop-1",
+        description="optimize deps",
+        updated_at=2,
+    )
+    other = SimpleNamespace(
+        id="g-other",
+        status="active",
+        assigned_loop_id="loop-2",
+        description="other",
+        updated_at=3,
+    )
+    ce = SimpleNamespace(get_all_goals=lambda: [other, match])
+    assert resolve_clarification_resume_ce_goal(ce, loop_id="loop-1") is match
+
+
+def test_resolve_clarification_resume_ce_goal_returns_none_without_active() -> None:
+    pending = SimpleNamespace(
+        id="g1",
+        status="pending",
+        assigned_loop_id="loop-1",
+        description="x",
+        updated_at=1,
+    )
+    ce = SimpleNamespace(get_all_goals=lambda: [pending])
+    assert resolve_clarification_resume_ce_goal(ce, loop_id="loop-1") is None
+
+
+def test_apply_clarification_resume_goal_text_overwrites_answer() -> None:
+    state = LoopState(goal="Approve", goal_user_submission="Approve", thread_id="t")
+    ce_goal = SimpleNamespace(description="generate a plan to optimize submodules")
+    original = apply_clarification_resume_goal_text(state, ce_goal)
+    assert original == "generate a plan to optimize submodules"
+    assert state.goal == original
+    assert state.goal_user_submission is None
+    assert resolve_user_request(state) == original

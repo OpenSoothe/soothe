@@ -91,11 +91,30 @@ async def node_await_clarification(
         scratch = getattr(ctx, "scratch", None)
         plan_path = getattr(scratch, "plan_artifact_path", None)
         plan_markdown = getattr(scratch, "plan_artifact_markdown", None)
+        if not plan_path and isinstance(pending, dict):
+            plan_path = pending.get("plan_path")
+        if not plan_markdown and isinstance(pending, dict):
+            plan_markdown = pending.get("plan_markdown")
         if plan_path:
             requested_payload["plan_path"] = str(plan_path)
         if plan_markdown:
             requested_payload["plan_markdown"] = str(plan_markdown)
-    await ctx.emit(_EVT_CLARIFICATION_REQUESTED, requested_payload)
+
+    # LangGraph re-runs this node from the top on Command(resume=...). Skip the
+    # TUI announcement on resume turns so Reject/Approve do not remount an empty
+    # plan-review widget (scratch is empty until hydrate).
+    resume_turn = bool(
+        (getattr(ctx, "clarification_resume_answers", None) or [])
+        or (getattr(ctx, "clarification_resume_text", None) or "").strip()
+    )
+    if not resume_turn:
+        await ctx.emit(_EVT_CLARIFICATION_REQUESTED, requested_payload)
+    else:
+        logger.info(
+            "[await_clarification] resume turn; skipping clarification_requested re-emit "
+            "(origin=%s)",
+            request.origin_node,
+        )
 
     try:
         answer = await policy.answer(request)

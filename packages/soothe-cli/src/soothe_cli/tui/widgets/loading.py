@@ -122,10 +122,10 @@ class LoadingWidget(Static):
             segments.append(
                 self._format_token_segment(self._token_count, approximate=self._token_approximate)
             )
-        body = " · ".join(segments)
         if include_interrupt:
-            return f"({body} · esc to interrupt)"
-        return f"({body})"
+            segments.append("esc to interrupt")
+        # Middot-separated ticking hint (no parentheses): `` · 12s · 1.2K tokens``.
+        return " · " + " · ".join(segments)
 
     def _elapsed_seconds(self) -> float:
         if self._turn_start_mono is None:
@@ -139,17 +139,19 @@ class LoadingWidget(Static):
             spinner_part = Content.styled(get_glyphs().pause, "dim")
             paused_duration = format_running_elapsed(float(self._paused_total_elapsed))
             if self._show_interrupt_hint:
-                paused_hint = f" (paused at {paused_duration} · esc to interrupt)"
+                paused_hint = f" · paused at {paused_duration} · esc to interrupt"
             else:
                 paused_suffix = ""
                 if self._token_count > 0:
                     paused_suffix = f" · {self._format_token_segment(self._token_count, approximate=self._token_approximate)}"
-                paused_hint = f" (paused at {paused_duration}{paused_suffix})"
+                paused_hint = f" · paused at {paused_duration}{paused_suffix}"
             hint_part = Content.styled(paused_hint, colors.muted)
         else:
             spinner_part = Content.styled(self._spinner.current_frame(), colors.primary)
             hint_part = Content.styled(
-                f" {self._format_hint_line(self._elapsed_seconds(), include_interrupt=self._show_interrupt_hint)}",
+                self._format_hint_line(
+                    self._elapsed_seconds(), include_interrupt=self._show_interrupt_hint
+                ),
                 colors.muted,
             )
         return Content.assemble(spinner_part, status_part, hint_part)

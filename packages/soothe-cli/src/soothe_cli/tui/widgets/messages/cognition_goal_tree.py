@@ -247,7 +247,7 @@ class CognitionGoalTreeMessage(Vertical):
         return Content.styled(f"{gutter}{plain}", "dim")
 
     def _plan_status_line_content(self) -> Content | None:
-        """Terminal footer, or live ``Running... (Xs)`` while the goal loop is open."""
+        """Terminal footer, or live ``Running... · Xs`` while the goal loop is open."""
         if self._footer_visible and self._footer_plain:
             return self._goal_footer_styled_content()
         if self._loop_executing():
@@ -255,7 +255,7 @@ class CognitionGoalTreeMessage(Vertical):
         return None
 
     def _running_status_content(self) -> Content:
-        """Thinking-row style live status: ``spinner Running... (12s)``."""
+        """Live status: ``spinner Running... · 12s`` (middots, not parentheses)."""
         try:
             colors = theme.get_theme_colors(self)
         except Exception:  # noqa: BLE001
@@ -265,11 +265,10 @@ class CognitionGoalTreeMessage(Vertical):
         frame = frames[self._spinner_position % len(frames)]
         # Caller is ``_plan_status_line_content`` only while ``_loop_executing``.
         started = self._loop_started_at or time()
-        hint = f" ({format_running_elapsed(time() - started)})"
+        elapsed = format_running_elapsed(time() - started)
         return Content.assemble(
             Content.styled(f"{gutter}{frame}", colors.primary),
-            Content.styled(" Running... ", colors.primary),
-            Content.styled(hint, colors.muted),
+            Content.styled(f" Running... · {elapsed}", colors.primary),
         )
 
     def mark_loop_started(self, started_at: float | None = None) -> None:
@@ -295,8 +294,8 @@ class CognitionGoalTreeMessage(Vertical):
         if st.phase == "running":
             parts: list[str] = []
             if st.started_at is not None:
-                # Parentheses match thinking-row / step-card live timers: (45s).
-                parts.append(f"({format_running_elapsed(time() - st.started_at)})")
+                # Middot-separated live timer (matches step-card Running · 45s...).
+                parts.append(format_running_elapsed(time() - st.started_at))
             if st.tool_call_count > 0:
                 parts.append(f"{st.tool_call_count} tools")
             if not parts:

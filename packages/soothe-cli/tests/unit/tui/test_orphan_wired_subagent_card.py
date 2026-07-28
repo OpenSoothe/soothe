@@ -76,6 +76,35 @@ async def test_orphan_wire_progress_attaches_without_step_widget() -> None:
 
 
 @pytest.mark.asyncio
+async def test_orphan_planner_progress_sets_running_stage_not_notes() -> None:
+    """Planner stage progress updates Running · stage; no activity notes."""
+    adapter = _make_adapter()
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="planner",
+        invocation_id="plan-inv",
+        step_id="PLN-01",
+        description="draft a plan",
+    )
+    handled = _route_orphan_wire_event(
+        adapter,
+        event_type="soothe.subagent.planner.progress",
+        data={
+            "type": "soothe.subagent.planner.progress",
+            "invocation_id": "plan-inv",
+            "step_id": "PLN-01",
+            "phase": "draft",
+            "message": "drafting 2/5",
+            "loop_count": 2,
+            "total_loops": 5,
+        },
+    )
+    assert handled is True
+    assert getattr(card, "_running_stage", "") == "drafting 2/5"
+    assert not getattr(card, "_subagent_notes", [])
+
+
+@pytest.mark.asyncio
 async def test_complete_orphan_clears_registry() -> None:
     adapter = _make_adapter()
     await _mount_orphan_subagent_card(

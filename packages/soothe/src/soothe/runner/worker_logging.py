@@ -19,6 +19,7 @@ from soothe_nano.logging.setup import (
 )
 
 from soothe.config.settings import SootheConfig
+from soothe.logging import HOST_LOGGER_NAME
 from soothe.sloop.checkpoints.directory_manager import PersistenceDirectoryManager
 
 _LOG = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ def configure_loop_runner_worker_logging(config: SootheConfig, loop_id: str) -> 
     log_path = loop_dir / RUNNER_LOG_FILENAME
     resolved = log_path.resolve()
 
-    package_loggers = _package_loggers()
+    package_loggers = _package_loggers((HOST_LOGGER_NAME,))
     for pkg_logger in package_loggers:
         _remove_stale_loop_runner_handlers(pkg_logger, keep_path=resolved)
 

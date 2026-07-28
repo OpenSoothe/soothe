@@ -282,6 +282,77 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     assert "status: approved" in plan_path.read_text(encoding="utf-8")
 
 
+@pytest.mark.asyncio
+async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
+    """Reject after clarification resume must not require Pass2 wire_subagent."""
+    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+    from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
+    from soothe.sloop.nodes.invoke_wired_subagent import _planner_subagent_review_pending_payload
+
+    plan_path = tmp_path / ".soothe" / "plans" / "y.md"
+    plan_path.parent.mkdir(parents=True)
+    plan_path.write_text("---\nstatus: draft\n---\n\n# Plan\n", encoding="utf-8")
+
+    async def _emit(*_a, **_k) -> None:
+        return None
+
+    # Fresh resume turn: no intent/wire, plan only on pending payload.
+    ctx = SimpleNamespace(
+        loop_state=SimpleNamespace(
+            intent=None,
+            routing_classification=None,
+            goal="plan the migration",
+            goal_user_submission="plan the migration",
+            total_tokens_used=0,
+            thread_id="t1",
+            iteration=0,
+            workspace=str(tmp_path),
+            _loop_messages_cache=[],
+            intent_classification=None,
+            activated_skill_names=[],
+            active_mcp_servers=[],
+        ),
+        preferred_subagent=None,
+        scratch=SimpleNamespace(
+            plan_result=None,
+            plan_artifact_path=None,
+            plan_artifact_markdown=None,
+            planner_subagent_review_comments=None,
+        ),
+        emit=_emit,
+        core_agent=SimpleNamespace(lookup_intake_only_subagent=lambda _n: None),
+        ce=None,
+        goal_record=SimpleNamespace(goal_id="g1"),
+    )
+    # Seed pending as if written on the prior turn (includes plan fields).
+    seed_ctx = SimpleNamespace(
+        scratch=SimpleNamespace(
+            plan_artifact_path=str(plan_path),
+            plan_artifact_markdown="# Plan\n",
+        ),
+        loop_state=ctx.loop_state,
+        goal_record=ctx.goal_record,
+        ce=None,
+    )
+    pending = _planner_subagent_review_pending_payload(seed_ctx)  # type: ignore[arg-type]
+    assert pending["pending_clarification"].get("plan_path") == str(plan_path)
+    state = {
+        **pending,
+        "last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        "pending_clarification_answer": answer_to_state(
+            ClarificationAnswer(answers=("Reject", ""), source="human")
+        ),
+    }
+    out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
+    assert out.get("last_outcome") != "fatal"
+    assert out.get("pending_clarification") is None
+    assert route_after_wired_subagent(out) == "goal_completion"
+    assert "status: rejected" in plan_path.read_text(encoding="utf-8")
+    assert ctx.scratch.plan_artifact_path == str(plan_path)
+    assert ctx.scratch.plan_result is not None
+    assert out.get("last_clarification_origin") is None
+
+
 def test_extract_subagent_report_prefers_answer_field() -> None:
     """deep_research / academic_research put the report in state ``answer``."""
     from soothe.sloop.nodes.invoke_wired_subagent import (

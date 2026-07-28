@@ -177,6 +177,7 @@ class CognitionStepMessage(Vertical):
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
         self._subagent_notes_by_task: dict[str, list[str]] = {}
+        self._running_stage: str = ""
         self._execute_assistant_buffer: str = ""
         self._last_completed_execute_prose: str = ""
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
@@ -258,8 +259,8 @@ class CognitionStepMessage(Vertical):
             classes="step-subagent-notes",
             id="step-cognition-subagent-notes",
         )
-        yield Static("", classes="step-detail", id="step-cognition-detail")
-        yield Static("", classes="step-status", id="step-cognition-status")
+        yield Static("", classes="step-detail", id="step-cognition-detail", markup=False)
+        yield Static("", classes="step-status", id="step-cognition-status", markup=False)
 
     def _flush_deferred_state_on_mount(self) -> None:
         """Apply deferred lifecycle state in a stable order after mount."""
@@ -497,6 +498,15 @@ class CognitionStepMessage(Vertical):
         else:
             self._subagent_notes.append(text)
         self._sync_step_card_surface()
+
+    def set_running_stage(self, stage: str) -> None:
+        """Set extended Running-line stage text (e.g. ``recon 1/4``, ``drafting 2/5``).
+
+        Shown after ``Running`` on the status footer; does not add activity notes.
+        """
+        self._running_stage = (stage or "").strip()
+        if self._status == "running":
+            self._sync_running_status_text()
 
     def _stats_title_suffix(self) -> str:
         """Step status suffix: total tool count plus task delegation count."""
@@ -1094,6 +1104,7 @@ class CognitionStepMessage(Vertical):
                 stats_suffix=stats_suffix,
                 token_suffix=token_suffix,
                 retry_suffix=retry_suffix,
+                stage_suffix=getattr(self, "_running_stage", "") or "",
                 colors=colors,
             )
         )

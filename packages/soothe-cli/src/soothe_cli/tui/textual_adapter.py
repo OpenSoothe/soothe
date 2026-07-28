@@ -1147,6 +1147,27 @@ def _apply_subagent_wire_step_event(
     return True
 
 
+def _planner_running_stage_label(data: dict[str, Any]) -> str:
+    """Compact status-line stage for ``soothe.subagent.planner.progress``."""
+    message = str(data.get("message", "") or "").strip()
+    if message:
+        return message
+    phase = str(data.get("phase", "") or "").strip()
+    loop_count = int(data.get("loop_count", 0) or 0)
+    total_loops = int(data.get("total_loops", 0) or 0)
+    if phase == "start":
+        return "starting"
+    if phase == "recon":
+        if total_loops > 0:
+            return f"recon {loop_count}/{total_loops}"
+        return "recon"
+    if phase == "draft":
+        if total_loops > 0:
+            return f"drafting {loop_count}/{total_loops}"
+        return "drafting"
+    return phase
+
+
 def _apply_subagent_wire_activity_event(
     adapter: TextualUIAdapter,
     *,
@@ -1154,18 +1175,31 @@ def _apply_subagent_wire_activity_event(
     data: dict[str, Any],
     task_scope: TaskScope,
 ) -> bool:
-    """Render note-style subagent wire events on orphan or parent step card."""
-    from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
+    """Render note-style subagent wire events on orphan or parent step card.
 
-    line = summarize_subagent_wire_activity(str(event_type or "").strip(), data).strip()
-    if not line:
-        return False
+    Planner ``*.progress`` updates the orphan card Running status line only
+    (no activity notes). Other subagent progress still appends activity lines.
+    """
+    et = str(event_type or "").strip()
     step_id = task_scope_step_id(task_scope)
     if not step_id:
         return True
     card = _display_target_for_task_scope(adapter, task_scope)
     if card is None:
         return True
+
+    if et == "soothe.subagent.planner.progress" and _is_orphan_subagent_card(card):
+        stage = _planner_running_stage_label(data)
+        setter = getattr(card, "set_running_stage", None)
+        if callable(setter) and stage:
+            setter(stage)
+        return True
+
+    from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
+
+    line = summarize_subagent_wire_activity(et, data).strip()
+    if not line:
+        return False
     task_tcid = str(task_scope[0] or "").strip()
     append = getattr(card, "append_subagent_activity", None)
     if not callable(append):
@@ -4020,6 +4054,18 @@ async def execute_task_textual(
                                 LOOP_CLARIFICATION_REQUESTED,
                                 LOOP_CLARIFICATION_DEFERRED,
                             ):
+                                origin_node = str(data.get("origin_node") or "")
+                                plan_path = str(data.get("plan_path") or "")
+                                plan_markdown = str(data.get("plan_markdown") or "")
+                                # Defense: skip empty planner-review remounts
+                                # (resume re-emit with fresh scratch / no plan body).
+                                if (
+                                    event_type == LOOP_CLARIFICATION_REQUESTED
+                                    and origin_node == "planner_subagent_review"
+                                    and not plan_path.strip()
+                                    and not plan_markdown.strip()
+                                ):
+                                    continue
                                 clarification_pending = True
                                 # Persist on the adapter so the next ``send_turn``
                                 # attaches ``clarification_answer=True`` and the
@@ -4037,9 +4083,9 @@ async def execute_task_textual(
                                         await _mount_manual_clarification_input(
                                             adapter,
                                             questions=questions_list,
-                                            origin_node=str(data.get("origin_node") or ""),
-                                            plan_path=str(data.get("plan_path") or ""),
-                                            plan_markdown=str(data.get("plan_markdown") or ""),
+                                            origin_node=origin_node,
+                                            plan_path=plan_path,
+                                            plan_markdown=plan_markdown,
                                         )
                                         if adapter._pause_spinner:
                                             await adapter._pause_spinner(SPINNER_LABEL_INPUT)

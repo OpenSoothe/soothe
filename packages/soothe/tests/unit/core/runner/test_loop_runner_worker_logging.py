@@ -7,10 +7,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import pytest
-from soothe_nano.logging.setup import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 
 import soothe.config as soothe_config
 from soothe.config.settings import SootheConfig
+from soothe.logging import COMMUNITY_LOGGER_NAME, PACKAGE_LOGGER_NAMES
 from soothe.runner.worker_logging import (
     RUNNER_LOG_FILENAME,
     configure_loop_runner_worker_logging,

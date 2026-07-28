@@ -23,6 +23,9 @@ class ClarificationRequestedEvent(SootheEvent):
     questions: list[str] = []
     origin_node: str = ""
     mode: Literal["manual", "auto"] = "manual"
+    # RFC-633 planner-subagent review card (empty for other origins).
+    plan_path: str = ""
+    plan_markdown: str = ""
 
     model_config = ConfigDict(extra="allow")
 

@@ -238,7 +238,7 @@ def test_running_animation_shows_no_stats_when_no_tools() -> None:
     assert card._stats_title_suffix() == ""
 
     card._status = "running"
-    card._start_time = 0.0
+    card._start_time = None
     mock_status_widget = MagicMock()
     card._status_widget = mock_status_widget
 
@@ -284,7 +284,10 @@ def test_running_animation_includes_elapsed_time() -> None:
         text = _extract_content_text(call_arg)
 
     assert "Running..." in text
-    assert "(" in text and ")" in text, f"Elapsed time should be shown, got: {text!r}"
+    assert " · 45s" in text, f"Elapsed time should use middots with unit, got: {text!r}"
+    assert "(45s)" not in text, f"Elapsed must not use parentheses, got: {text!r}"
+    # Unit must be present (not bare ``45``).
+    assert "45s" in text
     assert "1 tool" in text
 
 

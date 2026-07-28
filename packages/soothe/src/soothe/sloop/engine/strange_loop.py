@@ -197,20 +197,26 @@ class StrangeLoop:
         skill_context: str | None = None
         slash_invoked_skill_name: str | None = None
         slash_invoked_skill_body: str | None = None
-        execution_goal = goal
+        # Clarification answers are resume payloads only — never the turn goal text.
+        # Original planning goal is restored from CE after load (below).
+        execution_goal = "" if clarification_answer else goal
 
         # Targeted skill sync - only sync the addressed skill
-        parsed_skill = parse_slash_skill_user_line(goal)
+        parsed_skill = None if clarification_answer else parse_slash_skill_user_line(goal)
         if workspace and filesystem_virtual_mode_from_soothe_config(self.config):
             if parsed_skill is not None:
                 skill_name = parsed_skill[0]
                 sync_specific_skill_to_workspace(self.config, workspace, skill_name)
             # If no skill addressed, skip sync (skills are synced on-demand via middleware)
 
-        skill_env = try_expand_slash_skill_user_line(
-            goal,
-            self.config,
-            workspace=str(workspace) if workspace else None,
+        skill_env = (
+            None
+            if clarification_answer
+            else try_expand_slash_skill_user_line(
+                goal,
+                self.config,
+                workspace=str(workspace) if workspace else None,
+            )
         )
         if skill_env is not None:
             goal_user_submission = goal
@@ -601,24 +607,34 @@ class StrangeLoop:
                     max_entry_chars_before_spill=wm_cfg.max_entry_chars_before_spill,
                 )
 
-            logger.info(
-                "[Goal] %s (max_iterations=%d, iteration=%d, continue_loop=%s)",
-                log_preview(execution_goal, 80),
-                max_iterations,
-                state.iteration,
-                continue_loop_mode,
-            )
+            if clarification_answer:
+                logger.info(
+                    "[Goal] clarification resume (max_iterations=%d, iteration=%d, "
+                    "continue_loop=%s); restoring original goal from CE",
+                    max_iterations,
+                    state.iteration,
+                    continue_loop_mode,
+                )
+            else:
+                logger.info(
+                    "[Goal] %s (max_iterations=%d, iteration=%d, continue_loop=%s)",
+                    log_preview(execution_goal, 80),
+                    max_iterations,
+                    state.iteration,
+                    continue_loop_mode,
+                )
 
             from soothe.sloop.goal_text import resolve_user_request
             from soothe.sloop.state.resume_topic import schedule_resume_topic_persistence
 
-            schedule_resume_topic_persistence(
-                config=self.config,
-                loop_id=state_manager.loop_id,
-                pass1_reasoning=pass1_reasoning_text or None,
-                goal_text=resolve_user_request(state),
-                is_first_loop_goal=checkpoint.total_goals_completed == 0,
-            )
+            if not clarification_answer:
+                schedule_resume_topic_persistence(
+                    config=self.config,
+                    loop_id=state_manager.loop_id,
+                    pass1_reasoning=pass1_reasoning_text or None,
+                    goal_text=resolve_user_request(state),
+                    is_first_loop_goal=checkpoint.total_goals_completed == 0,
+                )
 
             queue: asyncio.Queue[Any] = asyncio.Queue()
             _graph_sentinel = object()
@@ -782,15 +798,43 @@ class StrangeLoop:
                         await ce_instance.cancel_goal(prior.id, reason="continue_keyword")
                 await ce_instance.save()
 
-            from soothe.sloop.goal_text import resolve_planning_goal
-
-            ce_goal = await ce_instance.create_goal(
-                resolve_planning_goal(state) or execution_goal,
-                generating_reasoning="StrangeLoop goal",
-                source="user",
-                max_iterations=max_iterations,
+            from soothe.sloop.goal_text import (
+                apply_clarification_resume_goal_text,
+                resolve_clarification_resume_ce_goal,
+                resolve_planning_goal,
             )
-            await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+
+            ce_goal: Any = None
+            if clarification_answer:
+                ce_goal = resolve_clarification_resume_ce_goal(
+                    ce_instance, loop_id=state_manager.loop_id
+                )
+                if ce_goal is not None:
+                    original = apply_clarification_resume_goal_text(state, ce_goal)
+                    if getattr(ce_goal, "status", None) == "pending":
+                        await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
+                    elif getattr(ce_goal, "assigned_loop_id", None) != state_manager.loop_id:
+                        ce_goal.assigned_loop_id = state_manager.loop_id
+                    logger.info(
+                        "[Goal] clarification resume reused CE goal %s: %s",
+                        ce_goal.id,
+                        log_preview(original or "(empty)", 80),
+                    )
+                else:
+                    logger.warning(
+                        "[Goal] clarification resume found no active CE goal for loop=%s; "
+                        "creating a new CE goal from restored state",
+                        state_manager.loop_id,
+                    )
+
+            if ce_goal is None:
+                ce_goal = await ce_instance.create_goal(
+                    resolve_planning_goal(state) or execution_goal,
+                    generating_reasoning="StrangeLoop goal",
+                    source="user",
+                    max_iterations=max_iterations,
+                )
+                await ce_instance.activate_goal(ce_goal.id, loop_id=state_manager.loop_id)
 
             # RFC-624 Phase 4 Step 3: bind CE to LoopState
             state.bind_ce(ce_instance, ce_goal.id)
