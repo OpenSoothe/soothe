@@ -28,6 +28,7 @@ dependencies = [
     "typer>=0.9.0,<2.0.0",          # CLI framework
     "textual>=8.0.0,<10.0.0",       # TUI framework
     "rich>=13.0.0,<15.0.0",         # Console output
+    "termaid>=0.7.1,<1.0.0",        # Mermaid → terminal diagram (goal-completion reports)
     "pyyaml>=6.0.0,<7.0.0",         # Config loading
     "python-dotenv>=1.0.0,<2.0.0",  # .env loading
     "websockets>=12.0,<16.0",       # WebSocket transport

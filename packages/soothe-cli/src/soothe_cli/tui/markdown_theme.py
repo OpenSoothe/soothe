@@ -339,6 +339,49 @@ def _markdown_styles_from_colors(
     }
 
 
+_SootheMarkdownCls: type[Any] | None = None
+
+
+def _soothe_markdown_class() -> type[Any]:
+    """Return the cached Rich ``Markdown`` subclass with Mermaid fence support."""
+    global _SootheMarkdownCls
+    if _SootheMarkdownCls is not None:
+        return _SootheMarkdownCls
+
+    from rich.markdown import CodeBlock
+    from rich.markdown import Markdown as RichMarkdown
+    from rich.text import Text
+
+    from soothe_cli.tui.mermaid_render import is_mermaid_lexer, render_mermaid_art
+
+    class MermaidCodeBlock(CodeBlock):
+        """Code fence that renders Mermaid as terminal art when possible."""
+
+        def __rich_console__(self, console: Any, options: Any) -> Any:
+            if is_mermaid_lexer(self.lexer_name):
+                max_width = options.max_width or getattr(console, "width", None)
+                art = render_mermaid_art(
+                    str(self.text),
+                    max_width=int(max_width) if max_width else None,
+                )
+                if art is not None:
+                    yield Text("")
+                    yield Text(art)
+                    yield Text("")
+                    return
+            yield from super().__rich_console__(console, options)
+
+    class SootheMarkdown(RichMarkdown):
+        """Rich Markdown with Mermaid-aware fence / code_block handlers."""
+
+        elements = dict(RichMarkdown.elements)
+        elements["fence"] = MermaidCodeBlock
+        elements["code_block"] = MermaidCodeBlock
+
+    _SootheMarkdownCls = SootheMarkdown
+    return SootheMarkdown
+
+
 class ThemedMarkdownRenderer:
     """Rich ``Markdown`` wrapper that applies a ``MarkdownThemeEntry`` at render time."""
 
@@ -350,9 +393,7 @@ class ThemedMarkdownRenderer:
         colors: theme.ThemeColors,
         code_theme: str,
     ) -> None:
-        from rich.markdown import Markdown as RichMarkdown
-
-        self._markdown = RichMarkdown(markup, code_theme=code_theme)
+        self._markdown = _soothe_markdown_class()(markup, code_theme=code_theme)
         self._entry = entry
         self._colors = colors
 

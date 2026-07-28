@@ -47,9 +47,8 @@ _SCENARIO_DESCRIPTIONS: dict[str, str] = {
 }
 
 # Per-scenario CLI layout hints for goal-completion synthesis (IG-552 / IG-652).
-# Layout examples only — not outline authority. Markdown tables and bullets
-# render in Rich TUI; Mermaid fences are preserved as source until a terminal
-# diagram renderer lands.
+# Layout examples only — not outline authority. Markdown tables, bullets, and
+# mermaid fences render in the Rich TUI (IG-657 terminal diagram expand).
 SCENARIO_FORMAT_HINTS: dict[str, str] = {
     "code_architecture_design": (
         "Bullets/tables first. Component inventory: GFM table (Name | Role | Location). "

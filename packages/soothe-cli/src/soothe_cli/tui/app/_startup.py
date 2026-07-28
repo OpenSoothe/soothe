@@ -674,6 +674,17 @@ class _StartupMixin:
         # language in skill bodies.
         _get_lexer("python")
 
+        # Mermaid expand path (IG-657) — first goal-completion report with a
+        # flowchart should not pay termaid import cost mid-render.
+        try:
+            import termaid  # noqa: F401
+
+            from soothe_cli.tui.markdown_theme import build_markdown
+
+            build_markdown("```mermaid\nflowchart TD\n  A-->B\n```\n")
+        except Exception:
+            logger.debug("Could not prewarm mermaid markdown path", exc_info=True)
+
         # Widgets deferred from app.py module level — a failure here indicates
         # a packaging or code bug (same as the block above), so we let
         # exceptions propagate.

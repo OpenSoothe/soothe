@@ -2621,8 +2621,8 @@ async def _flush_assistant_text_ns(
     else:
         # Stop the stream to finalize the content
         await current_msg.stop_stream()
-        # Sync normalized text for persistence without re-rendering: MarkdownStream
-        # already displayed the streamed body; repair can disturb fenced blocks/tables.
+        # Sync repaired text for persistence without re-rendering: stop_stream
+        # already painted themed markdown; a second update can disturb fences/tables.
         if repaired_text != current_msg._content:
             current_msg._content = repaired_text
 
