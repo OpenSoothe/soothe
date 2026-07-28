@@ -172,10 +172,13 @@ def route_after_resolve_decision(state: dict[str, Any]) -> str:
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
-    """IG-601/IG-656: intake-only direct invoke → goal_completion (or END on fatal)."""
+    """IG-601/IG-656/IG-658: intake-only invoke → review, completion, or END."""
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END
+    if _pending_clarification(state):
+        logger.info("[routing] route_after_wired_subagent → await_clarification")
+        return "await_clarification"
     logger.info("[routing] route_after_wired_subagent → goal_completion")
     return "goal_completion"
 
@@ -219,7 +222,7 @@ def route_after_clarification(state: dict[str, Any]) -> str:
     """RFC-622: return to originating node, or END on defer."""
     if state.get("last_outcome") == "deferred":
         return END
-    origin = state.get("last_clarification_origin")
-    if origin in ("execute", "plan_generate", "plan_assess", "plan_gap_analysis"):
-        return origin
-    return END
+    from soothe.sloop.clarification.origins import resume_node_for_clarification_origin
+
+    resume = resume_node_for_clarification_origin(state.get("last_clarification_origin"))
+    return resume if resume is not None else END

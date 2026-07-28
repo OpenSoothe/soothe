@@ -584,6 +584,14 @@ This index provides a comprehensive catalog of all RFCs in the Soothe project.
   - Implemented by: IG-592
   - Authors: xiaming (with Cursor)
 
+- **RFC-633**: [Planner Plan Artifact and Human Review](RFC-633-planner-plan-artifact-and-human-review.md)
+  - Kind: Architecture Design
+  - Status: Draft
+  - Created: 2026-07-28
+  - Depends on: RFC-618, RFC-622, RFC-630
+  - Implemented by: IG-658
+  - Authors: Soothe Team
+
 ---
 
 ### Product & Applications (7xx)

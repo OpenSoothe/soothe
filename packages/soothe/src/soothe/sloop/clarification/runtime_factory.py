@@ -69,7 +69,7 @@ def build_clarification_policy_for_runner(
             ``interactive_fallback`` (RFC-623). Veritas structured-output
             failures then degrade to a TUI prompt instead of terminating the
             loop. Headless callers (autopilot) pass ``False`` and keep the
-            legacy hard-defer path on veritas failure.
+            hard-defer path on veritas failure.
         thread_id: Loop thread id used as the Langfuse ``session_id`` for the
             veritas LLM call so the span correlates with the parent loop trace.
         loop_id: Loop id forwarded to Langfuse for trace correlation.
@@ -108,6 +108,7 @@ def build_clarification_policy_for_runner(
         emit=emit,
         min_confidence=clar_cfg.auto_min_confidence,
         interactive_fallback=interactive_fallback,
+        force_manual_origins=list(clar_cfg.force_manual_origins or ()),
     )
 
 
@@ -118,8 +119,9 @@ def bind_clarification_emit(
     """Wire runtime ``emit`` into interactive clarification legs (RFC-623).
 
     Runners build the policy before the graph ``emit`` closure exists. Call
-    this once ``emit`` is available so auto-mode veritas failures can re-notify
-    the TUI with ``mode=manual`` before ``interrupt(...)`` pauses the graph.
+    this once ``emit`` is available so auto→manual upgrades
+    (``answer_as_manual_fallback``) can re-notify the TUI before
+    ``interrupt(...)`` pauses the graph.
     """
     if policy is None:
         return

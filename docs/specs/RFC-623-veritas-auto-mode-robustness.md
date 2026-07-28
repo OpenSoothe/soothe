@@ -357,7 +357,7 @@ Same call, but the model returns malformed JSON. `invoke_structured_chat` exhaus
 
 ### 6.3 Forced defer in interactive run
 
-Same scenario but a TUI is attached: `_runner_strange_loop` wired `emit`, so `interactive_fallback=InteractiveClarificationPolicy(emit=emit)`. Policy detects `kind="structured_output_failed"`, calls `interactive_fallback.answer(request)`. The interactive policy emits `clarification_requested` with `mode="manual"`, then calls `interrupt(...)`. The LangGraph checkpointer captures the pending question; the TUI renders the prompt; the operator types an answer; `Command(resume=...)` returns the payload. Veritas's failure is invisible to the policy's caller — the loop continues with the human's answer.
+Same scenario but a TUI is attached: `_runner_strange_loop` wired `emit`, so `interactive_fallback=InteractiveClarificationPolicy(emit=emit)`. Policy detects `kind="structured_output_failed"`, calls `interactive_fallback.answer_as_manual_fallback(request)`. That path re-emits `clarification_requested` with `mode="manual"` (the earlier `await_clarification` emit used `mode=auto`), then calls `interrupt(...)`. The LangGraph checkpointer captures the pending question; the TUI renders the prompt; the operator types an answer; `Command(resume=...)` returns the payload. Veritas's failure is invisible to the policy's caller — the loop continues with the human's answer.
 
 ---
 

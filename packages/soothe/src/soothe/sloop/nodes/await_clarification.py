@@ -1,8 +1,9 @@
 """Loop graph node that resolves a pending clarification (RFC-622).
 
-Invoked when a prior node (``execute``, ``plan_generate``, ``plan_assess``)
-detected an ``ask_user`` interrupt (or a heuristic-detected plain-text
-question) and set ``pending_clarification`` on the loop state.
+Invoked when a prior node (``execute``, StrangeLoop ``plan_generate`` /
+``plan_assess``, or planner-subagent ``planner_subagent_review``) detected an
+``ask_user`` interrupt / review gate and set ``pending_clarification``
+on the loop state.
 
 The node calls into the runtime's :class:`ClarificationPolicy`. On success
 it writes ``pending_clarification_answer`` so the originating node can resume
@@ -85,7 +86,7 @@ async def node_await_clarification(
         {
             "questions": list(request.questions),
             "origin_node": request.origin_node,
-            "mode": _mode_for_policy(policy),
+            "mode": _mode_for_policy(policy, origin_node=request.origin_node),
         },
     )
 
@@ -158,10 +159,15 @@ def _summary(questions: tuple[str, ...]) -> str:
     return joined[: _QUESTION_SUMMARY_CHARS - 1] + "…"
 
 
-def _mode_for_policy(policy: Any) -> str:
-    cls_name = type(policy).__name__
-    if "Interactive" in cls_name:
+def _mode_for_policy(policy: Any, *, origin_node: str | None = None) -> str:
+    from soothe.sloop.clarification.auto import AutoClarificationPolicy
+    from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
+
+    if isinstance(policy, InteractiveClarificationPolicy):
         return "manual"
-    if "Auto" in cls_name:
+    requires_manual = getattr(policy, "requires_manual", None)
+    if isinstance(policy, AutoClarificationPolicy) or callable(requires_manual):
+        if callable(requires_manual) and origin_node and requires_manual(origin_node):
+            return "manual"
         return "auto"
     return "manual"

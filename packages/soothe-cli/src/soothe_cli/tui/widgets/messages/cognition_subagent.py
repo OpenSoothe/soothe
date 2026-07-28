@@ -65,10 +65,11 @@ def create_subagent_card(
     )
 
     def _subagent_build_row_index(self: Any) -> StepRowIndex:
-        """Build row index filtered to only include rows for this task_idx.
+        """Build row index for an intake-only orphan SubAgent card.
 
-        For orphan SubAgent cards, type 't' subgraph tools are treated as
-        main_tools for display purposes (they're the primary activity).
+        Host stamps wired-subagent tools as ``{step}:s:{id}`` (type ``s``).
+        Nested task subgraphs use type ``t`` filtered by ``task_idx``. Both
+        belong on the orphan card as primary activity.
         """
         from soothe_sdk.ux.task_namespace import parse_unified_tool_call_id
 
@@ -84,8 +85,12 @@ def create_subagent_card(
             if is_task_metadata_only_tool_row(row):
                 continue
             _, type_code, idx, _ = parse_unified_tool_call_id(tcid)
-            if type_code == "t" and idx == self._subagent_task_idx:
-                filtered_rows.append(row)
+            if type_code == "t":
+                if idx == self._subagent_task_idx:
+                    filtered_rows.append(row)
+                continue
+            # Type ``s`` (intake wire stamp) or opaque ids → show on orphan card.
+            filtered_rows.append(row)
 
         return StepRowIndex(
             task_delegations=[],

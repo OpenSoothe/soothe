@@ -67,7 +67,6 @@ from soothe_sdk.core.events import (
 )
 from soothe_sdk.core.subagent_wire import (
     is_allowlisted_subagent_event_type,
-    parse_subagent_wire_agent,
 )
 from soothe_sdk.display.message_processing import (
     extract_tool_args_dict,
@@ -737,6 +736,8 @@ async def _mount_orphan_subagent_card(
     card._invocation_id = inv  # type: ignore[attr-defined]
     adapter._orphan_cards_by_invocation[inv] = card
     await _mount_subagent_card_if_needed(adapter, card)
+    # Tools may have been buffered on root ns before this card was mounted.
+    _route_pending_main_tools_to_orphans(adapter, adapter._step_router)
     return card
 
 
@@ -771,18 +772,9 @@ def _route_orphan_wire_event(
 ) -> bool:
     """Route ``soothe.subagent.*`` events onto an orphan card via ``invocation_id``."""
     inv = str(data.get("invocation_id") or "").strip()
-    card = adapter._orphan_cards_by_invocation.get(inv) if inv else None
-    if card is None:
-        # Fallback: some forwarded custom events may miss invocation_id.
-        # Recover by matching step_id + subagent against active orphan cards.
-        sid = str(data.get("step_id") or "").strip()
-        event_subagent = str(parse_subagent_wire_agent(str(event_type or "")) or "").strip()
-        if sid:
-            candidate = _lookup_orphan_card_by_step_id(adapter, sid)
-            if candidate is not None:
-                card_subagent = str(getattr(candidate, "_subagent_type", "") or "").strip()
-                if not event_subagent or not card_subagent or card_subagent == event_subagent:
-                    card = candidate
+    if not inv:
+        return False
+    card = adapter._orphan_cards_by_invocation.get(inv)
     if card is None:
         return False
     step_id = str(getattr(card, "_step_id", "") or data.get("step_id") or "").strip()
@@ -805,10 +797,69 @@ def _lookup_orphan_card_by_step_id(
     sid = str(step_id or "").strip()
     if not sid:
         return None
+    # Unified tool ids parse to hyphen form (``HYE-01``); host/orphan cards may
+    # still carry underscore wire form (``HYE_01``). Compare both.
+    sid_norm = sid.replace("_", "-")
     for orphan in adapter._orphan_cards_by_invocation.values():
-        if str(getattr(orphan, "_step_id", "") or "").strip() == sid:
+        orphan_sid = str(getattr(orphan, "_step_id", "") or "").strip()
+        if orphan_sid == sid or orphan_sid.replace("_", "-") == sid_norm:
             return orphan
     return None
+
+
+def _first_active_orphan_card(adapter: TextualUIAdapter) -> Any | None:
+    """Return any active intake-only orphan SubAgent card (insertion order)."""
+    for orphan in adapter._orphan_cards_by_invocation.values():
+        if orphan is not None:
+            return orphan
+    return None
+
+
+def _orphan_card_for_tool_call(
+    adapter: TextualUIAdapter,
+    *,
+    tool_call_id: str,
+    step_id: str = "",
+) -> Any | None:
+    """Resolve an orphan card for a stamped intake-only tool call id."""
+    parsed_sid, _, _, _ = parse_unified_tool_call_id(str(tool_call_id or "").strip())
+    for sid in (parsed_sid, str(step_id or "").strip()):
+        if sid:
+            orphan = _lookup_orphan_card_by_step_id(adapter, sid)
+            if orphan is not None:
+                return orphan
+    return None
+
+
+def _route_pending_main_tools_to_orphans(
+    adapter: TextualUIAdapter,
+    router: StepTaskRouter,
+) -> int:
+    """Flush root-ns buffered tools onto orphan SubAgent cards when step ids match."""
+    pending = router.take_pending_main_tools_matching(
+        lambda item: _orphan_card_for_tool_call(adapter, tool_call_id=item.tool_call_id) is not None
+    )
+    routed = 0
+    for item in pending:
+        orphan = _orphan_card_for_tool_call(adapter, tool_call_id=item.tool_call_id)
+        if orphan is None:
+            router.buffer_main_tool(
+                item.tool_call_id,
+                item.name,
+                item.args,
+                raw_args=item.raw_args,
+            )
+            continue
+        _ingest_tool_on_display_card(
+            adapter,
+            orphan,
+            display_key=item.tool_call_id,
+            tool_name=item.name,
+            args=item.args,
+            raw_args=item.raw_args,
+        )
+        routed += 1
+    return routed
 
 
 def _register_execute_namespace_binding(
@@ -1945,6 +1996,27 @@ async def apply_tool_call_wire_update(
     if is_step_scope:
         parsed_sid, _, _, _ = parse_unified_tool_call_id(tcid)
         bound_step_id = parsed_sid or router.step_id_for_tool(tcid)
+        # Intake-only wire tools arrive on root ns ``()`` stamped as
+        # ``{step}:s:{id}``. Prefer the orphan SubAgent card over the main
+        # buffer when that step has no execute step card.
+        orphan = _orphan_card_for_tool_call(
+            adapter,
+            tool_call_id=tcid,
+            step_id=str(data.get("step_id") or bound_step_id or ""),
+        )
+        if orphan is not None and name != "task":
+            update_payload = dict(display_args or {})
+            if not update_payload and raw_args_stream:
+                update_payload = {"_raw": raw_args_stream}
+            _ingest_tool_on_display_card(
+                adapter,
+                orphan,
+                display_key=tcid,
+                tool_name=name,
+                args=update_payload,
+                raw_args=raw_args_stream,
+            )
+            return True
         step_w = _resolve_step_widget_for_tool(
             adapter,
             router,
@@ -2737,6 +2809,58 @@ def _should_show_clarification_prompt(
     if normalized not in {"auto", "manual"}:
         normalized = "auto"
     return normalized == "manual"
+
+
+async def _mount_manual_clarification_input(
+    adapter: TextualUIAdapter,
+    *,
+    questions: list[str],
+    origin_node: str = "",
+) -> str:
+    """Mount (or reuse) the inline clarification answer widget.
+
+    Prefers a running execute step card, then an active orphan SubAgent card,
+    then a synthetic key from ``origin_node`` so intake-only plan review still
+    shows an answer UI after the orphan card has completed.
+
+    Returns:
+        The step/key used for ``adapter._clarification_input_by_step``.
+    """
+    questions_list = [str(q) for q in questions if str(q).strip()]
+    if not questions_list:
+        return ""
+
+    target_step_id = ""
+    for sid, step_widget in adapter._current_step_messages.items():
+        if step_widget._status == "running":  # noqa: SLF001
+            step_widget.set_awaiting_clarification(questions_list)
+            target_step_id = sid
+            break
+    if not target_step_id:
+        orphan = _first_active_orphan_card(adapter)
+        if orphan is not None:
+            target_step_id = (
+                str(getattr(orphan, "_step_id", "") or "").strip()
+                or str(getattr(orphan, "_invocation_id", "") or "").strip()
+            )
+    if not target_step_id:
+        target_step_id = str(origin_node or "").strip() or "clarification"
+
+    existing = adapter._clarification_input_by_step.get(target_step_id)
+    if existing is None:
+        widget_id = f"clarify-{uuid.uuid4().hex[:8]}"
+        input_widget = ClarificationInputMessage(
+            step_id=target_step_id,
+            questions=questions_list,
+            origin_node=str(origin_node or ""),
+            widget_id=widget_id,
+            id=widget_id,
+        )
+        adapter._clarification_input_by_step[target_step_id] = input_widget
+        mount_result = adapter._mount_message(input_widget)
+        if mount_result is not None:
+            await mount_result
+    return target_step_id
 
 
 async def execute_task_textual(
@@ -3680,12 +3804,31 @@ async def execute_task_textual(
                                                     clarification_pending=clarification_pending,
                                                 )
                                         else:
-                                            router.buffer_main_tool(
-                                                str(lookup_id),
-                                                buffer_name,
-                                                parsed_args,
-                                                raw_args=raw_args_stream,
+                                            orphan = _orphan_card_for_tool_call(
+                                                adapter,
+                                                tool_call_id=str(lookup_id),
+                                                step_id=bound_step_id,
                                             )
+                                            if orphan is not None:
+                                                _ingest_tool_on_display_card(
+                                                    adapter,
+                                                    orphan,
+                                                    display_key=str(lookup_id),
+                                                    tool_name=buffer_name,
+                                                    args=parsed_args,
+                                                    raw_args=raw_args_stream,
+                                                )
+                                                await _maybe_set_running_tools_spinner(
+                                                    adapter,
+                                                    clarification_pending=clarification_pending,
+                                                )
+                                            else:
+                                                router.buffer_main_tool(
+                                                    str(lookup_id),
+                                                    buffer_name,
+                                                    parsed_args,
+                                                    raw_args=raw_args_stream,
+                                                )
                                     elif not is_step_scope:
                                         ts_disp = router.resolve_task_scope(ns_key)
                                         _merge_disp, display_key = canonical_subgraph_tool_ids(
@@ -3887,40 +4030,11 @@ async def execute_task_textual(
                                         event_data=data,
                                         fallback_mode=clarification_mode,
                                     ):
-                                        # The ask_user step card was put into "running" by
-                                        # ``step_started`` just before await_clarification.
-                                        # Surface the pending questions on it so the user
-                                        # knows what to answer.
-                                        target_step_id = ""
-                                        for (
-                                            sid,
-                                            step_widget,
-                                        ) in adapter._current_step_messages.items():
-                                            if step_widget._status == "running":
-                                                step_widget.set_awaiting_clarification(
-                                                    questions_list
-                                                )
-                                                target_step_id = sid
-                                                break
-                                        # Mount the inline answer widget so the
-                                        # user has somewhere to type without it
-                                        # being mistaken for a new goal.
-                                        if target_step_id:
-                                            existing = adapter._clarification_input_by_step.get(
-                                                target_step_id
-                                            )
-                                            if existing is None:
-                                                widget_id = f"clarify-{uuid.uuid4().hex[:8]}"
-                                                input_widget = ClarificationInputMessage(
-                                                    step_id=target_step_id,
-                                                    questions=questions_list,
-                                                    widget_id=widget_id,
-                                                    id=widget_id,
-                                                )
-                                                adapter._clarification_input_by_step[
-                                                    target_step_id
-                                                ] = input_widget
-                                                await adapter._mount_message(input_widget)
+                                        await _mount_manual_clarification_input(
+                                            adapter,
+                                            questions=questions_list,
+                                            origin_node=str(data.get("origin_node") or ""),
+                                        )
                                         if adapter._pause_spinner:
                                             await adapter._pause_spinner(SPINNER_LABEL_INPUT)
                                 continue
@@ -4384,6 +4498,7 @@ async def execute_task_textual(
         task_loop_assistant_by_tcid.clear()
 
         # Buffered tools without a step card: do not mount standalone tool cards.
+        routed_orphan = _route_pending_main_tools_to_orphans(adapter, router)
         routed_main = router.route_pending_main_tools(
             adapter._current_step_messages,
             adapter._tool_to_step,
@@ -4391,13 +4506,15 @@ async def execute_task_textual(
         )
         routed_sub = _route_pending_subgraph_tools(adapter, router)
         pending_sub = router.pending_subgraph_tools()
-        if router.pending_main_tool_count or pending_sub:
+        if router.pending_main_tool_count or pending_sub or routed_orphan:
             logger.debug(
-                "Stream-end tool buffer: routed_main=%d dropped_main=%d routed_sub=%d dropped_sub=%d",
+                "Stream-end tool buffer: routed_main=%d dropped_main=%d "
+                "routed_sub=%d dropped_sub=%d routed_orphan=%d",
                 routed_main,
                 router.pending_main_tool_count,
                 routed_sub,
                 len(pending_sub),
+                routed_orphan,
             )
 
         # Safety net: finalize any steps/tools still in-flight (e.g. worker

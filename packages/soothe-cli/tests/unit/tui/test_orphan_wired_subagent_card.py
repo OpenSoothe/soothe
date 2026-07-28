@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import pytest
+from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
 
+from soothe_cli.runtime.state.step_router import StepTaskRouter
 from soothe_cli.tui.textual_adapter import (
     TextualUIAdapter,
     _complete_orphan_subagent_card,
+    _mount_manual_clarification_input,
     _mount_orphan_subagent_card,
     _route_orphan_wire_event,
+    _route_pending_main_tools_to_orphans,
+    apply_tool_call_wire_update,
 )
 
 
@@ -153,8 +158,8 @@ async def test_orphan_browser_use_step_and_lifecycle() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orphan_wire_step_routes_without_invocation_id() -> None:
-    """Fallback routing should still show step rows when invocation_id is missing."""
+async def test_orphan_wire_step_requires_invocation_id() -> None:
+    """Orphan wire routing requires stamped invocation_id (no step_id-only fallback)."""
     adapter = _make_adapter()
     card = await _mount_orphan_subagent_card(
         adapter,
@@ -170,18 +175,14 @@ async def test_orphan_wire_step_routes_without_invocation_id() -> None:
         event_type="soothe.subagent.browser_use.step.completed",
         data={
             "type": "soothe.subagent.browser_use.step.completed",
-            # Simulate legacy/malformed forwarding where invocation_id is absent.
             "step_id": "BRW-03",
             "tool_name": "Navigate",
             "action_preview": "https://example.com",
             "duration_ms": 123,
         },
     )
-    assert handled is True
-    rows = list(getattr(card, "_rows", []) or [])
-    assert rows
-    assert getattr(rows[-1], "tool_name", "") == "Navigate"
-    assert getattr(rows[-1], "phase", "") == "success"
+    assert handled is False
+    assert not list(getattr(card, "_rows", []) or [])
 
 
 @pytest.mark.asyncio
@@ -202,11 +203,121 @@ async def test_orphan_browser_use_lifecycle_honors_success_false() -> None:
         event_type="soothe.subagent.browser_use.completed",
         data={
             "invocation_id": "bu-fail",
-            "success": False,
-            "summary": "Browser start failed",
             "duration_ms": 50,
+            "success": False,
+            "summary": "Failed",
         },
         task_scope=scope,
     )
     assert handled is True
     assert getattr(card, "_status", "") == "error"
+
+
+@pytest.mark.asyncio
+async def test_root_ns_tool_wire_update_routes_to_orphan_card() -> None:
+    """Intake-only stamped tools on ns ``()`` must land on the orphan card."""
+    adapter = _make_adapter()
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="planner",
+        invocation_id="plan-inv",
+        step_id="HYE_01",
+        description="optimize deps",
+    )
+    assert card is not None
+    router = StepTaskRouter()
+    handled = await apply_tool_call_wire_update(
+        adapter,
+        router,
+        data={
+            "type": STREAM_TOOL_CALL_UPDATE,
+            "tool_call_id": "HYE_01:s:call_abc",
+            "name": "grep",
+            "args": {"pattern": "uv.lock"},
+            "step_id": "HYE_01",
+        },
+        ns_key=(),
+        pending_tool_calls_lc={},
+    )
+    assert handled is True
+    assert card.has_tool_call_row("HYE_01:s:call_abc")
+    assert router.pending_main_tool_count == 0
+    # Display index must include type ``s`` stamped tools (not only type ``t``).
+    index = card._build_row_index()  # noqa: SLF001
+    assert index.main_tool_count == 1
+    assert index.total_tool_count == 1
+    assert any(r.tool_call_id == "HYE_01:s:call_abc" for r in index.main_tools)
+
+
+@pytest.mark.asyncio
+async def test_buffered_main_tools_flush_to_orphan_on_mount() -> None:
+    adapter = _make_adapter()
+    router = adapter._step_router
+    router.buffer_main_tool(
+        "HYE_01:s:call_buf",
+        "read_file",
+        {"file_path": "pyproject.toml"},
+    )
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="planner",
+        invocation_id="plan-buf",
+        step_id="HYE_01",
+        description="optimize deps",
+    )
+    assert card is not None
+    assert card.has_tool_call_row("HYE_01:s:call_buf")
+    assert router.pending_main_tool_count == 0
+
+
+@pytest.mark.asyncio
+async def test_route_pending_main_tools_to_orphans_safety_net() -> None:
+    adapter = _make_adapter()
+    card = await _mount_orphan_subagent_card(
+        adapter,
+        subagent="planner",
+        invocation_id="plan-late",
+        step_id="HYE_01",
+        description="optimize deps",
+    )
+    router = StepTaskRouter()
+    router.buffer_main_tool("HYE_01:s:call_late", "ls", {"path": "."})
+    routed = _route_pending_main_tools_to_orphans(adapter, router)
+    assert routed == 1
+    assert card is not None
+    assert card.has_tool_call_row("HYE_01:s:call_late")
+
+
+@pytest.mark.asyncio
+async def test_manual_clarification_mounts_without_step_or_orphan() -> None:
+    """Plan review after orphan complete must still show the answer widget."""
+    adapter = _make_adapter()
+    assert not adapter._current_step_messages
+    assert not adapter._orphan_cards_by_invocation
+    key = await _mount_manual_clarification_input(
+        adapter,
+        questions=["Approve this plan?", "Comments?"],
+        origin_node="planner_subagent_review",
+    )
+    assert key == "planner_subagent_review"
+    widget = adapter._clarification_input_by_step[key]
+    assert widget in adapter._mounted  # type: ignore[attr-defined]
+    assert getattr(widget, "_origin_node", "") == "planner_subagent_review"
+
+
+@pytest.mark.asyncio
+async def test_manual_clarification_prefers_active_orphan_step_id() -> None:
+    adapter = _make_adapter()
+    await _mount_orphan_subagent_card(
+        adapter,
+        subagent="planner",
+        invocation_id="plan-clarify",
+        step_id="HYE_01",
+        description="optimize deps",
+    )
+    key = await _mount_manual_clarification_input(
+        adapter,
+        questions=["Approve?"],
+        origin_node="planner_subagent_review",
+    )
+    assert key == "HYE_01"

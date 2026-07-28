@@ -84,7 +84,10 @@ async def test_defers_on_count_mismatch(monkeypatch: pytest.MonkeyPatch) -> None
         await policy.answer(_request(num_questions=3))
 
 
-async def test_emits_clarification_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_answer_does_not_reemit_clarification_requested(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """await_clarification owns the primary emit; answer() must not duplicate it."""
     _stub_interrupt(monkeypatch, {"answers": ["x"]})
     emitted: list[tuple[str, dict]] = []
 
@@ -93,12 +96,27 @@ async def test_emits_clarification_requested(monkeypatch: pytest.MonkeyPatch) ->
 
     policy = InteractiveClarificationPolicy(emit=_emit)
     await policy.answer(_request())
+    assert emitted == []
+
+
+async def test_answer_as_manual_fallback_emits_mode_manual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """auto→manual upgrade must re-announce so the TUI shows the prompt."""
+    _stub_interrupt(monkeypatch, {"answers": ["x"]})
+    emitted: list[tuple[str, dict]] = []
+
+    async def _emit(name: str, payload: dict) -> None:
+        emitted.append((name, payload))
+
+    policy = InteractiveClarificationPolicy(emit=_emit)
+    await policy.answer_as_manual_fallback(_request())
 
     assert len(emitted) == 1
     name, payload = emitted[0]
     assert name == "clarification_requested"
     assert payload["mode"] == "manual"
-    assert payload["origin"] == "execute"
+    assert payload["origin_node"] == "execute"
     assert payload["questions"] == ["q0"]
 
 

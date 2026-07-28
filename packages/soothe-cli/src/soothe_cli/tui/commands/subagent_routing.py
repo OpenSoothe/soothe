@@ -10,14 +10,22 @@ SUBAGENT_DISPLAY_NAMES: dict[str, str] = {
     "browser_use": "Browser",
 }
 
-# Lowercase ids matched after ``/`` for preferred_subagent routing (core only).
+# Lowercase slash tokens matched after ``/`` for preferred_subagent routing (core only).
 # Longest-first so a shorter id never shadows a longer prefix match.
 # Intake-only specialists (IG-600/601) must stay here so slash sets preferred_subagent.
+# ``plan`` is the UX slash for wire id ``planner`` (RFC-454 /plan routing).
 SUBAGENT_SLASH_ROUTE_IDS: tuple[str, ...] = (
     "academic_research",
     "deep_research",
     "browser_use",
+    "planner",
+    "plan",
 )
+
+# Slash token → wire preferred_subagent id when they differ.
+_SUBAGENT_SLASH_TO_WIRE: dict[str, str] = {
+    "plan": "planner",
+}
 
 
 def get_subagent_display_name(technical_name: str) -> str:
@@ -38,8 +46,9 @@ def get_subagent_display_name(technical_name: str) -> str:
 def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     """Parse subagent subcommand from user input.
 
-    Detects subagent routing commands (e.g. ``/deep_research``, ``/browser_use``)
-    and extracts the subagent name along with the cleaned input text.
+    Detects subagent routing commands (e.g. ``/deep_research``, ``/browser_use``,
+    ``/plan``) and extracts the wire subagent name along with the cleaned input
+    text (slash token removed so display cards do not show the prefix).
 
     Args:
         user_input: Raw user input string.
@@ -52,13 +61,14 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
     Examples:
         ``"/deep_research check this"`` -> ``("deep_research", "check this")``
         ``"/browser_use open example.com"`` -> ``("browser_use", "open example.com")``
+        ``"/plan draft a migration"`` -> ``("planner", "draft a migration")``
         ``"hello world"`` -> ``(None, "hello world")``
     """
     first_match: tuple[int, str] | None = None
     lowered = user_input.lower()
 
-    for subagent_name in SUBAGENT_SLASH_ROUTE_IDS:
-        subcommand = f"/{subagent_name}"
+    for slash_token in SUBAGENT_SLASH_ROUTE_IDS:
+        subcommand = f"/{slash_token}"
         idx = lowered.find(subcommand)
         if idx == -1:
             continue
@@ -67,13 +77,14 @@ def parse_subagent_from_input(user_input: str) -> tuple[str | None, str]:
         if end < len(lowered) and not lowered[end].isspace():
             continue
         if first_match is None or idx < first_match[0]:
-            first_match = (idx, subagent_name)
+            first_match = (idx, slash_token)
 
     if first_match:
-        idx, subagent_name = first_match
-        subcommand = f"/{subagent_name}"
+        idx, slash_token = first_match
+        subcommand = f"/{slash_token}"
         cleaned = user_input[:idx] + user_input[idx + len(subcommand) :]
         cleaned = " ".join(cleaned.split())
-        return (subagent_name, cleaned)
+        wire_name = _SUBAGENT_SLASH_TO_WIRE.get(slash_token, slash_token)
+        return (wire_name, cleaned)
 
     return (None, user_input)

@@ -151,6 +151,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
         route_after_wired_subagent,
         {
             "goal_completion": "goal_completion",
+            "await_clarification": "await_clarification",
             END: END,
         },
     )
@@ -232,6 +233,7 @@ def build_strange_loop_graph(ctx: LoopRuntimeContext):
             "plan_generate": "plan_generate",
             "plan_assess": "plan_assess",
             "plan_gap_analysis": "plan_gap_analysis",
+            "invoke_wired_subagent": "invoke_wired_subagent",
             END: END,
         },
     )

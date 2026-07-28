@@ -251,9 +251,9 @@ async def handle_routing_command(
     """Handle daemon routing command by sending input with optional subagent (RFC-454).
 
     For routing commands that map to a configured subagent id (e.g. ``/deep_research``,
-    ``/browser_use``), sets the WebSocket ``preferred_subagent`` field so the daemon merges a
-    subagent hint into StrangeLoop (IG-349). Other routing commands (e.g. ``/plan``) are sent
-    as plain text unchanged.
+    ``/browser_use``, ``/plan`` → ``planner``), strips the slash token from the query and
+    sets the WebSocket ``preferred_subagent`` field so the daemon merges a subagent hint
+    into StrangeLoop (IG-349).
 
     Args:
         cmd_input: Full command input (e.g., "/deep_research topic summary")

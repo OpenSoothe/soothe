@@ -28,3 +28,7 @@ class LoopPhaseScratch:
     undersized_plan_replan_attempts: int = 0
     iteration_perf_start: float | None = None
     step_results: list[Any] = field(default_factory=list)
+    # RFC-633 / IG-658: intake planner *subagent* review gate (not StrangeLoop plan_*)
+    plan_artifact_path: str | None = None
+    plan_artifact_markdown: str | None = None
+    planner_subagent_review_comments: str | None = None

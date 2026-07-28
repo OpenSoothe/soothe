@@ -45,6 +45,7 @@ from soothe.config.constants import (
     DEFAULT_TOOL_OUTPUT_CHARS,
 )
 from soothe.sloop.clarification import (
+    ORIGIN_EXECUTE,
     ClarificationCapture,
     ClarificationDetector,
     ClarificationOrigin,
@@ -671,7 +672,7 @@ class Executor:
         detector: ClarificationDetector | None = None,
         capture: ClarificationCapture | None = None,
         loop_state_view: LoopStateView | None = None,
-        origin_node: ClarificationOrigin = "execute",
+        origin_node: ClarificationOrigin = ORIGIN_EXECUTE,
         resume_answer_payload: dict[str, Any] | None = None,
         step_id: str | None = None,  # IG-549: for heartbeat correlation
     ) -> AsyncGenerator[Any, None]:
@@ -1995,7 +1996,7 @@ class Executor:
                     detector=self._clarification_detector,
                     capture=self._clarification_capture,
                     loop_state_view=self._clarification_loop_state_view,
-                    origin_node="execute",
+                    origin_node=ORIGIN_EXECUTE,
                     resume_answer_payload=self._clarification_resume_answer_payload,
                     step_id=step.id,  # IG-549: for heartbeat correlation
                 )

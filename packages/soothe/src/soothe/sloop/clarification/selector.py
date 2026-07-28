@@ -21,6 +21,7 @@ def build_default_clarification_policy(
     emit: EmitFn | None = None,
     min_confidence: float = 0.4,
     interactive_fallback: ClarificationPolicy | None = None,
+    force_manual_origins: tuple[str, ...] | list[str] | None = None,
 ) -> ClarificationPolicy:
     """Return the appropriate policy for the runtime mode.
 
@@ -35,6 +36,8 @@ def build_default_clarification_policy(
             :class:`AutoClarificationPolicy` (RFC-623). Invoked when veritas
             itself fails (``DeferKind == "structured_output_failed"``) and a
             human is wired. Ignored for manual mode.
+        force_manual_origins: Origins that skip veritas and use the interactive
+            relay (or defer when no human is attached).
 
     Raises:
         ValueError: if ``mode == "auto"`` but ``veritas_answer`` is not provided.
@@ -49,6 +52,7 @@ def build_default_clarification_policy(
             veritas_answer,
             min_confidence=min_confidence,
             interactive_fallback=interactive_fallback,
+            force_manual_origins=force_manual_origins,
         )
     msg = f"unknown clarification mode: {mode!r}"
     raise ValueError(msg)

@@ -8,6 +8,7 @@ from typing import Any
 
 from soothe.events import STRANGE_LOOP_CONTEXT_COMPACTED
 from soothe.sloop.clarification import (
+    ORIGIN_EXECUTE,
     ClarificationCapture,
     ClarificationDetector,
     ClarificationRequest,
@@ -461,7 +462,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             ask_iid = f"{PLANNER_ASK_INTERRUPT_PREFIX}{ask_step.id}"
             ask_request = ClarificationRequest(
                 questions=tuple(ask_step.questions),
-                origin_node="execute",
+                origin_node=ORIGIN_EXECUTE,
                 origin_interrupt_id=ask_iid,
                 loop_state=ask_view,
             )
@@ -475,7 +476,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
             await _emit_step_started_for_steps([ask_step])
             return {
                 "pending_clarification": request_to_state(ask_request),
-                "last_clarification_origin": "execute",
+                "last_clarification_origin": ORIGIN_EXECUTE,
                 "pending_clarification_answer": None,
             }
 
@@ -640,7 +641,7 @@ async def node_execute(ctx: LoopRuntimeContext, state_dict: dict[str, Any]) -> d
         logger.info("[execute] clarification captured; routing to await_clarification")
         return {
             "pending_clarification": request_to_state(clarification_capture.pending_request),
-            "last_clarification_origin": "execute",
+            "last_clarification_origin": ORIGIN_EXECUTE,
             # Clear any prior answer so re-entry only consumes it once.
             "pending_clarification_answer": None,
         }

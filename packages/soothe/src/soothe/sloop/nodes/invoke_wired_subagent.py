@@ -1,10 +1,13 @@
-"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602 / IG-656).
+"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602 / IG-656 / IG-658).
 
 Intake-only wires (``planner``, ``browser_use``, ``deep_research``,
 ``academic_research``): stream the specialist runnable from the intake-only
 registry (not on CoreAgent ``task``), forward curated wire customs for the
-orphan SubAgent card, record Human/AI execute-step ledger rows, then route to
-``goal_completion``.
+orphan SubAgent card, record Human/AI execute-step ledger rows.
+
+For ``planner`` (RFC-633): persist ``.soothe/plans/`` artifact and pause on
+RFC-622 clarification (Approve / Reject / More comments) before
+``goal_completion``. Other wires still route directly to ``goal_completion``.
 """
 
 from __future__ import annotations
@@ -17,9 +20,25 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from soothe.sloop.clarification.origins import (
+    ORIGIN_PLANNER_SUBAGENT_REVIEW,
+    PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX,
+    PLANNER_WIRE_SUBAGENT,
+)
+from soothe.sloop.clarification.protocol import (
+    ClarificationRequest,
+    LoopStateView,
+    answer_from_state,
+    request_to_state,
+)
 from soothe.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_subagent
 from soothe.sloop.goal_text import resolve_user_request
+from soothe.sloop.plans.artifact import (
+    parse_planner_subagent_review_answers,
+    update_plan_artifact_status,
+    write_plan_artifact,
+)
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
@@ -29,6 +48,10 @@ logger = logging.getLogger(__name__)
 
 WIRED_SUBAGENT_STATUS_LABEL = "Delegating to {subagent}"
 _DESC_DISPLAY_MAX = 200
+_PLANNER_SUBAGENT_REVIEW_QUESTIONS: tuple[str, ...] = (
+    "Action for this plan: Approve, Reject, or More comments",
+    "Additional comments (required for More comments; optional otherwise)",
+)
 
 
 def _extract_subagent_report(result: Any) -> str:
@@ -56,7 +79,6 @@ def _extract_subagent_report(result: Any) -> str:
                 if text:
                     return text
 
-    # Last resort: stringify structured payload only when no textual report exists.
     structured = result.get("structured_response")
     if structured is not None:
         if hasattr(structured, "model_dump_json"):
@@ -65,6 +87,28 @@ def _extract_subagent_report(result: Any) -> str:
             return str(structured.model_dump()).strip()
         return str(structured).strip()
     return ""
+
+
+def _build_loop_state_view(ctx: LoopRuntimeContext) -> LoopStateView:
+    state = ctx.loop_state
+    goal_record = getattr(ctx, "goal_record", None)
+    user_request = resolve_user_request(state)
+    plan_path = getattr(ctx.scratch, "plan_artifact_path", None)
+    plan_summary = plan_path or getattr(ctx.scratch, "plan_artifact_markdown", None)
+    if isinstance(plan_summary, str) and len(plan_summary) > 400:
+        plan_summary = plan_summary[:400] + "…"
+    return LoopStateView(
+        goal_id=getattr(goal_record, "goal_id", "") or "",
+        goal_description=user_request,
+        user_request=user_request,
+        iteration=getattr(state, "iteration", 0),
+        intent_classification=getattr(state, "intent_classification", None),
+        plan_summary=plan_summary,
+        recent_step_outputs=(),
+        workspace_summary=getattr(state, "workspace", None),
+        active_skills=tuple(getattr(state, "activated_skill_names", []) or []),
+        active_mcp_servers=tuple(getattr(state, "active_mcp_servers", []) or []),
+    )
 
 
 def _record_wired_execute_ledger(
@@ -100,7 +144,6 @@ def _record_wired_execute_ledger(
         _record_ledger_message(ctx.ce, ai, "execute_step")
         return
 
-    # Tests / unbound CE: keep cache warm for last_ledger_ai_content.
     cache = getattr(state, "_loop_messages_cache", None)
     if isinstance(cache, list):
         cache.extend([human, ai])
@@ -130,9 +173,27 @@ async def _forward_wire_custom(
     invocation_id: str,
     step_id: str,
 ) -> None:
-    """Stamp and forward curated ``soothe.subagent.*`` customs to the query stream."""
+    """Stamp and forward curated customs (subagent + tool_call.update) to the stream."""
+    from soothe_sdk.ux.stream_tool_wire import STREAM_TOOL_CALL_UPDATE
+
     et = data.get("type")
-    if not isinstance(et, str) or not et.startswith("soothe.subagent."):
+    if not isinstance(et, str):
+        return
+    if et == STREAM_TOOL_CALL_UPDATE:
+        raw_id = str(data.get("tool_call_id") or "").strip() or uuid.uuid4().hex[:12]
+        if ":" not in raw_id and step_id:
+            stamped_id = f"{step_id}:s:{raw_id}"
+        else:
+            stamped_id = raw_id
+        stamped = {
+            **data,
+            "tool_call_id": stamped_id,
+            "invocation_id": invocation_id,
+            "step_id": step_id,
+        }
+        await ctx.emit("stream_event", ((), "custom", stamped))
+        return
+    if not et.startswith("soothe.subagent."):
         return
     stamped = {**data, "invocation_id": invocation_id, "step_id": step_id}
     await ctx.emit("stream_event", ((), "custom", stamped))
@@ -146,13 +207,7 @@ async def _run_intake_only_runnable(
     invocation_id: str,
     step_id: str,
 ) -> Any:
-    """Run specialist while bridging wire customs live onto the query stream.
-
-    LangGraph ``get_stream_writer`` is often unavailable inside long single-node
-    specialists (notably browser_use): emits land in the runner log only. Install a
-    wire bridge so ``emit_progress`` posts to a queue drained concurrently for live
-    orphan-card activity. Stream ``values`` (or ``ainvoke``) for the final state.
-    """
+    """Run specialist while bridging wire customs live onto the query stream."""
     from soothe_nano.utils.progress import reset_wire_bridge, set_wire_bridge
 
     input_state = {"messages": [HumanMessage(content=goal_text)]}
@@ -190,7 +245,6 @@ async def _run_intake_only_runnable(
         if callable(astream):
             last_values: Any = None
             try:
-                # Customs arrive via the wire bridge; only consume final state here.
                 stream = astream(input_state, stream_mode=["values"])
                 async for item in stream:
                     mode, data = _unpack_astream_item(item)
@@ -208,10 +262,139 @@ async def _run_intake_only_runnable(
     finally:
         await queue.put(None)
         try:
-            # Keep draining queued wire events even if the caller is cancelled.
             await asyncio.shield(drain_task)
         finally:
             reset_wire_bridge(bridge_token)
+
+
+def _planner_goal_text(ctx: LoopRuntimeContext, base: str) -> str:
+    """Append prior plan + review comments when refining after More comments."""
+    parts = [base.strip()] if base.strip() else []
+    comments = (getattr(ctx.scratch, "planner_subagent_review_comments", None) or "").strip()
+    prior = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
+    path = (getattr(ctx.scratch, "plan_artifact_path", None) or "").strip()
+    if comments:
+        parts.append(f"## Human review comments\n{comments}")
+    if prior:
+        parts.append(f"## Prior plan draft\n{prior}")
+    if path:
+        parts.append(f"## Prior plan file\n{path}")
+    return "\n\n".join(parts) if parts else base
+
+
+def _save_planner_artifact(ctx: LoopRuntimeContext, report: str) -> str | None:
+    workspace = getattr(ctx.loop_state, "workspace", None) or ""
+    if not str(workspace).strip():
+        logger.warning("[WiredSubagent] No workspace; skipping plan artifact write")
+        return None
+    goal_record = getattr(ctx, "goal_record", None)
+    try:
+        path = write_plan_artifact(
+            workspace,
+            report,
+            title=resolve_user_request(ctx.loop_state) or ctx.loop_state.goal or "plan",
+            goal_id=getattr(goal_record, "goal_id", "") or "",
+            loop_id=str(getattr(ctx.loop_state, "thread_id", "") or ""),
+            status="draft",
+        )
+    except OSError:
+        logger.exception("[WiredSubagent] Failed to write plan artifact")
+        return None
+    ctx.scratch.plan_artifact_path = str(path)
+    ctx.scratch.plan_artifact_markdown = report
+    logger.info("[WiredSubagent] Plan artifact written: %s", path)
+    return str(path)
+
+
+def _planner_subagent_review_pending_payload(
+    ctx: LoopRuntimeContext, *, plan_path: str | None
+) -> dict[str, Any]:
+    path_line = plan_path or "(plan held in memory only)"
+    questions = (
+        f"{_PLANNER_SUBAGENT_REVIEW_QUESTIONS[0]} (plan: {path_line})",
+        _PLANNER_SUBAGENT_REVIEW_QUESTIONS[1],
+    )
+    req = ClarificationRequest(
+        questions=questions,
+        origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        origin_interrupt_id=(f"{PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX}{uuid.uuid4().hex[:8]}"),
+        loop_state=_build_loop_state_view(ctx),
+    )
+    return {
+        "pending_clarification": request_to_state(req),
+        "last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW,
+        "pending_clarification_answer": None,
+    }
+
+
+async def _handle_planner_subagent_review_answer(
+    ctx: LoopRuntimeContext,
+    state: dict[str, Any],
+    *,
+    wire: str,
+    goal_text: str,
+) -> dict[str, Any]:
+    """Resume after planner-subagent review: approve, reject, or re-plan with comments."""
+    raw_answer = state.get("pending_clarification_answer")
+    try:
+        answer = answer_from_state(raw_answer or {})
+    except ValueError:
+        logger.exception("[WiredSubagent] malformed planner-subagent review answer")
+        return {
+            "pending_clarification": None,
+            "pending_clarification_answer": None,
+            "last_outcome": "fatal",
+        }
+
+    action, comments = parse_planner_subagent_review_answers(answer.answers)
+    path = getattr(ctx.scratch, "plan_artifact_path", None)
+    report = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
+    step_id = "PLAN-RV"
+    if ctx.scratch.plan_result and getattr(ctx.scratch.plan_result, "decision", None):
+        steps = getattr(ctx.scratch.plan_result.decision, "steps", None) or []
+        if steps:
+            step_id = steps[0].id
+
+    if action == "approve":
+        if path:
+            update_plan_artifact_status(path, "approved")
+        final = (
+            f"Plan approved.\n\nSaved to: `{path}`\n\n{report}"
+            if path
+            else f"Plan approved.\n\n{report}"
+        )
+        _record_wired_execute_ledger(
+            ctx, goal_text=goal_text, report=final, wire=wire, step_id=step_id
+        )
+        ctx.scratch.planner_subagent_review_comments = None
+        return {
+            "pending_clarification": None,
+            "pending_clarification_answer": None,
+        }
+
+    if action == "reject":
+        if path:
+            update_plan_artifact_status(path, "rejected")
+        final = "Plan rejected by operator."
+        if path:
+            final = f"{final}\n\nPlan file (rejected): `{path}`"
+        if comments:
+            final = f"{final}\n\nComments: {comments}"
+        _record_wired_execute_ledger(
+            ctx, goal_text=goal_text, report=final, wire=wire, step_id=step_id
+        )
+        ctx.scratch.planner_subagent_review_comments = None
+        return {
+            "pending_clarification": None,
+            "pending_clarification_answer": None,
+        }
+
+    ctx.scratch.planner_subagent_review_comments = comments
+    return await _invoke_intake_only_direct(
+        ctx,
+        wire=wire,
+        goal_text=_planner_goal_text(ctx, goal_text),
+    )
 
 
 async def _invoke_intake_only_direct(
@@ -311,8 +494,20 @@ async def _invoke_intake_only_direct(
     if not report.strip():
         report = f"({wire} completed with no text output)"
 
+    review = wire == PLANNER_WIRE_SUBAGENT
+    plan_path: str | None = None
+    if review:
+        plan_path = _save_planner_artifact(ctx, report)
+        ledger_report = (
+            f"{report}\n\n---\nPlan saved to `{plan_path}` — awaiting Approve / Reject / comments."
+            if plan_path
+            else f"{report}\n\n---\nAwaiting Approve / Reject / comments."
+        )
+    else:
+        ledger_report = report
+
     _record_wired_execute_ledger(
-        ctx, goal_text=goal_text, report=report, wire=wire, step_id=step_id
+        ctx, goal_text=goal_text, report=ledger_report, wire=wire, step_id=step_id
     )
     card_summary = report.strip().splitlines()[0][:160] if report.strip() else "Done"
     await ctx.emit(
@@ -326,17 +521,18 @@ async def _invoke_intake_only_direct(
         },
     )
     logger.info(
-        "[WiredSubagent] Intake-only direct invoke done (subagent=%s chars=%d)",
+        "[WiredSubagent] Intake-only direct invoke done (subagent=%s chars=%d review=%s)",
         wire,
         len(report),
+        review,
     )
-    # Do not set after_record_route — that flag means record_iteration already
-    # advanced the counter. Direct intake-only skips record_iteration.
+    if review:
+        return _planner_subagent_review_pending_payload(ctx, plan_path=plan_path)
     return {}
 
 
 async def node_invoke_wired_subagent(
-    ctx: LoopRuntimeContext, _state: dict[str, Any]
+    ctx: LoopRuntimeContext, state: dict[str, Any]
 ) -> dict[str, Any]:
     """Resolve wire and direct-invoke the intake-only specialist."""
     intent = ctx.loop_state.intent
@@ -354,6 +550,16 @@ async def node_invoke_wired_subagent(
         return {"last_outcome": "fatal"}
 
     goal_text = resolve_user_request(ctx.loop_state) or ctx.loop_state.goal
+
+    if (
+        wire == PLANNER_WIRE_SUBAGENT
+        and state.get("pending_clarification_answer")
+        and state.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
+    ):
+        return await _handle_planner_subagent_review_answer(
+            ctx, state, wire=wire, goal_text=goal_text
+        )
+
     label = WIRED_SUBAGENT_STATUS_LABEL.format(subagent=wire)
     await ctx.emit(
         "plan_phase_status",

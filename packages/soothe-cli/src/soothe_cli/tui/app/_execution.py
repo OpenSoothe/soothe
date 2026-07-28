@@ -469,8 +469,7 @@ class _ExecutionMixin:
 
         # RFC-454 daemon *routing* commands (/deep_research, /plan, /browser_use, …):
         # send the full line as a normal user turn so ``parse_subagent_from_input``
-        # runs in the daemon adapter (same as headless CLI). Without this branch,
-        # ``cmd == "/deep_research …"`` never matches the bare single-token handlers below.
+        # strips the slash token and sets preferred_subagent (same as headless CLI).
         full_stripped = command.strip()
         first_word, query = parse_slash_command(full_stripped)
         if first_word:

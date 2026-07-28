@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, TypedDict
 
+from soothe.sloop.clarification.origins import ClarificationOrigin
 from soothe.sloop.intention.models import IntakeLabel
 
 IterationOutcome = Literal["continue", "completed", "fatal", "max_iterations", "deferred"]
@@ -14,7 +15,6 @@ AssessRoute = Literal[
     "continue_generate", "skip_generate", "continue_assess", "fresh_loop_skip_assess"
 ]
 EvidenceGatherRoute = Literal["plan_assess", "plan_generate_skip_assess", "plan_gap_analysis"]
-ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess", "plan_gap_analysis"]
 
 PLAN_ROUTE_GOAL_DONE: PlanRoute = "goal_done"
 PLAN_ROUTE_EXECUTE: PlanRoute = "execute"

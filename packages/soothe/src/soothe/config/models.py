@@ -77,6 +77,7 @@ from soothe.config.constants import (
     DEFAULT_MAX_ITERATIONS,
     DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 )
+from soothe.sloop.clarification.origins import DEFAULT_FORCE_MANUAL_ORIGINS
 
 AgenticFinalResponseMode = Literal["auto", "always_synthesize"]
 
@@ -1193,6 +1194,26 @@ class ClarificationConfig(BaseModel):
     ``manual`` routes them through the TUI relay (interactive policy).
     Autopilot always forces ``auto`` regardless of this setting.
     """
+
+    force_manual_origins: list[
+        Literal[
+            "execute",
+            "plan_generate",
+            "plan_assess",
+            "plan_gap_analysis",
+            "planner_subagent_review",
+        ]
+    ] = Field(
+        default_factory=lambda: list(DEFAULT_FORCE_MANUAL_ORIGINS),
+        description=(
+            "Clarification origins that never use veritas auto-answer, even when "
+            "``default_mode`` / wire ``clarification_mode`` is ``auto``. "
+            "With a human attached, the interactive TUI relay is used; otherwise "
+            "the loop defers. Default is ``planner_subagent_review`` only — the "
+            "planner *subagent* Approve/Reject/Comments gate (RFC-633). This is "
+            "not StrangeLoop ``plan_generate`` / ``plan_assess``."
+        ),
+    )
 
 
 class VeritasConfig(BaseModel):

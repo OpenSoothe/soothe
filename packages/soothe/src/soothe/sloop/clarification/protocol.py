@@ -6,7 +6,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
-ClarificationOrigin = Literal["execute", "plan_generate", "plan_assess"]
+from soothe.sloop.clarification.origins import (
+    CLARIFICATION_ORIGINS,
+    ClarificationOrigin,
+)
 
 DeferKind = Literal[
     "explicit",
@@ -132,12 +135,12 @@ def request_to_state(req: ClarificationRequest) -> dict[str, Any]:
 def request_from_state(d: Mapping[str, Any]) -> ClarificationRequest:
     """Inverse of :func:`request_to_state`."""
     origin = d.get("origin_node")
-    if origin not in ("execute", "plan_generate", "plan_assess"):
+    if origin not in CLARIFICATION_ORIGINS:
         msg = f"invalid origin_node: {origin!r}"
         raise ValueError(msg)
     return ClarificationRequest(
         questions=tuple(d.get("questions", []) or []),
-        origin_node=origin,
+        origin_node=origin,  # type: ignore[arg-type]
         origin_interrupt_id=str(d.get("origin_interrupt_id", "")),
         loop_state=_view_from_state(d.get("loop_state", {})),
     )

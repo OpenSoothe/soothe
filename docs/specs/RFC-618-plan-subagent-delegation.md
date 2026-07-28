@@ -2,13 +2,14 @@
 
 **RFC**: 618
 **Title**: Plan Subagent — Structured Planning with Explore Delegation
-**Status**: Draft
+**Status**: Draft (partially superseded for intake planner — see RFC-633)
 **Kind**: Architecture Design
 **Created**: 2026-05-11
-**Updated**: 2026-05-11
+**Updated**: 2026-07-28
 **Authors**: Soothe Team
 **Depends on**: RFC-000, RFC-001, RFC-100, RFC-600, RFC-601, RFC-613
-**Related**: RFC-201 (StrangeLoop plan-execute loop), RFC-214 (plan context)
+**Related**: RFC-201 (StrangeLoop plan-execute loop), RFC-214 (plan context),
+  RFC-633 (planner plan artifact + human review; readonly tools replace explore collection)
 
 ## Abstract
 
@@ -79,9 +80,12 @@ The compiled graph state **must** include `messages` with `add_messages` for the
 - **Plan** subagent primary model: ``subagents.planner.model`` (explicit ``provider:model``) when set; otherwise ``subagents.planner.model_role`` (default ``think``) via ``SootheConfig.create_chat_model(role)``.
 - **Explore** invocations (including those spawned from plan): **`fast`** model inside `create_explore_subagent` from the plan factory; the standalone explore subagent default remains **`fast`** in `resolve_subagents`.
 
-### 4.5 Future: additional readonly tools
+### 4.5 Supersession note (2026-07-28)
 
-The same **collection** loop pattern can later bind other readonly tools (e.g. bounded file reads) alongside explore; v1 uses explore only.
+The dedicated **explore** subagent and planner collection phase were removed
+(IG-547). Intake-only planner recon now uses **direct readonly filesystem tools**
+plus host-owned plan file persistence and human Approve/Reject/Comments review
+— see **RFC-633**. Section 4.1–4.4 remain historical for the explore-based design.
 
 ## 5. Security and Policy
 

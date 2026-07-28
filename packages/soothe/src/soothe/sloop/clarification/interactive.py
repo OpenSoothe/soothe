@@ -5,6 +5,11 @@ checkpoint snapshot captures the pending question, so TUI close/reopen and
 daemon restart both restore the loop at the same point. When the TUI submits
 the answer via ``Command(resume=...)``, ``interrupt(...)`` returns the payload
 and the policy unwraps it into a :class:`ClarificationAnswer`.
+
+``await_clarification`` owns the primary ``clarification_requested`` emit
+(with the correct mode). This policy only re-announces when used as an
+auto→manual upgrade (RFC-623 structured-output failure), via
+:meth:`answer_as_manual_fallback`.
 """
 
 from __future__ import annotations
@@ -34,12 +39,31 @@ class InteractiveClarificationPolicy:
         self._emit = emit
 
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
-        if self._emit is not None:
+        """Pause for a human answer without re-emitting ``clarification_requested``.
+
+        ``await_clarification`` already emitted the request (including
+        ``force_manual_origins`` with ``mode=manual``). Re-emitting here would
+        duplicate events for every interactive pause.
+        """
+        return await self._answer(request, announce=False)
+
+    async def answer_as_manual_fallback(self, request: ClarificationRequest) -> ClarificationAnswer:
+        """Re-announce as ``mode=manual`` then pause (auto→manual upgrade).
+
+        Used when veritas structured output fails and a human is attached
+        (RFC-623). The earlier ``await_clarification`` emit used ``mode=auto``.
+        """
+        return await self._answer(request, announce=True)
+
+    async def _answer(
+        self, request: ClarificationRequest, *, announce: bool
+    ) -> ClarificationAnswer:
+        if announce and self._emit is not None:
             await self._emit(
                 "clarification_requested",
                 {
                     "questions": list(request.questions),
-                    "origin": request.origin_node,
+                    "origin_node": request.origin_node,
                     "mode": "manual",
                 },
             )

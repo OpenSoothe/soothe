@@ -11,6 +11,7 @@ this module adds TUI-oriented buffers and lifecycle for multiple concurrent step
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeAlias
 
@@ -406,6 +407,23 @@ class StepTaskRouter:
                 raw_args=raw_args,
             )
         )
+
+    def take_pending_main_tools_matching(
+        self,
+        predicate: Callable[[PendingMainTool], bool],
+    ) -> list[PendingMainTool]:
+        """Remove and return buffered main tools for which ``predicate`` is true."""
+        if not self._pending_main_tools:
+            return []
+        taken: list[PendingMainTool] = []
+        still: dict[str, PendingMainTool] = {}
+        for key, item in self._pending_main_tools.items():
+            if predicate(item):
+                taken.append(item)
+            else:
+                still[key] = item
+        self._pending_main_tools = still
+        return taken
 
     def route_pending_main_tools(
         self,

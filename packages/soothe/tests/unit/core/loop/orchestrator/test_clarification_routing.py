@@ -67,11 +67,28 @@ def test_route_after_execute_preserved_when_no_pending() -> None:
 
 
 def test_route_after_clarification_returns_to_origin_node() -> None:
-    assert route_after_clarification({"last_clarification_origin": "execute"}) == "execute"
-    assert (
-        route_after_clarification({"last_clarification_origin": "plan_generate"}) == "plan_generate"
+    from soothe.sloop.clarification.origins import (
+        ORIGIN_EXECUTE,
+        ORIGIN_PLAN_ASSESS,
+        ORIGIN_PLAN_GENERATE,
+        ORIGIN_PLANNER_SUBAGENT_REVIEW,
     )
-    assert route_after_clarification({"last_clarification_origin": "plan_assess"}) == "plan_assess"
+
+    assert (
+        route_after_clarification({"last_clarification_origin": ORIGIN_EXECUTE}) == ORIGIN_EXECUTE
+    )
+    assert (
+        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_GENERATE})
+        == ORIGIN_PLAN_GENERATE
+    )
+    assert (
+        route_after_clarification({"last_clarification_origin": ORIGIN_PLAN_ASSESS})
+        == ORIGIN_PLAN_ASSESS
+    )
+    assert (
+        route_after_clarification({"last_clarification_origin": ORIGIN_PLANNER_SUBAGENT_REVIEW})
+        == "invoke_wired_subagent"
+    )
 
 
 def test_route_after_clarification_terminates_on_deferred_outcome() -> None:

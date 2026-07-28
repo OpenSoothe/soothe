@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import logging
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -157,7 +158,7 @@ async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal
 
 
 @pytest.mark.asyncio
-async def test_invoke_wired_planner_direct_ainvoke() -> None:
+async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         wire_subagent="planner",
@@ -186,11 +187,19 @@ async def test_invoke_wired_planner_direct_ainvoke() -> None:
             total_tokens_used=0,
             thread_id="t1",
             iteration=0,
-            workspace=None,
+            workspace=str(tmp_path),
             _loop_messages_cache=[],
+            intent_classification=None,
+            activated_skill_names=[],
+            active_mcp_servers=[],
         ),
         preferred_subagent=None,
-        scratch=SimpleNamespace(plan_result=None),
+        scratch=SimpleNamespace(
+            plan_result=None,
+            plan_artifact_path=None,
+            plan_artifact_markdown=None,
+            planner_subagent_review_comments=None,
+        ),
         emit=_emit,
         core_agent=SimpleNamespace(
             lookup_intake_only_subagent=lambda name: (
@@ -198,15 +207,79 @@ async def test_invoke_wired_planner_direct_ainvoke() -> None:
             )
         ),
         ce=None,
+        goal_record=SimpleNamespace(goal_id="g1"),
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
-    assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert out.get("pending_clarification")
+    from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
+
+    assert out.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
+    assert route_after_wired_subagent(out) == "await_clarification"
     assert ctx.scratch.plan_result is not None
+    assert ctx.scratch.plan_artifact_path
+    assert Path(ctx.scratch.plan_artifact_path).is_file()
     assert any(e[0] == "plan_phase_status" for e in emitted)
     assert any(e[0] == "wired_subagent_started" for e in emitted)
     assert any(e[0] == "wired_subagent_completed" for e in emitted)
     runnable.ainvoke.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
+    from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
+    from soothe.sloop.nodes.invoke_wired_subagent import _planner_subagent_review_pending_payload
+
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        wire_subagent="planner",
+        requires_tool_use=True,
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    plan_path = tmp_path / ".soothe" / "plans" / "x.md"
+    plan_path.parent.mkdir(parents=True)
+    plan_path.write_text("---\nstatus: draft\n---\n\n# Plan\n", encoding="utf-8")
+
+    async def _emit(*_a, **_k) -> None:
+        return None
+
+    ctx = SimpleNamespace(
+        loop_state=SimpleNamespace(
+            intent=intent,
+            routing_classification=build_loop_routing_classification(intent, None),
+            goal="plan the migration",
+            goal_user_submission="plan the migration",
+            total_tokens_used=0,
+            thread_id="t1",
+            iteration=0,
+            workspace=str(tmp_path),
+            _loop_messages_cache=[],
+            intent_classification=None,
+            activated_skill_names=[],
+            active_mcp_servers=[],
+        ),
+        preferred_subagent=None,
+        scratch=SimpleNamespace(
+            plan_result=SimpleNamespace(decision=SimpleNamespace(steps=[SimpleNamespace(id="P1")])),
+            plan_artifact_path=str(plan_path),
+            plan_artifact_markdown="# Plan\n",
+            planner_subagent_review_comments=None,
+        ),
+        emit=_emit,
+        core_agent=SimpleNamespace(lookup_intake_only_subagent=lambda _n: None),
+        ce=None,
+        goal_record=SimpleNamespace(goal_id="g1"),
+    )
+    pending = _planner_subagent_review_pending_payload(ctx, plan_path=str(plan_path))
+    state = {
+        **pending,
+        "pending_clarification_answer": answer_to_state(
+            ClarificationAnswer(answers=("Approve", ""), source="human")
+        ),
+    }
+    out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
+    assert out.get("pending_clarification") is None
+    assert route_after_wired_subagent(out) == "goal_completion"
+    assert "status: approved" in plan_path.read_text(encoding="utf-8")
 
 
 def test_extract_subagent_report_prefers_answer_field() -> None:

@@ -5,6 +5,12 @@ from __future__ import annotations
 import pytest
 
 from soothe.sloop.clarification.auto import AutoClarificationPolicy
+from soothe.sloop.clarification.origins import (
+    ORIGIN_EXECUTE,
+    ORIGIN_PLAN_ASSESS,
+    ORIGIN_PLAN_GENERATE,
+    ORIGIN_PLANNER_SUBAGENT_REVIEW,
+)
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
@@ -15,10 +21,10 @@ from soothe.sloop.clarification.protocol import (
 from soothe.subagents.veritas.schemas import VeritasAnswerSchema
 
 
-def _request() -> ClarificationRequest:
+def _request(*, origin_node: str = ORIGIN_EXECUTE) -> ClarificationRequest:
     return ClarificationRequest(
         questions=("What aspect to refine?",),
-        origin_node="execute",
+        origin_node=origin_node,  # type: ignore[arg-type]
         origin_interrupt_id="i1",
         loop_state=LoopStateView(
             goal_id="g",
@@ -170,6 +176,44 @@ async def test_structured_output_failed_delegates_to_fallback() -> None:
 
 
 @pytest.mark.asyncio
+async def test_structured_output_failed_uses_manual_fallback_announce() -> None:
+    """Interactive fallback must use answer_as_manual_fallback (auto→manual)."""
+    fallback_answer = ClarificationAnswer(answers=("ok",), source="human")
+
+    class _AnnounceFallback:
+        def __init__(self) -> None:
+            self.answer_calls = 0
+            self.upgrade_calls = 0
+
+        async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
+            self.answer_calls += 1
+            return fallback_answer
+
+        async def answer_as_manual_fallback(
+            self, request: ClarificationRequest
+        ) -> ClarificationAnswer:
+            self.upgrade_calls += 1
+            return fallback_answer
+
+    fallback = _AnnounceFallback()
+    policy = AutoClarificationPolicy(
+        _veritas_returning(
+            VeritasAnswerSchema(
+                answers=[],
+                confidence=0.0,
+                defer=True,
+                rationale="structured_output_failed: provider error",
+            )
+        ),
+        interactive_fallback=fallback,  # type: ignore[arg-type]
+    )
+    ans = await policy.answer(_request())
+    assert ans is fallback_answer
+    assert fallback.upgrade_calls == 1
+    assert fallback.answer_calls == 0
+
+
+@pytest.mark.asyncio
 async def test_explicit_defer_does_not_use_fallback() -> None:
     """Only structured_output_failed should reach the fallback (RFC-623)."""
     fallback_answer = ClarificationAnswer(answers=("x",), source="human", confidence=None)
@@ -187,3 +231,68 @@ async def test_explicit_defer_does_not_use_fallback() -> None:
     assert exc_info.value.kind == "explicit"
     assert isinstance(fallback, _RecordingFallback)
     assert fallback.calls == []
+
+
+@pytest.mark.asyncio
+async def test_force_manual_origin_uses_fallback_and_skips_veritas() -> None:
+    calls: list[ClarificationRequest] = []
+
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        calls.append(_req)
+        return VeritasAnswerSchema(answers=["approved"], confidence=0.99, defer=False)
+
+    fallback_answer = ClarificationAnswer(answers=("Approve", ""), source="human")
+    fallback = _RecordingFallback(fallback_answer)
+    policy = AutoClarificationPolicy(
+        _veritas,
+        interactive_fallback=fallback,
+        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+    )
+    request = _request(origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW)
+    ans = await policy.answer(request)
+    assert ans is fallback_answer
+    assert fallback.calls == [request]
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_force_manual_origin_defers_without_fallback() -> None:
+    async def _veritas(_req: ClarificationRequest) -> VeritasAnswerSchema:
+        raise AssertionError("veritas must not run for force-manual origins")
+
+    policy = AutoClarificationPolicy(
+        _veritas,
+        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+    )
+    request = _request(origin_node=ORIGIN_PLANNER_SUBAGENT_REVIEW)
+    with pytest.raises(ClarificationDeferredError) as exc_info:
+        await policy.answer(request)
+    assert "manual confirmation" in exc_info.value.reason
+    assert exc_info.value.kind == "explicit"
+
+
+@pytest.mark.asyncio
+async def test_force_manual_does_not_affect_other_origins() -> None:
+    policy = AutoClarificationPolicy(
+        _veritas_returning(
+            VeritasAnswerSchema(answers=["auth"], confidence=0.9, defer=False, rationale="ok")
+        ),
+        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+    )
+    ans = await policy.answer(_request(origin_node=ORIGIN_EXECUTE))
+    assert ans.source == "veritas"
+    assert ans.answers == ("auth",)
+
+
+@pytest.mark.asyncio
+async def test_force_manual_does_not_apply_to_strange_loop_plan_origins() -> None:
+    """StrangeLoop plan_generate/plan_assess stay eligible for veritas auto-answer."""
+    policy = AutoClarificationPolicy(
+        _veritas_returning(
+            VeritasAnswerSchema(answers=["ok"], confidence=0.9, defer=False, rationale="ok")
+        ),
+        force_manual_origins=(ORIGIN_PLANNER_SUBAGENT_REVIEW,),
+    )
+    for origin in (ORIGIN_PLAN_GENERATE, ORIGIN_PLAN_ASSESS):
+        ans = await policy.answer(_request(origin_node=origin))
+        assert ans.source == "veritas"

@@ -219,6 +219,10 @@ agent:
     auto_min_confidence: 0.4
     max_defer_age_hours: 168
     default_mode: auto
+    # StrangeLoop plan_generate/plan_assess are *not* listed here.
+    # Default: planner *subagent* human review only (RFC-633).
+    force_manual_origins:
+      - planner_subagent_review
 
   veritas:
     model_role: think

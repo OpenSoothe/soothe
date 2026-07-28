@@ -77,6 +77,9 @@ class _AutoPolicyStub:
     def __init__(self, *, raises: ClarificationDeferredError | None = None) -> None:
         self._raises = raises
 
+    def requires_manual(self, _origin_node: str) -> bool:
+        return False
+
     async def answer(self, request: ClarificationRequest) -> ClarificationAnswer:
         if self._raises is not None:
             raise self._raises

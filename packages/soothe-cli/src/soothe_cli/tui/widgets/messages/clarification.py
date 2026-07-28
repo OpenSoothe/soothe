@@ -17,6 +17,10 @@ from soothe_cli.tui.widgets.messages._helpers import _assemble_card_header
 
 logger = logging.getLogger(__name__)
 
+# Wire origin id for planner-subagent review (mirrors host ORIGIN_PLANNER_SUBAGENT_REVIEW).
+# CLI must not import soothe host packages; keep the wire string local.
+_ORIGIN_PLANNER_SUBAGENT_REVIEW = "planner_subagent_review"
+
 
 class ClarificationInputMessage(Vertical):
     """Inline answer-collection widget for a pending ``ask_user`` step (RFC-622).
@@ -101,23 +105,30 @@ class ClarificationInputMessage(Vertical):
         step_id: str,
         questions: list[str],
         widget_id: str | None = None,
+        origin_node: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
         self._step_id = step_id
         self._questions: list[str] = [q for q in questions if q.strip()]
+        self._origin_node = (origin_node or "").strip()
         self._inputs: list[Input] = []
         self._submitted = False
         self._answers: list[str] = []
         self._widget_id = widget_id or self.id or ""
 
+    @property
+    def _is_planner_subagent_review(self) -> bool:
+        return self._origin_node == _ORIGIN_PLANNER_SUBAGENT_REVIEW
+
     def _title_content(self) -> Content:
+        title = "Review this plan" if self._is_planner_subagent_review else "Awaiting your answer"
         if self._submitted:
-            return _assemble_card_header(self, "Awaiting your answer", status="success")
+            return _assemble_card_header(self, title, status="success")
         colors = theme.get_theme_colors(self)
         return _assemble_card_header(
             self,
-            "Awaiting your answer",
+            title,
             status="pending",
             accent=colors.warning,
         )
@@ -136,7 +147,13 @@ class ClarificationInputMessage(Vertical):
             if i > 0:
                 q_classes += " has-separator"
             yield Static(f"Q{i + 1}: {q}", classes=q_classes, markup=False)
-            inp = Input(placeholder=f"Your answer for Q{i + 1}…", id=f"clarification-input-{i}")
+            placeholder = f"Your answer for Q{i + 1}…"
+            if self._is_planner_subagent_review:
+                if i == 0:
+                    placeholder = "Approve / Reject / More comments…"
+                else:
+                    placeholder = "Optional comments (required for More comments)…"
+            inp = Input(placeholder=placeholder, id=f"clarification-input-{i}")
             self._inputs.append(inp)
             yield inp
 

@@ -336,13 +336,27 @@ agent:
     auto_policy: veritas              # only built-in for now
     auto_min_confidence: 0.4          # below this, treat as defer
     max_defer_age_hours: 168          # autopilot: scrub stale awaiting_clarification goals
+    default_mode: auto                # wire may override per turn (auto|manual)
+    force_manual_origins:             # never veritas-auto these origins
+      - planner_subagent_review       # planner *subagent* gate only (RFC-633)
+                                      # NOT StrangeLoop plan_generate/plan_assess
 
   veritas:
     model_role: think                  # reuses existing ModelRole
     max_context_steps: 8
 ```
 
-Per project rule, both `config/config.template.yml` and `config/develop/nano.yml` are updated in the same change.
+`force_manual_origins` keeps selected clarification origins on the interactive
+TUI relay even when the turn's clarification mode is ``auto``. The default is
+**planner subagent review only** (`planner_subagent_review`). That gate is
+unrelated to StrangeLoop planning-stage nodes ``plan_generate`` /
+``plan_assess``. Other wired specialists (`browser_use`, `deep_research`, …)
+are not listed and can still use veritas under auto mode. Headless / autopilot
+runs (no human attached) defer forced origins instead of auto-answering. Empty
+the list to allow veritas to answer every origin under auto mode.
+
+Per project rule, both `config/soothe.template.yml` and the packaged
+`soothe-daemon` setup template are updated in the same change.
 
 ---
 

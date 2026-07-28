@@ -13,6 +13,20 @@ from soothe.sloop.clarification.auto import AutoClarificationPolicy
 from soothe.sloop.clarification.capture import ClarificationCapture
 from soothe.sloop.clarification.detector import ClarificationDetector
 from soothe.sloop.clarification.interactive import InteractiveClarificationPolicy
+from soothe.sloop.clarification.origins import (
+    CLARIFICATION_ORIGIN_RESUME_NODE,
+    CLARIFICATION_ORIGINS,
+    DEFAULT_FORCE_MANUAL_ORIGINS,
+    ORIGIN_EXECUTE,
+    ORIGIN_PLAN_ASSESS,
+    ORIGIN_PLAN_GAP_ANALYSIS,
+    ORIGIN_PLAN_GENERATE,
+    ORIGIN_PLANNER_SUBAGENT_REVIEW,
+    PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX,
+    PLANNER_WIRE_SUBAGENT,
+    STRANGELOOP_PLANNING_ORIGINS,
+    resume_node_for_clarification_origin,
+)
 from soothe.sloop.clarification.protocol import (
     ClarificationAnswer,
     ClarificationDeferredError,
@@ -35,6 +49,8 @@ from soothe.sloop.clarification.selector import build_default_clarification_poli
 
 __all__ = [
     "AutoClarificationPolicy",
+    "CLARIFICATION_ORIGINS",
+    "CLARIFICATION_ORIGIN_RESUME_NODE",
     "ClarificationAnswer",
     "ClarificationCapture",
     "ClarificationDeferredError",
@@ -42,9 +58,18 @@ __all__ = [
     "ClarificationOrigin",
     "ClarificationPolicy",
     "ClarificationRequest",
+    "DEFAULT_FORCE_MANUAL_ORIGINS",
     "DeferKind",
     "InteractiveClarificationPolicy",
     "LoopStateView",
+    "ORIGIN_EXECUTE",
+    "ORIGIN_PLAN_ASSESS",
+    "ORIGIN_PLAN_GAP_ANALYSIS",
+    "ORIGIN_PLAN_GENERATE",
+    "ORIGIN_PLANNER_SUBAGENT_REVIEW",
+    "PLANNER_SUBAGENT_REVIEW_INTERRUPT_PREFIX",
+    "PLANNER_WIRE_SUBAGENT",
+    "STRANGELOOP_PLANNING_ORIGINS",
     "answer_from_state",
     "answer_to_state",
     "bind_clarification_emit",
@@ -53,4 +78,5 @@ __all__ = [
     "request_from_state",
     "request_to_state",
     "resolve_clarification_mode",
+    "resume_node_for_clarification_origin",
 ]
