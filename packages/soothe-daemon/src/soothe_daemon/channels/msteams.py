@@ -63,6 +63,11 @@ MSTEAMS_DEFAULT_TRUSTED_SERVICE_URL_HOSTS = [
 MSTEAMS_REF_META_FILENAME = "msteams_conversations_meta.json"
 MSTEAMS_REF_LOCK_FILENAME = "msteams_conversations.lock"
 MSTEAMS_REF_TOUCH_INTERVAL_S = 300
+# Reserved top-level key in the meta sidecar marking that the legacy ref-schema
+# migration (meta sidecar backfill) has completed at least once. Used to verify
+# IG-646 D8's decommission criterion ("loaded once post-upgrade, verify via audit").
+MSTEAMS_REF_META_MIGRATION_KEY = "__migration__"
+MSTEAMS_REF_META_MIGRATION_SCHEMA = "msteams_refs_v1"
 
 
 class MSTeamsConfig:
@@ -165,6 +170,15 @@ class MSTeamsChannel(Channel):
         self._refs_meta_path = self._refs_path.parent / MSTEAMS_REF_META_FILENAME
         self._refs_lock_path = self._refs_path.parent / MSTEAMS_REF_LOCK_FILENAME
         self._refs_guard = threading.RLock()
+        # Migration audit marker for the meta sidecar (see
+        # MSTEAMS_REF_META_MIGRATION_KEY). ``True`` once the legacy ref-schema
+        # backfill in ``_load_refs_from_disk`` has completed at least once; the
+        # persisted sentinel is written on the next ``_save_refs_locked``.
+        self._refs_migration: dict[str, Any] | None = None
+        # Re-entrancy guard: set while a save is flushing the meta sidecar so
+        # the load path (invoked via ``_merge_refs_from_disk_locked`` during a
+        # save) does not re-acquire the file lock / rewrite the sentinel.
+        self._refs_save_in_progress = False
         self._conversation_refs: dict[str, ConversationRef] = self._load_refs()
         with self._refs_guard:
             if self._prune_conversation_refs():
@@ -600,7 +614,13 @@ class MSTeamsChannel(Channel):
         )
 
     def _load_refs_raw(self) -> tuple[dict[str, Any], dict[str, Any], bool]:
-        """Load raw refs/main+meta JSON payloads."""
+        """Load raw refs/main+meta JSON payloads.
+
+        The per-conversation meta entries are returned in ``meta_data``. The
+        reserved migration sentinel (``MSTEAMS_REF_META_MIGRATION_KEY``) is
+        extracted into ``self._refs_migration`` instead of being returned as a
+        per-conversation entry, so the load/merge loops never treat it as a ref.
+        """
         main_data: dict[str, Any] = {}
         meta_data: dict[str, Any] = {}
         meta_exists = self._refs_meta_path.exists()
@@ -621,12 +641,32 @@ class MSTeamsChannel(Channel):
             except Exception as e:
                 logger.warning("Failed to load conversation refs metadata: %s", e)
 
+        # Extract the reserved migration sentinel from the meta sidecar so it is
+        # never misread as a per-conversation timestamp entry. Only overwrite the
+        # in-memory marker when one is actually found on disk; otherwise preserve
+        # the existing value (it may have been stamped by the current load's
+        # backfill and not yet persisted, or set by a prior load in this process).
+        if meta_data:
+            migration = meta_data.pop(MSTEAMS_REF_META_MIGRATION_KEY, None)
+            if isinstance(migration, dict):
+                self._refs_migration = migration
+
         return main_data, meta_data, meta_exists
 
     def _load_refs_from_disk(self) -> dict[str, ConversationRef]:
-        """Load refs from disk with compatibility fallback for legacy layouts."""
+        """Load refs from disk with compatibility fallback for legacy layouts.
+
+        After the legacy backfill (meta sidecar first-run timestamp init)
+        completes, the migration-complete sentinel is recorded on the instance
+        (``self._refs_migration``) and persisted on the next
+        ``_save_refs_locked`` so IG-646 D8's decommission criterion ("verify
+        via audit") can be confirmed from the meta sidecar on disk.
+        """
         main_data, meta_data, meta_exists = self._load_refs_raw()
         if not main_data:
+            # Nothing to backfill. Any existing on-disk marker was already
+            # captured into ``self._refs_migration`` by ``_load_refs_raw`` and
+            # will be preserved on the next save. Do not stamp a new one.
             return {}
 
         out: dict[str, ConversationRef] = {}
@@ -653,6 +693,15 @@ class MSTeamsChannel(Channel):
                 ref.updated_at = now
 
             out[key] = ref
+
+        # Record the migration-complete sentinel once legacy backfill has run.
+        # Preserve an existing on-disk marker; only stamp a new one when absent
+        # so the original completion timestamp survives across restarts.
+        if self._refs_migration is None and not self._refs_save_in_progress:
+            self._refs_migration = {
+                "completed_at": now,
+                "schema": MSTEAMS_REF_META_MIGRATION_SCHEMA,
+            }
         return out
 
     def _load_refs(self) -> dict[str, ConversationRef]:
@@ -803,7 +852,15 @@ class MSTeamsChannel(Channel):
         """Persist conversation references (caller must hold _refs_guard)."""
         try:
             with self._refs_file_lock():
-                self._merge_refs_from_disk_locked()
+                # Re-entrancy guard: the merge below calls ``_load_refs_from_disk``
+                # which would otherwise re-stamp the migration sentinel and, more
+                # importantly, re-enter ``_load_refs_raw``. The guard prevents a
+                # nested sentinel write while still letting the merge read refs.
+                self._refs_save_in_progress = True
+                try:
+                    self._merge_refs_from_disk_locked()
+                finally:
+                    self._refs_save_in_progress = False
                 if prune:
                     self._prune_conversation_refs()
                 refs_data = {
@@ -823,6 +880,10 @@ class MSTeamsChannel(Channel):
                     }
                     for key, ref in self._conversation_refs.items()
                 }
+                # Persist the migration-complete sentinel (IG-646 D8) so the
+                # meta sidecar on disk records that legacy backfill has run.
+                if isinstance(self._refs_migration, dict):
+                    refs_meta[MSTEAMS_REF_META_MIGRATION_KEY] = self._refs_migration
                 self._write_json_atomically(self._refs_path, refs_data)
                 self._write_json_atomically(self._refs_meta_path, refs_meta)
         except Exception as e:

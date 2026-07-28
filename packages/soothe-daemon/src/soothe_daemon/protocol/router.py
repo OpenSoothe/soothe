@@ -2449,45 +2449,23 @@ class MessageRouter:
     async def _read_loop_token_total(self, loop_id: str) -> int:
         """Best-effort loop token total for TUI resume.
 
-        Prefers StrangeLoop checkpoint ``total_tokens_used`` (authoritative loop
-        aggregate) and falls back to legacy ``_context_tokens`` on the CoreAgent
-        checkpoint channel written by the CLI.
+        Reads the authoritative ``total_tokens_used`` persisted by StrangeLoop
+        into loop metadata during checkpoint saves.
         """
         d = self._daemon
-        metadata_total = 0
         try:
             metadata = await d._persistence_manager.get_loop_metadata(loop_id)
             if isinstance(metadata, dict):
                 raw_meta = metadata.get("total_tokens_used")
                 if isinstance(raw_meta, int) and raw_meta >= 0:
-                    metadata_total = raw_meta
+                    return raw_meta
         except Exception:
             logger.debug(
                 "Failed to read loop metadata tokens for loop %s",
                 loop_id,
                 exc_info=True,
             )
-
-        channel_total = 0
-        runner = getattr(d, "_runner", None)
-        if runner is not None:
-            try:
-                from soothe_daemon.runtime.loop_dispatcher import bind_execution_thread_for_loop
-
-                checkpoint_thread_id = await bind_execution_thread_for_loop(d, loop_id)
-                values = await runner.get_thread_state_values(checkpoint_thread_id)
-            except Exception:
-                logger.debug(
-                    "Failed to read _context_tokens for loop %s",
-                    loop_id,
-                    exc_info=True,
-                )
-            else:
-                raw = values.get("_context_tokens") if isinstance(values, dict) else None
-                if isinstance(raw, int) and raw >= 0:
-                    channel_total = raw
-
-        return max(metadata_total, channel_total)
+        return 0
 
     # ---------------------------------------------------------------------------
     # RFC-228: Autopilot Job IPC Handlers

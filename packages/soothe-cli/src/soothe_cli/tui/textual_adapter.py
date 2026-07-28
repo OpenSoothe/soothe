@@ -2487,7 +2487,7 @@ async def _persist_loop_token_total(
     try:
         loop_id = _loop_id_for_remote_state(config, daemon_session)
         if loop_id:
-            await daemon_session.aupdate_loop_state(loop_id, {"_context_tokens": tokens})
+            await daemon_session.aupdate_loop_state(loop_id, {"total_tokens_used": tokens})
     except Exception:  # non-critical; stale count on resume is acceptable
         logger.warning(
             "Failed to persist loop token total=%d; count may be stale on resume",
