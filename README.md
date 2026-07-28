@@ -45,7 +45,9 @@ Five design choices make Soothe more than another agent loop.
 ## Quick Start
 
 ```bash
-pip install -U soothe-cli
+pip install -U soothe-cli soothe-daemon
+soothed setup
+soothed start
 soothe -p "Your first task"   # requires a running daemon
 ```
 
