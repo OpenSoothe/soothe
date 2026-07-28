@@ -129,6 +129,7 @@ class SootheDaemon(DaemonHandlersMixin):
         self._autopilot_service: Any = None  # AutopilotService | None
         self._cron_service: Any = None  # CronService | None (RFC-229)
         self._running = False
+        self._started_at: str | None = None
         self._current_query_task: asyncio.Task | None = None
         self._stop_event: asyncio.Event | None = None
         max_queue_size = self._daemon_config.max_input_queue_size
@@ -839,6 +840,9 @@ class SootheDaemon(DaemonHandlersMixin):
 
             self._stop_event = asyncio.Event()
             self._running = True
+            from datetime import UTC, datetime
+
+            self._started_at = datetime.now(UTC).isoformat()
 
             self._channel_manager = ChannelManager(
                 self._daemon_config,

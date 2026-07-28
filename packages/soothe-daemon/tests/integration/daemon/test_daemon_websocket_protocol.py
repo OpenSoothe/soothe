@@ -130,6 +130,8 @@ async def test_websocket_daemon_rpc_endpoints(
         assert status["running"] is True
         assert status["port_live"] is True
         assert isinstance(status["daemon_pid"], int)
+        assert isinstance(status["started_at"], str)
+        assert status["started_at"]
 
         providers = await client.request("config_get", {"section": "providers"})
         assert "providers" in providers

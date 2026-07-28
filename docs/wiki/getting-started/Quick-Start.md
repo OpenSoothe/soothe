@@ -202,11 +202,27 @@ persistence:
 For a lightweight SQLite database (no external dependency):
 
 ```bash
-# Start daemon with SQLite backend (default)
+# Scaffold config + configure provider, then start
+soothed setup          # interactive: endpoint, key, model picker
+# or: soothed setup --yes   (CI/scripts; merge provider from env)
 soothed start
 ```
 
-SQLite is the default backend. No configuration required.
+SQLite is the default backend; no `default_backend` override is required. The
+setup wizard writes `nano.yml` / `soothe.yml` / `daemon.yml` under
+`~/.soothe/config/` (see [Installation → Configuration
+Setup](Installation.md#configuration-setup)). If you skip `soothed setup`,
+`soothed start` still runs with in-memory defaults but does **not** write
+template config files.
+
+```bash
+# Confirm the daemon is live (client-side RPC table)
+soothe status
+```
+
+`soothe status` queries the running daemon over WebSocket and prints a unified
+table including PID, **Started** (the daemon process start time, an ISO-8601
+UTC timestamp), active threads, daemon/core versions, and readiness state.
 
 Purpose databases live under `~/.soothe/data/databases/` (`checkpoints.db`,
 `context.db`, `display.db`, `cron.db`, `identity.db`, `metadata.db`,
@@ -219,7 +235,14 @@ Full reference: [Environment variables](../configuration-guide/environment-varia
 ### Verify
 
 ```bash
+# HTTP health check
 curl -sf http://127.0.0.1:8765/healthz
+
+# Client-side status table (PID, Started time, threads, versions, readiness)
+soothe status
+
+# Fast local check (no RPC): soothed status
+soothed status
 ```
 
 ---

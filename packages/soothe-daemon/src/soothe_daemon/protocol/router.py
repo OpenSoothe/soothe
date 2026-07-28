@@ -1248,6 +1248,7 @@ class MessageRouter:
                 "port_live": port_live,
                 "active_threads": active_threads,
                 "daemon_pid": os.getpid() if running else None,
+                "started_at": d._started_at,
                 "readiness_state": d._readiness_state,
                 "readiness_message": d._readiness_message,
                 "daemon_version": daemon_version,

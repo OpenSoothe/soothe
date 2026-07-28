@@ -201,6 +201,92 @@ soothe loop tag abc123 research analysis
 soothe loop tag abc123 research --remove
 ```
 
+## Status Commands
+
+Client-side status checks that query the running daemon over WebSocket and
+render a unified table. (For the fast local `soothed status` check that does
+no RPC, see [Daemon Management](#soothed-status).)
+
+### soothe status
+
+Show overall daemon and connection status (the default when no subcommand is
+given).
+
+**Usage**: `soothe status [options]`
+
+**Options**:
+- `--json` - Output as JSON.
+- `--config <file>` - Use custom configuration file.
+
+**Examples**:
+```bash
+# Default: unified table
+soothe status
+
+# JSON output
+soothe status --json
+```
+
+**Output** (running daemon):
+```
+                          Soothe Status
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Section   ┃ Setting           ┃ Value                       ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Connection│ WebSocket URL      │ ws://127.0.0.1:8765         │
+│           │ Soothe Home        │ /home/user/.soothe          │
+│ Daemon    │ Status             │ Running                     │
+│           │ PID                │ 12345                       │
+│           │ Started            │ 2026-07-28T08:46:22+00:00   │
+│           │ Active Threads     │ 3                           │
+│           │ Daemon Version     │ 0.7.0                       │
+│           │ Core Version        │ 0.7.0                       │
+│           │ Readiness          │ ready                       │
+└───────────┴────────────────────┴──────────────────────────────┘
+```
+
+The **Started** row is the daemon process start time (ISO-8601 UTC timestamp,
+captured when the daemon enters the running state). In JSON output it is the
+`started_at` field under `daemon`; it is `null` until the daemon has started
+successfully and is omitted from the table when the daemon is not live.
+
+### soothe status daemon
+
+Check daemon status from the client side. Validates that the daemon is running
+and responsive over WebSocket.
+
+**Usage**: `soothe status daemon [options]`
+
+**Options**:
+- `--json` - Output as JSON.
+- `--config <file>` - Use custom configuration file.
+
+**Examples**:
+```bash
+soothe status daemon
+soothe status daemon --json
+```
+
+JSON output includes: `status`, `websocket_url`, `running`, `port_live`,
+`active_threads`, `daemon_pid`, `started_at`, `daemon_version`,
+`core_version`, `readiness_state`, and `readiness_message` (when present).
+
+### soothe status connection
+
+Check client-daemon connection settings (WebSocket URL, Soothe Home). Does
+not require the daemon to be running.
+
+**Usage**: `soothe status connection [options]`
+
+**Options**:
+- `--json` - Output as JSON.
+
+**Examples**:
+```bash
+soothe status connection
+soothe status connection --json
+```
+
 ## Configuration Management
 
 ### soothe config reload
@@ -304,6 +390,12 @@ soothed start
 soothed start --foreground
 ```
 
+**Output** (background):
+```
+Starting daemon...
+Daemon started successfully (PID: 12345, ws://127.0.0.1:8765)
+```
+
 ### soothed stop
 
 Stop the running Soothe daemon.
@@ -317,7 +409,8 @@ soothed stop
 
 ### soothed status
 
-Show Soothe daemon status.
+Fast local daemon status check (no daemon imports, no RPC). Reads the PID
+file and probes the WebSocket port directly.
 
 **Usage**: `soothed status`
 
@@ -326,15 +419,19 @@ Show Soothe daemon status.
 soothed status
 ```
 
-**Output**:
+**Output** (running):
 ```
-Daemon Status: running
+Daemon status: running
 PID: 12345
-Uptime: 2 hours
-Transports:
-  - WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
-Active Threads: 3
+WebSocket: ws://127.0.0.1:8765
 ```
+
+When the daemon is not running it prints `Daemon status: stopped`; if the PID
+file is missing but the port is live it prints
+`Daemon status: running (orphan — PID file missing)`.
+
+> For a richer status view (PID, start time, active threads, versions,
+> readiness), use `soothe status` — see [Status commands](#status-commands).
 
 ### soothed restart
 

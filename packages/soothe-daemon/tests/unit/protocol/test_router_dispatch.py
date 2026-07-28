@@ -46,6 +46,7 @@ class _FakeDaemon:
 
     def __init__(self) -> None:
         self.sent: list[tuple[Any, dict[str, Any]]] = []
+        self._started_at: str | None = None
 
     async def _send_client_message(self, client_id: Any, msg: dict[str, Any]) -> None:
         self.sent.append((client_id, msg))
@@ -227,6 +228,7 @@ async def test_dispatch_routes_daemon_status() -> None:
     daemon._active_threads = set()
     daemon._readiness_state = "ready"
     daemon._readiness_message = ""
+    daemon._started_at = "2026-01-01T00:00:00+00:00"
 
     import os
 
@@ -244,6 +246,7 @@ async def test_dispatch_routes_daemon_status() -> None:
     assert msg["id"] == "r1"
     assert msg["result"]["running"] is True
     assert msg["result"]["daemon_pid"] == os.getpid()
+    assert msg["result"]["started_at"] == "2026-01-01T00:00:00+00:00"
     assert msg["result"]["daemon_version"] == daemon_version
     assert msg["result"]["core_version"] == core_version
 
@@ -263,6 +266,7 @@ async def test_dispatch_unwraps_request_envelope() -> None:
     daemon._active_threads = set()
     daemon._readiness_state = "ready"
     daemon._readiness_message = ""
+    daemon._started_at = "2026-01-01T00:00:00+00:00"
 
     await router.dispatch(
         "client-1",

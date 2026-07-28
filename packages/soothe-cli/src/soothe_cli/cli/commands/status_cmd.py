@@ -58,12 +58,13 @@ def _render_unified_status_table(
     daemon_live: bool = True,
     daemon_version: str | None = None,
     core_version: str | None = None,
+    started_at: str | None = None,
 ) -> Table:
     """Render unified status table without duplicated info.
 
     Sections:
     - Connection: WebSocket URL, Soothe Home
-    - Daemon: Running, Threads, PID, Versions (only when daemon is live)
+    - Daemon: Running, Threads, PID, Versions, Started (only when daemon is live)
     """
     table = Table(title="Soothe Status")
     table.add_column("Section", style="dim", width=12)
@@ -82,6 +83,8 @@ def _render_unified_status_table(
     table.add_row("Daemon", "Status", "[green]Running[/green]")
     if daemon_pid:
         table.add_row("", "PID", str(daemon_pid))
+    if started_at:
+        table.add_row("", "Started", started_at)
     if active_threads is not None:
         table.add_row("", "Active Threads", str(active_threads))
     if daemon_version:
@@ -176,6 +179,7 @@ def daemon_status(
             "port_live": status.get("port_live", True),
             "active_threads": status.get("active_threads", 0),
             "daemon_pid": status.get("daemon_pid"),
+            "started_at": status.get("started_at"),
             "daemon_version": status.get("daemon_version"),
             "core_version": status.get("core_version"),
             "readiness_state": status.get("readiness_state", "unknown"),
@@ -192,6 +196,7 @@ def daemon_status(
     daemon_pid = status.get("daemon_pid")
     daemon_version = status.get("daemon_version")
     core_version = status.get("core_version")
+    started_at = status.get("started_at")
     # Use readiness_state from daemon_status RPC (already includes state + message)
     readiness_state_from_status = (
         {
@@ -213,6 +218,7 @@ def daemon_status(
         daemon_live=True,
         daemon_version=daemon_version,
         core_version=core_version,
+        started_at=started_at,
     )
     console.print(table)
 
@@ -302,6 +308,7 @@ def status_main(
                 output["daemon"]["port_live"] = status.get("port_live", True)
                 output["daemon"]["active_threads"] = status.get("active_threads", 0)
                 output["daemon"]["daemon_pid"] = status.get("daemon_pid")
+                output["daemon"]["started_at"] = status.get("started_at")
                 output["daemon"]["daemon_version"] = status.get("daemon_version")
                 output["daemon"]["core_version"] = status.get("core_version")
                 output["daemon"]["readiness_state"] = status.get("readiness_state", "unknown")
@@ -357,6 +364,7 @@ def status_main(
         daemon_live=True,
         daemon_version=daemon_version,
         core_version=core_version,
+        started_at=status.get("started_at"),
     )
     console.print(table)
 

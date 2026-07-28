@@ -789,6 +789,7 @@ def _install_rpc_stubs(server: _MockDaemonServer) -> None:
                     "port_live": True,
                     "active_threads": len(daemon._active_threads),
                     "daemon_pid": os.getpid(),
+                    "started_at": getattr(daemon, "_started_at", None),
                     "readiness_state": daemon._readiness_state,
                     "readiness_message": daemon._readiness_message,
                     "daemon_version": daemon_version,

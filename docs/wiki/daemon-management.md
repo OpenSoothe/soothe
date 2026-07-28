@@ -33,31 +33,86 @@ soothed start
 soothed start --foreground
 ```
 
-**Output**:
+**Output** (background):
 ```
-Daemon started successfully
-PID: 12345
-WebSocket: ws://127.0.0.1:8765
-Status: running
+Starting daemon...
+Daemon started successfully (PID: 12345, ws://127.0.0.1:8765)
 ```
+
+The foreground mode runs `run_daemon(..., detached=False)` in the current
+process and does not print the "Daemon started successfully" line — you see
+the daemon log stream directly until you stop the process.
 
 ### Check Status
 
-View daemon status:
+There are two status commands:
+
+- `soothed status` — **fast local check** (no daemon imports, no RPC).
+  Reads the PID file / probes the WebSocket port and prints the local view.
+- `soothe status` — **client-side RPC** (queries the running daemon over
+  WebSocket) and renders a unified table including PID, **Started** (the
+  daemon process start time, an ISO-8601 UTC timestamp), active threads,
+  daemon/core versions, and readiness state.
 
 ```bash
+# Fast local check (no daemon imports)
 soothed status
+
+# Rich client-side table (queries the daemon over WebSocket)
+soothe status
+
+# JSON output from the client
+soothe status daemon --json
 ```
 
-**Output**:
+**`soothed status` output** (running):
 ```
-Daemon Status: running
+Daemon status: running
 PID: 12345
-Uptime: 2 hours
-Transports:
-  - WebSocket: ✅ Enabled (ws://127.0.0.1:8765)
-Active Threads: 3
-Memory Usage: 256 MB
+WebSocket: ws://127.0.0.1:8765
+```
+
+When the daemon is not running it prints `Daemon status: stopped`; if the PID
+file is missing but the port is live it prints
+`Daemon status: running (orphan — PID file missing)`.
+
+**`soothe status` output** (running daemon, unified table):
+
+```
+                          Soothe Status
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Section   ┃ Setting           ┃ Value                       ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Connection│ WebSocket URL      │ ws://127.0.0.1:8765         │
+│           │ Soothe Home        │ /home/user/.soothe          │
+│ Daemon    │ Status             │ Running                     │
+│           │ PID                │ 12345                       │
+│           │ Started            │ 2026-07-28T08:46:22+00:00   │
+│           │ Active Threads     │ 3                           │
+│           │ Daemon Version     │ 0.7.0                       │
+│           │ Core Version       │ 0.7.0                       │
+│           │ Readiness          │ ready                       │
+└───────────┴────────────────────┴──────────────────────────────┘
+```
+
+The **Started** row is the daemon process start time (an ISO-8601 UTC
+timestamp captured when the daemon enters the running state). It is omitted
+when the daemon is not live or before the first successful start. With
+`--json` the same value is returned under the `started_at` key.
+
+When the daemon is not reachable, `soothe status` prints:
+
+```
+                          Soothe Status
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Section   ┃ Setting           ┃ Value                       ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Connection│ WebSocket URL      │ ws://127.0.0.1:8765         │
+│           │ Soothe Home        │ /home/user/.soothe          │
+│ Daemon    │ Status             │ Not running                 │
+└───────────┴────────────────────┴──────────────────────────────┘
+
+Hint: Start with 'soothed start'
 ```
 
 ### Stop Daemon
@@ -71,7 +126,6 @@ soothed stop
 **Output**:
 ```
 Stopping daemon (PID: 12345)...
-Saving thread state...
 Daemon stopped successfully
 ```
 
