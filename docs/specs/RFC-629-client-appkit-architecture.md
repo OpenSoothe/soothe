@@ -5,7 +5,7 @@
 **Status**: Draft
 **Kind**: Architecture Design
 **Created**: 2026-06-30
-**Updated**: 2026-07-17
+**Updated**: 2026-07-29
 **Authors**: Xiaming Chen
 **Dependencies**: RFC-450, RFC-614, RFC-403
 **Related**: RFC-610 (SDK Module Structure), IG-525 (Go/TS Clients RFC-450), IG-612 (Python client), IG-619 (cross-client API parity), IG-620 (Rust client)
@@ -19,7 +19,7 @@ Four language clients talk to soothe-daemon over protocol-1 (RFC-450): `client/p
 This RFC defines a three-layer architecture shared by all four clients:
 
 - **Layer 0 (core transport)**: WebSocket + protocol-1 lifecycle — `WebSocketClient` / `Client`, reconnect/reattach, multiplexing, heartbeat, `delivery_ack`.
-- **Layer 1 (`appkit`)**: reusable application mechanics — `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `SessionStore`.
+- **Layer 1 (`appkit`)**: reusable application mechanics — `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `LoopSessionStore`.
 - **Layer 2 (application)**: product decisions — deliverable phases, persistence, chat modes, error copy.
 
 A fourth **ephemeral RPC** entry point (`CommandClient` / `AsyncCommandClient`) sits beside Layer 0 for jobs/cron/autopilot one-shots that must not share a streaming socket.
@@ -61,7 +61,7 @@ Every client documents and implements these four entry points with matching sema
 | One conversation, stream turns | `appkit.DaemonSession` | Dual-socket: stream + RPC sidecar; `SendTurn` / `IterTurnChunks`; `EnsureConnected` |
 | Jobs / cron / autopilot one-shots | `CommandClient` (+ async variant in Python/TS) | Ephemeral connect → handshake → one RPC → close |
 | Raw protocol / custom RPCs | `WebSocketClient` (Python) / `Client` (Go, TS) | Long-lived transport; advanced |
-| Multi-user HTTP backend | `ConnectionPool` + `TurnRunner` | Session-scoped pool; product supplies `SessionStore` |
+| Multi-user HTTP backend | `ConnectionPool` + `TurnRunner` | Session-scoped pool; product supplies `LoopSessionStore` |
 
 Wire request param models (Python `protocol_params`) stay off the root export. Advanced stream helpers (`unwrap_next`, pipeline batchers, `ManagedClient`) are importable from submodules but demoted from the primary public list.
 
@@ -79,8 +79,8 @@ Wire request param models (Python `protocol_params`) stay off the root export. A
 ```mermaid
 graph TB
     subgraph App["Application layer (per app, per language)"]
-        APPGO[triarch / new Go app<br/>product config, SessionStore impl,<br/>chat modes, error copy, domain types]
-        APPTS[TS app<br/>product config, SessionStore impl,<br/>chat modes, error copy, domain types]
+        APPGO[triarch / new Go app<br/>product config, LoopSessionStore impl,<br/>chat modes, error copy, domain types]
+        APPTS[TS app<br/>product config, LoopSessionStore impl,<br/>chat modes, error copy, domain types]
     end
     subgraph AppkitGo["client/go/appkit"]
         POOLGO[ConnectionPool]
@@ -88,7 +88,7 @@ graph TB
         TURNGO[TurnRunner]
         CLSGO[EventClassifier]
         SSEGO[SSEBroadcaster]
-        STOREGO[SessionStore interface]
+        STOREGO[LoopSessionStore interface]
     end
     subgraph AppkitTS["client/typescript/src/appkit"]
         POOLTS[ConnectionPool]
@@ -96,7 +96,7 @@ graph TB
         TURNTS[TurnRunner]
         CLSTS[EventClassifier]
         SSETS[SSEBroadcaster]
-        STORETS[SessionStore interface]
+        STORETS[LoopSessionStore interface]
     end
     subgraph CoreGo["client/go (core, upgraded)"]
         CLIENTGO[Client<br/>concurrent-safe, multiplexed]
@@ -150,11 +150,11 @@ graph TB
 - `TurnRunner` — timeout-bounded pool turn loop: send `loop_input`, consume the multiplexed stream, persist/broadcast. **Turn end follows the `DaemonSession.IterTurnChunks` contract** (`TurnBoundary`: gated `soothe.stream.end` / `status.idle` / `stopped`). Phase deliverables may early-complete for UX but are not the sole terminator.
 - `EventClassifier` — map streamed frames to content deltas, thinking steps, and optional phase early-complete, keyed on `(namespace, mode, phase)` with a configurable `DeliverablePhases` set.
 - `SSEBroadcaster` — string-keyed pub/sub fan-out.
-- `SessionStore` interface — the persistence seam (loop-id mapping, message append, last-used/reset tracking).
+- `LoopSessionStore` interface — the persistence seam (loop-id mapping, message append, last-used/reset tracking).
 
 **Interfaces**:
-- Provides: `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `SessionStore`.
-- Requires: a core client (or factory), an application-supplied `SessionStore` when using the pool, and application product config (`DeliverablePhases`, SSE event vocabulary).
+- Provides: `DaemonSession`, `ConnectionPool`, `QueryGate`, `TurnRunner`, `EventClassifier`, `SSEBroadcaster`, `LoopSessionStore`.
+- Requires: a core client (or factory), an application-supplied `LoopSessionStore` when using the pool, and application product config (`DeliverablePhases`, SSE event vocabulary).
 
 ### `CommandClient` (ephemeral RPC)
 
@@ -184,7 +184,7 @@ graph TB
    - `TurnBoundary.Feed` applies DaemonSession end rules (authoritative turn end).
    - `EventClassifier.Classify` accumulates deltas / thinking steps; deliverable phases may early-complete for UX.
    - Boundary end with substantive accumulated text → persist + SSE complete (same as CLI when `iter_turn_chunks` returns).
-6. On complete: `SessionStore.Persist` + `SSEBroadcaster.Broadcast`.
+6. On complete: `LoopSessionStore.Persist` + `SSEBroadcaster.Broadcast`.
 7. `QueryGate.Release(sessionID)`.
 
 ### Flow 2: Connection drop mid-session
@@ -206,7 +206,7 @@ graph TB
 4. **Deliverable classification keys on `(namespace, mode, phase)`.** Per RFC-614/RFC-403: streamed chunks are `type:"next"` with `payload.mode="messages"` + `phase`; stream termination is `type:"complete"`/`error`. IG-317 removed `soothe.output.*` assistant bodies, so classification by the `output.*` namespace alone would miss real deliverables.
 5. **Per-connection handshake.** Each pooled connection independently completes `connection_init`/`connection_ack` (RFC-450 §8.2 rule 1); the protocol has no notion of pooling — pooling is a client-side concern.
 6. **Additive core API.** Existing `Client`/`Send*`/`Request*` signatures are preserved; the existing test suite must remain green.
-7. **Product decisions stay pluggable.** `SessionStore` is an interface; `DeliverablePhases` is configuration; the SSE broadcaster is string-keyed. The library does not import any application's domain types.
+7. **Product decisions stay pluggable.** `LoopSessionStore` is an interface; `DeliverablePhases` is configuration; the SSE broadcaster is string-keyed. The library does not import any application's domain types.
 8. **Cross-language parity of appkit semantics.** Python, Go, and TypeScript `appkit` packages must classify events, gate queries, stream turns (`DaemonSession`), and run pool turns with the same semantics. Language-idiomatic mechanics differ; the *contract* does not. Python is the reference for disputed behavior.
 9. **Constrained public exports.** Root / package entrypoints export the API tiers above; wire factories, demoted pipeline helpers, and legacy aliases are submodule-only or unexported. Each language locks the contract with a public-API test where the language supports it.
 
@@ -228,9 +228,9 @@ graph TB
 
 **Contains (Python)**: `client/python/src/soothe_client/appkit/` (`daemon_session.py`, `pool.py`, `query_gate.py`, `turn_runner.py`, `classifier.py`, …).
 
-**Contains (Go)**: `client/go/appkit/` (`daemon_session.go`, `pool.go`, `query_gate.go`, `turn_runner.go`, `classifier.go`, `thinking_step.go`, `broadcaster.go`, `session_store.go`, `client.go`, `doc.go`).
+**Contains (Go)**: `client/go/appkit/` (`daemon_session.go`, `pool.go`, `query_gate.go`, `turn_runner.go`, `classifier.go`, `thinking_step.go`, `broadcaster.go`, `loop_session_store.go`, `client.go`, `doc.go`).
 
-**Contains (TypeScript)**: `client/typescript/src/appkit/` (`daemon_session.ts`, `pool.ts`, `query_gate.ts`, `turn_runner.ts`, `classifier.ts`, `thinking_step.ts`, `broadcaster.ts`, `session_store.ts`, `client.ts`, `index.ts`).
+**Contains (TypeScript)**: `client/typescript/src/appkit/` (`daemon_session.ts`, `pool.ts`, `query_gate.ts`, `turn_runner.ts`, `classifier.ts`, `thinking_step.ts`, `broadcaster.ts`, `loop_session_store.ts`, `client.ts`, `index.ts`).
 
 ### Layer 2: Application (product)
 
@@ -294,11 +294,11 @@ ChatEventResult {
 }
 ```
 
-### `SessionStore` interface (appkit)
+### `LoopSessionStore` interface (appkit)
 
 ```
-SessionStore {
-  GetSession(sessionID) → SessionEntry?
+LoopSessionStore {
+  GetSession(sessionID) → LoopSessionEntry?
   CreateSession(workspaceID, sessionID, loopID, sessionType) → error
   UpdateLastUsed(sessionID) → error
   IncrementResetCount(sessionID) → error
@@ -317,7 +317,7 @@ SessionStore {
 
 ### Application persistence
 
-**Integration Type**: `SessionStore` interface (implemented per app).
+**Integration Type**: `LoopSessionStore` interface (implemented per app).
 
 **Data Exchange**: session↔loop-id mapping, appended messages, last-used/reset metadata.
 
@@ -373,4 +373,4 @@ SessionStore {
 
 ---
 
-*Updated 2026-07-17 for Python reference + three-language API tiers (IG-619).*
+*Updated 2026-07-29 for Python reference + three-language API tiers (IG-619); `LoopSessionStore` naming (GPE-05).*

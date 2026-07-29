@@ -38,6 +38,7 @@ from soothe_daemon.protocol.schemas import (
     JobResumeParams,
     JobStatusParams,
     LoopDeleteParams,
+    LoopExecutionStateFetchParams,
     LoopGetParams,
     LoopInputParams,
     LoopListParams,
@@ -89,6 +90,7 @@ class TestParamsRegistryCompleteness:
         "loop_messages",
         "loop_state_get",
         "loop_state_update",
+        "loop_execution_state_fetch",
         "loop_history_fetch",
         "skills_list",
         "invoke_skill",
@@ -121,6 +123,7 @@ class TestParamsRegistryCompleteness:
         ("request", "loop_messages"),
         ("request", "loop_state_get"),
         ("request", "loop_state_update"),
+        ("request", "loop_execution_state_fetch"),
         ("request", "loop_history_fetch"),
         ("request", "loop_detach"),
         ("subscribe", "loop_events"),
@@ -341,6 +344,18 @@ class TestLoopParams:
     def test_loop_state_update_missing_values(self) -> None:
         with pytest.raises(ValidationError):
             LoopStateUpdateParams.model_validate({"loop_id": "abc"})
+
+    def test_loop_execution_state_fetch_valid(self) -> None:
+        p = LoopExecutionStateFetchParams.model_validate({"loop_id": "abc"})
+        assert p.loop_id == "abc"
+
+    def test_loop_execution_state_fetch_missing_loop_id(self) -> None:
+        with pytest.raises(ValidationError):
+            LoopExecutionStateFetchParams.model_validate({})
+
+    def test_loop_execution_state_fetch_empty_loop_id(self) -> None:
+        with pytest.raises(ValidationError):
+            LoopExecutionStateFetchParams.model_validate({"loop_id": ""})
 
     def test_loop_history_fetch_valid(self) -> None:
         from soothe_daemon.protocol.schemas import LoopHistoryFetchParams

@@ -64,6 +64,7 @@ channels:
           - $ref: '#/components/messages/loopMessagesRequest'
           - $ref: '#/components/messages/loopStateGetRequest'
           - $ref: '#/components/messages/loopStateUpdateRequest'
+          - $ref: '#/components/messages/loopExecutionStateFetchRequest'
           - $ref: '#/components/messages/loopHistoryFetchRequest'
           # Job RPC requests
           - $ref: '#/components/messages/jobCreateRequest'
@@ -389,6 +390,18 @@ components:
         as_node:
           type: string
           description: Node to apply update as
+
+    loopExecutionStateFetchParams:
+      type: object
+      required: [loop_id]
+      description: >-
+        Params for loop_execution_state_fetch. Returns a focused
+        execution-progress snapshot (plan, step_index, iteration, status).
+      properties:
+        loop_id:
+          type: string
+          minLength: 1
+          description: Loop identifier
 
     loopHistoryFetchParams:
       type: object
@@ -1016,6 +1029,24 @@ components:
                 const: loop_state_update
               params:
                 $ref: '#/components/schemas/loopStateUpdateParams'
+              id:
+                type: string
+
+    loopExecutionStateFetchRequest:
+      title: Fetch focused execution-progress snapshot
+      correlationId:
+        $ref: '#/components/correlationIds/operationId'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/baseEnvelope'
+          - type: object
+            properties:
+              type:
+                const: request
+              method:
+                const: loop_execution_state_fetch
+              params:
+                $ref: '#/components/schemas/loopExecutionStateFetchParams'
               id:
                 type: string
 

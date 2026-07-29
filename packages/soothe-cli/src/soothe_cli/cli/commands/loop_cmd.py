@@ -9,6 +9,7 @@ All loop operations use daemon WebSocket RPC; the daemon must be running.
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from typing import Annotated, Any
 
@@ -26,6 +27,7 @@ from soothe_client import (
 from soothe_cli.runtime import load_config
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 # Create loop command group
 loop_app = typer.Typer(help="Manage StrangeLoop instances")
@@ -636,11 +638,19 @@ def continue_loop(
         str | None,
         typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
     ] = None,
+    resume: Annotated[
+        bool,
+        typer.Option(
+            "--resume",
+            help="Resume from the daemon's last execution step index.",
+        ),
+    ] = False,
 ) -> None:
     """Continue execution on existing loop.
 
     Behavior:
     - Resolve target loop (explicit `LOOP_ID` or most-recent loop)
+    - When resuming, fetch execution state (iteration/step/status) from daemon
     - Launch TUI on that loop
     - Optionally submit initial prompt in the resumed session
 
@@ -648,6 +658,7 @@ def continue_loop(
         soothe loop continue
         soothe loop continue loop_abc123
         soothe loop continue loop_abc123 --prompt "translate to chinese"
+        soothe loop continue loop_abc123 --resume
     """
     config = load_config()
     ws_url = websocket_url_from_config(config)
@@ -657,6 +668,31 @@ def continue_loop(
     # Show explicit message when user specified a loop_id
     if loop_id:
         console.print(f"[info]Continuing loop: {resolved_loop_id}[/info]")
+
+    # Fetch execution state to show where the loop will pick up.
+    # Best-effort: non-fatal if the daemon cannot answer (older daemon, etc.)
+    if resume:
+        try:
+            state = asyncio.run(
+                protocol1_rpc(
+                    ws_url,
+                    "loop_execution_state_fetch",
+                    {"loop_id": resolved_loop_id},
+                )
+            )
+            if "error" not in state:
+                step_index = state.get("step_index", 0)
+                iteration = state.get("iteration", 0)
+                status = state.get("status", "unknown")
+                plan = state.get("plan")
+                console.print(
+                    f"[info]Resuming from iteration {iteration}, "
+                    f"step {step_index} ({status})[/info]"
+                )
+                if plan:
+                    console.print(f"[dim]  Plan: {plan}[/dim]")
+        except Exception:
+            logger.warning("Failed to fetch execution state for loop %s", resolved_loop_id[:16])
 
     from soothe_cli.cli.commands.run_cmd import run_impl
 
@@ -677,8 +713,8 @@ def resume_loop(
         typer.Option("--prompt", "-p", help="Optional prompt to send after continuing."),
     ] = None,
 ) -> None:
-    """Alias for ``continue`` — resume execution on existing loop."""
-    continue_loop(loop_id, prompt)
+    """Resume execution on existing loop from the daemon's last step index."""
+    continue_loop(loop_id, prompt, resume=True)
 
 
 @loop_app.command("detach")

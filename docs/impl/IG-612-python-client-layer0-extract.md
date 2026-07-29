@@ -94,7 +94,7 @@ Promote product-agnostic CLI turn/session mechanics into `soothe_client.appkit`
 | `unwrap_next` / `is_loop_scoped_event` | ✓ |
 | `QueryGate` | ✓ |
 | `TurnEventPipeline` / `run_turn_pipeline` | ✓ (CLI re-exports) |
-| `SessionStore` Protocol | ✓ |
+| `LoopSessionStore` Protocol | ✓ |
 | Layer 0 `loop_*` RPCs + helpers | ✓ |
 | `DaemonSession` + `iter_turn_chunks` (dual-socket, post-idle drain) | ✓ |
 | `EventClassifier` / `extract_thinking_step` / `SSEBroadcaster` | ✓ |

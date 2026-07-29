@@ -39,6 +39,7 @@ __all__ = [
     "LoopMessagesParams",
     "LoopStateGetParams",
     "LoopStateUpdateParams",
+    "LoopExecutionStateFetchParams",
     "LoopDetachParams",
     # Job RPC
     "JobCreateParams",
@@ -208,6 +209,18 @@ class LoopStateUpdateParams(ParamsBase):
 
     loop_id: str = Field(..., min_length=1)
     values: dict[str, Any]
+
+
+class LoopExecutionStateFetchParams(ParamsBase):
+    """Params for method=loop_execution_state_fetch, type=request.
+
+    Returns a focused execution-progress snapshot (plan, step_index,
+    iteration, status) for the loop's bound checkpoint thread. Lighter than
+    ``loop_state_get`` (which returns the full channel-value dict) — this RPC
+    extracts only the fields a client needs to render a progress indicator.
+    """
+
+    loop_id: str = Field(..., min_length=1)
 
 
 class LoopHistoryFetchParams(ParamsBase):
@@ -556,6 +569,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "loop_messages"): LoopMessagesParams,
     ("request", "loop_state_get"): LoopStateGetParams,
     ("request", "loop_state_update"): LoopStateUpdateParams,
+    ("request", "loop_execution_state_fetch"): LoopExecutionStateFetchParams,
     ("request", "loop_history_fetch"): LoopHistoryFetchParams,
     ("request", "job_create"): JobCreateParams,
     ("request", "job_status"): JobStatusParams,

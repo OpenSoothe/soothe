@@ -415,6 +415,7 @@ PARAMS_REGISTRY: dict[tuple[str, str | None], type[BaseModel]] = {
     ("request", "loop_detach"): LoopDetachParams,
     ("request", "loop_state_get"): LoopStateGetParams,
     ("request", "loop_state_update"): LoopStateUpdateParams,
+    ("request", "loop_execution_state_fetch"): LoopExecutionStateFetchParams,
     ("request", "loop_cards_fetch"): LoopCardsFetchParams,
     ("notification", "loop_input"): LoopInputParams,
     ("request", "loop_input"): LoopInputParams,
@@ -931,6 +932,7 @@ The `method` field (within request/notification/subscribe) carries the operation
 | `loop_messages` | `request` | Fetch persisted conversation/activity rows |
 | `loop_state_get` | `request` | Get checkpoint channel values |
 | `loop_state_update` | `request` | Apply partial checkpoint values |
+| `loop_execution_state_fetch` | `request` | Get focused execution-progress snapshot (plan, step_index, iteration, status) |
 | `loop_cards_fetch` | `request` | Fetch display card ledger snapshot (deprecated — use `loop_history_fetch`) |
 | `loop_history_fetch` | `request` | Fetch goal display snapshots + live card tail (RFC-631) |
 
@@ -1363,6 +1365,7 @@ This appendix provides an informative mapping from the previous wire format to t
 | `loop_messages` | C→S | `request` | `loop_messages` | |
 | `loop_state_get` | C→S | `request` | `loop_state_get` | |
 | `loop_state_update` | C→S | `request` | `loop_state_update` | |
+| `loop_execution_state_fetch` | C→S | `request` | `loop_execution_state_fetch` | Returns plan, step_index, iteration, status |
 | `loop_cards_fetch` | C→S | `request` | `loop_cards_fetch` | |
 | `job_create` | C→S | `request` | `job_create` | |
 | `job_status` | C→S | `request` | `job_status` | |

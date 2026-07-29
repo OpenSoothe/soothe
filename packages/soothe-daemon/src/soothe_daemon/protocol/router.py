@@ -2468,10 +2468,116 @@ class MessageRouter:
             )
         return 0
 
+    async def _handle_loop_execution_state_fetch(self, client_id: Any, msg: dict[str, Any]) -> None:
+        """Return focused execution-progress snapshot: plan, step_index, iteration, status.
+
+        Lighter than ``loop_state_get`` (which returns the full channel-value
+        dict). This RPC extracts the four fields a client needs to render a
+        progress indicator from two sources:
+
+        * ``iteration`` / ``status`` — from the loop metadata
+          ``execution_checkpoint`` blob (the authoritative persisted values).
+        * ``plan`` / ``step_index`` — best-effort from the bound checkpoint
+          thread's graph channel values (``current_decision`` /
+          ``previous_plan`` / ``completed_step_ids``).
+        """
+        d = self._daemon
+        request_id = msg.get("request_id")
+        loop_id = msg.get("loop_id")
+        if not loop_id:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.INVALID_REQUEST,
+                    "loop_id required",
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        loop_id_str = str(loop_id)
+
+        # --- iteration + status: from execution_checkpoint metadata blob ----
+        iteration: int = 0
+        loop_status: str = "idle"
+        try:
+            metadata = await d._persistence_manager.get_loop_metadata(loop_id_str)
+        except Exception as exc:
+            await d._send_client_message(
+                client_id,
+                build_error_response(
+                    ErrorCode.LOOP_EXECUTION_STATE_ERROR,
+                    str(exc),
+                    request_id=request_id,
+                ),
+            )
+            return
+
+        if isinstance(metadata, dict):
+            # iteration comes from the execution_checkpoint blob; status from
+            # the loop metadata row (authoritative, same field loop_get surfaces).
+            exec_cp = metadata.get("execution_checkpoint")
+            if isinstance(exec_cp, dict):
+                raw_iter = exec_cp.get("iteration")
+                if isinstance(raw_iter, (int, float)) and raw_iter >= 0:
+                    iteration = int(raw_iter)
+                # Fall back to execution_checkpoint status only when the
+                # metadata-level status is absent (e.g. legacy/pre-5.0 row).
+                raw_exec_status = exec_cp.get("status")
+                if isinstance(raw_exec_status, str) and raw_exec_status.strip():
+                    loop_status = raw_exec_status.strip()
+            meta_status = metadata.get("status")
+            if isinstance(meta_status, str) and meta_status.strip():
+                loop_status = meta_status.strip()
+
+        # --- plan + step_index: best-effort from graph channel values --------
+        plan: Any = None
+        step_index: int = 0
+        runner = d._runner
+        if runner is not None:
+            try:
+                from soothe_daemon.runtime.loop_dispatcher import (
+                    bind_execution_thread_for_loop,
+                )
+
+                checkpoint_thread_id = await bind_execution_thread_for_loop(d, loop_id_str)
+                values = await runner.get_thread_state_values(checkpoint_thread_id)
+            except Exception:
+                logger.debug(
+                    "execution_state_fetch: thread values read failed for %s",
+                    loop_id_str,
+                    exc_info=True,
+                )
+                values = {}
+
+            # Prefer the in-flight decision; fall back to previous_plan.
+            decision = values.get("current_decision")
+            if decision is not None:
+                plan = _serialize_for_json(decision)
+            else:
+                prev_plan = values.get("previous_plan")
+                if prev_plan is not None:
+                    plan = _serialize_for_json(prev_plan)
+
+            # step_index = number of completed steps within the current plan.
+            completed = values.get("completed_step_ids")
+            if isinstance(completed, (list, tuple, set)):
+                step_index = len(completed)
+
+        payload = _serialize_for_json(
+            {
+                "loop_id": loop_id_str,
+                "plan": plan,
+                "step_index": step_index,
+                "iteration": iteration,
+                "status": loop_status,
+            }
+        )
+        await self._send_response(client_id, request_id, payload)
+
     # ---------------------------------------------------------------------------
     # RFC-228: Autopilot Job IPC Handlers
     # ---------------------------------------------------------------------------
-
     async def _require_autopilot_service(
         self, client_id: Any, request_id: str | None
     ) -> Any | None:

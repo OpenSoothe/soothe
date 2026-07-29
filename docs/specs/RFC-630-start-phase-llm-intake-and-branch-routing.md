@@ -195,7 +195,7 @@ JSON only:
 Examples:
 "list the files in src/" → scope:trivial
 "fix the type error in auth.py" → scope:simple
-"fix the null check across SessionStore callers" → scope:simple
+"fix the null check across LoopSessionStore callers" → scope:simple
 "first scan the repo and then run tests" → scope:complex, multi_phase:true
 "migrate the auth system to OAuth2" → scope:complex
 </INTAKE_PASS2>

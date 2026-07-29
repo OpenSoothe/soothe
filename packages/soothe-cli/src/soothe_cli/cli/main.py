@@ -147,6 +147,16 @@ def main(
             ),
         ),
     ] = None,
+    auto_resume: Annotated[
+        bool,
+        typer.Option(
+            "--auto-resume/--no-auto-resume",
+            help=(
+                "Auto-resume an active loop on startup without prompting. "
+                "Default: prompt ([Enter] to resume / n to discard)."
+            ),
+        ),
+    ] = False,
     show_help: Annotated[  # noqa: FBT002
         bool,
         typer.Option("--help", "-h", is_flag=True, help="Show this message and exit."),
@@ -203,6 +213,7 @@ def main(
         output_streaming_enabled=streaming,
         output_streaming_mode=streaming_mode,
         clarification_mode=mode,
+        auto_resume=auto_resume,
         soothe_home=home_path,
     )
     set_runtime_config(cli_cfg)

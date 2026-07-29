@@ -75,7 +75,7 @@ This document tracks the chronological evolution of RFCs in the Soothe project.
 
 **RFC-629**: Client Library — Core Upgrade and Appkit Architecture (Go + TypeScript) — absorbs triarch's hand-rolled adaptation layer into the Go and TypeScript client libraries
 
-- Generalizes the prior Go-only RFC to a cross-language client architecture: Layer 0 (core `Client` transport/lifecycle upgrades), Layer 1 (`appkit` package: `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`SessionStore`), Layer 2 (application product code)
+- Generalizes the prior Go-only RFC to a cross-language client architecture: Layer 0 (core `Client` transport/lifecycle upgrades), Layer 1 (`appkit` package: `ConnectionPool`/`QueryGate`/`TurnRunner`/`EventClassifier`/`SSEBroadcaster`/`LoopSessionStore`), Layer 2 (application product code)
 - Layer 0 folds drop detection, `Reconnect`/`ReattachAndProbe`, readiness retry, and concurrent `(type, id)` multiplexing into the core `Client` so every application gets a safe, reconnect-aware client for free
 - Layer 1 extracts the reusable application mechanics (pool, single-flight query gate with cancel-before-context ordering, timeout turn loop, event→deliverable classification keyed on `(namespace, mode, phase)`, SSE fan-out, persistence seam) into a new sibling package per client
 - Product decisions (deliverable phase sets, persistence, chat modes, error copy) stay pluggable via configuration and interfaces; the libraries import no application domain types

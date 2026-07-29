@@ -89,6 +89,7 @@ class ErrorCode(IntEnum):
     LOOP_CONTEXT_ERROR = -32405
     LOOP_STATE_ERROR = -32406
     WORKSPACE_RESOLUTION_FAILED = -32407
+    LOOP_EXECUTION_STATE_ERROR = -32408
 
     # Job operation failures (-32500 to -32599)
     JOB_CREATE_FAILED = -32500
@@ -133,6 +134,7 @@ _SEVERITY: dict[ErrorCode, str] = {
     ErrorCode.LOOP_CONTEXT_ERROR: "error",
     ErrorCode.LOOP_STATE_ERROR: "error",
     ErrorCode.WORKSPACE_RESOLUTION_FAILED: "error",
+    ErrorCode.LOOP_EXECUTION_STATE_ERROR: "error",
     ErrorCode.JOB_CREATE_FAILED: "error",
     ErrorCode.JOB_PAUSE_FAILED: "error",
     ErrorCode.JOB_RESUME_FAILED: "error",
