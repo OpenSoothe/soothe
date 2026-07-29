@@ -21,6 +21,17 @@ def test_strip_plan_frontmatter_passthrough() -> None:
     assert _strip_plan_frontmatter("# Already clean") == "# Already clean"
 
 
+def test_plan_review_actions_use_primary_text_highlight() -> None:
+    """Selected action is blue text only — no reverse/white-on-blue fill."""
+    css = ClarificationInputMessage.DEFAULT_CSS
+    assert "Button.plan-review-selected" in css
+    assert "color: $primary;" in css
+    assert "text-style: bold reverse;" not in css
+    selected_block = css.split("Button.plan-review-selected {", 1)[1].split("}", 1)[0]
+    assert "background: transparent;" in selected_block
+    assert "background: $primary;" not in selected_block
+
+
 def test_clarification_wire_content_plan_review() -> None:
     from soothe_cli.tui.app._execution import clarification_wire_content
 
@@ -136,6 +147,34 @@ async def test_plan_review_arrow_keys_cycle_actions() -> None:
         await pilot.press("enter")
         assert len(app.submitted) == 1
         assert app.submitted[0].answers == ["Reject", ""]
+
+
+@pytest.mark.asyncio
+async def test_plan_review_body_shows_full_content_without_inner_scroll() -> None:
+    """Plan body expands to full height; no VerticalScroll / max-height box."""
+    from textual.containers import Vertical, VerticalScroll
+
+    long_plan = "# Solution\n\n" + "\n".join(f"- step {i}" for i in range(60))
+    app = _PlanReviewHarnessApp(
+        step_id="planner_subagent_review",
+        questions=[
+            "Action for this plan: Approve, Reject, or More comments",
+            "Revision comments (when choosing More comments)",
+        ],
+        origin_node="planner_subagent_review",
+        plan_path="/ws/.soothe/plans/demo.md",
+        plan_markdown=long_plan,
+        id="clarify-full-body",
+    )
+    async with app.run_test():
+        widget = app.query_one(ClarificationInputMessage)
+        assert list(widget.query(VerticalScroll)) == []
+        box = widget.query_one(".plan-review-body-box", Vertical)
+        # No max-height cap (was 48 rows on VerticalScroll).
+        assert "max-height" not in box.styles.css or "max-height: none" in box.styles.css
+        body = widget.query_one(".plan-review-body")
+        rendered = str(getattr(body, "renderable", "") or "")
+        assert "step 0" in rendered or "step 59" in rendered or body.display
 
 
 @pytest.mark.asyncio

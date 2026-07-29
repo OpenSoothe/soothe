@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 from textual import on
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Horizontal, Vertical
 from textual.content import Content
 from textual.message import Message
 from textual.widgets import Button, Input, Static
@@ -64,7 +64,7 @@ class ClarificationInputMessage(Vertical):
     DEFAULT_CSS = """
     ClarificationInputMessage {
         height: auto;
-        padding: 0;
+        padding: 0 2;
         margin: 0 0 1 0;
         background: transparent;
     }
@@ -88,17 +88,18 @@ class ClarificationInputMessage(Vertical):
         margin-top: 1;
     }
 
-    ClarificationInputMessage .plan-review-body-scroll {
+    ClarificationInputMessage .plan-review-body-box {
         height: auto;
-        max-height: 48;
         padding: 0 1;
         margin: 0 0 1 0;
         border: solid $primary 40%;
         background: $surface;
+        overflow: hidden;
     }
 
     ClarificationInputMessage .plan-review-body {
         height: auto;
+        width: 1fr;
         padding: 0;
         margin: 0;
         color: $text;
@@ -135,9 +136,14 @@ class ClarificationInputMessage(Vertical):
     }
 
     ClarificationInputMessage .plan-review-actions Button.plan-review-selected {
-        color: $text;
-        text-style: bold reverse;
-        background: $primary;
+        color: $primary;
+        text-style: bold;
+        background: transparent;
+    }
+
+    ClarificationInputMessage .plan-review-actions Button.plan-review-selected:focus {
+        background: transparent;
+        text-style: bold underline;
     }
 
     ClarificationInputMessage .plan-review-hint {
@@ -248,7 +254,8 @@ class ClarificationInputMessage(Vertical):
     def _compose_planner_review(self) -> Any:
         yield Static(self._title_content(), classes="clarification-title")
         body = _strip_plan_frontmatter(self._plan_markdown)
-        with VerticalScroll(classes="plan-review-body-scroll"):
+        # Expand to full plan height — no inner scroll; the chat list scrolls.
+        with Vertical(classes="plan-review-body-box"):
             body_widget = Static("", classes="plan-review-body", markup=False)
             yield body_widget
             # Stash for on_mount markdown render (widget not yet mounted here).

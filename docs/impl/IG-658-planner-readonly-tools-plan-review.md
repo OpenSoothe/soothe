@@ -18,7 +18,8 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 
 ### A. soothe-nano planner
 
-1. `subagents/plan/tools.py` — `get_planner_readonly_tools(workspace)` whitelist.
+1. Readonly tools via `get_planner_readonly_tools(workspace)` (in `engine.py`
+   after IG-659 layout collapse; was `tools.py`).
 2. `PlanSubagentConfig` — `enable_recon`, `max_recon_rounds`.
 3. `engine.py` — recon loop (`bind_tools` → `ToolNode` → collect findings) →
    plan_iteration → emit_final; emit `soothe.stream.tool_call.update` via wire
@@ -42,7 +43,8 @@ Approve / Reject / More comments via the RFC-622 clarification relay.
 ### C. soothe-cli
 
 1. Clarification UI keys off `origin_node=planner_subagent_review`.
-2. Unified plan-review card: full draft markdown preview, `Plan saved to:` path
+2. Unified plan-review card: full draft markdown preview (expanded in-box,
+   no inner scroll), `Plan saved to:` path
    footer, Approve / Reject / More comments buttons; comments `Input` only when
    More comments is selected (Approve/Reject submit immediately).
 3. Root-ns stamped tool updates route onto the orphan SubAgent card (not the main tool buffer).

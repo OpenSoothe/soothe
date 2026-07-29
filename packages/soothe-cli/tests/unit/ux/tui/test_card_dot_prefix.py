@@ -9,6 +9,7 @@ from soothe_cli.tui.widgets.messages._helpers import (
     _card_dot_tone,
 )
 from soothe_cli.tui.widgets.messages.assistant import AssistantMessage
+from soothe_cli.tui.widgets.messages.clarification import ClarificationInputMessage
 from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
 
 
@@ -62,10 +63,13 @@ def test_stream_cards_use_horizontal_inset_padding() -> None:
     """Agent cards inset from the chat edges; user/input gutters stay separate."""
     step_css = CognitionStepMessage.DEFAULT_CSS
     assistant_css = AssistantMessage.DEFAULT_CSS
+    clarification_css = ClarificationInputMessage.DEFAULT_CSS
     assert "padding: 0 2;" in step_css
     assert "padding: 0 2;" in assistant_css
+    assert "padding: 0 2;" in clarification_css
     assert "border-left:" not in step_css
     assert "border-left:" not in assistant_css
+    assert "border-left:" not in clarification_css
 
 
 def test_step_status_footer_uses_same_muted_base_as_tool_activity() -> None:

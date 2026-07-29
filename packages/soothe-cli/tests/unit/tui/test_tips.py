@@ -1,0 +1,37 @@
+"""Tests for the rotating session tip pool surfaced in the status bar."""
+
+from __future__ import annotations
+
+import random
+
+from soothe_cli.tui.tips import SESSION_TIPS, pick_session_tip
+
+
+def test_session_tips_is_non_empty_str_list() -> None:
+    assert isinstance(SESSION_TIPS, list)
+    assert SESSION_TIPS, "SESSION_TIPS must not be empty"
+    assert all(isinstance(tip, str) and tip for tip in SESSION_TIPS)
+
+
+def test_session_tips_contains_plan_generation_tips() -> None:
+    """Plan-generation tips must be present in the tip pool."""
+    plan_tips = [t for t in SESSION_TIPS if "plan" in t.lower()]
+    assert plan_tips, "expected at least one plan-related tip in SESSION_TIPS"
+
+
+def test_plan_tips_reference_action_triggers() -> None:
+    """Plan tips should surface actionable bindings (ctrl+t or /plan)."""
+    plan_tips = [t for t in SESSION_TIPS if "plan" in t.lower()]
+    assert any("ctrl+t" in t.lower() for t in plan_tips), "expected a ctrl+t plan-quick-view tip"
+    assert any("/plan" in t.lower() for t in plan_tips), "expected a /plan command tip"
+
+
+def test_pick_session_tip_returns_member_of_pool() -> None:
+    random.seed(42)
+    for _ in range(20):
+        tip = pick_session_tip()
+        assert tip in SESSION_TIPS
+
+
+def test_pick_session_tip_returns_str() -> None:
+    assert isinstance(pick_session_tip(), str)
