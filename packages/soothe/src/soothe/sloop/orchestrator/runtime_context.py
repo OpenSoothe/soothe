@@ -53,13 +53,16 @@ class LoopRuntimeContext:
     # RFC-622: when set, the next graph invocation should resume a pending
     # ``await_clarification`` interrupt with this answer instead of starting a
     # new iteration. Verified against ``pending_clarification`` in the graph
-    # state before issuing ``Command(resume=...)``.
+    # state before issuing ``Command(resume=...)``. Cleared by
+    # ``await_clarification`` after a successful answer so a later park in the
+    # same invocation re-emits ``clarification_requested``.
     clarification_resume_text: str | None = None
     # RFC-622: per-question answer list. When provided, the orchestrator runner
     # passes the list directly as ``Command(resume={"answers": [...]})`` so the
     # InteractiveClarificationPolicy returns one answer per question rather
     # than broadcasting a single concatenated string. ``None`` falls back to
-    # broadcasting ``clarification_resume_text``.
+    # broadcasting ``clarification_resume_text``. Cleared with
+    # ``clarification_resume_text`` after successful consume.
     clarification_resume_answers: list[str] | None = None
     # ProposalQueue for autopilot proposals (report_progress, flag_blocker, etc.)
     proposal_queue: ProposalQueue | None = None

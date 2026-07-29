@@ -38,6 +38,11 @@ def create_subagent_card(
         CognitionStepMessage instance configured as a SubAgent card.
     """
     from soothe_cli.tui.widgets.messages.cognition_step import CognitionStepMessage
+    from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+        StepRowIndex,
+        count_distinct_tool_call_ids,
+        subagent_task_label,
+    )
 
     card = CognitionStepMessage(
         step_id=step_id,
@@ -50,18 +55,14 @@ def create_subagent_card(
     card._status = "running"
     card._start_time = time()
 
+    header_label = subagent_task_label(card._subagent_type, description)
     card._step_header_content = lambda: _assemble_card_header(
         card,
-        f"{card._subagent_type}({description})",
+        header_label,
         status=getattr(card, "_status", "running"),
         glyph_override=get_glyphs().subagent_prefix,
         spinner_position=getattr(card, "_spinner_position", 0),
         animate_running=getattr(card, "_status", "") == "running",
-    )
-
-    from soothe_cli.tui.widgets.messages.cognition_step_activity import (
-        StepRowIndex,
-        count_distinct_tool_call_ids,
     )
 
     def _subagent_build_row_index(self: Any) -> StepRowIndex:

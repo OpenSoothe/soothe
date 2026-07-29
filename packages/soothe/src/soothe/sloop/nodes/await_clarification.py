@@ -101,8 +101,10 @@ async def node_await_clarification(
             requested_payload["plan_markdown"] = str(plan_markdown)
 
     # LangGraph re-runs this node from the top on Command(resume=...). Skip the
-    # TUI announcement on resume turns so Reject/Approve do not remount an empty
-    # plan-review widget (scratch is empty until hydrate).
+    # TUI announcement on that first re-entry so Reject/Approve do not remount an
+    # empty plan-review widget (scratch is empty until hydrate). Clear the sticky
+    # resume inputs after a successful answer so a later park in the same graph
+    # invocation (planner rewrite after "More comments") re-emits the request.
     resume_turn = bool(
         (getattr(ctx, "clarification_resume_answers", None) or [])
         or (getattr(ctx, "clarification_resume_text", None) or "").strip()
@@ -167,6 +169,10 @@ async def node_await_clarification(
             goal_id,
             loop_id,
         )
+
+    if resume_turn:
+        ctx.clarification_resume_answers = None
+        ctx.clarification_resume_text = None
 
     # IG-462: keep ``pending_clarification`` alive alongside the answer so the
     # originating node (``execute`` / ``plan_*``) can pair them on re-entry

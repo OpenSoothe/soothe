@@ -259,5 +259,3 @@ def _strip_success_exit_line(text: str) -> str:
 # Preview limits imported from preview_limits module
 _STEP_TOOL_PREVIEW_ROWS = STEP_TASK_CARD_COLLAPSE_LINE_THRESHOLD
 """Collapsed step/task activity preview shows this many rows (IG-402)."""
-
-_MAX_TASK_DELEGATION_DESC_CHARS = 80

@@ -29,14 +29,11 @@ def compact_arg_text(text: str) -> str:
     return " ".join(text.split())
 
 
-_compact_arg_text = compact_arg_text
-
-
 def _coerce_arg_text(value: Any) -> str:
     if value is None:
         return ""
     if isinstance(value, str):
-        return _compact_arg_text(value.strip())
+        return compact_arg_text(value.strip())
     if isinstance(value, (int, float, bool)):
         return str(value)
     if isinstance(value, (list, dict)):
@@ -137,7 +134,7 @@ def abbreviate_tool_error_message(
                     text = val.strip()
                     break
 
-    first_line = _compact_arg_text(text.splitlines()[0].strip())
+    first_line = compact_arg_text(text.splitlines()[0].strip())
     lowered = first_line.lower()
     for prefix in (
         "error executing tool:",

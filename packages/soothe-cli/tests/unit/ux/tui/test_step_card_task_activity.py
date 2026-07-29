@@ -54,6 +54,27 @@ def test_task_delegation_label_collapses_multiline_description() -> None:
     assert "\n" not in text.split("Deep Research(", 1)[-1].split(")", 1)[0]
 
 
+def test_task_delegation_label_truncates_long_description() -> None:
+    from soothe_cli.tui.preview_limits import TASK_DELEGATION_DESC_MAX_CHARS
+    from soothe_cli.tui.widgets.messages.cognition_step_activity import (
+        preview_task_description,
+        subagent_task_label,
+    )
+
+    long_desc = "x" * (TASK_DELEGATION_DESC_MAX_CHARS + 40)
+    preview = preview_task_description(long_desc)
+    assert len(preview) == TASK_DELEGATION_DESC_MAX_CHARS
+    assert preview.endswith("...")
+    assert "\n" not in preview
+
+    label = subagent_task_label("deep_research", f"First line\n{'y' * 200}")
+    assert label.startswith("Deep Research(")
+    assert "\n" not in label
+    inner = label[len("Deep Research(") : -1]
+    assert len(inner) <= TASK_DELEGATION_DESC_MAX_CHARS
+    assert inner.endswith("...")
+
+
 def test_task_activity_tree_shows_running_tool_count() -> None:
     """Running task marker shows subgraph tool count on the item line."""
     card = CognitionStepMessage("ABC-01", "Scan workspace", id="stp-task-tree")

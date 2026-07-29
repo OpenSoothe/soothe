@@ -47,6 +47,25 @@ async def test_mount_orphan_subagent_card_registers_keys() -> None:
     assert card in adapter._mounted  # type: ignore[attr-defined]
 
 
+def test_orphan_subagent_card_header_is_single_line_length_preview() -> None:
+    from soothe_cli.tui.preview_limits import TASK_DELEGATION_DESC_MAX_CHARS
+    from soothe_cli.tui.widgets.messages.cognition_subagent import create_subagent_card
+
+    long_multiline = "Investigate deps\n" + ("across packages " * 20)
+    card = create_subagent_card(
+        "ORP-01",
+        long_multiline,
+        "deep_research",
+        id="orphan-header-preview",
+    )
+    header = str(card._step_header_content())
+    assert "Deep Research(" in header
+    assert "\n" not in header.split("Deep Research(", 1)[-1].split(")", 1)[0]
+    inner = header.split("Deep Research(", 1)[-1].rsplit(")", 1)[0]
+    assert len(inner) <= TASK_DELEGATION_DESC_MAX_CHARS
+    assert inner.endswith("...")
+
+
 @pytest.mark.asyncio
 async def test_orphan_wire_progress_attaches_without_step_widget() -> None:
     adapter = _make_adapter()

@@ -22,13 +22,15 @@ from textual.content import Content
 from soothe_cli.runtime.presentation.duration_format import format_running_elapsed
 from soothe_cli.tui import theme
 from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
-from soothe_cli.tui.preview_limits import STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT
+from soothe_cli.tui.preview_limits import (
+    STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
+    TASK_DELEGATION_DESC_MAX_CHARS,
+)
 from soothe_cli.tui.tool_display import (
     compact_arg_text,
     format_step_tool_activity_command,
     format_step_tool_activity_status_tail,
 )
-from soothe_cli.tui.widgets.messages._helpers import _MAX_TASK_DELEGATION_DESC_CHARS
 
 
 @dataclass
@@ -405,25 +407,41 @@ def task_tool_row_tone(row: StepToolRow, colors: Any) -> str:
     return task_tool_row_tone_for_phase(row.phase or "pending", colors)
 
 
-def task_delegation_label(task_row: StepToolRow) -> str:
-    """Display label ``SubAgentName(description)`` for a task delegation row."""
-    args = dict(task_row.args or {})
-    raw_type = args.get("subagent_type", "")
-    if isinstance(raw_type, str):
-        st = raw_type.strip()
+def preview_task_description(
+    description: object,
+    *,
+    max_chars: int = TASK_DELEGATION_DESC_MAX_CHARS,
+) -> str:
+    """Collapse whitespace and truncate for a single-line task description preview."""
+    if isinstance(description, str):
+        text = compact_arg_text(description.strip())
     else:
-        st = str(raw_type or "").strip()
+        text = compact_arg_text(str(description or "").strip())
+    if len(text) > max_chars:
+        return text[: max_chars - 3].rstrip() + "..."
+    return text
+
+
+def subagent_task_label(subagent_type: object, description: object = "") -> str:
+    """Display label ``DisplayName(preview)`` for a subagent task description."""
+    if isinstance(subagent_type, str):
+        st = subagent_type.strip()
+    else:
+        st = str(subagent_type or "").strip()
     name = get_subagent_display_name(st) if st else "Task"
-    desc = args.get("description") or args.get("prompt") or ""
-    if isinstance(desc, str):
-        desc_text = compact_arg_text(desc.strip())
-    else:
-        desc_text = compact_arg_text(str(desc or "").strip())
-    if len(desc_text) > _MAX_TASK_DELEGATION_DESC_CHARS:
-        desc_text = desc_text[: _MAX_TASK_DELEGATION_DESC_CHARS - 3].rstrip() + "..."
+    desc_text = preview_task_description(description)
     if desc_text:
         return f"{name}({desc_text})"
     return name
+
+
+def task_delegation_label(task_row: StepToolRow) -> str:
+    """Display label ``SubAgentName(description)`` for a task delegation row."""
+    args = dict(task_row.args or {})
+    return subagent_task_label(
+        args.get("subagent_type", ""),
+        args.get("description") or args.get("prompt") or "",
+    )
 
 
 def append_tool_activity_lines(

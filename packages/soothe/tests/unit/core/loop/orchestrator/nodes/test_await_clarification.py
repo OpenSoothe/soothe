@@ -266,8 +266,11 @@ async def test_planner_subagent_review_emit_includes_plan_payload() -> None:
     assert requested[0]["questions"] == list(_PLANNER_SUBAGENT_REVIEW_QUESTIONS)
 
 
-async def test_resume_turn_skips_clarification_requested_reemit() -> None:
-    """Reject/Approve resume must not remount an empty plan-review widget."""
+def _planner_review_pending(
+    *,
+    plan_path: str = "/ws/.soothe/plans/demo.md",
+    plan_markdown: str = "# Plan\n",
+) -> dict[str, Any]:
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
     from soothe.sloop.nodes.invoke_wired_subagent import _PLANNER_SUBAGENT_REVIEW_QUESTIONS
 
@@ -289,10 +292,78 @@ async def test_resume_turn_skips_clarification_requested_reemit() -> None:
         ),
     )
     pending = request_to_state(req)
-    pending["plan_path"] = "/ws/.soothe/plans/demo.md"
-    pending["plan_markdown"] = "# Plan\n"
+    pending["plan_path"] = plan_path
+    pending["plan_markdown"] = plan_markdown
+    return pending
+
+
+async def test_resume_turn_skips_clarification_requested_reemit() -> None:
+    """Reject/Approve resume must not remount an empty plan-review widget."""
     policy = _InteractivePolicyStub(ClarificationAnswer(answers=("Reject", ""), source="human"))
     ctx = _StubCtx(policy=policy, clarification_resume_answers=["Reject", ""])
-    await node_await_clarification(ctx, {"pending_clarification": pending})
+    await node_await_clarification(ctx, {"pending_clarification": _planner_review_pending()})
     assert not any(n == "clarification_requested" for n, _ in ctx.emitted)
+    assert any(n == "clarification_answered" for n, _ in ctx.emitted)
+    # Sticky resume inputs must be consumed so a later park can re-announce.
+    assert ctx.clarification_resume_answers is None
+    assert ctx.clarification_resume_text is None
+
+
+async def test_second_park_after_resume_reemits_clarification_requested() -> None:
+    """Planner rewrite after 'More comments' must remount plan review (loop 6580)."""
+    first_policy = _InteractivePolicyStub(
+        ClarificationAnswer(answers=("More comments", "Show unified mental model"), source="human")
+    )
+    ctx = _StubCtx(
+        policy=first_policy,
+        clarification_resume_answers=["More comments", "Show unified mental model"],
+        clarification_resume_text="Plan review: More comments",
+    )
+    ctx.scratch = type(  # type: ignore[attr-defined]
+        "Scratch",
+        (),
+        {
+            "plan_artifact_path": "/ws/.soothe/plans/v1.md",
+            "plan_artifact_markdown": "# Plan v1\n",
+        },
+    )()
+
+    await node_await_clarification(
+        ctx,
+        {
+            "pending_clarification": _planner_review_pending(
+                plan_path="/ws/.soothe/plans/v1.md",
+                plan_markdown="# Plan v1\n",
+            )
+        },
+    )
+    assert not any(n == "clarification_requested" for n, _ in ctx.emitted)
+    assert ctx.clarification_resume_answers is None
+
+    # Same graph turn: planner produced a new reviewable draft.
+    ctx.emitted.clear()
+    ctx.policy = _InteractivePolicyStub(
+        ClarificationAnswer(answers=("Approve", ""), source="human")
+    )
+    ctx.scratch = type(  # type: ignore[attr-defined]
+        "Scratch",
+        (),
+        {
+            "plan_artifact_path": "/ws/.soothe/plans/v2.md",
+            "plan_artifact_markdown": "# Plan v2\n\nUnified model.\n",
+        },
+    )()
+    await node_await_clarification(
+        ctx,
+        {
+            "pending_clarification": _planner_review_pending(
+                plan_path="/ws/.soothe/plans/v2.md",
+                plan_markdown="# Plan v2\n\nUnified model.\n",
+            )
+        },
+    )
+    requested = [p for n, p in ctx.emitted if n == "clarification_requested"]
+    assert len(requested) == 1
+    assert requested[0]["plan_path"] == "/ws/.soothe/plans/v2.md"
+    assert "Unified model" in requested[0]["plan_markdown"]
     assert any(n == "clarification_answered" for n, _ in ctx.emitted)

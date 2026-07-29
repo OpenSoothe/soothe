@@ -86,7 +86,6 @@ class TestSubagentDisplayNames:
         """Known subagent types should return mapped display names."""
         # Built-in soothe core subagents
         assert get_subagent_display_name("deep_research") == "Deep Research"
-        assert get_subagent_display_name("deep_research") == "Deep Research"
         assert get_subagent_display_name("planner") == "Planner"
         # Plugin-based subagent
         assert get_subagent_display_name("browser_use") == "Browser"
@@ -98,47 +97,18 @@ class TestSubagentDisplayNames:
 
     def test_empty_subagent_type_returns_task(self) -> None:
         """Empty subagent type should fall back to 'Task' in label rendering."""
-        # This is tested indirectly via task_delegation_label
         from soothe_cli.tui.widgets.messages.cognition_step_activity import (
-            StepToolRow,
-            task_delegation_label,
+            subagent_task_label,
         )
 
-        row = StepToolRow(
-            tool_call_id="test:task",
-            tool_name="task",
-            args={},
-            phase="pending",
-            is_task_row=True,
-        )
-        label = task_delegation_label(row)
-        assert label == "Task"
+        assert subagent_task_label("", "") == "Task"
 
     def test_task_label_with_subagent_type(self) -> None:
         """Task label should use mapped display name when subagent_type present."""
         from soothe_cli.tui.widgets.messages.cognition_step_activity import (
-            StepToolRow,
-            task_delegation_label,
+            subagent_task_label,
         )
 
-        row = StepToolRow(
-            tool_call_id="test:task",
-            tool_name="task",
-            args={"subagent_type": "deep_research", "description": "search code"},
-            phase="pending",
-            is_task_row=True,
-        )
-        label = task_delegation_label(row)
+        label = subagent_task_label("deep_research", "search code")
         assert label.startswith("Deep Research(")
         assert "search code" in label
-
-
-class TestTaskRowArgsInjection:
-    """Tests for subagent_type injection from router registry."""
-
-    def test_injection_from_router_registry(self) -> None:
-        """When args lack subagent_type, router registry should provide it."""
-        # This requires a more complex integration test with the router.
-        # For unit coverage, we verify the injection logic path exists.
-        # Integration test would use mock router with _spawns_by_task_id populated.
-        pass  # Placeholder for integration test in test suite
