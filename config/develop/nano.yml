@@ -29,9 +29,8 @@ providers:
     api_base_url: "http://100.75.70.86:9642/v1"
     api_key: "mirasoth"
     models:
-      - gemma-4-12b-coder-fable5-composer2.5
-      - GLM-4.6V-Flash-4bit
       - Qwen3.6-27B-OptiQ-4bit
+      - GLM-4.6V-Flash-4bit
       - PaddleOCR-VL-1.5-4bit
       - DeepSeek-OCR-4bit
       - nomicai-modernbert-embed-base-bf16
@@ -62,8 +61,6 @@ router_profiles:
   - name: local-deploy
     router:
       default: "omlx:Qwen3.6-27B-OptiQ-4bit"
-      fast: "omlx:gemma-4-12b-coder-fable5-composer2.5"
-      think: "omlx:Qwen3.6-27B-OptiQ-4bit"
       image: "omlx:GLM-4.6V-Flash-4bit"
       ocr: "omlx:DeepSeek-OCR-4bit"
 
