@@ -5,6 +5,43 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.7] - 2026-07-29
+
+### Added
+- Planner plan artifact with human review gate: plan-review clarification card
+  with draft preview, action buttons, and arrow-key stage navigation
+- Planner "Approve" action hands off to StrangeLoop `plan_generate`; clarification
+  resume reuses the Context Engine goal
+- Server-owned display card ledger via `card_wire` — live source-of-truth for
+  planner intake-only cards
+- Loop resume gate with execution-state fetch RPC (daemon + CLI)
+- Canonical loop token field and MS Teams ref migration marker
+- Mermaid diagram rendering in goal-completion TUI reports
+- Session tips rotate in the CLI status footer on interval
+- Daemon started time exposed in status output
+
+### Changed
+- Require `soothe-nano>=1.0.11` (browser_use eventbus fix, operation_guard
+  protected-kill hooks, RunBackgroundTool args_schema, planner recon tools,
+  solution-report output)
+- Raise daemon `soothe` floor pin to `>=0.9.7`
+- Planner reframed as solution report (goal-completion proposal) instead of an
+  investigation roadmap; expanded plan-review body
+- StrangeLoop prefers single CoreAgent execute over trivial plan steps; disables
+  general-purpose subagent by default
+- Mid-loop plan phase uses fast gap/assess roles for speed
+- LLM owns goal-completion report outline (synthesis)
+- Relocated prompts package into the sloop namespace
+
+### Fixed
+- Orphan-stop reliability and intake-only plan wiring (daemon, sloop, TUI)
+- Diagnose/doctor: polish daemon and providers diagnose UX
+
+### Removed
+- Legacy `loop_cards_fetch` compat shim and stale migration notes (daemon, CLI)
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.6...v0.9.7
+
 ## [v0.9.6] - 2026-07-25
 
 ### Added
