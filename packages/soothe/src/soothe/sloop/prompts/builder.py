@@ -457,4 +457,8 @@ class PromptBuilder:
             )
         if plan_gap is not None:
             generate_kwargs["plan_gap"] = plan_gap
+        approved_md = getattr(state, "approved_plan_markdown", None)
+        if (approved_md or "").strip():
+            generate_kwargs["approved_plan_markdown"] = approved_md
+            generate_kwargs["approved_plan_path"] = getattr(state, "approved_plan_path", None)
         return builder.build_plan_generate_message(**generate_kwargs)

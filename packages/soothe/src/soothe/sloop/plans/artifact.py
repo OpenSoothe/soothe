@@ -89,6 +89,17 @@ def write_plan_artifact(
     return path.resolve()
 
 
+def strip_plan_frontmatter(markdown: str) -> str:
+    """Remove YAML frontmatter from a plan artifact for prompts / display."""
+    raw = (markdown or "").strip()
+    if not raw.startswith("---"):
+        return raw
+    m = _FRONTMATTER_RE.match(raw)
+    if not m:
+        return raw
+    return raw[m.end() :].lstrip()
+
+
 def update_plan_artifact_status(path: str | Path, status: str) -> None:
     """Update ``status`` in YAML frontmatter when present; otherwise no-op prepend."""
     p = Path(path)

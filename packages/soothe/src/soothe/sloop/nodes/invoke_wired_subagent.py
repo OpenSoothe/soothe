@@ -1,13 +1,14 @@
-"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602 / IG-656 / IG-658).
+"""Wired-subagent intake branch (RFC-630, IG-599 / IG-601 / IG-602 / IG-656 / IG-658 / IG-660).
 
 Intake-only wires (``planner``, ``browser_use``, ``deep_research``,
 ``academic_research``): stream the specialist runnable from the intake-only
 registry (not on CoreAgent ``task``), forward curated wire customs for the
 orphan SubAgent card, record Human/AI execute-step ledger rows.
 
-For ``planner`` (RFC-633): persist ``.soothe/plans/`` artifact and pause on
-RFC-622 clarification (Approve / Reject / More comments) before
-``goal_completion``. Other wires still route directly to ``goal_completion``.
+For ``planner`` (RFC-633 / IG-660): persist ``.soothe/plans/`` artifact and pause
+on RFC-622 clarification (Approve / Reject / More comments). Approve hands off
+to StrangeLoop ``plan_generate``; Reject routes to ``goal_completion``. Other
+wires still route directly to ``goal_completion``.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from soothe.sloop.engine.thread_selection import resolve_user_requested_wire_sub
 from soothe.sloop.goal_text import resolve_user_request
 from soothe.sloop.plans.artifact import (
     parse_planner_subagent_review_answers,
+    strip_plan_frontmatter,
     update_plan_artifact_status,
     write_plan_artifact,
 )
@@ -381,7 +383,8 @@ async def _handle_planner_subagent_review_answer(
     report = (getattr(ctx.scratch, "plan_artifact_markdown", None) or "").strip()
 
     # Clarification-resume turns rebuild LoopPhaseScratch; reinject a trivial
-    # plan so goal_completion can ledger_direct without a fatal.
+    # plan so Reject → goal_completion can ledger_direct without a fatal.
+    # Approve clears plan_result and hands off to StrangeLoop plan_generate.
     if ctx.scratch.plan_result is None:
         ctx.scratch.plan_result = build_trivial_plan(
             goal_text,
@@ -398,19 +401,36 @@ async def _handle_planner_subagent_review_answer(
     if action == "approve":
         if path:
             update_plan_artifact_status(path, "approved")
-        final = (
-            f"Plan approved.\n\nSaved to: `{path}`\n\n{report}"
-            if path
-            else f"Plan approved.\n\n{report}"
-        )
+        # Short note only — full body stays on scratch for plan_generate grounding.
+        note = "Plan approved. Proceeding to implement."
+        if path:
+            note = f"{note}\n\nSaved to: `{path}`"
         _record_wired_execute_ledger(
-            ctx, goal_text=goal_text, report=final, wire=wire, step_id=step_id
+            ctx, goal_text=goal_text, report=note, wire=wire, step_id=step_id
         )
+        from soothe.sloop.nodes.bounded_evidence_gather import _create_fresh_loop_assessment
+
+        # StrangeLoop will own the decision; drop the intake trivial plan.
+        ctx.scratch.plan_result = None
+        ctx.scratch.plan_assessment = _create_fresh_loop_assessment()
         ctx.scratch.planner_subagent_review_comments = None
+        ctx.scratch.planner_implement_handoff = True
+        ctx.preferred_subagent = None
+        body = strip_plan_frontmatter(report) if report else ""
+        if not body and path:
+            body = strip_plan_frontmatter(
+                getattr(ctx.scratch, "plan_artifact_markdown", None) or ""
+            )
+        state_obj = ctx.loop_state
+        if state_obj is not None:
+            state_obj.approved_plan_path = str(path) if path else None
+            state_obj.approved_plan_markdown = body or None
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,
             "last_clarification_origin": None,
+            "planner_implement_handoff": True,
+            "intent_route": None,
         }
 
     if action == "reject":
@@ -425,10 +445,12 @@ async def _handle_planner_subagent_review_answer(
             ctx, goal_text=goal_text, report=final, wire=wire, step_id=step_id
         )
         ctx.scratch.planner_subagent_review_comments = None
+        ctx.scratch.planner_implement_handoff = False
         return {
             "pending_clarification": None,
             "pending_clarification_answer": None,
             "last_clarification_origin": None,
+            "planner_implement_handoff": False,
         }
 
     ctx.scratch.planner_subagent_review_comments = comments

@@ -647,6 +647,8 @@ class UserMessageBuilder:
         assessment_status: str | None = None,
         assessment_progress: str | None = None,
         plan_gap: PlanGapAnalysis | dict[str, Any] | None = None,
+        approved_plan_path: str | None = None,
+        approved_plan_markdown: str | None = None,
     ) -> str:
         """Build user message for the plan-generate phase.
 
@@ -661,6 +663,8 @@ class UserMessageBuilder:
             assessment_status: Assess ``status`` (inline envelope; not in projected ledger).
             assessment_progress: Assess ``goal_progress`` (inline envelope).
             plan_gap: Optional gap analysis for ``OPEN GAPS`` replan targeting (IG-557 Phase F).
+            approved_plan_path: Optional path of an operator-approved intake plan artifact.
+            approved_plan_markdown: Optional approved plan body (frontmatter stripped).
 
         Returns:
             Structured text message for the plan-generate LoopHumanMessage.
@@ -699,6 +703,20 @@ class UserMessageBuilder:
             open_gaps = _render_open_gaps_block(plan_gap)
             if open_gaps.strip():
                 sections.append(("OPEN GAPS", open_gaps))
+
+        approved_body = (approved_plan_markdown or "").strip()
+        if approved_body:
+            approved_lines: list[str] = []
+            path = (approved_plan_path or "").strip()
+            if path:
+                approved_lines.append(f"path: {path}")
+            approved_lines.append(
+                "Operator approved this solution report. Implement it via StrangeLoop "
+                "steps; do not re-litigate the Solution unless blocked."
+            )
+            approved_lines.append("")
+            approved_lines.append(approved_body)
+            sections.append(("APPROVED PLAN", "\n".join(approved_lines)))
 
         sections.append(
             (

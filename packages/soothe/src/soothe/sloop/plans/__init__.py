@@ -4,6 +4,7 @@ from soothe.sloop.plans.artifact import (
     parse_planner_subagent_review_answers,
     plan_artifact_path,
     slugify_plan_name,
+    strip_plan_frontmatter,
     update_plan_artifact_status,
     write_plan_artifact,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "parse_planner_subagent_review_answers",
     "plan_artifact_path",
     "slugify_plan_name",
+    "strip_plan_frontmatter",
     "update_plan_artifact_status",
     "write_plan_artifact",
 ]

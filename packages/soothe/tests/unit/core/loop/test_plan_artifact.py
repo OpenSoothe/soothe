@@ -7,6 +7,7 @@ from pathlib import Path
 from soothe.sloop.plans.artifact import (
     parse_planner_subagent_review_answers,
     slugify_plan_name,
+    strip_plan_frontmatter,
     update_plan_artifact_status,
     write_plan_artifact,
 )
@@ -14,6 +15,12 @@ from soothe.sloop.plans.artifact import (
 
 def test_slugify_plan_name_from_heading() -> None:
     assert slugify_plan_name("# Continue Mermaid Flow\n\nbody") == "continue-mermaid-flow"
+
+
+def test_strip_plan_frontmatter() -> None:
+    raw = "---\nstatus: draft\n---\n\n# Plan\n\nBody.\n"
+    assert strip_plan_frontmatter(raw) == "# Plan\n\nBody."
+    assert strip_plan_frontmatter("# Already clean") == "# Already clean"
 
 
 def test_write_and_update_plan_artifact(tmp_path: Path) -> None:

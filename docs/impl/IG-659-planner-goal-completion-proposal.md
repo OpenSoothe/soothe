@@ -91,6 +91,6 @@ No behavioral change required beyond consuming the same markdown artifact
 
 ## Out of scope
 
-- Auto-executing approved proposals into StrangeLoop plan-execute waves
+- Approve → StrangeLoop implement handoff (see [IG-660](IG-660-planner-approve-strange-loop-handoff.md))
 - Mutating / shell tools on the planner thread
 - Host artifact path or clarification origin changes

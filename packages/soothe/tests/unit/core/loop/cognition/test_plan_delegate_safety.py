@@ -99,3 +99,17 @@ def test_build_plan_generate_message_includes_subagent_routing_block() -> None:
     assert "SUBAGENT ROUTING" in msg
     assert "Leave delegate null" in msg
     assert "intake-only" in msg
+
+
+def test_build_plan_generate_message_includes_approved_plan_section() -> None:
+    from soothe.sloop.prompts.user_message import UserMessageBuilder
+
+    msg = UserMessageBuilder().build_plan_generate_message(
+        "migrate auth",
+        approved_plan_path="/ws/.soothe/plans/demo.md",
+        approved_plan_markdown="# Solution\n\nUse OAuth.\n",
+    )
+    assert "APPROVED PLAN" in msg
+    assert "path: /ws/.soothe/plans/demo.md" in msg
+    assert "Use OAuth" in msg
+    assert "do not re-litigate" in msg

@@ -1163,6 +1163,15 @@ class LoopState(BaseModel):
         default=None,
         description="Skill reference text for execute-step SKILL_CONTEXT when goal expanded from /skill:.",
     )
+    # IG-660: one-shot approved intake-planner artifact for plan_generate grounding.
+    approved_plan_path: str | None = Field(
+        default=None,
+        description="Workspace path of the approved plan artifact (cleared after first plan_generate).",
+    )
+    approved_plan_markdown: str | None = Field(
+        default=None,
+        description="Frontmatter-stripped approved plan body for plan_generate (cleared after first use).",
+    )
     thread_id: str
     workspace: str | None = None  # Thread-specific workspace (RFC-103)
     iteration: int = 0

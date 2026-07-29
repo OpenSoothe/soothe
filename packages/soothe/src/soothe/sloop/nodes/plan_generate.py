@@ -37,6 +37,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
     1. plan_assess node (normal flow)
     2. bounded_evidence_gather (fresh-loop bypass, IG-476)
     3. synthetic, when reached via the ``simple`` intake branch (RFC-630)
+    4. synthetic, when Approve hands off from the planner subagent (IG-660)
     """
     strange_loop = ctx.strange_loop
     state = ctx.loop_state
@@ -48,6 +49,18 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
             {"error": "plan_generate invoked without prior assessment", "step_id": ""},
         )
         return _PLAN_GENERATE_FATAL
+
+    # IG-660: hydrate approved-plan grounding from scratch when handoff is active.
+    if getattr(ctx.scratch, "planner_implement_handoff", False):
+        if not (getattr(state, "approved_plan_markdown", None) or "").strip():
+            from soothe.sloop.plans.artifact import strip_plan_frontmatter
+
+            raw = getattr(ctx.scratch, "plan_artifact_markdown", None) or ""
+            body = strip_plan_frontmatter(raw)
+            if body:
+                state.approved_plan_markdown = body
+                state.approved_plan_path = getattr(ctx.scratch, "plan_artifact_path", None)
+        logger.info("[PlanGenerate] Implementing operator-approved plan artifact")
 
     # IG-476: Log when using fresh-loop bypass assessment
     if assessment.assessment_reasoning and "Fresh-loop bypass" in assessment.assessment_reasoning:
@@ -142,6 +155,7 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
                 require_goal_completion=False,
             )
             ctx.scratch.plan_result = None
+            # Keep approved-plan grounding for the forced replan.
             return {"assess_route": "continue_generate"}
 
     ctx.scratch.undersized_plan_replan_attempts = 0
@@ -167,5 +181,14 @@ async def node_plan_generate(ctx: LoopRuntimeContext, _state: dict[str, Any]) ->
         },
     )
 
+    # IG-660: one-shot handoff — stop injecting APPROVED PLAN on later waves.
+    ctx.scratch.planner_implement_handoff = False
+    state.approved_plan_markdown = None
+    state.approved_plan_path = None
+
     plan_route: PlanRoute = PLAN_ROUTE_GOAL_DONE if plan_result.is_done() else PLAN_ROUTE_EXECUTE
-    return {"plan_route": plan_route, "assess_route": None}
+    return {
+        "plan_route": plan_route,
+        "assess_route": None,
+        "planner_implement_handoff": False,
+    }

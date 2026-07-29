@@ -47,6 +47,8 @@ class LoopGraphState(TypedDict, total=False):
     pending_clarification: dict[str, Any] | None
     pending_clarification_answer: dict[str, Any] | None
     last_clarification_origin: ClarificationOrigin | None
+    # IG-660: Approve cleared planner wire; route_after_wired_subagent → plan_generate.
+    planner_implement_handoff: bool | None
     # Set true when execute_steps synthesizes a step result on the
     # clarification-resume path (no scratch decision / plan_result). Routing
     # skips record_iteration in that case to avoid the "missing plan or

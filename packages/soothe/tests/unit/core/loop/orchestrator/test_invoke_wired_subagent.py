@@ -237,7 +237,9 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     )
     plan_path = tmp_path / ".soothe" / "plans" / "x.md"
     plan_path.parent.mkdir(parents=True)
-    plan_path.write_text("---\nstatus: draft\n---\n\n# Plan\n", encoding="utf-8")
+    plan_path.write_text(
+        "---\nstatus: draft\n---\n\n# Plan\n\nDo the migration.\n", encoding="utf-8"
+    )
 
     async def _emit(*_a, **_k) -> None:
         return None
@@ -256,13 +258,17 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
             intent_classification=None,
             activated_skill_names=[],
             active_mcp_servers=[],
+            approved_plan_path=None,
+            approved_plan_markdown=None,
         ),
-        preferred_subagent=None,
+        preferred_subagent="planner",
         scratch=SimpleNamespace(
             plan_result=SimpleNamespace(decision=SimpleNamespace(steps=[SimpleNamespace(id="P1")])),
+            plan_assessment=None,
             plan_artifact_path=str(plan_path),
-            plan_artifact_markdown="# Plan\n",
+            plan_artifact_markdown="# Plan\n\nDo the migration.\n",
             planner_subagent_review_comments=None,
+            planner_implement_handoff=False,
         ),
         emit=_emit,
         core_agent=SimpleNamespace(lookup_intake_only_subagent=lambda _n: None),
@@ -278,8 +284,24 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     }
     out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
     assert out.get("pending_clarification") is None
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert out.get("planner_implement_handoff") is True
+    assert route_after_wired_subagent(out) == "plan_generate"
     assert "status: approved" in plan_path.read_text(encoding="utf-8")
+    assert ctx.preferred_subagent is None
+    assert ctx.scratch.planner_implement_handoff is True
+    assert ctx.scratch.plan_result is None
+    assert ctx.scratch.plan_assessment is not None
+    assert ctx.loop_state.approved_plan_markdown is not None
+    assert "Do the migration" in ctx.loop_state.approved_plan_markdown
+    ledger = ctx.loop_state._loop_messages_cache
+    ai_texts = [str(m.content) for m in ledger if type(m).__name__.endswith("AIMessage")]
+    assert any("Proceeding to implement" in t for t in ai_texts)
+    assert not any("Do the migration" in t for t in ai_texts)
+
+
+def test_route_after_wired_subagent_handoff_to_plan_generate() -> None:
+    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "plan_generate"
+    assert route_after_wired_subagent({}) == "goal_completion"
 
 
 @pytest.mark.asyncio

@@ -32,3 +32,5 @@ class LoopPhaseScratch:
     plan_artifact_path: str | None = None
     plan_artifact_markdown: str | None = None
     planner_subagent_review_comments: str | None = None
+    # IG-660: Approve → StrangeLoop plan_generate handoff (one-shot).
+    planner_implement_handoff: bool = False

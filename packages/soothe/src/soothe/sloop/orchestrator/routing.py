@@ -172,13 +172,16 @@ def route_after_resolve_decision(state: dict[str, Any]) -> str:
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
-    """IG-601/IG-656/IG-658: intake-only invoke → review, completion, or END."""
+    """IG-601/IG-656/IG-658/IG-660: intake-only invoke → review, implement, or complete."""
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END
     if _pending_clarification(state):
         logger.info("[routing] route_after_wired_subagent → await_clarification")
         return "await_clarification"
+    if state.get("planner_implement_handoff"):
+        logger.info("[routing] route_after_wired_subagent → plan_generate (approved plan handoff)")
+        return "plan_generate"
     logger.info("[routing] route_after_wired_subagent → goal_completion")
     return "goal_completion"
 
