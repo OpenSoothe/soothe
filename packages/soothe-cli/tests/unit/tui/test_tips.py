@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 
-from soothe_cli.tui.tips import SESSION_TIPS, pick_session_tip
+from soothe_cli.tui.tips import SESSION_TIPS, TipRotator, pick_session_tip
 
 
 def test_session_tips_is_non_empty_str_list() -> None:
@@ -35,3 +35,43 @@ def test_pick_session_tip_returns_member_of_pool() -> None:
 
 def test_pick_session_tip_returns_str() -> None:
     assert isinstance(pick_session_tip(), str)
+
+
+def test_tip_rotator_returns_pool_members() -> None:
+    """Each rotated tip must be a member of the pool."""
+    rotator = TipRotator()
+    for _ in range(len(SESSION_TIPS) * 3):
+        assert rotator.next_tip() in SESSION_TIPS
+
+
+def test_tip_rotator_cycles_through_full_pool() -> None:
+    """One full pass over the pool covers every tip exactly once."""
+    rotator = TipRotator()
+    seen = {rotator.next_tip() for _ in range(len(SESSION_TIPS))}
+    assert seen == set(SESSION_TIPS)
+
+
+def test_tip_rotator_avoids_immediate_repeat() -> None:
+    """Consecutive tips should differ while the pool has more than one entry."""
+    rotator = TipRotator()
+    previous = rotator.next_tip()
+    for _ in range(len(SESSION_TIPS) * 4):
+        current = rotator.next_tip()
+        assert current != previous, "rotator repeated a tip back-to-back"
+        previous = current
+
+
+def test_tip_rotator_returns_str() -> None:
+    assert isinstance(TipRotator().next_tip(), str)
+
+
+def test_tip_rotator_custom_pool() -> None:
+    """A rotator seeded with a custom pool stays within that pool."""
+    custom = ["alpha", "beta", "gamma"]
+    rotator = TipRotator(tips=custom)
+    for _ in range(10):
+        assert rotator.next_tip() in custom
+
+
+def test_tip_rotator_empty_pool_returns_empty_string() -> None:
+    assert TipRotator(tips=[]).next_tip() == ""

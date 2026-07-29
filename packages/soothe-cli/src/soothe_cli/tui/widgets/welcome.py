@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 from soothe_cli.tui import theme
 from soothe_cli.tui._version import __version__
 from soothe_cli.tui.config import _is_editable_install, get_banner, get_glyphs
-from soothe_cli.tui.tips import pick_session_tip
 from soothe_cli.tui.widgets._links import open_style_link
 
 
@@ -55,16 +54,10 @@ class WelcomeBanner(Static):
         self._mcp_tool_count = mcp_tool_count
         self._failed = False
         self._failure_error: str = ""
-        self._tip: str = pick_session_tip()
         self._update_latest: str | None = None
         """PyPI version string when an update is available; drives banner line only."""
 
         super().__init__(self._build_banner(), **kwargs)
-
-    @property
-    def session_tip(self) -> str:
-        """Tip chosen for this session (shown in the status bar when ready)."""
-        return self._tip
 
     def update_loop_id(self, loop_id: str) -> None:
         """Update the displayed loop ID and re-render the banner.

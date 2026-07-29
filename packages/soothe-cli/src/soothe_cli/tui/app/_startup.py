@@ -137,9 +137,9 @@ class _StartupMixin:
         # Seed the badge from the app-level clarification mode (CLI flag, default Auto).
         self._status_bar.set_clarification_mode(self._clarification_mode)
 
-        with suppress(NoMatches):
-            banner = self.query_one("#welcome-banner", WelcomeBanner)
-            self.set_default_session_tip(banner.session_tip)
+        # Seed the status footer with the first rotating tip and start rotation.
+        self.set_default_session_tip(self._tip_rotator.next_tip())
+        self.start_tip_rotation()
 
         # Focus the input immediately so the cursor is visible on first paint
         self._chat_input.focus_input()
@@ -544,8 +544,6 @@ class _StartupMixin:
             banner.set_connected(self._mcp_tool_count)
             if self._lc_loop_id:
                 banner.update_loop_id(self._lc_loop_id)
-            if self._status_bar is not None:
-                self.set_default_session_tip(banner.session_tip)
         except NoMatches:
             logger.warning("Welcome banner not found during daemon ready transition")
 

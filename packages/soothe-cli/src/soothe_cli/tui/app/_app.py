@@ -37,6 +37,7 @@ from soothe_cli.tui.app._module_init import (
 )
 from soothe_cli.tui.app._startup import _StartupMixin
 from soothe_cli.tui.app._ui import _UIMixin
+from soothe_cli.tui.tips import TipRotator
 from soothe_cli.tui.widgets.chat_input import ChatInput
 from soothe_cli.tui.widgets.loading import LoadingWidget
 from soothe_cli.tui.widgets.message_store import MessageStore
@@ -227,6 +228,9 @@ class SootheApp(
         self._default_session_tip: str = ""
         self._status_notification_timer: Timer | None = None
         self._status_notification_active = False
+        # Rotating tip source + interval timer for the status footer.
+        self._tip_rotator: TipRotator = TipRotator()
+        self._tip_rotation_timer: Timer | None = None
 
         self._chat_input: ChatInput | None = None
         self._plan_quick_view_overlay: PlanQuickViewOverlay | None = None
@@ -370,6 +374,32 @@ class SootheApp(
         self._default_session_tip = cleaned
         if self._status_bar is not None and not self._status_notification_active:
             self._status_bar.set_session_tip(cleaned)
+
+    def start_tip_rotation(self, interval: float = 12.0) -> None:
+        """Cycle through rotating tips in the status footer at a fixed interval.
+
+        Args:
+            interval: Seconds between tip rotations.
+        """
+        self.stop_tip_rotation()
+        self._tip_rotation_timer = self.set_interval(interval, self._rotate_session_tip)
+
+    def stop_tip_rotation(self) -> None:
+        """Cancel the rotating-tip interval timer if one is running."""
+        if self._tip_rotation_timer is not None:
+            with suppress(Exception):
+                self._tip_rotation_timer.stop()
+            self._tip_rotation_timer = None
+
+    def _rotate_session_tip(self) -> None:
+        """Advance to the next tip and push it to the status footer.
+
+        Transient notifications take precedence: rotation is skipped while a
+        notification is active so it can run its timeout uninterrupted.
+        """
+        if self._status_notification_active:
+            return
+        self.set_default_session_tip(self._tip_rotator.next_tip())
 
     def _set_status_notification(self, message: str, *, timeout: float | None = None) -> None:
         """Render a transient notification in the status-tip area."""

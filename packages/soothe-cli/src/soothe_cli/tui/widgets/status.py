@@ -166,12 +166,14 @@ class StatusBar(Horizontal):
         min-width: 0;
         padding: 0 1 0 0;
         color: $text-muted;
+        text-style: dim;
         text-overflow: ellipsis;
         overflow: hidden;
     }
 
     StatusBar .status-tip.notification {
         color: $warning;
+        text-style: bold;
     }
 
     StatusBar .status-message {
