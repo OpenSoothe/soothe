@@ -8505,7 +8505,7 @@ wheels = [
 
 [[package]]
 name = "soothe-nano"
-version = "1.0.11"
+version = "1.0.12"
 source = { editable = "packages/soothe-nano" }
 dependencies = [
     { name = "aiofiles" },
