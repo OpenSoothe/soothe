@@ -388,7 +388,7 @@ Unit:
 - `tests/unit/core/loop/clarification/test_interactive.py`
 - `tests/unit/core/loop/clarification/test_auto.py`
 - `tests/unit/core/loop/clarification/test_detector.py`
-- `tests/unit/core/loop/orchestrator/nodes/test_await_clarification.py`
+- `tests/unit/core/loop/orchestrator/stages/test_await_clarification.py`
 - `tests/unit/core/loop/orchestrator/test_routing.py` (extended)
 - `tests/unit/subagents/veritas/test_implementation.py`
 - `tests/unit/core/loop/engine/test_graph_interrupt.py` (rewritten — assert policy dispatch, not empty answers)

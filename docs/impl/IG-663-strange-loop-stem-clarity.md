@@ -61,7 +61,8 @@ sloop/orchestrator/  # builder, routing, stations, state
 
 ## Cleanse (IG-663 follow-up)
 
-- Removed ``sloop/nodes/`` compatibility shims; all host/tests import ``sloop/stages/``.
+- Removed ``sloop/nodes/`` package and test ``orchestrator/nodes/`` directory
+  (tests live under ``orchestrator/stages/``).
 - Ledger writers keep **client-visible** phase strings (`intent_classify`,
   `plan_assess`, `plan_generate`, `plan_gap_analysis`, `goal_completion`,
   `execute_step`) so soothe-sdk / CLI checkpoint filters stay compatible.
