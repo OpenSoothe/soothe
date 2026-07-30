@@ -892,10 +892,14 @@ class _ExecutionMixin:
                     )
                     break
                 except Exception as e:
+                    # Resending needs content: the daemon rejects an empty
+                    # ``loop_input``, so a contentless turn (prompt queued
+                    # server-side and already cancelled) cannot be retried.
                     if (
                         attempt == 1
                         and self._daemon_session is not None
                         and is_daemon_connection_error(e)
+                        and message.strip()
                     ):
                         try:
                             await self._daemon_session.ensure_connected()

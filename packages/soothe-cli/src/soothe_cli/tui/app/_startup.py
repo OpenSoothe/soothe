@@ -408,7 +408,15 @@ class _StartupMixin:
                 args=str(echo.get("args", args)),
             ),
         )
-        await self._send_to_agent("", skip_daemon_send_turn=True)
+        # Pass the selector line the daemon queued for this turn (not an empty
+        # string): if the stream drops mid-turn the daemon cancels the queued
+        # turn, and the reconnect retry has to resend real content.
+        resolved_name = str(echo.get("skill_name", skill_name)).strip() or skill_name
+        resolved_args = str(echo.get("args", args)).strip()
+        queued_line = f"/skill:{resolved_name}"
+        if resolved_args:
+            queued_line = f"{queued_line} {resolved_args}"
+        await self._send_to_agent(queued_line, skip_daemon_send_turn=True)
 
     async def _discover_skills(self) -> list[ExtendedSkillMetadata]:
         """Discover skills from daemon via WebSocket RPC (IG-174 Phase 2).
