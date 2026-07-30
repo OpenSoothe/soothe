@@ -5,6 +5,25 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.8] - 2026-07-30
+
+### Fixed
+- Internal `asyncio.CancelledError` (no user `/cancel`) no longer interrupts a
+  running loop: workers retry once, emit an error terminal instead of cancel,
+  and StrangeLoop skips `goal_interrupted` unless the task was cooperatively
+  cancelled
+- Stream-end UX: honor `soothe.stream.end` cancel reasons; avoid misleading
+  "Query cancelled by user" / "Stream ended unexpectedly" for cancel terminals
+- Interrupted loops set metadata `status=idle` so resume is not stuck on
+  `running` until reconciliation
+
+### Changed
+- Require `soothe-client-python>=1.0.8` (CLI runtime + daemon dev):
+  `aupdate_loop_state`, shared stream-end cancel-reason helpers
+- Raise daemon `soothe` floor pin to `>=0.9.8`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.7...v0.9.8
+
 ## [v0.9.7] - 2026-07-29
 
 ### Added
