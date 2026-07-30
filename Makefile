@@ -34,7 +34,12 @@ ROOT_LINT_DIRS = examples scripts
 ifdef UV_PYPI_MIRROR
 UV_SYNC = uv sync --all-packages --all-extras --default-index $(UV_PYPI_MIRROR)
 else
-UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras 
+# Default to PyPI. Fastly (pypi.org/files.pythonhosted.org) occasionally resets
+# uv's HTTP client (ECONNRESET / os error 54) while curl succeeds on the same
+# host. Fall back to a mirror if the direct PyPI sync fails; the committed
+# uv.lock stays pinned to PyPI and is restored after the mirror run.
+UV_PYPI_FALLBACK ?= https://pypi.tuna.tsinghua.edu.cn/simple
+UV_SYNC = UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras
 endif
 
 # ============================================================================
@@ -87,21 +92,35 @@ help:
 # Workspace Setup
 # ============================================================================
 
+# Run a uv sync, falling back to UV_PYPI_FALLBACK mirror if the default PyPI
+# endpoint fails (e.g. Fastly ECONNRESET). uv.lock is restored afterward so a
+# mirror run never rewrites the committed PyPI-pinned lockfile.
+define uv_sync_with_fallback
+	$(UV_SYNC) \
+		|| (rc=$$?; \
+			if [ -n "$(UV_PYPI_MIRROR)" ]; then echo "sync failed; UV_PYPI_MIRROR set, no fallback"; exit $$rc; fi; \
+			echo ">> direct PyPI sync failed (rc=$$rc); retrying via mirror $(UV_PYPI_FALLBACK)"; \
+			cp uv.lock uv.lock.bak.$$$$.tmp 2>/dev/null || true; \
+			UV_INDEX_URL= UV_DEFAULT_INDEX= uv sync --all-packages --all-extras --default-index $(UV_PYPI_FALLBACK) \
+				&& { git checkout -- uv.lock 2>/dev/null || [ -f uv.lock.bak.$$$$.tmp ] && mv uv.lock.bak.$$$$.tmp uv.lock; } \
+				|| { git checkout -- uv.lock 2>/dev/null || ([ -f uv.lock.bak.$$$$.tmp ] && mv uv.lock.bak.$$$$.tmp uv.lock); exit 1; })
+endef
+
 setup:
 	@echo "Syncing workspace dependencies..."
-	$(UV_SYNC)
+	@$(call uv_sync_with_fallback)
 	@echo "Workspace ready"
 
 sync:
 	@echo "Syncing all workspace packages..."
-	$(UV_SYNC)
+	@$(call uv_sync_with_fallback)
 	@$(MAKE) sync-verify
 	@echo "All packages synced"
 
 sync-no-cache:
 	@echo "Syncing all workspace packages (no cache, refresh install)..."
 	uv cache clean
-	$(UV_SYNC) --no-cache --refresh
+	@$(call uv_sync_with_fallback) --no-cache --refresh
 	@$(MAKE) sync-verify
 	@echo "All packages synced (cache bypassed)"
 
