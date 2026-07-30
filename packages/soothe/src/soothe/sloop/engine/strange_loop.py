@@ -296,7 +296,7 @@ class StrangeLoop:
                 and intent_classifier is not None
                 and not clarification_answer
             ):
-                from soothe.sloop.nodes.intent_classify import (
+                from soothe.sloop.stages.preprocess.intake import (
                     INTENT_CLASSIFY_STATUS_LABEL,
                 )
 
@@ -781,7 +781,7 @@ class StrangeLoop:
                     state.routing_classification = effective_routing
                     routing_classification = effective_routing
 
-                from soothe.sloop.nodes.intent_classify import (
+                from soothe.sloop.stages.preprocess.intake import (
                     intent_classified_reasoning_event,
                 )
 
@@ -955,7 +955,7 @@ class StrangeLoop:
                     await pump_task
 
         finally:
-            from soothe.sloop.nodes.goal_completion import (
+            from soothe.sloop.stages.complete.finalize import (
                 await_goal_completion_tail_persistence,
             )
 

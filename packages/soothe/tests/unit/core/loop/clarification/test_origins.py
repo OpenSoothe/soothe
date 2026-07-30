@@ -46,9 +46,6 @@ def test_resume_node_mapping() -> None:
     assert (
         resume_node_for_clarification_origin(ORIGIN_PLAN_GAP_ANALYSIS) == ORIGIN_PLAN_GAP_ANALYSIS
     )
-    assert (
-        resume_node_for_clarification_origin(ORIGIN_PLANNER_SUBAGENT_REVIEW)
-        == "invoke_wired_subagent"
-    )
+    assert resume_node_for_clarification_origin(ORIGIN_PLANNER_SUBAGENT_REVIEW) == "delegate"
     assert resume_node_for_clarification_origin("not_a_stage") is None
     assert resume_node_for_clarification_origin(None) is None

@@ -19,12 +19,6 @@ from soothe.context.engine import ContextEngine
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.intention import IntentClassification
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.nodes.bounded_evidence_gather import (
-    node_bounded_evidence_gather,
-)
-from soothe.sloop.nodes.init_or_resume import node_init_or_resume
-from soothe.sloop.nodes.plan_assess import node_plan_assess
-from soothe.sloop.nodes.plan_generate import node_plan_generate
 from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.sloop.orchestrator.routing import (
     route_after_evidence_gather,
@@ -37,6 +31,12 @@ from soothe.sloop.prompts.plan_ledger_projection import (
     project_planner_ledger,
     resolve_planner_projection_mode,
 )
+from soothe.sloop.stages.plan.assess import node_plan_assess
+from soothe.sloop.stages.plan.gather_evidence import (
+    node_bounded_evidence_gather,
+)
+from soothe.sloop.stages.plan.generate_plan import node_plan_generate
+from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
 from soothe.sloop.state.checkpoint import (
     StrangeLoopCheckpoint,
     ThreadHealthMetrics,
@@ -246,11 +246,11 @@ async def test_continuation_complex_goal_produces_multi_step_plan() -> None:
     assert ctx.scratch.plan_result is None
 
     route = route_by_intent(graph_state)
-    assert route == "bounded_evidence_gather"
+    assert route == "gather_evidence"
 
     evidence_out = await node_bounded_evidence_gather(ctx, graph_state)
     graph_state.update(evidence_out)
-    assert route_after_evidence_gather(graph_state) == "plan_assess"
+    assert route_after_evidence_gather(graph_state) == "assess"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     graph_state.update(assess_out)
@@ -287,7 +287,7 @@ async def test_continuation_complex_goal_replans_undersized_plan() -> None:
     first_generate = await node_plan_generate(ctx, graph_state)
     graph_state.update(first_generate)
     assert first_generate.get("assess_route") == "continue_generate"
-    assert route_after_plan(graph_state) == "plan_generate"
+    assert route_after_plan(graph_state) == "generate_plan"
 
     second_generate = await node_plan_generate(ctx, graph_state)
     graph_state.update(second_generate)
@@ -400,7 +400,7 @@ async def test_continuation_trivial_git_commit_still_bootstraps() -> None:
         "is_continuation": True,
         "intake_label": IntakeLabel.TRIVIAL,
     }
-    assert route_by_intent(graph_state) == "plan_assess"
+    assert route_by_intent(graph_state) == "assess"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "skip_generate"
@@ -487,7 +487,7 @@ async def test_continuation_simple_routes_to_assess_and_bootstraps() -> None:
         "is_continuation": True,
         "intake_label": IntakeLabel.SIMPLE,
     }
-    assert route_by_intent(graph_state) == "plan_assess"
+    assert route_by_intent(graph_state) == "assess"
 
     assess_out = await node_plan_assess(ctx, graph_state)
     assert assess_out.get("assess_route") == "skip_generate"

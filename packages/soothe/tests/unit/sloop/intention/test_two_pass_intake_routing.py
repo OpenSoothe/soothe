@@ -182,7 +182,7 @@ def test_routing_guard_blocks_chitchat_on_new_goal_created() -> None:
     }
 
     result = route_by_intent(state)
-    assert result == "bounded_evidence_gather"
+    assert result == "gather_evidence"
 
 
 def test_routing_guard_allows_chitchat_on_resume() -> None:

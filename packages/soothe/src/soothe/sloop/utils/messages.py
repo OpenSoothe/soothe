@@ -103,7 +103,18 @@ def last_ledger_ai_content(state: LoopState) -> str:
     Returns:
         Content of the last non-planning AI message, or empty string if none found.
     """
-    planning_phases = {"plan_assess", "plan_generate", "plan_gap_analysis", "intent_classify"}
+    # Dual-read: client-visible ledger phases + IG-663 station ids if present.
+    planning_phases = {
+        "assess",
+        "plan_assess",
+        "generate_plan",
+        "plan_generate",
+        "analyze_gaps",
+        "plan_gap_analysis",
+        "intake",
+        "intent_classify",
+        "continuation",
+    }
     for msg in reversed(state.loop_messages):
         if (
             isinstance(msg, LoopAIMessage)
@@ -168,15 +179,20 @@ class LoopHumanMessage(HumanMessage):
     workspace: str | None = None
     phase: (
         Literal[
-            "intent_classify",  # IG-540: Pre-stream intake classification
-            "plan_assess",  # RFC-214: Plan assess phase
-            "plan_generate",  # RFC-214: Plan generate phase
-            "plan_gap_analysis",  # IG-557: Read-only gap map before plan-assess
+            "intake",  # IG-663: Preprocess intake
+            "intent_classify",  # legacy alias
+            "assess",  # IG-663: Plan assess
+            "plan_assess",  # legacy
+            "generate_plan",  # IG-663: Plan generate
+            "plan_generate",  # legacy
+            "analyze_gaps",  # IG-663
+            "plan_gap_analysis",  # legacy
             "execute_wave",  # Parallel execution wave
             "execute_step",  # Single step execution
-            "goal_completion",  # Goal completion phase
+            "goal_completion",  # Goal completion phase (wire-stable)
             "goal_interrupted",  # Non-success terminal marker (cancel/fatal/max-iter)
             "chitchat",  # Chitchat intake fast-path (piggybacked response)
+            "finalize",  # IG-663 station id (prefer goal_completion for wire)
         ]
         | None
     ) = None

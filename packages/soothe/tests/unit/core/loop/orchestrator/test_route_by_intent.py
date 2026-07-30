@@ -16,8 +16,8 @@ from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.sloop.cognition.trivial_plan import build_trivial_plan
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.nodes.init_or_resume import node_init_or_resume
 from soothe.sloop.orchestrator.routing import route_by_intent
+from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
 
 
 async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
@@ -31,27 +31,27 @@ async def _noop_emit(*_args, **_kwargs) -> None:  # type: ignore[no-untyped-def]
 def test_route_by_intent_continuation_trivial() -> None:
     """Continuation trivial goals use plan_assess (continuation discriminator)."""
     state = {"is_continuation": True, "intake_label": IntakeLabel.TRIVIAL}
-    assert route_by_intent(state) == "plan_assess"
+    assert route_by_intent(state) == "assess"
 
 
 def test_route_by_intent_continuation_simple() -> None:
     state = {"is_continuation": True, "intake_label": IntakeLabel.SIMPLE}
-    assert route_by_intent(state) == "plan_assess"
+    assert route_by_intent(state) == "assess"
 
 
 def test_route_by_intent_continuation_complex() -> None:
     state = {"is_continuation": True, "intake_label": IntakeLabel.COMPLEX}
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_continuation_missing_label() -> None:
     state = {"is_continuation": True, "intake_label": None}
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_trivial() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.TRIVIAL}
-    assert route_by_intent(state) == "resolve_decision"
+    assert route_by_intent(state) == "commit_plan"
 
 
 def test_route_by_intent_chitchat_fast_path() -> None:
@@ -75,18 +75,18 @@ def test_route_by_intent_chitchat_fast_path_wins_over_continuation() -> None:
 
 def test_route_by_intent_simple() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.SIMPLE}
-    assert route_by_intent(state) == "plan_generate"
+    assert route_by_intent(state) == "generate_plan"
 
 
 def test_route_by_intent_complex() -> None:
     state = {"is_continuation": False, "intake_label": IntakeLabel.COMPLEX}
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_route_by_intent_missing_label_falls_back_to_complex() -> None:
     """Fail-safe: a missing label routes to the full pipeline (complex)."""
     state = {"is_continuation": False, "intake_label": None}
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 # -- Group 4: trivial pseudo-plan (in-graph execute) ------------------------
@@ -330,7 +330,7 @@ def test_routing_guard_blocks_chitchat_on_new_goal() -> None:
         "new_goal_created": True,
     }
     # Routing guard forces complex instead of END
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
@@ -341,7 +341,7 @@ def test_routing_guard_blocks_chitchat_label_on_new_goal() -> None:
         "new_goal_created": True,
     }
     # Routing guard forces complex instead of END
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_routing_guard_allows_chitchat_on_existing_goal() -> None:
@@ -362,7 +362,7 @@ def test_routing_guard_complex_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.COMPLEX,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "bounded_evidence_gather"
+    assert route_by_intent(state) == "gather_evidence"
 
 
 def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
@@ -372,7 +372,7 @@ def test_routing_guard_simple_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.SIMPLE,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "plan_generate"
+    assert route_by_intent(state) == "generate_plan"
 
 
 def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
@@ -382,7 +382,7 @@ def test_routing_guard_trivial_not_blocked_by_new_goal() -> None:
         "intake_label": IntakeLabel.TRIVIAL,
         "new_goal_created": True,
     }
-    assert route_by_intent(state) == "resolve_decision"
+    assert route_by_intent(state) == "commit_plan"
 
 
 def test_routing_guard_missing_new_goal_defaults_false() -> None:

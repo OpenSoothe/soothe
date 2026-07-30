@@ -13,8 +13,9 @@ Requirements:
     - mermaid-cli (mmdc) for SVG output: npm install -g @mermaid-js/mermaid-cli
 
 Output:
-    - docs/diagrams/strange_loop_graph.mmd  (Mermaid source)
-    - docs/diagrams/strange_loop_graph.svg   (SVG diagram)
+    - docs/diagrams/strange_loop_stem.mmd   (canonical stem — hand-authored, IG-663)
+    - docs/diagrams/strange_loop_graph.mmd  (full-edge Mermaid dump from LangGraph)
+    - docs/diagrams/strange_loop_graph.svg   (SVG of full-edge dump)
 """
 
 from __future__ import annotations
@@ -234,72 +235,16 @@ def main() -> None:
         print(f"ASCII generation failed: {e}")
     print("-" * 60)
 
-    # Save node and edge summary with routing design notes
-    summary_path = output_dir / "strange_loop_graph_nodes.md"
-    summary = """# StrangeLoop LangGraph Design
+    # Full-edge appendix (do not overwrite hand-authored strange_loop_graph_nodes.md / stem).
+    summary_path = output_dir / "strange_loop_graph_edges.md"
+    summary = """# StrangeLoop LangGraph — Full Edge Dump (IG-663)
 
-Auto-generated topology from ``build_strange_loop_graph()`` (RFC-220, RFC-630).
+Auto-generated from ``build_strange_loop_graph()``.
+Canonical architecture: [`strange_loop_stem.mmd`](strange_loop_stem.mmd) /
+[`strange_loop_graph_nodes.md`](strange_loop_graph_nodes.md).
+
 Regenerate: ``python scripts/visualize_strange_loop_graph.py``
 
-## Graph entry
-
-Every goal turn runs:
-
-1. ``intent_classify`` — intake LLM (or heuristic) → ``IntakeLabel`` + optional ``chitchat_response`` / ``wire_subagent``
-2. ``init_or_resume`` — surface label on graph state; inject trivial pseudo-plan or select wired-subagent route; emit chitchat fast-path event
-3. ``route_by_intent`` — branch dispatch (conditional edge from ``init_or_resume``)
-
-## ``route_by_intent`` priority (RFC-630 / IG-599)
-
-Evaluated in order; first match wins:
-
-| Priority | Condition | Target | Notes |
-|----------|-----------|--------|-------|
-| 1 | ``intent_route == fast_path`` | ``__end__`` | **Chitchat fast-path** — emits piggybacked ``chitchat_response`` via runner; **always wins**, including loop continuation turns |
-| 2 | ``intent_route == wired_subagent`` | ``invoke_wired_subagent`` | Intake-only direct invoke → goal_completion |
-| 3 | ``is_continuation`` + ``trivial`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
-| 3b | ``is_continuation`` + ``simple`` | ``plan_assess`` | Continuation discriminator (bootstrap vs plan_generate) |
-| 3c | ``is_continuation`` + ``complex`` / missing | ``bounded_evidence_gather`` | Full spine; same as fresh-loop complex |
-| 4 | ``intake_label == trivial`` (fresh) | ``resolve_decision`` | Pseudo 1-step plan injected in ``init_or_resume`` |
-| 5 | ``intake_label == simple`` (fresh) | ``plan_generate`` | Skips ``bounded_evidence_gather`` + ``plan_assess`` |
-| 6 | default / ``complex`` (fresh) | ``bounded_evidence_gather`` | Full spine; fresh-loop skip (IG-476) intact |
-
-### Chitchat fast-path (``init_or_resume``)
-
-When intake is ``chitchat`` and ``chitchat_response`` is non-empty (and goal is not an explicit continue keyword):
-
-- Sets ``intent_route = fast_path`` and emits ``intent_fast_path`` to the runner
-- Runner streams the piggybacked reply directly — **no** ``plan_assess``, ``plan_generate``, or ``execute``
-- Applies on **first and subsequent goals** in the same loop (continuation does not override chitchat)
-
-### Wired-subagent route (``invoke_wired_subagent``)
-
-When Pass 2 ``wire_subagent`` or slash ``preferred_subagent`` resolves to
-``planner`` / ``browser_use`` / ``deep_research`` / ``academic_research``:
-
-- ``init_or_resume`` sets ``intent_route = wired_subagent``
-- All allowlisted specialists are intake-only: streamed direct invoke from
-  intake-only registry → ``goal_completion`` (orphan SubAgent card)
-- Skips evidence gather / plan assess / plan generate; ledger via existing goal completion
-
-```mermaid
-flowchart TD
-    IC[intent_classify] --> IOR[init_or_resume]
-    IOR --> R{{route_by_intent}}
-    R -->|fast_path| END1[__end__ / chitchat response]
-    R -->|wired_subagent| IWS[invoke_wired_subagent → intake-only → goal_completion]
-    R -->|continuation+trivial| PA[plan_assess]
-    R -->|continuation+simple| PA2[plan_assess]
-    R -->|continuation+complex| BEG[bounded_evidence_gather]
-    R -->|trivial| RD[resolve_decision → execute]
-    R -->|simple| PG2[plan_generate → execute]
-    R -->|complex| BEG2[bounded_evidence_gather]
-    BEG --> PGA{{route_after_evidence_gather}}
-    BEG2 --> PGA
-    PGA -->|plan_assess| PA3[plan_assess]
-    PGA -->|plan_gap_analysis| PGA2[plan_gap_analysis → plan_assess]
-    PGA -->|plan_generate| PG3[plan_generate → execute]
-```
 ## Nodes
 
 """
@@ -308,16 +253,8 @@ flowchart TD
             summary += f"- `{node.id}`: {node.name or node.id}\n"
         else:
             summary += f"- `{node}`\n"
-    summary += "\n## Conditional edges\n\n"
-    summary += "Solid arrows in the Mermaid/SVG diagram are unconditional; dashed arrows are conditional.\n\n"
-    summary += "### From ``init_or_resume`` (`route_by_intent`)\n\n"
-    summary += "- → ``__end__`` — chitchat fast-path\n"
-    summary += "- → ``invoke_wired_subagent`` — Pass 2 / slash specialist direct route\n"
-    summary += "- → ``plan_assess`` — continuation + trivial, or continuation + simple\n"
-    summary += "- → ``plan_generate`` — fresh simple\n"
-    summary += "- → ``bounded_evidence_gather`` — continuation + complex, or fresh complex\n"
-    summary += "- → ``resolve_decision`` — fresh trivial pseudo-plan\n\n"
-    summary += "### All edges\n\n"
+    summary += "\n## All edges\n\n"
+    summary += "Solid arrows in Mermaid/SVG are unconditional; dashed are conditional.\n\n"
     for edge in graph.edges:
         source = edge.source if hasattr(edge, "source") else str(edge)
         target = edge.target if hasattr(edge, "target") else ""
@@ -326,7 +263,7 @@ flowchart TD
             summary += f"- `{source}` → `{target}`{conditional}\n"
 
     summary_path.write_text(summary)
-    print(f"\nNode summary saved to: {summary_path}")
+    print(f"\nEdge dump saved to: {summary_path}")
 
 
 if __name__ == "__main__":

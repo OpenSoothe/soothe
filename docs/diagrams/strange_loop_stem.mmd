@@ -1,0 +1,41 @@
+---
+title: StrangeLoop main stem (IG-663)
+config:
+  flowchart:
+    curve: basis
+    htmlLabels: true
+---
+flowchart TD
+  START([START]) --> intake[intake]
+  intake --> enter_loop[enter_loop]
+  enter_loop --> routePre{{route_after_preprocess}}
+
+  routePre -->|chitchat| END1([END])
+  routePre -->|delegate| delegate[delegate] --> finalize
+  routePre -->|trivial| commit_plan
+  routePre -->|simple| generate_plan
+  routePre -->|complex_or_cont| gather_evidence
+
+  subgraph stem [Main stem Plan Execute]
+    direction TB
+    gather_evidence[gather_evidence] --> assess[assess]
+    assess -->|need_plan| generate_plan[generate_plan]
+    assess -->|ready| commit_plan[commit_plan]
+    generate_plan --> commit_plan
+    commit_plan --> validate_plan[validate_plan]
+    validate_plan --> execute[execute]
+    execute --> record_progress[record_progress]
+    record_progress -->|continue| check_limits[check_limits]
+    check_limits --> begin_iteration[begin_iteration]
+    begin_iteration --> gather_evidence
+    record_progress -->|terminal| finalize[finalize]
+    assess -->|done| finalize
+  end
+
+  finalize --> END2([END])
+
+  execute -.-> await_user[await_user]
+  await_user -.-> execute
+  await_user -.-> generate_plan
+  await_user -.-> assess
+  await_user -.-> delegate

@@ -15,9 +15,9 @@ from soothe.context.models import GoalNode
 from soothe.context.planning_models import CompletionStrategy
 from soothe.context.store_sqlite import SqliteContextPersistence
 from soothe.sloop.engine.synthesis import SynthesisGenerator
-from soothe.sloop.nodes.goal_completion import node_goal_completion
 from soothe.sloop.orchestrator.phase_scratch import LoopPhaseScratch
 from soothe.sloop.orchestrator.runtime_context import LoopRuntimeContext
+from soothe.sloop.stages.complete.finalize import node_goal_completion
 from soothe.sloop.state.schemas import LoopState, PlanResult
 from soothe.sloop.utils.messages import LoopAIMessage, LoopHumanMessage
 
@@ -462,7 +462,7 @@ async def test_synthesis_fallback_sets_skip_replay_false() -> None:
 
     with (
         patch(
-            "soothe.sloop.nodes.goal_completion.generate_user_fallback_summary",
+            "soothe.sloop.stages.complete.finalize.generate_user_fallback_summary",
             return_value="fallback summary body",
         ),
         patch.object(SynthesisGenerator, "generate_synthesis", empty_gen),

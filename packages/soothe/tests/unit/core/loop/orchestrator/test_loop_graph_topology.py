@@ -13,16 +13,16 @@ def test_strange_loop_graph_exposes_rfc220_named_nodes() -> None:
     names = set(graph.nodes)
 
     for required in (
-        "init_or_resume",
-        "iteration_gate",
-        "iteration_start",
-        "bounded_evidence_gather",
-        "plan_assess",
-        "plan_generate",
-        "goal_completion",
-        "resolve_decision",
-        "validate_evidence_bindings",
+        "enter_loop",
+        "check_limits",
+        "begin_iteration",
+        "gather_evidence",
+        "assess",
+        "generate_plan",
+        "finalize",
+        "commit_plan",
+        "validate_plan",
         "execute",
-        "record_iteration",
+        "record_progress",
     ):
         assert required in names, f"missing node {required}: {sorted(names)}"

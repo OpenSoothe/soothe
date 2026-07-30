@@ -1,4 +1,4 @@
-"""Compile the Strange Loop LangGraph (RFC-220).
+"""Compile the Strange Loop LangGraph (RFC-220, IG-663 stem stations).
 
 The graph checkpoint namespace uses ``loop_id`` via ``configurable.thread_id`` when a
 checkpointer is attached. Persistence for goals remains ``StrangeLoopStateManager``.
@@ -10,21 +10,22 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from ..nodes.await_clarification import node_await_clarification
-from ..nodes.bounded_evidence_gather import node_bounded_evidence_gather
-from ..nodes.execute_steps import node_execute
-from ..nodes.goal_completion import node_goal_completion
-from ..nodes.init_or_resume import node_init_or_resume
-from ..nodes.intent_classify import node_intent_classify
-from ..nodes.invoke_wired_subagent import node_invoke_wired_subagent
-from ..nodes.iteration_gate import node_iteration_gate
-from ..nodes.iteration_start import node_iteration_start
-from ..nodes.plan_assess import node_plan_assess
-from ..nodes.plan_gap_analysis import node_plan_gap_analysis
-from ..nodes.plan_generate import node_plan_generate
-from ..nodes.record_iteration import node_record_iteration
-from ..nodes.resolve_decision import node_resolve_decision
-from ..nodes.validate_evidence_bindings import node_validate_evidence_bindings
+from soothe.sloop.stages.complete.finalize import node_goal_completion
+from soothe.sloop.stages.execute.begin_iteration import node_iteration_start
+from soothe.sloop.stages.execute.check_limits import node_iteration_gate
+from soothe.sloop.stages.execute.commit_plan import node_resolve_decision
+from soothe.sloop.stages.execute.execute import node_execute
+from soothe.sloop.stages.execute.record_progress import node_record_iteration
+from soothe.sloop.stages.execute.validate_plan import node_validate_evidence_bindings
+from soothe.sloop.stages.plan.analyze_gaps import node_plan_gap_analysis
+from soothe.sloop.stages.plan.assess import node_plan_assess
+from soothe.sloop.stages.plan.gather_evidence import node_bounded_evidence_gather
+from soothe.sloop.stages.plan.generate_plan import node_plan_generate
+from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.stages.preprocess.intake import node_intent_classify
+from soothe.sloop.stages.sidecars.await_user import node_await_clarification
+from soothe.sloop.stages.sidecars.delegate import node_invoke_wired_subagent
+
 from .checkpointer import core_agent_checkpointer
 from .routing import (
     route_after_assess,
@@ -34,14 +35,31 @@ from .routing import (
     route_after_gap_analysis,
     route_after_iteration_gate,
     route_after_plan,
+    route_after_preprocess,
     route_after_record_iteration,
     route_after_resolve_decision,
     route_after_validate_evidence,
     route_after_wired_subagent,
-    route_by_intent,
 )
 from .runtime_context import LoopRuntimeContext
 from .state import LoopGraphState
+from .stations import (
+    ANALYZE_GAPS,
+    ASSESS,
+    AWAIT_USER,
+    BEGIN_ITERATION,
+    CHECK_LIMITS,
+    COMMIT_PLAN,
+    DELEGATE,
+    ENTER_LOOP,
+    EXECUTE,
+    FINALIZE,
+    GATHER_EVIDENCE,
+    GENERATE_PLAN,
+    INTAKE,
+    RECORD_PROGRESS,
+    VALIDATE_PLAN,
+)
 
 
 def _is_real_checkpointer(obj: Any) -> bool:
@@ -59,182 +77,182 @@ def _is_real_checkpointer(obj: Any) -> bool:
 
 
 def build_strange_loop_graph(ctx: LoopRuntimeContext):
-    """Build and compile the Loop orchestrator graph (RFC-220 topology).
+    """Build and compile the Loop orchestrator graph (RFC-220 / IG-663 topology).
 
     The compiled graph is given the same checkpointer the CoreAgent uses.
     Without a checkpointer LangGraph's ``interrupt(...)`` cannot persist
     across ``ainvoke`` calls, so a clarification suspended in
-    ``await_clarification`` could never be resumed via ``Command(resume=...)``
+    ``await_user`` could never be resumed via ``Command(resume=...)``
     on the next user input — the user's text would be classified as a new
     goal and the prior interrupt would dangle (RFC-622 / IG-462).
     """
 
-    async def intent_classify(state: dict[str, Any]) -> dict[str, Any]:
+    async def intake(state: dict[str, Any]) -> dict[str, Any]:
         return await node_intent_classify(ctx, state)
 
-    async def init_or_resume(state: dict[str, Any]) -> dict[str, Any]:
+    async def enter_loop(state: dict[str, Any]) -> dict[str, Any]:
         return await node_init_or_resume(ctx, state)
 
-    async def invoke_wired_subagent(state: dict[str, Any]) -> dict[str, Any]:
+    async def delegate(state: dict[str, Any]) -> dict[str, Any]:
         return await node_invoke_wired_subagent(ctx, state)
 
-    async def iteration_gate(state: dict[str, Any]) -> dict[str, Any]:
+    async def check_limits(state: dict[str, Any]) -> dict[str, Any]:
         return await node_iteration_gate(ctx, state)
 
-    async def iteration_start(state: dict[str, Any]) -> dict[str, Any]:
+    async def begin_iteration(state: dict[str, Any]) -> dict[str, Any]:
         return await node_iteration_start(ctx, state)
 
-    async def bounded_evidence_gather(state: dict[str, Any]) -> dict[str, Any]:
+    async def gather_evidence(state: dict[str, Any]) -> dict[str, Any]:
         return await node_bounded_evidence_gather(ctx, state)
 
-    async def plan_generate(state: dict[str, Any]) -> dict[str, Any]:
+    async def generate_plan(state: dict[str, Any]) -> dict[str, Any]:
         return await node_plan_generate(ctx, state)
 
-    async def plan_assess(state: dict[str, Any]) -> dict[str, Any]:
+    async def assess(state: dict[str, Any]) -> dict[str, Any]:
         return await node_plan_assess(ctx, state)
 
-    async def plan_gap_analysis(state: dict[str, Any]) -> dict[str, Any]:
+    async def analyze_gaps(state: dict[str, Any]) -> dict[str, Any]:
         return await node_plan_gap_analysis(ctx, state)
 
-    async def goal_completion(state: dict[str, Any]) -> dict[str, Any]:
+    async def finalize(state: dict[str, Any]) -> dict[str, Any]:
         return await node_goal_completion(ctx, state)
 
-    async def resolve_decision(state: dict[str, Any]) -> dict[str, Any]:
+    async def commit_plan(state: dict[str, Any]) -> dict[str, Any]:
         return await node_resolve_decision(ctx, state)
 
-    async def validate_evidence_bindings(state: dict[str, Any]) -> dict[str, Any]:
+    async def validate_plan(state: dict[str, Any]) -> dict[str, Any]:
         return await node_validate_evidence_bindings(ctx, state)
 
     async def execute(state: dict[str, Any]) -> dict[str, Any]:
         return await node_execute(ctx, state)
 
-    async def record_iteration(state: dict[str, Any]) -> dict[str, Any]:
+    async def record_progress(state: dict[str, Any]) -> dict[str, Any]:
         return await node_record_iteration(ctx, state)
 
-    async def await_clarification(state: dict[str, Any]) -> dict[str, Any]:
+    async def await_user(state: dict[str, Any]) -> dict[str, Any]:
         return await node_await_clarification(ctx, state)
 
     graph = StateGraph(LoopGraphState)
-    graph.add_node("intent_classify", intent_classify)
-    graph.add_node("init_or_resume", init_or_resume)
-    graph.add_node("invoke_wired_subagent", invoke_wired_subagent)
-    graph.add_node("iteration_gate", iteration_gate)
-    graph.add_node("iteration_start", iteration_start)
-    graph.add_node("bounded_evidence_gather", bounded_evidence_gather)
-    graph.add_node("plan_gap_analysis", plan_gap_analysis)
-    graph.add_node("plan_assess", plan_assess)
-    graph.add_node("plan_generate", plan_generate)
-    graph.add_node("goal_completion", goal_completion)
-    graph.add_node("resolve_decision", resolve_decision)
-    graph.add_node("validate_evidence_bindings", validate_evidence_bindings)
-    graph.add_node("execute", execute)
-    graph.add_node("record_iteration", record_iteration)
-    graph.add_node("await_clarification", await_clarification)
+    graph.add_node(INTAKE, intake)
+    graph.add_node(ENTER_LOOP, enter_loop)
+    graph.add_node(DELEGATE, delegate)
+    graph.add_node(CHECK_LIMITS, check_limits)
+    graph.add_node(BEGIN_ITERATION, begin_iteration)
+    graph.add_node(GATHER_EVIDENCE, gather_evidence)
+    graph.add_node(ANALYZE_GAPS, analyze_gaps)
+    graph.add_node(ASSESS, assess)
+    graph.add_node(GENERATE_PLAN, generate_plan)
+    graph.add_node(FINALIZE, finalize)
+    graph.add_node(COMMIT_PLAN, commit_plan)
+    graph.add_node(VALIDATE_PLAN, validate_plan)
+    graph.add_node(EXECUTE, execute)
+    graph.add_node(RECORD_PROGRESS, record_progress)
+    graph.add_node(AWAIT_USER, await_user)
 
-    graph.add_edge(START, "intent_classify")
-    graph.add_edge("intent_classify", "init_or_resume")
+    graph.add_edge(START, INTAKE)
+    graph.add_edge(INTAKE, ENTER_LOOP)
     graph.add_conditional_edges(
-        "init_or_resume",
-        route_by_intent,
+        ENTER_LOOP,
+        route_after_preprocess,
         {
-            "iteration_gate": "iteration_gate",
-            "bounded_evidence_gather": "bounded_evidence_gather",
-            "plan_generate": "plan_generate",
-            "plan_assess": "plan_assess",
-            "resolve_decision": "resolve_decision",
-            "invoke_wired_subagent": "invoke_wired_subagent",
+            CHECK_LIMITS: CHECK_LIMITS,
+            GATHER_EVIDENCE: GATHER_EVIDENCE,
+            GENERATE_PLAN: GENERATE_PLAN,
+            ASSESS: ASSESS,
+            COMMIT_PLAN: COMMIT_PLAN,
+            DELEGATE: DELEGATE,
             END: END,
         },
     )
     graph.add_conditional_edges(
-        "invoke_wired_subagent",
+        DELEGATE,
         route_after_wired_subagent,
         {
-            "goal_completion": "goal_completion",
-            "await_clarification": "await_clarification",
-            "plan_generate": "plan_generate",
+            FINALIZE: FINALIZE,
+            AWAIT_USER: AWAIT_USER,
+            GENERATE_PLAN: GENERATE_PLAN,
             END: END,
         },
     )
     graph.add_conditional_edges(
-        "iteration_gate",
+        CHECK_LIMITS,
         route_after_iteration_gate,
-        {"iteration_start": "iteration_start", END: END},
+        {BEGIN_ITERATION: BEGIN_ITERATION, END: END},
     )
-    graph.add_edge("iteration_start", "bounded_evidence_gather")
+    graph.add_edge(BEGIN_ITERATION, GATHER_EVIDENCE)
     graph.add_conditional_edges(
-        "bounded_evidence_gather",
+        GATHER_EVIDENCE,
         route_after_evidence_gather,
         {
-            "plan_assess": "plan_assess",
-            "plan_gap_analysis": "plan_gap_analysis",
-            "plan_generate": "plan_generate",
+            ASSESS: ASSESS,
+            ANALYZE_GAPS: ANALYZE_GAPS,
+            GENERATE_PLAN: GENERATE_PLAN,
         },
     )
     graph.add_conditional_edges(
-        "plan_gap_analysis",
+        ANALYZE_GAPS,
         route_after_gap_analysis,
-        {"plan_assess": "plan_assess"},
+        {ASSESS: ASSESS},
     )
     graph.add_conditional_edges(
-        "plan_assess",
+        ASSESS,
         route_after_assess,
         {
-            "goal_completion": "goal_completion",
-            "resolve_decision": "resolve_decision",
-            "plan_generate": "plan_generate",
-            "await_clarification": "await_clarification",
+            FINALIZE: FINALIZE,
+            COMMIT_PLAN: COMMIT_PLAN,
+            GENERATE_PLAN: GENERATE_PLAN,
+            AWAIT_USER: AWAIT_USER,
         },
     )
     graph.add_conditional_edges(
-        "plan_generate",
+        GENERATE_PLAN,
         route_after_plan,
         {
-            "goal_completion": "goal_completion",
-            "resolve_decision": "resolve_decision",
-            "plan_generate": "plan_generate",
-            "await_clarification": "await_clarification",
+            FINALIZE: FINALIZE,
+            COMMIT_PLAN: COMMIT_PLAN,
+            GENERATE_PLAN: GENERATE_PLAN,
+            AWAIT_USER: AWAIT_USER,
         },
     )
-    graph.add_edge("goal_completion", END)
+    graph.add_edge(FINALIZE, END)
     graph.add_conditional_edges(
-        "resolve_decision",
+        COMMIT_PLAN,
         route_after_resolve_decision,
-        {"validate_evidence_bindings": "validate_evidence_bindings", END: END},
+        {VALIDATE_PLAN: VALIDATE_PLAN, END: END},
     )
     graph.add_conditional_edges(
-        "validate_evidence_bindings",
+        VALIDATE_PLAN,
         route_after_validate_evidence,
-        {"execute": "execute", END: END},
+        {EXECUTE: EXECUTE, END: END},
     )
     graph.add_conditional_edges(
-        "execute",
+        EXECUTE,
         route_after_execute,
         {
-            "record_iteration": "record_iteration",
-            "await_clarification": "await_clarification",
-            "iteration_gate": "iteration_gate",
+            RECORD_PROGRESS: RECORD_PROGRESS,
+            AWAIT_USER: AWAIT_USER,
+            CHECK_LIMITS: CHECK_LIMITS,
             END: END,
         },
     )
     graph.add_conditional_edges(
-        "record_iteration",
+        RECORD_PROGRESS,
         route_after_record_iteration,
         {
-            "iteration_gate": "iteration_gate",
-            "goal_completion": "goal_completion",  # RFC-226 terminal bootstrap fast-exit
+            CHECK_LIMITS: CHECK_LIMITS,
+            FINALIZE: FINALIZE,
             END: END,
         },
     )
     graph.add_conditional_edges(
-        "await_clarification",
+        AWAIT_USER,
         route_after_clarification,
         {
-            "execute": "execute",
-            "plan_generate": "plan_generate",
-            "plan_assess": "plan_assess",
-            "plan_gap_analysis": "plan_gap_analysis",
-            "invoke_wired_subagent": "invoke_wired_subagent",
+            EXECUTE: EXECUTE,
+            GENERATE_PLAN: GENERATE_PLAN,
+            ASSESS: ASSESS,
+            ANALYZE_GAPS: ANALYZE_GAPS,
+            DELEGATE: DELEGATE,
             END: END,
         },
     )

@@ -1,4 +1,4 @@
-"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-554)."""
+"""Conditional edges for the Loop Graph (RFC-220, RFC-622, RFC-630, IG-663)."""
 
 from __future__ import annotations
 
@@ -10,43 +10,46 @@ from langgraph.graph import END
 from soothe.sloop.intention.models import IntakeLabel
 
 from .state import PLAN_ROUTE_GOAL_DONE
+from .stations import (
+    ANALYZE_GAPS,
+    ASSESS,
+    AWAIT_USER,
+    BEGIN_ITERATION,
+    CHECK_LIMITS,
+    COMMIT_PLAN,
+    DELEGATE,
+    EXECUTE,
+    FINALIZE,
+    GATHER_EVIDENCE,
+    GENERATE_PLAN,
+    RECORD_PROGRESS,
+    VALIDATE_PLAN,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def route_after_evidence_gather(state: dict[str, Any]) -> str:
-    """IG-476: Route from bounded_evidence_gather based on fresh-loop detection.
-
-    When evidence_gather_route is "plan_generate_skip_assess", shortcut directly
-    to plan_generate with the synthetic assessment already set in scratch.
-    Otherwise, proceed to plan_assess for normal assessment flow.
-    """
+    """Route from gather_evidence based on fresh-loop detection (IG-476)."""
     route = state.get("evidence_gather_route")
     if route == "plan_generate_skip_assess":
-        logger.info("[routing] route_after_evidence_gather → plan_generate (fresh-loop skip)")
-        return "plan_generate"
-    if route == "plan_gap_analysis":
-        logger.info("[routing] route_after_evidence_gather → plan_gap_analysis")
-        return "plan_gap_analysis"
-    logger.info("[routing] route_after_evidence_gather → plan_assess")
-    return "plan_assess"
+        logger.info("[routing] route_after_evidence_gather → generate_plan (fresh-loop skip)")
+        return GENERATE_PLAN
+    if route in ("plan_gap_analysis", ANALYZE_GAPS, "analyze_gaps"):
+        logger.info("[routing] route_after_evidence_gather → analyze_gaps")
+        return ANALYZE_GAPS
+    logger.info("[routing] route_after_evidence_gather → assess")
+    return ASSESS
 
 
 def route_after_gap_analysis(state: dict[str, Any]) -> str:
-    """Gap analysis always feeds plan-assess."""
+    """Gap analysis always feeds assess."""
     _ = state
-    return "plan_assess"
+    return ASSESS
 
 
 def _pending_clarification(state: dict[str, Any]) -> bool:
-    """RFC-622: yield to ``await_clarification`` when a request is pending and
-    the policy has not yet returned an answer.
-
-    IG-462: ``await_clarification`` keeps ``pending_clarification`` set so the
-    originating node can pair it with the answer on re-entry. We must not
-    re-route those re-entries back into ``await_clarification`` — the answer
-    being present is the signal that we're past the relay.
-    """
+    """RFC-622: yield to ``await_user`` when a request is pending and unanswered."""
     pending = state.get("pending_clarification")
     answer = state.get("pending_clarification_answer")
     result = bool(pending) and not answer
@@ -60,29 +63,16 @@ def _pending_clarification(state: dict[str, Any]) -> bool:
     return result
 
 
-def route_by_intent(state: dict[str, Any]) -> str:
-    """RFC-630 IG-554/IG-599: branch dispatch after init_or_resume by intake.
-
-    Routing guard (P0): block chitchat fast-path when new_goal_created. If daemon
-    has committed to starting agentic work, chitchat is structurally invalid.
+def route_after_preprocess(state: dict[str, Any]) -> str:
+    """RFC-630 / IG-663: branch dispatch after enter_loop by intake.
 
     Priority (first match wins):
 
     1. ``intent_route == fast_path`` → END (chitchat)
-    2. ``intent_route == wired_subagent`` → ``invoke_wired_subagent`` (IG-599)
-    3. Continuation overlay from structural ``is_continuation``:
-
-       - ``trivial`` / ``simple`` → ``plan_assess``
-       - ``complex`` / missing → ``bounded_evidence_gather``
-
-    4. Fresh-loop labels:
-
-       - ``trivial`` → ``resolve_decision``
-       - ``simple`` → ``plan_generate``
-       - ``complex`` / missing → ``bounded_evidence_gather``
+    2. ``intent_route == wired_subagent`` → ``delegate``
+    3. Continuation overlay from structural ``is_continuation``
+    4. Fresh-loop labels (trivial / simple / complex)
     """
-    # P0 routing guard: block chitchat when new_goal_created (IG-554)
-    # If daemon created a new goal record, chitchat is structurally invalid.
     new_goal_created = state.get("new_goal_created", False)
     label = state.get("intake_label")
 
@@ -93,136 +83,132 @@ def route_by_intent(state: dict[str, Any]) -> str:
         )
         label = IntakeLabel.COMPLEX
 
-    # Original fast-path check (chitchat from intent_classify node)
     if state.get("intent_route") == "fast_path":
-        # Apply routing guard here too
         if new_goal_created:
             logger.warning(
                 "[routing] intent_route fast_path blocked by new_goal_created; "
                 "forcing complex route"
             )
-            return "bounded_evidence_gather"
-        logger.info("[routing] route_by_intent → END (chitchat fast-path)")
+            return GATHER_EVIDENCE
+        logger.info("[routing] route_after_preprocess → END (chitchat fast-path)")
         return END
 
-    # IG-599: dedicated specialist — after chitchat, before continuation overlays.
     if state.get("intent_route") == "wired_subagent":
-        logger.info("[routing] route_by_intent → invoke_wired_subagent")
-        return "invoke_wired_subagent"
+        logger.info("[routing] route_after_preprocess → delegate")
+        return DELEGATE
 
     if state.get("is_continuation"):
         if label == IntakeLabel.SIMPLE:
-            logger.info("[routing] route_by_intent → plan_assess (continuation+simple)")
-            return "plan_assess"
+            logger.info("[routing] route_after_preprocess → assess (continuation+simple)")
+            return ASSESS
         if label == IntakeLabel.COMPLEX or label is None:
-            logger.info(
-                "[routing] route_by_intent → bounded_evidence_gather (continuation+complex)"
-            )
-            return "bounded_evidence_gather"
-        logger.info("[routing] route_by_intent → plan_assess (continuation+trivial)")
-        return "plan_assess"
+            logger.info("[routing] route_after_preprocess → gather_evidence (continuation+complex)")
+            return GATHER_EVIDENCE
+        logger.info("[routing] route_after_preprocess → assess (continuation+trivial)")
+        return ASSESS
 
     if label == IntakeLabel.TRIVIAL:
-        logger.info("[routing] route_by_intent → resolve_decision (trivial pseudo-plan)")
-        return "resolve_decision"
+        logger.info("[routing] route_after_preprocess → commit_plan (trivial pseudo-plan)")
+        return COMMIT_PLAN
     if label == IntakeLabel.SIMPLE:
-        logger.info("[routing] route_by_intent → plan_generate (simple)")
-        return "plan_generate"
-    logger.info("[routing] route_by_intent → bounded_evidence_gather (complex/default)")
-    return "bounded_evidence_gather"
+        logger.info("[routing] route_after_preprocess → generate_plan (simple)")
+        return GENERATE_PLAN
+    logger.info("[routing] route_after_preprocess → gather_evidence (complex/default)")
+    return GATHER_EVIDENCE
+
+
+# Historical name used by tests and docs.
+route_by_intent = route_after_preprocess
 
 
 def route_after_iteration_gate(state: dict[str, Any]) -> str:
-    """End graph after max-iteration or rate-limit terminal; otherwise begin iteration body."""
+    """End graph after max-iteration or rate-limit terminal; otherwise begin iteration."""
     if state.get("last_outcome") in ("max_iterations", "rate_limited"):
         return END
-    return "iteration_start"
+    return BEGIN_ITERATION
 
 
 def route_after_plan(state: dict[str, Any]) -> str:
-    """Branch to goal completion synthesis vs execute pipeline."""
+    """Branch to finalize vs execute pipeline after generate_plan."""
     if _pending_clarification(state):
-        return "await_clarification"
+        return AWAIT_USER
     if state.get("last_outcome") == "fatal":
-        return "resolve_decision"
+        return COMMIT_PLAN
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
-        return "goal_completion"
+        return FINALIZE
     if state.get("assess_route") == "continue_generate":
-        logger.info("[routing] route_after_plan → plan_generate (undersized replan)")
-        return "plan_generate"
-    return "resolve_decision"
+        logger.info("[routing] route_after_plan → generate_plan (undersized replan)")
+        return GENERATE_PLAN
+    return COMMIT_PLAN
 
 
 def route_after_assess(state: dict[str, Any]) -> str:
-    """Branch from assess: done/skip-generate/continue-generate."""
+    """Branch from assess: done / skip-generate / continue-generate."""
     if _pending_clarification(state):
-        return "await_clarification"
+        return AWAIT_USER
     if state.get("plan_route") == PLAN_ROUTE_GOAL_DONE:
-        return "goal_completion"
+        return FINALIZE
     if state.get("assess_route") == "skip_generate":
-        return "resolve_decision"
-    return "plan_generate"
+        return COMMIT_PLAN
+    return GENERATE_PLAN
 
 
 def route_after_resolve_decision(state: dict[str, Any]) -> str:
-    """Stop on planner fatal; otherwise validate evidence refs."""
+    """Stop on planner fatal; otherwise validate plan evidence refs."""
     if state.get("last_outcome") == "fatal":
         return END
-    return "validate_evidence_bindings"
+    return VALIDATE_PLAN
 
 
 def route_after_wired_subagent(state: dict[str, Any]) -> str:
-    """IG-601/IG-656/IG-658/IG-660: intake-only invoke → review, implement, or complete."""
+    """Intake-only invoke → review, implement handoff, or finalize."""
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_wired_subagent → END (fatal)")
         return END
     if _pending_clarification(state):
-        logger.info("[routing] route_after_wired_subagent → await_clarification")
-        return "await_clarification"
+        logger.info("[routing] route_after_wired_subagent → await_user")
+        return AWAIT_USER
     if state.get("planner_implement_handoff"):
-        logger.info("[routing] route_after_wired_subagent → plan_generate (approved plan handoff)")
-        return "plan_generate"
-    logger.info("[routing] route_after_wired_subagent → goal_completion")
-    return "goal_completion"
+        logger.info("[routing] route_after_wired_subagent → generate_plan (approved plan handoff)")
+        return GENERATE_PLAN
+    logger.info("[routing] route_after_wired_subagent → finalize")
+    return FINALIZE
 
 
 def route_after_validate_evidence(state: dict[str, Any]) -> str:
     """Stop on validation fatal; otherwise CoreAgent execute."""
     if state.get("last_outcome") == "fatal":
         return END
-    return "execute"
+    return EXECUTE
 
 
 def route_after_execute(state: dict[str, Any]) -> str:
-    """Stop on execute fatal; otherwise persist iteration."""
+    """Stop on execute fatal; otherwise record progress."""
     if _pending_clarification(state):
-        logger.info("[routing] route_after_execute → await_clarification")
-        return "await_clarification"
+        logger.info("[routing] route_after_execute → await_user")
+        return AWAIT_USER
     if state.get("last_outcome") == "fatal":
         logger.debug("[routing] route_after_execute → END (fatal)")
         return END
-    # RFC-622 resume synthesis: scratch has no plan_result/decision so
-    # record_iteration would emit fatal_error. The synthesized step has
-    # already emitted step_completed and execute_steps advanced
-    # state.iteration; skip straight to iteration_gate to start the next cycle.
     if state.get("resume_synth"):
-        logger.info("[routing] route_after_execute → iteration_gate (resume synth)")
-        return "iteration_gate"
-    logger.info("[routing] route_after_execute → record_iteration")
-    return "record_iteration"
+        logger.info("[routing] route_after_execute → check_limits (resume synth)")
+        return CHECK_LIMITS
+    logger.info("[routing] route_after_execute → record_progress")
+    return RECORD_PROGRESS
 
 
 def route_after_record_iteration(state: dict[str, Any]) -> str:
-    """RFC-226: terminal bootstrap fast-exit, then continue outer iteration cycle or finish."""
-    if state.get("after_record_route") == "goal_completion":
-        return "goal_completion"
+    """Terminal bootstrap fast-exit, continue outer iteration, or finish."""
+    after = state.get("after_record_route")
+    if after in ("goal_completion", FINALIZE):
+        return FINALIZE
     if state.get("last_outcome") == "continue":
-        return "iteration_gate"
+        return CHECK_LIMITS
     return END
 
 
 def route_after_clarification(state: dict[str, Any]) -> str:
-    """RFC-622: return to originating node, or END on defer."""
+    """RFC-622: return to originating station, or END on defer."""
     if state.get("last_outcome") == "deferred":
         return END
     from soothe.sloop.clarification.origins import resume_node_for_clarification_origin

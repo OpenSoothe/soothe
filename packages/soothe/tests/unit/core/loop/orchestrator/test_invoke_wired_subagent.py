@@ -20,11 +20,11 @@ from soothe.sloop.intention.models import (
     TaskComplexity,
     build_loop_routing_classification,
 )
-from soothe.sloop.nodes.init_or_resume import node_init_or_resume
-from soothe.sloop.nodes.invoke_wired_subagent import (
+from soothe.sloop.orchestrator.routing import route_after_wired_subagent, route_by_intent
+from soothe.sloop.stages.preprocess.enter_loop import node_init_or_resume
+from soothe.sloop.stages.sidecars.delegate import (
     node_invoke_wired_subagent,
 )
-from soothe.sloop.orchestrator.routing import route_after_wired_subagent, route_by_intent
 from soothe.sloop.state.schemas import resolve_wire_subagent
 
 
@@ -84,7 +84,7 @@ def test_route_by_intent_wired_subagent() -> None:
         "intake_label": IntakeLabel.COMPLEX,
         "is_continuation": True,
     }
-    assert route_by_intent(state) == "invoke_wired_subagent"
+    assert route_by_intent(state) == "delegate"
 
 
 def test_route_by_intent_chitchat_still_wins_over_wired() -> None:
@@ -124,7 +124,7 @@ async def test_init_or_resume_sets_wired_subagent_route() -> None:
     result = await node_init_or_resume(ctx, {})  # type: ignore[arg-type]
     assert result["intent_route"] == "wired_subagent"
     assert ctx.scratch.plan_result is None  # plan owned by invoke_wired_subagent
-    assert route_by_intent(result) == "invoke_wired_subagent"
+    assert route_by_intent(result) == "delegate"
 
 
 @pytest.mark.asyncio
@@ -154,7 +154,7 @@ async def test_init_or_resume_wire_subagent_wins_even_with_continue_keyword_goal
     )
     result = await node_init_or_resume(ctx, {})  # type: ignore[arg-type]
     assert result["intent_route"] == "wired_subagent"
-    assert route_by_intent(result) == "invoke_wired_subagent"
+    assert route_by_intent(result) == "delegate"
 
 
 @pytest.mark.asyncio
@@ -214,7 +214,7 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
 
     assert out.get("last_clarification_origin") == ORIGIN_PLANNER_SUBAGENT_REVIEW
-    assert route_after_wired_subagent(out) == "await_clarification"
+    assert route_after_wired_subagent(out) == "await_user"
     assert ctx.scratch.plan_result is not None
     assert ctx.scratch.plan_artifact_path
     assert Path(ctx.scratch.plan_artifact_path).is_file()
@@ -227,7 +227,7 @@ async def test_invoke_wired_planner_direct_ainvoke(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-    from soothe.sloop.nodes.invoke_wired_subagent import _planner_subagent_review_pending_payload
+    from soothe.sloop.stages.sidecars.delegate import _planner_subagent_review_pending_payload
 
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
@@ -285,7 +285,7 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
     out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
     assert out.get("pending_clarification") is None
     assert out.get("planner_implement_handoff") is True
-    assert route_after_wired_subagent(out) == "plan_generate"
+    assert route_after_wired_subagent(out) == "generate_plan"
     assert "status: approved" in plan_path.read_text(encoding="utf-8")
     assert ctx.preferred_subagent is None
     assert ctx.scratch.planner_implement_handoff is True
@@ -300,8 +300,8 @@ async def test_invoke_wired_planner_approve_clears_review(tmp_path) -> None:
 
 
 def test_route_after_wired_subagent_handoff_to_plan_generate() -> None:
-    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "plan_generate"
-    assert route_after_wired_subagent({}) == "goal_completion"
+    assert route_after_wired_subagent({"planner_implement_handoff": True}) == "generate_plan"
+    assert route_after_wired_subagent({}) == "finalize"
 
 
 @pytest.mark.asyncio
@@ -309,7 +309,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     """Reject after clarification resume must not require Pass2 wire_subagent."""
     from soothe.sloop.clarification.origins import ORIGIN_PLANNER_SUBAGENT_REVIEW
     from soothe.sloop.clarification.protocol import ClarificationAnswer, answer_to_state
-    from soothe.sloop.nodes.invoke_wired_subagent import _planner_subagent_review_pending_payload
+    from soothe.sloop.stages.sidecars.delegate import _planner_subagent_review_pending_payload
 
     plan_path = tmp_path / ".soothe" / "plans" / "y.md"
     plan_path.parent.mkdir(parents=True)
@@ -368,7 +368,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
     out = await node_invoke_wired_subagent(ctx, state)  # type: ignore[arg-type]
     assert out.get("last_outcome") != "fatal"
     assert out.get("pending_clarification") is None
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     assert "status: rejected" in plan_path.read_text(encoding="utf-8")
     assert ctx.scratch.plan_artifact_path == str(plan_path)
     assert ctx.scratch.plan_result is not None
@@ -377,7 +377,7 @@ async def test_invoke_wired_planner_reject_without_live_wire(tmp_path) -> None:
 
 def test_extract_subagent_report_prefers_answer_field() -> None:
     """deep_research / academic_research put the report in state ``answer``."""
-    from soothe.sloop.nodes.invoke_wired_subagent import (
+    from soothe.sloop.stages.sidecars.delegate import (
         _extract_subagent_report,
     )
 
@@ -436,7 +436,7 @@ async def test_invoke_wired_intake_only_direct_ainvoke() -> None:
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     runnable.ainvoke.assert_awaited_once()
     assert ctx.scratch.plan_result is not None
     assert ctx.scratch.plan_result.decision.steps[0].wire_subagent == "deep_research"
@@ -494,7 +494,7 @@ async def test_invoke_wired_intake_only_ledgers_answer_field() -> None:
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     assert any(getattr(m, "content", None) == body for m in loop_state._loop_messages_cache)
     completed = next(p for t, p in emitted if t == "wired_subagent_completed")
     assert isinstance(completed, dict)
@@ -556,7 +556,7 @@ async def test_invoke_wired_intake_only_forwards_via_bridge_during_astream() -> 
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     runnable.ainvoke.assert_not_called()
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
@@ -619,7 +619,7 @@ async def test_invoke_wired_intake_only_astream_two_tuple_prefers_answer_field()
 
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     runnable.ainvoke.assert_not_called()
     assert any(getattr(m, "content", None) == synthesized for m in loop_state._loop_messages_cache)
 
@@ -685,7 +685,7 @@ async def test_invoke_wired_intake_only_forwards_custom_wire() -> None:
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
     ns, mode, data = stream_customs[0]  # type: ignore[misc]
@@ -755,7 +755,7 @@ async def test_invoke_wired_intake_only_forwards_wire_when_context_lost() -> Non
     )
     out = await node_invoke_wired_subagent(ctx, {})  # type: ignore[arg-type]
     assert out == {}
-    assert route_after_wired_subagent(out) == "goal_completion"
+    assert route_after_wired_subagent(out) == "finalize"
     stream_customs = [p for t, p in emitted if t == "stream_event"]
     assert stream_customs
     _ns, mode, data = stream_customs[0]  # type: ignore[misc]

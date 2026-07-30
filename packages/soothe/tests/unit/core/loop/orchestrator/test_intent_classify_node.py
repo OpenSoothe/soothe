@@ -10,7 +10,7 @@ from soothe_sdk.intention.models import TaskComplexity
 
 from soothe.sloop.intention import IntentClassification
 from soothe.sloop.intention.models import IntakeLabel
-from soothe.sloop.nodes.intent_classify import node_intent_classify
+from soothe.sloop.stages.preprocess.intake import node_intent_classify
 
 
 @pytest.mark.asyncio

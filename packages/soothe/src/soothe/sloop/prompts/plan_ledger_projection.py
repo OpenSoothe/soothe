@@ -21,6 +21,12 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+from soothe.sloop.orchestrator.stations import (
+    INTAKE_LEDGER_PHASES,
+    PHASE_GOAL_COMPLETION,
+    PHASE_GOAL_INTERRUPTED,
+    PLANNING_LEDGER_PHASES,
+)
 from soothe.sloop.utils.stream_normalize import extract_text_from_message_content
 
 if TYPE_CHECKING:
@@ -47,17 +53,25 @@ class ProjectedExecuteStepInput:
 _LEDGER_OMITTED_MARKER = "[Earlier ledger content omitted for plan prompt size]\n\n"
 _TRUNC_PER_MSG = "\n…[truncated for plan prompt]\n"
 _NEW_GOAL_LEDGER_PHASES = frozenset(
-    {"intent_classify", "plan_generate", "goal_completion", "goal_interrupted"}
+    {
+        *INTAKE_LEDGER_PHASES,
+        "generate_plan",
+        "plan_generate",
+        PHASE_GOAL_COMPLETION,
+        PHASE_GOAL_INTERRUPTED,
+    }
 )
-_PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"plan_assess"})
-_MID_GOAL_CURRENT_PHASES = frozenset({"intent_classify", "plan_generate", "execute_step"})
+_PLANNER_PROJECTED_EXCLUDED_PHASES = frozenset({"assess", "plan_assess"})
+_MID_GOAL_CURRENT_PHASES = frozenset(
+    {*INTAKE_LEDGER_PHASES, "generate_plan", "plan_generate", "execute_step"}
+)
 
 # RFC-214: phases that mark a goal segment boundary. ``goal_completion`` is the
 # success terminal; ``goal_interrupted`` is the non-success terminal marker
 # (cancel/fatal/max-iter) carrying the goal's partial-work digest. Projection
 # treats both as segment boundaries so an interrupted goal's ``execute_step``
 # rows do not bleed into the next goal's "current segment".
-_GOAL_TERMINAL_PHASES: frozenset[str] = frozenset({"goal_completion", "goal_interrupted"})
+_GOAL_TERMINAL_PHASES: frozenset[str] = frozenset({PHASE_GOAL_COMPLETION, PHASE_GOAL_INTERRUPTED})
 
 # IG-555: Boundary marker for prior goal completion in planning projections.
 # Prevents planner anchoring on prior "Recommended next actions" instead of
@@ -780,9 +794,7 @@ def resolve_execute_projection_mode(state: LoopState) -> ExecuteProjectionMode:
 def _execute_plan_tail_index(loop_messages: list[BaseMessage]) -> int:
     """Index before trailing plan-phase rows for the current goal (exclude from Slice A scan)."""
     idx = len(loop_messages)
-    plan_phases = frozenset(
-        {"plan_assess", "plan_generate", "plan_gap_analysis", "intent_classify", "continuation"}
-    )
+    plan_phases = PLANNING_LEDGER_PHASES
     while idx > 0:
         phase = getattr(loop_messages[idx - 1], "phase", None)
         if phase in plan_phases:
@@ -801,7 +813,7 @@ def _goal_segment_start(loop_messages: list[BaseMessage], unit_start: int) -> in
             seg_after_prev_terminal = i + 1
             break
     for i in range(seg_after_prev_terminal, unit_start):
-        if getattr(loop_messages[i], "phase", None) == "intent_classify":
+        if getattr(loop_messages[i], "phase", None) in INTAKE_LEDGER_PHASES:
             return i
     return seg_after_prev_terminal
 

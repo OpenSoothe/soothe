@@ -27,19 +27,23 @@ The name comes from the core insight: the LLM plans, executes, assesses progress
 
 StrangeLoop is implemented as a **compiled LangGraph** (RFC-220 Loop Graph), not a Python `while` loop. The graph's configurable checkpoint key is `loop_id`, allowing loop state to persist across interruptions and resume from checkpoints.
 
-The graph orchestrates a multi-phase iteration:
+The graph orchestrates a multi-phase iteration along a clear **main stem**
+(IG-663), analogous to ReAct’s agent⇄tools loop:
 
-1. **Plan-Assess** — a quick status check (RFC-604): lightweight schema (~50-80 tokens) that decides whether to continue, replan, or finish.
-2. **Plan-Generate** — if replanning, the LLM generates new steps with structured output.
-3. **Execute** — runs steps via CoreAgent, either in parallel or dependency-ordered waves.
-4. **Record Iteration** — logs evidence, updates progress.
-5. **Goal Completion** — when the plan asserts completion, a final LLM call synthesizes the answer.
+1. **Preprocess** — `intake` → `enter_loop` (understand goal + branch).
+2. **Assess** — quick status check (RFC-604); decide continue / replan / done.
+3. **Generate plan** — when needed, structured multi-step plan.
+4. **Execute** — `commit_plan` → `validate_plan` → `execute` via CoreAgent.
+5. **Record progress** — then either loop (`check_limits` → …) or **finalize**.
 
-The graph nodes live in `orchestrator/nodes/` — each node is a discrete phase (e.g., `plan_assess.py`, `plan_generate.py`, `execute_steps.py`, `iteration_gate.py`).
+Stage modules live under `sloop/stages/{preprocess,plan,execute,complete,sidecars}/`.
+Canonical station IDs and legacy aliases are in `sloop/orchestrator/stations.py`.
 
-Routing is intake-aware (`route_by_intent`, RFC-630): fresh `simple` turns go to lightweight
-`plan_generate`, while continuation `trivial` and `simple` turns first go through
-`plan_assess` continuation discrimination so the loop can bootstrap a single execute wave when
+Primary diagram: [strange_loop_stem.mmd](../../diagrams/strange_loop_stem.mmd).
+
+Routing is intake-aware (`route_after_preprocess`, RFC-630): fresh `simple` turns go to lightweight
+`generate_plan`, while continuation `trivial` and `simple` turns first go through
+`assess` continuation discrimination so the loop can bootstrap a single execute wave when
 prior context is already sufficient.
 
 ---
@@ -54,7 +58,7 @@ Key fields and their design rationale:
 - **`goal_progress`** — descriptive level (`none` | `low` | `medium` | `high` | `complete`), **not** numeric. IG-399 replaced numeric progress with descriptive levels because LLMs are bad at precise numeric estimation but good at categorical assessment.
 - **`plan_action`** — `keep` | `new`. Whether to reuse the in-flight `AgentDecision` or supply a new one. A validator enforces that `new` requires a `decision` when status isn't `done`.
 - **`require_goal_completion`** — optimization flag. When `False`, the last AIMessage can be used directly, skipping an extra goal-completion LLM call.
-- **`terminal_after_execute`** (RFC-226) — when `True`, the plan asserts its single step IS the goal completion. The graph routes directly from `record_iteration` to `goal_completion`, skipping the next `plan_assess`. Set for bootstrap actions where the first step is obviously the answer.
+- **`terminal_after_execute`** (RFC-226) — when `True`, the plan asserts its single step IS the goal completion. The graph routes directly from `record_progress` to `finalize`, skipping the next `assess`. Set for bootstrap actions where the first step is obviously the answer.
 
 ---
 
