@@ -591,8 +591,11 @@ class StrangeLoopStateManager:
             close_timeout_seconds=self._close_timeout_seconds,
             durable_flush_timeout=self._durable_flush_timeout,
         )
+        if coord is None:
+            await self._do_save_checkpoint(checkpoint)
+            return
         self._sqlite_flush = coord
-        await coord.enqueue(
+        await coord.submit_enqueue(
             self.loop_id,
             checkpoint,
             self._save_checkpoint_sync,
@@ -658,8 +661,13 @@ class StrangeLoopStateManager:
             close_timeout_seconds=self._close_timeout_seconds,
             durable_flush_timeout=self._durable_flush_timeout,
         )
+        if coord is None:
+            await self._do_save_checkpoint(self._last_save_checkpoint, write_mode="full")
+            self._goal_boundary_persisted = True
+            logger.info("Force checkpoint flush: loop=%s", self.loop_id)
+            return
         self._sqlite_flush = coord
-        await coord.enqueue(
+        await coord.submit_enqueue(
             self.loop_id,
             self._last_save_checkpoint,
             self._save_checkpoint_sync,
@@ -668,7 +676,7 @@ class StrangeLoopStateManager:
         )
         try:
             async with asyncio.timeout(timeout):
-                await coord.flush_loop(self.loop_id, timeout=timeout)
+                await coord.submit_flush_loop(self.loop_id, timeout=timeout)
                 await self._do_save_checkpoint(self._last_save_checkpoint, write_mode="full")
             self._goal_boundary_persisted = True
             logger.info("Force checkpoint flush: loop=%s", self.loop_id)
@@ -1251,19 +1259,26 @@ class StrangeLoopStateManager:
                         close_timeout_seconds=self._close_timeout_seconds,
                         durable_flush_timeout=self._durable_flush_timeout,
                     )
-                    self._sqlite_flush = coord
-                    if not self._goal_boundary_persisted and self._last_save_checkpoint:
-                        await coord.enqueue(
+                    if coord is None:
+                        if not self._goal_boundary_persisted and self._last_save_checkpoint:
+                            await self._do_save_checkpoint(
+                                self._last_save_checkpoint, write_mode="full"
+                            )
+                            self._goal_boundary_persisted = True
+                    else:
+                        self._sqlite_flush = coord
+                        if not self._goal_boundary_persisted and self._last_save_checkpoint:
+                            await coord.submit_enqueue(
+                                self.loop_id,
+                                self._last_save_checkpoint,
+                                self._save_checkpoint_sync,
+                                runtime=await self._ensure_sqlite_runtime(),
+                                durable=True,
+                            )
+                        await coord.submit_release_loop(
                             self.loop_id,
-                            self._last_save_checkpoint,
-                            self._save_checkpoint_sync,
-                            runtime=await self._ensure_sqlite_runtime(),
-                            durable=True,
+                            timeout=self._close_timeout_seconds,
                         )
-                    await coord.release_loop(
-                        self.loop_id,
-                        timeout=self._close_timeout_seconds,
-                    )
         except TimeoutError:
             logger.warning(
                 "StrangeLoopStateManager.close timed out after %.0fs loop=%s",

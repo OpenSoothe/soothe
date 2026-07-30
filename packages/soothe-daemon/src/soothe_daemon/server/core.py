@@ -559,6 +559,22 @@ class SootheDaemon(DaemonHandlersMixin):
                     exc_info=True,
                 )
 
+            # Pin the process-wide SQLite flush coordinator to the daemon main
+            # loop before any worker thread starts. Without this, the singleton
+            # asyncio.Event is lazily bound to the first worker's loop, and
+            # subsequent workers hit "bound to a different event loop".
+            try:
+                from soothe.persistence.sqlite_loop_flush import (
+                    SqliteLoopFlushCoordinator,
+                )
+
+                SqliteLoopFlushCoordinator.bind_main_loop(asyncio.get_running_loop())
+            except Exception:
+                logger.warning(
+                    "Failed to bind SQLite loop flush coordinator to main loop",
+                    exc_info=True,
+                )
+
             # Open shared PostgreSQL pools before any SootheRunner / persist store
             # construction so durability metadata stores never borrow ``open=False`` pools.
             try:
