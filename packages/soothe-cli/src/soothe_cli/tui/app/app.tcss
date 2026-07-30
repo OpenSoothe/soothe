@@ -3,7 +3,7 @@
 /* Define layers for z-ordering */
 Screen {
     layout: vertical;
-    layers: base plan-quick-view autocomplete;
+    layers: base autocomplete;
 }
 
 /* Scrollable regions keep wheel / key scrolling; scrollbar chrome is hidden. */
@@ -54,7 +54,9 @@ Screen {
     padding-top: 0;
 }
 
-/* Bottom app container - holds thinking row, ChatInput, and status bar. */
+/* Sticky bottom chrome — thinking row, ChatInput, and status bar.
+   Plan quick-view is a sibling above this container (not nested) so it
+   cannot paint over the thinking row or input. */
 #bottom-app-container {
     height: auto;
     margin-top: 0;

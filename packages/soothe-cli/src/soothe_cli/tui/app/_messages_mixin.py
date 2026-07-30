@@ -694,7 +694,7 @@ class _MessagesMixin:
         """Immediately stop in-flight step/goal UI when the user interrupts a turn.
 
         Daemon cancel and worker teardown can take several seconds; without an
-        eager UI pass the thinking spinner and plan running status stay live.
+        eager UI pass the thinking spinner stays live after interrupt.
         """
         label = message or self._INTERRUPT_UI_MESSAGE
         adapter = getattr(self, "_ui_adapter", None)
@@ -722,9 +722,9 @@ class _MessagesMixin:
     async def _interrupt_daemon_agent_turn(self, *, discard_queue: bool = True) -> None:
         """Stop in-flight UI and request daemon-side cancel.
 
-        UI teardown runs first so Ctrl+C does not leave the thinking spinner or
-        plan running status active while the daemon winds down (which can take
-        several seconds on long execute steps).
+        UI teardown runs first so Ctrl+C does not leave the thinking spinner
+        active while the daemon winds down (which can take several seconds on
+        long execute steps).
 
         Args:
             discard_queue: When ``False``, preserve queued user goals so they
@@ -795,7 +795,7 @@ class _MessagesMixin:
 
         Priority order:
         1. If modal screen is active, dismiss it
-        2. If plan quick-view overlay is open, collapse it
+        2. If plan panel is open, collapse it
         3. If input is idle and queue has a normal goal, cancel queued tail
         4. If completion popup is open, dismiss it
         5. If input is in command/shell mode, exit to normal mode

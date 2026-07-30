@@ -473,8 +473,10 @@ class SootheApp(
                     id="welcome-banner",
                 )
                 yield Container(id="messages")
+        # In-flow plan panel: sits above the sticky bottom chrome so Ctrl+t
+        # never covers the thinking row or chat input.
+        yield PlanQuickViewOverlay(id="plan-quick-view-overlay")
         with Container(id="bottom-app-container"):
-            yield PlanQuickViewOverlay(id="plan-quick-view-overlay")
             yield Container(id="thinking-status")
             yield ChatInput(
                 cwd=self._cwd,

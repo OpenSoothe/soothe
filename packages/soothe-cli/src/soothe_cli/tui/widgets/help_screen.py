@@ -62,7 +62,7 @@ def build_keyboard_shortcut_rows() -> list[tuple[str, str]]:
         ),
         ("Ctrl+X", "Open prompt in external editor ($VISUAL/$EDITOR)"),
         ("Ctrl+Y", "Copy selected text to clipboard"),
-        ("Ctrl+T", "Toggle plan quick-view overlay"),
+        ("Ctrl+T", "Toggle plan panel above thinking row"),
         ("Ctrl+O", "Toggle expand/collapse of the most recent skill or tool card"),
         ("Shift+Tab", "Toggle clarification relay mode (Auto/Manual)"),
         ("@filename", "Autocomplete files and inject content"),

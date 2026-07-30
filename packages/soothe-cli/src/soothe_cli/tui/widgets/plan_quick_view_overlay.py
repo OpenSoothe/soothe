@@ -1,4 +1,4 @@
-"""Sticky overlay above chat input showing the live goal/plan aggregate."""
+"""In-flow plan panel above the thinking row (Ctrl+t quick view)."""
 
 from __future__ import annotations
 
@@ -25,12 +25,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = False) -> Content:
-    """Build the quick-view header: bold title, abbreviated loop id, dim hints.
+def _plan_quick_view_header(
+    loop_id: str | None,
+    *,
+    show_enter_hint: bool = False,
+    elapsed: str | None = None,
+) -> Content:
+    """Build the quick-view header: bold title, optional elapsed, dim hints.
 
     The title (including the abbreviated loop id) is rendered with the same
     `SECONDARY_TEXT_STYLE` dim style used by the welcome-area Loop ID, then
     bolded via `bold dim` so the title stands out while staying de-emphasized.
+    Live loop elapsed (``12s``) sits in the title row while the goal is open.
     """
     dim_style = theme.SECONDARY_TEXT_STYLE
     title = "Plan"
@@ -38,6 +44,8 @@ def _plan_quick_view_header(loop_id: str | None, *, show_enter_hint: bool = Fals
     if abbreviated:
         title = f"Plan ({abbreviated})"
     hints: list[str] = []
+    if elapsed:
+        hints.append(elapsed)
     if show_enter_hint:
         hints.append("Enter runs queued goal")
     hints.append("Ctrl+t to close")
@@ -68,10 +76,12 @@ def _goal_tree_running_live_stats(adapter: Any) -> dict[str, tuple[int, float | 
 
 
 class PlanQuickViewOverlay(Vertical):
-    """Floating quick-view panel of the full plan above the chat prompt.
+    """In-flow plan panel above the thinking row and chat input.
 
-    Toggle with ``Ctrl+t``. Snapshots in-memory goal tree state on the UI adapter
-    (not mounted in the main message list).
+    Toggle with ``Ctrl+t``. Mounted as a Screen sibling between ``#chat`` and
+    ``#bottom-app-container`` so expanding it shrinks the transcript instead of
+    floating over the sticky bottom chrome. Snapshots in-memory goal tree state
+    on the UI adapter (not mounted in the main message list).
     """
 
     DEFAULT_CSS = """
@@ -87,37 +97,37 @@ class PlanQuickViewOverlay(Vertical):
     }
 
     PlanQuickViewOverlay.-expanded {
-        layer: plan-quick-view;
-        max-height: 20;
+        max-height: 14;
         opacity: 1;
-        padding: 1 1 0 1;
-        margin: 0 0 1 0;
-        background: $surface;
-        border: solid $cognition;
+        padding: 0 1;
+        margin: 0 1;
+        background: transparent;
+        border: none;
+        border-left: tall $cognition;
     }
 
     PlanQuickViewOverlay .plan-quick-view-header {
         height: 1;
         width: 1fr;
-        color: $cognition;
-        margin: 0 0 1 0;
+        color: $text-muted;
+        margin: 0;
         padding: 0;
     }
 
     PlanQuickViewOverlay .plan-quick-view-body {
         height: auto;
-        max-height: 15;
+        max-height: 12;
         width: 1fr;
         scrollbar-size-vertical: 1;
-        scrollbar-color: $cognition 40%;
-        scrollbar-background: $surface;
+        scrollbar-color: $foreground-muted 40%;
+        scrollbar-background: transparent;
     }
 
     PlanQuickViewOverlay .plan-quick-view-content {
         height: auto;
         width: 1fr;
         margin: 0;
-        padding: 0 0 1 0;
+        padding: 0;
     }
     """
 
@@ -183,19 +193,24 @@ class PlanQuickViewOverlay(Vertical):
         """Repaint the plan snapshot from the live goal tree."""
         if not self.is_expanded or self._content is None:
             return
+        tree = get_live_goal_tree(self.app)
         if self._header is not None:
             show_enter_hint = False
             can_run_queued = getattr(self.app, "_can_run_queued_goal_now_from_enter", None)
             if callable(can_run_queued):
                 with suppress(Exception):
                     show_enter_hint = bool(can_run_queued())
+            elapsed: str | None = None
+            if tree is not None:
+                with suppress(Exception):
+                    elapsed = tree.loop_elapsed_label()
             self._header.update(
                 _plan_quick_view_header(
                     getattr(self.app, "_lc_loop_id", None),
                     show_enter_hint=show_enter_hint,
+                    elapsed=elapsed,
                 )
             )
-        tree = get_live_goal_tree(self.app)
         if tree is None:
             self._content.update(Content.styled("No active plan.", "dim"))
             return
@@ -212,7 +227,8 @@ class PlanQuickViewOverlay(Vertical):
 
     def _plan_quick_view_line_width(self) -> int:
         """Available columns for one plan step row inside the overlay."""
-        overlay_padding = 4
+        # Expanded chrome: left tall border (1) + horizontal padding (2).
+        overlay_padding = 3
         gutter_len = len(get_glyphs().output_prefix) + 1
         width = self.size.width if self.size.width else 0
         if width > overlay_padding + gutter_len:

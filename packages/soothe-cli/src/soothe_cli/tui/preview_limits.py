@@ -51,5 +51,5 @@ APPROVAL_WARNING_TEXT_TRUNCATE_CHARS: Final[int] = 220
 # --- Unified diff snippets in chat (`file_ops`, DiffMessage) ---
 APPROVAL_DIFF_MAX_LINES: Final[int] = 15
 
-# --- Plan quick-view overlay (Ctrl+T goal tree step rows) ---
+# --- Plan quick-view panel (Ctrl+T goal tree step rows) ---
 PLAN_QUICK_VIEW_STEP_LINE_MAX_CHARS: Final[int] = 76

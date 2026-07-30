@@ -246,30 +246,12 @@ class CognitionGoalTreeMessage(Vertical):
             return Content.styled(f"{gutter}{mark} {plain}", colors.error)
         return Content.styled(f"{gutter}{plain}", "dim")
 
-    def _plan_status_line_content(self) -> Content | None:
-        """Terminal footer, or live ``Running... · Xs`` while the goal loop is open."""
-        if self._footer_visible and self._footer_plain:
-            return self._goal_footer_styled_content()
-        if self._loop_executing():
-            return self._running_status_content()
-        return None
-
-    def _running_status_content(self) -> Content:
-        """Live status: ``spinner Running... · 12s`` (middots, not parentheses)."""
-        try:
-            colors = theme.get_theme_colors(self)
-        except Exception:  # noqa: BLE001
-            colors = theme.DARK_COLORS
-        gutter = self._indent_prefix()
-        frames = get_glyphs().spinner_frames
-        frame = frames[self._spinner_position % len(frames)]
-        # Caller is ``_plan_status_line_content`` only while ``_loop_executing``.
+    def loop_elapsed_label(self) -> str | None:
+        """Wall-clock elapsed while the goal loop is open, for the plan panel title."""
+        if not self._loop_executing():
+            return None
         started = self._loop_started_at or time()
-        elapsed = format_running_elapsed(time() - started)
-        return Content.assemble(
-            Content.styled(f"{gutter}{frame}", colors.primary),
-            Content.styled(f" Running... · {elapsed}", colors.primary),
-        )
+        return format_running_elapsed(time() - started)
 
     def mark_loop_started(self, started_at: float | None = None) -> None:
         """Anchor plan-level elapsed time (matches thinking-row turn start)."""
@@ -425,14 +407,13 @@ class CognitionGoalTreeMessage(Vertical):
             logger.debug("goal tree header refresh failed", exc_info=True)
 
     def plan_quick_view_content(self, *, max_line_width: int | None = None) -> Content:
-        """Full goal tree snapshot for the sticky plan quick-view overlay."""
+        """Full goal tree snapshot for the Ctrl+t plan panel."""
         parts: list[object] = [self._goal_header_content()]
         steps = self._assemble_steps_content(max_line_width=max_line_width)
         if steps.plain.strip():
             parts.extend([Content("\n"), steps])
-        status_line = self._plan_status_line_content()
-        if status_line is not None:
-            parts.extend([Content("\n"), status_line])
+        if self._footer_visible and self._footer_plain:
+            parts.extend([Content("\n"), self._goal_footer_styled_content()])
         return Content.assemble(*parts)
 
     def sync_running_live_stats(
@@ -449,11 +430,11 @@ class CognitionGoalTreeMessage(Vertical):
                 st.started_at = started_at
 
     def tick_running_spinner(self) -> None:
-        """Advance the running spinner frame for the next plan-quick-view paint.
+        """Advance spinner frames for goal-header and running step icons.
 
-        Live trees stay unmounted (Ctrl+T overlay snapshots ``plan_quick_view_content``);
-        only the spinner index is updated here. Ticks for the whole goal loop, not just
-        while a step row is in ``running`` phase (parity with the thinking-row clock).
+        Live trees stay unmounted (Ctrl+t panel snapshots ``plan_quick_view_content``);
+        only the spinner index is updated here. Ticks for the whole goal loop so the
+        goal glyph keeps animating between steps.
         """
         if not self._loop_executing():
             return
@@ -480,9 +461,8 @@ class CognitionGoalTreeMessage(Vertical):
             return
         try:
             ft = self.query_one("#cognition-goal-tree-footer", Static)
-            status_line = self._plan_status_line_content()
-            if status_line is not None:
-                ft.update(status_line)
+            if self._footer_visible and self._footer_plain:
+                ft.update(self._goal_footer_styled_content())
                 ft.display = True
             else:
                 ft.display = False

@@ -503,7 +503,7 @@ class _UIMixin:
             self._loading_widget.resume()
 
     def action_toggle_plan_quick_view(self) -> None:
-        """Expand or collapse the sticky plan quick-view panel."""
+        """Expand or collapse the in-flow plan panel above the thinking row."""
         if self.screen.is_modal:
             return
         overlay = getattr(self, "_plan_quick_view_overlay", None)
