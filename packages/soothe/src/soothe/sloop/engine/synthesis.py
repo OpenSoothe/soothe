@@ -205,7 +205,7 @@ class SynthesisGenerator:
 
         if self._soothe_config is not None:
             tn = (self._soothe_config.observability.langfuse.trace_name or "").strip()
-            run_name = f"{tn}:goal-synthesis" if tn else "goal-synthesis"
+            run_name = f"{tn}:finalize" if tn else "finalize"
             graph_config = merge_langfuse_runnable_config(
                 graph_config,
                 self._soothe_config,

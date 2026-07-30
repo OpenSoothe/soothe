@@ -61,6 +61,7 @@ class TwoPassIntakeResult:
             self._intent_classification = IntentClassification(
                 intake_label=intake_label,
                 reasoning=pass2_result.reasoning,
+                pass1_reasoning=pass1_result.reasoning,
                 chitchat_response=None,
                 multi_phase=pass2_result.multi_phase,
                 wire_subagent=pass2_result.wire_subagent,

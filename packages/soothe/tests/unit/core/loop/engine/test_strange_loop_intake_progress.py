@@ -31,7 +31,7 @@ def _make_strange_loop() -> StrangeLoop:
 
 @pytest.mark.asyncio
 async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() -> None:
-    """Pass 2 pre-classification must emit TUI progress before the graph starts."""
+    """Pass 1 then Pass 2 pre-classification emit TUI cognition cards before the graph."""
     sl = _make_strange_loop()
 
     pass1_result = MagicMock()
@@ -121,7 +121,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
         try:
             async for event in gen:
                 events.append(event)
-                if len(events) >= 3:
+                if len(events) >= 4:
                     break
         except Exception:
             pass
@@ -134,5 +134,7 @@ async def test_run_with_progress_yields_intake_status_and_reasoning_pre_graph() 
         for event_type, payload in events
         if event_type == "intent_classified_reasoning" and isinstance(payload, dict)
     ]
-    assert len(reasoning_events) == 1
-    assert reasoning_events[0]["reasoning"] == "I'll read the readme first."
+    assert [e["reasoning"] for e in reasoning_events] == [
+        "Work request detected.",
+        "I'll read the readme first.",
+    ]

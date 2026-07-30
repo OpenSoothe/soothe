@@ -86,6 +86,10 @@ class IntentClassification(BaseModel):
         default=None,
         description="Brief first-person reasoning (I'll / Let me …).",
     )
+    pass1_reasoning: str | None = Field(
+        default=None,
+        description="Pass 1 social/task reasoning for TUI cognition cards (not routing).",
+    )
     chitchat_response: str | None = Field(
         default=None,
         description="Direct friendly reply when intake_label is chitchat",

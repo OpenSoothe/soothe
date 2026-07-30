@@ -80,19 +80,19 @@ def resolve_planner(
         config,
         loop_cfg.plan_assess_model_role,
         fallback=planner_model,
-        phase="plan-assess",
+        phase="assess",
     )
     plan_gap_model = _create_loop_phase_model(
         config,
         loop_cfg.plan_gap_model_role,
         fallback=plan_assess_model,
-        phase="plan-gap-analysis",
+        phase="analyze-gaps",
     )
     plan_generate_model = _create_loop_phase_model(
         config,
         loop_cfg.plan_generate_model_role,
         fallback=planner_model,
-        phase="plan-generate",
+        phase="generate-plan",
     )
 
     from soothe.sloop.cognition.planner import LLMPlanner

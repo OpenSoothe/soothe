@@ -359,6 +359,11 @@ class StrangeLoop:
 
                 if pass1_result.is_task:
                     pass1_reasoning_text = (pass1_result.reasoning or "").strip()
+                    from soothe.sloop.stages.preprocess.intake import intake_reasoning_event
+
+                    pass1_reasoning_event = intake_reasoning_event(pass1_reasoning_text)
+                    if pass1_reasoning_event is not None:
+                        yield pass1_reasoning_event
 
                 if not pass1_result.is_task:
                     from soothe.sloop.utils.structural_continuation import (
@@ -782,15 +787,15 @@ class StrangeLoop:
                     routing_classification = effective_routing
 
                 from soothe.sloop.stages.preprocess.intake import (
-                    intent_classified_reasoning_event,
+                    intake_reasoning_event,
                 )
 
-                reasoning_event = intent_classified_reasoning_event(
-                    preclassified_intent,
-                    pass1_reasoning=pass1_reasoning_text,
-                )
-                if reasoning_event is not None:
-                    yield reasoning_event
+                # Pass 1 cognition card already yielded above when displayable.
+                pass2_event = intake_reasoning_event(preclassified_intent.reasoning or "")
+                if pass2_event is not None and pass2_event[1]["reasoning"] != (
+                    pass1_reasoning_text or ""
+                ):
+                    yield pass2_event
 
             if force_continue_loop and loaded:
                 for prior in ce_instance.get_all_goals():

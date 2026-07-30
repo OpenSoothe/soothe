@@ -9,7 +9,10 @@ from soothe.sloop.intention.models import (
 )
 from soothe.sloop.stages.preprocess.intake import (
     INTENT_CLASSIFY_STATUS_LABEL,
+    intake_reasoning_event,
     intent_classified_reasoning_event,
+    intent_pass_reasoning_events,
+    is_displayable_intake_reasoning,
 )
 
 
@@ -58,6 +61,38 @@ def test_intent_classified_reasoning_event_skips_empty_reasoning() -> None:
         task_complexity=TaskComplexity.COMPLEX,
     )
     assert intent_classified_reasoning_event(intent, pass1_reasoning="") is None
+
+
+def test_intent_pass_reasoning_events_emits_pass1_then_pass2() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        reasoning="I'll read the readme first.",
+        pass1_reasoning="Work request detected.",
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    events = intent_pass_reasoning_events(intent)
+    assert [e[1]["reasoning"] for e in events] == [
+        "Work request detected.",
+        "I'll read the readme first.",
+    ]
+
+
+def test_intent_pass_reasoning_events_dedupes_identical_text() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        reasoning="Same line.",
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    events = intent_pass_reasoning_events(intent, pass1_reasoning="Same line.")
+    assert len(events) == 1
+    assert events[0][1]["reasoning"] == "Same line."
+
+
+def test_intake_reasoning_event_skips_fail_safe_placeholders() -> None:
+    assert not is_displayable_intake_reasoning("Pre-graph Pass1 error fail-safe")
+    assert intake_reasoning_event("Pre-graph Pass1 error fail-safe") is None
+    assert intake_reasoning_event("Loop-control phrase; resume via checkpoint") is None
+    assert intake_reasoning_event("Work request detected.") is not None
 
 
 def test_intent_classify_status_label_is_stable() -> None:

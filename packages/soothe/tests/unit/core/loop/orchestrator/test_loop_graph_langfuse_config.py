@@ -9,6 +9,7 @@ from soothe.sloop.orchestrator.runner import build_loop_graph_invoke_config
 from soothe.utils.observability.langfuse import (
     GoalLoopTrace,
     SootheLangfuse,
+    intake_langfuse_run_display_name,
     intent_classify_langfuse_run_display_name,
 )
 
@@ -85,7 +86,7 @@ def test_build_loop_graph_invoke_config_passes_conversation_thread_to_langfuse_m
 
 
 def test_build_loop_graph_invoke_config_uses_goal_trace_pinned_id() -> None:
-    """Graph invoke pins handler to goal trace id so intent-classify shares one trace."""
+    """Graph invoke pins handler to goal trace id so intake shares one trace."""
     cfg = SootheConfig()
     cfg.observability.langfuse.enabled = True
     cfg.observability.langfuse.trace_name = "soothe-dev"
@@ -179,6 +180,8 @@ def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
     handler = out["callbacks"][0]
     assert isinstance(handler, SootheLangfuseCallbackHandler)
     assert handler.trace_context == {"trace_id": "trace-goal-1"}
+    assert out["run_name"] == intake_langfuse_run_display_name("soothe-dev")
+    assert out["run_name"] == "soothe-dev:intake"
     assert out["run_name"] == intent_classify_langfuse_run_display_name("soothe-dev")
     assert out["metadata"]["langfuse_trace_name"] == "soothe-dev:strange-loop-graph"
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"

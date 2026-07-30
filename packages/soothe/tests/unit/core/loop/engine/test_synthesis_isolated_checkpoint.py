@@ -99,7 +99,7 @@ async def test_generate_synthesis_astream_uses_isolated_thread_and_workspace() -
 
 
 @pytest.mark.asyncio
-async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypatch) -> None:
+async def test_generate_synthesis_sets_finalize_langfuse_run_name(monkeypatch) -> None:
     """Phase-2 synthesis uses the same run-name convention as execute-step (IG-377 pattern)."""
     captured: dict = {}
     llm = _recording_llm(captured)
@@ -151,7 +151,7 @@ async def test_generate_synthesis_sets_goal_synthesis_langfuse_run_name(monkeypa
             pass
 
     cfg = captured.get("config") or {}
-    assert cfg.get("run_name") == "soothe-dev:goal-synthesis"
+    assert cfg.get("run_name") == "soothe-dev:finalize"
     assert (cfg.get("metadata") or {}).get("langfuse_session_id") == "parent-thread"
     assert (cfg.get("metadata") or {}).get("loop_id") == "loop-9"
 

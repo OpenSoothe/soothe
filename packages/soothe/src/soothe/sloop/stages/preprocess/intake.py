@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 INTENT_CLASSIFY_STATUS_LABEL = "Interpreting goal"
 
+# Structural fail-safe / bypass strings — not LLM prose for CognitionReasonMessage.
+_NON_DISPLAYABLE_INTAKE_REASONING_PREFIXES: tuple[str, ...] = (
+    "Pre-graph Pass1 error fail-safe",
+    "Loop-control phrase;",
+)
+
 
 def _apply_intent_to_loop_state(
     loop_state: Any,
@@ -40,27 +46,70 @@ def _apply_intent_to_loop_state(
     )
 
 
-def intent_classified_reasoning_event(
-    intent: IntentClassification,
-    *,
-    pass1_reasoning: str = "",
-) -> tuple[str, dict[str, Any]] | None:
-    """Build one intake reasoning event for TUI cognition cards (IG-518, IG-554).
+def is_displayable_intake_reasoning(text: str) -> bool:
+    """True when intake reasoning is user-facing LLM prose for TUI cards."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    return not any(stripped.startswith(p) for p in _NON_DISPLAYABLE_INTAKE_REASONING_PREFIXES)
 
-    Prefers Pass 2 ``intent.reasoning``; falls back to Pass 1 when Pass 2 is empty.
+
+def intake_reasoning_event(reasoning: str) -> tuple[str, dict[str, Any]] | None:
+    """Build a TUI cognition-reason payload for displayable intake reasoning.
+
+    The runner maps ``intent_classified_reasoning`` → ``IntentClassifiedEvent`` →
+    ``CognitionReasonMessage``.
     """
-    if intent.intake_label == IntakeLabel.CHITCHAT:
-        return None
-    reasoning = (intent.reasoning or pass1_reasoning or "").strip()
-    if not reasoning:
+    text = (reasoning or "").strip()
+    if not is_displayable_intake_reasoning(text):
         return None
     return (
         "intent_classified_reasoning",
         {
             "intent_type": "agentic",
-            "reasoning": reasoning,
+            "reasoning": text,
         },
     )
+
+
+def intent_classified_reasoning_event(
+    intent: IntentClassification,
+    *,
+    pass1_reasoning: str = "",
+) -> tuple[str, dict[str, Any]] | None:
+    """Build Pass 2 (or Pass 1 fallback) intake reasoning for TUI cognition cards.
+
+    Prefer Pass 2 ``intent.reasoning``. Fall back to ``pass1_reasoning`` only when
+    Pass 2 is empty (e.g. callers that did not emit Pass 1 separately).
+    """
+    if intent.intake_label == IntakeLabel.CHITCHAT:
+        return None
+    return intake_reasoning_event(intent.reasoning or pass1_reasoning or "")
+
+
+def intent_pass_reasoning_events(
+    intent: IntentClassification,
+    *,
+    pass1_reasoning: str = "",
+) -> list[tuple[str, dict[str, Any]]]:
+    """Build zero, one, or two intake cognition cards (Pass 1 then Pass 2).
+
+    Skips chitchat. Dedupes when Pass 2 text matches Pass 1.
+    """
+    if intent.intake_label == IntakeLabel.CHITCHAT:
+        return []
+    events: list[tuple[str, dict[str, Any]]] = []
+    pass1_event = intake_reasoning_event(pass1_reasoning or intent.pass1_reasoning or "")
+    if pass1_event is not None:
+        events.append(pass1_event)
+    pass2_text = (intent.reasoning or "").strip()
+    pass2_event = intake_reasoning_event(pass2_text)
+    if pass2_event is None:
+        return events
+    if pass1_event is not None and pass2_event[1]["reasoning"] == pass1_event[1]["reasoning"]:
+        return events
+    events.append(pass2_event)
+    return events
 
 
 def _ledger_messages_for_intake(ctx: LoopRuntimeContext) -> list[BaseMessage]:
@@ -153,9 +202,7 @@ async def node_intent_classify(ctx: LoopRuntimeContext, _state: dict[str, Any]) 
 
     _apply_intent_to_loop_state(ctx.loop_state, intent, preferred_subagent=ctx.preferred_subagent)
 
-    reasoning_event = intent_classified_reasoning_event(intent)
-    if reasoning_event is not None:
-        event_type, payload = reasoning_event
+    for event_type, payload in intent_pass_reasoning_events(intent):
         await ctx.emit(event_type, payload)
 
     return {}

@@ -440,7 +440,7 @@ class LLMPlanner:
         from soothe.sloop.state.schemas import StatusAssessment
 
         model = _plan_phase_chat_model(self._plan_assess_model)
-        lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="plan-assess")
+        lf_cfg = self._planner_langfuse_run_config(thread_id=thread_id, phase="assess")
 
         # IG-503: Retry loop for transient network errors
         network_attempts = 0
@@ -592,7 +592,7 @@ class LLMPlanner:
         model = _plan_phase_chat_model(self._plan_assess_model)
         try:
             lf_cfg = self._planner_langfuse_run_config(
-                thread_id=state.thread_id, phase="continuation-assess"
+                thread_id=state.thread_id, phase="assess-continuation"
             )
             result = await self._invoke_structured(
                 model,
@@ -713,7 +713,7 @@ class LLMPlanner:
         for attempt in range(max_retries + 1):
             try:
                 lf_cfg = self._planner_langfuse_run_config(
-                    thread_id=thread_id, phase="plan-generate"
+                    thread_id=thread_id, phase="generate-plan"
                 )
                 plan_wire = await self._invoke_structured(
                     model,
@@ -823,7 +823,7 @@ class LLMPlanner:
                         await asyncio.sleep(backoff)
                         try:
                             lf_cfg_retry = self._planner_langfuse_run_config(
-                                thread_id=thread_id, phase="plan-generate-retry"
+                                thread_id=thread_id, phase="generate-plan-retry"
                             )
                             plan_wire = await self._invoke_structured(
                                 model,
@@ -1165,7 +1165,7 @@ class LLMPlanner:
         model = _plan_phase_chat_model(self._plan_gap_model)
         lf_cfg = self._planner_langfuse_run_config(
             thread_id=state.thread_id,
-            phase="plan-gap-analysis",
+            phase="analyze-gaps",
         )
         t0 = time.perf_counter()
         gap = await self._invoke_structured(
@@ -1645,7 +1645,7 @@ class LLMPlanner:
                         logger.info("[Retry] fallback: manual JSON parse")
                         try:
                             lf_retry = self._planner_langfuse_run_config(
-                                thread_id=state.thread_id, phase="plan-json-retry"
+                                thread_id=state.thread_id, phase="generate-plan-json-retry"
                             )
                             retry_model = _plan_phase_chat_model(self._plan_generate_model)
                             if lf_retry is not None:

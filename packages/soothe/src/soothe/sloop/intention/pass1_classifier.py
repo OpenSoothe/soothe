@@ -335,7 +335,7 @@ class IntakePass1Classifier:
                 purpose=purpose,
                 component=f"classifier.{component}",
                 phase="intake_pass1",
-                run_name=f"intake_pass1:{trace_name or 'query'}",
+                run_name=f"intake-pass1:{trace_name or 'query'}",
                 extra_metadata=observability_metadata,
             )
 

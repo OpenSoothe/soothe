@@ -16,6 +16,7 @@ from soothe_sdk.observability.langfuse._trace_io import (
 from soothe.utils.observability.langfuse._goal_loop import GoalLoopTrace
 from soothe.utils.observability.langfuse._names import (
     execute_step_langfuse_run_display_name,
+    intake_langfuse_run_display_name,
     intent_classify_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
 )
@@ -30,7 +31,7 @@ class SootheLangfuse(_SdkSootheLangfuse):
         session_id: str | None,
         loop_id: str | None,
     ) -> GoalLoopTrace | None:
-        """Start a shared trace for intent-classify + strange-loop-graph."""
+        """Start a shared trace for intake + strange-loop-graph."""
         if not self.enabled or self._config is None:
             return None
         return GoalLoopTrace.begin(
@@ -44,6 +45,7 @@ __all__ = [
     "GoalLoopTrace",
     "SootheLangfuse",
     "execute_step_langfuse_run_display_name",
+    "intake_langfuse_run_display_name",
     "intent_classify_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",
     "merge_langfuse_runnable_config",

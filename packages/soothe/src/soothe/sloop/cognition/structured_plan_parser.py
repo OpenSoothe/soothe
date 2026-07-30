@@ -70,7 +70,7 @@ async def parse_plan_structured(
         SootheLangfuse(soothe_config).traced_llm(
             purpose="structured_plan_parse",
             component="loop.cognition.structured_parser",
-            phase="plan-generate",
+            phase="generate-plan",
             run_name="soothe:structured-plan-parse",
         )
         if soothe_config is not None

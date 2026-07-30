@@ -25,6 +25,7 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
     intent = IntentClassification(
         intake_label=IntakeLabel.SIMPLE,
         reasoning="I'll plan a lightweight change.",
+        pass1_reasoning="Work request detected.",
         task_complexity=TaskComplexity.SIMPLE,
     )
     classifier.classify_intake = AsyncMock(return_value=intent)
@@ -65,6 +66,13 @@ async def test_intent_classify_emits_interpreting_status_and_sets_state() -> Non
         for t, d in emitted
     )
     assert any(t == "intent_classified_reasoning" for t, _ in emitted)
+    reasoning_payloads = [
+        d for t, d in emitted if t == "intent_classified_reasoning" and isinstance(d, dict)
+    ]
+    assert [d["reasoning"] for d in reasoning_payloads] == [
+        "Work request detected.",
+        "I'll plan a lightweight change.",
+    ]
 
 
 @pytest.mark.asyncio

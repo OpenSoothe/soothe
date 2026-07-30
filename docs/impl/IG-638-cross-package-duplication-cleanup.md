@@ -100,7 +100,7 @@ to a follow-up RFC and listed under "Out of scope".
   the config surface. Deferred — needs an RFC.
 - **`observability/langfuse/_names.py` parallel impls.** The SDK copy
   (`nanoagent-graph` / `intake-classify`) and host copy
-  (`strange-loop-graph` / `intent-classify`) are genuinely different trace-name
+  (`strange-loop-graph` / `intake`) are genuinely different trace-name
   vocabularies for different graphs; the SDK copy has real test callers. Not a
   stale duplicate — left as-is.
 

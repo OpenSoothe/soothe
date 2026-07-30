@@ -69,7 +69,7 @@ class LoopRuntimeContext:
     # RFC-624 Phase 4: ContextEngine is always active
     ce: Any | None = None  # ContextEngine instance
     ce_goal_id: str | None = None  # Active goal ID in CE
-    # Shared Langfuse trace for graph entry intent-classify + strange-loop-graph (IG-540).
+    # Shared Langfuse trace for graph entry intake + strange-loop-graph (IG-540 / IG-663).
     goal_trace: GoalLoopTrace | None = None
     # Background checkpoint finalize started at goal completion; drained before close().
     tail_persistence_task: asyncio.Task[None] | None = None

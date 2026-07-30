@@ -1,4 +1,4 @@
-"""Goal-loop Langfuse trace session (intent-classify + strange-loop-graph)."""
+"""Goal-loop Langfuse trace session (intake + strange-loop-graph)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from soothe_sdk.observability.langfuse._merge import merge_langfuse_runnable_con
 
 from soothe.utils.observability.langfuse._names import (
     execute_step_langfuse_run_display_name,
-    intent_classify_langfuse_run_display_name,
+    intake_langfuse_run_display_name,
     loop_graph_langfuse_run_display_name,
 )
 
@@ -97,7 +97,7 @@ class GoalLoopTrace:
         phase: str = "pre-stream",
         extra_metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """RunnableConfig for in-graph intent-classify under this trace."""
+        """RunnableConfig for preprocess ``intake`` LLM under this trace."""
         from soothe_nano.utils.llm.observability import create_llm_call_metadata
 
         metadata = create_llm_call_metadata(purpose=purpose, component=component, phase=phase)
@@ -105,7 +105,7 @@ class GoalLoopTrace:
             metadata.update(extra_metadata)
 
         trace_name = (self.soothe_config.observability.langfuse.trace_name or "").strip()
-        run_name = intent_classify_langfuse_run_display_name(trace_name or None)
+        run_name = intake_langfuse_run_display_name(trace_name or None)
 
         base: dict[str, Any] = {
             "configurable": dict(self._configurable()),

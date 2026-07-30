@@ -67,7 +67,9 @@ sloop/orchestrator/  # builder, routing, stations, state
   `plan_assess`, `plan_generate`, `plan_gap_analysis`, `goal_completion`,
   `execute_step`) so soothe-sdk / CLI checkpoint filters stay compatible.
 - Host projection dual-reads legacy + station ids via ``stations.PLANNING_LEDGER_PHASES``.
-- Clarification resume still accepts legacy origin ids on in-flight interrupts.
+- Langfuse run-name suffixes align with stem stations: ``intake``, ``assess``,
+  ``generate-plan``, ``analyze-gaps``, ``finalize``; root remains
+  ``strange-loop-graph``; CoreAgent child remains ``execute-step``.
 
 ## Validation
 
