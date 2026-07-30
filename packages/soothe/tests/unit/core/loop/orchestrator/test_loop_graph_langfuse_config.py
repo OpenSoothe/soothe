@@ -10,7 +10,6 @@ from soothe.utils.observability.langfuse import (
     GoalLoopTrace,
     SootheLangfuse,
     intake_langfuse_run_display_name,
-    intent_classify_langfuse_run_display_name,
 )
 
 
@@ -182,7 +181,6 @@ def test_goal_trace_intake_invoke_config_pins_trace_id() -> None:
     assert handler.trace_context == {"trace_id": "trace-goal-1"}
     assert out["run_name"] == intake_langfuse_run_display_name("soothe-dev")
     assert out["run_name"] == "soothe-dev:intake"
-    assert out["run_name"] == intent_classify_langfuse_run_display_name("soothe-dev")
     assert out["metadata"]["langfuse_trace_name"] == "soothe-dev:strange-loop-graph"
     assert out["metadata"]["langfuse_trace_id"] == "trace-goal-1"
 

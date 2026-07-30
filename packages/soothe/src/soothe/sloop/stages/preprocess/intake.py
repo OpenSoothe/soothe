@@ -72,21 +72,6 @@ def intake_reasoning_event(reasoning: str) -> tuple[str, dict[str, Any]] | None:
     )
 
 
-def intent_classified_reasoning_event(
-    intent: IntentClassification,
-    *,
-    pass1_reasoning: str = "",
-) -> tuple[str, dict[str, Any]] | None:
-    """Build Pass 2 (or Pass 1 fallback) intake reasoning for TUI cognition cards.
-
-    Prefer Pass 2 ``intent.reasoning``. Fall back to ``pass1_reasoning`` only when
-    Pass 2 is empty (e.g. callers that did not emit Pass 1 separately).
-    """
-    if intent.intake_label == IntakeLabel.CHITCHAT:
-        return None
-    return intake_reasoning_event(intent.reasoning or pass1_reasoning or "")
-
-
 def intent_pass_reasoning_events(
     intent: IntentClassification,
     *,

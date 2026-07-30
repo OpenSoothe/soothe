@@ -298,6 +298,7 @@ class StrangeLoop:
             ):
                 from soothe.sloop.stages.preprocess.intake import (
                     INTENT_CLASSIFY_STATUS_LABEL,
+                    intake_reasoning_event,
                 )
 
                 yield ("plan_phase_status", {"label": INTENT_CLASSIFY_STATUS_LABEL})
@@ -359,8 +360,6 @@ class StrangeLoop:
 
                 if pass1_result.is_task:
                     pass1_reasoning_text = (pass1_result.reasoning or "").strip()
-                    from soothe.sloop.stages.preprocess.intake import intake_reasoning_event
-
                     pass1_reasoning_event = intake_reasoning_event(pass1_reasoning_text)
                     if pass1_reasoning_event is not None:
                         yield pass1_reasoning_event
@@ -785,10 +784,6 @@ class StrangeLoop:
                 if effective_routing is not None:
                     state.routing_classification = effective_routing
                     routing_classification = effective_routing
-
-                from soothe.sloop.stages.preprocess.intake import (
-                    intake_reasoning_event,
-                )
 
                 # Pass 1 cognition card already yielded above when displayable.
                 pass2_event = intake_reasoning_event(preclassified_intent.reasoning or "")

@@ -22,10 +22,6 @@ def intake_langfuse_run_display_name(trace_name: str | None) -> str:
     return f"{tn}:{_HOST_INTAKE_RUN_NAME}" if tn else _HOST_INTAKE_RUN_NAME
 
 
-# Historical alias (IG-540 / pre-IG-663).
-intent_classify_langfuse_run_display_name = intake_langfuse_run_display_name
-
-
 def execute_step_langfuse_run_display_name(trace_name: str | None) -> str:
     """Return host CoreAgent execute-step child run display name for a trace."""
     tn = (trace_name or "").strip()
@@ -35,6 +31,5 @@ def execute_step_langfuse_run_display_name(trace_name: str | None) -> str:
 __all__ = [
     "execute_step_langfuse_run_display_name",
     "intake_langfuse_run_display_name",
-    "intent_classify_langfuse_run_display_name",
     "loop_graph_langfuse_run_display_name",
 ]

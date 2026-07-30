@@ -14,10 +14,11 @@ from soothe_nano.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat
+from soothe_nano.utils.llm.structured import invoke_structured_chat
 
 from .models import IntakePass2LLMResult, IntakeScope
 from .prompts import INTAKE_PASS2_HUMAN_TASK, INTAKE_PASS2_SYSTEM_PROMPT
+from .structured_methods import INTAKE_JSON_FIRST_METHODS
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -26,14 +27,30 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Mid-loop prior goal_completion dumps can be multi-k tokens; Pass 2 only needs
+# enough context for reference resolution ("apply it"), not the full report.
+_PASS2_PRIOR_MAX_CHARS = 2400
+
+
+def clip_pass2_prior_projection(prior_projection: str | None) -> str | None:
+    """Bound prior-goal text for Pass 2 (keep the tail for next-action cues)."""
+    if prior_projection is None:
+        return None
+    text = prior_projection.strip()
+    if not text:
+        return None
+    if len(text) <= _PASS2_PRIOR_MAX_CHARS:
+        return text
+    return "…\n" + text[-_PASS2_PRIOR_MAX_CHARS:]
+
 
 class IntakePass2Classifier:
     """Pass 2: scope classification for work requests (RFC-630 IG-554).
 
     Classifies as trivial, simple, or complex. Prior-goal projection included
-    for reference resolution ("apply it"). Retries once on structured-output
-    failure, then fail-safe to simple (lightweight plan) so CoreAgent can
-    finish in one execute rather than forcing a full complex spine.
+    for reference resolution ("apply it"). On structured-output failure,
+    fail-safe to simple (lightweight plan) so CoreAgent can finish in one
+    execute rather than forcing a full complex spine.
 
     Args:
         model: Fast LLM for classification.
@@ -63,8 +80,6 @@ class IntakePass2Classifier:
     ) -> IntakePass2LLMResult:
         """Classify work scope as trivial, simple, or complex.
 
-        Retries once on structured-output failure, then fail-safe to simple.
-
         Args:
             query: User input text.
             prior_projection: Prior-goal summary for reference resolution (optional).
@@ -72,13 +87,13 @@ class IntakePass2Classifier:
             goal_trace: Optional Langfuse trace context.
 
         Returns:
-            IntakePass2LLMResult with scope and reasoning.
+            IntakePass2LLMResult with scope classification.
         """
         if not self._fast_model:
             return self._fallback(query)
 
         try:
-            result = await self._classify_llm_with_output_retry(
+            result = await self._classify_llm(
                 query,
                 prior_projection=prior_projection,
                 observability_metadata=observability_metadata,
@@ -98,31 +113,6 @@ class IntakePass2Classifier:
             logger.debug("Pass2 error: %s", exc, exc_info=True)
             return self._fallback(query, error_context=exc)
 
-    async def _classify_llm_with_output_retry(
-        self,
-        query: str,
-        *,
-        prior_projection: str | None = None,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> IntakePass2LLMResult:
-        """Run Pass 2 LLM classification with one retry on structured-output failure."""
-        try:
-            return await self._classify_llm(
-                query,
-                prior_projection=prior_projection,
-                observability_metadata=observability_metadata,
-                goal_trace=goal_trace,
-            )
-        except StructuredOutputError:
-            logger.warning("Pass2 structured output failed; retrying classification once")
-            return await self._classify_llm(
-                query,
-                prior_projection=prior_projection,
-                observability_metadata=observability_metadata,
-                goal_trace=goal_trace,
-            )
-
     async def _classify_llm(
         self,
         query: str,
@@ -136,9 +126,9 @@ class IntakePass2Classifier:
             SystemMessage(content=INTAKE_PASS2_SYSTEM_PROMPT),
         ]
 
-        # Add prior projection as context (for reference resolution)
-        if prior_projection:
-            messages.append(SystemMessage(content=f"PRIOR_GOAL_SUMMARY:\n{prior_projection}"))
+        clipped_prior = clip_pass2_prior_projection(prior_projection)
+        if clipped_prior:
+            messages.append(SystemMessage(content=f"PRIOR_GOAL_SUMMARY:\n{clipped_prior}"))
 
         messages.append(HumanMessage(content=f"CURRENT_GOAL: {query}\n\n{INTAKE_PASS2_HUMAN_TASK}"))
 
@@ -159,6 +149,7 @@ class IntakePass2Classifier:
                 schema_name="IntakePass2LLMResult",
                 strict=True,
                 config=config,
+                methods=INTAKE_JSON_FIRST_METHODS,
             )
 
         result_dict = await await_with_llm_call_policy(
@@ -257,4 +248,4 @@ def preview_goal(goal: str, max_len: int = 50) -> str:
     return goal[: max_len - 3] + "..."
 
 
-__all__ = ["IntakePass2Classifier"]
+__all__ = ["IntakePass2Classifier", "clip_pass2_prior_projection"]

@@ -10,57 +10,9 @@ from soothe.sloop.intention.models import (
 from soothe.sloop.stages.preprocess.intake import (
     INTENT_CLASSIFY_STATUS_LABEL,
     intake_reasoning_event,
-    intent_classified_reasoning_event,
     intent_pass_reasoning_events,
     is_displayable_intake_reasoning,
 )
-
-
-def test_intent_classified_reasoning_event_prefers_pass2() -> None:
-    intent = IntentClassification(
-        intake_label=IntakeLabel.SIMPLE,
-        reasoning="I'll read the readme first.",
-        task_complexity=TaskComplexity.SIMPLE,
-    )
-    event = intent_classified_reasoning_event(
-        intent,
-        pass1_reasoning="Work request detected.",
-    )
-    assert event is not None
-    assert event[1]["reasoning"] == "I'll read the readme first."
-
-
-def test_intent_classified_reasoning_event_falls_back_to_pass1() -> None:
-    intent = IntentClassification(
-        intake_label=IntakeLabel.SIMPLE,
-        reasoning="",
-        task_complexity=TaskComplexity.SIMPLE,
-    )
-    event = intent_classified_reasoning_event(
-        intent,
-        pass1_reasoning="Work request detected.",
-    )
-    assert event is not None
-    assert event[1]["reasoning"] == "Work request detected."
-
-
-def test_intent_classified_reasoning_event_skips_chitchat() -> None:
-    intent = IntentClassification(
-        intake_label=IntakeLabel.CHITCHAT,
-        reasoning="greeting detected",
-        chitchat_response="Hello!",
-        task_complexity=TaskComplexity.MINIMAL,
-    )
-    assert intent_classified_reasoning_event(intent) is None
-
-
-def test_intent_classified_reasoning_event_skips_empty_reasoning() -> None:
-    intent = IntentClassification(
-        intake_label=IntakeLabel.COMPLEX,
-        reasoning="",
-        task_complexity=TaskComplexity.COMPLEX,
-    )
-    assert intent_classified_reasoning_event(intent, pass1_reasoning="") is None
 
 
 def test_intent_pass_reasoning_events_emits_pass1_then_pass2() -> None:
@@ -86,6 +38,36 @@ def test_intent_pass_reasoning_events_dedupes_identical_text() -> None:
     events = intent_pass_reasoning_events(intent, pass1_reasoning="Same line.")
     assert len(events) == 1
     assert events[0][1]["reasoning"] == "Same line."
+
+
+def test_intent_pass_reasoning_events_skips_chitchat() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.CHITCHAT,
+        reasoning="greeting detected",
+        pass1_reasoning="greeting detected",
+        chitchat_response="Hello!",
+        task_complexity=TaskComplexity.MINIMAL,
+    )
+    assert intent_pass_reasoning_events(intent) == []
+
+
+def test_intent_pass_reasoning_events_pass1_only_when_pass2_empty() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.SIMPLE,
+        reasoning="",
+        task_complexity=TaskComplexity.SIMPLE,
+    )
+    events = intent_pass_reasoning_events(intent, pass1_reasoning="Work request detected.")
+    assert [e[1]["reasoning"] for e in events] == ["Work request detected."]
+
+
+def test_intent_pass_reasoning_events_skips_empty_reasoning() -> None:
+    intent = IntentClassification(
+        intake_label=IntakeLabel.COMPLEX,
+        reasoning="",
+        task_complexity=TaskComplexity.COMPLEX,
+    )
+    assert intent_pass_reasoning_events(intent, pass1_reasoning="") == []
 
 
 def test_intake_reasoning_event_skips_fail_safe_placeholders() -> None:

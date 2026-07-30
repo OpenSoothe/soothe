@@ -14,7 +14,7 @@ from soothe_nano.utils.llm.invoke_policy import (
     await_with_llm_call_policy,
     llm_rate_limit_config_from,
 )
-from soothe_nano.utils.llm.structured import StructuredOutputError, invoke_structured_chat
+from soothe_nano.utils.llm.structured import invoke_structured_chat
 
 from soothe.sloop.chitchat_fallbacks import pick_generic_chitchat_fallback
 
@@ -36,6 +36,7 @@ from .prompts import (
     build_intake_pass1_human_content,
     build_intake_pass1_system_prompt,
 )
+from .structured_methods import INTAKE_JSON_FIRST_METHODS
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
@@ -117,7 +118,7 @@ class IntakePass1Classifier:
             return fallback
 
         try:
-            result = await self._classify_llm_with_output_retry(
+            result = await self._classify_llm(
                 query,
                 prior_response_language=prior_response_language,
                 observability_metadata=observability_metadata,
@@ -151,31 +152,6 @@ class IntakePass1Classifier:
             fallback = self._fallback(query, error_context=exc)
             _log_pass1_result(fallback)
             return fallback
-
-    async def _classify_llm_with_output_retry(
-        self,
-        query: str,
-        *,
-        prior_response_language: ResponseLanguage | None = None,
-        observability_metadata: dict[str, str] | None = None,
-        goal_trace: Any | None = None,
-    ) -> IntakePass1LLMResult:
-        """Run Pass 1 LLM classification with one retry on structured-output failure."""
-        try:
-            return await self._classify_llm(
-                query,
-                prior_response_language=prior_response_language,
-                observability_metadata=observability_metadata,
-                goal_trace=goal_trace,
-            )
-        except StructuredOutputError:
-            logger.warning("Pass1 structured output failed; retrying classification once")
-            return await self._classify_llm(
-                query,
-                prior_response_language=prior_response_language,
-                observability_metadata=observability_metadata,
-                goal_trace=goal_trace,
-            )
 
     async def _classify_llm(
         self,
@@ -219,6 +195,7 @@ class IntakePass1Classifier:
                 schema_name="IntakePass1LLMResult",
                 strict=True,
                 config=config,
+                methods=INTAKE_JSON_FIRST_METHODS,
             )
 
         result_dict = await await_with_llm_call_policy(
@@ -278,6 +255,7 @@ class IntakePass1Classifier:
                 schema_name="Pass1SocialReplyLLMResult",
                 strict=True,
                 config=config,
+                methods=INTAKE_JSON_FIRST_METHODS,
             )
 
         result_dict = await await_with_llm_call_policy(

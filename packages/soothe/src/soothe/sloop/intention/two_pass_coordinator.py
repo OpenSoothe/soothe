@@ -115,11 +115,6 @@ class TwoPassIntakeResult:
         """Pass 1 confidence level."""
         return self._pass1_result.confidence
 
-    @property
-    def pass1_reasoning(self) -> str:
-        """Pass 1 reasoning."""
-        return self._pass1_result.reasoning
-
 
 class TwoPassIntakeCoordinator:
     """Orchestrates two-pass intake classification (RFC-630 IG-554).

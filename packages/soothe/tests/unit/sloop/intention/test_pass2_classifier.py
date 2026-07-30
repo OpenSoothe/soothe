@@ -134,8 +134,8 @@ async def test_llm_error_fails_safe_to_simple() -> None:
     assert result.scope == IntakeScope.SIMPLE
 
 
-async def test_structured_output_error_retries_once() -> None:
-    """StructuredOutputError should trigger one retry before fail-safe."""
+async def test_structured_output_error_fails_safe_to_simple() -> None:
+    """StructuredOutputError after one invoke fails safe to simple (no outer retry)."""
     from unittest.mock import patch
 
     from soothe_nano.utils.llm.structured import StructuredOutputError
@@ -145,22 +145,51 @@ async def test_structured_output_error_retries_once() -> None:
     with patch(
         "soothe.sloop.intention.pass2_classifier.invoke_structured_chat",
         new=AsyncMock(
-            side_effect=[
-                StructuredOutputError(
-                    "structured model invoke failed: Provider returned empty response for json_schema format. Response object: AIMessage"
-                ),
-                {
-                    "scope": "simple",
-                    "reasoning": "single file task",
-                    "multi_phase": False,
-                    "requires_tool_use": True,
-                },
-            ]
+            side_effect=StructuredOutputError(
+                "structured model invoke failed: Provider returned empty response for json_schema format. Response object: AIMessage"
+            ),
         ),
     ) as mock_invoke:
         result = await classifier.classify("count files in packages")
     assert result.scope == IntakeScope.SIMPLE
-    assert mock_invoke.await_count == 2
+    assert mock_invoke.await_count == 1
+
+
+async def test_pass2_prefers_json_schema_structured_methods() -> None:
+    """Pass 2 asks invoke_structured_chat to try json_schema before function_calling."""
+    from unittest.mock import patch
+
+    from soothe.sloop.intention.structured_methods import INTAKE_JSON_FIRST_METHODS
+
+    mock_model = MagicMock()
+    classifier = IntakePass2Classifier(model=mock_model)
+    with patch(
+        "soothe.sloop.intention.pass2_classifier.invoke_structured_chat",
+        new=AsyncMock(
+            return_value={
+                "scope": "simple",
+                "reasoning": "I'll inspect the files.",
+                "multi_phase": False,
+                "requires_tool_use": True,
+            }
+        ),
+    ) as mock_invoke:
+        await classifier.classify("reanalyze project arch")
+    assert mock_invoke.await_args.kwargs["methods"] == INTAKE_JSON_FIRST_METHODS
+
+
+def test_clip_pass2_prior_projection_keeps_tail() -> None:
+    from soothe.sloop.intention.pass2_classifier import (
+        _PASS2_PRIOR_MAX_CHARS,
+        clip_pass2_prior_projection,
+    )
+
+    long_prior = "HEAD-" + ("x" * (_PASS2_PRIOR_MAX_CHARS + 50)) + "-TAIL"
+    clipped = clip_pass2_prior_projection(long_prior)
+    assert clipped is not None
+    assert clipped.startswith("…\n")
+    assert clipped.endswith("-TAIL")
+    assert len(clipped) <= _PASS2_PRIOR_MAX_CHARS + 2
 
 
 async def test_invalid_scope_fails_safe_to_simple() -> None:
