@@ -1,9 +1,11 @@
 """Project StrangeLoop state into user-safe synthesis context (RFC-603, RFC-214).
 
-Goal-synthesis injects ``execute_step`` ledger turns as native messages (like
-plan-assess) for prompt-cache alignment. Plan-phase ledger rows stay out of the
-message list. Scenario, focus, emphasis, and the verbatim user request live in
-the system prompt; the closing human message is a short TASK trigger only.
+Goal-synthesis injects current-goal ``execute_step`` ledger turns as native
+messages (like plan-assess) for prompt-cache alignment. Prior-goal execute rows
+are excluded; at most one compacted prior terminal unit may appear as brief
+status reference (IG-662). Plan-phase ledger rows stay out of the message list.
+Scenario, focus, emphasis, and the verbatim user request live in the system
+prompt; the closing human message is a short TASK trigger only.
 """
 
 from __future__ import annotations

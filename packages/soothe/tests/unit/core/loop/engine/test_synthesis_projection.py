@@ -36,6 +36,7 @@ def test_build_synthesis_message_is_task_only() -> None:
     assert "EVIDENCE:" not in text
     assert "prefer bullets" in text.lower() or "Prefer bullets" in text
     assert "required sections" not in text.lower()
+    assert "prior-goal status" in text.lower() or "prior completion" in text.lower()
 
 
 def test_projection_excludes_plan_phases_from_ledger() -> None:
@@ -217,6 +218,8 @@ def test_system_prompt_uses_synthesis_instructions_wrapper_and_anti_echo_rules()
     assert "start immediately with the first `##` heading" in text
     assert "Suggested outline" in text
     assert "Required sections" not in text
+    assert "Multi-goal loops" in text
+    assert "at most one short" in text
 
 
 def test_system_prompt_empty_sections_asks_model_to_design_outline() -> None:

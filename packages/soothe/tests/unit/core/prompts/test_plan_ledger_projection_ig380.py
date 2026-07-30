@@ -100,6 +100,76 @@ def test_synthesis_projection_keeps_execute_step_only() -> None:
     assert extract_join(proj) == "exec-hexec-ai"
 
 
+# ── IG-662: Synthesis current-goal focus ──────────────────────────────────────
+
+
+def test_ig662_synthesis_excludes_prior_goal_execute_steps() -> None:
+    """Multi-goal ledger: synthesis keeps current execute only, not prior execute."""
+    from soothe.sloop.prompts.plan_ledger_projection import (
+        _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY,
+    )
+
+    prior_exec_h = LoopHumanMessage(
+        content="prior-exec-h", thread_id="t", iteration=0, phase="execute_step"
+    )
+    prior_exec_ai = LoopAIMessage(
+        content="prior-exec-ai-verbose-outcome",
+        thread_id="t",
+        iteration=0,
+        phase="execute_step",
+    )
+    prior_gc_h = LoopHumanMessage(
+        content="finalize prior", thread_id="t", iteration=0, phase="goal_completion"
+    )
+    prior_gc_ai = LoopAIMessage(
+        content="## Prior Report\n" + ("detail " * 80),
+        thread_id="t",
+        iteration=0,
+        phase="goal_completion",
+    )
+    current_exec_h = LoopHumanMessage(
+        content="current-exec-h", thread_id="t", iteration=1, phase="execute_step"
+    )
+    current_exec_ai = LoopAIMessage(
+        content="current-exec-ai", thread_id="t", iteration=1, phase="execute_step"
+    )
+    raw = [
+        prior_exec_h,
+        prior_exec_ai,
+        prior_gc_h,
+        prior_gc_ai,
+        current_exec_h,
+        current_exec_ai,
+    ]
+    proj = project_loop_messages_for_synthesis(raw, None)
+    joined = extract_join(proj)
+    assert "prior-exec-h" not in joined
+    assert "prior-exec-ai-verbose-outcome" not in joined
+    assert "current-exec-h" in joined
+    assert "current-exec-ai" in joined
+    # Compact prior status reference present
+    assert _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY.strip() in joined
+    assert "status_reference" in joined
+    # Prior AI body truncated (preview), not full verbose report
+    assert "detail " * 80 not in joined
+
+
+def test_ig662_synthesis_single_goal_unchanged() -> None:
+    """First goal (no prior terminal): execute_step only, no prior boundary."""
+    from soothe.sloop.prompts.plan_ledger_projection import (
+        _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY,
+    )
+
+    raw = [
+        LoopHumanMessage(content="exec-h", thread_id="t", iteration=0, phase="execute_step"),
+        LoopAIMessage(content="exec-ai", thread_id="t", iteration=0, phase="execute_step"),
+    ]
+    proj = project_loop_messages_for_synthesis(raw, None)
+    assert len(proj) == 2
+    assert extract_join(proj) == "exec-hexec-ai"
+    assert _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY.strip() not in extract_join(proj)
+
+
 # ── IG-555: Prior Goal Completion Bias Mitigation ─────────────────────────────
 
 

@@ -74,17 +74,6 @@ def _prior_goals_from_checkpoint(
     return out
 
 
-def _enrich_prior_goals(
-    prior_goals: list[Any],
-    checkpoint: Any | None,
-    *,
-    exclude_goal_id: str | None,
-) -> list[Any]:
-    """Return prior goals unchanged — completion text is resolved from CE/ledger."""
-    _ = checkpoint, exclude_goal_id
-    return prior_goals
-
-
 def _format_dag_context(dag_ctx: Any) -> str:
     """Format DagPlanningContext as plain-text DAG STATUS section for prompt injection."""
     if not dag_ctx or not dag_ctx.has_prior_state:
@@ -157,12 +146,10 @@ class PromptBuilder:
             )
         completion_in_ledger = projected_ledger_has_goal_completion(projected)
 
-        prior_goals = _enrich_prior_goals(
+        prior_goals = (
             list(context_bundle.prior_goals)
             if context_bundle and context_bundle.prior_goals
-            else [],
-            checkpoint,
-            exclude_goal_id=exclude_goal_id,
+            else []
         )
         if not prior_goals and projection_mode == "new_goal":
             prior_goals = _prior_goals_from_checkpoint(checkpoint, exclude_goal_id=exclude_goal_id)

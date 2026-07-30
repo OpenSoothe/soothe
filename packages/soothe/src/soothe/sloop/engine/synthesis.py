@@ -10,8 +10,9 @@ Separation of concerns (IG-300 / IG-652):
 - ``sloop/engine/synthesis.py``: Execution ("how to synthesize?")
 
 Checkpoint isolation (IG-302): synthesis uses a fresh LangGraph ``thread_id`` so the
-checkpointer does not replay the parent thread. The model receives execute-step ledger
-messages plus a context human envelope and system report instructions.
+checkpointer does not replay the parent thread. The model receives current-goal
+execute-step ledger messages (plus optional compact prior status; IG-662), a TASK
+human envelope, and system report instructions.
 """
 
 from __future__ import annotations

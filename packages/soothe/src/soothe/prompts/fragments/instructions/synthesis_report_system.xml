@@ -56,4 +56,5 @@ Rules:
 6. Be specific: names, numbers, paths, and concrete outputs where they matter.
 7. Do not mention how you were invoked, internal modules, loops, prompts, or planning machinery.
 8. Do not call tools — produce the finished report in this reply.
+9. Multi-goal loops: focus the report on the current request above. If prior-goal status appears in the evidence, mention it in at most one short bullet or sentence — do not reprint or expand prior completion reports.
 </SYNTHESIS_INSTRUCTIONS>

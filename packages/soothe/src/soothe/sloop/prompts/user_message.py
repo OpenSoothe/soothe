@@ -319,27 +319,6 @@ def _render_prior_goals_tree(
     return "\n\n".join(blocks)
 
 
-def _render_prior_goals_section(prior_goals: list[PriorGoalSummary]) -> str:
-    """Render completed prior goals for continuation-mode plan prompts."""
-    if not prior_goals:
-        return ""
-    blocks: list[str] = []
-    for summary in prior_goals:
-        description = (summary.description or "").strip()
-        if not description:
-            continue
-        status = (summary.status or "unknown").strip()
-        block_lines = [f"- [{summary.goal_id}] {description} ({status})"]
-        step_summary = (summary.step_summary or "").strip()
-        if step_summary:
-            block_lines.append(step_summary)
-        completion = (summary.completion_text or "").strip()
-        if completion:
-            block_lines.append(completion)
-        blocks.append("\n".join(block_lines))
-    return "\n\n".join(blocks)
-
-
 def render_prior_steps_tree(
     prior_steps: list[Any],
     *,
@@ -391,17 +370,13 @@ def _append_plan_context_sections(
     if prior_goals is None and context_bundle is not None:
         prior_goals = context_bundle.prior_goals
 
-    if is_new_goal and prior_goals:
+    if prior_goals:
         tree = _render_prior_goals_tree(
             prior_goals,
             completion_in_ledger=completion_in_ledger,
         )
         if tree:
             sections.append(("PRIOR GOALS", tree))
-    elif not is_new_goal and prior_goals:
-        prior_goals_text = _render_prior_goals_section(prior_goals)
-        if prior_goals_text:
-            sections.append(("PRIOR GOALS", prior_goals_text))
 
     if context_bundle is not None:
         goal_lineage = (context_bundle.goal_lineage or "").strip()
@@ -832,7 +807,8 @@ class UserMessageBuilder:
         """Build the closing task prompt for goal-completion synthesis.
 
         GOAL, INTENT, contextual focus, evidence emphasis, and step summaries
-        live in the system prompt and execute-step ledger messages — not here.
+        live in the system prompt and current-goal execute-step ledger messages
+        (IG-662) — not here.
         """
         return _render_sections(
             [
@@ -844,7 +820,9 @@ class UserMessageBuilder:
                     "4. Use a clear Markdown outline (`##` headings); prefer bullets, "
                     "GFM tables, code fences, and mermaid over long prose\n"
                     "5. Adapt the suggested outline if present — drop empty sections, "
-                    "rename or add headings when evidence warrants",
+                    "rename or add headings when evidence warrants\n"
+                    "6. Focus on the current request; prior-goal status at most one short "
+                    "mention — do not reprint prior completion reports",
                 ),
             ]
         )
@@ -884,7 +862,6 @@ __all__ = [
     "PRIOR_PROGRESS_OUTCOME_PREVIEW_CHARS",
     "UserMessageBuilder",
     "_append_plan_context_sections",
-    "_render_prior_goals_section",
     "_render_prior_goals_tree",
     "_should_inject_goal_lineage",
     "flatten_user_message_content",

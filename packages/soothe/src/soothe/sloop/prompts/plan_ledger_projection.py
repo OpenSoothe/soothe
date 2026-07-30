@@ -69,6 +69,16 @@ _GOAL_COMPLETION_CONTEXT_BOUNDARY = (
     "Decompose the current goal independently based on its scope.\n"
 )
 
+# IG-662: Boundary for prior terminal units in goal-completion synthesis.
+# Keeps the report focused on the current goal; prior text is status only.
+_SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY = (
+    '<PRIOR_GOAL_CONTEXT role="status_reference">\n'
+    "Prior goal outcome below is background status only.\n"
+    "Write the report for the CURRENT request using current-goal evidence.\n"
+    "Do not reprint or expand the prior report; at most one short status mention.\n"
+)
+_SYNTHESIS_PRIOR_COMPLETION_PREVIEW_CHARS = 400
+
 
 def resolve_planner_projection_mode(state: LoopState) -> PlannerProjectionMode:
     """Return ``new_goal`` at iter=0 before any execution, else ``mid_goal``."""
@@ -1219,27 +1229,98 @@ def project_loop_messages_for_core_agent(
     return out
 
 
+def _compact_terminal_unit_for_synthesis(unit: list[BaseMessage]) -> list[BaseMessage]:
+    """Compact a prior terminal unit for goal-completion synthesis (IG-662).
+
+    Rewrites the human envelope with a synthesis status-reference boundary and
+    truncates the AI body so the model can mention prior status without
+    reprinting the full prior report.
+    """
+    phase: str | None = None
+    for msg in unit:
+        p = getattr(msg, "phase", None)
+        if p in _GOAL_TERMINAL_PHASES:
+            phase = p
+            break
+    if phase == "goal_interrupted":
+        compact_human = "Prior goal was interrupted. Brief status follows."
+    else:
+        compact_human = "Prior goal completed. Brief status follows."
+    compact_human = _SYNTHESIS_PRIOR_GOAL_CONTEXT_BOUNDARY + compact_human
+
+    out: list[BaseMessage] = []
+    for msg in unit:
+        copy_msg = _deep_copy_message(msg)
+        if phase is not None and getattr(copy_msg, "phase", None) == phase:
+            if _is_loop_human_message(copy_msg):
+                copy_msg = _set_message_content(copy_msg, compact_human)
+            elif _is_loop_ai_message(copy_msg):
+                text = extract_text_from_message_content(getattr(copy_msg, "content", ""))
+                preview_limit = _SYNTHESIS_PRIOR_COMPLETION_PREVIEW_CHARS
+                if preview_limit > 0 and len(text) > preview_limit:
+                    text = text[: preview_limit - 1].rstrip() + "…"
+                copy_msg = _set_message_content(copy_msg, text)
+        out.append(copy_msg)
+    return out
+
+
+def _project_prior_goal_for_synthesis(
+    loop_messages: list[BaseMessage],
+    *,
+    before_index: int,
+    ledger_cfg: PlanPromptLedgerConfig | None,
+) -> list[BaseMessage]:
+    """Project one compacted prior terminal unit for synthesis (IG-662)."""
+    found = resolve_goal_terminal_unit(loop_messages, before_index)
+    if found is None:
+        return []
+    unit, _start = found
+    compacted = _compact_terminal_unit_for_synthesis(unit)
+    return project_loop_messages_for_plan(compacted, ledger_cfg)
+
+
 def project_loop_messages_for_synthesis(
     loop_messages: list[BaseMessage],
     ledger_cfg: PlanPromptLedgerConfig | None = None,
 ) -> list[BaseMessage]:
-    """Return execute_step ledger messages for goal-synthesis prompts (RFC-214).
+    """Return ledger messages for goal-synthesis prompts (RFC-214, IG-662).
 
     Unlike plan-assess / plan-generate, synthesis injects only ``execute_step``
-    human/AI turns — plan-phase reasoning is excluded. Optional ``plan_prompt_ledger``
-    caps apply to the filtered slice (same trimming as plan prompts).
+    human/AI turns from the **current goal segment** — plan-phase reasoning and
+    prior-goal execute rows are excluded. When a prior terminal exists on the
+    same loop, one compacted prior completion/interrupted unit is prepended as
+    brief status reference (not full prior execute evidence).
+
+    Optional ``plan_prompt_ledger`` caps apply to the filtered slice (same
+    trimming as plan prompts).
 
     Args:
         loop_messages: RFC-214 complete ledger from ``LoopState.loop_messages``.
         ledger_cfg: Optional size caps; ``None`` treated as all limits disabled.
 
     Returns:
-        Filtered execute_step messages, optionally deep-trimmed copies.
+        Current-goal execute_step messages (plus optional compact prior status),
+        optionally deep-trimmed copies.
     """
-    execute_only = project_loop_messages_for_core_agent(loop_messages)
-    projected = project_loop_messages_for_plan(execute_only, ledger_cfg)
+    seg_start = _current_goal_segment_start(loop_messages)
+    current_segment = loop_messages[seg_start:]
+    execute_only = project_loop_messages_for_core_agent(current_segment)
+
+    prior_msgs: list[BaseMessage] = []
+    if seg_start > 0:
+        prior_msgs = _project_prior_goal_for_synthesis(
+            loop_messages,
+            before_index=seg_start,
+            ledger_cfg=ledger_cfg,
+        )
+
+    combined = prior_msgs + execute_only
+    projected = project_loop_messages_for_plan(combined, ledger_cfg)
     logger.debug(
-        "Synthesis ledger projection: %d execute_step messages (filtered from %d total)",
+        "Synthesis ledger projection: seg_start=%d prior=%d execute=%d out=%d (from %d total)",
+        seg_start,
+        len(prior_msgs),
+        len(execute_only),
         len(projected),
         len(loop_messages),
     )
