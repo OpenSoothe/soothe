@@ -5,6 +5,23 @@ All notable changes to the Soothe project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.9.10] - 2026-07-30
+
+### Fixed
+- CLI reconnect retry after a mid-turn WebSocket drop no longer resends an empty
+  `loop_input` for slash-skill turns; the queued `/skill:…` selector line is
+  resent, and contentless turns are not retried (avoids
+  "loop_id and non-empty content required")
+- Require `soothe-nano>=1.0.12` / `wizsearch>=1.1.9` / `tarzi>=0.1.11` so
+  blocking web search releases the Python GIL; previously tarzi held the GIL
+  across headless-browser I/O and froze the daemon event loop / heartbeats
+  during `deep_research` / wizsearch fan-out
+
+### Changed
+- Raise daemon `soothe` floor pin to `>=0.9.10`
+
+[Compare with previous version]: https://github.com/mirasoth/soothe/compare/v0.9.9...v0.9.10
+
 ## [v0.9.9] - 2026-07-30
 
 ### Fixed
