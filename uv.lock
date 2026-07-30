@@ -8597,7 +8597,7 @@ requires-dist = [
     { name = "sqlite-vec", specifier = ">=0.1.0" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=5.0.0" },
     { name = "wcmatch", specifier = ">=10.1" },
-    { name = "wizsearch", specifier = ">=1.1.8,<2.0.0" },
+    { name = "wizsearch", specifier = ">=1.1.9,<2.0.0" },
 ]
 provides-extras = ["dev"]
 
@@ -8775,25 +8775,25 @@ wheels = [
 
 [[package]]
 name = "tarzi"
-version = "0.1.10"
+version = "0.1.11"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/92/3c/80b9b940a73c1662c31774211f566e4ac4654577fb0e23006e2ceb6c6b5b/tarzi-0.1.10.tar.gz", hash = "sha256:4a6af822ba9ecb7c06ff5ecbd3ff71943e87a52eab81fec22752cc3e272af15c", size = 1221629, upload-time = "2026-03-01T16:28:16.476Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/1c/9fd9b2d65cf7e2afd712417d699cdab07be1d485e8e21138b4cf0f3b8a01/tarzi-0.1.11.tar.gz", hash = "sha256:38ba89ccce6478e5df0a59b342f50b44fd3691627e31d5450454f12866661452", size = 1223132, upload-time = "2026-07-30T12:48:30.693Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/19/f3/3ec65f6f29fe28470f7a9d78aaddc6ffeffb6285f2d86f903d71af9476f9/tarzi-0.1.10-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:747c54c069af9a202724fc95d4eb9d62791c88bcc2c0354d9ee91e796065e8e1", size = 4208974, upload-time = "2026-03-01T16:27:52.883Z" },
-    { url = "https://files.pythonhosted.org/packages/61/5a/bbd29a1b6723538ba9c7872050ffa074f191b0d661cb6d9ddf4e2fe8ddb5/tarzi-0.1.10-cp311-cp311-macosx_15_0_x86_64.whl", hash = "sha256:8f74b0d6785eb1a748f526d9c4540028aabb9f97fa648b9989aa1908b8718674", size = 4386460, upload-time = "2026-03-01T16:27:54.258Z" },
-    { url = "https://files.pythonhosted.org/packages/25/2c/1850dd9220ac048eac2d6a8c811ccdba1818da325b3a032d43c1338f8184/tarzi-0.1.10-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:7c71fe2e6f1c8a67110895938c937b9909c8587195b0823e02b1752fef725b65", size = 4511678, upload-time = "2026-03-01T16:27:55.607Z" },
-    { url = "https://files.pythonhosted.org/packages/d4/e8/1362ebca3447ba42c4f26a0d54e9894214969fa146707deb2ba8de84f306/tarzi-0.1.10-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:a09b3e17442be0047b34a657f2f9a659997628fe040329b26339854c0cc8fc10", size = 4206881, upload-time = "2026-03-01T16:27:57.077Z" },
-    { url = "https://files.pythonhosted.org/packages/e2/85/20edb501c4c5f1895389e1c236adff63d5d1693134e9b2630b919037b097/tarzi-0.1.10-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:1ca0663eab8f0266a4190fb46c98ffad7261af4abc75abed9a6b196b20a965cd", size = 4385498, upload-time = "2026-03-01T16:27:58.49Z" },
-    { url = "https://files.pythonhosted.org/packages/cd/87/749c1c97f399065201972bba59ba7a2d15c0f553e69990f9227804e19203/tarzi-0.1.10-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:ac2ab6f444a984a8083dbc94a1bd2e9428a420774ae9cc2cfc0ddb55f36258c4", size = 4508078, upload-time = "2026-03-01T16:28:00.1Z" },
-    { url = "https://files.pythonhosted.org/packages/f4/0a/93b39ec71e1403aa9ee976e2167b22a542ffec55ceb8e3ef0f0aa72189ce/tarzi-0.1.10-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:2c6464a738ddee50b03d43c2aa54ba36a09941bd196d97386278b525e91cdc87", size = 4207021, upload-time = "2026-03-01T16:28:01.806Z" },
-    { url = "https://files.pythonhosted.org/packages/40/10/1669d6fb9ca044375c20bf11a867af4dccb8952782e3b6e42dcb43dd8366/tarzi-0.1.10-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:309515f812bfed51e90b08a68330e1e4c765d13ea85e5a1d6869d39ee48b440a", size = 4385025, upload-time = "2026-03-01T16:28:03.614Z" },
-    { url = "https://files.pythonhosted.org/packages/53/df/ab7adba8791d44fc302ce04cc2d983937da12fbffdb06f84d64db0ca6e4b/tarzi-0.1.10-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:4526f2c33d49dcb0f403b5395d798b4d651975b482c970a8e93ffd976b2c567f", size = 4507210, upload-time = "2026-03-01T16:28:05.301Z" },
-    { url = "https://files.pythonhosted.org/packages/25/e4/12307780a4550debfde2be9ca6942f4be75f81ba118c5bc3aeac43eefe63/tarzi-0.1.10-cp314-cp314-macosx_15_0_arm64.whl", hash = "sha256:c7ca361a523e30ff03d37bda3f41f91b3962a7de3e4ad1c3ee85a7c700f0d0c6", size = 4206755, upload-time = "2026-03-01T16:28:06.815Z" },
-    { url = "https://files.pythonhosted.org/packages/ab/38/148caae455fb780926e402002f611ba518f75bb1b9180582eb8ad6ef7201/tarzi-0.1.10-cp314-cp314-macosx_15_0_x86_64.whl", hash = "sha256:a4f94544b225056250b9d68b533cd13d6132cff359888a2d6660a466b5b454ca", size = 4385011, upload-time = "2026-03-01T16:28:08.187Z" },
-    { url = "https://files.pythonhosted.org/packages/fb/f9/bf1d1ca0f90dd097d946541049d1ddf132d747a5b31ca65f5d1ee78e3874/tarzi-0.1.10-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:c492394016d8c97fc3da233048d916efa413522f5c77e761cc7d83a1c9e80e7f", size = 4507236, upload-time = "2026-03-01T16:28:09.68Z" },
-    { url = "https://files.pythonhosted.org/packages/9c/3c/7366925cbed3eaf7c4e49c7c5e97f94ddfe5f36ff237612f377e2c2e3b40/tarzi-0.1.10-cp314-cp314t-macosx_15_0_arm64.whl", hash = "sha256:7edf88f7474ce23262277d62fef36751ee19c61740db43460f9609a0ae3697cf", size = 4205155, upload-time = "2026-03-01T16:28:11.084Z" },
-    { url = "https://files.pythonhosted.org/packages/26/ed/aeace057969d3d66ed44d122fdff6b87c76f95154916ed70fc721d4432c9/tarzi-0.1.10-cp314-cp314t-macosx_15_0_x86_64.whl", hash = "sha256:05396fd7a896daa07e67f7305dd0c765b862fd80aaf1ee69ea37ea492a300c5c", size = 4383471, upload-time = "2026-03-01T16:28:12.486Z" },
-    { url = "https://files.pythonhosted.org/packages/75/d2/42bd9fca15ed1d55d3bc0e105a5e182eab98c422e481386e92bb019d8b52/tarzi-0.1.10-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:44109965173f2f2e1f34f7fef85473eefd43cc9b7fe96a24efcda1fb4a864000", size = 4503840, upload-time = "2026-03-01T16:28:14.116Z" },
+    { url = "https://files.pythonhosted.org/packages/61/6e/aa4b23631841c2778211ba44df70d6f983ef660b1dac05e7d0d6e15b5312/tarzi-0.1.11-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:1c208fc07565b0d16c738f6f247f970f1b14fff6bdeb2da376cfd713262551f4", size = 4200277, upload-time = "2026-07-30T12:48:04.592Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/a3/7a66a8e1e46e55ce0a106c02b649c80a0dacdfa52b38d0ad024739b8c85d/tarzi-0.1.11-cp311-cp311-macosx_15_0_x86_64.whl", hash = "sha256:a57cbe87e1cc02137aea2e9f9fb2b02e496b9ac3ac523fbdf5787c74682fdfab", size = 4356666, upload-time = "2026-07-30T12:48:06.386Z" },
+    { url = "https://files.pythonhosted.org/packages/f6/6d/b800c3a667e90b8f36414f8a43cdc9dfb9e006366bd318d43cdcfd9d3044/tarzi-0.1.11-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:12d65570fe2e5e73e02075e5b319d89eb7f514a2a659207438187b9881c8a1d6", size = 4512311, upload-time = "2026-07-30T12:48:08.26Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/8c/9180f5049eef1ce0cfff71070d79c08a361f2b69d563ce613539c9f0ec22/tarzi-0.1.11-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:e696bb7689f420314c9fc698cd3fdcbfe07e972a77129c071e949d3744305a88", size = 4200406, upload-time = "2026-07-30T12:48:10.029Z" },
+    { url = "https://files.pythonhosted.org/packages/23/6b/ce7b59983fa637df9ad472fd6c5cca96b52905fc5f3b65ca31206d5a594e/tarzi-0.1.11-cp312-cp312-macosx_15_0_x86_64.whl", hash = "sha256:cb1c81ea78693440e9317330a2a9544da388bc5b6ee809dec1a2a261d7d1a95e", size = 4355830, upload-time = "2026-07-30T12:48:12.005Z" },
+    { url = "https://files.pythonhosted.org/packages/f8/6f/f34458dcf28d24d2ed863e280c3333e9b87558bfd1e97f33138c45d5cad8/tarzi-0.1.11-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:e18ee55a8384c7c0e3064de40c427b0bc18613d8ff49379656ca460cc7d1c3e7", size = 4512959, upload-time = "2026-07-30T12:48:13.706Z" },
+    { url = "https://files.pythonhosted.org/packages/32/ac/bf981246e13029e50ce57e4c307d71e486483f60700bf49af25c02b29171/tarzi-0.1.11-cp313-cp313-macosx_15_0_arm64.whl", hash = "sha256:2bc9ae88f93e37a2b39c1e181e54e502efa66238a0f8611e57a57b7f2c4b2fc5", size = 4200243, upload-time = "2026-07-30T12:48:15.274Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/cd/3b9e7c965ceae920f1e6bd156a9db922188a1aa079b8462dc7f79b2a36db/tarzi-0.1.11-cp313-cp313-macosx_15_0_x86_64.whl", hash = "sha256:e44f1589381052354a75e7ee4167e5e897902a6a8f74e79c0a3ce448f9166449", size = 4355853, upload-time = "2026-07-30T12:48:16.973Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/ea/4251ccab24fa090c2f36fac0c0c6b91ea2da35033777383397e4d5c67b12/tarzi-0.1.11-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:08b6272f2fe4bb3acd48c3bea163edb8c4a4fe39e4a632b6c2cf6bfc35302eb4", size = 4513726, upload-time = "2026-07-30T12:48:18.789Z" },
+    { url = "https://files.pythonhosted.org/packages/28/ec/e9c9e87c15cd2ec507c8a1030f68135f499b160f428d4601012fecea18fd/tarzi-0.1.11-cp314-cp314-macosx_15_0_arm64.whl", hash = "sha256:cc40c76ab92bc4d93a60a7a7ee11b5e9f3e010ccf8f9b3419ce08c30a05991aa", size = 4195941, upload-time = "2026-07-30T12:48:20.471Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/22/cf77b0459d0e35d934ed1e9f0f8d06a19466a7a2c225d27ad78afd69ffcf/tarzi-0.1.11-cp314-cp314-macosx_15_0_x86_64.whl", hash = "sha256:4eccfebd992d3ef5fb95e82b5a173172dcf7e1cefbe4f7869cf08645b005bb30", size = 4354017, upload-time = "2026-07-30T12:48:22.334Z" },
+    { url = "https://files.pythonhosted.org/packages/5b/bd/9ba6514d00acdab275ce4860727b39310b6f6644a8a94228bc46644bc5d8/tarzi-0.1.11-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:895388b91873058a1cadffc1935003efba8380311f91123551107d69f7ae7228", size = 4512043, upload-time = "2026-07-30T12:48:24.013Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/e1/1ebde724744fbdcf304ce650cef7190dfbd2f5d485ff59ba4621687cf1c9/tarzi-0.1.11-cp314-cp314t-macosx_15_0_arm64.whl", hash = "sha256:2867bb949fa6b9a49ad50e866cae2542ce27cd00f19aa94bc3878d6853c5a49b", size = 4201193, upload-time = "2026-07-30T12:48:25.762Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/c7/e326fa54de554e6d33ff8b33dceb11774665bb768594859ca161ffed9395/tarzi-0.1.11-cp314-cp314t-macosx_15_0_x86_64.whl", hash = "sha256:b21b818c5f2fff273bbb6755a223cc57658a386235d0431fe7d9629c64efc7e7", size = 4357338, upload-time = "2026-07-30T12:48:27.496Z" },
+    { url = "https://files.pythonhosted.org/packages/76/b6/6d9f1f4e306c1fee3f3a80cb61dcd5a801bc54297e04348df8972e01edfd/tarzi-0.1.11-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:92661aa5b284bb0305fedf73335ceae40646320610b266fcba6b933adfbff447", size = 4511481, upload-time = "2026-07-30T12:48:29.263Z" },
 ]
 
 [[package]]
@@ -9571,7 +9571,7 @@ wheels = [
 
 [[package]]
 name = "wizsearch"
-version = "1.1.8"
+version = "1.1.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -9583,9 +9583,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "tarzi" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5f/60/c5dfe847cfaa8fb58a9c8278b43e8ca3e069e35cf7552b0e69e5fdbe1381/wizsearch-1.1.8.tar.gz", hash = "sha256:b05c0edd351e7d044ef4ffed1ecfbaf8a22dce19158cad398ef648e75c212d10", size = 46171, upload-time = "2026-03-23T05:43:32.281Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/28/c8/6416b4a4871503f666809814e7bacd261e57487438777cd09c1a82674645/wizsearch-1.1.9.tar.gz", hash = "sha256:1fd12ba481f2daa5f5f0025c06721db7485f439f810c4ec55458b28b5fc86c6a", size = 48884, upload-time = "2026-07-30T12:55:01.504Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/8f/dd3bf01f07a1f79b091fe9a2b4f439d1d29deba770141e4d2759e72e75db/wizsearch-1.1.8-py3-none-any.whl", hash = "sha256:0ca94e5119a847e2afe36c42ddbe9ffae02170cbabc42920819732e48d4b44be", size = 49793, upload-time = "2026-03-23T05:43:30.918Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/f6/ac37f92c64863e3ce11e3c75ced2c17a9bff1a1f56146a3c33fb763333f3/wizsearch-1.1.9-py3-none-any.whl", hash = "sha256:bf03233b090c661543ed2ca54467d534cae864ee4705788690fd655cd930c289", size = 50845, upload-time = "2026-07-30T12:55:00.285Z" },
 ]
 
 [[package]]
