@@ -70,22 +70,25 @@ def test_token_budget_suffix_output_only() -> None:
     assert "out:200" in suffix
 
 
-def test_record_token_usage_refreshes_running_status_line() -> None:
-    """Token counts appear in the running status line immediately, like tool stats."""
+def test_record_token_usage_refreshes_running_title_meta() -> None:
+    """Token counts appear in compact title meta immediately (IG-664)."""
     card = CognitionStepMessage("TKN-07", "Token stats", id="stp-tkn-run")
     card._status = "running"
     card._start_time = 0.0
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    mock_status = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = mock_status
 
     with patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()):
         card.record_token_usage(1200, 340)
 
-    assert mock_status_widget.update.called
-    text = _extract_content_text(mock_status_widget.update.call_args[0][0])
-    assert "in:1.2K" in text
-    assert "out:340" in text
-    assert "Running..." in text
+    assert mock_header.update.called
+    text = _extract_content_text(mock_header.update.call_args[0][0])
+    assert "↑1.2K" in text
+    assert "↓340" in text
+    assert "Running..." not in text
+    assert mock_status.display is False
 
 
 def test_subagent_completion_status_includes_token_suffix() -> None:

@@ -23,7 +23,6 @@ from soothe_cli.tui.config import get_glyphs
 from soothe_cli.tui.preview_limits import STEP_CARD_SHOW_TOOL_ROW_DETAILS
 from soothe_cli.tui.tool_display import format_step_tool_activity_line
 from soothe_cli.tui.widgets.clipboard import (
-    clear_widget_text_selection,
     screen_has_text_selection,
 )
 from soothe_cli.tui.widgets.messages._helpers import (
@@ -41,9 +40,13 @@ from soothe_cli.tui.widgets.messages.cognition_step_activity import (
     StepRowClassifier,
     StepRowIndex,
     branched_prose_body,
+    coerce_todos_list,
+    compact_step_title_meta,
     finalize_tool_rows_on_step_end,
     has_task_activity_body,
+    is_write_todos_tool_name,
     latest_preview_rows,
+    normalize_todo_items,
     normalized_task_note_key,
     phase_icon,
     stats_title_suffix,
@@ -69,13 +72,11 @@ class _DeferredStepComplete(NamedTuple):
 
 
 class CognitionStepMessage(Vertical):
-    """Agent-loop act step card (RFC-628).
+    """Agent-loop act step card (RFC-628 / IG-664).
 
-    Header is the step description only. Task delegations render in a branch panel
-    (``Name(desc)`` plus the latest tool activity lines and nested stats). Footer and
-    branch Running lines show tool totals via ``stats_title_suffix`` on ``StepRowIndex``
-    (e.g. `` · 12 tools, 1 task`` on the footer; `` · 6 tools`` under a delegation branch).
-    The status line is always the last body line (running, pending, completed, failed).
+    Header is the full step description plus compact live meta while running
+    (`` · 45s · 12/1 · ↑8.1K ↓2.0K``). Activity nests under Todo then Tools.
+    The Running footer line is omitted; Completed/Failed/Pending footers remain.
     Optional full tool lists use ``STEP_CARD_SHOW_TOOL_ROW_DETAILS``. Click toggles
     manual whole-card collapse; cards do not auto-collapse.
 
@@ -177,7 +178,7 @@ class CognitionStepMessage(Vertical):
         self._tools_body_collapsed: bool = False
         self._subagent_notes: list[str] = []
         self._subagent_notes_by_task: dict[str, list[str]] = {}
-        self._running_stage: str = ""
+        self._todos: list[dict[str, str]] = []
         self._execute_assistant_buffer: str = ""
         self._last_completed_execute_prose: str = ""
         """Execute-step prose frozen when ``set_complete`` runs (TUI dedupe vs goal_completion)."""
@@ -237,14 +238,39 @@ class CognitionStepMessage(Vertical):
         parts.append(f"out:{format_token_count(self._output_tokens)}")
         return " · " + " ".join(parts)
 
+    def _compact_title_meta_suffix(self) -> str:
+        """Live compact meta for the step title while running (IG-664)."""
+        if self._status != "running":
+            return ""
+        from soothe_cli.runtime.state.session_stats import format_token_count
+
+        index = self._build_row_index()
+        elapsed_secs: int | None = None
+        if self._start_time is not None:
+            elapsed_secs = int(time() - self._start_time)
+        return compact_step_title_meta(
+            elapsed_secs=elapsed_secs,
+            tool_count=index.total_tool_count,
+            task_count=index.task_delegation_count,
+            input_tokens=self._input_tokens,
+            output_tokens=self._output_tokens,
+            retry_attempt=self._retry_attempt,
+            max_retry_attempts=self._max_retry_attempts,
+            format_token=format_token_count,
+        )
+
     def _step_header_content(self) -> Content:
-        return _assemble_card_header(
+        header = _assemble_card_header(
             self,
             self._description,
             status=self._status,
             spinner_position=self._spinner_position,
             animate_running=self._status == "running",
         )
+        meta = self._compact_title_meta_suffix()
+        if not meta:
+            return header
+        return Content.assemble(header, Content.styled(meta, theme.SECONDARY_TEXT_STYLE))
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -393,7 +419,9 @@ class CognitionStepMessage(Vertical):
     def _has_task_activity_body(self) -> bool:
         """True when the step card should show the task-activity tree panel."""
         index = self._build_row_index()
-        return has_task_activity_body(index, self._subagent_notes, self._subagent_notes_by_task)
+        return has_task_activity_body(
+            index, self._subagent_notes, self._subagent_notes_by_task, self._todos
+        )
 
     @staticmethod
     def _latest_preview_rows(
@@ -429,8 +457,46 @@ class CognitionStepMessage(Vertical):
     def _normalized_task_note_key(self, task_tool_call_id: str) -> str:
         return normalized_task_note_key(self._step_id, task_tool_call_id)
 
+    def set_todos(self, todos: list[Any] | None) -> None:
+        """Replace CoreAgent todo list shown under the Todo section (IG-664)."""
+        if self._apply_todos_payload(todos):
+            self._sync_step_card_surface()
+
+    def _apply_todos_payload(self, todos: object) -> bool:
+        """Normalize and store todos. Returns True when the list changed.
+
+        Empty payloads are ignored so short-circuited empty ``write_todos`` does
+        not clear a previously shown list.
+        """
+        if not isinstance(todos, list):
+            return False
+        normalized = normalize_todo_items(todos)
+        if not normalized or normalized == self._todos:
+            return False
+        self._todos = normalized
+        return True
+
+    def _maybe_apply_write_todos_args(self, tool_name: str, args: dict[str, Any] | None) -> bool:
+        """Derive Todo section from ``write_todos`` tool args (daemon has no todo emit)."""
+        if not is_write_todos_tool_name(tool_name):
+            return False
+        payload = args if isinstance(args, dict) else {}
+        todos = coerce_todos_list(payload.get("todos"))
+        if todos is None:
+            raw = payload.get("_raw")
+            if isinstance(raw, str) and raw.strip():
+                try:
+                    loaded = json.loads(raw)
+                except (TypeError, ValueError):
+                    loaded = None
+                if isinstance(loaded, dict):
+                    todos = coerce_todos_list(loaded.get("todos"))
+                elif isinstance(loaded, list):
+                    todos = loaded
+        return self._apply_todos_payload(todos)
+
     def _step_task_activity_content(self) -> Content:
-        """Task delegations, latest tool activity lines, and notes under the step title."""
+        """Todo then Tools (task markers, tool preview, notes) under the step title."""
         g = get_glyphs()
         try:
             colors = theme.get_theme_colors(self)
@@ -446,6 +512,7 @@ class CognitionStepMessage(Vertical):
             spinner_position=self._spinner_position,
             colors=colors,
             g=g,
+            todos=self._todos,
         )
 
     def _sync_step_card_surface(self) -> None:
@@ -465,7 +532,9 @@ class CognitionStepMessage(Vertical):
             except Exception:  # noqa: BLE001
                 activity_widget = None
         if activity_widget is not None:
-            show = has_task_activity_body(index, self._subagent_notes, self._subagent_notes_by_task)
+            show = has_task_activity_body(
+                index, self._subagent_notes, self._subagent_notes_by_task, self._todos
+            )
             if show:
                 activity_widget.update(self._step_task_activity_content())
                 activity_widget.display = True
@@ -473,7 +542,7 @@ class CognitionStepMessage(Vertical):
                 activity_widget.display = False
 
         if self._status == "running":
-            self._sync_running_status_text(index)
+            self._sync_running_status_text()
         elif self._status == "pending":
             self._refresh_pending_display(index)
 
@@ -498,15 +567,6 @@ class CognitionStepMessage(Vertical):
         else:
             self._subagent_notes.append(text)
         self._sync_step_card_surface()
-
-    def set_running_stage(self, stage: str) -> None:
-        """Set extended Running-line stage text (e.g. ``recon 1/4``, ``drafting 2/5``).
-
-        Shown after ``Running`` on the status footer; does not add activity notes.
-        """
-        self._running_stage = (stage or "").strip()
-        if self._status == "running":
-            self._sync_running_status_text()
 
     def _stats_title_suffix(self) -> str:
         """Step status suffix: total tool count plus task delegation count."""
@@ -844,6 +904,7 @@ class CognitionStepMessage(Vertical):
                 row.started_at = time()
         self._rows.append(row)
         self._row_index[tcid] = row
+        self._maybe_apply_write_todos_args(row.tool_name, row_args)
         self._refresh_header_title()
         self._sync_step_card_surface()
 
@@ -940,6 +1001,7 @@ class CognitionStepMessage(Vertical):
         if merged == row.args:
             return
         row.args = merged
+        self._maybe_apply_write_todos_args(row.tool_name, merged)
         self._sync_step_card_surface()
 
     def set_tool_running(self, tool_call_id: str) -> None:
@@ -1072,42 +1134,13 @@ class CognitionStepMessage(Vertical):
         self._refresh_header_title()
         self._sync_step_card_surface()
 
-    def _sync_running_status_text(self, index: StepRowIndex | None = None) -> None:
-        """Update running status line text immediately (no visibility check)."""
-        if self._status != "running" or self._status_widget is None:
+    def _sync_running_status_text(self) -> None:
+        """Hide the Running footer; live meta lives on the step title (IG-664)."""
+        if self._status != "running":
             return
-        if index is None:
-            index = self._build_row_index()
-        g = get_glyphs()
-        frames = g.spinner_frames
-        frame = frames[self._spinner_position]
-        elapsed_secs: int | None = None
-        if self._start_time is not None:
-            elapsed_secs = int(time() - self._start_time)
-        try:
-            colors = theme.get_theme_colors(self)
-        except Exception:  # noqa: BLE001
-            colors = theme.DARK_COLORS
-        gutter = f"{g.output_prefix} "
-        stats_suffix = stats_title_suffix(index)
-        token_suffix = self._token_budget_suffix()
-        retry_suffix = ""
-        if self._retry_attempt > 0 and self._max_retry_attempts > 0:
-            retry_suffix = f" ({self._retry_attempt}/{self._max_retry_attempts} attempts)"
-        clear_widget_text_selection(self._status_widget)
-        self._status_widget.display = True
-        self._status_widget.update(
-            StepCardStatusLine.footer_running(
-                gutter=gutter,
-                spinner_frame=frame,
-                elapsed_secs=elapsed_secs,
-                stats_suffix=stats_suffix,
-                token_suffix=token_suffix,
-                retry_suffix=retry_suffix,
-                stage_suffix=getattr(self, "_running_stage", "") or "",
-                colors=colors,
-            )
-        )
+        if self._status_widget is not None:
+            self._status_widget.display = False
+        self._refresh_header_title()
 
     def _refresh_pending_display(self, index: StepRowIndex | None = None) -> None:
         """Show waiting state for planned steps that are not executing yet."""
@@ -1138,8 +1171,8 @@ class CognitionStepMessage(Vertical):
             return
         if self._start_time is None:
             self._start_time = time()
-        if self._status_widget:
-            self._status_widget.display = True
+        if self._status_widget is not None:
+            self._status_widget.display = False
         if self._animation_timer is None and getattr(self, "is_mounted", False):
             self._animation_timer = self.set_interval(
                 _RUNNING_SPINNER_INTERVAL_SECONDS,
@@ -1147,7 +1180,7 @@ class CognitionStepMessage(Vertical):
             )
 
     def _ensure_running_ui(self) -> None:
-        """Paint running footer/branch status and start the spinner timer if needed."""
+        """Refresh title meta / activity and start the spinner timer if needed."""
         if self._status != "running":
             return
         self._sync_step_card_surface()
@@ -1187,7 +1220,7 @@ class CognitionStepMessage(Vertical):
 
     def _update_running_animation(self) -> None:
         """Animation timer callback: advance spinner and repaint the card surface."""
-        if self._status != "running" or self._status_widget is None:
+        if self._status != "running":
             return
         if not _is_widget_animation_visible(self):
             return

@@ -64,20 +64,20 @@ When StrangeLoop emits `step.started` / tool wire updates for the **main** strea
 
 ```
 CognitionStepMessage
-├── step-header          (#step-cognition-header)     step description only
-├── step-subagent-notes  (#step-cognition-subagent-notes)  activity tree (RFC-628)
+├── step-header          (#step-cognition-header)     full description + compact live meta
+├── step-subagent-notes  (#step-cognition-subagent-notes)  activity tree (Todo then Tools)
 ├── step-tools           (#step-cognition-tools)        optional full nested list
 ├── step-detail          (#step-cognition-detail)       execute prose / clarification / error
-└── step-status          (#step-cognition-status)       footer status line
+└── step-status          (#step-cognition-status)       Pending / Completed / Failed (no Running)
 ```
 
 | Zone | Visible when | Content |
 |------|--------------|---------|
-| Header | Always | `● {description}` via `_assemble_card_header` |
-| Activity tree | Tool rows, task delegations, or subagent notes exist | `StepActivityTree.render` |
+| Header | Always | `● {description}` plus while running compact meta ` · 45s · 12/1 · ↑8.1K ↓2.0K` (IG-664); description is never truncated |
+| Activity tree | Todos, tool rows, task delegations, or subagent notes exist | `StepActivityTree.render` — **TODO** then **TOOLS** |
 | Tools panel | `STEP_CARD_SHOW_TOOL_ROW_DETAILS = True` | Full nested tool list (default **off**) |
 | Detail | Execute streaming, clarification Q&A, or error prose | `branched_prose_body` |
-| Footer | Step not bare header-only | `StepCardStatusLine` (pending / queued / running / complete) |
+| Footer | Pending / completed / failed (not while running) | `StepCardStatusLine` |
 
 **Invariant:** Non-empty activity body while running ⇒ `#step-cognition-subagent-notes.display == True`.
 
@@ -97,10 +97,14 @@ Rendered by `StepActivityTree.render` from `StepRowIndex` (see below).
 
 ### Render order
 
-1. **Task delegations** — `SubAgentName(description)` label → child tool preview lines → branch status line → per-task subagent notes
-2. **Main-agent tools** — preview lines → main branch Running status when step is `running` **and task delegations exist** (main-only steps rely on footer Running to avoid duplicate lines)
-3. **Orphan subgraph tools** — preview lines → orphan branch Running when step is `running` **and** (task delegations or main tools exist)
-4. **Global subagent notes** — prose/metadata not tied to a task key
+1. **TODO** section (when CoreAgent todos present) — status glyph + content per item.
+   Todos are derived from ``write_todos`` tool-call args on the step card (no
+   dedicated daemon todo emit; execute avoids LangGraph ``updates`` per IG-477).
+2. **TOOLS** section (when tool/task/notes activity exists):
+   - Task delegations — `SubAgentName(description)` label (+ running child tool count)
+   - Main-agent tools — preview lines (+ `+N more tools`)
+   - Per-task / global subagent notes
+3. Empty sections are omitted. When the TODO section is live, `write_todos` tool rows are omitted from the TOOLS preview.
 
 ### Tool line format
 

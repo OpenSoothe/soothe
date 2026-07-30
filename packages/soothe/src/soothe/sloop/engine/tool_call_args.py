@@ -162,15 +162,17 @@ def filter_redundant_stream_tool_updates(
     Daemon ``tool_call_updates_batch`` carries the same kwargs; keep partial-arg updates
     for providers that stream tool JSON incrementally.
 
-    Task delegations and ``_subgraph_tool`` placeholders are never treated as complete —
-    the TUI needs those wire events for subagent card labels and later arg hydration.
+    Task delegations, ``write_todos``, and ``_subgraph_tool`` placeholders are never
+    treated as complete — the TUI needs those wire events for subagent labels and
+    the step-card Todo section (IG-664).
     """
     if not updates:
         return []
     for upd in updates:
         if not isinstance(upd, dict):
             return updates
-        if str(upd.get("name") or "").strip() == "task":
+        name = str(upd.get("name") or "").strip()
+        if name in ("task", "write_todos"):
             return updates
         args = upd.get("args")
         if not _stream_update_has_displayable_args(args):

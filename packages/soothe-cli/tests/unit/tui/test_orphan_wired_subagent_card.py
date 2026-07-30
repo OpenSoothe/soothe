@@ -95,8 +95,8 @@ async def test_orphan_wire_progress_attaches_without_step_widget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orphan_planner_progress_sets_running_stage_not_notes() -> None:
-    """Planner stage progress updates Running · stage; no activity notes."""
+async def test_orphan_planner_progress_swallows_notes() -> None:
+    """Planner progress on orphan cards is swallowed (no activity notes)."""
     adapter = _make_adapter()
     card = await _mount_orphan_subagent_card(
         adapter,
@@ -119,7 +119,6 @@ async def test_orphan_planner_progress_sets_running_stage_not_notes() -> None:
         },
     )
     assert handled is True
-    assert getattr(card, "_running_stage", "") == "drafting 2/5"
     assert not getattr(card, "_subagent_notes", [])
 
 

@@ -7,6 +7,7 @@ colors and glyphs; builders return ``Content``.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,7 +20,7 @@ from soothe_sdk.ux.task_namespace import (
 )
 from textual.content import Content
 
-from soothe_cli.runtime.presentation.duration_format import format_running_elapsed
+from soothe_cli.runtime.presentation.duration_format import format_running_elapsed_compact
 from soothe_cli.tui import theme
 from soothe_cli.tui.commands.subagent_routing import get_subagent_display_name
 from soothe_cli.tui.preview_limits import (
@@ -31,6 +32,18 @@ from soothe_cli.tui.tool_display import (
     format_step_tool_activity_command,
     format_step_tool_activity_status_tail,
 )
+
+# Todo item status → phase_icon input (IG-664).
+_TODO_STATUS_TO_PHASE: dict[str, str] = {
+    "pending": "pending",
+    "in_progress": "running",
+    "completed": "success",
+    "done": "success",
+    "cancelled": "skipped",
+    "canceled": "skipped",
+    "failed": "error",
+    "error": "error",
+}
 
 
 @dataclass
@@ -121,12 +134,95 @@ def stats_title_suffix(index: StepRowIndex) -> str:
     return f" · {', '.join(parts)}"
 
 
+def compact_step_title_meta(
+    *,
+    elapsed_secs: int | None,
+    tool_count: int,
+    task_count: int,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    retry_attempt: int = 0,
+    max_retry_attempts: int = 0,
+    format_token: Any = None,
+) -> str:
+    """Compact middot meta for the step title (IG-664).
+
+    Forms: `` · 45s · 12/1 · ↑8.1K ↓2.0K · ↻1/3``. Description is not truncated;
+    callers append this string after the full step brief.
+    """
+    parts: list[str] = []
+    if elapsed_secs is not None:
+        parts.append(format_running_elapsed_compact(float(elapsed_secs)))
+    if tool_count > 0 or task_count > 0:
+        parts.append(f"{max(0, int(tool_count))}/{max(0, int(task_count))}")
+    if input_tokens or output_tokens:
+        fmt = format_token if callable(format_token) else str
+        parts.append(f"↑{fmt(int(input_tokens))} ↓{fmt(int(output_tokens))}")
+    if retry_attempt > 0 and max_retry_attempts > 0:
+        parts.append(f"↻{int(retry_attempt)}/{int(max_retry_attempts)}")
+    if not parts:
+        return ""
+    return " · " + " · ".join(parts)
+
+
+def normalize_todo_items(todos: list[Any] | None) -> list[dict[str, str]]:
+    """Normalize CoreAgent ``write_todos`` / updates payloads to ``{content, status}``."""
+    out: list[dict[str, str]] = []
+    if not todos:
+        return out
+    for item in todos:
+        if isinstance(item, dict):
+            content = str(item.get("content") or item.get("text") or "").strip()
+            status = str(item.get("status") or "pending").strip().lower() or "pending"
+            if content:
+                out.append({"content": content, "status": status})
+        else:
+            text = str(item or "").strip()
+            if text:
+                out.append({"content": text, "status": "pending"})
+    return out
+
+
+def coerce_todos_list(raw: object) -> list[Any] | None:
+    """Coerce a ``todos`` field to a list (handles JSON strings from streaming)."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            loaded = json.loads(raw)
+        except (TypeError, ValueError):
+            return None
+        if isinstance(loaded, list):
+            return loaded
+    return None
+
+
+def is_write_todos_tool_name(tool_name: object) -> bool:
+    """True for ``write_todos`` / ``WriteTodos`` style names."""
+    name = str(tool_name or "").strip()
+    if not name:
+        return False
+    if name == "write_todos":
+        return True
+    # CamelCase / mixed display forms → snake_case.
+    snake = "".join(("_" + c.lower()) if c.isupper() else c for c in name).lstrip("_")
+    return snake.replace("-", "_").lower() == "write_todos"
+
+
+def todo_status_phase(status: str) -> str:
+    """Map a todo status string to a ``phase_icon`` phase."""
+    return _TODO_STATUS_TO_PHASE.get((status or "pending").strip().lower(), "pending")
+
+
 def has_task_activity_body(
     index: StepRowIndex,
     subagent_notes: list[str],
     subagent_notes_by_task: dict[str, list[str]],
+    todos: list[dict[str, str]] | None = None,
 ) -> bool:
-    """True when the step card should show the task-activity tree panel (IG-513)."""
+    """True when the step card should show the task-activity tree panel (IG-513/IG-664)."""
+    if todos:
+        return True
     if subagent_notes or subagent_notes_by_task:
         return True
     if index.task_delegations:
@@ -481,44 +577,7 @@ def append_tool_activity_lines(
 
 
 class StepCardStatusLine:
-    """Pure footer and branch status line builders."""
-
-    @staticmethod
-    def footer_running(
-        *,
-        gutter: str,
-        spinner_frame: str,
-        elapsed_secs: int | None,
-        stats_suffix: str,
-        token_suffix: str = "",
-        retry_suffix: str = "",
-        stage_suffix: str = "",
-        colors: Any,
-    ) -> Content:
-        """Step card footer while executing.
-
-        Elapsed time uses middot separators (not parentheses), e.g.
-        ``Running... · 12s · recon 1/4 · 3 tools``.
-        """
-        segments: list[str] = []
-        # Elapsed first so a narrow terminal that clips the line end cannot
-        # eat the trailing ``s`` off ``35s`` before stage/tool tails.
-        if elapsed_secs is not None:
-            segments.append(format_running_elapsed(float(elapsed_secs)))
-        stage_text = (stage_suffix or "").strip()
-        if stage_text:
-            segments.append(stage_text)
-        mid = f" · {' · '.join(segments)}" if segments else ""
-        head = f"{gutter}{spinner_frame} Running{retry_suffix}...{mid}"
-        tail = f"{stats_suffix}{token_suffix}"
-        # Keep warning and dim spans in separate Content parts separated by an
-        # unstyled string so markup does not nest at the ``…35s`` boundary.
-        parts: list[object] = [Content.styled(head, colors.warning)]
-        if tail:
-            # Leading space keeps a clean close of the warning span before dim.
-            parts.append(Content(" "))
-            parts.append(Content.styled(tail.lstrip(), theme.SECONDARY_TEXT_STYLE))
-        return Content.assemble(*parts)
+    """Pure footer status line builders (pending / completed; no Running — IG-664)."""
 
     @staticmethod
     def footer_pending(
@@ -560,10 +619,11 @@ class StepCardStatusLine:
 
 
 class StepActivityTree:
-    """Pure render: task delegation markers and main tool preview.
+    """Pure render: Todo + Tools sections under the step title (IG-664).
 
-    Task rows are flat markers. While a task is running, the marker line shows
-    that task's subgraph tool count. Nested child tool lines are not rendered.
+    Task rows are flat markers under Tools. While a task is running, the marker
+    line shows that task's subgraph tool count. Nested child tool lines are not
+    rendered.
     """
 
     @staticmethod
@@ -578,84 +638,112 @@ class StepActivityTree:
         colors: Any,
         g: Any,
         preview_limit: int = STEP_CARD_TOOL_ACTIVITY_PREVIEW_COUNT,
+        todos: list[dict[str, str]] | None = None,
     ) -> Content:
-        """Task delegation markers and main tool preview under the step title."""
-        branch_gutter = f"{g.output_prefix} "
+        """Todo section then Tools section (task markers + main tool preview)."""
+        section_gutter = f"{g.output_prefix}  "
+        item_gutter = f"{g.output_prefix}    "
         parts: list[object] = []
-        first_block = True
+        todo_items = list(todos or [])
 
-        main_preview = latest_preview_rows(index.main_tools, preview_limit)
-        if (
-            not index.task_delegations
-            and not main_preview
-            and not subagent_notes
-            and not subagent_notes_by_task
-        ):
+        main_source = list(index.main_tools)
+        if todo_items:
+            # Avoid duplicating write_todos when the Todo section is live.
+            main_source = [r for r in main_source if not is_write_todos_tool_name(r.tool_name)]
+        main_preview = latest_preview_rows(main_source, preview_limit)
+        has_tools = bool(
+            index.task_delegations or main_preview or subagent_notes or subagent_notes_by_task
+        )
+        if not todo_items and not has_tools:
             return Content("")
 
-        for task_row in index.task_delegations:
+        first_block = True
+        if todo_items:
+            first_block = False
+            parts.append(Content.styled(f"{section_gutter}TODO", theme.SECONDARY_TEXT_STYLE))
+            for item in todo_items:
+                content = str(item.get("content") or "").strip()
+                if not content:
+                    continue
+                status = str(item.get("status") or "pending")
+                phase = todo_status_phase(status)
+                animate = phase == "running" and step_status == "running"
+                icon = phase_icon(
+                    phase,
+                    g,
+                    spinner_position=spinner_position,
+                    animate_running=animate,
+                )
+                tone = task_tool_row_tone_for_phase(phase, colors)
+                parts.append("\n")
+                parts.append(Content.styled(f"{item_gutter}{icon} {content}", tone))
+
+        if has_tools:
             if not first_block:
                 parts.append("\n")
             first_block = False
-            task_key = task_delegation_dedupe_key(task_row, step_id)
-            task_phase = (task_row.phase or "pending").strip().lower()
-            if task_phase == "pending" and step_status == "running":
-                task_phase = "running"
-            task_icon = phase_icon(
-                task_phase,
-                g,
-                spinner_position=spinner_position,
-                animate_running=task_phase == "running",
-            )
-            label = task_delegation_label(task_row)
-            if task_phase == "running":
-                child_count = count_distinct_tool_call_ids(index.children_by_task.get(task_key, []))
-                count_label = format_tool_count_label(child_count, singular="tool", plural="tools")
-                if count_label:
-                    label = f"{label} · {count_label}"
-            task_tone = task_tool_row_tone_for_phase(task_phase, colors)
-            parts.append(
-                Content.styled(
-                    f"{branch_gutter}{task_icon} {label}",
-                    task_tone,
-                )
-            )
+            parts.append(Content.styled(f"{section_gutter}TOOLS", theme.SECONDARY_TEXT_STYLE))
 
-            for note in subagent_notes_by_task.get(task_key, []):
-                text = (note or "").strip()
-                if not text:
+            for task_row in index.task_delegations:
+                parts.append("\n")
+                task_key = task_delegation_dedupe_key(task_row, step_id)
+                task_phase = (task_row.phase or "pending").strip().lower()
+                if task_phase == "pending" and step_status == "running":
+                    task_phase = "running"
+                task_icon = phase_icon(
+                    task_phase,
+                    g,
+                    spinner_position=spinner_position,
+                    animate_running=task_phase == "running",
+                )
+                label = task_delegation_label(task_row)
+                if task_phase == "running":
+                    child_count = count_distinct_tool_call_ids(
+                        index.children_by_task.get(task_key, [])
+                    )
+                    count_label = format_tool_count_label(
+                        child_count, singular="tool", plural="tools"
+                    )
+                    if count_label:
+                        label = f"{label} · {count_label}"
+                task_tone = task_tool_row_tone_for_phase(task_phase, colors)
+                parts.append(
+                    Content.styled(
+                        f"{item_gutter}{task_icon} {label}",
+                        task_tone,
+                    )
+                )
+
+                for note in subagent_notes_by_task.get(task_key, []):
+                    text = (note or "").strip()
+                    if not text:
+                        continue
+                    parts.append("\n")
+                    parts.append(Content.styled(f"{item_gutter}{text}", theme.SECONDARY_TEXT_STYLE))
+
+            if main_preview:
+                append_tool_activity_lines(
+                    parts,
+                    main_preview,
+                    gutter=item_gutter,
+                    g=g,
+                    colors=colors,
+                    spinner_position=spinner_position,
+                    animate_running=step_status == "running",
+                )
+                hidden_tools = len(main_source) - len(main_preview)
+                if hidden_tools > 0:
+                    label = f"+{hidden_tools} more tool{'s' if hidden_tools != 1 else ''}"
+                    parts.append("\n")
+                    parts.append(
+                        Content.styled(f"{item_gutter}· {label}", theme.SECONDARY_TEXT_STYLE)
+                    )
+
+            for note in subagent_notes:
+                t = (note or "").strip()
+                if not t:
                     continue
                 parts.append("\n")
-                parts.append(Content.styled(f"{branch_gutter}{text}", theme.SECONDARY_TEXT_STYLE))
-
-        # Main-agent tool preview
-        if main_preview:
-            first_block = False
-            append_tool_activity_lines(
-                parts,
-                main_preview,
-                gutter=branch_gutter,
-                g=g,
-                colors=colors,
-                spinner_position=spinner_position,
-                animate_running=step_status == "running",
-            )
-            hidden_tools = index.main_tool_count - len(main_preview)
-            if hidden_tools > 0:
-                label = f"+{hidden_tools} more tool{'s' if hidden_tools != 1 else ''}"
-                parts.append("\n")
-                parts.append(
-                    Content.styled(f"{branch_gutter}· {label}", theme.SECONDARY_TEXT_STYLE)
-                )
-
-        # Global subagent notes
-        for note in subagent_notes:
-            t = (note or "").strip()
-            if not t:
-                continue
-            if not first_block:
-                parts.append("\n")
-            first_block = False
-            parts.append(Content.styled(f"{branch_gutter}{t}", theme.SECONDARY_TEXT_STYLE))
+                parts.append(Content.styled(f"{item_gutter}{t}", theme.SECONDARY_TEXT_STYLE))
 
         return Content.assemble(*parts) if parts else Content("")

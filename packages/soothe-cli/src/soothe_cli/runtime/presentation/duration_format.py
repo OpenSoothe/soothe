@@ -31,6 +31,11 @@ def format_running_elapsed(seconds: float) -> str:
     return format_duration(float(max(0, int(seconds))))
 
 
+def format_running_elapsed_compact(seconds: float) -> str:
+    """Compact live elapsed for step titles (e.g. ``20s``, ``1m5s`` — no spaces)."""
+    return format_running_elapsed(seconds).replace(" ", "")
+
+
 def format_duration_ms(milliseconds: int) -> str:
     """Format a wall-clock duration in milliseconds for status lines and cards.
 

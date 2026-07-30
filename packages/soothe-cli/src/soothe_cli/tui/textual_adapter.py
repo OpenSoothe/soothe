@@ -1147,27 +1147,6 @@ def _apply_subagent_wire_step_event(
     return True
 
 
-def _planner_running_stage_label(data: dict[str, Any]) -> str:
-    """Compact status-line stage for ``soothe.subagent.planner.progress``."""
-    message = str(data.get("message", "") or "").strip()
-    if message:
-        return message
-    phase = str(data.get("phase", "") or "").strip()
-    loop_count = int(data.get("loop_count", 0) or 0)
-    total_loops = int(data.get("total_loops", 0) or 0)
-    if phase == "start":
-        return "starting"
-    if phase == "recon":
-        if total_loops > 0:
-            return f"recon {loop_count}/{total_loops}"
-        return "recon"
-    if phase == "draft":
-        if total_loops > 0:
-            return f"drafting {loop_count}/{total_loops}"
-        return "drafting"
-    return phase
-
-
 def _apply_subagent_wire_activity_event(
     adapter: TextualUIAdapter,
     *,
@@ -1177,8 +1156,8 @@ def _apply_subagent_wire_activity_event(
 ) -> bool:
     """Render note-style subagent wire events on orphan or parent step card.
 
-    Planner ``*.progress`` updates the orphan card Running status line only
-    (no activity notes). Other subagent progress still appends activity lines.
+    Planner ``*.progress`` on orphan cards is swallowed (no activity notes; stage
+    is not shown on the title). Other subagent progress still appends activity lines.
     """
     et = str(event_type or "").strip()
     step_id = task_scope_step_id(task_scope)
@@ -1189,10 +1168,6 @@ def _apply_subagent_wire_activity_event(
         return True
 
     if et == "soothe.subagent.planner.progress" and _is_orphan_subagent_card(card):
-        stage = _planner_running_stage_label(data)
-        setter = getattr(card, "set_running_stage", None)
-        if callable(setter) and stage:
-            setter(stage)
         return True
 
     from soothe_sdk.ux.subagent_progress import summarize_subagent_wire_activity
@@ -2078,6 +2053,21 @@ async def apply_tool_call_wire_update(
                 update_payload,
                 raw_args=raw_args_stream,
             )
+            # Explicit Todo ingest: do not rely solely on add_tool_call side effects
+            # when coalesce skips a later messages-path refresh (IG-664).
+            if str(name or "").strip() == "write_todos":
+                setter = getattr(step_w, "set_todos", None)
+                if callable(setter):
+                    todos_payload = update_payload.get("todos")
+                    if todos_payload is None and raw_args_stream:
+                        try:
+                            loaded = json.loads(raw_args_stream)
+                        except (TypeError, ValueError, json.JSONDecodeError):
+                            loaded = None
+                        if isinstance(loaded, dict):
+                            todos_payload = loaded.get("todos")
+                    if todos_payload is not None:
+                        setter(todos_payload)
         elif name != "task":
             update_payload = dict(display_args or {})
             if not update_payload and raw_args_stream:
@@ -3152,15 +3142,10 @@ async def execute_task_textual(
                     suppress_subgraph_assistant_text = not is_main_agent
                     suppress_main_agent_assistant_text = False
 
-                    # Handle UPDATES stream - for todos
+                    # LangGraph ``updates`` are unused for step cards (execute
+                    # avoids them; Todo comes from ``write_todos`` tool args).
                     if current_stream_mode == "updates":
-                        if not isinstance(data, dict):
-                            continue
-
-                        # Check for todo updates (not yet implemented in Textual UI)
-                        chunk_data = next(iter(data.values())) if data else None
-                        if chunk_data and isinstance(chunk_data, dict) and "todos" in chunk_data:
-                            pass  # Future: render todo list widget
+                        continue
 
                     # Handle MESSAGES stream - for content and tool calls
                     elif current_stream_mode == "messages":

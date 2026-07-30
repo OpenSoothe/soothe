@@ -276,7 +276,7 @@ class CognitionGoalTreeMessage(Vertical):
         if st.phase == "running":
             parts: list[str] = []
             if st.started_at is not None:
-                # Middot-separated live timer (matches step-card Running · 45s...).
+                # Middot-separated live timer (matches step-card title elapsed meta).
                 parts.append(format_running_elapsed(time() - st.started_at))
             if st.tool_call_count > 0:
                 parts.append(f"{st.tool_call_count} tools")

@@ -66,6 +66,24 @@ def test_filter_keeps_task_delegation_with_complete_args() -> None:
     assert filter_redundant_stream_tool_updates(updates) == updates
 
 
+def test_filter_keeps_write_todos_with_complete_args() -> None:
+    """IG-664: write_todos wire updates must reach the TUI Todo section."""
+    updates = [
+        {
+            "type": "soothe.stream.tool_call.update",
+            "tool_call_id": "LWZ_01:s:write_todos:0",
+            "name": "write_todos",
+            "args": {
+                "todos": [
+                    {"content": "Survey docs", "status": "in_progress"},
+                    {"content": "Fix errors", "status": "pending"},
+                ]
+            },
+        }
+    ]
+    assert filter_redundant_stream_tool_updates(updates) == updates
+
+
 def test_wire_updates_emits_unified_main_tool_without_args() -> None:
     msg = AIMessage(
         content="",

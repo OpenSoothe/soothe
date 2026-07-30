@@ -164,8 +164,8 @@ def test_route_pending_main_tools_single_active_step_without_unified_id() -> Non
     step.add_tool_call.assert_called_once()
 
 
-def test_running_animation_includes_tool_stats_in_status_line() -> None:
-    """Stats appear in the running status line during animation, not just in _stats_title_suffix()."""
+def test_running_animation_includes_tool_stats_in_title() -> None:
+    """Compact tool/task counts appear on the step title during animation (IG-664)."""
     card = CognitionStepMessage("RUN-01", "Deep Research workspace", id="step-run")
 
     card.add_tool_call("RUN_01:s:grep:0", "grep", {"pattern": "TODO"})
@@ -176,9 +176,10 @@ def test_running_animation_includes_tool_stats_in_status_line() -> None:
 
     card._status = "running"
     card._start_time = 0.0
-
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    mock_status = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = mock_status
 
     with (
         patch(
@@ -189,24 +190,25 @@ def test_running_animation_includes_tool_stats_in_status_line() -> None:
     ):
         card._update_running_animation()
 
-    assert mock_status_widget.update.called
-    update_call_arg = mock_status_widget.update.call_args[0][0]
-    text = _extract_content_text(update_call_arg)
+    assert mock_header.update.called
+    text = _extract_content_text(mock_header.update.call_args[0][0])
+    assert "Deep Research workspace" in text
+    assert "3/0" in text
+    assert "Running..." not in text
+    assert mock_status.display is False
 
-    assert "3 tools" in text, f"Running status line should include 3 tools, got: {text!r}"
-    assert "Running..." in text, f"Running status line should show 'Running...', got: {text!r}"
 
-
-def test_running_animation_updates_stats_dynamically() -> None:
-    """Stats in running status line update when new tools are added during running state."""
+def test_running_animation_updates_title_stats_dynamically() -> None:
+    """Title meta updates when new tools are added during running state."""
     card = CognitionStepMessage("DYN-01", "Dynamic stats", id="step-dyn")
 
     card.add_tool_call("DYN_01:s:read_file:0", "read_file", {"path": "a.py"})
 
     card._status = "running"
     card._start_time = 0.0
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = MagicMock()
 
     with (
         patch(
@@ -216,31 +218,29 @@ def test_running_animation_updates_stats_dynamically() -> None:
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
-        first_call_arg = mock_status_widget.update.call_args[0][0]
-        first_text = _extract_content_text(first_call_arg)
-        assert "1 tool" in first_text
+        first_text = _extract_content_text(mock_header.update.call_args[0][0])
+        assert "1/0" in first_text
 
         card.add_tool_call("DYN_01:s:read_file:1", "read_file", {"path": "b.py"})
         card.add_tool_call("DYN_01:s:grep:0", "grep", {"pattern": "class"})
 
-        mock_status_widget.update.reset_mock()
+        mock_header.update.reset_mock()
         card._update_running_animation()
-        second_call_arg = mock_status_widget.update.call_args[0][0]
-        second_text = _extract_content_text(second_call_arg)
-
-        assert "3 tools" in second_text, f"Stats should reflect 3 tools, got: {second_text!r}"
+        second_text = _extract_content_text(mock_header.update.call_args[0][0])
+        assert "3/0" in second_text, f"Stats should reflect 3 tools, got: {second_text!r}"
 
 
-def test_running_animation_shows_no_stats_when_no_tools() -> None:
-    """Running status line works correctly even with zero tool calls."""
+def test_running_animation_shows_elapsed_without_tool_counts() -> None:
+    """Title shows elapsed when running with zero tool calls."""
     card = CognitionStepMessage("EMPTY-01", "No tools step", id="step-empty")
 
     assert card._stats_title_suffix() == ""
 
     card._status = "running"
-    card._start_time = None
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    card._start_time = 0.0
+    mock_header = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = MagicMock()
 
     with (
         patch(
@@ -250,16 +250,15 @@ def test_running_animation_shows_no_stats_when_no_tools() -> None:
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
-        call_arg = mock_status_widget.update.call_args[0][0]
-        text = _extract_content_text(call_arg)
+        text = _extract_content_text(mock_header.update.call_args[0][0])
 
-    assert "Running..." in text
-    assert "tool" not in text
-    assert " · " not in text
+    assert "No tools step" in text
+    assert "Running..." not in text
+    assert "0/" not in text
 
 
-def test_running_animation_includes_elapsed_time() -> None:
-    """Running status line shows elapsed time when start_time is set."""
+def test_running_animation_includes_elapsed_time_on_title() -> None:
+    """Title meta shows elapsed time when start_time is set."""
     from time import time
 
     card = CognitionStepMessage("TIME-01", "Time step", id="step-time")
@@ -269,8 +268,9 @@ def test_running_animation_includes_elapsed_time() -> None:
     card._status = "running"
     card._start_time = time() - 45.0
 
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = MagicMock()
 
     with (
         patch(
@@ -280,15 +280,13 @@ def test_running_animation_includes_elapsed_time() -> None:
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
         card._update_running_animation()
-        call_arg = mock_status_widget.update.call_args[0][0]
-        text = _extract_content_text(call_arg)
+        text = _extract_content_text(mock_header.update.call_args[0][0])
 
-    assert "Running..." in text
+    assert "Running..." not in text
     assert " · 45s" in text, f"Elapsed time should use middots with unit, got: {text!r}"
     assert "(45s)" not in text, f"Elapsed must not use parentheses, got: {text!r}"
-    # Unit must be present (not bare ``45``).
     assert "45s" in text
-    assert "1 tool" in text
+    assert "1/0" in text
 
 
 def test_running_animation_returns_early_when_not_running_status() -> None:
@@ -297,22 +295,37 @@ def test_running_animation_returns_early_when_not_running_status() -> None:
     card.add_tool_call("SKIP_01:s:grep:0", "grep", {"pattern": "x"})
 
     card._status = "pending"
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = MagicMock()
 
     card._update_running_animation()
-    assert not mock_status_widget.update.called
+    assert not mock_header.update.called
 
 
-def test_running_animation_returns_early_when_status_widget_is_none() -> None:
-    """_update_running_animation does nothing when _status_widget is None."""
+def test_running_animation_works_without_status_widget() -> None:
+    """Running animation refreshes the title even when _status_widget is None."""
     card = CognitionStepMessage("NO-WIDGET-01", "No widget step", id="step-no-widget")
     card.add_tool_call("NO_WIDGET_01:s:grep:0", "grep", {"pattern": "x"})
 
     card._status = "running"
+    card._start_time = 0.0
     card._status_widget = None
+    mock_header = MagicMock()
+    card._header_widget = mock_header
 
-    card._update_running_animation()
+    with (
+        patch(
+            "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
+            return_value=True,
+        ),
+        patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
+    ):
+        card._update_running_animation()
+
+    assert mock_header.update.called
+    text = _extract_content_text(mock_header.update.call_args[0][0])
+    assert "1/0" in text
 
 
 def test_no_duplicate_tool_rows_in_activity_preview() -> None:
@@ -350,23 +363,17 @@ def test_no_duplicate_subgraph_tools_in_main_preview() -> None:
     assert main_preview[0].tool_call_id == "MAIN_01:s:grep:0"
 
 
-def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
-    """Tool count shows in status line immediately even when widget is not yet visible.
-
-    This tests the fix for real-time tool count display: when tool calls arrive
-    during a running step, `_sync_step_card_surface` should update the status
-    line immediately (bypassing the visibility check) so users see the count
-    in real-time, not only when the step finishes.
-    """
+def test_tool_stats_show_immediately_on_title_when_widget_not_visible() -> None:
+    """Tool count appears on the title immediately even when animation is not visible."""
     card = CognitionStepMessage("INVIS-01", "Invisible widget step", id="step-invis")
 
-    # Set up running state BEFORE any visibility check would pass
     card._status = "running"
     card._start_time = 0.0
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    mock_status = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = mock_status
 
-    # Add tool calls while widget is NOT visible (visibility returns False)
     with (
         patch(
             "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
@@ -374,39 +381,34 @@ def test_tool_stats_show_immediately_when_widget_not_visible() -> None:
         ),
         patch.object(theme, "get_theme_colors", return_value=_mock_theme_colors()),
     ):
-        # Adding tool calls should trigger immediate status update via _sync_step_card_surface
         card.add_tool_call("INVIS_01:s:grep:0", "grep", {"pattern": "test"})
         card.add_tool_call("INVIS_01:s:glob:1", "glob", {"pattern": "*.py"})
 
-        # Verify the status widget was updated (showing real-time stats)
-        assert mock_status_widget.update.called
-        call_arg = mock_status_widget.update.call_args[0][0]
-        text = _extract_content_text(call_arg)
+        assert mock_header.update.called
+        text = _extract_content_text(mock_header.update.call_args[0][0])
+        assert "2/0" in text, f"Title should show '2/0' immediately, got: {text!r}"
+        assert "Running..." not in text
+        assert mock_status.display is False
 
-        # Should show 2 tools immediately, even though widget is "not visible"
-        assert "2 tools" in text, f"Status line should show '2 tools' immediately, got: {text!r}"
-        assert "Running..." in text
-
-    # The animation timer callback should NOT update when not visible
-    mock_status_widget.update.reset_mock()
+    mock_header.update.reset_mock()
     card._update_running_animation()
-    # Should NOT have called update because visibility check returned False
-    assert not mock_status_widget.update.called, "Animation should skip when not visible"
+    assert not mock_header.update.called, "Animation should skip when not visible"
 
 
-def test_sync_running_status_text_bypasses_visibility_check() -> None:
-    """_sync_running_status_text updates status immediately regardless of visibility."""
+def test_sync_running_status_text_hides_footer_and_refreshes_title() -> None:
+    """_sync_running_status_text hides Running footer and refreshes title meta."""
     card = CognitionStepMessage("BYPASS-01", "Bypass visibility", id="step-bypass")
 
     card._status = "running"
     card._start_time = 0.0
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    mock_status = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = mock_status
 
     card.add_tool_call("BYPASS_01:s:read_file:0", "read_file", {"path": "a.py"})
     card.add_tool_call("BYPASS_01:s:read_file:1", "read_file", {"path": "b.py"})
 
-    # Directly call _sync_running_status_text - should always update
     with (
         patch(
             "soothe_cli.tui.widgets.messages.cognition_step._is_widget_animation_visible",
@@ -416,24 +418,27 @@ def test_sync_running_status_text_bypasses_visibility_check() -> None:
     ):
         card._sync_running_status_text()
 
-    assert mock_status_widget.update.called
-    text = _extract_content_text(mock_status_widget.update.call_args[0][0])
-    assert "2 tools" in text, f"Should show 2 tools even with visibility=False, got: {text!r}"
+    assert mock_status.display is False
+    assert mock_header.update.called
+    text = _extract_content_text(mock_header.update.call_args[0][0])
+    assert "2/0" in text, f"Should show 2/0 even with visibility=False, got: {text!r}"
 
 
-def test_refresh_tools_display_syncs_status_when_animation_not_visible() -> None:
-    """Surface sync must refresh running status even off-screen."""
+def test_refresh_tools_display_syncs_title_when_animation_not_visible() -> None:
+    """Surface sync must refresh title meta even off-screen."""
     card = CognitionStepMessage("REFRESH-01", "Tools refresh", id="step-refresh")
 
     card._status = "running"
     card._start_time = 0.0
-    mock_status_widget = MagicMock()
-    card._status_widget = mock_status_widget
+    mock_header = MagicMock()
+    mock_status = MagicMock()
+    card._header_widget = mock_header
+    card._status_widget = mock_status
     card._tools_widget = MagicMock()
     card._activity_widget = MagicMock()
 
     card.add_tool_call("REFRESH_01:s:grep:0", "grep", {"pattern": "foo"})
-    mock_status_widget.update.reset_mock()
+    mock_header.update.reset_mock()
 
     with (
         patch(
@@ -444,21 +449,22 @@ def test_refresh_tools_display_syncs_status_when_animation_not_visible() -> None
     ):
         card._sync_step_card_surface()
 
-    assert mock_status_widget.update.called
-    text = _extract_content_text(mock_status_widget.update.call_args[0][0])
-    assert "1 tool" in text, f"Footer status should show 1 tool after surface sync, got: {text!r}"
-    assert "Running..." in text
+    assert mock_header.update.called
+    text = _extract_content_text(mock_header.update.call_args[0][0])
+    assert "1/0" in text, f"Title should show 1/0 after surface sync, got: {text!r}"
+    assert "Running..." not in text
+    assert mock_status.display is False
 
 
-def test_main_only_step_activity_has_no_running_line() -> None:
-    """Main-agent-only steps show Running on footer only, not duplicated in activity tree."""
+def test_main_only_step_activity_has_tools_section_no_running_line() -> None:
+    """Main-agent-only steps wrap tools under Tools; no Running line in activity."""
     card = CognitionStepMessage("MAIN-01", "Direct tools", id="step-main-branch")
     card.add_tool_call("MAIN_01:s:grep:0", "grep", {"pattern": "foo"})
     card.add_tool_call("MAIN_01:s:glob:1", "glob", {"pattern": "**/*"})
     card._status = "running"
     card._start_time = 0.0
     content = str(card._step_task_activity_content())
-    # Preview shows the latest tools (up to 2); both fit without overflow.
+    assert "TOOLS" in content
     assert "Glob" in content
     assert "Grep" in content
     assert "+1 more tool" not in content
@@ -467,7 +473,7 @@ def test_main_only_step_activity_has_no_running_line() -> None:
 
 
 def test_deferred_running_set_running_refreshes_task_activity_panel() -> None:
-    """Tools added before mount must paint branch status + footer on set_running()."""
+    """Tools added before mount must paint activity panel on set_running()."""
     from soothe_cli.runtime.state.step_router import StepTaskRouter
 
     card = CognitionStepMessage("DEF-01", "Deferred mount", id="step-deferred")
@@ -483,7 +489,9 @@ def test_deferred_running_set_running_refreshes_task_activity_panel() -> None:
 
     mock_status = MagicMock()
     mock_notes = MagicMock()
+    mock_header = MagicMock()
     card._status_widget = mock_status
+    card._header_widget = mock_header
     card._start_time = 0.0
 
     def fake_query(sel: str, _cls: type) -> MagicMock:
@@ -491,6 +499,8 @@ def test_deferred_running_set_running_refreshes_task_activity_panel() -> None:
             return mock_notes
         if "status" in sel:
             return mock_status
+        if "header" in sel:
+            return mock_header
         return MagicMock()
 
     card.query_one = fake_query  # type: ignore[method-assign]
@@ -500,10 +510,8 @@ def test_deferred_running_set_running_refreshes_task_activity_panel() -> None:
 
     assert mock_notes.update.called, "Task activity panel should refresh after deferred mount"
     notes_text = _extract_content_text(mock_notes.update.call_args[0][0])
+    assert "TOOLS" in notes_text
     assert "Grep" in notes_text or "grep" in notes_text.lower()
-    assert "Running..." not in notes_text, (
-        "Main-only activity tree must not duplicate footer Running"
-    )
-    assert mock_status.update.called
-    status_text = _extract_content_text(mock_status.update.call_args[0][0])
-    assert "1 tool" in status_text, f"Footer should show tool count, got: {status_text!r}"
+    assert "Running..." not in notes_text
+    assert mock_status.display is False
+    assert mock_header.update.called
